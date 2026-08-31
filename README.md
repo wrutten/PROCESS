@@ -1,3 +1,16 @@
+<!-- FORK NOTICE — architecture_surgery. Delete this block when syncing upstream. -->
+> ## This is a fork, not upstream PROCESS
+>
+> Branch `architecture_surgery` modifies PROCESS's **optimisation architecture** — the arrangement
+> of solvers and optimisers — with every physics and engineering model frozen at `c0ae5b28`, to
+> measure what the architecture alone contributes to solve cost and robustness.
+>
+> **Start at [`arch_surgery/README.md`](arch_surgery/README.md).** The queue is
+> [`arch_surgery/docs/plans/MASTER_TODO.md`](arch_surgery/docs/plans/MASTER_TODO.md).
+>
+> Everything below is upstream PROCESS's own README.
+<!-- END FORK NOTICE -->
+
 [![DOI](https://img.shields.io/badge/DOI-10.5281/zenodo.8335291-blue)](https://doi.org/10.5281/zenodo.8335291) [![codecov](https://codecov.io/gh/ukaea/process/graph/badge.svg?token=F94XDNUIX0)](https://codecov.io/gh/ukaea/process)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/ukaea/PROCESS/HEAD?urlpath=%2Fdoc%2Ftree%2Fexamples%2F)
 # PROCESS
