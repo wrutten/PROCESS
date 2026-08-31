@@ -432,6 +432,9 @@ not this task's.**
 | 7 | **Deleted a first, contaminated set of runs and re-ran everything serially.** | Two driver invocations overlapped without my knowing — each sandboxed Bash call has its own PID namespace, so `ps` reported no processes and `pkill` killed nothing. Concurrent runs invalidate the timing weights and, worse, one arm had been started before a probe edit. | The re-run is the only data in `runs/a2/`; nothing from the contaminated set survives. |
 | 8 | **Fixed `run_stage0.py`'s `PYTHONPATH` handling and tightened `run_one.py`'s tree assertion**, though A2 is a measurement task. | Trap T6: without this, a worktree measures the main checkout, and A1's prefix assertion does not catch it. Leaving it broken would silently invalidate A3 and everything after. | `git revert` the harness hunks of `dc6ba4d2`. The Stage-0 runs would then need cwd to be the tree root. |
 
+| 9 | **Appended the third instance to trap T1 in `arch_surgery/docs/TRAPS.md`**, together with the measured shape of the hazard (ten models call `run()` from `output()`). | T1's own text keeps a count of how often it has bitten, and this instance landed in the partition plan's central section. Recording it where the next agent will read it is the point of the file. | Revert the `TRAPS.md` hunk of `40022610`; the same material is in §3.2 and §6.1 here. |
+| 10 | **Did not merge `architecture_surgery`'s `dc27a6d9` (trap T6, D11, refreshed plan) into this branch.** T6 was taken from the task brief and acted on. | Merging mid-task would have changed the tree under measurement. The orchestrator merges this branch anyway. | `git merge architecture_surgery` before review. Note that `TRAPS.md` will need a manual resolution if T6 was added near T1. |
+
 No edit was made under `process/models/`. D11 approval was not needed.
 
 ---
