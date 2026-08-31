@@ -13,19 +13,24 @@ driver, so they must be **sequenced, never run in parallel** — see §3.5.
 
 > PROCESS contains various subdrivers — root-finders nested inside model evaluations. Lifting
 > their residuals to the optimiser, focusing on those that call another function (easiest to
-> extract), should improve runtime, because nested loops should be avoided.
+> extract), should make the code **more robust**: a nested solve that fails does so silently and
+> locally, whereas a lifted residual becomes an equality constraint the optimiser must satisfy
+> and the user can audit. Runtime is a secondary question and the dimension penalty is expected
+> to be real.
 
-Testable claims:
+Testable claims, primary first:
 
 | | Claim | Status |
 |---|---|---|
-| **H1** | There are subdrivers nested inside the MDA that take a callback residual | **Supported** — four confirmed, one rejected (§2) |
-| **H2** | Their residuals can be lifted to the optimiser as design variables plus equality constraints | Plausible; §3.4 raises a scope conflict first |
-| **H3** | Lifting reduces runtime | **Doubtful as the primary claim** (§3.1) |
-| **H4** | Lifting improves finite-difference gradient quality | **Untested, and the stronger claim** (§3.2) |
-| **H5** | Lifting improves robustness and makes failure auditable | **Partly established already** by inspection (§3.3) |
+| **H1** | Nested solves fail — hit `maxiter`, return unconverged, or raise — during ordinary runs, and those failures are currently invisible | **Partly established by inspection** (§3.1); incidence unmeasured |
+| **H2** | Lifting converts a silent local failure into a visible constraint violation, so failure becomes attributable | **Untested — the primary result** |
+| **H3** | Lifting removes a discontinuity from the finite-difference stencil, improving Jacobian quality | **Untested — the secondary result** (§3.2) |
+| **H4** | The dimension penalty (`n → n+k`) is affordable | **Must be measured, expected adverse** (§3.3) |
+| **H5** | Net runtime improves | **Doubtful** (§3.3); measured and reported, but not the reason to do this |
 
----
+**Framing.** This experiment is about **robustness first**, gradient quality second, and runtime
+third. A result of "more robust, more auditable, and 15 % slower" is a success. A runtime-led
+framing would have to call that a failure, which is why it is not the framing.
 
 ## 2. The subdrivers, as found
 
@@ -67,74 +72,78 @@ it is counted.** Stage 1 does this by measurement, not by reading.
 
 ## 3. Critical assessment
 
-### 3.1 The runtime claim is the weakest part of the hypothesis
+### 3.1 The robustness case is already half-made, before any measurement
 
-"Nested loops should be avoided to improve runtime" is a reasonable prior in general, but the
-arithmetic here is unfavourable, for a reason specific to this codebase.
-
-**What lifting removes** is a handful of evaluations of a *scalar* residual — `jcrit_rebco`,
-a current-density margin, a duct-diameter update. A secant iteration converges in roughly 5–15
-evaluations of a cheap function.
-
-**What lifting costs** is `k` design variables and `k` equality constraints. Gradient cost
-scales as `n + k + 1`, and `n` is only **14–20** in these scenarios. Lifting four residuals is
-therefore roughly a **+20–29 % increase in gradient cost**, paid on every optimiser iteration.
-
-Contrast the partition experiment, where lifting **one** variable eliminates whole sweeps of a
-56-node sequence: there, `k = 1` buys a large structural saving. Here, `k = 4` buys the removal
-of some scalar iterations. **The break-even condition is that the nested solvers currently
-consume more than ~25 % of wall clock.** That is measurable before any refactor is written —
-just time them — and it is the first thing this experiment should do. My expectation is that
-they do not, and that H3 is false.
-
-There is a second-order effect that could rescue it: `S2`/`S3`/`S4` are called **per coil and
-per conductor**, so their aggregate count may be much larger than "one solve per model call".
-Stage 1 must count, not assume. But the burden of proof sits with H3.
-
-### 3.2 The strong argument is gradient quality, and the hypothesis omits it
-
-A root-find with a finite exit tolerance makes the enclosing model a **piecewise** function of
-its inputs. Perturb an input by the finite-difference step, and the inner solver may take a
-different number of iterations and land on a different side of its tolerance — so the model
-output jumps by roughly the inner tolerance, discontinuously, for an arbitrarily small input
-change. That jump enters the outer finite-difference quotient divided by the FD step, and
-appears as **noise in the constraint Jacobian**.
-
-This is finding **F14** in the architecture evaluation ("root-finders inside the FD stencil"),
-and it is where the payoff actually is:
-
-- **S1's tolerance is 1 % relative.** Against a relative FD step of order `1e-3`, a 1 % jump in
-  the duct diameter is not a perturbation of the derivative — it is larger than the signal.
-- S2–S4 are at `1e-6`, so their contribution should be small — **which is itself a testable
-  prediction**: if lifting only S2–S4 changes the Jacobian materially, something other than the
-  exit tolerance is going on.
-
-Lifting converts the model into an exact algebraic function of (inputs, lifted unknown), and
-the finite-difference derivative becomes exact in that direction. **Reframe the experiment
-around this.** Runtime becomes a secondary measurement that may well be negative, and the
-result is still publishable: *"lifting nested solves buys gradient accuracy at a quantified
-cost in problem dimension"* is a real architectural finding. A runtime-only framing risks
-producing a null result and calling it a failure.
-
-### 3.3 Three defects are already visible, and they are a deliverable
-
-Found by inspection, before any measurement:
+Three defects are visible by inspection:
 
 1. **The same residual is solved with two different failure policies.** `pfcoil.py:4909` passes
    `disp=False` — on non-convergence `optimize.newton` **returns the unconverged iterate
-   silently**. `tfcoil/superconducting.py:1267` calls the *same function*
-   (`superconductor_current_density_margin`) with the same tolerances and `disp=True`, which
-   raises. One of these is wrong; nothing in the code says which.
-2. **`vacuum.py` continues on non-convergence.** The `for … else` logs an error and then
-   proceeds with whatever `d[i]` the loop left behind — the outer `while True` carries on using
-   it.
-3. **The tolerances span four orders of magnitude with no stated rationale** — `1e-2` relative
-   (S1), `1e-6` (S2–S4) — and the rejected candidate in §2.1 uses `1e-3` absolute on a quantity
-   whose bracket spans `0.01–150`.
+   silently**, and the caller uses it as though it were a root. `tfcoil/superconducting.py:1267`
+   calls the *same function* (`superconductors.superconductor_current_density_margin`) with the
+   *same tolerances* and `disp=True`, which raises. One of these is wrong; nothing in the code
+   says which, and the two produce opposite behaviour on the same numerical failure.
+2. **`vacuum.py` continues on non-convergence.** The `for … else` logs an error and then the
+   enclosing `while True` proceeds with whatever `d[i]` the loop left behind. A logged error is
+   not a gate; the run completes and reports a number.
+3. **Tolerances span four orders of magnitude with no stated rationale** — `1e-2` relative (S1),
+   `1e-6` (S2–S4) — and the candidate rejected in §2.1 uses `1e-3` absolute on a quantity whose
+   bracket spans `0.01–150`.
 
-Lifting replaces all three with something auditable: an equality constraint the optimiser must
-satisfy, whose residual is reported in the output and whose violation is visible rather than
-silent. That is an architectural argument that does not depend on any timing result.
+What is *not* yet known is how often any of this fires in practice. That is Stage L0, it is
+read-only, and it is the first deliverable.
+
+**Why lifting helps.** A lifted residual becomes an equality constraint. Non-convergence stops
+being a local event inside a model — invisible, policy-dependent, sometimes silent — and becomes
+a **constraint violation the optimiser reports and the user can see in the output**. That is a
+genuine architectural improvement and it does not depend on any timing result. It also removes
+the `disp=True`/`disp=False` divergence by construction: there is one policy, and it is the
+optimiser's.
+
+**The honest counter-argument.** Lifting does not make a badly-conditioned residual well
+conditioned. If `superconductor_current_density_margin` is hard to solve, it is hard whether the
+secant method or VMCON drives it — and VMCON must now satisfy it *simultaneously* with 82
+other constraints, from a starting point that may be far from its root. It is possible that
+lifting converts a rare silent local failure into a frequent visible global one. **That would
+still be a result** — it would say the nested solves are load-bearing — but it must be measured
+rather than assumed away, and it is the reason Stage L2 lifts exactly one residual first.
+
+### 3.2 Gradient quality — the secondary case
+
+A root-find with a finite exit tolerance makes the enclosing model a **piecewise** function of
+its inputs. Perturb an input by the finite-difference step and the inner solver may take a
+different number of iterations, landing on a different side of its tolerance, so the model
+output jumps by roughly the inner tolerance for an arbitrarily small input change. That jump
+enters the outer difference quotient divided by the FD step, and appears as noise in the
+constraint Jacobian. This is finding **F14** of the architecture evaluation.
+
+- **S1's tolerance is 1 % relative.** Against a relative FD step of order `1e-3`, the jump is
+  larger than the signal.
+- S2–S4 are at `1e-6`, so their contribution should be small — **a testable prediction**: if
+  lifting only S2–S4 moves the Jacobian materially, something other than the exit tolerance is
+  at work.
+
+### 3.3 The performance penalty is real and must be measured, not hidden
+
+Lifting costs `k` design variables and `k` equality constraints. Gradient cost scales as
+`n + k + 1`, and `n` is only **14–20** in these scenarios, so lifting four residuals is roughly
+a **+20–29 % increase in gradient cost**, paid every optimiser iteration.
+
+What lifting saves is a handful of evaluations of a *scalar* residual — a secant iteration
+converges in roughly 5–15 cheap evaluations. Break-even needs the nested solves to be consuming
+more than ~25 % of wall clock, which Stage L0 measures directly.
+
+Two further pressures on the runtime side, both worth stating in advance so a negative result is
+not a surprise:
+
+- **The partition experiment shrinks this prize.** If the MDA partition succeeds, the inner
+  solvers are called fewer times, so there is less nested-solve time to reclaim — while the
+  robustness and gradient prizes are untouched.
+- **`k` may be larger than 4.** S2–S4 may be invoked per coil and per conductor; if the lift has
+  to be per-invocation rather than per-site, `k` grows and the penalty with it. Stage L0 counts.
+
+**Reporting rule.** The dimension penalty and the nested-solve saving are reported as two
+separate numbers, never netted into one. A single "net runtime" figure hides which mechanism did
+what, and the two move independently as `k` changes.
 
 ### 3.4 This conflicts with the model freeze — a decision is required first
 
@@ -194,15 +203,17 @@ Extend the Stage-0 probe to instrument every candidate site.
    `disp=False` path returns unconverged; how often `vacuum.py` logs and continues.
 4. **Sweep the candidate list** for any site missed by inspection.
 
-**Gate.** This decides the framing, and is cheap enough to be worth doing even if the
-experiment stops here.
-- Nested solves are **> 25 %** of wall clock → H3 is live; keep runtime as a primary claim.
-- **5–25 %** → runtime is secondary; lead with gradient quality (§3.2).
-- **< 5 %** → **H3 is refuted.** Report it as a measured negative and continue only on the
-  gradient-quality and robustness case, with the plan rewritten accordingly.
+**Gate — on failure incidence, not on time.**
+- **Any** non-convergence observed in ordinary runs → the robustness case is live; proceed, and
+  report the incidence immediately as a standalone finding.
+- **Zero** non-convergence across all four scenarios → widen the search before proceeding: scan
+  starting points and scenario variants, since a defect that never fires in four decks may still
+  fire in a user's. If it still never fires, the robustness case rests on *auditability* alone
+  (silent-by-construction versus visible-by-construction) and the plan should say so plainly
+  rather than implying a failure rate it has not measured.
 
-Any non-convergence observed in (3) is a **finding reportable immediately**, independent of
-everything downstream.
+Wall-clock share is recorded at the same time, and sets expectations for §3.3's penalty
+reporting — but it does not gate this experiment.
 
 ### Stage L1 — Extract residuals behind a switch
 
@@ -215,23 +226,27 @@ that keeps §3.4's narrow reading nearly intact, and it is non-negotiable.
 
 ### Stage L2 — Lift one residual
 
-Start with the site with the **loosest tolerance and the highest call count** from L0 — on
-current evidence that is **S1 (`vacuum`, 1 % relative)**, but L0's counts decide.
+Start with the site with the **highest measured failure incidence** from L0; where incidence
+ties, prefer the loosest tolerance and highest call count. On current evidence that points at
+**S1 (`vacuum`, 1 % relative, continues on non-convergence)**, but L0's counts decide.
 
 Add one design variable and one equality consistency constraint. Measure:
-- **Gradient quality** — the primary result. Compare the constraint Jacobian against a
-  high-accuracy reference (Richardson-extrapolated or complex-step where the code permits) at a
-  fixed point away from the optimum and at the optimum. This is where §3.2 predicts a win.
-- **Runtime** at matched final accuracy, reporting the `n → n+1` dimension cost separately from
-  the saving, so the two are not netted into an uninterpretable single number.
+- **Robustness — the primary result.** Does a previously-silent non-convergence now appear as a
+  constraint violation? Run a **starting-point sensitivity scan**: perturb `x0` across a spread
+  of feasible starts and count, for baseline versus lifted, how many runs fail, how many fail
+  *visibly*, and how many complete carrying an unconverged inner value. The headline is the
+  shift from silent failure to attributable failure.
+- **Gradient quality** — secondary. Compare the constraint Jacobian against a high-accuracy
+  reference (Richardson-extrapolated, or complex-step where the code permits) at a point away
+  from the optimum and at the optimum.
+- **Performance** — measured and reported as **two separate numbers**: the `n → n+1` dimension
+  cost, and the reclaimed nested-solve time. Never netted.
 - **Correctness** — `norm_objf` agreement plus a post-solve feasibility audit (D6). Never
   iteration variables.
-- **Robustness** — `ifail`, retries, and whether previously-silent non-convergence now shows up
-  as constraint violation.
 
-**Gate.** Measurable Jacobian improvement, correctness held, no robustness regression. A
-runtime regression is **acceptable here** if the gradient result is positive — but it must be
-stated, not buried.
+**Gate.** Robustness improves or is neutral, and correctness holds. **A runtime regression does
+not fail this gate** — it is a reported cost. What fails the gate is a robustness regression
+(more failures, or failures that are still silent) or a correctness break.
 
 ### Stage L3 — Lift the remainder, incrementally
 

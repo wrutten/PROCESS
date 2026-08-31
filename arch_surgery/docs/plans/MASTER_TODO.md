@@ -52,7 +52,24 @@
 | **PROCESS finding** | — | Defect or critique of *PROCESS itself* | Architecture critiques belong here; implementation defects go to `PROCESS_code_analysis/docs/bug_reports/` |
 | **Decision** | `D<n>` | A recorded user decision | Append-only; a reversal is a new decision referencing the old |
 
-**Numbering** — next free: **A13**, **D9**, **I-5**. Numbers are never reused.
+**Numbering** — next free: **A18**, **D9**, **I-5**. Numbers are never reused.
+
+**Reserved optimiser-registry ranges.** Both planned experiments mint new entries in
+`process/core/solver/iteration_variables.py` (`ITERATION_VARIABLES`, number-keyed;
+`N_ITERATION_VARIABLES_MAX` derives from `max(keys)`) and in
+`process/core/solver/constraints.py` (82 constraints, registered by number). Developed on
+separate branches both would take the next free number, collide at merge, and produce
+**different numberings per branch** — so an `IN.DAT` written against one is silently
+misread by the other. Ranges are therefore reserved here before any task starts, and a task
+takes numbers only from its own range:
+
+| Experiment | Iteration variables | Constraints |
+|---|---|---|
+| MDA partition (A4) | reserved block 1 | reserved block 1 |
+| Subdriver lift (A9–A11) | reserved block 2 | reserved block 2 |
+
+The concrete first-free numbers are set by A1 (stage0-rebaseline)'s report, which is the first
+task to read both registries at `c0ae5b28`; the blocks are allocated here once it lands.
 
 ---
 
@@ -102,6 +119,11 @@ Open issues only.
 | **A10** | **subdriver-extract** *(PROPOSED)* — Stage L1: extract each residual into a named function behind an env switch, inner solve remaining the default. Gate: switch unset ⇒ bit-identical | A9 ✓ | **BLOCKED** on the D5 ruling |
 | **A11** | **subdriver-lift-one** *(PROPOSED)* — Stage L2: lift the loosest-tolerance, highest-count residual. Primary result is Jacobian accuracy against a bounded reference; runtime secondary and may regress | A10 ✓ | **BLOCKED** |
 | **A12** | **subdriver-failure-policy** *(PROPOSED)* — Stage L4, independent of the lift: resolve whether `disp=False` at `pfcoil.py:4909` is deliberate, given the identical call at `superconducting.py:1267` uses `disp=True`. Report as a PROCESS finding | — | **PROPOSED** — runnable without the D5 ruling |
+| **A13** | **feedforward-hoist** *(PROPOSED)* — E1 of [`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCHITECTURE_EXPERIMENT_CANDIDATES.md): run the DSM's feed-forward nodes once after the fixed point instead of every sweep. Pure `caller.py`, **no new design variables, no dimension penalty**. Gate: exact agreement on `norm_objf` and the full MFILE | A2 ✓ | **PROPOSED** — no D5 ruling needed |
+| **A14** | **converge-y** *(PROPOSED)* — E2: converge the coupling variables instead of objective and constraints (finding F3), moving objective/constraint evaluation out of the loop. Pure `caller.py`. Judge on gradient quality and robustness, **not** sweep count — the criterion changes meaning | A2 ✓ (supplies the coupling set) | **PROPOSED** — no D5 ruling needed |
+| **A15** | **dsm-sequencing** *(PROPOSED)* — E3: reorder `_call_models_once` to the sequenced DSM. **A3 (build-reorder) folds into this** — otherwise two tasks reorder the same sequence and neither is attributable. Not expected to be result-neutral (finding F4), so the gate is `norm_objf` plus feasibility, and every changed result must be explained by a named edge | A2 ✓ | **PROPOSED** — supersedes A3 if adopted |
+| **A16** | **convergence-predicate-audit** *(PROPOSED)* — E4: measure how often `MDA_Idempotence` (objective+constraints) and `MDA_Output` (successive MFILEs) disagree, given only the second is reported to the user (finding F12). **Read-only, no code change** | A1 ✓ | **PROPOSED** — no D5 ruling needed |
+| **A17** | **fixed-count-scan** *(PROPOSED)* — E5: scan the tokamak path for unrolled iteration with a literal trip count and no convergence test (finding F11, found in the stellarator path, unchecked for tokamak). **Read-only.** Naturally folded into A9 (subdriver-count) | A1 ✓ | **PROPOSED** — no D5 ruling needed |
 
 ### User-facing standing items (not tasks)
 
@@ -135,3 +157,4 @@ Open issues only.
 |---|---|
 | 2026-08-31 | Queue opened. Repository flattened into the `wrutten/PROCESS` fork (D1); base commit fixed at `c0ae5b28` (D2); `710a75c9` evidence discarded (D4). Experiment plan written and revised after the DSM module decomposition (D8) and the withdrawal of the `b_plasma_vertical_required` finding (I-4). A1 (stage0-rebaseline) dispatched. |
 | 2026-08-31 | Subdriver-lift experiment planned ([`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md)); A9–A12 proposed, A9–A11 blocked on a D5 ruling. Superseded IDF plan moved to `reports/deprecated/`, architecture evaluation to `reports/`. **A1 (stage0-rebaseline) was dispatched before this protocol existed** — its original brief said to commit to `architecture_surgery` and to write its report to `idf_probe/STAGE0.md`; it was corrected in flight to branch `A1-stage0-rebaseline` and to report at `reports/A1_stage0_rebaseline.md`, and given the hard rules (sandbox never overridden, no sibling-clone writes, no `git add -A`). |
+| 2026-08-31 | Subdriver-lift experiment **reframed around robustness** (primary), gradient quality secondary, performance penalty measured and reported as two separate numbers rather than netted; its Stage L0 gate moved from wall-clock share to failure incidence. Portfolio of further candidates added ([`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCHITECTURE_EXPERIMENT_CANDIDATES.md)) with A13–A17 proposed — E1/E4/E5 need no D5 ruling. Interference between the two planned experiments analysed: **optimiser-registry ranges now reserved above**, and §2.4 records that the partition's outcome changes what the subdriver experiment *is* (a lifted residual gains a second possible host — the module's own solver — which costs no dimension), so the partition resolves first. |
