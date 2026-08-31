@@ -563,3 +563,50 @@ which invalidated two phantom edges before A2 closed the sweep at the end of `_c
 - The architectural critique is unaffected and arguably strengthened: the loop exits before its
   state converges, ten models call `run()` from `output()`, and a hand-ordered sequence leaves
   6 % of work in nodes that feed nothing back.
+
+### Addendum — reassessment of the measurement method (2026-08-31)
+
+Re-examined at the user's request, after the verdict was accepted. **The STOP is not reversed, but
+its margin is thinner than this report conveys, and one assumption is doing more work than its
+caveat in §11 admits.**
+
+**The load-bearing doubt.** `Sᵢ` is measured inside the coupled loop and §5.1 uses those values as
+if they transfer to the partitioned case. §11 calls the direction "not knowable a priori". It is
+partly knowable: in the coupled loop M2 reads M1's *same-sweep* output, so **M2 cannot settle
+while its inputs are still moving**; under the partition M1 is converged first and M2 sees a fixed
+input. `S₂` and `S₃` are therefore plausibly biased **high**, and the estimate biased **against**
+the partition.
+
+The user's sharper form: **M3 cannot converge before M2, which cannot before M1 — so
+`S₁ ≈ S₂ ≈ S₃` may be M1's bottleneck propagating downstream**, the residual differences being
+insensitivity rather than module dynamics. §4's means show `S₂ = 2.979 < S₁ = 3.159`, so the
+ordering is not strict, but that is consistent with M2's outputs being insensitive to M1's last
+sub-`rtol` flickers.
+
+**Indicative sensitivity** (this report's measured cost shares; the partition's own contribution
+beyond the hoist):
+
+| | as measured | if `S₂,S₃ → 2.5` | if `S₂,S₃ → 2.0` floor |
+|---|---|---|---|
+| `large_tokamak_nof` | 3.8 % | ≈ 13 % | ≈ 21 % |
+| `low_aspect_ratio_DEMO` | 7.2 % | ≈ 19 % | **≈ 27 %** |
+
+`large_tokamak_nof` stays under 25 % even at the floor. `low_aspect_ratio_DEMO` does not. **The
+decision boundary sits inside the uncertainty on one of four scenarios.**
+
+**Three smaller doubts.** (i) The cost weights come from a heavily instrumented run — Gate N
+proves *result* neutrality, not *timing* neutrality, and snapshot cost plausibly correlates with
+how many fields a node touches, so excluding it is unlikely to be clean. (ii) Those weights
+inherit I-10, and the "within-run ratio cancels common-mode" defence assumes what I-10
+specifically fails to establish; the node-count weighting, being timing-free, is the real
+protection. (iii) §5.1 assumes per-module solvers iterate the same unaccelerated Picard scheme —
+no credit for Newton or Aitken inside a module, no debit for per-module convergence-test overhead.
+
+**What is untouched.** `k = 1` and `st_regression`'s zero live cross-module back edges are exact
+structural facts. The hoist/partition split is robust — the hoist does not depend on `Sᵢ` at all.
+And §4.2's finding that the loop exits with M2 still changing is an obstacle to the partition
+being cheaper regardless of the arithmetic.
+
+**Action:** dispatched as **A19 (frozen-input-convergence)** — freeze M1's outputs, iterate M2
+alone, count sweeps. It measures `Sᵢ` under partitioning conditions *without building the
+partition*, and it either confirms this STOP or reopens it on `low_aspect_ratio_DEMO`.
