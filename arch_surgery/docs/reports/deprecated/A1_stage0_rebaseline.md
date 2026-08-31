@@ -1,3 +1,9 @@
+> **Document status** — **ARCHIVED · CURRENT**
+> A merged task report, archived per protocol §7 because its task closed — **not because it is
+> stale.** It describes commit **`c0ae5b28`** and is **the authoritative Stage-0 baseline**: every
+> later stage compares against the numbers here. Position in `deprecated/` records lifecycle, not
+> validity; the stale documents in this folder say so explicitly in their own headers.
+
 # A1 (stage0-rebaseline) — Stage 0 re-baseline at `c0ae5b28`
 
 | | |

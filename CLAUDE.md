@@ -21,10 +21,12 @@ in `arch_surgery/`.
   merged forward, or re-pinned (D2). It is the shared coordinate system with
   `functional_PROCESS` and with the dependency-analysis pin `PROCESS_at_36ac820e`; moving it
   forfeits every cross-study comparison. `upstream` may be fetched for drift measurement only.
-- **The models are frozen.** Only the driver changes — `process/core/caller.py`,
-  `process/core/solver/`, and the probe. A change under `process/models/` is a change to the
-  independent variable and invalidates the experiment (D5). If a model must change, that is a
-  user decision, recorded as a `D<n>`.
+- **The physics is frozen; model edits need approval.** Only the driver changes by default —
+  `process/core/caller.py`, `process/core/solver/`, the probe. **Minimal structural edits under
+  `process/models/` are permitted (D11)** — extracting a residual so its solution method becomes a
+  driver choice, not changing what a model computes — but **every such change requires the user's
+  approval before merging**. Changing what a model computes is still a change to the independent
+  variable and invalidates the experiment (D5).
 - **Never modify a sibling clone.** `/home/wrutten/dev_libraries/PROCESS`,
   `/home/wrutten/projects/functional_PROCESS` and `/home/wrutten/projects/PROCESS_code_analysis`
   are other working trees. Read them; never write to them.
@@ -50,7 +52,10 @@ in `arch_surgery/`.
 - Probe instrumentation is env-switched: with `PROCESS_IDF_PROBE` unset every hook is a no-op
   and behaviour is byte-identical to upstream. Switch-neutrality is a gate, not an aspiration.
 - Task reports go to `arch_surgery/docs/reports/` while the task is open; they are archived to
-  `arch_surgery/docs/reports/deprecated/` at merge.
+  `arch_surgery/docs/reports/deprecated/` at merge. **Folder position records lifecycle, not
+  validity** — read each document's `> **Document status**` header (trap T3).
+- **Read [`arch_surgery/docs/TRAPS.md`](arch_surgery/docs/TRAPS.md) before touching anything.**
+  Five recorded ways this project has already misled someone.
 - Bulk run artifacts (`arch_surgery/idf_probe/runs/`) stay untracked. Summaries and verdicts
   are committed; raw JSONs are not.
 
@@ -58,12 +63,14 @@ in `arch_surgery/`.
 
 - [`arch_surgery/docs/plans/MASTER_TODO.md`](arch_surgery/docs/plans/MASTER_TODO.md) — the
   queue: protocol, decisions, issues, task rows.
-- [`arch_surgery/docs/MDA_PARTITION_EXPERIMENT.md`](arch_surgery/docs/MDA_PARTITION_EXPERIMENT.md)
+- [`arch_surgery/docs/plans/MDA_PARTITION_EXPERIMENT.md`](arch_surgery/docs/plans/MDA_PARTITION_EXPERIMENT.md)
   — the experiment plan: hypothesis, evidence, critical assessment, stages and gates.
 - [`arch_surgery/docs/reports/PROCESS_architecture_evaluation.md`](arch_surgery/docs/reports/PROCESS_architecture_evaluation.md)
   — the F1–F14 critique of PROCESS's driver architecture. **Stale in its measurements**
   (`710a75c9`); its structural findings largely survive.
-- `arch_surgery/idf_probe/` — the measurement instrument and its stage reports.
+- [`arch_surgery/docs/TRAPS.md`](arch_surgery/docs/TRAPS.md) — binding; read first.
+- `arch_surgery/idf_probe/` — the measurement instrument. Its `MEMO.md` and `NOISE_ANALYSIS.md`
+  are **stale** (`710a75c9`) and carry status headers saying so.
 
 ## Environments
 

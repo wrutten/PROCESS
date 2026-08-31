@@ -1,7 +1,16 @@
 # Subdriver-lift experiment — plan
 
-**Status:** draft, not started, **blocked on a decision** (§3.4) · **Base commit:** `c0ae5b28`
-· **Branch:** task branches off `architecture_surgery`
+> **Document status** — CURRENT · plan for a live but blocked experiment · last revised
+> 2026-08-31.
+
+**Status:** not started, **no longer blocked**. **D11 (2026-08-31) rules** that minimal structural
+edits under `process/models/` are permitted — extracting a residual is licensed, changing what a
+model computes is not — **with every change requiring the user's approval before merging**. §3.4's
+open question is resolved in favour of the refined reading; the switch-gated extraction it
+recommends remains the right mechanism, now as good practice rather than as a workaround. **Not** blocked by I-7, which
+was downgraded once the iteration-variable cap turned out to be derived rather than hand-set;
+numbers are allocated append-only from
+[`REGISTRY_ALLOCATIONS.md`](REGISTRY_ALLOCATIONS.md) (D10). · **Base commit:** `c0ae5b28`
 
 **Relationship to the other experiment.** This is a *second, separate* architecture change,
 independent of [`MDA_PARTITION_EXPERIMENT.md`](../MDA_PARTITION_EXPERIMENT.md). Both alter the
@@ -294,7 +303,7 @@ not a result.
 
 ## 7. Open questions
 
-1. **Does the refined reading of D5 hold?** Blocking — §3.4.
+1. ~~Does the refined reading of D5 hold?~~ **Resolved by D11** — it does, with an approval gate.
 2. What fraction of wall clock do the nested solves actually consume? L0 answers it and it
    determines whether H3 survives.
 3. Is `disp=False` at `pfcoil.py:4909` deliberate, given the identical call at

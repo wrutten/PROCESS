@@ -1,3 +1,11 @@
+> **Document status** — **SUPERSEDED · STALE**
+> The gradient-noise study of the abandoned IDF experiment, measured at commit **`710a75c9`**.
+> Not rederived at `c0ae5b28`; its figures are not evidence for anything in this repository
+> (decision D4). The script that produced it, `noise_probe.py`, has not been run against this tree.
+> Retained because the finite-difference-noise argument it develops is the basis of the subdriver
+> lift's secondary case
+> ([`../docs/plans/SUBDRIVER_LIFT_EXPERIMENT.md`](../docs/plans/SUBDRIVER_LIFT_EXPERIMENT.md) §3.2).
+
 # Why the measured FD gradient noise in PROCESS was (almost) zero
 
 **Subject:** reconciling "gradient error = 0.0" with the fact that PROCESS's models are full of

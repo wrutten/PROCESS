@@ -87,19 +87,20 @@ from 93 upward are available and will be blocked out when the first lifting task
 | **D8** | **The module partition is derived from the collapsed DSM, not assumed.** M1 Physics = rows 4, 6–28; M2 Coils = rows 5, 29–37; M3 Plant = rows 40–51; `CsFatigue` (38) and rows 52–55 feed-forward; `Pulse` (39) is the articulation point belonging to no module | 2026-08-31 |
 | **D9** | **The archived scenario deck is patched in place, not re-pointed at upstream's regression inputs.** `st_regression.IN.DAT` gains `i_tf_turn_type = 2` and the four tape geometries; the other three stay as archived and continue to load via obsolete-name rewriting (A1 autonomous decision 3). Rationale: the deck stays a frozen artifact of this study rather than tracking whatever upstream ships, so a scenario cannot change under a result | 2026-08-31 |
 | **D10** | **Registry numbers are appended, never fitted into gaps.** `ITERATION_VARIABLES` has 94 gaps in 1–177 from retired variables; reusing one silently reinterprets any existing `IN.DAT` naming that number. There is **no cap to raise** — `N_ITERATION_VARIABLES_MAX` is derived as `max(keys)`, so appending 178 raises it automatically and every array sized by it grows. Constraints append from 93, with `lablcc` extended in step. Allocations in [`REGISTRY_ALLOCATIONS.md`](REGISTRY_ALLOCATIONS.md) | 2026-08-31 |
+| **D11** | **D5 refined: minimal edits to `process/models/` are permitted, and every change requires the user's approval before merging.** The physics is still frozen — what is licensed is structural work such as extracting a residual so its solution method becomes a driver choice, not changing what a model computes. The approval gate replaces the blanket prohibition. **Unblocks A9–A11** | 2026-08-31 |
 
 ---
 
 ## Issue register
 
-Open issues only.
+Open issues only. **Traps — recurring ways to be misled, as opposed to defects to fix — live in
+[`../TRAPS.md`](../TRAPS.md)** and are binding on every task.
 
 | # | Issue | Status |
 |---|---|---|
 | **I-1** | **The editable install pointed at the wrong tree** (`dev_libraries/PROCESS`, at superseded commit `710a75c9`), so runs in their own working directories imported the wrong code silently | **CLOSED** 2026-08-31 — conda env `PROCESS_surgery_env` created by the user; A1 re-ran every gate under it and confirmed **bit-identical** results to the `PROCESS_env` figures. `PROCESS_env` must not be used here |
 | **I-2** | **`t_burn_0` is dead code.** `process/models/physics/physics.py:513` writes `times.t_burn_0` with a comment referring to "the convergence loop in `fcnvmc1`, `evaluators.f90`" — a file that no longer exists. The variable has no reader anywhere in `process/`. Evidence that burn time was historically *the* reconciliation variable, and a candidate small independent contribution upstream | **OPEN** — confirm no MFILE-path reader, then propose removal |
 | **I-3** | **The superseded documents carry no staleness marking.** `IDF_EXPERIMENT_PLAN.md`, `PROCESS_architecture_evaluation.md`, `idf_probe/MEMO.md` and `NOISE_ANALYSIS.md` all describe the `710a75c9` study and read as current | **OPEN** — A7 (repo-readme) adds headers |
-| **I-4** | **Name-level dependency analysis conflates `run()` and `output()`.** `physics.b_plasma_vertical_required` looked like a Coils→Physics feedback edge but the read is inside `PlasmaFields.output()`, a report-writing method outside the MDA. Any instrument that greps attribute access must exclude `output()` paths | **OPEN** — binding on A2 (module-convergence)'s instrument |
 | **I-5** | **`st_regression.IN.DAT` was stale and did not solve at `c0ae5b28`** — archived from `710a75c9`, missing `i_tf_turn_type` | **CLOSED** 2026-08-31 by D9's patch: five keys copied verbatim from the base commit's own regression input, carrying `* D9 PATCH` provenance comments. Reproduces the base-input diagnostic bit-for-bit, so the patch is equivalent, not merely sufficient |
 | **I-6** | **Two actors in one working tree put commits on the wrong branch.** Orchestrator admin commits landed on `A1-stage0-rebaseline` because the agent had checked it out in the shared tree. Repaired by fast-forwarding `architecture_surgery` (contiguous commits, no history rewritten). Root cause: the protocol said "own branch" where `PROCESS_code_analysis` says **isolated worktree** | **CLOSED** by the protocol amendment at §3 and §9 above — task work now runs in its own `git worktree` |
 | **I-7** | **~~No free iteration-variable number exists.~~ Overstated — corrected.** `N_ITERATION_VARIABLES_MAX` is *derived* (`max(keys)`), not a hand-set cap, so appending 178 raises it automatically; arrays grow and `lablxc` self-populates. Nothing hardcodes 177. The real risks are **reusing one of the 94 gaps** (silently reinterprets existing `IN.DAT`s) and two branches independently picking 178 | **DOWNGRADED** — not a blocker; handled by D10 and the allocation table |
@@ -122,9 +123,9 @@ Open issues only.
 | **A6** | **characterise** — Stage 5. Scenario sweep; pulsed and steady-state reported separately; wall clock decomposed into model evaluation, VMCON overhead and I/O | A5 ✓ | QUEUED |
 | **A7** | **repo-readme** — write the repository README for the flattened fork: what this is, the base-commit rationale, the relationship to `functional_PROCESS` and `PROCESS_code_analysis`, and where to start. Add staleness headers to the superseded documents (I-3) | — | QUEUED — awaiting user prompt |
 | **A8** | **plan-relocation** — move `MDA_PARTITION_EXPERIMENT.md` into `docs/plans/` per the plans convention, and fold the corrected speedup mechanism (feed-forward nodes drop from `S_global ×` to `1 ×`, so `|all|` shrinks as well as the sweep counts) into §3.2 | A1 ✓ (the running agent holds the current path) | QUEUED |
-| **A9** | **subdriver-count** *(PROPOSED)* — Stage L0 of [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md): confirm each nested root-find is on a `run()` path **by invocation counting, not by reading** (I-4); time them as a fraction of wall clock; record non-convergence. Read-only, no refactor. Its gate decides whether the runtime claim survives | A1 ✓ | **BLOCKED** on the D5 ruling (open question 1) |
-| **A10** | **subdriver-extract** *(PROPOSED)* — Stage L1: extract each residual into a named function behind an env switch, inner solve remaining the default. Gate: switch unset ⇒ bit-identical | A9 ✓ | **BLOCKED** on the D5 ruling |
-| **A11** | **subdriver-lift-one** *(PROPOSED)* — Stage L2: lift the loosest-tolerance, highest-count residual. Primary result is Jacobian accuracy against a bounded reference; runtime secondary and may regress | A10 ✓ | **BLOCKED** |
+| **A9** | **subdriver-count** *(PROPOSED)* — Stage L0 of [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md): confirm each nested root-find is on a `run()` path **by invocation counting, not by reading** (trap T1); time them as a fraction of wall clock; record non-convergence. Read-only, no refactor. Its gate decides whether the runtime claim survives | A1 ✓ | **UNBLOCKED** by D11 |
+| **A10** | **subdriver-extract** *(PROPOSED)* — Stage L1: extract each residual into a named function behind an env switch, inner solve remaining the default. Gate: switch unset ⇒ bit-identical | A9 ✓ | **UNBLOCKED** by D11 |
+| **A11** | **subdriver-lift-one** *(PROPOSED)* — Stage L2: lift the loosest-tolerance, highest-count residual. Primary result is Jacobian accuracy against a bounded reference; runtime secondary and may regress | A10 ✓ | **UNBLOCKED** by D11 |
 | **A12** | **subdriver-failure-policy** *(PROPOSED)* — Stage L4, independent of the lift: resolve whether `disp=False` at `pfcoil.py:4909` is deliberate, given the identical call at `superconducting.py:1267` uses `disp=True`. Report as a PROCESS finding | — | **PROPOSED** — runnable without the D5 ruling |
 | **A18** | **experiment-framework** — build the shared harness in [`EXPERIMENT_FRAMEWORK.md`](EXPERIMENT_FRAMEWORK.md), steps F1–F6 + F7a: arm selection and identity in `metrics.json`, the registry allocation table with 178 appended, the timing protocol closing I-8, the DSM node map with run-time validation, the read-only `note_subsolve` census, and the correctness + robustness gates. **Framework-only — no behaviour change**, merging under neutrality and determinism alone | A1 ✓ | **PROPOSED — recommended next.** F1–F3 are the minimum before any further experiment: without them arms are unidentifiable and timings unreportable |
 
@@ -144,20 +145,18 @@ and the interference analysis, is [`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCH
 
 ### User-facing standing items (not tasks)
 
-- Delete `github.com/wrutten/PROCESS_surgery` — orphaned, superseded by the flattened fork.
-- Add `upstream` (`https://github.com/ukaea/PROCESS.git`) read-only, for drift measurement.
-- Push `architecture_surgery` — commit `98615eb3` and everything since awaits per-push approval.
+- ~~Add `upstream` read-only for drift measurement~~ — **DONE**, verified
+  (`upstream https://github.com/ukaea/PROCESS.git`).
+- ~~Push `architecture_surgery`~~ — **DONE**, verified (0 commits ahead of origin).
+- Delete `github.com/wrutten/PROCESS_surgery` — reported done by the user; **not verifiable from
+  this session** (no network access to GitHub).
+- **Run measurement work when the machine is otherwise idle** (user, 2026-08-31). With 7 GB RAM and
+  no thread pinning, concurrent sessions are the leading suspect for I-8's spread.
 
 ---
 
 ## Known open questions (parked, not blocking)
 
-0. **Does D5's model freeze permit lifting a subdriver residual?** **BLOCKING** for A9–A11.
-   Lifting requires edits under `process/models/` to expose residuals. Narrow reading: out of
-   scope. Refined reading: the residual *expressions* are frozen while the *method of driving
-   them to zero* is architecture, and is exactly this project's independent variable. A
-   switch-gated extraction keeps the frozen path byte-identical either way. Needs a recorded
-   `D9`. See [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md) §3.4.
 1. **Which module is the laggard?** Everything in the speedup argument turns on it. A2's
    central measurement.
 1b. **Does H2 survive its own cheapest test?** `st_regression` has `i_pulsed_plant = 0`, so the

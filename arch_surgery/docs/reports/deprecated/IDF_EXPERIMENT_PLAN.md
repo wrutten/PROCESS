@@ -1,3 +1,10 @@
+> **Document status** — **SUPERSEDED · STALE**
+> Describes the IDF experiment at commit **`710a75c9`**, not this repository's base `c0ae5b28`.
+> **No number in this document is evidence** (decision D4); the study it plans was abandoned and
+> its Stage-0 evidence deleted. Retained for **methodology only** — the gate design, the run
+> isolation requirements and the measurement approach carried forward; the conclusions did not.
+> Superseded by [`../../plans/MDA_PARTITION_EXPERIMENT.md`](../../plans/MDA_PARTITION_EXPERIMENT.md).
+
 # PROCESS optimisation-architecture experiment — consolidated plan (v2)
 
 **Date:** 2026-08-06, last revised 2026-08-10 · **Author context:** W.J. Rutten (TU/e) with Claude Code

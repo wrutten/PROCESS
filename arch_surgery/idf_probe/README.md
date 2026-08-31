@@ -5,7 +5,7 @@
 
 This directory holds the instrument that measures how much work PROCESS's driver does, and
 the scripts that run it. The experiment it serves is described in
-[`../docs/MDA_PARTITION_EXPERIMENT.md`](../docs/MDA_PARTITION_EXPERIMENT.md); the Stage-0
+[`../docs/plans/MDA_PARTITION_EXPERIMENT.md`](../docs/plans/MDA_PARTITION_EXPERIMENT.md); the Stage-0
 result is in [`../docs/reports/A1_stage0_rebaseline.md`](../docs/reports/A1_stage0_rebaseline.md).
 
 > **The directory name is historical.** *IDF* — individual discipline feasible — was the

@@ -1,3 +1,10 @@
+> **Document status** — **LIVE REFERENCE · MEASUREMENTS STALE**
+> The F1–F14 critique of PROCESS's driver architecture. Its **structural findings are current and
+> still cited** — F3, F4, F11, F12 and F14 are the basis of the live and deferred experiments. Its
+> **measured figures were taken at `710a75c9`** and must not be quoted; the current baseline is
+> A1 (stage0-rebaseline)'s, at `c0ae5b28`. It sits in `reports/` rather than `reports/deprecated/`
+> precisely because it is still in use.
+
 # PROCESS driver architecture — a critical evaluation
 
 **Scope.** The workflow layer of PROCESS: the drivers between the command line and

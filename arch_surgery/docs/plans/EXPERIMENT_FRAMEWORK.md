@@ -1,7 +1,11 @@
 # Experiment framework — implementation master plan
 
-**Status:** design, not built · **Base commit:** `c0ae5b28` · **Owns:** the shared code both
-architecture experiments run on
+> **Document status** — CURRENT · design for the shared harness · last revised 2026-08-31.
+
+**Status:** design, not built — proposed as **A18 (experiment-framework)**. A1
+(stage0-rebaseline) has already delivered the parts marked *(built, A1)* below: the probe module,
+its four measurement hooks, the run harness and the first three gates. · **Base commit:**
+`c0ae5b28` · **Owns:** the shared code both architecture experiments run on
 
 This document specifies the code to build **before** running either experiment. It is not an
 experiment plan — [`MDA_PARTITION_EXPERIMENT.md`](MDA_PARTITION_EXPERIMENT.md),

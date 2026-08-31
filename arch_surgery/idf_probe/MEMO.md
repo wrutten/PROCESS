@@ -1,3 +1,12 @@
+> **Document status** — **SUPERSEDED · STALE**
+> The Stage-0 verdict of the abandoned IDF study, measured at commit **`710a75c9`**. Every number
+> here — sweep counts, the coupling census, the gradient-noise study — was rederived or discarded
+> at `c0ae5b28` (decision D4), and the run artifacts it cites were deleted. **Do not cite it.**
+> The current Stage-0 record is
+> [`../docs/reports/deprecated/A1_stage0_rebaseline.md`](../docs/reports/deprecated/A1_stage0_rebaseline.md).
+> Retained because its *methodology* — switch-neutrality gating, subprocess isolation, the census
+> design, and the finding that `nviter` under-reports evaluations — carried forward.
+
 # Track A verdict memo — one-shot IDF performance probe on PROCESS
 
 **Study commit:** `main` @ `710a75c9d2b81053e92918bb6866a0e98f89d814` (merge of ukaea/main, 2026-07-29)
