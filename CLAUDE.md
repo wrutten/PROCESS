@@ -46,6 +46,14 @@ in `arch_surgery/`.
   run in a fresh environment for timing — numba JIT dominates it.
 - **Compare at matched final accuracy**, never at matched tolerance settings (§3.3 of the
   experiment plan).
+- **No conclusion rests on a timing.** Acceptance quantities are **counts or bit-comparisons** —
+  sweeps, model evaluations, hex-float identity — which are exact and reproduce bit-for-bit.
+  Timings are reported as context, with their interval and repetition count, and never as
+  evidence. This is not caution about noise: I-10 showed a wall-clock-derived *cost weight* moving
+  6.4 % → 4.4 % across runs of identical code, which had already reached the arithmetic behind a
+  gate decision. A weighting whose instability is comparable to the effect it resolves is noise
+  with a decimal point. *(Convention adopted from `PROCESS_code_analysis`, which reached it
+  independently and for different reasons.)*
 - Correctness is gated on `norm_objf` plus a post-solve feasibility audit — **never on
   iteration variables** (D6); some are not identified by the problem and differ at an unchanged
   optimum.
