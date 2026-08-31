@@ -108,3 +108,18 @@ Each sandboxed Bash call gets its own PID namespace, so `ps` shows nothing from 
 
 **How to avoid it:** stop background work with `TaskStop`, never with `pkill`. If two runs may
 overlap, serialise them explicitly rather than trying to detect and kill.
+
+## T9 — Reading a sibling repository's generated exports races with its merges
+
+`PROCESS_code_analysis` regenerates its shipped exports (`output/tokamak/dsm_collapsed.html` and
+friends) **at every merge**. A task that reads them live can catch a half-written or
+mid-regeneration state, and it also silently re-pins our analysis to whatever their tree happens
+to hold that day — which is not necessarily the commit our documents claim.
+
+Confirmed by their orchestrator, 2026-08-31, on their own initiative.
+
+**How to avoid it:** never read a sibling repo's generated output live. The DSM node map is
+**committed as data in this repository** (framework component C8), generated once from a named
+pin and validated at run time. A task proposing to read their `output/` instead of our committed
+copy is a design error, not an optimisation. If a re-derivation is genuinely needed, warn that
+session before it runs.
