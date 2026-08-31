@@ -20,6 +20,15 @@ Two modes are supported:
     node performing it.  Implemented in ``_idf_probe_modules``, which is
     imported only in this mode.  (Stage 1 / A2.)
 
+``frozen``
+    Everything ``modules`` records, plus a **replay**: on a sampled subset of
+    ``call_models`` invocations the three modules are re-iterated in
+    isolation from a saved copy of the data structure, to measure how many
+    sweeps each would need with its upstream inputs held *fixed* rather than
+    moving.  The data structure is restored exactly afterwards, so the
+    optimisation trajectory is unchanged.  Implemented in
+    ``_idf_probe_frozen``, imported only in this mode.  (A19.)
+
 Hook sites (see ``arch_surgery/idf_probe/README.md`` for the manifest):
 
 * ``process/core/caller.py``     -- ``call_models`` begin/end, ``_call_models_once``
@@ -72,7 +81,7 @@ __all__ = [
     "write_summary",
 ]
 
-VALID_MODES = ("baseline", "modules")
+VALID_MODES = ("baseline", "modules", "frozen")
 
 _raw = os.environ.get("PROCESS_IDF_PROBE", "").strip()
 MODE: str | None = _raw or None
@@ -88,6 +97,8 @@ if ENABLED and MODE not in VALID_MODES:
 #: mode, so that no other arm pays for its existence.
 if MODE == "modules":
     from process.core import _idf_probe_modules as _mod
+elif MODE == "frozen":
+    from process.core import _idf_probe_frozen as _mod
 else:
     _mod = None
 

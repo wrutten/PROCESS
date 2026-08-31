@@ -5,7 +5,11 @@
 
 **Status:** **Stage 0 COMPLETE** (A1, merged `e9747707`). **Stage 1 COMPLETE (A2,
 module-convergence) and its gate STOPS the study** — see the Stage 1 section and §3.2. Stages 3-5
-are not authorised on this evidence. · **Base commit:** `c0ae5b28` · **Branch:**
+are not authorised on this evidence. **A19 (frozen-input-convergence, 2026-08-31) re-measured the
+one assumption that STOP rests on and moved the partition's contribution from 2.3-7.2 % into the
+10-25 % band on the two large pulsed tokamaks — the middle band, not a reopening; nothing reaches
+25 %.** The STOP therefore stands unless the user revises it; §3.2 carries A19's numbers and the
+two corrections that pull against them. · **Base commit:** `c0ae5b28` · **Branch:**
 `architecture_surgery`
 
 **Scope:** tokamak only. Stellarator and IFE take an early return in `_call_models_once`
@@ -323,6 +327,54 @@ runs changes the *information* M2 receives, so per-module sweep counts under par
 not equal those measured in the coupled loop. Treat the analytic prediction as an estimate to
 be checked at Stage 3, not as a result.
 
+> **MEASURED (A19, 2026-08-31) — this paragraph is half confirmed and half refuted, and it did
+> not need Stage 3.** A19 replayed 2 447 of the four scenarios' 2 451 `call_models` with each
+> module iterated in isolation on frozen upstream inputs, restoring the data structure exactly
+> afterwards (byte-identical MFILE against `control`, 4 / 4 scenarios).
+>
+> **Confirmed: the counts do change, and A2's estimate was biased against the partition.**
+>
+> | Scenario | `S₁` coupled → frozen | `S₂` coupled → frozen | `S₃` coupled → frozen |
+> |---|---|---|---|
+> | `large_tokamak_nof` | 3.226 → **2.544** | 3.226 → **3.226** | 3.283 → **2.461** |
+> | `low_aspect_ratio_DEMO` | 3.144 → **2.561** | 3.201 → **3.201** | 3.287 → **2.527** |
+> | `st_regression` | 2.638 → **2.638** | 2.800 → **2.800** | 2.938 → **2.482** |
+> | `large_tokamak_eval` | 2.400 → **2.400** | 2.000 → **2.000** | 2.300 → **2.000** |
+>
+> **Refuted: the mechanism is not "the information M2 receives".** `S₂` measured with M1 solved
+> to convergence first is **identical, per `call_models`, to `S₂` in the coupled loop — 2 447
+> loops, four scenarios, zero exceptions.** M2 is not chasing a moving target and never was.
+> `S₁`'s fall is *entirely* the `k = 1` lift: `S₁` with M1 alone equals `S₁` measured in the
+> whole untouched sequence with `times.t_plant_pulse_burn` pinned, in 100 % of loops in all four
+> scenarios. Only `S₃` shows a genuine frozen-input effect beyond the lift, worth 0.10–0.46
+> sweeps.
+>
+> **The gate moves into the 10–25 % band and still does not reach 25 %.** Partition contribution
+> beyond the hoist, node counts / measured cost: `large_tokamak_nof` **14.9 / 11.3 %** (A2:
+> 2.3 / 3.8 %), `low_aspect_ratio_DEMO` **19.5 / 16.8 %** (A2: 6.8 / 7.2 %), `st_regression`
+> **18.1 / 18.0 %** (A2: 15.2 / 15.8 %), `large_tokamak_eval` **−0.4 / −1.3 %**.
+>
+> **Two corrections that pull the other way.**
+>
+> 1. **The lift's dimension penalty is not in this arithmetic.** The gradient uses central
+>    differences, `2n` perturbation calls, confirmed exactly; lifting one variable makes it
+>    `2(n+1)`, a **4.8 % / 5.0 %** penalty on total model evaluations at `n = 20` / `n = 19`.
+>    Netted, the two large pulsed tokamaks are at **6.6–10.2 %** and **11.8–14.5 %**. §3.1's
+>    "essentially all of any saving survives to the bottom line" is optimistic at these margins.
+> 2. **The laggard moves from M1 to M2, not to a small module.** Because `S₂` does not move, M2
+>    is joint-last in 76 % / 73 % of the two large pulsed tokamaks' loops under the partition and
+>    strictly last in 39 % / 36 %. M2 is 10 of the 46 module nodes but **41.7–43.1 % of the
+>    measured cost**. This section's condition — the loop being driven by a *small* module — is
+>    still not met.
+>
+> **And the lift buys nothing on its own.** `max(S₁, S₂, S₃)` — what a per-module-state exit test
+> would cost the *monolithic* loop — is unchanged to four decimals by pinning the coupler, in
+> every scenario, because M2 is always the binding module. The lift's value is realised only
+> through the partition, so unlike the feed-forward hoist it is **not** separable and is
+> correctly credited to the partition.
+>
+> Full detail: [`../reports/A19_frozen_input_convergence.md`](../reports/A19_frozen_input_convergence.md).
+
 ### 3.3 Where it is most likely to break
 
 **H5 is the real risk.** Adding an equality consistency constraint changes the geometry of the
@@ -394,7 +446,10 @@ Done as A2 (module-convergence). Report:
 `baseline` across 15 916-18 691 MFILE lines on all four scenarios.
 
 **Outcome: `k = 1` as hypothesised, but no module is the laggard and the predicted saving does
-not reach the threshold.** The stop rule below is met on two of its three clauses. Stages 3-5 are
+not reach the threshold.** (**Revised by A19**: the predicted saving is higher than A2 computed —
+11.3-19.5 % partition contribution rather than 2.3-15.8 % — because A2's `Sᵢ` were measured with
+the `k = 1` coupler still live. It still does not reach 25 %, and under the partition the laggard
+becomes M2. See §3.2.) The stop rule below is met on two of its three clauses. Stages 3-5 are
 not authorised on this evidence; Stage 2 (A3) is still worth running as an integrity check, and
 the feed-forward hoist (A13 / E1), which delivers 4.6-8.2 % with `k = 0` and no change to the
 optimiser's problem, should be reconsidered. The original design of the stage is retained below.
@@ -480,7 +535,7 @@ converged to the same place to the same precision.
 | Threat | Handling |
 |---|---|
 | Sweep count reflects the loop's exit criterion, not coupling | Compare at matched final accuracy; report the criterion's slack. **Confirmed real by A2**: in 24 % of `large_tokamak_nof`'s loops the state is still changing when the loop exits |
-| Partitioning changes per-module convergence vs. the coupled loop | Stage 1 prediction checked against Stage 4 measurement |
+| Partitioning changes per-module convergence vs. the coupled loop | **Measured by A19 (2026-08-31) without building the partition**, by replaying each module in isolation from a saved state and restoring it. It does change, in the partition's favour, by +8 to +12 percentage points of partition contribution on the two large pulsed tokamaks — but the mechanism is the `k = 1` coupler, not the information M2 receives, and `S₂` does not move at all. Threat closed; §3.2 carries the numbers |
 | Name-level analysis conflates `run()` and `output()` paths | Instrument excludes `output()`; §2.4 is the worked example |
 | Consistency constraint changes optimiser behaviour | Measured as a first-class result (H5), not assumed away |
 | Models raise off the consistency manifold | Budgeted as Stage 3 work; failures reported, not silently worked around |
