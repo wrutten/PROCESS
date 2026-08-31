@@ -55,7 +55,7 @@ once the hoist is credited separately.
 
 | Gate criterion (plan §4, Stage 1) | Measured | Outcome |
 |---|---|---|
-| Predicted saving **> 25 %** with `k = 1` → proceed | max 23.2 %, and that is the smallest scenario-by-cost case | **not met** |
+| Predicted saving **> 25 %** with `k = 1` → proceed | max 23.2 %, on `st_regression` under the weighting that most flatters the partition; 8.4 % and 11.8 % on the two large pulsed tokamaks | **not met** |
 | **10–25 %**, or `k = 2–3` → proceed with expectation revised down | total saving is in band for 2 of 4 scenarios; `k = 1` | partially met |
 | **< 10 %**, or **M1 is the laggard**, or `k > 3` → **stop and report** | partition-only saving < 10 % in 3 of 4; M1 is joint laggard in the largest case | **met — STOP** |
 
