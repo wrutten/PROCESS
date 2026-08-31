@@ -1,147 +1,223 @@
 #!/usr/bin/env python
-"""A/B tables: probe modes vs self-generated baselines."""
+"""Stage-0 gate checker and sweep-anatomy table.
+
+Reads ``runs/<scenario>/<arm>/metrics.json`` written by ``run_stage0.py`` and
+evaluates the three Stage-0 gates:
+
+(a) switch-neutrality
+    An untouched checkout of the base commit (arm ``pristine``), the
+    instrumented tree with the probe switch unset (arm ``control``) and the
+    instrumented tree with ``PROCESS_IDF_PROBE=baseline`` must all produce
+    **identical** results -- not "within tolerance".  The comparison is made
+    on hex float literals, i.e. exact IEEE-754 doubles.
+(b) determinism
+    Two independent ``baseline`` runs of the same scenario must agree
+    exactly.
+(c) baseline solves
+    Every scenario returns ``ifail = 1``.
+
+Usage:  python compare.py [--runs DIR]
+"""
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from metrics import compare_itvars, load_jsonl, rel_delta, speedup, sweep_stats  # noqa: E402
+from metrics import exact_signature, sweep_table  # noqa: E402
 
-RUNS = HERE / "runs"
-OPT_SCENARIOS = ["large_tokamak_nof", "low_aspect_ratio_DEMO", "st_regression"]
+SCENARIOS = [
+    "large_tokamak_nof",
+    "low_aspect_ratio_DEMO",
+    "st_regression",
+    "large_tokamak_eval",
+]
 
 
-def load(scenario: str, mode: str) -> dict | None:
-    p = RUNS / scenario / mode / "metrics.json"
+def load(runs: Path, scenario: str, arm: str) -> dict | None:
+    p = runs / scenario / arm / "metrics.json"
     return json.loads(p.read_text()) if p.exists() else None
 
 
-def repro_gate() -> dict:
-    a = load("large_tokamak_nof", "baseline_rep1")
-    b = load("large_tokamak_nof", "baseline_rep2")
-    if not a or not b:
-        return {"status": "missing"}
-    cmp = compare_itvars(a["mfile"], b["mfile"])
-    return {
-        "status": "PASS" if cmp["max_rel"] <= 1e-6 else "FAIL",
-        "max_rel_itvar_delta": cmp["max_rel"],
-        "n_itvars": cmp["n_common"],
-        "norm_objf_rel_delta": rel_delta(a["mfile"]["norm_objf"], b["mfile"]["norm_objf"]),
-        "sweeps_a": a["probe"]["n_sweeps"], "sweeps_b": b["probe"]["n_sweeps"],
-    }
+def _diff_signature(a: dict, b: dict) -> list[str]:
+    """Field names where two exact signatures differ."""
+    return [k for k in a if a[k] != b.get(k)]
 
 
-def baseline_summary() -> dict:
+def gate_a(runs: Path, scenarios) -> dict:
     out = {}
-    for s, mode in [(x, "baseline_rep1") for x in OPT_SCENARIOS] + [
-        ("large_tokamak_eval", "baseline")
-    ]:
-        d = load(s, mode)
-        if not d:
+    for s in scenarios:
+        arms = {a: load(runs, s, a) for a in ("pristine", "control", "baseline")}
+        if any(v is None for v in arms.values()):
+            out[s] = {"status": "MISSING"}
             continue
-        recs = load_jsonl(RUNS / s / mode / "probe.jsonl")
-        st = sweep_stats(recs)
-        n = d.get("nvar")
-        S = st["ALL"]["mean_S"]
+        if any(v["status"] != "ok" for v in arms.values()):
+            out[s] = {
+                "status": "NOT APPLICABLE (run crashed)",
+                "run_status": {a: v["status"] for a, v in arms.items()},
+            }
+            continue
+        sig = {a: exact_signature(v) for a, v in arms.items()}
+        d_pc = _diff_signature(sig["pristine"], sig["control"])
+        d_pb = _diff_signature(sig["pristine"], sig["baseline"])
         out[s] = {
-            "mode": mode,
-            "nvar": n, "neqns": d.get("neqns"), "nineqns": d.get("nineqns"),
-            "ifail": d["mfile"]["ifail"], "norm_objf": d["mfile"]["norm_objf"],
-            "nviter": d["mfile"]["nviter"],
-            "n_call_models": d["probe"]["n_call_models"],
-            "total_sweeps": d["probe"]["n_sweeps"],
-            "n_retries": d["probe"]["n_retries"],
-            "epsfcn_final": d.get("epsfcn_final"),
-            "wall_s": d["wall_s"],
-            "mean_S": S,
-            "sweeps": st,
-            "idf_speedup_projection": {
-                f"k={k}": speedup(S, n, k) for k in (4, 6, 8, 10, 12)
-            } if n else {},
-            "itvars": d["mfile"]["itvars"],
+            "status": "PASS" if not d_pc and not d_pb else "FAIL",
+            "pristine_vs_control_differing_fields": d_pc,
+            "pristine_vs_baseline_differing_fields": d_pb,
+            "norm_objf_hex": sig["pristine"]["norm_objf"],
+            "conf_l2_hex": sig["pristine"]["conf_l2"],
+            "n_itvars_compared": len(sig["pristine"]["xcs"] or []),
         }
     return out
 
 
-def ab_table() -> dict:
+def gate_b(runs: Path, scenarios) -> dict:
     out = {}
-    for s in OPT_SCENARIOS:
-        base = load(s, "baseline_rep1")
-        test = load(s, "single_sweep")
-        if not base or not test:
-            out[s] = {"status": "missing", "have_base": bool(base), "have_test": bool(test)}
+    for s in scenarios:
+        a, b = load(runs, s, "baseline"), load(runs, s, "baseline_rep2")
+        if a is None or b is None:
+            out[s] = {"status": "MISSING"}
             continue
-        row: dict = {
-            "base_ifail": base["mfile"]["ifail"], "test_ifail": test["mfile"]["ifail"],
-            "test_status": test["status"],
-            "base_norm_objf": base["mfile"]["norm_objf"],
-            "test_norm_objf": test["mfile"]["norm_objf"],
-            "base_nviter": base["mfile"]["nviter"], "test_nviter": test["mfile"]["nviter"],
-            "base_sweeps": base["probe"]["n_sweeps"], "test_sweeps": test["probe"]["n_sweeps"],
-            "base_calls": base["probe"]["n_call_models"],
-            "test_calls": test["probe"]["n_call_models"],
-            "base_wall": base["wall_s"], "test_wall": test["wall_s"],
-            "base_retries": base["probe"]["n_retries"],
-            "test_retries": test["probe"]["n_retries"],
-            "base_epsfcn": base.get("epsfcn_final"), "test_epsfcn": test.get("epsfcn_final"),
+        if a["status"] != "ok" or b["status"] != "ok":
+            out[s] = {
+                "status": "NOT APPLICABLE (run crashed)",
+                "run_status": [a["status"], b["status"]],
+            }
+            continue
+        d = _diff_signature(exact_signature(a), exact_signature(b))
+        probe_same = (
+            a["probe"]["sweeps_total"] == b["probe"]["sweeps_total"]
+            and a["probe"]["call_models_total"] == b["probe"]["call_models_total"]
+            and a["probe"]["all_phases"]["hist"] == b["probe"]["all_phases"]["hist"]
+        )
+        out[s] = {
+            "status": "PASS" if not d and probe_same else "FAIL",
+            "differing_fields": d,
+            "sweep_counts_identical": probe_same,
+            "sweeps": [a["probe"]["sweeps_total"], b["probe"]["sweeps_total"]],
         }
-        if base["mfile"]["norm_objf"] is not None and test["mfile"]["norm_objf"] is not None:
-            row["d_norm_objf_abs"] = abs(test["mfile"]["norm_objf"] - base["mfile"]["norm_objf"])
-            row["d_norm_objf_rel"] = rel_delta(base["mfile"]["norm_objf"], test["mfile"]["norm_objf"])
-        row["itvar"] = compare_itvars(base["mfile"], test["mfile"])
-        if row["base_sweeps"] and row["test_sweeps"]:
-            row["sweep_ratio"] = row["base_sweeps"] / row["test_sweeps"]
-        if row["base_wall"] and row["test_wall"]:
-            row["wall_ratio"] = row["base_wall"] / row["test_wall"]
+    return out
+
+
+def gate_c(runs: Path, scenarios) -> dict:
+    out = {}
+    for s in scenarios:
+        m = load(runs, s, "baseline")
+        if m is None:
+            out[s] = {"status": "MISSING"}
+            continue
+        ifail = (m.get("mfile") or {}).get("ifail")
+        out[s] = {
+            "status": "PASS" if m["status"] == "ok" and ifail == 1.0 else "FAIL",
+            "run_status": m["status"],
+            "ifail": ifail,
+            "error": (m.get("traceback") or "").strip().splitlines()[-1:]
+            if m["status"] != "ok"
+            else None,
+        }
+    return out
+
+
+# MFILE fields that legitimately differ between two identical solves: run
+# metadata and provenance, not results.
+VOLATILE_MFILE_KEYS = (
+    "(date)",
+    "(time)",
+    "(username)",
+    "(computer)",
+    "(directory)",
+    "(fileprefix)",
+    "(tagno)",
+    "(branch_name)",
+    "(commsg)",
+    "(process_runtime)",
+)
+
+
+def _mfile_lines(path: Path) -> list[str]:
+    return [
+        ln
+        for ln in path.read_text(errors="replace").splitlines()
+        if not any(k in ln for k in VOLATILE_MFILE_KEYS)
+    ]
+
+
+def mfile_identity(runs: Path, scenarios) -> dict:
+    """Whole-MFILE identity across arms -- the strongest form of (a) and (b).
+
+    Every line of the MFILE except run metadata must match, not just the
+    handful of quantities the gates name.
+    """
+    out = {}
+    for s in scenarios:
+        # A crashed run leaves a truncated MFILE; comparing those would report
+        # a meaningless PASS.
+        statuses = {
+            arm: (load(runs, s, arm) or {}).get("status")
+            for arm in ("pristine", "control", "baseline", "baseline_rep2")
+        }
+        if any(v != "ok" for v in statuses.values()):
+            out[s] = {"status": "NOT APPLICABLE (run crashed)", "run_status": statuses}
+            continue
+        arms = {}
+        for arm in ("pristine", "control", "baseline", "baseline_rep2"):
+            cand = sorted((runs / s / arm).glob("*MFILE.DAT"))
+            if cand:
+                arms[arm] = _mfile_lines(cand[0])
+        if "pristine" not in arms:
+            out[s] = {"status": "MISSING"}
+            continue
+        base = arms["pristine"]
+        deltas = {
+            arm: sum(1 for a, b in zip(base, v, strict=False) if a != b)
+            + abs(len(base) - len(v))
+            for arm, v in arms.items()
+            if arm != "pristine"
+        }
+        out[s] = {
+            "status": "PASS" if all(d == 0 for d in deltas.values()) else "FAIL",
+            "n_lines_compared": len(base),
+            "differing_lines_vs_pristine": deltas,
+        }
+    return out
+
+
+def anatomy(runs: Path, scenarios) -> dict:
+    out = {}
+    for s in scenarios:
+        m = load(runs, s, "baseline")
+        if m is None:
+            continue
+        row = sweep_table(m)
+        row["status"] = m["status"]
+        row["ifail"] = (m.get("mfile") or {}).get("ifail")
+        row["n_model_calls_builtin"] = m.get("n_model_calls")
         out[s] = row
     return out
 
 
-def drift_ranking(scenario="large_tokamak_nof", top=15) -> dict:
-    recs = load_jsonl(RUNS / scenario / "single_sweep_debug" / "probe.jsonl")
-    drifts = [r for r in recs if r.get("kind") == "drift"]
-    if not drifts:
-        return {"status": "missing"}
-    agg: dict[int, list[float]] = {}
-    objf_rel = []
-    for r in drifts:
-        objf_rel.append(r["objf_rel"])
-        for c in r["conf"]:
-            agg.setdefault(c["j"], []).append(c["rel"])
-    rank = sorted(
-        ({"constraint_index": j,
-          "max_rel_drift": max(v),
-          "mean_rel_drift": sum(v) / len(v),
-          "n": len(v)} for j, v in agg.items()),
-        key=lambda d: -d["max_rel_drift"],
-    )
-    objf_rel.sort()
-    return {
-        "n_drift_records": len(drifts),
-        "objf_rel_drift_median": objf_rel[len(objf_rel) // 2],
-        "objf_rel_drift_max": objf_rel[-1],
-        "top_constraints": rank[:top],
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--runs", default=str(HERE / "runs"))
+    ap.add_argument("--scenarios", nargs="*", default=SCENARIOS)
+    args = ap.parse_args()
+    runs = Path(args.runs)
+
+    result = {
+        "gate_a_switch_neutrality": gate_a(runs, args.scenarios),
+        "gate_b_determinism": gate_b(runs, args.scenarios),
+        "gate_c_baseline_solves": gate_c(runs, args.scenarios),
+        "mfile_whole_file_identity": mfile_identity(runs, args.scenarios),
+        "sweep_anatomy": anatomy(runs, args.scenarios),
     }
+    (runs / "_gates.json").write_text(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2))
+    return 0
 
 
 if __name__ == "__main__":
-    result = {
-        "reproducibility_gate": repro_gate(),
-        "baseline_summary": baseline_summary(),
-        "ab_single_sweep": ab_table(),
-        "drift_ranking": drift_ranking(),
-    }
-    (RUNS / "baseline_summary.json").write_text(
-        json.dumps(result["baseline_summary"], indent=2))
-    (RUNS / "comparison.json").write_text(json.dumps(result, indent=2))
-
-    def brief(d):
-        if isinstance(d, dict):
-            return {k: brief(v) for k, v in d.items() if k not in ("itvars", "sweeps", "per_var")}
-        return d
-
-    print(json.dumps(brief(result), indent=2, default=str))
+    raise SystemExit(main())
