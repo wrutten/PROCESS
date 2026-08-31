@@ -21,7 +21,8 @@
    always accompanies the number in prose — queue rows, change-log entries, reports and
    session messages write `A1 (stage0-rebaseline)`, never a bare `A1`. One keyword per task,
    never renamed. The keyword is the branch slug.
-3. **Every task runs on its own branch** `A<n>-<keyword>` off `architecture_surgery` and writes
+3. **Every task runs on its own branch** `A<n>-<keyword>` **in an isolated `git worktree`** off
+   `architecture_surgery`, and writes
    a report to [`../reports/`](../reports/) — verdict first, autonomous decisions with their
    reversal paths, append-only change log. Commit messages carry the keyword:
    `A<n> <keyword>: …`.
@@ -38,7 +39,11 @@
    tasks' reports.
 8. **Pacing**: the user decides which tasks execute. Only the user adds tasks; agents may
    propose.
-9. **Standing rules**: the sandbox is never overridden (report blockers and ask); never push
+9. **One actor per working tree.** Never `git commit` or `git checkout` in a tree another agent
+   is working in — commits land on whatever branch that agent last checked out (I-6, 2026-08-31).
+   The orchestrator's admin work goes on `architecture_surgery` in the main checkout; task work
+   goes in its own worktree.
+10. **Standing rules**: the sandbox is never overridden (report blockers and ask); never push
    without per-push approval; never modify a sibling clone; the base commit and the models
    are frozen. See [`../../../CLAUDE.md`](../../../CLAUDE.md).
 
@@ -63,13 +68,16 @@ separate branches both would take the next free number, collide at merge, and pr
 misread by the other. Ranges are therefore reserved here before any task starts, and a task
 takes numbers only from its own range:
 
-| Experiment | Iteration variables | Constraints |
-|---|---|---|
-| MDA partition (A4) | reserved block 1 | reserved block 1 |
-| Subdriver lift (A9–A11) | reserved block 2 | reserved block 2 |
+A1 (stage0-rebaseline) §8 measured the registries at `c0ae5b28`, and the result **blocks
+allocation**:
 
-The concrete first-free numbers are set by A1 (stage0-rebaseline)'s report, which is the first
-task to read both registries at `c0ae5b28`; the blocks are allocated here once it lands.
+| Registry | State at `c0ae5b28` | First free |
+|---|---|---|
+| Constraints | 82 registered over 1–92, cap 500 | **93** — but `lablcc` has exactly 92 entries and must be extended in step |
+| Iteration variables | 83 registered over 1–177, `N_ITERATION_VARIABLES_MAX = 177` | **none** — 177 is taken and the cap is the maximum |
+
+**No iteration-variable block can be reserved until the cap is raised (I-7).** Constraint numbers
+from 93 upward are available and will be blocked out when the first lifting task is authorised.
 
 ---
 
@@ -98,6 +106,10 @@ Open issues only.
 | **I-2** | **`t_burn_0` is dead code.** `process/models/physics/physics.py:513` writes `times.t_burn_0` with a comment referring to "the convergence loop in `fcnvmc1`, `evaluators.f90`" — a file that no longer exists. The variable has no reader anywhere in `process/`. Evidence that burn time was historically *the* reconciliation variable, and a candidate small independent contribution upstream | **OPEN** — confirm no MFILE-path reader, then propose removal |
 | **I-3** | **The superseded documents carry no staleness marking.** `IDF_EXPERIMENT_PLAN.md`, `PROCESS_architecture_evaluation.md`, `idf_probe/MEMO.md` and `NOISE_ANALYSIS.md` all describe the `710a75c9` study and read as current | **OPEN** — A7 (repo-readme) adds headers |
 | **I-4** | **Name-level dependency analysis conflates `run()` and `output()`.** `physics.b_plasma_vertical_required` looked like a Coils→Physics feedback edge but the read is inside `PlasmaFields.output()`, a report-writing method outside the MDA. Any instrument that greps attribute access must exclude `output()` paths | **OPEN** — binding on A2 (module-convergence)'s instrument |
+| **I-5** | **`st_regression.IN.DAT` is stale and does not solve at `c0ae5b28`.** Archived from `710a75c9`; sets `i_tf_sc_mat = 9` (REBCO tape) but not `i_tf_turn_type`, which defaults to cable-in-conduit, so the CICC model raises on the first `fcnvmc1` call. Reproduces on a pristine `c0ae5b28` archive, so it is the input, not the probe. The base commit's own `tests/regression/input_files/st_regression.IN.DAT` adds `i_tf_turn_type = 2` and solves. **Costs the MDA partition plan its only `i_pulsed_plant = 0` control** | **OPEN** — needs a `D<n>` ruling (open question 0b); blocks A1's merge |
+| **I-6** | **Two actors in one working tree put commits on the wrong branch.** Orchestrator admin commits landed on `A1-stage0-rebaseline` because the agent had checked it out in the shared tree. Repaired by fast-forwarding `architecture_surgery` (contiguous commits, no history rewritten). Root cause: the protocol said "own branch" where `PROCESS_code_analysis` says **isolated worktree** | **CLOSED** by the protocol amendment at §3 and §9 above — task work now runs in its own `git worktree` |
+| **I-7** | **No free iteration-variable number exists.** `N_ITERATION_VARIABLES_MAX = 177` and 177 is taken, so any task that lifts a variable to the optimiser — A4 (burn-time-lift), A9–A11 (subdriver lift) — must first raise the cap in `numerics.py`, or reuse a retired gap, which would **silently reinterpret existing `IN.DAT` files**. The cap is outside `process/models/`, so raising it is D5-safe, but it is a shared change that must land once, not per branch | **OPEN** — blocks all lifting tasks |
+| **I-8** | **Wall clock is not yet a measurable quantity.** Two bit-identical baseline runs differ by up to **7.9 %** in wall time. The MDA partition plan's Stage-1 gate ("> 25 % predicted saving") and stop rule ("< 10 %") sit inside or near that band, and **no plan specifies a repetition count or a confidence interval** | **OPEN** — A2 (module-convergence) must fix the timing protocol before reporting any timing |
 
 ---
 
@@ -107,7 +119,7 @@ Open issues only.
 
 | # | Task | Prereqs | Status |
 |---|---|---|---|
-| **A1** | **stage0-rebaseline** — reinstate an env-switched probe against `c0ae5b28`; measure sweep anatomy for all four scenarios; pass the switch-neutrality, determinism and baseline-solve gates. Branch `A1-stage0-rebaseline`; report [`../reports/A1_stage0_rebaseline.md`](../reports/A1_stage0_rebaseline.md). Deliverables: probe, rewritten `idf_probe/README.md`, the report | — | **IN PROGRESS** (dispatched 2026-08-31, before the protocol existed; corrected in flight — see change log) |
+| **A1** | **stage0-rebaseline** — env-switched probe at `c0ae5b28`; sweep anatomy; three gates. Report [`../reports/A1_stage0_rebaseline.md`](../reports/A1_stage0_rebaseline.md) with the orchestrator's assessment appended | — | **COMPLETE, NOT MERGED — gate (c) FAILED.** Gates (a) switch-neutrality and (b) determinism PASS; (c) baseline-solves fails on `st_regression`, a stale input archived from `710a75c9` that also fails on the pristine base commit. Frozen under protocol §6 pending the scenario-set ruling (open question 0b) |
 | **A2** | **module-convergence** — Stage 1, the gating measurement. Attribute per-sweep state change to M1 / M2 / M3 to obtain `S₁, S₂, S₃` and identify the laggard; confirm at runtime that `t_plant_pulse_burn` is the only cross-module coupler in a `run()` path. **Instrument must exclude `output()` (I-4).** Gate: predicted saving, with a stop rule if M1 is the laggard | A1 ✓ | QUEUED |
 | **A3** | **build-reorder** — Stage 2. Move `build.run()` to after `PlasmaConfinementTime`. Gate: **bit-identical** results. Expected to be inert; it is a sharp integrity check on the dependency graph | A1 ✓ | QUEUED |
 | **A4** | **burn-time-lift** — Stage 3. Lift `t_plant_pulse_burn` to a design variable with a consistency constraint; verify module independence before adding any solver. Report the `n → n+1` overhead separately from the partition's effect | A2 ✓, A3 ✓ | QUEUED |
@@ -141,6 +153,12 @@ Open issues only.
    them to zero* is architecture, and is exactly this project's independent variable. A
    switch-gated extraction keeps the frozen path byte-identical either way. Needs a recorded
    `D9`. See [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md) §3.4.
+0b. **Does the scenario set re-point at `tests/regression/input_files/`?** **BLOCKING** A1's
+   merge. The archived scenarios came from `710a75c9`; one no longer solves (I-5) and the other
+   three need obsolete-name rewriting to load at all. Re-pointing at the base commit's own
+   regression inputs fixes both and keeps the deck aligned with the frozen tree — at the cost
+   that the deck is then whatever upstream ships rather than a frozen artifact of this study.
+   Needs a recorded `D<n>`.
 1. **Which module is the laggard?** Everything in the speedup argument turns on it. A2's
    central measurement.
 2. Post-lift, does `Pulse` (row 39) join a module or remain a standalone feed-forward node?
@@ -158,3 +176,4 @@ Open issues only.
 | 2026-08-31 | Queue opened. Repository flattened into the `wrutten/PROCESS` fork (D1); base commit fixed at `c0ae5b28` (D2); `710a75c9` evidence discarded (D4). Experiment plan written and revised after the DSM module decomposition (D8) and the withdrawal of the `b_plasma_vertical_required` finding (I-4). A1 (stage0-rebaseline) dispatched. |
 | 2026-08-31 | Subdriver-lift experiment planned ([`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md)); A9–A12 proposed, A9–A11 blocked on a D5 ruling. Superseded IDF plan moved to `reports/deprecated/`, architecture evaluation to `reports/`. **A1 (stage0-rebaseline) was dispatched before this protocol existed** — its original brief said to commit to `architecture_surgery` and to write its report to `idf_probe/STAGE0.md`; it was corrected in flight to branch `A1-stage0-rebaseline` and to report at `reports/A1_stage0_rebaseline.md`, and given the hard rules (sandbox never overridden, no sibling-clone writes, no `git add -A`). |
 | 2026-08-31 | Subdriver-lift experiment **reframed around robustness** (primary), gradient quality secondary, performance penalty measured and reported as two separate numbers rather than netted; its Stage L0 gate moved from wall-clock share to failure incidence. Portfolio of further candidates added ([`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCHITECTURE_EXPERIMENT_CANDIDATES.md)) with A13–A17 proposed — E1/E4/E5 need no D5 ruling. Interference between the two planned experiments analysed: **optimiser-registry ranges now reserved above**, and §2.4 records that the partition's outcome changes what the subdriver experiment *is* (a lifted residual gains a second possible host — the module's own solver — which costs no dimension), so the partition resolves first. |
+| 2026-08-31 | **A1 (stage0-rebaseline) complete, not merged.** Gates (a) switch-neutrality and (b) determinism PASS — (a) verified more strongly than specified, against a pristine `git archive` arm on hex float literals plus whole-MFILE identity. Gate (c) **FAILS** on `st_regression` (I-5), a stale input that also fails on the pristine base commit; the agent held the gate at FAIL rather than adopting a working diagnostic input, which is the behaviour protocol §6 asks for. Frozen pending the scenario ruling (open question 0b). New issues **I-5** (stale scenario), **I-6** (shared-tree branch mishap, closed by amending §3/§9 to isolated worktrees), **I-7** (no free iteration-variable number — blocks every lifting task), **I-8** (7.9 % wall-clock noise versus gates set at 10–25 %). Registry reservation table replaced with A1's measured state. Sweep anatomy: mean 3.2–3.5 sweeps per `call_models`, 38–42 % of sweeps above the 2-sweep floor, and **94–96 % of all sweeps are finite-difference gradient perturbations**. |
