@@ -163,9 +163,18 @@ The protocol therefore attacks the difference, not the absolute:
    all-B, and difference within each pair. Blocked ordering lets a slow period bias one arm
    entirely; interleaving turns drift into common-mode noise that cancels. **This is the single
    highest-value change** — the gates care about the ratio between arms, not absolute time.
-2. **Pin threads, identically across arms**: `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`,
-   `MKL_NUM_THREADS=1`, `NUMBA_NUM_THREADS=1`. The workload is serial per process, so this costs
-   little and removes oversubscription variance.
+2. **Pin threads, identically across arms** — `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`,
+   `MKL_NUM_THREADS=1`, `NUMBA_NUM_THREADS=1` — **but test before adopting.** This is *not* a free
+   knob. The Stage-0 baseline was cut under the current unpinned defaults, and every gate here is
+   **bit-identity**; multi-threaded BLAS can change the reduction order of a dot product or QP
+   solve, and a different summation order is a different last bit. PROCESS's solver path runs
+   through `scipy.optimize.fsolve` and pyvmcon's QP, so LAPACK/BLAS is plausibly in it.
+   **Precondition:** run one scenario pinned and unpinned and compare hex floats. Bit-identical ⇒
+   pinning is free, take it. Different ⇒ the baseline must be re-cut under the pinned
+   configuration and every existing figure carries a footnote. Cheap to test, expensive to
+   assume — and the answer is needed *before* the timing protocol depends on it.
+   *(Raised by the `PROCESS_code_analysis` orchestrator, 2026-08-31, declining to move the same
+   lever under its own regression baseline. The argument transfers.)*
 3. **Record CPU time alongside wall clock** (`resource.getrusage`). This is a **diagnostic, not
    just a mitigation**: process CPU time is far less sensitive to other processes' scheduling, so
    if the CPU-time spread is much narrower than the wall-clock spread, contention is confirmed as
