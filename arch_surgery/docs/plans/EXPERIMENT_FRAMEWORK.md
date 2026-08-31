@@ -183,6 +183,11 @@ The protocol therefore attacks the difference, not the absolute:
    problem is worth solving this way.
 4. **Record load average and available memory in every `metrics.json`**, so a contaminated run can
    be flagged or excluded after the fact rather than silently averaged in.
+4b. **Record a content hash and the run's position in its sequence.** Timings are only comparable
+   across *identical* content, and the confound is easy to miss: a sibling project's three
+   descending quiet samples looked like a settling trend until it emerged that the third ran on a
+   branch with ~100 files of prose deleted — lighter import work, not a faster machine. Without a
+   content hash in the record, that error is invisible after the fact.
 5. Choose `n` from a target minimum detectable effect, not by habit; variance is not uniform
    across scenarios, so a per-scenario `n` is cheaper than a uniform one. Discard the first run in
    a fresh environment (numba JIT).
