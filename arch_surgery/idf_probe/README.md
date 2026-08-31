@@ -84,49 +84,41 @@ the probe, so a typo cannot masquerade as a control run.
 
 ---
 
-## 3. Running it — the setup trap first
+## 3. Running it
 
-**Read this before running anything.** In this environment `pip show process` reports
+### The environment
+
+Use **`PROCESS_surgery_env`**:
 
 ```
-Editable project location: /home/wrutten/dev_libraries/PROCESS
+/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
 ```
 
-which is a **different clone at a different commit**. `import process` resolves to the
-surgery tree only when the current directory happens to be the repository root — and every
-probe run executes in its own working directory. Left alone, every measurement would
-silently come from the wrong code. This is issue **I-1** in the queue.
-
-The workaround used by these scripts is to set `PYTHONPATH` explicitly for every run.
-`PYTHONPATH` entries precede site-packages `.pth` entries in `sys.path`, so the surgery tree
-wins. `run_one.py` then **asserts** which tree it actually imported (`--expect-tree`) and
-aborts if it is the wrong one. Prove it yourself from a directory that is not the repo root:
+Its editable install points at this tree, so `import process` resolves here from any working
+directory. Check it before a measurement session:
 
 ```bash
-cd /tmp && PYTHONPATH=/home/wrutten/projects/PROCESS_surgery \
-  /home/wrutten/anaconda3/envs/PROCESS_env/bin/python -c \
+cd /tmp && /home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python -c \
   "import process, pathlib; p = pathlib.Path(process.__file__).resolve(); print(p); \
    assert pathlib.Path('/home/wrutten/projects/PROCESS_surgery') in p.parents"
 ```
 
-The permanent fix is for the user to re-point the editable install (it writes into
-site-packages, which agents may not touch):
+> **Do not use `PROCESS_env`.** Its editable install points at
+> `/home/wrutten/dev_libraries/PROCESS`, a different clone pinned at the superseded commit
+> `710a75c9`. `import process` resolves to the surgery tree there only when the current
+> directory happens to be the repository root — and every probe run executes in its own
+> working directory, so measurements would silently come from the wrong code. That was issue
+> **I-1**, now closed by the creation of `PROCESS_surgery_env`; the trap survives in
+> `PROCESS_env`, so the environment matters.
 
-```bash
-/home/wrutten/anaconda3/envs/PROCESS_env/bin/pip install -e \
-  /home/wrutten/projects/PROCESS_surgery --no-deps --no-build-isolation
-```
+**The harness asserts the tree anyway, and always will.** `run_one.py` takes `--expect-tree`
+and checks `process.__file__` against it *before doing any work*, aborting if it is wrong.
+This is a standing rule, not a workaround: it costs nothing and it is what would catch a
+future environment regression.
 
-Note that this would make `/home/wrutten/dev_libraries/PROCESS` no longer importable from
-`PROCESS_env`, which is why it is the user's decision and not an agent's.
-
-A side effect of the `PYTHONPATH` workaround: `process.__version__` comes from
-`importlib.metadata`, so the MFILE header records the *installed distribution's* version
-(`0.0.1.dev1152+g710a75c9d`, from the other clone) rather than this tree's. The MFILE's
-`PROCESS_git_tag` / `PROCESS_git_branch` fields, which are read from the working tree, are
-correct. Nothing numerical is affected; the version string is cosmetic. Every
-`metrics.json` records `process_file`, `tree` and `tree_git_head` so provenance never
-depends on the MFILE header.
+`PYTHONPATH` is set for exactly one arm — `pristine`, whose throwaway `git archive` of the
+base commit is not installed in any environment and cannot be imported otherwise.
+`run_stage0.py`'s `_env()` sets it only when the tree is not the installed one.
 
 ### Isolation
 
@@ -136,7 +128,7 @@ depends on the MFILE header.
 contaminate each other. `run_stage0.py` enforces it.
 
 **Discard the first run in a fresh environment for timing.** Numba compiles on first use; a
-cold run costs roughly 45–60 s more than a warm one. `run_stage0.py` does a warm-up run per
+cold run costs roughly 20–45 s more than a warm one. `run_stage0.py` does a warm-up run per
 tree and throws it away. The numba cache lives in `__pycache__` next to the source, so each
 tree warms separately.
 
@@ -146,21 +138,21 @@ tree warms separately.
 # 1. Take a pristine checkout of the base commit, for the switch-neutrality gate.
 mkdir -p /tmp/pristine && git archive c0ae5b28 | tar -x -C /tmp/pristine
 
-# 2. Warm the caches and run every (scenario, arm) pair.  --jobs 1 for clean timings.
+# 2. Warm the caches and run every (scenario, arm) pair.  --jobs 1 for clean
+#    timings; --reps sets the replicate count behind every wall-clock figure.
 cd arch_surgery/idf_probe
-/home/wrutten/anaconda3/envs/PROCESS_env/bin/python run_stage0.py \
-    --pristine-tree /tmp/pristine --jobs 1
+/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python run_stage0.py \
+    --pristine-tree /tmp/pristine --jobs 1 --reps 5
 
-# 3. Evaluate the gates and print the sweep-anatomy table.
-PYTHONPATH=/home/wrutten/projects/PROCESS_surgery \
-  /home/wrutten/anaconda3/envs/PROCESS_env/bin/python compare.py
+# 3. Evaluate the gates and print the sweep-anatomy and timing tables.
+/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python compare.py
 ```
 
-One run on its own:
+`run_stage0.py` launches each run with `sys.executable`, so the interpreter you invoke it
+with is the one every run uses. One run on its own:
 
 ```bash
-PYTHONPATH=/home/wrutten/projects/PROCESS_surgery \
-  /home/wrutten/anaconda3/envs/PROCESS_env/bin/python run_one.py \
+/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python run_one.py \
     --scenario large_tokamak_nof --mode baseline --outdir runs/scratch \
     --expect-tree /home/wrutten/projects/PROCESS_surgery
 ```
@@ -172,18 +164,46 @@ suffix marks a replicate and is stripped before the value reaches the probe.
 
 | Arm | Tree | `PROCESS_IDF_PROBE` | Purpose |
 |---|---|---|---|
-| `pristine` | untouched checkout of `c0ae5b28` | unset | reference for gate (a) |
-| `control` | this tree | unset | the disabled path |
-| `baseline` | this tree | `baseline` | the instrumented path |
-| `baseline_rep2` | this tree | `baseline` | reference for gate (b) |
+| `pristine` | untouched checkout of `c0ae5b28` | unset | reference for gate (a); one run, because it is compared for identity and not for time |
+| `control`, `control_rep2` … | this tree | unset | the disabled path |
+| `baseline`, `baseline_rep2` … | this tree | `baseline` | the instrumented path |
+
+`--reps N` (default 5) sets how many independent replicates of `control` and of `baseline`
+are run. Gates (a) and (b) need only the first two of each; **the rest exist because a
+single run is not a timing measurement.** At `n = 5`, bit-identical runs of this code have
+spread by up to **19.6 %** in wall clock (issue I-8), so `compare.py` reports every
+wall-clock figure with its own `n`, standard deviation and spread, gives the
+baseline-minus-control difference a Welch two-standard-error band, and declares probe
+overhead *resolvable* only when the between-arm difference exceeds the worst within-arm
+spread. **Do not quote a wall clock from this harness without its `n`.**
 
 ### Scenarios
 
-The four IN.DATs in [`scenarios/`](scenarios/). They were archived from the superseded study
-at `710a75c9`. Three of them differ from the base commit's own regression inputs
-(`tests/regression/input_files/`) **only** by variable renames, which `run_one.py` applies
-automatically (`update_obsolete=True`). `st_regression` differs substantively and does not
-run at `c0ae5b28` — see the Stage-0 report.
+The four IN.DATs in [`scenarios/`](scenarios/), archived from the superseded study at
+`710a75c9`. **The deck is a frozen artifact of this study** (decision D9): it is patched in
+place when it falls behind the base commit, rather than re-pointed at
+`tests/regression/input_files/`, so that the inputs cannot drift with whatever upstream
+ships.
+
+Three of the four differ from the base commit's own regression inputs **only** by variable
+renames, which `run_one.py` applies automatically (`update_obsolete=True`).
+
+`st_regression` needed a real patch. As archived it set `i_tf_sc_mat = 9` (Hazelton-Zhai
+REBCO, a *tape* superconductor) but not `i_tf_turn_type`, which defaults to cable-in-conduit;
+at `c0ae5b28` the caller dispatches on `i_tf_turn_type` and the cable-in-conduit TF-coil
+model raises. Under D9 the five missing keys — `i_tf_turn_type = 2` and the four tape
+geometries `dx_tf_hts_tape_rebco`, `dx_tf_croco_strand_copper`, `dx_tf_hts_tape_copper`,
+`dx_tf_hts_tape_hastelloy` — were copied verbatim from
+`tests/regression/input_files/st_regression.IN.DAT` at `c0ae5b28`. Both insertions carry a
+`* D9 PATCH` provenance comment in the file itself, so the patch stays auditable against
+upstream. Nothing else in the file changed.
+
+> **The deck is tracked now, and was not before.** The repository-root `.gitignore` ignores
+> `*.DAT` wholesale and un-ignores upstream's own input decks by name; this deck was never
+> added to that list, so all four files lived only in a working tree and Stage 0 was not
+> reproducible off that machine. The `.gitignore` in this directory now carries
+> `!scenarios/*.IN.DAT` and the four files are committed. If you add a scenario, check
+> `git status` actually sees it.
 
 ---
 
@@ -213,12 +233,14 @@ Each `metrics.json` carries:
 
 - **(a) switch-neutrality** — `pristine`, `control` and `baseline` must be **identical**,
   not close. Compared on hex float literals.
-- **(b) determinism** — `baseline` and `baseline_rep2` must agree exactly, results *and*
-  sweep counts.
+- **(b) determinism** — **every** `baseline` replicate must agree exactly with the first,
+  results *and* sweep counts.
 - **(c) baseline solves** — every scenario returns `ifail = 1`.
 - **whole-MFILE identity** — a stronger form of (a) and (b) that is not one of the named
-  gates: every line of the ~16,000-line MFILE must match across all four arms, excluding the
-  run-metadata header (date, time, user, host, paths, git tag/branch, runtime).
+  gates: every line of the MFILE (15,900–18,700 lines) must match across *every* arm present,
+  excluding the run-metadata header (date, time, user, host, paths, git tag/branch, runtime).
+- **timing** — not a gate. Wall clock per arm with `n`, standard deviation, spread, and
+  whether the probe's overhead is resolvable above within-arm noise (I-8).
 
 A failed gate is a result. It is reported with its numbers and never tuned into passing.
 

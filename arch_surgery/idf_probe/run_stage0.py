@@ -15,8 +15,12 @@ control
     The instrumented tree with ``PROCESS_IDF_PROBE`` unset.
 baseline
     The instrumented tree with ``PROCESS_IDF_PROBE=baseline``.
-baseline_rep2
-    A second, independent ``baseline`` run.  The reference for gate (b).
+baseline_rep2 ... baseline_repN
+    Further independent ``baseline`` runs.  ``baseline_rep2`` is the reference
+    for gate (b); the rest exist so wall clock can be quoted with a spread.
+control_rep2 ... control_repN
+    Further independent ``control`` runs, so that probe overhead is compared
+    between two samples of equal size rather than one run against one run.
 
 Usage
 -----
@@ -46,22 +50,48 @@ SCENARIOS = [
     "large_tokamak_eval",
 ]
 
-# (arm name, tree selector)
-ARMS = [
-    ("pristine", "pristine"),
-    ("control", "surgery"),
-    ("baseline", "surgery"),
-    ("baseline_rep2", "surgery"),
-]
+#: How many independent replicates of `control` and of `baseline` to run.
+#: Two bit-identical runs of this code differ by up to ~8 % in wall clock
+#: (issue I-8), so a single run is not a timing measurement.  Gates (a) and
+#: (b) need only the first two; the extra replicates exist so that the wall
+#: clock can be quoted with a spread and an n.
+DEFAULT_REPS = 5
+
+
+def build_arms(reps: int) -> list[tuple[str, str]]:
+    """(arm name, tree selector) pairs.
+
+    `pristine` is an untouched checkout of the base commit and is the
+    reference for gate (a); one run of it is enough, because it is compared
+    for identity, not for time.
+    """
+    arms = [("pristine", "pristine")]
+    for stem in ("control", "baseline"):
+        arms.append((stem, "surgery"))
+        arms.extend((f"{stem}_rep{i}", "surgery") for i in range(2, reps + 1))
+    return arms
+
+
+ARMS = build_arms(DEFAULT_REPS)
 
 
 def _env(tree: Path) -> dict:
+    """Environment for one run.
+
+    The interpreter is expected to be an environment whose editable install
+    already points at this tree (`PROCESS_surgery_env`), so nothing is
+    injected for the surgery arms -- runs resolve `process` exactly the way
+    every later stage will.  `PYTHONPATH` is set *only* for a tree that is not
+    the installed one, which in practice is the `pristine` arm's throwaway
+    checkout of the base commit: there is no other way to import a tree that
+    is not installed.  Either way `run_one.py` asserts which tree it actually
+    imported (`--expect-tree`) and aborts before doing any work if it is
+    wrong -- a standing rule, not a workaround.
+    """
     env = dict(os.environ)
-    # THE setup fix.  `pip show process` points the editable install at
-    # /home/wrutten/dev_libraries/PROCESS, a different clone at a different
-    # commit.  PYTHONPATH precedes site-packages .pth entries in sys.path, so
-    # this wins; run_one.py then asserts which tree it actually imported.
-    env["PYTHONPATH"] = str(tree)
+    env.pop("PYTHONPATH", None)
+    if tree != SURGERY_TREE:
+        env["PYTHONPATH"] = str(tree)
     env["MPLCONFIGDIR"] = str(RUNS / "_mplconfig")
     env.pop("PROCESS_IDF_PROBE", None)
     return env
@@ -111,9 +141,19 @@ def main() -> int:
     ap.add_argument("--pristine-tree", required=True)
     ap.add_argument("--scenarios", nargs="*", default=SCENARIOS)
     ap.add_argument("--jobs", type=int, default=4)
+    ap.add_argument(
+        "--reps",
+        type=int,
+        default=DEFAULT_REPS,
+        help="independent replicates of `control` and of `baseline` (default "
+        f"{DEFAULT_REPS}); >= 2 is required by gate (b)",
+    )
     ap.add_argument("--skip-warm", action="store_true")
     args = ap.parse_args()
 
+    if args.reps < 2:
+        raise SystemExit("--reps must be at least 2: gate (b) needs two baseline runs")
+    arms = build_arms(args.reps)
     trees = {"surgery": SURGERY_TREE, "pristine": Path(args.pristine_tree).resolve()}
     RUNS.mkdir(parents=True, exist_ok=True)
     (RUNS / "_mplconfig").mkdir(exist_ok=True)
@@ -125,7 +165,7 @@ def main() -> int:
 
     def do_scenario(scenario: str) -> list:
         rows = []
-        for arm, tree_key in ARMS:
+        for arm, tree_key in arms:
             outdir = RUNS / scenario / arm
             if outdir.exists():
                 shutil.rmtree(outdir)
