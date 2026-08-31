@@ -11,7 +11,7 @@
 | **Task** | A19 (frozen-input-convergence) |
 | **Branch** | `A19-frozen-input-convergence`, in the isolated worktree `/home/wrutten/projects/PROCESS_surgery_A19` |
 | **Base** | `bb5d440c` on `architecture_surgery`; experiment base commit `c0ae5b28` |
-| **Tests** | A2's §11 threat row 1, and [`../plans/MDA_PARTITION_EXPERIMENT.md`](../plans/MDA_PARTITION_EXPERIMENT.md) §3.2's second-order caveat |
+| **Tests** | [`deprecated/A2_module_convergence.md`](deprecated/A2_module_convergence.md) §11 threat row 1, and [`../plans/MDA_PARTITION_EXPERIMENT.md`](../plans/MDA_PARTITION_EXPERIMENT.md) §3.2's second-order caveat |
 | **Environment** | `PROCESS_surgery_env`, `PYTHONPATH` pinned to the worktree (trap T6) |
 | **Date** | 2026-08-31 |
 | **Status** | Complete — **the middle band: A2's STOP is neither confirmed nor overturned** |
@@ -62,6 +62,12 @@ beyond the feed-forward hoist, recomputed with frozen `Sᵢ`:
 | `low_aspect_ratio_DEMO` | 6.8 % / 7.2 % | **16.8 – 19.5 %** | 19.53 % | 16.80 % |
 | `st_regression` | 15.2 % / 15.8 % | **18.0 – 18.1 %** | 18.10 % | 18.01 % |
 | `large_tokamak_eval` | 1.4 % / 3.2 % | **−1.3 – −0.4 %** | −0.35 % | −1.28 % |
+
+(A2's two figures are its node-count and measured-cost columns under the optimistic censoring
+treatment. `large_tokamak_eval` is the one scenario where A19 is *below* A2: it is an evaluation
+run of 11 `call_models` with no gradient phase, three of them right-censored, and A2's optimistic
+treatment of those three flattered the partition — §7.2 shows that bound is never attained. It
+carries no weight either way.)
 
 **Nothing reaches 25 %.** The maximum partition contribution is **19.5 %**, on
 `low_aspect_ratio_DEMO` under the weighting that most flatters the partition. Three of four
@@ -580,6 +586,8 @@ were re-confirmed incidentally where the instrument re-measures them.
 | 6 | **Kept the design vector injected at the head of every sub-sweep**, matching the coupled loop, and measured the alternative. | It is what `_call_models_once` does and what a per-module solver would do with its own inputs. The alternative gives identical counts everywhere, so the choice is immaterial. | `PROCESS_IDF_PROBE_FROZEN_NOINJECT=0` drops the variant; the primary numbers do not change. |
 | 7 | **Excluded `Pulse` from all three sub-solves.** | Post-lift, A2 §6.2 established `Pulse` becomes a pure feed-forward node with no consumer upstream of itself. Including it would model a partition nobody proposes. Measured anyway as the M1 + `Pulse` diagnostic: identical counts. | The `S1_pulse` column already reports it. |
 | 8 | **Switched off A2's read census** (`PROCESS_IDF_PROBE_READ_BUDGET=0`). | A19 does not use the coupler census — A2 established it completely — and it is the dominant cost of the `modules` instrument. It cannot affect sweep counts, and Gate N19 confirms the run is byte-identical to `control`. | Unset the two environment variables in `run_a19.py::_env`. |
+
+| 9 | **Left `MASTER_TODO.md`'s duplicated body duplicated**, and added the A19 row to both copies rather than deduplicating. | The file at `bb5d440c` already contains everything from "## Project administration" onwards **twice** — the two queue blocks (lines 116–162 and 269–314 of the base file) are byte-identical, as are the decisions, issue register and open questions. This predates A19 and is not this task's to restructure; adding the row to only one copy would have made it inconsistent. **Flagged for the orchestrator.** | Delete lines 231 onwards up to the change log; nothing is lost. |
 
 No edit was made under `process/models/`. **D11 approval was not needed.**
 

@@ -1,5 +1,11 @@
-> **Document status** — **LIVE · CURRENT**
-> The task report for A2 (module-convergence), open at the time of writing. It describes commit
+> **Document status** — **ARCHIVED · CURRENT, WITH ONE SECTION REVISED**
+> The task report for A2 (module-convergence), merged `0c0466c5`. Its measurements of the
+> *coupled* loop stand and are authoritative. **§5's gate arithmetic has been revised by A19
+> (frozen-input-convergence, 2026-08-31)**, which measured the same `Sᵢ` with each module
+> iterated in isolation and found the partition's contribution to be 11.3–19.5 % rather than
+> 2.3–15.8 %; inline notes mark every affected claim. See
+> [`../A19_frozen_input_convergence.md`](../A19_frozen_input_convergence.md).
+> The original text below is unchanged apart from those marked notes. It describes commit
 > **`c0ae5b28`** (branch `A2-module-convergence`, off `92b65c0c`) and its numbers are current
 > evidence. It will be archived to `deprecated/` at merge; position in that folder would record
 > lifecycle, not staleness (trap T3).
@@ -170,6 +176,16 @@ it by `S_global` and `S_global + 1`.
 | `st_regression` | 570 | **3.314** | 2.640 / 2.640 | 2.800 / 2.807 | 2.911 / 2.944 |
 | `large_tokamak_eval` | 11 | **2.455** | 2.455 / 2.727 | 2.273 / 2.364 | 2.455 / 2.636 |
 
+> **REVISED by A19 (2026-08-31).** These `Sᵢ` are measured with the `k = 1` coupler
+> `times.t_plant_pulse_burn` still live, so they do **not** transfer to the partitioned case,
+> which lifts it. Iterating each module in isolation gives `S₁ / S₂ / S₃` of
+> **2.544 / 3.226 / 2.461** (`large_tokamak_nof`), **2.561 / 3.201 / 2.527**
+> (`low_aspect_ratio_DEMO`), **2.638 / 2.800 / 2.482** (`st_regression`) and
+> **2.400 / 2.000 / 2.000** (`large_tokamak_eval`). `S₂` is unchanged in every one of 2 447
+> loops; `S₁`'s fall is entirely the lift; `S₃` falls for both reasons. The numbers in the table
+> above are correct *as measurements of the coupled loop* and are not withdrawn — what is
+> withdrawn is §5's use of them as the partition's `Sᵢ`.
+
 Censoring (module still changing when the loop exits), as a count of `call_models`:
 
 | Scenario | M1 | M2 | M3 |
@@ -197,6 +213,16 @@ in 85 %.
 This is the answer to the plan's open question 1, and it is the negative answer. The
 partition's saving comes from *not re-running module A for module B's benefit*, and there is
 almost no such waste to recover: when one module is still moving, the others usually are too.
+
+> **REFUTED in part by A19 (2026-08-31), exactly where the orchestrator's assessment §1 said it
+> would be.** "No module is the laggard" holds *in the coupled loop* — A19 reproduces M1
+> joint-last in 82 % and 85 % of the two large pulsed tokamaks' loops, to the percentage point,
+> over uncensored counts. It does **not** hold under partitioning. With each module iterated
+> alone the three modules agree in only 24–27 % of loops rather than 58–60 %, and **the laggard
+> becomes M2** — joint-last in 76 % / 73 % of loops and strictly last in 39 % / 36 %. The
+> sentence above that "there is almost no such waste to recover" is therefore too strong: there
+> is 11.3–19.5 % of it, against a 25 % gate. What survives is the conclusion that the laggard is
+> not a *small* module: M2 is 10 of the 46 module nodes but 41.7–43.1 % of the measured cost.
 
 ### 4.2 The one thing that is genuinely lagging
 
@@ -285,6 +311,16 @@ contribution is **2.3–7.2 %** optimistically and **−0.6 % to +7.2 %** pessim
 below the stop line. The negative entries are not an artefact: if a module is still changing
 when the loop exits, iterating it alone to its own criterion costs *more* sweeps than the loop
 spends, and the partition loses.
+
+> **RESOLVED by A19 (2026-08-31): the censoring bounds above can now be replaced by observed
+> values, and the optimistic column was never attained.** Replaying the full sweep sequence past
+> the loop's exit shows that on `large_tokamak_nof`'s 152 censored M2 loops the true `S₂` exceeds
+> `S_global` by **+1 in 146 and +2 in 6** — so the `S_global` (optimistic) column is wrong in
+> every case and flattered the partition, and the `S_global + 1` (pessimistic) column is right
+> 96 % of the time and slightly too generous otherwise. With the observed values the partition's
+> contribution on `large_tokamak_nof` is **−0.76 %** (node counts), below even the pessimistic
+> −0.57 % quoted above. **Autonomous decision 3's reversal path — "quote only the optimistic
+> column" — should not be taken; the optimistic column is not a bound that is ever achieved.**
 
 **Most of the available saving is the hoist, not the partition.** In `large_tokamak_nof` and
 `large_tokamak_eval` the hoist is the larger of the two contributions under both weightings.
@@ -443,7 +479,7 @@ No edit was made under `process/models/`. D11 approval was not needed.
 
 | Threat | Handling / residual risk |
 |---|---|
-| `Sᵢ` measured in the *coupled* loop need not equal `Sᵢ` under partitioning — converging M1 fully before M2 runs changes the information M2 receives | The plan flags this (§3.2) and calls the prediction an estimate. It cuts both ways and cannot be resolved without building the partition. **Residual risk: real.** The direction is not knowable a priori; the second-order effect could be larger than the 2–7 % first-order saving it would modify. |
+| `Sᵢ` measured in the *coupled* loop need not equal `Sᵢ` under partitioning — converging M1 fully before M2 runs changes the information M2 receives | ~~The plan flags this (§3.2) and calls the prediction an estimate. It cuts both ways and cannot be resolved without building the partition. **Residual risk: real.**~~ **MEASURED by A19 (2026-08-31), by replay, without building the partition** — see [`../A19_frozen_input_convergence.md`](../A19_frozen_input_convergence.md). The threat was real and it runs *against* this report: the partition's contribution rises to **11.3–19.5 %** on three of four scenarios. But "the information M2 receives" is **refuted as the mechanism** — `S₂` frozen equals `S₂` coupled in all 2 447 replayed loops. The change is the `k = 1` coupler, which the partition lifts. The claim that the direction "is not knowable a priori" was wrong: it was knowable, by replay, for the cost of two runs per scenario. |
 | `Sᵢ` is right-censored where a module still changes at loop exit | Bounded, both bounds reported. Material only for `large_tokamak_nof` M2 (24 %). |
 | Node-cost weights are wall clock, and wall clock on this machine is contended | Used only as a *within-run ratio*, which a common-mode slowdown does not change. The two weightings agree on the verdict, and the verdict also holds under pure node counts. |
 | The read census could miss a branch never taken in these four scenarios | Census is complete over all sweeps of all four scenarios, and the edge count is flat from sweep 3. It cannot cover configurations the deck does not exercise — `i_blanket_type = 5` (DCLL), resistive TF coils, and `i_tf_turn_type = 3` are unsampled. **A coupler could exist in an unsampled configuration.** |
@@ -482,6 +518,7 @@ rule; `runs/a2/_a2_report.json` holds every number quoted above.
 
 | Date | Entry |
 |---|---|
+| 2026-08-31 (A19) | **Revised by A19 (frozen-input-convergence).** §4's `Sᵢ` do not transfer to the partitioned case and §5's gate is superseded: the partition's own contribution is **11.3–19.5 %**, not 2.3–15.8 %. §4.1's "there is almost no such waste to recover" is too strong, and the laggard becomes **M2** under partitioning. §5.3's optimistic censoring column is shown never to be attained. §11's first threat row is closed. Every affected claim carries an inline note; nothing was rewritten in place. |
 | 2026-08-31 | Report written. Instrument (`PROCESS_IDF_PROBE=modules`), A2 harness and T6 fixes committed as `dc6ba4d2`. Gate N PASS 4/4; **Stage-1 gate STOP**. Findings: no module is the laggard and M1 is joint-last in 82 % of the largest scenario's loops; `k = 1` (`times.t_plant_pulse_burn`), with two structurally-present but dynamically-dead back edges recorded; open question 1b resolved *for* H2 (`st_regression` has `k = 0` and the most independent modules); plan §2.3's `pfcoil.py:2727` citation withdrawn as a third instance of trap T1; §2.3a and open question 2 confirmed at runtime; I-8's CPU-time diagnostic shown not to discriminate because the runs are CPU-bound. |
 
 ---
