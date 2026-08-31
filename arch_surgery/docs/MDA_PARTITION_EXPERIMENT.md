@@ -130,13 +130,27 @@ write behind. Burn time was historically known to be **the** reconciliation vari
 the organic-architecture thesis in a single dead line, and it is worth quoting in the write-up.
 
 **Caveat on scope: the edge is conditional.** The whole `pulse` body is behind
-`if i_pulsed_plant == 1` and the default is `0`. Of the four archived scenarios,
-`st_regression` sets `i_pulsed_plant = 0` — it is a *steady-state spherical tokamak*
-(`runtitle = ST Regression`, `itart = 1`, `aspect = 1.8`; `istell` unset, so it is a tokamak
-and in scope). In that case `t_plant_pulse_burn` is never written by `Pulse` and the M1/M2
-cycle this hypothesis targets **does not exist**. So `st_regression` is not a test of the
-lift; it is a **free control** — the partition should already hold there, and if it does not,
-some other cross-module coupler is active.
+`if i_pulsed_plant == 1` and the default is `0`. Of the four scenarios, `st_regression` sets
+`i_pulsed_plant = 0` — it is a *steady-state spherical tokamak* (`runtitle = ST Regression`,
+`itart = 1`, `aspect = 1.8`; `istell` unset, so it is a tokamak and in scope). In that case
+`t_plant_pulse_burn` is never written by `Pulse` and the M1/M2 cycle this hypothesis targets
+**does not exist**. It should therefore have been a free control: the partition should already
+hold there.
+
+> **Measured, and it does not behave that way (A1, 2026-08-31).** `st_regression`'s above-floor
+> sweep fraction is **39.7 %** — sitting *between* `large_tokamak_nof` (37.8 %) and
+> `low_aspect_ratio_DEMO` (42.1 %), not below them. With the burn-time edge structurally absent
+> it does about as much reconciliation work as the two pulsed cases.
+>
+> This is **not a refutation**. Sweep count is not coupling; `st_regression` also differs in
+> `itart` and in `nvar` (14 against 20 and 19), and §3.3's warning that sweep counts may be
+> measuring the exit criterion rather than the coupling applies with full force here. But the
+> cheapest test of H2 in the whole design has returned **a sign H2 does not predict**, and the
+> free control this section relied on is no longer free.
+>
+> **Stage 1 must resolve this before anything is built.** If burn time is the only cross-module
+> coupler, `st_regression` should partition into independent blocks with no lifting at all —
+> that is now a concrete, falsifiable prediction, and it is the first thing A2 should test.
 
 ### 2.4 A candidate coupler, checked and rejected
 

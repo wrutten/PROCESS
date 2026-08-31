@@ -59,20 +59,12 @@
 
 **Numbering** — next free: **A18**, **D10**, **I-9**. Numbers are never reused.
 
-**Reserved optimiser-registry ranges.** Both planned experiments mint new entries in
-`process/core/solver/iteration_variables.py` (`ITERATION_VARIABLES`, number-keyed;
-`N_ITERATION_VARIABLES_MAX` derives from `max(keys)`) and in
-`process/core/solver/constraints.py` (82 constraints, registered by number). Developed on
-separate branches both would take the next free number, collide at merge, and produce
-**different numberings per branch** — so an `IN.DAT` written against one is silently
-misread by the other. Ranges are therefore reserved here before any task starts, and a task
-takes numbers only from its own range:
+**Optimiser-registry allocation** is administered in
+[`REGISTRY_ALLOCATIONS.md`](REGISTRY_ALLOCATIONS.md) — one table, append-only (D10). Every task
+takes its numbers from there; two branches allocating independently would both pick the same next
+number and merge into a dict with one entry silently winning.
 
-A1 (stage0-rebaseline) §8 measured the registries at `c0ae5b28`, and the result **blocks
-allocation**:
-
-| Registry | State at `c0ae5b28` | First free |
-|---|---|---|
+---|---|---|
 | Constraints | 82 registered over 1–92, cap 500 | **93** — but `lablcc` has exactly 92 entries and must be extended in step |
 | Iteration variables | 83 registered over 1–177, `N_ITERATION_VARIABLES_MAX = 177` | **none** — 177 is taken and the cap is the maximum |
 
@@ -94,6 +86,7 @@ from 93 upward are available and will be blocked out when the first lifting task
 | **D7** | **A full IDF / MDF / SAND comparison is deferred** to a later study on the `functional_PROCESS` back-end. This experiment is not a stepping stone to it — it is the control that study will need | 2026-08-31 |
 | **D8** | **The module partition is derived from the collapsed DSM, not assumed.** M1 Physics = rows 4, 6–28; M2 Coils = rows 5, 29–37; M3 Plant = rows 40–51; `CsFatigue` (38) and rows 52–55 feed-forward; `Pulse` (39) is the articulation point belonging to no module | 2026-08-31 |
 | **D9** | **The archived scenario deck is patched in place, not re-pointed at upstream's regression inputs.** `st_regression.IN.DAT` gains `i_tf_turn_type = 2` and the four tape geometries; the other three stay as archived and continue to load via obsolete-name rewriting (A1 autonomous decision 3). Rationale: the deck stays a frozen artifact of this study rather than tracking whatever upstream ships, so a scenario cannot change under a result | 2026-08-31 |
+| **D10** | **Registry numbers are appended, never fitted into gaps.** `ITERATION_VARIABLES` has 94 gaps in 1–177 from retired variables; reusing one silently reinterprets any existing `IN.DAT` naming that number. There is **no cap to raise** — `N_ITERATION_VARIABLES_MAX` is derived as `max(keys)`, so appending 178 raises it automatically and every array sized by it grows. Constraints append from 93, with `lablcc` extended in step. Allocations in [`REGISTRY_ALLOCATIONS.md`](REGISTRY_ALLOCATIONS.md) | 2026-08-31 |
 
 ---
 
@@ -103,14 +96,15 @@ Open issues only.
 
 | # | Issue | Status |
 |---|---|---|
-| **I-1** | **The editable install points at the wrong tree.** `pip show process` reports `Editable project location: /home/wrutten/dev_libraries/PROCESS` — a different clone at the superseded commit `710a75c9`. `import process` resolves to the surgery tree only when cwd is the repo root; probe runs execute in their own work directories, so they would silently import the wrong code and every measurement would be invalid | **OPEN** — being addressed by A1 (stage0-rebaseline) as its first action |
+| **I-1** | **The editable install pointed at the wrong tree** (`dev_libraries/PROCESS`, at superseded commit `710a75c9`), so runs in their own working directories imported the wrong code silently | **CLOSED** 2026-08-31 — conda env `PROCESS_surgery_env` created by the user; A1 re-ran every gate under it and confirmed **bit-identical** results to the `PROCESS_env` figures. `PROCESS_env` must not be used here |
 | **I-2** | **`t_burn_0` is dead code.** `process/models/physics/physics.py:513` writes `times.t_burn_0` with a comment referring to "the convergence loop in `fcnvmc1`, `evaluators.f90`" — a file that no longer exists. The variable has no reader anywhere in `process/`. Evidence that burn time was historically *the* reconciliation variable, and a candidate small independent contribution upstream | **OPEN** — confirm no MFILE-path reader, then propose removal |
 | **I-3** | **The superseded documents carry no staleness marking.** `IDF_EXPERIMENT_PLAN.md`, `PROCESS_architecture_evaluation.md`, `idf_probe/MEMO.md` and `NOISE_ANALYSIS.md` all describe the `710a75c9` study and read as current | **OPEN** — A7 (repo-readme) adds headers |
 | **I-4** | **Name-level dependency analysis conflates `run()` and `output()`.** `physics.b_plasma_vertical_required` looked like a Coils→Physics feedback edge but the read is inside `PlasmaFields.output()`, a report-writing method outside the MDA. Any instrument that greps attribute access must exclude `output()` paths | **OPEN** — binding on A2 (module-convergence)'s instrument |
-| **I-5** | **`st_regression.IN.DAT` is stale and does not solve at `c0ae5b28`.** Archived from `710a75c9`; sets `i_tf_sc_mat = 9` (REBCO tape) but not `i_tf_turn_type`, which defaults to cable-in-conduit, so the CICC model raises on the first `fcnvmc1` call. Reproduces on a pristine `c0ae5b28` archive, so it is the input, not the probe. The base commit's own `tests/regression/input_files/st_regression.IN.DAT` adds `i_tf_turn_type = 2` and solves. **Costs the MDA partition plan its only `i_pulsed_plant = 0` control** | **OPEN** — needs a `D<n>` ruling (open question 0b); blocks A1's merge |
+| **I-5** | **`st_regression.IN.DAT` was stale and did not solve at `c0ae5b28`** — archived from `710a75c9`, missing `i_tf_turn_type` | **CLOSED** 2026-08-31 by D9's patch: five keys copied verbatim from the base commit's own regression input, carrying `* D9 PATCH` provenance comments. Reproduces the base-input diagnostic bit-for-bit, so the patch is equivalent, not merely sufficient |
 | **I-6** | **Two actors in one working tree put commits on the wrong branch.** Orchestrator admin commits landed on `A1-stage0-rebaseline` because the agent had checked it out in the shared tree. Repaired by fast-forwarding `architecture_surgery` (contiguous commits, no history rewritten). Root cause: the protocol said "own branch" where `PROCESS_code_analysis` says **isolated worktree** | **CLOSED** by the protocol amendment at §3 and §9 above — task work now runs in its own `git worktree` |
-| **I-7** | **No free iteration-variable number exists.** `N_ITERATION_VARIABLES_MAX = 177` and 177 is taken, so any task that lifts a variable to the optimiser — A4 (burn-time-lift), A9–A11 (subdriver lift) — must first raise the cap in `numerics.py`, or reuse a retired gap, which would **silently reinterpret existing `IN.DAT` files**. The cap is outside `process/models/`, so raising it is D5-safe, but it is a shared change that must land once, not per branch | **OPEN** — blocks all lifting tasks |
-| **I-8** | **Wall clock is not yet a measurable quantity.** Two bit-identical baseline runs differ by up to **7.9 %** in wall time. The MDA partition plan's Stage-1 gate ("> 25 % predicted saving") and stop rule ("< 10 %") sit inside or near that band, and **no plan specifies a repetition count or a confidence interval** | **OPEN** — A2 (module-convergence) must fix the timing protocol before reporting any timing |
+| **I-7** | **~~No free iteration-variable number exists.~~ Overstated — corrected.** `N_ITERATION_VARIABLES_MAX` is *derived* (`max(keys)`), not a hand-set cap, so appending 178 raises it automatically; arrays grow and `lablxc` self-populates. Nothing hardcodes 177. The real risks are **reusing one of the 94 gaps** (silently reinterprets existing `IN.DAT`s) and two branches independently picking 178 | **DOWNGRADED** — not a blocker; handled by D10 and the allocation table |
+| **I-8** | **Wall clock is not measurable at the thresholds the plans use — worse than first filed.** At `n = 5` the worst within-arm spread is **19.6 %** (not the 7.9 % seen at `n = 2`), and 2 SE bands on a difference of means are 3–9 %. **A 10 % effect is not measurable on this machine at `n = 5`**, so the MDA partition plan's Stage-1 stop rule (< 10 %) sits *inside* the noise band, not near it. Reaching a 5 % band on `low_aspect_ratio_DEMO` needs roughly `n = 15`; variance is not uniform, so a per-scenario `n` may be cheaper | **OPEN** — A2 must fix the timing protocol first. Sweep count is exact and reproduces bit-for-bit; it is the mechanism metric, wall clock the headline with its interval attached |
+| **I-9** | **The scenario deck was never under version control.** The repository-root `.gitignore`'s blanket `*.DAT` swallowed `arch_surgery/idf_probe/scenarios/*.IN.DAT`; upstream un-ignores its own decks by name and this one was never added. All four files existed only in one working tree, so **Stage 0 was not reproducible by anyone else**, and D9's "frozen artifact" premise was false as written | **CLOSED** 2026-08-31 — A1 added a scoped `!scenarios/*.IN.DAT` in `arch_surgery/idf_probe/.gitignore` (upstream's own pattern, without editing the shared root file) and committed the deck, 208 KB. Verified the un-ignore also covers *new* files. Audit of `arch_surgery/` found nothing else untracked |
 
 ---
 
@@ -120,7 +114,7 @@ Open issues only.
 
 | # | Task | Prereqs | Status |
 |---|---|---|---|
-| **A1** | **stage0-rebaseline** — env-switched probe at `c0ae5b28`; sweep anatomy; three gates. Report [`../reports/A1_stage0_rebaseline.md`](../reports/A1_stage0_rebaseline.md) with the orchestrator's assessment appended | — | **COMPLETE, NOT MERGED — gate (c) FAILED.** Gates (a) switch-neutrality and (b) determinism PASS; (c) baseline-solves fails on `st_regression`, a stale input archived from `710a75c9` that also fails on the pristine base commit. Frozen under protocol §6; **D9 ruled** — patch the archived input in place and re-gate on the same branch |
+| **A1** | **stage0-rebaseline** — env-switched probe at `c0ae5b28`; sweep anatomy; three gates. Report archived at [`../reports/deprecated/A1_stage0_rebaseline.md`](../reports/deprecated/A1_stage0_rebaseline.md) | — | **MERGED** 2026-08-31 (`e9747707`). **All three gates PASS 4/4** under `PROCESS_surgery_env` at `n = 5`: switch-neutrality (0 differing MFILE lines across 11 arms), determinism (bit- and sweep-identical), baseline solves (`ifail = 1` everywhere) |
 | **A2** | **module-convergence** — Stage 1, the gating measurement. Attribute per-sweep state change to M1 / M2 / M3 to obtain `S₁, S₂, S₃` and identify the laggard; confirm at runtime that `t_plant_pulse_burn` is the only cross-module coupler in a `run()` path. **Instrument must exclude `output()` (I-4).** Gate: predicted saving, with a stop rule if M1 is the laggard | A1 ✓ | QUEUED |
 | **A3** | **build-reorder** — Stage 2. Move `build.run()` to after `PlasmaConfinementTime`. Gate: **bit-identical** results. Expected to be inert; it is a sharp integrity check on the dependency graph | A1 ✓ | QUEUED |
 | **A4** | **burn-time-lift** — Stage 3. Lift `t_plant_pulse_burn` to a design variable with a consistency constraint; verify module independence before adding any solver. Report the `n → n+1` overhead separately from the partition's effect | A2 ✓, A3 ✓ | QUEUED |
@@ -132,11 +126,21 @@ Open issues only.
 | **A10** | **subdriver-extract** *(PROPOSED)* — Stage L1: extract each residual into a named function behind an env switch, inner solve remaining the default. Gate: switch unset ⇒ bit-identical | A9 ✓ | **BLOCKED** on the D5 ruling |
 | **A11** | **subdriver-lift-one** *(PROPOSED)* — Stage L2: lift the loosest-tolerance, highest-count residual. Primary result is Jacobian accuracy against a bounded reference; runtime secondary and may regress | A10 ✓ | **BLOCKED** |
 | **A12** | **subdriver-failure-policy** *(PROPOSED)* — Stage L4, independent of the lift: resolve whether `disp=False` at `pfcoil.py:4909` is deliberate, given the identical call at `superconducting.py:1267` uses `disp=True`. Report as a PROCESS finding | — | **PROPOSED** — runnable without the D5 ruling |
-| **A13** | **feedforward-hoist** *(PROPOSED)* — E1 of [`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCHITECTURE_EXPERIMENT_CANDIDATES.md): run the DSM's feed-forward nodes once after the fixed point instead of every sweep. Pure `caller.py`, **no new design variables, no dimension penalty**. Gate: exact agreement on `norm_objf` and the full MFILE | A2 ✓ | **PROPOSED** — no D5 ruling needed |
-| **A14** | **converge-y** *(PROPOSED)* — E2: converge the coupling variables instead of objective and constraints (finding F3), moving objective/constraint evaluation out of the loop. Pure `caller.py`. Judge on gradient quality and robustness, **not** sweep count — the criterion changes meaning | A2 ✓ (supplies the coupling set) | **PROPOSED** — no D5 ruling needed |
-| **A15** | **dsm-sequencing** *(PROPOSED)* — E3: reorder `_call_models_once` to the sequenced DSM. **A3 (build-reorder) folds into this** — otherwise two tasks reorder the same sequence and neither is attributable. Not expected to be result-neutral (finding F4), so the gate is `norm_objf` plus feasibility, and every changed result must be explained by a named edge | A2 ✓ | **PROPOSED** — supersedes A3 if adopted |
-| **A16** | **convergence-predicate-audit** *(PROPOSED)* — E4: measure how often `MDA_Idempotence` (objective+constraints) and `MDA_Output` (successive MFILEs) disagree, given only the second is reported to the user (finding F12). **Read-only, no code change** | A1 ✓ | **PROPOSED** — no D5 ruling needed |
-| **A17** | **fixed-count-scan** *(PROPOSED)* — E5: scan the tokamak path for unrolled iteration with a literal trip count and no convergence test (finding F11, found in the stellarator path, unchecked for tokamak). **Read-only.** Naturally folded into A9 (subdriver-count) | A1 ✓ | **PROPOSED** — no D5 ruling needed |
+| **A18** | **experiment-framework** — build the shared harness in [`EXPERIMENT_FRAMEWORK.md`](EXPERIMENT_FRAMEWORK.md), steps F1–F6 + F7a: arm selection and identity in `metrics.json`, the registry allocation table with 178 appended, the timing protocol closing I-8, the DSM node map with run-time validation, the read-only `note_subsolve` census, and the correctness + robustness gates. **Framework-only — no behaviour change**, merging under neutrality and determinism alone | A1 ✓ | **PROPOSED — recommended next.** F1–F3 are the minimum before any further experiment: without them arms are unidentifiable and timings unreportable |
+
+### Optional / deferred
+
+**E1–E5 are not authorised for execution** (user, 2026-08-31). Their register, with the reasoning
+and the interference analysis, is [`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCHITECTURE_EXPERIMENT_CANDIDATES.md).
+
+| # | Task | Status |
+|---|---|---|
+| A13 | **feedforward-hoist** — E1 | DEFERRED |
+| A14 | **converge-y** — E2 | DEFERRED |
+| A15 | **dsm-sequencing** — E3. **A3 no longer folds into it** while it is deferred | DEFERRED |
+| A16 | **convergence-predicate-audit** — E4, read-only | DEFERRED |
+| A17 | **fixed-count-scan** — E5, read-only | DEFERRED |
+| — | **sequencing-comparison** — retired to [`deprecated/SEQUENCING_COMPARISON_EXPERIMENT.md`](deprecated/SEQUENCING_COMPARISON_EXPERIMENT.md); if revived its home is the `functional_PROCESS` programme, not this one | OUT OF SCOPE |
 
 ### User-facing standing items (not tasks)
 
@@ -156,6 +160,13 @@ Open issues only.
    `D9`. See [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md) §3.4.
 1. **Which module is the laggard?** Everything in the speedup argument turns on it. A2's
    central measurement.
+1b. **Does H2 survive its own cheapest test?** `st_regression` has `i_pulsed_plant = 0`, so the
+   burn-time cycle is structurally absent — the MDA partition plan §2.3 treats it as a free
+   control that should partition cleanly. A1 measured its above-floor sweep fraction at
+   **39.7 %**, sitting *between* the two pulsed cases (37.8 %, 42.1 %) rather than below them.
+   Sweep count is not coupling and the scenario differs in `itart` and `nvar` too, so this is not
+   a refutation — but the cheapest test of H2 has returned a sign H2 does not predict. **A2 must
+   resolve this before the partition is built.**
 2. Post-lift, does `Pulse` (row 39) join a module or remain a standalone feed-forward node?
 3. Rows 52–55 (`Objective`, `Constraints`) are downstream of everything — can the objective be
    evaluated without re-running M3?
@@ -173,3 +184,4 @@ Open issues only.
 | 2026-08-31 | Subdriver-lift experiment **reframed around robustness** (primary), gradient quality secondary, performance penalty measured and reported as two separate numbers rather than netted; its Stage L0 gate moved from wall-clock share to failure incidence. Portfolio of further candidates added ([`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCHITECTURE_EXPERIMENT_CANDIDATES.md)) with A13–A17 proposed — E1/E4/E5 need no D5 ruling. Interference between the two planned experiments analysed: **optimiser-registry ranges now reserved above**, and §2.4 records that the partition's outcome changes what the subdriver experiment *is* (a lifted residual gains a second possible host — the module's own solver — which costs no dimension), so the partition resolves first. |
 | 2026-08-31 | **A1 (stage0-rebaseline) complete, not merged.** Gates (a) switch-neutrality and (b) determinism PASS — (a) verified more strongly than specified, against a pristine `git archive` arm on hex float literals plus whole-MFILE identity. Gate (c) **FAILS** on `st_regression` (I-5), a stale input that also fails on the pristine base commit; the agent held the gate at FAIL rather than adopting a working diagnostic input, which is the behaviour protocol §6 asks for. Frozen pending the scenario ruling (open question 0b). New issues **I-5** (stale scenario), **I-6** (shared-tree branch mishap, closed by amending §3/§9 to isolated worktrees), **I-7** (no free iteration-variable number — blocks every lifting task), **I-8** (7.9 % wall-clock noise versus gates set at 10–25 %). Registry reservation table replaced with A1's measured state. Sweep anatomy: mean 3.2–3.5 sweeps per `call_models`, 38–42 % of sweeps above the 2-sweep floor, and **94–96 % of all sweeps are finite-difference gradient perturbations**. |
 | 2026-08-31 | **D9** ruled: patch `st_regression.IN.DAT` in place rather than re-pointing the deck at upstream's regression inputs, keeping the scenario set a frozen artifact of this study. A1 (stage0-rebaseline) re-dispatched to apply the patch and re-run all three gates on its own branch, per protocol §6 — one merge, re-gated, no deferred fix. Isolated-worktree convention (§3, §9) takes effect from A2 onward; A1's fix continues in the main checkout by sequential handoff, with no concurrent git access. |
+| 2026-08-31 | **A1 (stage0-rebaseline) MERGED** (`e9747707`) — all three gates PASS 4/4 under `PROCESS_surgery_env` at `n = 5`; patching an input disturbed neither switch-neutrality nor determinism, which was the point of re-gating the whole task. **I-1 and I-5 CLOSED**; **I-9 filed and closed** (the scenario deck had never been under version control — the root `.gitignore`'s `*.DAT` swallowed it, so Stage 0 was not reproducible by anyone else and D9's "frozen artifact" premise was false as written). **I-8 revised upward**: worst within-arm wall-clock spread is 19.6 % at `n = 5`, so a 10 % effect is not measurable here and the partition plan's stop rule sits inside the noise. **I-7 downgraded** — the cap is derived, so appending is a one-entry change (D10, allocation table added). **Open question 1b filed**: `st_regression`, the free control for H2, does not behave as the plan predicts. E1–E5 moved to Optional / deferred; the sequencing comparison retired out of scope. Framework plan added, proposed as **A18**. |

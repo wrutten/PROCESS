@@ -1,8 +1,13 @@
 # Architecture experiment candidates — portfolio and interference
 
-**Status:** proposal · **Base commit:** `c0ae5b28`
+**Status:** **DEFERRED — not authorised for execution** (user, 2026-08-31). Recorded as a
+candidate register, not a plan. · **Base commit:** `c0ae5b28`
 
-Candidates for further architecture experiments, subject to three filters:
+Candidates for further architecture experiments. **None of E1–E5 is queued for execution.** They
+are kept here so the reasoning is not lost and so a later decision has something to start from;
+the live work is the MDA partition and the subdriver lift.
+
+Candidates are subject to three filters:
 
 1. **Inferable from the DSM.** The change is motivated by the dependency structure, not by
    numerical taste.
@@ -80,9 +85,11 @@ Module 1's span.
 **Change.** Reorder the `self.models.X.run()` calls to the sequenced DSM's order. Pure
 `caller.py`, pure reordering, no logic touched.
 
-**Note.** **A3 (build-reorder) is the single-node special case of this.** If E3 is adopted, A3
-should be folded into it rather than run separately — otherwise two tasks reorder the same
-sequence and neither result is attributable.
+**Note — reversed 2026-08-31.** I previously recommended folding **A3 (build-reorder)** into E3,
+since A3 is its single-node special case. With E3 deferred, **A3 stands alone again** and runs as
+Stage 2 of the partition experiment. If E3 is ever revived, the fold-in question returns and A3
+will by then have already moved the sequence — so E3 would have to measure against A3's result,
+not against Stage 0.
 
 **Why it is attractive.** It tests finding **F4** directly. The code carries a comment admitting
 ordering matters — *"These two methods need to be run after vacuum/buildings otherwise output
@@ -196,24 +203,20 @@ measurement design, not in the bulk of the code.
 
 ---
 
-## 3. Recommended order
+## 3. Where these would slot in, if revived
 
-| Order | Work | Why here |
+Not a schedule — E1–E5 are deferred. Recorded so that reviving one does not need this reasoning
+reconstructed:
+
+| Candidate | Earliest sensible point | Why not before |
 |---|---|---|
-| 1 | **A1 (stage0-rebaseline)** | Everything needs the baseline |
-| 2 | **E4 (convergence-predicate audit)**, **E5 (fixed-count scan)** | Read-only, no branch contention, informs E2 and A9 |
-| 3 | **A2 (module-convergence)** | Gating measurement; also produces the coupling set E2 needs |
-| 4 | **E1 (feed-forward hoist)** | Cheapest performance result in the portfolio; no dimension penalty |
-| 5 | **A3/E3 (sequencing)** — fold A3 into E3 | One reordering, one attributable result |
-| 6 | **A4–A5 (partition)** *or* stop at A2's gate | Resolves §2.4 either way |
-| 7 | **E2 (converge y)** | Needs A2's coupling set; large change, wants a settled baseline |
-| 8 | **A9–A11 (subdriver lift)** | Framing depends on §2.4's resolution |
-| — | **A12 (subdriver-failure-policy)** | Independent; runnable at any time |
+| **E4**, **E5** | any time | Read-only; no branch contention, no framework dependency |
+| **E1** | after A2 (module-convergence) | Needs the SCC decomposition to know which nodes are feed-forward |
+| **E3** | after A3 (build-reorder) | A3 will have moved the sequence; E3 must measure against that, not Stage 0 |
+| **E2** | after A2 | Needs A2's coupling-variable set to converge on |
 
-Note that E1, E4 and E5 need **no ruling on D5** — they touch no model code — so they are
-available immediately while A9–A11 remain blocked.
-
----
+E1, E4 and E5 touch no model code, so none of them ever needed a ruling on D5's model freeze —
+that remains true whenever they are picked up.
 
 ## 4. Explicitly excluded
 

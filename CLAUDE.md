@@ -67,13 +67,18 @@ in `arch_surgery/`.
 
 ## Environments
 
-- `PROCESS_env` runs PROCESS: `/home/wrutten/anaconda3/envs/PROCESS_env/bin/python`
-  (Python 3.12.14).
-- **Check the editable install before every measurement session.** `pip show process` must
-  report an editable location of `/home/wrutten/projects/PROCESS_surgery`. It has pointed at
-  `/home/wrutten/dev_libraries/PROCESS` (I-1) — a different clone at the superseded commit,
-  which imports silently and invalidates every number. Prove it from a directory that is *not*
-  the repo root: `process.__file__` must be under `PROCESS_surgery`.
+- **`PROCESS_surgery_env` runs this repository's PROCESS.**
+  `/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python` (Python 3.12.14), editable
+  install pointing at `/home/wrutten/projects/PROCESS_surgery`. Verified: `import process` from
+  a directory outside the repo resolves to this tree.
+- **Do not use `PROCESS_env`.** It is a sibling environment whose editable install points at
+  `/home/wrutten/dev_libraries/PROCESS`, a different clone at the superseded commit `710a75c9`.
+  It imports silently and would invalidate every measurement. `func_PROCESS_env` belongs to
+  `functional_PROCESS`. Picking the wrong one is a silent failure, not an error — the run
+  succeeds and the numbers are of the wrong tree.
+- **Assert the tree, do not trust the environment.** Every measurement subprocess re-checks
+  `process.__file__` and aborts if it is not under `PROCESS_surgery`. Keep that check even though
+  the environment is now correct.
 - The dependency-analysis instrument lives in the sibling repo
   `PROCESS_code_analysis/dependency_analysis`, runs in `ESL_env`, and is pinned at
   `ANALYSIS_PIN_NAME` in `dependency_analysis/core/inputs/config.py` — read it; never copy a
