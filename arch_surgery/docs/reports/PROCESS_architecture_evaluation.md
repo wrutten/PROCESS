@@ -545,5 +545,5 @@ Related documents, in the `PROCESS_code_analysis` repository:
 [tool README](../../PROCESS_code_analysis/dependency_analysis/README.md) ·
 [the PROCESS → xDSM interpretation](../../PROCESS_code_analysis/dependency_analysis/docs/PROCESS_architecture_interpretation.md)
 
-In this repository: [`IDF_EXPERIMENT_PLAN.md`](IDF_EXPERIMENT_PLAN.md) ·
+In this repository: [`deprecated/IDF_EXPERIMENT_PLAN.md`](deprecated/IDF_EXPERIMENT_PLAN.md) ·
 [`idf_probe/`](../idf_probe/README.md)
