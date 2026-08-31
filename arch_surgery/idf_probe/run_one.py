@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import resource
 import shutil
 import subprocess
 import sys
@@ -108,9 +109,17 @@ def main() -> int:
     result["process_file"] = str(process_file)
     if args.expect_tree:
         expect = Path(args.expect_tree).resolve()
-        if expect not in process_file.parents:
+        # Trap T6: the editable install points at the *main* checkout, so a
+        # worktree's code is only imported when PYTHONPATH says so.  A prefix
+        # test ("is it under a directory called PROCESS_surgery?") passes for
+        # the main checkout as well and would silently measure the wrong tree.
+        # Require the exact tree: <expect>/process/__init__.py.
+        actual_tree = process_file.parent.parent
+        if actual_tree != expect:
             raise SystemExit(
-                f"WRONG TREE: imported {process_file}, expected it under {expect}"
+                f"WRONG TREE: imported {process_file} (tree {actual_tree}), "
+                f"expected exactly {expect}. Set "
+                f"PYTHONPATH={expect} for this subprocess."
             )
     result["tree"] = str(process_file.parent.parent)
     try:
@@ -135,6 +144,10 @@ def main() -> int:
 
     from process.main import SingleRun
 
+    # I-8 diagnostic: CPU time beside wall clock.  If the CPU-time spread
+    # across replicates is much narrower than the wall-clock spread, the
+    # variance is machine contention rather than the code.
+    ru0 = resource.getrusage(resource.RUSAGE_SELF)
     t0 = time.perf_counter()
     try:
         sr = SingleRun(str(dst), solver="vmcon", update_obsolete=True)
@@ -145,6 +158,15 @@ def main() -> int:
         result["status"] = "crashed"
         result["traceback"] = traceback.format_exc()
     result["wall_s"] = time.perf_counter() - t0
+    ru1 = resource.getrusage(resource.RUSAGE_SELF)
+    result["cpu_user_s"] = ru1.ru_utime - ru0.ru_utime
+    result["cpu_sys_s"] = ru1.ru_stime - ru0.ru_stime
+    result["cpu_s"] = result["cpu_user_s"] + result["cpu_sys_s"]
+    result["maxrss_kb"] = ru1.ru_maxrss
+    try:
+        result["loadavg"] = os.getloadavg()
+    except OSError:
+        result["loadavg"] = None
 
     result["probe"] = (
         _idf_probe.summary()
@@ -206,6 +228,11 @@ def main() -> int:
     except Exception:
         result["mfile"] = {"error": traceback.format_exc()}
 
+    probe_block = result.get("probe") or {}
+    modules_block = probe_block.pop("modules", None) if isinstance(probe_block, dict) else None
+    if modules_block:
+        (outdir / "probe_modules.json").write_text(json.dumps(modules_block, indent=2))
+        probe_block["modules_written_to"] = "probe_modules.json"
     (outdir / "metrics.json").write_text(json.dumps(result, indent=2))
     brief = {
         k: v

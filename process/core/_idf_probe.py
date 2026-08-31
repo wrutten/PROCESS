@@ -6,12 +6,19 @@ every hook site in the instrumented modules short-circuits on a single global
 boolean load, and no probe state is created or mutated.  No floating-point
 work is performed on the disabled path.
 
-Stage 0 supports exactly one mode:
+Two modes are supported:
 
 ``baseline``
     Record the shape of the existing MDA solve without altering control flow:
     sweeps per ``Caller.call_models``, the solver phase each ``call_models``
-    belongs to, total model sweeps, and solver retries.
+    belongs to, total model sweeps, and solver retries.  (Stage 0 / A1.)
+
+``modules``
+    Everything ``baseline`` records, plus per-module state attribution: which
+    of the three candidate modules still has changing state after each sweep,
+    and every read/write of a data-structure field attributed to the model
+    node performing it.  Implemented in ``_idf_probe_modules``, which is
+    imported only in this mode.  (Stage 1 / A2.)
 
 Hook sites (see ``arch_surgery/idf_probe/README.md`` for the manifest):
 
@@ -55,14 +62,17 @@ __all__ = [
     "MODE",
     "call_models_begin",
     "call_models_end",
+    "objective_begin",
+    "objective_end",
     "record_retry",
+    "sweep_end",
     "set_phase",
     "summary",
     "sweep",
     "write_summary",
 ]
 
-VALID_MODES = ("baseline",)
+VALID_MODES = ("baseline", "modules")
 
 _raw = os.environ.get("PROCESS_IDF_PROBE", "").strip()
 MODE: str | None = _raw or None
@@ -73,6 +83,13 @@ if ENABLED and MODE not in VALID_MODES:
         f"PROCESS_IDF_PROBE={MODE!r} is not a recognised probe mode; "
         f"expected one of {VALID_MODES} (or unset to disable the probe)."
     )
+
+#: The module-attribution instrument for Stage 1.  Imported only in ``modules``
+#: mode, so that no other arm pays for its existence.
+if MODE == "modules":
+    from process.core import _idf_probe_modules as _mod
+else:
+    _mod = None
 
 # --------------------------------------------------------------------------
 # Probe state.  Only ever touched when ENABLED is True.
@@ -120,12 +137,19 @@ def set_phase(phase: str) -> str:
     return previous
 
 
-def sweep() -> None:
-    """Record one execution of ``Caller._call_models_once``."""
+def sweep(models=None, data=None) -> None:
+    """Record one execution of ``Caller._call_models_once``.
+
+    ``models`` and ``data`` are passed so that the ``modules`` mode can install
+    its node wrappers on the first sweep.  They are ignored in every other
+    mode.
+    """
     global _sweeps_total, _sweeps_output
     _sweeps_total += 1
     if _depth == 0:
         _sweeps_output += 1
+    if _mod is not None:
+        _mod.sweep(models, data)
 
 
 def call_models_begin() -> None:
@@ -133,6 +157,8 @@ def call_models_begin() -> None:
     global _depth, _sweeps_at_call_start
     if _depth == 0:
         _sweeps_at_call_start = _sweeps_total
+        if _mod is not None:
+            _mod.call_models_begin()
     _depth += 1
 
 
@@ -156,6 +182,8 @@ def call_models_end(*, converged: bool = True) -> None:
     _records.append((_phase, sweeps, converged))
     if not converged:
         _calls_nonconverged += 1
+    if _mod is not None:
+        _mod.call_models_end(_phase, converged)
 
 
 def record_retry(kind: str, ifail_before) -> None:
@@ -166,6 +194,24 @@ def record_retry(kind: str, ifail_before) -> None:
         "call_models_before": _calls_total,
         "sweeps_before": _sweeps_total,
     })
+
+
+def sweep_end() -> None:
+    """Mark the end of the model sequence within one sweep."""
+    if _mod is not None:
+        _mod.sweep_end()
+
+
+def objective_begin() -> None:
+    """Mark entry into the objective/constraint evaluation (DSM rows 54-55)."""
+    if _mod is not None:
+        _mod.objective_begin()
+
+
+def objective_end() -> None:
+    """Mark exit from the objective/constraint evaluation."""
+    if _mod is not None:
+        _mod.objective_end()
 
 
 def _phase_block(pairs) -> dict:
@@ -214,6 +260,7 @@ def summary() -> dict:
         "all_phases": overall,
         "retries": list(_retries),
         "n_retries": len(_retries),
+        "modules": _mod.summary() if _mod is not None else None,
     }
 
 
