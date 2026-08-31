@@ -1,0 +1,4218 @@
+{
+  "scenario": "st_regression",
+  "mode": "census",
+  "tag": "",
+  "outdir": "/home/wrutten/projects/PROCESS_code_analysis/idf_probe/runs/st_regression/census2",
+  "status": "ok",
+  "probe": {
+    "mode": "census",
+    "n_call_models": 1050,
+    "n_sweeps": 3437,
+    "n_retries": 0,
+    "sweeps_per_call_hist_by_phase": {
+      "func": {
+        "2": 17,
+        "3": 4,
+        "4": 8,
+        "5": 4,
+        "6": 2
+      },
+      "grad": {
+        "2": 127,
+        "3": 468,
+        "4": 339,
+        "5": 46
+      },
+      "grad_reconcile": {
+        "2": 22,
+        "3": 13
+      }
+    },
+    "wall_in_call_models_by_phase": {
+      "func": 1.4337679220116115,
+      "grad": 24.437326831030077,
+      "grad_reconcile": 0.6439961410287651
+    },
+    "census": {
+      "current_drive.big_q_plasma": {
+        "max_rel": 41.73037858293332,
+        "max_sym": 1.0,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 41.73037858293332
+        }
+      },
+      "physics.beta_norm_max_stambaugh": {
+        "max_rel": 6.716203525852666,
+        "max_sym": 1.0,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 6.716203525852666
+        }
+      },
+      "superconducting_tfcoil.a_tf_plasma_case": {
+        "max_rel": 2.9505258654658952,
+        "max_sym": 1.0,
+        "n_changed": 18,
+        "example": {
+          "sweep1": -0.014774905628315738,
+          "sweep2": 0.02881883558784748
+        }
+      },
+      "physics.nd_plasma_protons_vol_avg": {
+        "max_rel": 2.116265933122801,
+        "max_sym": 0.5141227431623442,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3e+16,
+          "sweep2": 9.348797799368403e+16
+        }
+      },
+      "current_drive.f_c_plasma_bootstrap_sugiyama_h": {
+        "max_rel": 1.8557566114913144,
+        "max_sym": 1.0,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 1.8557566114913144
+        }
+      },
+      "fwbs.p_fw_nuclear_heat_total_mw": {
+        "max_rel": 1.7446835201192656,
+        "max_sym": 0.465909471586987,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 86.46649962021034,
+          "sweep2": 237.32317654999008
+        }
+      },
+      "fwbs.p_blkt_multiplication_mw": {
+        "max_rel": 1.3021540532581612,
+        "max_sym": 0.3943347379488111,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 311.4328825070753,
+          "sweep2": 716.9664727815361
+        }
+      },
+      "build.a_blkt_outboard_surface": {
+        "max_rel": 1.2824819351647523,
+        "max_sym": 0.39070494841897213,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 327.63187501127226,
+          "sweep2": 747.813836097385
+        }
+      },
+      "fwbs.p_blkt_nuclear_heat_total_mw": {
+        "max_rel": 1.274500970357552,
+        "max_sym": 0.38921990919990035,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1382.2568887018356,
+          "sweep2": 3143.944634635736
+        }
+      },
+      "power.p_blkt_heat_deposited_mw": {
+        "max_rel": 1.274500970357552,
+        "max_sym": 0.38921990919990035,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1382.2568887018356,
+          "sweep2": 3143.944634635736
+        }
+      },
+      "fwbs.p_shld_nuclear_heat_mw": {
+        "max_rel": 1.210051520235233,
+        "max_sym": 0.37695704028655597,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.4471860298638994,
+          "sweep2": 0.9883041651286693
+        }
+      },
+      "primary_pumping.p_fw_blkt_coolant_pump_mw": {
+        "max_rel": 1.18020474162639,
+        "max_sym": 0.37110967296489883,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 181.23630946576185,
+          "sweep2": 395.1322612521218
+        }
+      },
+      "power.p_fw_blkt_coolant_pump_elec_mw": {
+        "max_rel": 1.18020474162639,
+        "max_sym": 0.3711096729648988,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 208.3175970870826,
+          "sweep2": 454.17501293347334
+        }
+      },
+      "power.p_fw_blkt_heat_deposited_mw": {
+        "max_rel": 1.1802047416263899,
+        "max_sym": 0.3711096729648988,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2025.8182632316423,
+          "sweep2": 4416.698583170964
+        }
+      },
+      "heat_transport.p_coolant_pump_loss_total_mw": {
+        "max_rel": 1.0365342800144222,
+        "max_sym": 0.34135438115636857,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 29.55303529551324,
+          "sweep2": 60.185769457788865
+        }
+      },
+      "power.p_coolant_pump_elec_total_profile_mw": {
+        "max_rel": 1.0365342800144217,
+        "max_sym": 0.34135438115636846,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 393.7489126900405,
+          "sweep2": 801.8831584116731
+        }
+      },
+      "heat_transport.p_coolant_pump_elec_total_mw": {
+        "max_rel": 1.0365342800144215,
+        "max_sym": 0.34135438115636835,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 227.33104073471736,
+          "sweep2": 462.96745736760676
+        }
+      },
+      "power.p_coolant_pump_total_mw": {
+        "max_rel": 1.0365342800144215,
+        "max_sym": 0.34135438115636835,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 197.77800543920412,
+          "sweep2": 402.7816879098179
+        }
+      },
+      "power.p_fw_heat_deposited_mw": {
+        "max_rel": 0.898278405393253,
+        "max_sym": 0.30993516831291784,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 462.3250650640449,
+          "sweep2": 877.6216872831071
+        }
+      },
+      "fwbs.p_div_nuclear_heat_total_mw": {
+        "max_rel": 0.8059283887304517,
+        "max_sym": 0.674941419864744,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1887.0885580683234,
+          "sweep2": 366.2303170726483
+        }
+      },
+      "fwbs.f_ster_div_single": {
+        "max_rel": 0.8056408386098842,
+        "max_sym": 0.674538166285088,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.25,
+          "sweep2": 0.048589790347528944
+        }
+      },
+      "fwbs.p_div_rad_total_mw": {
+        "max_rel": 0.8056408386098842,
+        "max_sym": 0.674538166285088,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 328.3228216645884,
+          "sweep2": 63.81254828396594
+        }
+      },
+      "fwbs.p_fw_rad_total_mw": {
+        "max_rel": 0.8056408386098842,
+        "max_sym": 0.2871503820171995,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 328.3228216645884,
+          "sweep2": 592.8330950452108
+        }
+      },
+      "divertor.deg_div_poloidal_plasma": {
+        "max_rel": 0.8056408386098842,
+        "max_sym": 0.674538166285088,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 90.0,
+          "sweep2": 17.49232452511042
+        }
+      },
+      "fwbs.psurffwi": {
+        "max_rel": 0.8056408386098841,
+        "max_sym": 0.28715038201719945,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 61.858550816408965,
+          "sweep2": 111.69432557133281
+        }
+      },
+      "blanket.len_blkt_outboard_segment_poloidal": {
+        "max_rel": 0.805640838609884,
+        "max_sym": 0.28715038201719945,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1.3374808666998574,
+          "sweep2": 2.415010073772605
+        }
+      },
+      "blanket.n_fw_inboard_channels": {
+        "max_rel": 0.80178716490658,
+        "max_sym": 0.28616990432009276,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1231.0,
+          "sweep2": 2218.0
+        }
+      },
+      "first_wall.a_fw_total": {
+        "max_rel": 0.801701258598372,
+        "max_sym": 0.286148016723041,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 522.7436283551198,
+          "sweep2": 941.8278531316989
+        }
+      },
+      "first_wall.a_fw_outboard": {
+        "max_rel": 0.801701258598372,
+        "max_sym": 0.286148016723041,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 424.2546986650798,
+          "sweep2": 764.3802245511473
+        }
+      },
+      "first_wall.a_fw_inboard": {
+        "max_rel": 0.8017012585983714,
+        "max_sym": 0.28614801672304085,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 98.48892969004001,
+          "sweep2": 177.4476285805516
+        }
+      },
+      "blanket.n_fw_outboard_channels": {
+        "max_rel": 0.801621723552706,
+        "max_sym": 0.2861277512283772,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 5303.0,
+          "sweep2": 9554.0
+        }
+      },
+      "build.a_blkt_total_surface": {
+        "max_rel": 0.7973848513032394,
+        "max_sym": 0.2850465322752268,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 524.6097343913523,
+          "sweep2": 942.9255894412327
+        }
+      },
+      "costs.cpp": {
+        "max_rel": 0.7774165096653213,
+        "max_sym": 0.2799063471250843,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 26.900757452955805,
+          "sweep2": 47.813850419386085
+        }
+      },
+      "power.f_p_div_primary_heat": {
+        "max_rel": 0.7238100115129562,
+        "max_sym": 0.5671647780053907,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.48449754455337624,
+          "sweep2": 0.13381337125219797
+        }
+      },
+      "power.delta_eta": {
+        "max_rel": 0.7238100115129562,
+        "max_sym": 0.5671647780053906,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.16424466760359455,
+          "sweep2": 0.045362732854495116
+        }
+      },
+      "heat_transport.p_div_coolant_pump_mw": {
+        "max_rel": 0.6926570545823129,
+        "max_sym": 0.5298204706042251,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 12.897515431369385,
+          "sweep2": 3.963960381247139
+        }
+      },
+      "power.p_div_heat_deposited_mw": {
+        "max_rel": 0.6926570545823129,
+        "max_sym": 0.5298204706042252,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2592.400601705246,
+          "sweep2": 796.7560366306749
+        }
+      },
+      "power.p_div_coolant_pump_elec_mw": {
+        "max_rel": 0.6926570545823127,
+        "max_sym": 0.5298204706042251,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 14.82473038088435,
+          "sweep2": 4.556276300284067
+        }
+      },
+      "costs.c2211": {
+        "max_rel": 0.6856304738382597,
+        "max_sym": 0.255295909291038,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 51.8025225030964,
+          "sweep2": 87.3199105529115
+        }
+      },
+      "fwbs.psurffwo": {
+        "max_rel": 0.6834527405643458,
+        "max_sym": 0.2546915510129728,
+        "n_changed": 15,
+        "example": {
+          "sweep1": 314.00001462742557,
+          "sweep2": 528.6041851617842
+        }
+      },
+      "physics.f_beta_alpha_beam_thermal": {
+        "max_rel": 0.46201925873359595,
+        "max_sym": 1.0,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.24286842954104357,
+          "sweep2": 0.13065853775469805
+        }
+      },
+      "blanket.len_blkt_outboard_channel_total": {
+        "max_rel": 0.36682084274588267,
+        "max_sym": 0.15498462584109793,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 5.874961733399715,
+          "sweep2": 8.03002014754521
+        }
+      },
+      "heat_transport.tlvpmw": {
+        "max_rel": 0.354150983445334,
+        "max_sym": 0.1504368181717168,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 810.606959578567,
+          "sweep2": 1097.6842115009485
+        }
+      },
+      "costs.c243": {
+        "max_rel": 0.3541509834453339,
+        "max_sym": 0.15043681817171678,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 12.726529265383501,
+          "sweep2": 17.23364212056489
+        }
+      },
+      "heat_transport.p_plant_electric_recirc_mw": {
+        "max_rel": 0.33347880712899697,
+        "max_sym": 0.14291057887913441,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 710.5035033439476,
+          "sweep2": 947.4413641000606
+        }
+      },
+      "fwbs.fwclfr": {
+        "max_rel": 0.3141592653589793,
+        "max_sym": 1.0,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 0.3141592653589793
+        }
+      },
+      "fwbs.m_blkt_total": {
+        "max_rel": 0.26483976706795576,
+        "max_sym": 0.11693532183551127,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1298075.2001630834,
+          "sweep2": 1641857.1338109644
+        }
+      },
+      "costs.c2212": {
+        "max_rel": 0.26483976706795564,
+        "max_sym": 0.11693532183551122,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 322.050050178908,
+          "sweep2": 407.34171045251344
+        }
+      },
+      "costs.c22121": {
+        "max_rel": 0.26483976706795564,
+        "max_sym": 0.11693532183551122,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 85.65542396533888,
+          "sweep2": 108.34038649642622
+        }
+      },
+      "costs.c22122": {
+        "max_rel": 0.2648397670679556,
+        "max_sym": 0.11693532183551121,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 209.9111819436487,
+          "sweep2": 265.50401047456387
+        }
+      },
+      "fwbs.m_blkt_li4sio4": {
+        "max_rel": 0.2648397670679556,
+        "max_sym": 0.11693532183551117,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 466469.2932081083,
+          "sweep2": 590008.9121656975
+        }
+      },
+      "fwbs.m_blkt_tibe12": {
+        "max_rel": 0.2648397670679556,
+        "max_sym": 0.11693532183551117,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 439258.5844376353,
+          "sweep2": 555591.7256226985
+        }
+      },
+      "fwbs.m_blkt_beryllium": {
+        "max_rel": 0.2648397670679556,
+        "max_sym": 0.11693532183551117,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 439258.5844376353,
+          "sweep2": 555591.7256226985
+        }
+      },
+      "fwbs.m_blkt_li2o": {
+        "max_rel": 0.2648397670679556,
+        "max_sym": 0.11693532183551117,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 466469.2932081083,
+          "sweep2": 590008.9121656975
+        }
+      },
+      "fwbs.vol_blkt_total": {
+        "max_rel": 0.26483976706795553,
+        "max_sym": 0.11693532183551117,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 518.2992146756759,
+          "sweep2": 655.5654579618862
+        }
+      },
+      "fwbs.vol_blkt_outboard": {
+        "max_rel": 0.26483976706795553,
+        "max_sym": 0.11693532183551117,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 518.2992146756759,
+          "sweep2": 655.5654579618862
+        }
+      },
+      "fwbs.m_blkt_steel_total": {
+        "max_rel": 0.2648397670679555,
+        "max_sym": 0.11693532183551114,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 392347.3225173399,
+          "sweep2": 496256.4960225682
+        }
+      },
+      "costs.c22123": {
+        "max_rel": 0.2648397670679553,
+        "max_sym": 0.11693532183551109,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 26.483444269920444,
+          "sweep2": 33.49731348152335
+        }
+      },
+      "fwbs.armour_fw_bl_mass": {
+        "max_rel": 0.254590538598285,
+        "max_sym": 0.11292096468947663,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1418274.4367293785,
+          "sweep2": 1779353.6894564903
+        }
+      },
+      "fwbs.m_fw_total": {
+        "max_rel": 0.23568011480075918,
+        "max_sym": 0.10541763700472984,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 73393.20542105882,
+          "sweep2": 90690.52450028967
+        }
+      },
+      "fwbs.vol_fw_total": {
+        "max_rel": 0.23568011480075918,
+        "max_sym": 0.10541763700472985,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 9.409385310392157,
+          "sweep2": 11.626990320549957
+        }
+      },
+      "costs.c221": {
+        "max_rel": 0.22940329172379165,
+        "max_sym": 0.10289896519638457,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 531.5647426083176,
+          "sweep2": 653.5074443269757
+        }
+      },
+      "costs.c2261": {
+        "max_rel": 0.20938991890465022,
+        "max_sym": 0.09477273210717803,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 142.91786865246524,
+          "sweep2": 172.8434295796304
+        }
+      },
+      "heat_transport.f_p_plant_electric_recirc": {
+        "max_rel": 0.19831446232856909,
+        "max_sym": 0.09021205370159104,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.3319676003587944,
+          "sweep2": 0.397801576534454
+        }
+      },
+      "fwbs.m_fw_blkt_div_coolant_total": {
+        "max_rel": 0.19580882237418953,
+        "max_sym": 0.08917389363727658,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 316.8092620601763,
+          "sweep2": 378.84331058141544
+        }
+      },
+      "heat_transport.pacpmw": {
+        "max_rel": 0.14867629962445497,
+        "max_sym": 0.06919436848186046,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1633.5724092321966,
+          "sweep2": 1876.4459102054454
+        }
+      },
+      "costs.c24": {
+        "max_rel": 0.1318241632804179,
+        "max_sym": 0.06183632100199527,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 49.04515445215414,
+          "sweep2": 55.51049090076822
+        }
+      },
+      "costs.c242": {
+        "max_rel": 0.12749577659015215,
+        "max_sym": 0.05992762852601111,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 15.359125186770637,
+          "sweep2": 17.317348780203325
+        }
+      },
+      "tfcoil.a_tf_coil_inboard_case": {
+        "max_rel": 0.12584606549026706,
+        "max_sym": 0.05919810824178569,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.34640527732299164,
+          "sweep2": 0.389999018539155
+        }
+      },
+      "tfcoil.m_tf_coil_case": {
+        "max_rel": 0.12080484385055511,
+        "max_sym": 0.056961791746580795,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 597187.2749457755,
+          "sweep2": 669330.3904451384
+        }
+      },
+      "costs.c22213": {
+        "max_rel": 0.12080484385055487,
+        "max_sym": 0.056961791746580684,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 302.7739483975082,
+          "sweep2": 339.35050795568515
+        }
+      },
+      "tfcoil.a_tf_coil_outboard_case": {
+        "max_rel": 0.11880225133894173,
+        "max_sym": 0.056070476262646336,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.5989656027625921,
+          "sweep2": 0.6701240648453743
+        }
+      },
+      "tfcoil.whtcp": {
+        "max_rel": 0.11606952028876513,
+        "max_sym": 0.05485146833593914,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2910561.0880790344,
+          "sweep2": 3248388.517343514
+        }
+      },
+      "physics.e_plasma_beta_thermal": {
+        "max_rel": 0.11392601826894758,
+        "max_sym": 0.060403790822874004,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1566510141.5791178,
+          "sweep2": 1388043878.5710835
+        }
+      },
+      "current_drive.f_c_plasma_bootstrap_wilson": {
+        "max_rel": 0.11392601826894752,
+        "max_sym": 0.06040379082287397,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.9188823610836938,
+          "sweep2": 1.7002717341589118
+        }
+      },
+      "physics.beta_thermal_vol_avg": {
+        "max_rel": 0.1139260182689475,
+        "max_sym": 0.060403790822873955,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.2,
+          "sweep2": 0.1772147963462105
+        }
+      },
+      "physics.beta_thermal_poloidal_vol_avg": {
+        "max_rel": 0.1139260182689475,
+        "max_sym": 0.060403790822873955,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2.0047585767037654,
+          "sweep2": 1.776364414469383
+        }
+      },
+      "physics.beta_thermal_toroidal_vol_avg": {
+        "max_rel": 0.11392601826894748,
+        "max_sym": 0.06040379082287395,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.2221636292611816,
+          "sweep2": 0.19685341157527655
+        }
+      },
+      "physics.beta_norm_thermal": {
+        "max_rel": 0.1139260182689474,
+        "max_sym": 0.0604037908228739,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6.120731314045357,
+          "sweep2": 5.423420766542107
+        }
+      },
+      "costs.c26": {
+        "max_rel": 0.1127953880634777,
+        "max_sym": 0.05338680153351832,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 110.4244721907437,
+          "sweep2": 122.87984338320334
+        }
+      },
+      "water_use.wateruserecirc": {
+        "max_rel": 0.11279538806347733,
+        "max_sym": 0.053386801533518144,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 45795.33028518548,
+          "sweep2": 50960.832336198095
+        }
+      },
+      "power.p_turbine_loss_mw": {
+        "max_rel": 0.11279538806347732,
+        "max_sym": 0.053386801533518144,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3210.4194923361215,
+          "sweep2": 3572.540004820726
+        }
+      },
+      "water_use.wateruseonethru": {
+        "max_rel": 0.11279538806347726,
+        "max_sym": 0.05338680153351812,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4487942.367948177,
+          "sweep2": 4994161.568947413
+        }
+      },
+      "heat_transport.p_plant_primary_heat_mw": {
+        "max_rel": 0.11279538806347725,
+        "max_sym": 0.053386801533518116,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 5350.699153893536,
+          "sweep2": 5954.233341367877
+        }
+      },
+      "water_use.evapvol": {
+        "max_rel": 0.11279538806347722,
+        "max_sym": 0.0533868015335181,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 45689.2544807059,
+          "sweep2": 50842.79167018809
+        }
+      },
+      "heat_transport.p_plant_electric_gross_mw": {
+        "max_rel": 0.11279538806347715,
+        "max_sym": 0.05338680153351807,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2140.279661557415,
+          "sweep2": 2381.693336547151
+        }
+      },
+      "power.p_plant_electric_gross_profile_mw": {
+        "max_rel": 0.11279538806347714,
+        "max_sym": 0.05338680153351807,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3707.0731162237635,
+          "sweep2": 4125.213866947906
+        }
+      },
+      "water_use.waterusetower": {
+        "max_rel": 0.11279538806347711,
+        "max_sym": 0.05338680153351805,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 136490.03519090076,
+          "sweep2": 151885.48167705606
+        }
+      },
+      "tfcoil.m_tf_coils_total": {
+        "max_rel": 0.11233112551468542,
+        "max_sym": 0.053178748425304345,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 7700838.37589108,
+          "sweep2": 8565882.218061607
+        }
+      },
+      "tfcoil.whttflgs": {
+        "max_rel": 0.1100596857404168,
+        "max_sym": 0.05215951306220848,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4790277.287812045,
+          "sweep2": 5317493.700718095
+        }
+      },
+      "ccfe_hcpb.tfc_nuc_heating": {
+        "max_rel": 0.11005968574041558,
+        "max_sym": 0.05215951306220793,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2846.575199320342,
+          "sweep2": 3159.868371194
+        }
+      },
+      "superconducting_tfcoil.a_tf_coil_inboard_steel": {
+        "max_rel": 0.09981475975689968,
+        "max_sym": 0.047535031027429994,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.4367464423331432,
+          "sweep2": 0.4803401835493065
+        }
+      },
+      "costs.c23": {
+        "max_rel": 0.09275980801521747,
+        "max_sym": 0.04432415399987602,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 371.79019924837417,
+          "sweep2": 406.2773867525928
+        }
+      },
+      "tfcoil.str_wp": {
+        "max_rel": 0.08875180298820876,
+        "max_sym": 0.04643656597137458,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0005369905788927363,
+          "sweep2": 0.000489331696828324
+        }
+      },
+      "tfcoil.a_tf_leg_outboard": {
+        "max_rel": 0.08868876939970419,
+        "max_sym": 0.042461457493829305,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.8023390398178143,
+          "sweep2": 0.8734975019005965
+        }
+      },
+      "costs.c2221": {
+        "max_rel": 0.08448327196458975,
+        "max_sym": 0.04052959939801566,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 450.9427738165818,
+          "sweep2": 489.03989481739455
+        }
+      },
+      "costs.c226": {
+        "max_rel": 0.08328015333025361,
+        "max_sym": 0.03997549402903161,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 371.19832452507285,
+          "sweep2": 402.11177790745415
+        }
+      },
+      "costs.crctcore": {
+        "max_rel": 0.08226694544761629,
+        "max_sym": 0.03950835680673579,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1973.9367021260969,
+          "sweep2": 2136.326445116952
+        }
+      },
+      "heat_transport.p_plant_secondary_heat_mw": {
+        "max_rel": 0.0797794204916436,
+        "max_sym": 0.038359558569333464,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 400.3617383359067,
+          "sweep2": 432.3023658073724
+        }
+      },
+      "tfcoil.a_tf_inboard_total": {
+        "max_rel": 0.07929325031338613,
+        "max_sym": 0.03813471250456628,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6.5973445725385655,
+          "sweep2": 7.1204694671325255
+        }
+      },
+      "costs.chx": {
+        "max_rel": 0.07768223038441742,
+        "max_sym": 0.037388889045869386,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 116.01711119950944,
+          "sweep2": 125.02957916024431
+        }
+      },
+      "tfcoil.j_tf_coil_full_area": {
+        "max_rel": 0.07346775335652514,
+        "max_sym": 0.03813471250456631,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 10231389.194172006,
+          "sweep2": 9479712.01635996
+        }
+      },
+      "superconducting_tfcoil.f_a_tf_coil_inboard_insulation": {
+        "max_rel": 0.07346775335652503,
+        "max_sym": 0.03813471250456625,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0766036475812964,
+          "sweep2": 0.07097574969458355
+        }
+      },
+      "tfcoil.sig_tf_wp": {
+        "max_rel": 0.07197038464031577,
+        "max_sym": 0.03732846428652462,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 142743586.1264813,
+          "sweep2": 132470275.3280204
+        }
+      },
+      "structure.gsmass": {
+        "max_rel": 0.06386251680786922,
+        "max_sym": 0.030943202993309837,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 846670.324914939,
+          "sweep2": 900740.8227705434
+        }
+      },
+      "costs.c2214": {
+        "max_rel": 0.06386251680786911,
+        "max_sym": 0.03094320299330978,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 24.74394024563909,
+          "sweep2": 26.324150545469127
+        }
+      },
+      "costs.c22": {
+        "max_rel": 0.06289649727689837,
+        "max_sym": 0.03048941008912669,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3081.3907958988298,
+          "sweep2": 3275.1994837021402
+        }
+      },
+      "costs.moneyint": {
+        "max_rel": 0.05940789253186325,
+        "max_sym": 0.02884707432038944,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1060.0447441875326,
+          "sweep2": 1123.019768429192
+        }
+      },
+      "costs.capcost": {
+        "max_rel": 0.059407892531863245,
+        "max_sym": 0.028847074320389438,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 7484.558345324092,
+          "sweep2": 7929.200183151566
+        }
+      },
+      "costs.concost": {
+        "max_rel": 0.059407892531863245,
+        "max_sym": 0.028847074320389438,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6424.513601136559,
+          "sweep2": 6806.180414722374
+        }
+      },
+      "costs.ccont": {
+        "max_rel": 0.05940789253186321,
+        "max_sym": 0.028847074320389424,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1048.351591817263,
+          "sweep2": 1110.6319505195506
+        }
+      },
+      "costs.cindrt": {
+        "max_rel": 0.059407892531863155,
+        "max_sym": 0.028847074320389396,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1178.0033264212045,
+          "sweep2": 1247.9860214394128
+        }
+      },
+      "costs.cdirt": {
+        "max_rel": 0.05940789253186305,
+        "max_sym": 0.028847074320389347,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4198.158682898093,
+          "sweep2": 4447.56244276341
+        }
+      },
+      "tfcoil.sig_tf_case": {
+        "max_rel": 0.059246018360007285,
+        "max_sym": 0.03052732026856011,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 183702541.79560548,
+          "sweep2": 172818897.63160303
+        }
+      },
+      "superconducting_tfcoil.vv_stress_quench": {
+        "max_rel": 0.05785564411911142,
+        "max_sym": 0.02978956942305667,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 11664593.323112138,
+          "sweep2": 10989730.763015999
+        }
+      },
+      "costs.coecap": {
+        "max_rel": 0.056101839609713836,
+        "max_sym": 0.027285535438440638,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 96.6876427520305,
+          "sweep2": 102.11199737794622
+        }
+      },
+      "build.dr_tf_inboard": {
+        "max_rel": 0.05281496925194418,
+        "max_sym": 0.025728070986928846,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.0,
+          "sweep2": 1.0528149692519442
+        }
+      },
+      "build.dr_tf_outboard": {
+        "max_rel": 0.05281496925194418,
+        "max_sym": 0.025728070986928846,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.0,
+          "sweep2": 1.0528149692519442
+        }
+      },
+      "costs.coe": {
+        "max_rel": 0.05026433096140019,
+        "max_sym": 0.024516024691231146,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 110.1689032387534,
+          "sweep2": 115.70646945280058
+        }
+      },
+      "build.dr_shld_vv_gap_outboard": {
+        "max_rel": 0.045102291132875755,
+        "max_sym": 0.023071432806073943,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.9845948733544867,
+          "sweep2": 0.9401873887285157
+        }
+      },
+      "structure.clgsmass": {
+        "max_rel": 0.04359519705380869,
+        "max_sym": 0.02133259909626848,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 451002.02465326374,
+          "sweep2": 470663.54678968946
+        }
+      },
+      "costs.c22215": {
+        "max_rel": 0.04359519705380855,
+        "max_sym": 0.021332599096268414,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 13.338384879120275,
+          "sweep2": 13.919874396305064
+        }
+      },
+      "structure.coldmass": {
+        "max_rel": 0.04359519705380836,
+        "max_sym": 0.021332599096268327,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 21596584.181458216,
+          "sweep2": 22538091.524538048
+        }
+      },
+      "costs.c222": {
+        "max_rel": 0.036690158066382254,
+        "max_sym": 0.01801459977653921,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1102.394849294937,
+          "sweep2": 1142.841890567134
+        }
+      },
+      "ccfe_hcpb.pnuc_tot_blk_sector": {
+        "max_rel": 0.03491614032551423,
+        "max_sym": 0.017158515593634682,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3685.891532236197,
+          "sweep2": 3814.5886382003805
+        }
+      },
+      "tfcoil.r_b_tf_inboard_peak": {
+        "max_rel": 0.03472356561456437,
+        "max_sym": 0.017065495382944818,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.4691850307480558,
+          "sweep2": 1.5202003735631717
+        }
+      },
+      "tfcoil.dr_tf_plasma_case": {
+        "max_rel": 0.03407417371093182,
+        "max_sym": 0.01675168691059454,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.052814969251944115,
+          "sweep2": 0.05461459568877238
+        }
+      },
+      "tfcoil.tficrn": {
+        "max_rel": 0.034074173710931736,
+        "max_sym": 0.0167516869105945,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.40116951990890715,
+          "sweep2": 0.41483903981781434
+        }
+      },
+      "tfcoil.dx_tf_inboard_out_toroidal": {
+        "max_rel": 0.034074173710931736,
+        "max_sym": 0.0167516869105945,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.8023390398178143,
+          "sweep2": 0.8296780796356287
+        }
+      },
+      "build.r_tf_inboard_out": {
+        "max_rel": 0.03407417371093173,
+        "max_sym": 0.016751686910594494,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.55,
+          "sweep2": 1.6028149692519442
+        }
+      },
+      "build.r_cp_top": {
+        "max_rel": 0.03407417371093173,
+        "max_sym": 0.016751686910594494,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.55,
+          "sweep2": 1.6028149692519442
+        }
+      },
+      "tfcoil.b_tf_inboard_peak_symmetric": {
+        "max_rel": 0.03355830172278014,
+        "max_sym": 0.017065495382944856,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 9.188767730043022,
+          "sweep2": 8.880408290097693
+        }
+      },
+      "tfcoil.b_tf_inboard_peak_with_ripple": {
+        "max_rel": 0.03355830172278013,
+        "max_sym": 0.017065495382944856,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 10.015756825746895,
+          "sweep2": 9.679645036206486
+        }
+      },
+      "tfcoil.cforce": {
+        "max_rel": 0.0335583017227801,
+        "max_sym": 0.017065495382944836,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 25843409.229145337,
+          "sweep2": 24976148.304688398
+        }
+      },
+      "build.r_vv_inboard_out": {
+        "max_rel": 0.029019213874694604,
+        "max_sym": 0.014302089244033513,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.82,
+          "sweep2": 1.8728149692519442
+        }
+      },
+      "build.r_sh_inboard_in": {
+        "max_rel": 0.029019213874694604,
+        "max_sym": 0.014302089244033513,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.82,
+          "sweep2": 1.8728149692519442
+        }
+      },
+      "tfcoil.temp_margin": {
+        "max_rel": 0.028795550102784145,
+        "max_sym": 0.014193421363392328,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 22.687818226383023,
+          "sweep2": 23.341126432843694
+        }
+      },
+      "tfcoil.temp_tf_superconductor_margin": {
+        "max_rel": 0.028795550102784145,
+        "max_sym": 0.014193421363392328,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 22.687818226383023,
+          "sweep2": 23.341126432843694
+        }
+      },
+      "power.qss": {
+        "max_rel": 0.02696203758524707,
+        "max_sym": 0.01330169834723071,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 15252.011529060856,
+          "sweep2": 15663.236837158016
+        }
+      },
+      "build.r_tf_inboard_mid": {
+        "max_rel": 0.025149985358068654,
+        "max_sym": 0.012418826032592279,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.05,
+          "sweep2": 1.0764074846259721
+        }
+      },
+      "superconducting_tfcoil.j_tf_superconductor_critical": {
+        "max_rel": 0.02455346828462414,
+        "max_sym": 0.012127843827917248,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1291641228.720107,
+          "sweep2": 1323355500.6645992
+        }
+      },
+      "tfcoil.j_crit_str_tf": {
+        "max_rel": 0.024553468284624125,
+        "max_sym": 0.012127843827917243,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 400408780.9032333,
+          "sweep2": 410240205.20602584
+        }
+      },
+      "superconducting_tfcoil.c_tf_turn_cables_critical": {
+        "max_rel": 0.0245534682846241,
+        "max_sym": 0.01212784382791723,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 149212.15019757996,
+          "sweep2": 152875.8259951368
+        }
+      },
+      "tfcoil.j_tf_wp_critical": {
+        "max_rel": 0.02455346828462401,
+        "max_sym": 0.012127843827917187,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 77895305.51136957,
+          "sweep2": 79807905.42476408
+        }
+      },
+      "ccfe_hcpb.exp_blanket": {
+        "max_rel": 0.023999889081466795,
+        "max_sym": 0.011857653358053513,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.9598058652443987,
+          "sweep2": 0.9828410995500055
+        }
+      },
+      "superconducting_tfcoil.f_c_tf_turn_operating_critical": {
+        "max_rel": 0.023965043352723266,
+        "max_sym": 0.012127843827917179,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.4691306968454591,
+          "sweep2": 0.4578879593574644
+        }
+      },
+      "build.r_sh_inboard_out": {
+        "max_rel": 0.023790526690064942,
+        "max_sym": 0.011755429416390564,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2.22,
+          "sweep2": 2.2728149692519444
+        }
+      },
+      "physics.f_alpha_ion": {
+        "max_rel": 0.022003372445296744,
+        "max_sym": 0.011124069747529547,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.3103804322853082,
+          "sweep2": 0.30355101603400236
+        }
+      },
+      "physics.f_pden_alpha_ions_mw": {
+        "max_rel": 0.021900625616024436,
+        "max_sym": 0.011071549740945033,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.06937447407661887,
+          "sweep2": 0.06785512969255825
+        }
+      },
+      "superconducting_tfcoil.f_a_tf_coil_inboard_steel": {
+        "max_rel": 0.01901384024921411,
+        "max_sym": 0.009417389752448236,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.7944040591442189,
+          "sweep2": 0.8095087310181143
+        }
+      },
+      "build.rbld": {
+        "max_rel": 0.014661484317172664,
+        "max_sym": 0.007277393463518695,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4.83,
+          "sweep2": 4.900814969251944
+        }
+      },
+      "costs.c22214": {
+        "max_rel": 0.01416568316535899,
+        "max_sym": 0.007033027761200327,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 71.89007120038919,
+          "sweep2": 72.908443171749
+        }
+      },
+      "structure.aintmass": {
+        "max_rel": 0.014165683165358912,
+        "max_sym": 0.0070330277612002876,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2430771.6382211056,
+          "sweep2": 2465205.179095486
+        }
+      },
+      "blanket.vol_vv_inboard": {
+        "max_rel": 0.012857142857143034,
+        "max_sym": 0.006470165348670111,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 34.253413020620215,
+          "sweep2": 33.81301199606938
+        }
+      },
+      "build.r_shld_inboard_inner": {
+        "max_rel": 0.012000000000000158,
+        "max_sym": 0.006036217303823018,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1.5,
+          "sweep2": 1.4819999999999998
+        }
+      },
+      "heat_transport.p_shld_coolant_pump_mw": {
+        "max_rel": 0.011329223099517362,
+        "max_sym": 0.005632704466978657,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3.644180542072878,
+          "sweep2": 3.685466276448942
+        }
+      },
+      "power.p_shld_heat_deposited_mw": {
+        "max_rel": 0.011329223099517286,
+        "max_sym": 0.0056327044669786195,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 732.4802889566485,
+          "sweep2": 740.7787215662372
+        }
+      },
+      "power.p_shld_coolant_pump_elec_mw": {
+        "max_rel": 0.011329223099517262,
+        "max_sym": 0.0056327044669786065,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4.188713266750435,
+          "sweep2": 4.236168133849358
+        }
+      },
+      "fwbs.p_cp_shield_nuclear_heat_mw": {
+        "max_rel": 0.010593281285341462,
+        "max_sym": 0.005268734051756772,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 728.3889223847117,
+          "sweep2": 736.1049511246597
+        }
+      },
+      "blanket.vol_shld_inboard": {
+        "max_rel": 0.010588235294117768,
+        "max_sym": 0.005322294500295745,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 79.89698436609561,
+          "sweep2": 79.05101629633694
+        }
+      },
+      "physics.f_pden_alpha_electron_mw": {
+        "max_rel": 0.010009263714498546,
+        "max_sym": 0.004979710240738603,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.15413985498665272,
+          "sweep2": 0.1556826814441287
+        }
+      },
+      "physics.f_alpha_electron": {
+        "max_rel": 0.009903164833239326,
+        "max_sym": 0.004927185053744112,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.6896195677146918,
+          "sweep2": 0.6964489839659976
+        }
+      },
+      "tfcoil.dr_tf_internal_midplane": {
+        "max_rel": 0.009632383734130914,
+        "max_sym": 0.004839499826771821,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 8.224594873354487,
+          "sweep2": 8.14537241947657
+        }
+      },
+      "costs.c2243": {
+        "max_rel": 0.009569990725941361,
+        "max_sym": 0.004762208218726574,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2.7805404804706355,
+          "sweep2": 2.807150227081844
+        }
+      },
+      "vacuum.dlscal": {
+        "max_rel": 0.009569990725941285,
+        "max_sym": 0.0047622082187265356,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2.742150375217589,
+          "sweep2": 2.768392728877558
+        }
+      },
+      "build.a_blkt_inboard_surface": {
+        "max_rel": 0.009473684210526466,
+        "max_sym": 0.00475938656795354,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 196.97785938008002,
+          "sweep2": 195.11175334384765
+        }
+      },
+      "build.a_blkt_inboard_surface_full_coverage": {
+        "max_rel": 0.009473684210526466,
+        "max_sym": 0.00475938656795354,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 196.97785938008002,
+          "sweep2": 195.11175334384765
+        }
+      },
+      "build.a_shld_inboard_surface": {
+        "max_rel": 0.009473684210526459,
+        "max_sym": 0.004759386567953537,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 208.91591146372122,
+          "sweep2": 206.93670809195962
+        }
+      },
+      "current_drive.radius_beam_tangency_max": {
+        "max_rel": 0.0081375025573293,
+        "max_sym": 0.004052263625855464,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 8.524622404323999,
+          "sweep2": 8.593991540939452
+        }
+      },
+      "fwbs.vol_cryostat_internal": {
+        "max_rel": 0.007502629302079432,
+        "max_sym": 0.003737294881993637,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 19341.24590937781,
+          "sweep2": 19486.35610767623
+        }
+      },
+      "power.p_cryo_plant_electric_profile_mw": {
+        "max_rel": 0.0069255215761922844,
+        "max_sym": 0.0034508114535078223,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 407.19108139866813,
+          "sweep2": 410.0110920185277
+        }
+      },
+      "tfcoil.cryo_cool_req": {
+        "max_rel": 0.006925521576192273,
+        "max_sym": 0.0034508114535078166,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 311.903844571517,
+          "sweep2": 314.0639413767944
+        }
+      },
+      "heat_transport.p_cryo_plant_electric_mw": {
+        "max_rel": 0.006925521576192258,
+        "max_sym": 0.0034508114535078092,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 153.90376249490495,
+          "sweep2": 154.9696263227206
+        }
+      },
+      "heat_transport.helpow": {
+        "max_rel": 0.006925521576192207,
+        "max_sym": 0.0034508114535077837,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1464945.2040518138,
+          "sweep2": 1475090.713670414
+        }
+      },
+      "power.qmisc": {
+        "max_rel": 0.0069255215761921275,
+        "max_sym": 0.003450811453507744,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 454638.16677470086,
+          "sweep2": 457786.7732080595
+        }
+      },
+      "tfcoil.e_tf_magnetic_stored_total_gj": {
+        "max_rel": 0.006787977945352606,
+        "max_sym": 0.0034055473628718165,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 26.46913329228813,
+          "sweep2": 26.28946139926748
+        }
+      },
+      "tfcoil.e_tf_magnetic_stored_total": {
+        "max_rel": 0.006787977945352558,
+        "max_sym": 0.003405547362871793,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 26469133292.288128,
+          "sweep2": 26289461399.26748
+        }
+      },
+      "tfcoil.ind_tf_coil": {
+        "max_rel": 0.006787977945352506,
+        "max_sym": 0.0034055473628717666,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.1618823952176114e-05,
+          "sweep2": 1.1539955631437809e-05
+        }
+      },
+      "tfcoil.v_tf_coil_dump_quench_kv": {
+        "max_rel": 0.006787977945352445,
+        "max_sym": 0.0034055473628717362,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6.302174593401935,
+          "sweep2": 6.259395571254162
+        }
+      },
+      "tfcoil.e_tf_coil_magnetic_stored": {
+        "max_rel": 0.006787977945352414,
+        "max_sym": 0.00340554736287172,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2205761107.690677,
+          "sweep2": 2190788449.9389567
+        }
+      },
+      "costs.c22513": {
+        "max_rel": 0.00674429818484257,
+        "max_sym": 0.003383558957689612,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4.6620983261504225,
+          "sweep2": 4.630655744871809
+        }
+      },
+      "fwbs.qnuc": {
+        "max_rel": 0.006704326912430626,
+        "max_sym": 0.0033409639987900383,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 961943.8387772929,
+          "sweep2": 968393.0247438543
+        }
+      },
+      "fwbs.p_tf_nuclear_heat_mw": {
+        "max_rel": 0.006704326912430604,
+        "max_sym": 0.003340963998790027,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.9619438387772928,
+          "sweep2": 0.9683930247438542
+        }
+      },
+      "costs.c22521": {
+        "max_rel": 0.0062936869296373234,
+        "max_sym": 0.003136971905279214,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 34.318948551747795,
+          "sweep2": 34.534941269686826
+        }
+      },
+      "heat_transport.peakmva": {
+        "max_rel": 0.006293686929637223,
+        "max_sym": 0.0031369719052791642,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 980.5413871927943,
+          "sweep2": 986.712607705338
+        }
+      },
+      "pf_power.spsmva": {
+        "max_rel": 0.006293665968159836,
+        "max_sym": 0.003136961490192791,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 980.5411402132818,
+          "sweep2": 986.7123386178228
+        }
+      },
+      "pf_power.poloidalpower": {
+        "max_rel": 0.00629366596815971,
+        "max_sym": 0.003136961490192728,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 693347289.4772017,
+          "sweep2": 697710985.7171001
+        }
+      },
+      "power.qac": {
+        "max_rel": 0.00629366596815969,
+        "max_sym": 0.0031369614901927186,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 21687.18697075915,
+          "sweep2": 21823.678881342134
+        }
+      },
+      "pf_power.ensxpfm": {
+        "max_rel": 0.006293665968159677,
+        "max_sym": 0.003136961490192712,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 24029.99960061674,
+          "sweep2": 24181.23639131803
+        }
+      },
+      "costs.c22526": {
+        "max_rel": 0.006293665968159592,
+        "max_sym": 0.0031369614901926696,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3.6044999400925106,
+          "sweep2": 3.627185458697704
+        }
+      },
+      "pf_power.peakpoloidalpower": {
+        "max_rel": 0.006293665968159474,
+        "max_sym": 0.003136961490192611,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 490.270570106642,
+          "sweep2": 493.35616930891234
+        }
+      },
+      "costs.c22223": {
+        "max_rel": 0.006130860606768183,
+        "max_sym": 0.003056062157836434,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 160.5570776595457,
+          "sweep2": 161.54143072210644
+        }
+      },
+      "pf_coil.m_pf_coil_structure_total": {
+        "max_rel": 0.006130860606768134,
+        "max_sym": 0.00305606215783641,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3800167.5185691295,
+          "sweep2": 3823465.815907845
+        }
+      },
+      "buildings.volrci": {
+        "max_rel": 0.006094411154514019,
+        "max_sym": 0.0030379483241801493,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 734390.3183881181,
+          "sweep2": 738865.9949362697
+        }
+      },
+      "pf_coil.m_pf_coil_structure": {
+        "max_rel": 0.0059633282818346055,
+        "max_sym": 0.0029728002490167,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1764639.923883075,
+          "sweep2": 1775163.0510484213
+        }
+      },
+      "costs.c212": {
+        "max_rel": 0.005824866270469702,
+        "max_sym": 0.00290397550076252,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 284.26159719824085,
+          "sweep2": 285.9173829877507
+        }
+      },
+      "buildings.rbvol": {
+        "max_rel": 0.005824866270469668,
+        "max_sym": 0.002903975500762503,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 846016.6583280978,
+          "sweep2": 850944.5922254486
+        }
+      },
+      "power.p_plant_core_systems_elec_mw": {
+        "max_rel": 0.005625736212646229,
+        "max_sym": 0.002804978072962742,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 231.33756614786566,
+          "sweep2": 232.63901027108915
+        }
+      },
+      "pf_coil.p_pf_electric_supplies_mw": {
+        "max_rel": 0.0056238182199741,
+        "max_sym": 0.00280402444809682,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 10.756876185232823,
+          "sweep2": 10.81737090151334
+        }
+      },
+      "power.p_pf_electric_supplies_profile_mw": {
+        "max_rel": 0.0056238182199741,
+        "max_sym": 0.00280402444809682,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 21.513752370465646,
+          "sweep2": 21.63474180302668
+        }
+      },
+      "costs.c2273": {
+        "max_rel": 0.005525451094811317,
+        "max_sym": 0.0027551139237824117,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 44.22776335834976,
+          "sweep2": 44.47214170181921
+        }
+      },
+      "heat_transport.p_plant_electric_net_mw": {
+        "max_rel": 0.00531087513755917,
+        "max_sym": 0.002648404894924263,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 15.618706842592132,
+          "sweep2": 15.70165584444328
+        }
+      },
+      "pf_coil.ind_pf_cs_plasma_mutual": {
+        "max_rel": 0.005079679687010852,
+        "max_sym": 0.002533405399531943,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 9.561671044588694,
+          "sweep2": 9.610241270767771
+        }
+      },
+      "fwbs.vol_cryostat": {
+        "max_rel": 0.005077333352414151,
+        "max_sym": 0.002532238167554884,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 283.58808396308814,
+          "sweep2": 285.02795520014115
+        }
+      },
+      "buildings.volnucb": {
+        "max_rel": 0.005068333923940203,
+        "max_sym": 0.0025277611930668814,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1296336.6172956168,
+          "sweep2": 1302906.884149902
+        }
+      },
+      "ccfe_hcpb.shld_u_nuc_heating": {
+        "max_rel": 0.005015807388533597,
+        "max_sym": 0.0025142090885280776,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 237233.61283985066,
+          "sweep2": 236043.69473176
+        }
+      },
+      "costs.c2213": {
+        "max_rel": 0.005015807388531809,
+        "max_sym": 0.0025142090885271785,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 89.02991482756727,
+          "sweep2": 88.5833579229748
+        }
+      },
+      "costs.c22131": {
+        "max_rel": 0.005015807388531809,
+        "max_sym": 0.0025142090885271785,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 44.514957413783634,
+          "sweep2": 44.2916789614874
+        }
+      },
+      "costs.c22132": {
+        "max_rel": 0.005015807388531809,
+        "max_sym": 0.0025142090885271785,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 44.514957413783634,
+          "sweep2": 44.2916789614874
+        }
+      },
+      "fwbs.whtshld": {
+        "max_rel": 0.005015807388531806,
+        "max_sym": 0.0025142090885271772,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1854789.8922409848,
+          "sweep2": 1845486.6233953084
+        }
+      },
+      "fwbs.wpenshld": {
+        "max_rel": 0.005015807388531806,
+        "max_sym": 0.0025142090885271772,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1854789.8922409848,
+          "sweep2": 1845486.6233953084
+        }
+      },
+      "fwbs.vol_shld_total": {
+        "max_rel": 0.005015807388531756,
+        "max_sym": 0.0025142090885271516,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 317.0581012377752,
+          "sweep2": 315.4677988709929
+        }
+      },
+      "pf_coil.m_pf_coil_max": {
+        "max_rel": 0.004984678921479737,
+        "max_sym": 0.0024861431480668935,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1239.4467002803594,
+          "sweep2": 1245.6249441215446
+        }
+      },
+      "buildings.rmbvol": {
+        "max_rel": 0.004827785314406449,
+        "max_sym": 0.002408079811029421,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 335189.57491599995,
+          "sweep2": 336807.79822332156
+        }
+      },
+      "costs.c2141": {
+        "max_rel": 0.004827785314406445,
+        "max_sym": 0.002408079811029419,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 73.20540316165439,
+          "sweep2": 73.55882313197343
+        }
+      },
+      "costs.c22512": {
+        "max_rel": 0.004736309614730411,
+        "max_sym": 0.002373776277067352,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 16.54225307823328,
+          "sweep2": 16.46390384592954
+        }
+      },
+      "costs.c2263": {
+        "max_rel": 0.0046348133774149125,
+        "max_sym": 0.0023120487315124315,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 198.09058360147887,
+          "sweep2": 199.00869648829493
+        }
+      },
+      "build.a_shld_total_surface": {
+        "max_rel": 0.004626968323315159,
+        "max_sym": 0.00231884878158706,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 857.778861165308,
+          "sweep2": 853.8099455462867
+        }
+      },
+      "build.a_blkt_total_surface_full_coverage": {
+        "max_rel": 0.004572330847922472,
+        "max_sym": 0.0022914039524496548,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1049.2194687827046,
+          "sweep2": 1044.4220902393486
+        }
+      },
+      "tfcoil.drarea": {
+        "max_rel": 0.004524499636528992,
+        "max_sym": 0.002267379196439578,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1619.2539207216118,
+          "sweep2": 1611.9276069458588
+        }
+      },
+      "costs.c2274": {
+        "max_rel": 0.004417923808970132,
+        "max_sym": 0.002204093146690091,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 55.64181653461137,
+          "sweep2": 55.88763784065398
+        }
+      },
+      "costs.c2222": {
+        "max_rel": 0.004227805012923251,
+        "max_sym": 0.002109443348879191,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 526.5100358196006,
+          "sweep2": 528.7360175883931
+        }
+      },
+      "build.z_tf_top": {
+        "max_rel": 0.004147229623238648,
+        "max_sym": 0.002069323831073174,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 12.735,
+          "sweep2": 12.787814969251944
+        }
+      },
+      "tfcoil.cplen": {
+        "max_rel": 0.004147229623238648,
+        "max_sym": 0.002069323831073174,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 25.47,
+          "sweep2": 25.575629938503887
+        }
+      },
+      "buildings.a_plant_floor_effective": {
+        "max_rel": 0.0040886549125124785,
+        "max_sym": 0.002040156707883248,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 285481.9541287502,
+          "sweep2": 286649.19132293237
+        }
+      },
+      "costs.c2244": {
+        "max_rel": 0.003948296260969178,
+        "max_sym": 0.0019702585482549804,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 7.025054793891968,
+          "sweep2": 7.052791791467795
+        }
+      },
+      "costs.c21": {
+        "max_rel": 0.0038822198743676847,
+        "max_sym": 0.0019373493291492344,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 563.3830611079902,
+          "sweep2": 565.5702380247058
+        }
+      },
+      "buildings.tfcbv": {
+        "max_rel": 0.003875418803577097,
+        "max_sym": 0.0019414714091914424,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4928.767536904414,
+          "sweep2": 4909.666498513434
+        }
+      },
+      "costs.life_div_fpy": {
+        "max_rel": 0.003839862947130307,
+        "max_sym": 0.001916252400270579,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.4553033962381512,
+          "sweep2": 0.45705169887906866
+        }
+      },
+      "costs.life_div": {
+        "max_rel": 0.0038398629471302665,
+        "max_sym": 0.001916252400270559,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.3414775471786134,
+          "sweep2": 0.3427887741593015
+        }
+      },
+      "divertor.pflux_div_heat_load_mw": {
+        "max_rel": 0.003825174800148783,
+        "max_sym": 0.0019162524002705112,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 20.499151577712887,
+          "sweep2": 20.42073873967339
+        }
+      },
+      "costs.c214": {
+        "max_rel": 0.003749160620259434,
+        "max_sym": 0.0018710728338365884,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 119.64585995456636,
+          "sweep2": 120.0944315010851
+        }
+      },
+      "tfcoil.tfckw": {
+        "max_rel": 0.0037270786869996746,
+        "max_sym": 0.001867018606127402,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 7381.7219675967635,
+          "sweep2": 7354.209708977976
+        }
+      },
+      "physics.plimw": {
+        "max_rel": 0.0036872458889701805,
+        "max_sym": 0.0018470281679947153,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 5.825467304655436,
+          "sweep2": 5.803987374285015
+        }
+      },
+      "physics.puimw": {
+        "max_rel": 0.0036872458889701805,
+        "max_sym": 0.0018470281679947153,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 5.825467304655436,
+          "sweep2": 5.803987374285015
+        }
+      },
+      "physics.ptarmw": {
+        "max_rel": 0.0036872458889701133,
+        "max_sym": 0.0018470281679946817,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 72.81834130819294,
+          "sweep2": 72.54984217856268
+        }
+      },
+      "physics.pradsolmw": {
+        "max_rel": 0.003687245888970113,
+        "max_sym": 0.0018470281679946817,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 291.2733652327718,
+          "sweep2": 290.1993687142508
+        }
+      },
+      "physics.p_plasma_separatrix_mw": {
+        "max_rel": 0.003687245888970074,
+        "max_sym": 0.0018470281679946621,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 364.09170654096476,
+          "sweep2": 362.7492108928135
+        }
+      },
+      "physics.p_div_lower_separatrix_mw": {
+        "max_rel": 0.003687245888970074,
+        "max_sym": 0.0018470281679946621,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 182.04585327048238,
+          "sweep2": 181.37460544640675
+        }
+      },
+      "physics.p_div_upper_separatrix_mw": {
+        "max_rel": 0.003687245888970074,
+        "max_sym": 0.0018470281679946621,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 182.04585327048238,
+          "sweep2": 181.37460544640675
+        }
+      },
+      "physics.p_div_separatrix_max_mw": {
+        "max_rel": 0.003687245888970074,
+        "max_sym": 0.0018470281679946621,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 182.04585327048238,
+          "sweep2": 181.37460544640675
+        }
+      },
+      "physics.plomw": {
+        "max_rel": 0.0036872458889700716,
+        "max_sym": 0.001847028167994661,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 30.583703349441034,
+          "sweep2": 30.470933714996328
+        }
+      },
+      "physics.puomw": {
+        "max_rel": 0.0036872458889700716,
+        "max_sym": 0.001847028167994661,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 30.583703349441034,
+          "sweep2": 30.470933714996328
+        }
+      },
+      "physics.p_div_bt_q_aspect_rmajor_mw": {
+        "max_rel": 0.0036872458889700708,
+        "max_sym": 0.0018470281679946604,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 22.47479670005955,
+          "sweep2": 22.391926598321817
+        }
+      },
+      "physics.p_plasma_separatrix_rmajor_mw": {
+        "max_rel": 0.0036872458889700348,
+        "max_sym": 0.0018470281679946424,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 80.90926812021439,
+          "sweep2": 80.61093575395856
+        }
+      },
+      "heat_transport.fachtmw": {
+        "max_rel": 0.0036611707157267253,
+        "max_sym": 0.0018272404382717665,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 47.822293119312526,
+          "sweep2": 47.99737869843985
+        }
+      },
+      "heat_transport.p_plant_electric_base_total_mw": {
+        "max_rel": 0.0036611707157267253,
+        "max_sym": 0.0018272404382717665,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 47.822293119312526,
+          "sweep2": 47.99737869843985
+        }
+      },
+      "power.p_plant_electric_base_total_profile_mw": {
+        "max_rel": 0.0036611707157265224,
+        "max_sym": 0.0018272404382716656,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 126.52589471853628,
+          "sweep2": 126.98912761906088
+        }
+      },
+      "costs.c22221": {
+        "max_rel": 0.0035054139948656696,
+        "max_sym": 0.0017496403904774538,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 312.9865453472241,
+          "sweep2": 314.0836927634889
+        }
+      },
+      "pf_coil.m_pf_coil_conductor_total": {
+        "max_rel": 0.003505413994865586,
+        "max_sym": 0.0017496403904774123,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 832182.0325203328,
+          "sweep2": 835099.1750634053
+        }
+      },
+      "costs.c22222": {
+        "max_rel": 0.0035054139948654723,
+        "max_sym": 0.0017496403904773558,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 41.21661241109896,
+          "sweep2": 41.36109370106577
+        }
+      },
+      "pf_coil.itr_sum": {
+        "max_rel": 0.0035038377101267023,
+        "max_sym": 0.0017488550030088082,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 668979651.9899039,
+          "sweep2": 671323648.1218536
+        }
+      },
+      "costs.c2174": {
+        "max_rel": 0.0034567861030150655,
+        "max_sym": 0.0017254108633603053,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 25.722341357403145,
+          "sweep2": 25.811257989544426
+        }
+      },
+      "buildings.cryvol": {
+        "max_rel": 0.00345678610301498,
+        "max_sym": 0.0017254108633602625,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 66569.20641149883,
+          "sweep2": 66799.32191911084
+        }
+      },
+      "build.a_blkt_outboard_surface_full_coverage": {
+        "max_rel": 0.003439485322921816,
+        "max_sym": 0.0017227052712089296,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 852.2416094026246,
+          "sweep2": 849.310336895501
+        }
+      },
+      "fwbs.z_cryostat_half_inside": {
+        "max_rel": 0.0034330177067689724,
+        "max_sym": 0.00171356749960055,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 17.96857113403388,
+          "sweep2": 18.030257556902356
+        }
+      },
+      "pf_coil.m_pf_coil_conductor": {
+        "max_rel": 0.003399369110911721,
+        "max_sym": 0.0016968005298016674,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 334218.5790237434,
+          "sweep2": 335354.7113375695
+        }
+      },
+      "pf_coil.c_pf_cs_coil_flat_top_ma": {
+        "max_rel": 0.0033066933917537027,
+        "max_sym": 0.0016506176526347117,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 39.60831647514178,
+          "sweep2": 39.73928903348862
+        }
+      },
+      "pf_coil.c_pf_cs_coil_pulse_end_ma": {
+        "max_rel": 0.0033066933917537027,
+        "max_sym": 0.0016506176526347117,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 39.60831647514178,
+          "sweep2": 39.73928903348862
+        }
+      },
+      "pf_coil.c_pf_cs_coils_peak_ma": {
+        "max_rel": 0.0033066933917537027,
+        "max_sym": 0.0016506176526347117,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 39.60831647514178,
+          "sweep2": 39.73928903348862
+        }
+      },
+      "pf_coil.ccls": {
+        "max_rel": 0.003306693391753692,
+        "max_sym": 0.0016506176526347063,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 28007309.170955602,
+          "sweep2": 28099920.755112004
+        }
+      },
+      "pf_coil.ccls_ma": {
+        "max_rel": 0.003306693391753558,
+        "max_sym": 0.0016506176526346393,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 28.0073091709556,
+          "sweep2": 28.099920755112
+        }
+      },
+      "costs.c2252": {
+        "max_rel": 0.0032876561473869775,
+        "max_sym": 0.001641130337571998,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 72.5982967330487,
+          "sweep2": 72.83697496959293
+        }
+      },
+      "power.p_plant_electric_net_profile_mw": {
+        "max_rel": 0.003209136227218863,
+        "max_sym": 0.0016019975993434462,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2516.3990501610383,
+          "sweep2": 2524.4745175150492
+        }
+      },
+      "blanket.vol_shld_outboard": {
+        "max_rel": 0.0031385174215818887,
+        "max_sym": 0.0015717251541801107,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 237.16111687167955,
+          "sweep2": 236.41678257465597
+        }
+      },
+      "build.a_shld_outboard_surface": {
+        "max_rel": 0.0030664599483986405,
+        "max_sym": 0.0015355843781958826,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 648.8629497015868,
+          "sweep2": 646.8732374543271
+        }
+      },
+      "power.e_plant_net_electric_pulse_mj": {
+        "max_rel": 0.003055382119451069,
+        "max_sym": 0.0015253607796995316,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1469944.3344362066,
+          "sweep2": 1474435.5760722314
+        }
+      },
+      "power.e_plant_net_electric_pulse_kwh": {
+        "max_rel": 0.003055382119450974,
+        "max_sym": 0.0015253607796994841,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 408317.87067672407,
+          "sweep2": 409565.437797842
+        }
+      },
+      "fwbs.vol_blkt_total_full_coverage": {
+        "max_rel": 0.0029223822945100212,
+        "max_sym": 0.001463329351148427,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 691.0656195675679,
+          "sweep2": 689.046061636599
+        }
+      },
+      "fwbs.vol_blkt_outboard_full_coverage": {
+        "max_rel": 0.0029223822945100212,
+        "max_sym": 0.001463329351148427,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 691.0656195675679,
+          "sweep2": 689.046061636599
+        }
+      },
+      "pf_coil.n_pf_coil_turns": {
+        "max_rel": 0.0029201622496860726,
+        "max_sym": 0.001457952396068617,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1053.8086679975956,
+          "sweep2": 1056.8859602882742
+        }
+      },
+      "build.dr_tf_inner_bore": {
+        "max_rel": 0.002862725679395513,
+        "max_sym": 0.0014334145760558036,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 9.224594873354487,
+          "sweep2": 9.198187388728515
+        }
+      },
+      "vacuum.dia_vv_vacuum_ducts": {
+        "max_rel": 0.00281862358190813,
+        "max_sym": 0.001407328426408982,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.4137887340374175,
+          "sweep2": 0.4149550487211033
+        }
+      },
+      "pf_coil.pfcaseth": {
+        "max_rel": 0.0028062866625279655,
+        "max_sym": 0.0014011772787094429,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.8229041498031464,
+          "sweep2": 0.8252134547432779
+        }
+      },
+      "pf_coil.ricpf": {
+        "max_rel": 0.0028053424765689325,
+        "max_sym": 0.0014007065075530435,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 93.67893912382375,
+          "sweep2": 93.94174063090773
+        }
+      },
+      "superconducting_tfcoil.r_tf_outboard_in": {
+        "max_rel": 0.002701644924226865,
+        "max_sym": 0.0013526496516462461,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 9.774594873354488,
+          "sweep2": 9.748187388728516
+        }
+      },
+      "costs.c2251": {
+        "max_rel": 0.0026895205815441513,
+        "max_sym": 0.0013465711061242927,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 42.31816170097204,
+          "sweep2": 42.20434613410416
+        }
+      },
+      "costs.coeoam": {
+        "max_rel": 0.00264490714030062,
+        "max_sym": 0.0013242047694753127,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 94.96580383255076,
+          "sweep2": 94.71462809990966
+        }
+      },
+      "costs.c22511": {
+        "max_rel": 0.002610416008776508,
+        "max_sym": 0.001306913798739414,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.54142223768165,
+          "sweep2": 1.5373984843961217
+        }
+      },
+      "tfcoil.dr_tf_full_midplane": {
+        "max_rel": 0.0025827414145073425,
+        "max_sym": 0.001289705219711943,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 10.224594873354487,
+          "sweep2": 10.25100235798046
+        }
+      },
+      "blanket.vol_vv_outboard": {
+        "max_rel": 0.002541213162454595,
+        "max_sym": 0.0012689941888593937,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 306.20028292282814,
+          "sweep2": 306.97840311213895
+        }
+      },
+      "superconducting_tfcoil.r_tf_outboard_out": {
+        "max_rel": 0.002450902789048491,
+        "max_sym": 0.0012239515014499638,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 10.774594873354488,
+          "sweep2": 10.80100235798046
+        }
+      },
+      "costs.coefuelt": {
+        "max_rel": 0.0024046850255435032,
+        "max_sym": 0.001203789880521547,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 5.981736282711284,
+          "sweep2": 5.967352091045498
+        }
+      },
+      "pf_coil.c_pf_cs_current_filaments": {
+        "max_rel": 0.0023911390190147997,
+        "max_sym": 0.0011941418299454896,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 46451467.22882015,
+          "sweep2": 46562539.14460147
+        }
+      },
+      "fwbs.dewmkg": {
+        "max_rel": 0.0023145600763005755,
+        "max_sym": 0.001155942289213727,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6832624.616256569,
+          "sweep2": 6848439.136409705
+        }
+      },
+      "costs.c2262": {
+        "max_rel": 0.0023113568607837365,
+        "max_sym": 0.001154344379491246,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 30.18987227112877,
+          "sweep2": 30.25965183952883
+        }
+      },
+      "costs.cppa": {
+        "max_rel": 0.0023113568607837365,
+        "max_sym": 0.001154344379491246,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 30.18987227112877,
+          "sweep2": 30.25965183952883
+        }
+      },
+      "physics.t_energy_confinement_beta": {
+        "max_rel": 0.0021975846169417,
+        "max_sym": 0.0010975862890985053,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2.558659995036515,
+          "sweep2": 2.5642828668815913
+        }
+      },
+      "physics.p_plasma_loss_mw": {
+        "max_rel": 0.0021927658284884373,
+        "max_sym": 0.001097586289098495,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 612.2384938280015,
+          "sweep2": 610.8959981798503
+        }
+      },
+      "first_wall.a_fw_inboard_full_coverage": {
+        "max_rel": 0.0021818181818183562,
+        "max_sym": 0.0010921004732436259,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 196.97785938008002,
+          "sweep2": 196.5480895050689
+        }
+      },
+      "fwbs.dz_fw_half": {
+        "max_rel": 0.0021818181818182643,
+        "max_sym": 0.0010921004732435799,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 8.25,
+          "sweep2": 8.232
+        }
+      },
+      "first_wall.a_fw_outboard_full_coverage": {
+        "max_rel": 0.0021818181818179312,
+        "max_sym": 0.001092100473243413,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 848.5093973301596,
+          "sweep2": 846.6581040996213
+        }
+      },
+      "first_wall.a_fw_total_full_coverage": {
+        "max_rel": 0.0021818181818178484,
+        "max_sym": 0.0010921004732433715,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1045.4872567102395,
+          "sweep2": 1043.2061936046903
+        }
+      },
+      "pf_coil.r_pf_outside_tf_midplane": {
+        "max_rel": 0.002151393581493844,
+        "max_sym": 0.0010745409105379301,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 12.274594873354488,
+          "sweep2": 12.30100235798046
+        }
+      },
+      "build.r_shld_outboard_outer": {
+        "max_rel": 0.0021428571428570124,
+        "max_sym": 0.0010702818408847015,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 8.4,
+          "sweep2": 8.418
+        }
+      },
+      "pf_coil.r_pf_coil_outer_max": {
+        "max_rel": 0.0021062531882384676,
+        "max_sym": 0.0010520186852642718,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 12.588669982105484,
+          "sweep2": 12.615184908390976
+        }
+      },
+      "tfcoil.r_tf_arc": {
+        "max_rel": 0.00208431557353225,
+        "max_sym": 0.001043245012679594,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 17.0714122091473,
+          "sweep2": 17.035829998817587
+        }
+      },
+      "costs.c2142": {
+        "max_rel": 0.002048894062863862,
+        "max_sym": 0.001023398613760093,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 46.44045679291198,
+          "sweep2": 46.535608369111664
+        }
+      },
+      "buildings.wsvol": {
+        "max_rel": 0.002048894062863831,
+        "max_sym": 0.0010233986137600773,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 120187.51757999997,
+          "sweep2": 120433.76907119997
+        }
+      },
+      "blanket.dz_pf_cryostat": {
+        "max_rel": 0.0020257922555723964,
+        "max_sym": 0.0010118712073584465,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3.928441876485668,
+          "sweep2": 3.936400083615519
+        }
+      },
+      "fwbs.r_cryostat_inboard": {
+        "max_rel": 0.002025792255572349,
+        "max_sym": 0.001011871207358423,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 13.088669982105484,
+          "sweep2": 13.115184908390976
+        }
+      },
+      "pf_coil.b_pf_coil_peak": {
+        "max_rel": 0.0019345882058607023,
+        "max_sym": 0.0009663593492305288,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 21.370635963455875,
+          "sweep2": 21.41197934374252
+        }
+      },
+      "physics.molflow_plasma_fuelling_required": {
+        "max_rel": 0.0019143001750260187,
+        "max_sym": 0.0009580671015230754,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4.1003554068979096e+21,
+          "sweep2": 4.092506095824816e+21
+        }
+      },
+      "pf_coil.z_pf_coil_middle_group_array": {
+        "max_rel": 0.0017884935515305172,
+        "max_sym": 0.0008934478129392232,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 28.350891520373747,
+          "sweep2": 28.401596907038076
+        }
+      },
+      "pf_coil.z_pf_coil_middle": {
+        "max_rel": 0.0017884935515305172,
+        "max_sym": 0.0008934478129392232,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 28.350891520373747,
+          "sweep2": 28.401596907038076
+        }
+      },
+      "pf_coil.z_pf_coil_upper": {
+        "max_rel": 0.0016962759123231087,
+        "max_sym": 0.0008474192277497187,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 29.934676641623277,
+          "sweep2": 29.985454112553644
+        }
+      },
+      "buildings.dz_tf_cryostat": {
+        "max_rel": 0.0016951051947762701,
+        "max_sym": 0.0008468348603027267,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 5.23357113403388,
+          "sweep2": 5.242442587650412
+        }
+      },
+      "pf_coil.z_pf_coil_lower": {
+        "max_rel": 0.0016737075635354336,
+        "max_sym": 0.0008361540430946128,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 28.478457648080546,
+          "sweep2": 28.526122258043962
+        }
+      },
+      "pf_coil.r_pf_coil_inner": {
+        "max_rel": 0.0016408376816331987,
+        "max_sym": 0.000819746305502875,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 27.594465809256782,
+          "sweep2": 27.63974384856115
+        }
+      },
+      "buildings.wrbi": {
+        "max_rel": 0.001637792131132,
+        "max_sym": 0.0008182260234946164,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 32.31326485545998,
+          "sweep2": 32.36618726637143
+        }
+      },
+      "pf_coil.r_pf_coil_middle_group_array": {
+        "max_rel": 0.001630727283861975,
+        "max_sym": 0.0008146993656891003,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 28.20089590278864,
+          "sweep2": 28.24688387316667
+        }
+      },
+      "pf_coil.r_pf_coil_middle": {
+        "max_rel": 0.001630727283861975,
+        "max_sym": 0.0008146993656891003,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 28.20089590278864,
+          "sweep2": 28.24688387316667
+        }
+      },
+      "pf_coil.r_pf_coil_outer": {
+        "max_rel": 0.001523880238746775,
+        "max_sym": 0.00076136000863752,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 29.72688735460987,
+          "sweep2": 29.772187570809013
+        }
+      },
+      "physics.nTtau": {
+        "max_rel": 0.0015158173787105942,
+        "max_sym": 0.0007573346988063215,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 3.831938202497687e+21,
+          "sweep2": 3.837746721019178e+21
+        }
+      },
+      "physics.ntau": {
+        "max_rel": 0.001515817378710577,
+        "max_sym": 0.000757334698806313,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2.5546254683317915e+20,
+          "sweep2": 2.5584978140127855e+20
+        }
+      },
+      "physics.t_energy_confinement": {
+        "max_rel": 0.0015158173787105142,
+        "max_sym": 0.0007573346988062815,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.7030836455545277,
+          "sweep2": 1.705665209341857
+        }
+      },
+      "physics.t_electron_energy_confinement": {
+        "max_rel": 0.0015158173787103836,
+        "max_sym": 0.0007573346988062164,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.703083645554528,
+          "sweep2": 1.705665209341857
+        }
+      },
+      "physics.t_ion_energy_confinement": {
+        "max_rel": 0.0015158173787103836,
+        "max_sym": 0.0007573346988062164,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.703083645554528,
+          "sweep2": 1.705665209341857
+        }
+      },
+      "physics.pden_ion_transport_loss_mw": {
+        "max_rel": 0.0015135231540104694,
+        "max_sym": 0.0007573346988062242,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.34130523928257467,
+          "sweep2": 0.3407886659003354
+        }
+      },
+      "physics.pden_electron_transport_loss_mw": {
+        "max_rel": 0.001513523154010456,
+        "max_sym": 0.0007573346988062173,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.44170253288045785,
+          "sweep2": 0.4410340058697582
+        }
+      },
+      "physics.p_electron_transport_loss_mw": {
+        "max_rel": 0.0015135231540104302,
+        "max_sym": 0.0007573346988062044,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 579.8240571680851,
+          "sweep2": 578.946480032309
+        }
+      },
+      "physics.pscalingmw": {
+        "max_rel": 0.0015135231540104274,
+        "max_sym": 0.0007573346988062029,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1027.856327399837,
+          "sweep2": 1026.3006430493213
+        }
+      },
+      "physics.p_ion_transport_loss_mw": {
+        "max_rel": 0.001513523154010424,
+        "max_sym": 0.0007573346988062013,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 448.03227023175185,
+          "sweep2": 447.35416301701224
+        }
+      },
+      "costs.cplife": {
+        "max_rel": 0.001481670187032306,
+        "max_sym": 0.0007402866631768096,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.1920284038567515,
+          "sweep2": 0.19231292661780944
+        }
+      },
+      "costs.cplife_cal": {
+        "max_rel": 0.001481670187032306,
+        "max_sym": 0.0007402866631768096,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.14402130289256362,
+          "sweep2": 0.14423469496335709
+        }
+      },
+      "physics.t_alpha_confinement": {
+        "max_rel": 0.0014816701870321674,
+        "max_sym": 0.0007402866631767405,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 23.501161536977982,
+          "sweep2": 23.53598250738795
+        }
+      },
+      "costs.cdrlife_cal": {
+        "max_rel": 0.001481670187031967,
+        "max_sym": 0.0007402866631766405,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.1671044598725924,
+          "sweep2": 1.1688337237559376
+        }
+      },
+      "fwbs.life_blkt": {
+        "max_rel": 0.001481670187031967,
+        "max_sym": 0.0007402866631766405,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.1671044598725924,
+          "sweep2": 1.1688337237559376
+        }
+      },
+      "costs.life_hcd_fpy": {
+        "max_rel": 0.0014816701870319193,
+        "max_sym": 0.0007402866631766165,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.5561392798301232,
+          "sweep2": 1.5584449650079168
+        }
+      },
+      "fwbs.life_blkt_fpy": {
+        "max_rel": 0.0014816701870319193,
+        "max_sym": 0.0007402866631766165,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.5561392798301232,
+          "sweep2": 1.5584449650079168
+        }
+      },
+      "costs.bktcycles": {
+        "max_rel": 0.001481619619407263,
+        "max_sym": 0.0007402614167843326,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 29300.766911454233,
+          "sweep2": 29344.179502573923
+        }
+      },
+      "physics.p_dt_total_mw": {
+        "max_rel": 0.0014794780884562933,
+        "max_sym": 0.00074028666317682,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4722.325634226122,
+          "sweep2": 4715.339056923729
+        }
+      },
+      "physics.p_plasma_dt_mw": {
+        "max_rel": 0.0014794780884562933,
+        "max_sym": 0.00074028666317682,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4722.325634226122,
+          "sweep2": 4715.339056923729
+        }
+      },
+      "physics.p_fw_alpha_mw": {
+        "max_rel": 0.0014794780884562924,
+        "max_sym": 0.0007402866631768195,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 47.53574377924614,
+          "sweep2": 47.46541568790627
+        }
+      },
+      "physics.p_charged_particle_mw": {
+        "max_rel": 0.0014794780884562775,
+        "max_sym": 0.000740286663176812,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 954.9473902417393,
+          "sweep2": 953.5345665022481
+        }
+      },
+      "physics.p_plasma_alpha_mw": {
+        "max_rel": 0.0014794780884562638,
+        "max_sym": 0.0007402866631768052,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 950.714875584922,
+          "sweep2": 949.3083137581247
+        }
+      },
+      "physics.p_alpha_total_mw": {
+        "max_rel": 0.0014794780884562638,
+        "max_sym": 0.0007402866631768052,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 950.714875584922,
+          "sweep2": 949.3083137581247
+        }
+      },
+      "physics.p_non_alpha_charged_mw": {
+        "max_rel": 0.001479478088456215,
+        "max_sym": 0.0007402866631767807,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4.232514656817338,
+          "sweep2": 4.226252744123507
+        }
+      },
+      "fwbs.neut_flux_cp": {
+        "max_rel": 0.0014794780884562122,
+        "max_sym": 0.0007402866631767793,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2.2002361579569576e+16,
+          "sweep2": 2.196980956771831e+16
+        }
+      },
+      "physics.pden_plasma_alpha_mw": {
+        "max_rel": 0.0014794780884561777,
+        "max_sym": 0.000740286663176762,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.7242424031937933,
+          "sweep2": 0.7231709024275372
+        }
+      },
+      "physics.pden_alpha_total_mw": {
+        "max_rel": 0.0014794780884561777,
+        "max_sym": 0.000740286663176762,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.7242424031937933,
+          "sweep2": 0.7231709024275372
+        }
+      },
+      "power.p_fusion_total_profile_mw": {
+        "max_rel": 0.0014794780884561773,
+        "max_sym": 0.0007402866631767618,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 8191.083920366453,
+          "sweep2": 8178.965391185565
+        }
+      },
+      "physics.beta_fast_alpha": {
+        "max_rel": 0.0014794780884561432,
+        "max_sym": 0.0007402866631767447,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.02278520365378949,
+          "sweep2": 0.0227514934442427
+        }
+      },
+      "physics.dt_power_density_plasma": {
+        "max_rel": 0.0014794780884561426,
+        "max_sym": 0.0007402866631767444,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 3.5974071236566885,
+          "sweep2": 3.5920848386419824
+        }
+      },
+      "physics.fusden_alpha_total": {
+        "max_rel": 0.001479478088456109,
+        "max_sym": 0.0007402866631767276,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.2765326493669855e+18,
+          "sweep2": 1.2746440472830482e+18
+        }
+      },
+      "physics.fusden_plasma_alpha": {
+        "max_rel": 0.001479478088456109,
+        "max_sym": 0.0007402866631767276,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.2765326493669855e+18,
+          "sweep2": 1.2746440472830482e+18
+        }
+      },
+      "physics.dd_power_density": {
+        "max_rel": 0.001479478088456108,
+        "max_sym": 0.0007402866631767272,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.005179293637888994,
+          "sweep2": 0.005171630986438057
+        }
+      },
+      "physics.p_dd_total_mw": {
+        "max_rel": 0.0014794780884560864,
+        "max_sym": 0.0007402866631767163,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 6.798872152264519,
+          "sweep2": 6.788813369889029
+        }
+      },
+      "physics.pden_non_alpha_charged_mw": {
+        "max_rel": 0.0014794780884560814,
+        "max_sym": 0.0007402866631767139,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.0032242754008875614,
+          "sweep2": 0.0032195051560808003
+        }
+      },
+      "physics.p_fusion_total_mw": {
+        "max_rel": 0.001479478088456078,
+        "max_sym": 0.0007402866631767122,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4729.124506378386,
+          "sweep2": 4722.127870293619
+        }
+      },
+      "physics.fusrat_total": {
+        "max_rel": 0.001479478088456073,
+        "max_sym": 0.0007402866631767096,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.6874692095316525e+21,
+          "sweep2": 1.6849726358112061e+21
+        }
+      },
+      "physics.rndfuel": {
+        "max_rel": 0.001479478088456073,
+        "max_sym": 0.0007402866631767096,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.6874692095316525e+21,
+          "sweep2": 1.6849726358112061e+21
+        }
+      },
+      "physics.fusrat": {
+        "max_rel": 0.001479478088456073,
+        "max_sym": 0.0007402866631767096,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.6874692095316525e+21,
+          "sweep2": 1.6849726358112061e+21
+        }
+      },
+      "physics.fusden_total": {
+        "max_rel": 0.001479478088456072,
+        "max_sym": 0.000740286663176709,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.2854924089357727e+18,
+          "sweep2": 1.2835905510838756e+18
+        }
+      },
+      "physics.fusden_plasma": {
+        "max_rel": 0.001479478088456072,
+        "max_sym": 0.000740286663176709,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1.2854924089357727e+18,
+          "sweep2": 1.2835905510838756e+18
+        }
+      },
+      "physics.pden_neutron_total_mw": {
+        "max_rel": 0.001479478088456063,
+        "max_sym": 0.0007402866631767047,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2.8751197386998966,
+          "sweep2": 2.8708660620448025
+        }
+      },
+      "physics.pden_plasma_neutron_mw": {
+        "max_rel": 0.001479478088456063,
+        "max_sym": 0.0007402866631767047,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2.8751197386998966,
+          "sweep2": 2.8708660620448025
+        }
+      },
+      "physics.fusrat_plasma_dt_profile": {
+        "max_rel": 0.0014794780884560376,
+        "max_sym": 0.0007402866631766919,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4.57322145058257e+19,
+          "sweep2": 4.566455469652776e+19
+        }
+      },
+      "fwbs.pnuc_cp_tf": {
+        "max_rel": 0.001479478088456028,
+        "max_sym": 0.0007402866631766871,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.9565780364912887,
+          "sweep2": 0.9551628002464015
+        }
+      },
+      "physics.p_plasma_neutron_mw": {
+        "max_rel": 0.0014794780884560274,
+        "max_sym": 0.0007402866631766867,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 3774.177116136647,
+          "sweep2": 3768.5933037913705
+        }
+      },
+      "physics.p_neutron_total_mw": {
+        "max_rel": 0.0014794780884560274,
+        "max_sym": 0.0007402866631766867,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 3774.177116136647,
+          "sweep2": 3768.5933037913705
+        }
+      },
+      "fwbs.pnuc_cp": {
+        "max_rel": 0.0014794780884560131,
+        "max_sym": 0.0007402866631766796,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 901.0555719308617,
+          "sweep2": 899.7224799557088
+        }
+      },
+      "physics.fusrat_plasma_dd_helion_profile": {
+        "max_rel": 0.001479478088456002,
+        "max_sym": 0.0007402866631766741,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 3.831589372934807e+17,
+          "sweep2": 3.825920620413589e+17
+        }
+      },
+      "physics.wtgpd": {
+        "max_rel": 0.0014794780884559995,
+        "max_sym": 0.0007402866631766728,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1217.5448045469852,
+          "sweep2": 1215.7434736869445
+        }
+      },
+      "physics.pflux_plasma_surface_neutron_avg_mw": {
+        "max_rel": 0.0014794780884559925,
+        "max_sym": 0.0007402866631766693,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4.656637683733077,
+          "sweep2": 4.649748290314116
+        }
+      },
+      "physics.proton_rate_density": {
+        "max_rel": 0.0014794780884559895,
+        "max_sym": 0.0007402866631766677,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 3978015207741331.0,
+          "sweep2": 3972129821405933.0
+        }
+      },
+      "physics.pflux_fw_neutron_mw": {
+        "max_rel": 0.0014794780884559676,
+        "max_sym": 0.0007402866631766569,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 4.284106669034431,
+          "sweep2": 4.277768427088986
+        }
+      },
+      "physics.fusrat_plasma_dd_triton_profile": {
+        "max_rel": 0.0014794780884559528,
+        "max_sym": 0.0007402866631766494,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 3.420456074288025e+17,
+          "sweep2": 3.41539558447359e+17
+        }
+      },
+      "costs.c224": {
+        "max_rel": 0.0014749861898650921,
+        "max_sym": 0.0007369495996914603,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 36.845595274362594,
+          "sweep2": 36.89994201854964
+        }
+      },
+      "physics.f_p_plasma_separatrix_rad": {
+        "max_rel": 0.001316953526487877,
+        "max_sym": 0.0006580434569183531,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.6433051983575554,
+          "sweep2": 0.6441524014071404
+        }
+      },
+      "physics.p_plasma_heating_total_mw": {
+        "max_rel": 0.0013152214409731,
+        "max_sym": 0.0006580434569183655,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1020.7373498701415,
+          "sweep2": 1019.3948542219903
+        }
+      },
+      "costs.c217": {
+        "max_rel": 0.001304866113638715,
+        "max_sym": 0.0006520076654651084,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 68.14234135740314,
+          "sweep2": 68.23125798954442
+        }
+      },
+      "tfcoil.len_tf_coil": {
+        "max_rel": 0.0012599234281739469,
+        "max_sym": 0.0006303588160071951,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 41.91918974670897,
+          "sweep2": 41.866374777457025
+        }
+      },
+      "tfcoil.m_tf_coil_wp_turn_insulation": {
+        "max_rel": 0.001259923428173931,
+        "max_sym": 0.0006303588160071873,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 833.6707193681723,
+          "sweep2": 832.6203580974577
+        }
+      },
+      "tfcoil.m_tf_coil_wp_insulation": {
+        "max_rel": 0.0012599234281739256,
+        "max_sym": 0.0006303588160071845,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3730.8891027549166,
+          "sweep2": 3726.188468166437
+        }
+      },
+      "costs.c22212": {
+        "max_rel": 0.0012599234281738922,
+        "max_sym": 0.0006303588160071678,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 16.395193948146165,
+          "sweep2": 16.37453725918144
+        }
+      },
+      "costs.c22211": {
+        "max_rel": 0.0012599234281738798,
+        "max_sym": 0.0006303588160071617,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 46.545175391417956,
+          "sweep2": 46.486532034473846
+        }
+      },
+      "tfcoil.m_tf_wp_steel_conduit": {
+        "max_rel": 0.0012599234281738027,
+        "max_sym": 0.000630358816007123,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 29538.821816394448,
+          "sweep2": 29501.60516274732
+        }
+      },
+      "superconducting_tfcoil.len_tf_coil_superconductor": {
+        "max_rel": 0.001259923428173762,
+        "max_sym": 0.0006303588160071026,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2997970.6225037165,
+          "sweep2": 2994193.4090794474
+        }
+      },
+      "superconducting_tfcoil.len_tf_superconductor_total": {
+        "max_rel": 0.001259923428173762,
+        "max_sym": 0.0006303588160071026,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 35975647.4700446,
+          "sweep2": 35930320.90895337
+        }
+      },
+      "tfcoil.m_tf_coil_superconductor": {
+        "max_rel": 0.0012599234281737203,
+        "max_sym": 0.0006303588160070818,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2919.728798824169,
+          "sweep2": 2916.050164106617
+        }
+      },
+      "tfcoil.m_tf_coil_conductor": {
+        "max_rel": 0.0012599234281736975,
+        "max_sym": 0.0006303588160070703,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 40818.3672757263,
+          "sweep2": 40766.93925849581
+        }
+      },
+      "tfcoil.m_tf_coil_copper": {
+        "max_rel": 0.0012599234281735218,
+        "max_sym": 0.0006303588160069824,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 7526.14594113951,
+          "sweep2": 7516.663573544415
+        }
+      },
+      "tfcoil.vforce": {
+        "max_rel": 0.0012167642935260192,
+        "max_sym": 0.0006087525009163644,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 38306665.93502842,
+          "sweep2": 38260055.75171465
+        }
+      },
+      "tfcoil.vforce_outboard": {
+        "max_rel": 0.0012167642935260192,
+        "max_sym": 0.0006087525009163644,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 38306665.93502842,
+          "sweep2": 38260055.75171465
+        }
+      },
+      "superconducting_tfcoil.vforce_inboard_tot": {
+        "max_rel": 0.0012167642935260192,
+        "max_sym": 0.0006087525009163645,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 459679991.220341,
+          "sweep2": 459120669.02057576
+        }
+      },
+      "pf_coil.j_crit_str_pf": {
+        "max_rel": 0.0012033859732664294,
+        "max_sym": 0.0006020552390481157,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 788820913.1546663,
+          "sweep2": 787871657.1323568
+        }
+      },
+      "costs.c225": {
+        "max_rel": 0.0010865516687329057,
+        "max_sym": 0.0005429808459943003,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 114.91645843402074,
+          "sweep2": 115.0413211036971
+        }
+      },
+      "tfcoil.tfcryoarea": {
+        "max_rel": 0.001069008733405616,
+        "max_sym": 0.0005342188244083868,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2982.740165516911,
+          "sweep2": 2985.9287408033283
+        }
+      },
+      "costs.c227": {
+        "max_rel": 0.0010542443992502346,
+        "max_sym": 0.000526844488199637,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 309.4937155392766,
+          "sweep2": 309.819997555487
+        }
+      },
+      "costs.c2223": {
+        "max_rel": 0.0009919679791524935,
+        "max_sym": 0.0004957381114099646,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 124.94203965875475,
+          "sweep2": 125.06597816134624
+        }
+      },
+      "fwbs.m_vv": {
+        "max_rel": 0.0009919679791523493,
+        "max_sym": 0.0004957381114098926,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 4620637.561344481,
+          "sweep2": 4625221.085848603
+        }
+      },
+      "fwbs.vol_vv": {
+        "max_rel": 0.0009919679791522912,
+        "max_sym": 0.0004957381114098637,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 592.3894309416002,
+          "sweep2": 592.9770622882825
+        }
+      },
+      "pf_coil.r_pf_cs_current_filaments": {
+        "max_rel": 0.0009560062882823372,
+        "max_sym": 0.0004777747663006856,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 36.83803102392854,
+          "sweep2": 36.87324841323535
+        }
+      },
+      "pf_coil.j_pf_wp_critical": {
+        "max_rel": 0.000949048745586836,
+        "max_sym": 0.00047474965307477715,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1146169431.72734,
+          "sweep2": 1145081661.0659292
+        }
+      },
+      "pf_coil.bpf2": {
+        "max_rel": 0.0008756015270108293,
+        "max_sym": 0.0004376091778732248,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 13.270657139727522,
+          "sweep2": 13.282276947383505
+        }
+      },
+      "costs.c2272": {
+        "max_rel": 0.0008750481230628507,
+        "max_sym": 0.00043771557262655645,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 187.32413564631545,
+          "sweep2": 187.16021801301378
+        }
+      },
+      "pf_coil.z_pf_cs_current_filaments": {
+        "max_rel": 0.0007912370691040288,
+        "max_sym": 0.0003954620824224955,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 42.63603114619167,
+          "sweep2": 42.66976635451401
+        }
+      },
+      "physics.m_plasma_fuel_ions": {
+        "max_rel": 0.0007400128537399951,
+        "max_sym": 0.0003701433823003121,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.000470244763679159,
+          "sweep2": 0.0004698967765096325
+        }
+      },
+      "physics.nd_plasma_fuel_ions_vol_avg": {
+        "max_rel": 0.0007400128537399411,
+        "max_sym": 0.00037014338230028504,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 8.579307463758488e+19,
+          "sweep2": 8.57295866595912e+19
+        }
+      },
+      "physics.pres_plasma_fuel_profile": {
+        "max_rel": 0.0007400128537398692,
+        "max_sym": 0.0003701433823002491,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 8407755.21086695,
+          "sweep2": 8401533.36393981
+        }
+      },
+      "tfcoil.j_tf_wp_quench_heat_max": {
+        "max_rel": 0.0006954263332374263,
+        "max_sym": 0.0003475923041979282,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 9480994.103524787,
+          "sweep2": 9487587.436489647
+        }
+      },
+      "pf_coil.vsdum": {
+        "max_rel": 0.0005886283378062093,
+        "max_sym": 0.00029440081523436477,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 82.97659721174955,
+          "sweep2": 82.92775483525598
+        }
+      },
+      "physics.n_charge_plasma_effective_mass_weighted_vol_avg": {
+        "max_rel": 0.0005474540084036544,
+        "max_sym": 0.00027365209823278436,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.44737090000651464,
+          "sweep2": 0.44761581499896635
+        }
+      },
+      "physics.burnup": {
+        "max_rel": 0.0004356560630476985,
+        "max_sym": 0.00021778059280601426,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.4115421816101287,
+          "sweep2": 0.411721472456747
+        }
+      },
+      "costs.c216": {
+        "max_rel": 0.0004251404932328588,
+        "max_sym": 0.0002126154423334407,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 14.341262597779888,
+          "sweep2": 14.335165546325486
+        }
+      },
+      "buildings.elevol": {
+        "max_rel": 0.0004251404932328045,
+        "max_sym": 0.0002126154423334135,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 44928.767536904415,
+          "sweep2": 44909.666498513434
+        }
+      },
+      "pf_coil.xind": {
+        "max_rel": 0.0002860712287919617,
+        "max_sym": 0.0001430560765097775,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 9.920238089981099e-05,
+          "sweep2": 9.917400195280789e-05
+        }
+      },
+      "physics.hstar": {
+        "max_rel": 0.00027665240278798163,
+        "max_sym": 0.0001383453381791017,
+        "n_changed": 16,
+        "example": {
+          "sweep1": 0.8507432693369927,
+          "sweep2": 0.850507909167375
+        }
+      },
+      "physics.p_l_h_threshold_mw": {
+        "max_rel": 0.00027582235354345103,
+        "max_sym": 0.0001378921599016859,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 80.86415174906388,
+          "sweep2": 80.8864558897166
+        }
+      },
+      "physics.m_plasma_ions_total": {
+        "max_rel": 0.00027574629655110474,
+        "max_sym": 0.00013789215990176056,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.0007564542759379105,
+          "sweep2": 0.0007562456864728104
+        }
+      },
+      "physics.m_ions_total_amu": {
+        "max_rel": 0.0002757462965510587,
+        "max_sym": 0.00013789215990173752,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2.99407668074367,
+          "sweep2": 2.993251075187365
+        }
+      },
+      "physics.m_plasma": {
+        "max_rel": 0.0002756809277325849,
+        "max_sym": 0.0001378594664791003,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 0.000756633644611286,
+          "sweep2": 0.0007564250551461859
+        }
+      },
+      "physics.rad_fraction_total": {
+        "max_rel": 0.0001824568951194453,
+        "max_sym": 9.122012568926982e-05,
+        "n_changed": 15,
+        "example": {
+          "sweep1": 0.9286610396715111,
+          "sweep2": 0.928830480281428
+        }
+      },
+      "physics.nd_plasma_electron_max_array": {
+        "max_rel": 0.00014172772493116845,
+        "max_sym": 7.086888450846911e-05,
+        "n_changed": 13,
+        "example": {
+          "sweep1": 1.3707387556336576e+22,
+          "sweep2": 1.3705444839483467e+22
+        }
+      },
+      "pf_coil.vs_pf_coils_total_ramp": {
+        "max_rel": 6.878642303192926e-05,
+        "max_sym": 3.439202866364834e-05,
+        "n_changed": 18,
+        "example": {
+          "sweep1": -112.6062748541279,
+          "sweep2": -112.61402063698607
+        }
+      },
+      "pf_coil.vs_pf_coils_total_pulse": {
+        "max_rel": 6.878642303192926e-05,
+        "max_sym": 3.439202866364834e-05,
+        "n_changed": 18,
+        "example": {
+          "sweep1": -112.6062748541279,
+          "sweep2": -112.61402063698607
+        }
+      },
+      "pf_coil.vs_cs_pf_total_ramp": {
+        "max_rel": 6.878642303192926e-05,
+        "max_sym": 3.439202866364834e-05,
+        "n_changed": 18,
+        "example": {
+          "sweep1": -112.6062748541279,
+          "sweep2": -112.61402063698607
+        }
+      },
+      "pf_coil.vs_cs_pf_total_pulse": {
+        "max_rel": 6.878642303192926e-05,
+        "max_sym": 3.439202866364834e-05,
+        "n_changed": 18,
+        "example": {
+          "sweep1": -112.6062748541279,
+          "sweep2": -112.61402063698607
+        }
+      },
+      "physics.f_t_alpha_energy_confinement": {
+        "max_rel": 3.409550911316183e-05,
+        "max_sym": 1.704804518747094e-05,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 13.799182205948524,
+          "sweep2": 13.798711715805867
+        }
+      },
+      "tfcoil.a_tf_coil_wp_turn_insulation": {
+        "max_rel": 1.8791739025808383e-15,
+        "max_sym": 9.395869512904184e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.010154439783107838,
+          "sweep2": 0.010154439783107858
+        }
+      },
+      "ccfe_hcpb.exp_shield1": {
+        "max_rel": 1.868682345058592e-15,
+        "max_sym": 9.34341172529297e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.0007542549047772816,
+          "sweep2": 0.0007542549047772802
+        }
+      },
+      "tfcoil.a_tf_turn_insulation": {
+        "max_rel": 1.7159664281286308e-15,
+        "max_sym": 8.579832140643147e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.00012636636180206567,
+          "sweep2": 0.0001263663618020659
+        }
+      },
+      "superconducting_tfcoil.a_tf_turn_cable_space_effective": {
+        "max_rel": 8.010029131793485e-16,
+        "max_sym": 4.005014565896744e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.0002707111683731782,
+          "sweep2": 0.000270711168373178
+        }
+      },
+      "superconducting_tfcoil.j_tf_superconductor": {
+        "max_rel": 7.679750961553166e-16,
+        "max_sym": 3.8398754807765844e-16,
+        "n_changed": 15,
+        "example": {
+          "sweep1": 776127312.9009913,
+          "sweep2": 776127312.9009907
+        }
+      },
+      "tfcoil.a_tf_turn_cable_space_no_void": {
+        "max_rel": 6.721508432596485e-16,
+        "max_sym": 3.3607542162982436e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.0004839102040968574,
+          "sweep2": 0.0004839102040968571
+        }
+      },
+      "tfcoil.a_tf_wp_conductor": {
+        "max_rel": 6.379543204718746e-16,
+        "max_sym": 3.189771602359374e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.02175357602022273,
+          "sweep2": 0.021753576020222716
+        }
+      },
+      "tfcoil.a_tf_wp_extra_void": {
+        "max_rel": 5.576362553990587e-16,
+        "max_sym": 2.7881812769952945e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.015554256553274094,
+          "sweep2": 0.015554256553274085
+        }
+      },
+      "superconducting_tfcoil.a_tf_coil_inboard_insulation": {
+        "max_rel": 5.224322338449575e-16,
+        "max_sym": 2.612161169224787e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.039845706989625494,
+          "sweep2": 0.039845706989625515
+        }
+      },
+      "physics.p_plasma_outer_rad_mw": {
+        "max_rel": 4.379290869894812e-16,
+        "max_sym": 2.1896454349474064e-16,
+        "n_changed": 3,
+        "example": {
+          "sweep1": 129.80051005877434,
+          "sweep2": 129.80051005877428
+        }
+      },
+      "tfcoil.a_tf_turn_steel": {
+        "max_rel": 4.281296194060367e-16,
+        "max_sym": 2.140648097030184e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.0010129662824914253,
+          "sweep2": 0.001012966282491425
+        }
+      },
+      "tfcoil.a_tf_wp_coolant_channels": {
+        "max_rel": 4.1229412555997187e-16,
+        "max_sym": 2.0614706277998596e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.001577808809688409,
+          "sweep2": 0.0015778088096884083
+        }
+      },
+      "superconducting_tfcoil.j_tf_coil_turn": {
+        "max_rel": 3.582015456579264e-16,
+        "max_sym": 1.7910077282896323e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 41599935.49574991,
+          "sweep2": 41599935.4957499
+        }
+      },
+      "tfcoil.n_tf_coil_turns": {
+        "max_rel": 3.5369238418157175e-16,
+        "max_sym": 1.768461920907859e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 80.35714282107195,
+          "sweep2": 80.35714282107192
+        }
+      },
+      "tfcoil.a_tf_wp_steel": {
+        "max_rel": 3.40981457031113e-16,
+        "max_sym": 1.7049072851555653e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.08139907623509375,
+          "sweep2": 0.08139907623509372
+        }
+      },
+      "physics.vs_plasma_burn_required": {
+        "max_rel": 3.2555792454191216e-16,
+        "max_sym": 1.627789622709561e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 2.5408093312947045e-09,
+          "sweep2": 2.5408093312947037e-09
+        }
+      },
+      "physics.v_plasma_loop_burn": {
+        "max_rel": 3.2110693729231567e-16,
+        "max_sym": 1.6055346864615786e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 2.5156528032620838e-12,
+          "sweep2": 2.515652803262083e-12
+        }
+      },
+      "superconducting_tfcoil.dx_tf_turn_cable_space_average": {
+        "max_rel": 3.0581976484423394e-16,
+        "max_sym": 1.52909882422117e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.02268948806314556,
+          "sweep2": 0.022689488063145552
+        }
+      },
+      "physics.pden_plasma_outer_rad_mw": {
+        "max_rel": 2.932874028792841e-16,
+        "max_sym": 1.4664370143964204e-16,
+        "n_changed": 3,
+        "example": {
+          "sweep1": 0.09463609873163559,
+          "sweep2": 0.09463609873163562
+        }
+      },
+      "physics.pden_plasma_ohmic_mw": {
+        "max_rel": 2.873316271325419e-16,
+        "max_sym": 1.4366581356627098e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 4.3927550230013306e-14,
+          "sweep2": 4.3927550230013293e-14
+        }
+      },
+      "impurity_radiation.f_nd_impurity_electron_array": {
+        "max_rel": 2.7375597915817213e-16,
+        "max_sym": 1.368779895790861e-16,
+        "n_changed": 8,
+        "example": {
+          "sweep1": 0.8111041286032962,
+          "sweep2": 0.811104128603296
+        }
+      },
+      "tfcoil.a_tf_turn": {
+        "max_rel": 2.577299453699937e-16,
+        "max_sym": 1.2886497268499686e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.0016826949168503302,
+          "sweep2": 0.0016826949168503307
+        }
+      },
+      "physics.p_plasma_ohmic_mw": {
+        "max_rel": 2.241388028903037e-16,
+        "max_sym": 1.1206940144515186e-16,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 5.766380878489194e-11,
+          "sweep2": 5.7663808784891927e-11
+        }
+      },
+      "tfcoil.c_tf_total": {
+        "max_rel": 2.2075794371165232e-16,
+        "max_sym": 1.1037897185582614e-16,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 67499999.96970041,
+          "sweep2": 67499999.96970043
+        }
+      },
+      "physics.res_plasma": {
+        "max_rel": 1.8842662810719028e-16,
+        "max_sym": 9.421331405359515e-17,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1.0974837007676926e-09,
+          "sweep2": 1.0974837007676924e-09
+        }
+      },
+      "physics.pden_plasma_core_rad_mw": {
+        "max_rel": 1.8610941089298062e-16,
+        "max_sym": 9.305470544649032e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.14913579857382567,
+          "sweep2": 0.14913579857382564
+        }
+      },
+      "ccfe_hcpb.blanket_density": {
+        "max_rel": 1.8157283554195232e-16,
+        "max_sym": 9.078641777097616e-17,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 2504.49,
+          "sweep2": 2504.4900000000002
+        }
+      },
+      "tfcoil.t_conductor": {
+        "max_rel": 1.7934829979094528e-16,
+        "max_sym": 8.967414989547265e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.03868948806314556,
+          "sweep2": 0.03868948806314555
+        }
+      },
+      "tfcoil.j_tf_wp": {
+        "max_rel": 1.7910077282896323e-16,
+        "max_sym": 8.955038641448162e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 41599935.495749906,
+          "sweep2": 41599935.4957499
+        }
+      },
+      "tfcoil.dx_tf_turn_general": {
+        "max_rel": 1.7222591394142133e-16,
+        "max_sym": 8.611295697071066e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.040289488063145557,
+          "sweep2": 0.04028948806314555
+        }
+      },
+      "superconducting_tfcoil.dr_tf_turn": {
+        "max_rel": 1.7222591394142133e-16,
+        "max_sym": 8.611295697071066e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.040289488063145557,
+          "sweep2": 0.04028948806314555
+        }
+      },
+      "superconducting_tfcoil.dx_tf_turn": {
+        "max_rel": 1.7222591394142133e-16,
+        "max_sym": 8.611295697071066e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 0.040289488063145557,
+          "sweep2": 0.04028948806314555
+        }
+      },
+      "ccfe_hcpb.x_blanket": {
+        "max_rel": 1.6819080537045017e-16,
+        "max_sym": 8.409540268522507e-17,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 2.640389341569118,
+          "sweep2": 2.6403893415691186
+        }
+      },
+      "superconducting_tfcoil.c_tf_coil": {
+        "max_rel": 1.6556845778373922e-16,
+        "max_sym": 8.27842288918696e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 5624999.997475035,
+          "sweep2": 5624999.9974750355
+        }
+      },
+      "physics.p_plasma_inner_rad_mw": {
+        "max_rel": 1.4517838144190826e-16,
+        "max_sym": 7.258919072095413e-17,
+        "n_changed": 2,
+        "example": {
+          "sweep1": 195.77094845747874,
+          "sweep2": 195.7709484574787
+        }
+      },
+      "physics.n_charge_plasma_effective_vol_avg": {
+        "max_rel": 1.4419058736646722e-16,
+        "max_sym": 7.209529368323361e-17,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 3.079876557554959,
+          "sweep2": 3.0798765575549587
+        }
+      },
+      "physics.j_plasma_bootstrap_sauter_profile": {
+        "max_rel": 1.4271098085523754e-16,
+        "max_sym": 7.135549042761877e-17,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 6525934.928302322,
+          "sweep2": 6525934.928302321
+        }
+      },
+      "current_drive.f_c_plasma_bootstrap_sauter": {
+        "max_rel": 1.1709440536229945e-16,
+        "max_sym": 5.854720268114972e-17,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.9481435267466773,
+          "sweep2": 0.9481435267466772
+        }
+      },
+      "physics.pden_plasma_rad_mw": {
+        "max_rel": 1.1385879964911078e-16,
+        "max_sym": 5.692939982455539e-17,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.24377189730759363,
+          "sweep2": 0.2437718973075936
+        }
+      }
+    },
+    "census_n_entries": 459
+  },
+  "epsfcn_final": 0.001,
+  "ncalls": 3439,
+  "nvar": 14,
+  "neqns": 3,
+  "nineqns": 15,
+  "wall_s": 30.66915241300012,
+  "mfile": {
+    "ifail": 1.0,
+    "norm_objf": -16.588576508115732,
+    "nviter": 18.0,
+    "ncalls": 0,
+    "process_runtime": 26.78108859062195,
+    "sqsumsq": 5.626654699090426e-11,
+    "epsfcn": 0,
+    "itvars": {
+      "itvar001": 10.872252618484865,
+      "itvar002": 0.11283061300309548,
+      "itvar003": 8.793336169801476e+19,
+      "itvar004": 1.1999999999995152,
+      "itvar005": 0.19359094859320713,
+      "itvar006": 6.410698949368919,
+      "itvar007": 0.21877098080911653,
+      "itvar008": 0.2555038840146371,
+      "itvar009": 0.266011619640486,
+      "itvar010": 0.07587192194030298,
+      "itvar011": 0.0007963317786088564,
+      "itvar012": 0.622599866549825,
+      "itvar013": 0.10000000000100705,
+      "itvar014": 0.001000000016373151
+    },
+    "itvar_names": {
+      "itvar001": "temp_plasma_electron_vol_avg_kev",
+      "itvar002": "beta_total_vol_avg",
+      "itvar003": "nd_plasma_electrons_vol_avg",
+      "itvar004": "hfact",
+      "itvar005": "dr_cs",
+      "itvar006": "q95",
+      "itvar007": "dr_bore",
+      "itvar008": "dr_tf_nose_case",
+      "itvar009": "dr_shld_inboard",
+      "itvar010": "f_nd_alpha_thermal_electron",
+      "itvar011": "f_nd_impurity_electrons(13)",
+      "itvar012": "dr_tf_wp_with_insulation",
+      "itvar013": "f_nd_plasma_pedestal_greenwald",
+      "itvar014": "f_nd_plasma_separatrix_greenwald"
+    }
+  }
+}

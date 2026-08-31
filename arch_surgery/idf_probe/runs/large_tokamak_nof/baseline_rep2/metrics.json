@@ -1,0 +1,95 @@
+{
+  "scenario": "large_tokamak_nof",
+  "mode": "baseline",
+  "tag": "rep2",
+  "outdir": "/home/wrutten/projects/PROCESS_code_analysis/idf_probe/runs/large_tokamak_nof/baseline_rep2",
+  "status": "ok",
+  "probe": {
+    "mode": "baseline",
+    "n_call_models": 630,
+    "n_sweeps": 2049,
+    "n_retries": 0,
+    "sweeps_per_call_hist_by_phase": {
+      "func": {
+        "2": 7,
+        "4": 2,
+        "5": 4,
+        "6": 2
+      },
+      "grad": {
+        "2": 120,
+        "3": 274,
+        "4": 156,
+        "5": 50
+      },
+      "grad_reconcile": {
+        "3": 1,
+        "4": 14
+      }
+    },
+    "wall_in_call_models_by_phase": {
+      "func": 2.1107034149972606,
+      "grad": 16.57207287698111,
+      "grad_reconcile": 0.4738110000034794
+    }
+  },
+  "epsfcn_final": 0.001,
+  "ncalls": 2051,
+  "nvar": 20,
+  "neqns": 3,
+  "nineqns": 23,
+  "wall_s": 23.95670396299829,
+  "mfile": {
+    "ifail": 1.0,
+    "norm_objf": 1.6000000000281593,
+    "nviter": 8.0,
+    "ncalls": 0,
+    "process_runtime": 19.317399740219116,
+    "sqsumsq": 4.468523142206598e-09,
+    "epsfcn": 0,
+    "itvars": {
+      "itvar001": 4.956241228018815,
+      "itvar002": 8.000000000140796,
+      "itvar003": 12.653773995551095,
+      "itvar004": 0.038883454675386404,
+      "itvar005": 8.108496316574086e+19,
+      "itvar006": 1.1999959261612925,
+      "itvar007": 0.5907910823023867,
+      "itvar008": 3.3493140397295713,
+      "itvar009": 2.0397267923151206,
+      "itvar010": 17438088.73864851,
+      "itvar011": 0.44232548691717066,
+      "itvar012": 19.176504697573403,
+      "itvar013": 0.20161200209232844,
+      "itvar014": 0.008085107900662157,
+      "itvar015": 0.8997879501373618,
+      "itvar016": 82589.75368028147,
+      "itvar017": 0.08565693934860097,
+      "itvar018": 0.6927877625175114,
+      "itvar019": 0.000616941943686695,
+      "itvar020": 0.5709492288613988
+    },
+    "itvar_names": {
+      "itvar001": "b_plasma_toroidal_on_axis",
+      "itvar002": "rmajor",
+      "itvar003": "temp_plasma_electron_vol_avg_kev",
+      "itvar004": "beta_total_vol_avg",
+      "itvar005": "nd_plasma_electrons_vol_avg",
+      "itvar006": "hfact",
+      "itvar007": "dr_cs",
+      "itvar008": "q95",
+      "itvar009": "dr_bore",
+      "itvar010": "j_cs_flat_top_end",
+      "itvar011": "f_c_plasma_non_inductive",
+      "itvar012": "t_tf_superconductor_quench",
+      "itvar013": "dr_tf_nose_case",
+      "itvar014": "dx_tf_turn_steel",
+      "itvar015": "f_a_tf_turn_cable_copper",
+      "itvar016": "c_tf_turn",
+      "itvar017": "f_nd_alpha_thermal_electron",
+      "itvar018": "f_a_cs_turn_steel",
+      "itvar019": "f_nd_impurity_electrons(13)",
+      "itvar020": "dr_tf_wp_with_insulation"
+    }
+  }
+}

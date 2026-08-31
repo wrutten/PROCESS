@@ -1,0 +1,84 @@
+{
+  "scenario": "st_regression",
+  "mode": "baseline",
+  "tag": "rep1",
+  "outdir": "/home/wrutten/projects/PROCESS_code_analysis/idf_probe/runs/st_regression/baseline_rep1",
+  "status": "ok",
+  "probe": {
+    "mode": "baseline",
+    "n_call_models": 1050,
+    "n_sweeps": 3437,
+    "n_retries": 0,
+    "sweeps_per_call_hist_by_phase": {
+      "func": {
+        "2": 17,
+        "3": 4,
+        "4": 8,
+        "5": 4,
+        "6": 2
+      },
+      "grad": {
+        "2": 127,
+        "3": 468,
+        "4": 339,
+        "5": 46
+      },
+      "grad_reconcile": {
+        "2": 22,
+        "3": 13
+      }
+    },
+    "wall_in_call_models_by_phase": {
+      "func": 2.0654953390112496,
+      "grad": 26.720864504008205,
+      "grad_reconcile": 0.6574639889950049
+    }
+  },
+  "epsfcn_final": 0.001,
+  "ncalls": 3439,
+  "nvar": 14,
+  "neqns": 3,
+  "nineqns": 15,
+  "wall_s": 34.08374141999957,
+  "mfile": {
+    "ifail": 1.0,
+    "norm_objf": -16.588576508115732,
+    "nviter": 18.0,
+    "ncalls": 0,
+    "process_runtime": 29.757160663604736,
+    "sqsumsq": 5.626654699090426e-11,
+    "epsfcn": 0,
+    "itvars": {
+      "itvar001": 10.872252618484865,
+      "itvar002": 0.11283061300309548,
+      "itvar003": 8.793336169801476e+19,
+      "itvar004": 1.1999999999995152,
+      "itvar005": 0.19359094859320713,
+      "itvar006": 6.410698949368919,
+      "itvar007": 0.21877098080911653,
+      "itvar008": 0.2555038840146371,
+      "itvar009": 0.266011619640486,
+      "itvar010": 0.07587192194030298,
+      "itvar011": 0.0007963317786088564,
+      "itvar012": 0.622599866549825,
+      "itvar013": 0.10000000000100705,
+      "itvar014": 0.001000000016373151
+    },
+    "itvar_names": {
+      "itvar001": "temp_plasma_electron_vol_avg_kev",
+      "itvar002": "beta_total_vol_avg",
+      "itvar003": "nd_plasma_electrons_vol_avg",
+      "itvar004": "hfact",
+      "itvar005": "dr_cs",
+      "itvar006": "q95",
+      "itvar007": "dr_bore",
+      "itvar008": "dr_tf_nose_case",
+      "itvar009": "dr_shld_inboard",
+      "itvar010": "f_nd_alpha_thermal_electron",
+      "itvar011": "f_nd_impurity_electrons(13)",
+      "itvar012": "dr_tf_wp_with_insulation",
+      "itvar013": "f_nd_plasma_pedestal_greenwald",
+      "itvar014": "f_nd_plasma_separatrix_greenwald"
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "scenario": "large_tokamak_nof",
+  "mode": "single_sweep_debug",
+  "tag": "",
+  "outdir": "/home/wrutten/projects/PROCESS_code_analysis/idf_probe/runs/large_tokamak_nof/single_sweep_debug",
+  "status": "ok",
+  "probe": {
+    "mode": "single_sweep_debug",
+    "n_call_models": 672,
+    "n_sweeps": 1344,
+    "n_retries": 1,
+    "sweeps_per_call_hist_by_phase": {
+      "func": {
+        "2": 16
+      },
+      "grad": {
+        "2": 640
+      },
+      "grad_reconcile": {
+        "2": 16
+      }
+    },
+    "wall_in_call_models_by_phase": {
+      "func": 0.7492002580038388,
+      "grad": 11.398644807079108,
+      "grad_reconcile": 0.2631466670281952
+    }
+  },
+  "epsfcn_final": 0.001,
+  "ncalls": 1347,
+  "nvar": 20,
+  "neqns": 3,
+  "nineqns": 23,
+  "wall_s": 17.22047304699663,
+  "mfile": {
+    "ifail": 1.0,
+    "norm_objf": 1.6000000000188797,
+    "nviter": 8.0,
+    "ncalls": 0,
+    "process_runtime": 12.543123722076416,
+    "sqsumsq": 9.003932660340562e-09,
+    "epsfcn": 0,
+    "itvars": {
+      "itvar001": 4.981541997117457,
+      "itvar002": 8.000000000094397,
+      "itvar003": 12.80827664221393,
+      "itvar004": 0.03915409237915079,
+      "itvar005": 8.168201735587132e+19,
+      "itvar006": 1.1999962877303831,
+      "itvar007": 0.5944802763686625,
+      "itvar008": 3.3418058321522177,
+      "itvar009": 2.0267167548950056,
+      "itvar010": 17383178.067952655,
+      "itvar011": 0.4617604022427835,
+      "itvar012": 19.234491296169008,
+      "itvar013": 0.20466688372684155,
+      "itvar014": 0.008077786903079486,
+      "itvar015": 0.8987423842414519,
+      "itvar016": 82197.1737371841,
+      "itvar017": 0.08818092335495878,
+      "itvar018": 0.6897126521292369,
+      "itvar019": 0.0006493624652498888,
+      "itvar020": 0.5759988526305233
+    },
+    "itvar_names": {
+      "itvar001": "b_plasma_toroidal_on_axis",
+      "itvar002": "rmajor",
+      "itvar003": "temp_plasma_electron_vol_avg_kev",
+      "itvar004": "beta_total_vol_avg",
+      "itvar005": "nd_plasma_electrons_vol_avg",
+      "itvar006": "hfact",
+      "itvar007": "dr_cs",
+      "itvar008": "q95",
+      "itvar009": "dr_bore",
+      "itvar010": "j_cs_flat_top_end",
+      "itvar011": "f_c_plasma_non_inductive",
+      "itvar012": "t_tf_superconductor_quench",
+      "itvar013": "dr_tf_nose_case",
+      "itvar014": "dx_tf_turn_steel",
+      "itvar015": "f_a_tf_turn_cable_copper",
+      "itvar016": "c_tf_turn",
+      "itvar017": "f_nd_alpha_thermal_electron",
+      "itvar018": "f_a_cs_turn_steel",
+      "itvar019": "f_nd_impurity_electrons(13)",
+      "itvar020": "dr_tf_wp_with_insulation"
+    }
+  }
+}

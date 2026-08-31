@@ -1,0 +1,1047 @@
+{
+  "scenario": "st_regression",
+  "mode": "census",
+  "tag": "",
+  "outdir": "/home/wrutten/projects/PROCESS_code_analysis/idf_probe/runs/st_regression/census",
+  "status": "ok",
+  "probe": {
+    "mode": "census",
+    "n_call_models": 1050,
+    "n_sweeps": 3437,
+    "n_retries": 0,
+    "sweeps_per_call_hist_by_phase": {
+      "func": {
+        "2": 17,
+        "3": 4,
+        "4": 8,
+        "5": 4,
+        "6": 2
+      },
+      "grad": {
+        "2": 127,
+        "3": 468,
+        "4": 339,
+        "5": 46
+      },
+      "grad_reconcile": {
+        "2": 22,
+        "3": 13
+      }
+    },
+    "wall_in_call_models_by_phase": {
+      "func": 1.4724616920066183,
+      "grad": 25.48118309806887,
+      "grad_reconcile": 0.642939249992196
+    },
+    "census": {
+      "current_drive.big_q_plasma": {
+        "max_rel": 41.73037858293332,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 41.73037858293332
+        }
+      },
+      "physics.beta_norm_max_stambaugh": {
+        "max_rel": 6.716203525852666,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 6.716203525852666
+        }
+      },
+      "superconducting_tfcoil.a_tf_plasma_case": {
+        "max_rel": 2.9505258654658952,
+        "n_changed": 18,
+        "example": {
+          "sweep1": -0.014774905628315738,
+          "sweep2": 0.02881883558784748
+        }
+      },
+      "physics.nd_plasma_protons_vol_avg": {
+        "max_rel": 2.116265933122801,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3e+16,
+          "sweep2": 9.348797799368403e+16
+        }
+      },
+      "current_drive.f_c_plasma_bootstrap_sugiyama_h": {
+        "max_rel": 1.8557566114913144,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 1.8557566114913144
+        }
+      },
+      "fwbs.p_fw_nuclear_heat_total_mw": {
+        "max_rel": 1.7446835201192656,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 86.46649962021034,
+          "sweep2": 237.32317654999008
+        }
+      },
+      "fwbs.p_blkt_multiplication_mw": {
+        "max_rel": 1.3021540532581612,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 311.4328825070753,
+          "sweep2": 716.9664727815361
+        }
+      },
+      "build.a_blkt_outboard_surface": {
+        "max_rel": 1.2824819351647523,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 327.63187501127226,
+          "sweep2": 747.813836097385
+        }
+      },
+      "fwbs.p_blkt_nuclear_heat_total_mw": {
+        "max_rel": 1.274500970357552,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1382.2568887018356,
+          "sweep2": 3143.944634635736
+        }
+      },
+      "power.p_blkt_heat_deposited_mw": {
+        "max_rel": 1.274500970357552,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1382.2568887018356,
+          "sweep2": 3143.944634635736
+        }
+      },
+      "fwbs.p_shld_nuclear_heat_mw": {
+        "max_rel": 1.210051520235233,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.4471860298638994,
+          "sweep2": 0.9883041651286693
+        }
+      },
+      "primary_pumping.p_fw_blkt_coolant_pump_mw": {
+        "max_rel": 1.18020474162639,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 181.23630946576185,
+          "sweep2": 395.1322612521218
+        }
+      },
+      "power.p_fw_blkt_coolant_pump_elec_mw": {
+        "max_rel": 1.18020474162639,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 208.3175970870826,
+          "sweep2": 454.17501293347334
+        }
+      },
+      "power.p_fw_blkt_heat_deposited_mw": {
+        "max_rel": 1.1802047416263899,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2025.8182632316423,
+          "sweep2": 4416.698583170964
+        }
+      },
+      "heat_transport.p_coolant_pump_loss_total_mw": {
+        "max_rel": 1.0365342800144222,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 29.55303529551324,
+          "sweep2": 60.185769457788865
+        }
+      },
+      "power.p_coolant_pump_elec_total_profile_mw": {
+        "max_rel": 1.0365342800144217,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 393.7489126900405,
+          "sweep2": 801.8831584116731
+        }
+      },
+      "heat_transport.p_coolant_pump_elec_total_mw": {
+        "max_rel": 1.0365342800144215,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 227.33104073471736,
+          "sweep2": 462.96745736760676
+        }
+      },
+      "power.p_coolant_pump_total_mw": {
+        "max_rel": 1.0365342800144215,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 197.77800543920412,
+          "sweep2": 402.7816879098179
+        }
+      },
+      "power.p_fw_heat_deposited_mw": {
+        "max_rel": 0.898278405393253,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 462.3250650640449,
+          "sweep2": 877.6216872831071
+        }
+      },
+      "fwbs.p_div_nuclear_heat_total_mw": {
+        "max_rel": 0.8059283887304517,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 1887.0885580683234,
+          "sweep2": 366.2303170726483
+        }
+      },
+      "fwbs.f_ster_div_single": {
+        "max_rel": 0.8056408386098842,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.25,
+          "sweep2": 0.048589790347528944
+        }
+      },
+      "fwbs.p_div_rad_total_mw": {
+        "max_rel": 0.8056408386098842,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 328.3228216645884,
+          "sweep2": 63.81254828396594
+        }
+      },
+      "fwbs.p_fw_rad_total_mw": {
+        "max_rel": 0.8056408386098842,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 328.3228216645884,
+          "sweep2": 592.8330950452108
+        }
+      },
+      "divertor.deg_div_poloidal_plasma": {
+        "max_rel": 0.8056408386098842,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 90.0,
+          "sweep2": 17.49232452511042
+        }
+      },
+      "fwbs.psurffwi": {
+        "max_rel": 0.8056408386098841,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 61.858550816408965,
+          "sweep2": 111.69432557133281
+        }
+      },
+      "blanket.len_blkt_outboard_segment_poloidal": {
+        "max_rel": 0.805640838609884,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1.3374808666998574,
+          "sweep2": 2.415010073772605
+        }
+      },
+      "blanket.n_fw_inboard_channels": {
+        "max_rel": 0.80178716490658,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1231.0,
+          "sweep2": 2218.0
+        }
+      },
+      "first_wall.a_fw_total": {
+        "max_rel": 0.801701258598372,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 522.7436283551198,
+          "sweep2": 941.8278531316989
+        }
+      },
+      "first_wall.a_fw_outboard": {
+        "max_rel": 0.801701258598372,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 424.2546986650798,
+          "sweep2": 764.3802245511473
+        }
+      },
+      "first_wall.a_fw_inboard": {
+        "max_rel": 0.8017012585983714,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 98.48892969004001,
+          "sweep2": 177.4476285805516
+        }
+      },
+      "blanket.n_fw_outboard_channels": {
+        "max_rel": 0.801621723552706,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 5303.0,
+          "sweep2": 9554.0
+        }
+      },
+      "build.a_blkt_total_surface": {
+        "max_rel": 0.7973848513032394,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 524.6097343913523,
+          "sweep2": 942.9255894412327
+        }
+      },
+      "costs.cpp": {
+        "max_rel": 0.7774165096653213,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 26.900757452955805,
+          "sweep2": 47.813850419386085
+        }
+      },
+      "power.f_p_div_primary_heat": {
+        "max_rel": 0.7238100115129562,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.48449754455337624,
+          "sweep2": 0.13381337125219797
+        }
+      },
+      "power.delta_eta": {
+        "max_rel": 0.7238100115129562,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.16424466760359455,
+          "sweep2": 0.045362732854495116
+        }
+      },
+      "heat_transport.p_div_coolant_pump_mw": {
+        "max_rel": 0.6926570545823129,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 12.897515431369385,
+          "sweep2": 3.963960381247139
+        }
+      },
+      "power.p_div_heat_deposited_mw": {
+        "max_rel": 0.6926570545823129,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 2592.400601705246,
+          "sweep2": 796.7560366306749
+        }
+      },
+      "power.p_div_coolant_pump_elec_mw": {
+        "max_rel": 0.6926570545823127,
+        "n_changed": 17,
+        "example": {
+          "sweep1": 14.82473038088435,
+          "sweep2": 4.556276300284067
+        }
+      },
+      "costs.c2211": {
+        "max_rel": 0.6856304738382597,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 51.8025225030964,
+          "sweep2": 87.3199105529115
+        }
+      },
+      "fwbs.psurffwo": {
+        "max_rel": 0.6834527405643458,
+        "n_changed": 15,
+        "example": {
+          "sweep1": 314.00001462742557,
+          "sweep2": 528.6041851617842
+        }
+      },
+      "physics.f_beta_alpha_beam_thermal": {
+        "max_rel": 0.46201925873359595,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.24286842954104357,
+          "sweep2": 0.13065853775469805
+        }
+      },
+      "blanket.len_blkt_outboard_channel_total": {
+        "max_rel": 0.36682084274588267,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 5.874961733399715,
+          "sweep2": 8.03002014754521
+        }
+      },
+      "heat_transport.tlvpmw": {
+        "max_rel": 0.354150983445334,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 810.606959578567,
+          "sweep2": 1097.6842115009485
+        }
+      },
+      "costs.c243": {
+        "max_rel": 0.3541509834453339,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 12.726529265383501,
+          "sweep2": 17.23364212056489
+        }
+      },
+      "heat_transport.p_plant_electric_recirc_mw": {
+        "max_rel": 0.33347880712899697,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 710.5035033439476,
+          "sweep2": 947.4413641000606
+        }
+      },
+      "fwbs.fwclfr": {
+        "max_rel": 0.3141592653589793,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 0.0,
+          "sweep2": 0.3141592653589793
+        }
+      },
+      "fwbs.m_blkt_total": {
+        "max_rel": 0.26483976706795576,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1298075.2001630834,
+          "sweep2": 1641857.1338109644
+        }
+      },
+      "costs.c2212": {
+        "max_rel": 0.26483976706795564,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 322.050050178908,
+          "sweep2": 407.34171045251344
+        }
+      },
+      "costs.c22121": {
+        "max_rel": 0.26483976706795564,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 85.65542396533888,
+          "sweep2": 108.34038649642622
+        }
+      },
+      "costs.c22122": {
+        "max_rel": 0.2648397670679556,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 209.9111819436487,
+          "sweep2": 265.50401047456387
+        }
+      },
+      "fwbs.m_blkt_li4sio4": {
+        "max_rel": 0.2648397670679556,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 466469.2932081083,
+          "sweep2": 590008.9121656975
+        }
+      },
+      "fwbs.m_blkt_tibe12": {
+        "max_rel": 0.2648397670679556,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 439258.5844376353,
+          "sweep2": 555591.7256226985
+        }
+      },
+      "fwbs.m_blkt_beryllium": {
+        "max_rel": 0.2648397670679556,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 439258.5844376353,
+          "sweep2": 555591.7256226985
+        }
+      },
+      "fwbs.m_blkt_li2o": {
+        "max_rel": 0.2648397670679556,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 466469.2932081083,
+          "sweep2": 590008.9121656975
+        }
+      },
+      "fwbs.vol_blkt_total": {
+        "max_rel": 0.26483976706795553,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 518.2992146756759,
+          "sweep2": 655.5654579618862
+        }
+      },
+      "fwbs.vol_blkt_outboard": {
+        "max_rel": 0.26483976706795553,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 518.2992146756759,
+          "sweep2": 655.5654579618862
+        }
+      },
+      "fwbs.m_blkt_steel_total": {
+        "max_rel": 0.2648397670679555,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 392347.3225173399,
+          "sweep2": 496256.4960225682
+        }
+      },
+      "costs.c22123": {
+        "max_rel": 0.2648397670679553,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 26.483444269920444,
+          "sweep2": 33.49731348152335
+        }
+      },
+      "fwbs.armour_fw_bl_mass": {
+        "max_rel": 0.254590538598285,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 1418274.4367293785,
+          "sweep2": 1779353.6894564903
+        }
+      },
+      "fwbs.m_fw_total": {
+        "max_rel": 0.23568011480075918,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 73393.20542105882,
+          "sweep2": 90690.52450028967
+        }
+      },
+      "fwbs.vol_fw_total": {
+        "max_rel": 0.23568011480075918,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 9.409385310392157,
+          "sweep2": 11.626990320549957
+        }
+      },
+      "costs.c221": {
+        "max_rel": 0.22940329172379165,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 531.5647426083176,
+          "sweep2": 653.5074443269757
+        }
+      },
+      "costs.c2261": {
+        "max_rel": 0.20938991890465022,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 142.91786865246524,
+          "sweep2": 172.8434295796304
+        }
+      },
+      "heat_transport.f_p_plant_electric_recirc": {
+        "max_rel": 0.19831446232856909,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.3319676003587944,
+          "sweep2": 0.397801576534454
+        }
+      },
+      "fwbs.m_fw_blkt_div_coolant_total": {
+        "max_rel": 0.19580882237418953,
+        "n_changed": 1,
+        "example": {
+          "sweep1": 316.8092620601763,
+          "sweep2": 378.84331058141544
+        }
+      },
+      "heat_transport.pacpmw": {
+        "max_rel": 0.14867629962445497,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1633.5724092321966,
+          "sweep2": 1876.4459102054454
+        }
+      },
+      "costs.c24": {
+        "max_rel": 0.1318241632804179,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 49.04515445215414,
+          "sweep2": 55.51049090076822
+        }
+      },
+      "costs.c242": {
+        "max_rel": 0.12749577659015215,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 15.359125186770637,
+          "sweep2": 17.317348780203325
+        }
+      },
+      "tfcoil.a_tf_coil_inboard_case": {
+        "max_rel": 0.12584606549026706,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.34640527732299164,
+          "sweep2": 0.389999018539155
+        }
+      },
+      "tfcoil.m_tf_coil_case": {
+        "max_rel": 0.12080484385055511,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 597187.2749457755,
+          "sweep2": 669330.3904451384
+        }
+      },
+      "costs.c22213": {
+        "max_rel": 0.12080484385055487,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 302.7739483975082,
+          "sweep2": 339.35050795568515
+        }
+      },
+      "tfcoil.a_tf_coil_outboard_case": {
+        "max_rel": 0.11880225133894173,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.5989656027625921,
+          "sweep2": 0.6701240648453743
+        }
+      },
+      "tfcoil.whtcp": {
+        "max_rel": 0.11606952028876513,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2910561.0880790344,
+          "sweep2": 3248388.517343514
+        }
+      },
+      "physics.e_plasma_beta_thermal": {
+        "max_rel": 0.11392601826894758,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1566510141.5791178,
+          "sweep2": 1388043878.5710835
+        }
+      },
+      "current_drive.f_c_plasma_bootstrap_wilson": {
+        "max_rel": 0.11392601826894752,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.9188823610836938,
+          "sweep2": 1.7002717341589118
+        }
+      },
+      "physics.beta_thermal_vol_avg": {
+        "max_rel": 0.1139260182689475,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.2,
+          "sweep2": 0.1772147963462105
+        }
+      },
+      "physics.beta_thermal_poloidal_vol_avg": {
+        "max_rel": 0.1139260182689475,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2.0047585767037654,
+          "sweep2": 1.776364414469383
+        }
+      },
+      "physics.beta_thermal_toroidal_vol_avg": {
+        "max_rel": 0.11392601826894748,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.2221636292611816,
+          "sweep2": 0.19685341157527655
+        }
+      },
+      "physics.beta_norm_thermal": {
+        "max_rel": 0.1139260182689474,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6.120731314045357,
+          "sweep2": 5.423420766542107
+        }
+      },
+      "costs.c26": {
+        "max_rel": 0.1127953880634777,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 110.4244721907437,
+          "sweep2": 122.87984338320334
+        }
+      },
+      "water_use.wateruserecirc": {
+        "max_rel": 0.11279538806347733,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 45795.33028518548,
+          "sweep2": 50960.832336198095
+        }
+      },
+      "power.p_turbine_loss_mw": {
+        "max_rel": 0.11279538806347732,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3210.4194923361215,
+          "sweep2": 3572.540004820726
+        }
+      },
+      "water_use.wateruseonethru": {
+        "max_rel": 0.11279538806347726,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4487942.367948177,
+          "sweep2": 4994161.568947413
+        }
+      },
+      "heat_transport.p_plant_primary_heat_mw": {
+        "max_rel": 0.11279538806347725,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 5350.699153893536,
+          "sweep2": 5954.233341367877
+        }
+      },
+      "water_use.evapvol": {
+        "max_rel": 0.11279538806347722,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 45689.2544807059,
+          "sweep2": 50842.79167018809
+        }
+      },
+      "heat_transport.p_plant_electric_gross_mw": {
+        "max_rel": 0.11279538806347715,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2140.279661557415,
+          "sweep2": 2381.693336547151
+        }
+      },
+      "power.p_plant_electric_gross_profile_mw": {
+        "max_rel": 0.11279538806347714,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3707.0731162237635,
+          "sweep2": 4125.213866947906
+        }
+      },
+      "water_use.waterusetower": {
+        "max_rel": 0.11279538806347711,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 136490.03519090076,
+          "sweep2": 151885.48167705606
+        }
+      },
+      "tfcoil.m_tf_coils_total": {
+        "max_rel": 0.11233112551468542,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 7700838.37589108,
+          "sweep2": 8565882.218061607
+        }
+      },
+      "tfcoil.whttflgs": {
+        "max_rel": 0.1100596857404168,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4790277.287812045,
+          "sweep2": 5317493.700718095
+        }
+      },
+      "ccfe_hcpb.tfc_nuc_heating": {
+        "max_rel": 0.11005968574041558,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 2846.575199320342,
+          "sweep2": 3159.868371194
+        }
+      },
+      "superconducting_tfcoil.a_tf_coil_inboard_steel": {
+        "max_rel": 0.09981475975689968,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.4367464423331432,
+          "sweep2": 0.4803401835493065
+        }
+      },
+      "costs.c23": {
+        "max_rel": 0.09275980801521747,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 371.79019924837417,
+          "sweep2": 406.2773867525928
+        }
+      },
+      "tfcoil.str_wp": {
+        "max_rel": 0.08875180298820876,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0005369905788927363,
+          "sweep2": 0.000489331696828324
+        }
+      },
+      "tfcoil.a_tf_leg_outboard": {
+        "max_rel": 0.08868876939970419,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.8023390398178143,
+          "sweep2": 0.8734975019005965
+        }
+      },
+      "costs.c2221": {
+        "max_rel": 0.08448327196458975,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 450.9427738165818,
+          "sweep2": 489.03989481739455
+        }
+      },
+      "costs.c226": {
+        "max_rel": 0.08328015333025361,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 371.19832452507285,
+          "sweep2": 402.11177790745415
+        }
+      },
+      "costs.crctcore": {
+        "max_rel": 0.08226694544761629,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1973.9367021260969,
+          "sweep2": 2136.326445116952
+        }
+      },
+      "heat_transport.p_plant_secondary_heat_mw": {
+        "max_rel": 0.0797794204916436,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 400.3617383359067,
+          "sweep2": 432.3023658073724
+        }
+      },
+      "tfcoil.a_tf_inboard_total": {
+        "max_rel": 0.07929325031338613,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6.5973445725385655,
+          "sweep2": 7.1204694671325255
+        }
+      },
+      "costs.chx": {
+        "max_rel": 0.07768223038441742,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 116.01711119950944,
+          "sweep2": 125.02957916024431
+        }
+      },
+      "tfcoil.j_tf_coil_full_area": {
+        "max_rel": 0.07346775335652514,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 10231389.194172006,
+          "sweep2": 9479712.01635996
+        }
+      },
+      "superconducting_tfcoil.f_a_tf_coil_inboard_insulation": {
+        "max_rel": 0.07346775335652503,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.0766036475812964,
+          "sweep2": 0.07097574969458355
+        }
+      },
+      "tfcoil.sig_tf_wp": {
+        "max_rel": 0.07197038464031577,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 142743586.1264813,
+          "sweep2": 132470275.3280204
+        }
+      },
+      "structure.gsmass": {
+        "max_rel": 0.06386251680786922,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 846670.324914939,
+          "sweep2": 900740.8227705434
+        }
+      },
+      "costs.c2214": {
+        "max_rel": 0.06386251680786911,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 24.74394024563909,
+          "sweep2": 26.324150545469127
+        }
+      },
+      "costs.c22": {
+        "max_rel": 0.06289649727689837,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 3081.3907958988298,
+          "sweep2": 3275.1994837021402
+        }
+      },
+      "costs.moneyint": {
+        "max_rel": 0.05940789253186325,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1060.0447441875326,
+          "sweep2": 1123.019768429192
+        }
+      },
+      "costs.capcost": {
+        "max_rel": 0.059407892531863245,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 7484.558345324092,
+          "sweep2": 7929.200183151566
+        }
+      },
+      "costs.concost": {
+        "max_rel": 0.059407892531863245,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 6424.513601136559,
+          "sweep2": 6806.180414722374
+        }
+      },
+      "costs.ccont": {
+        "max_rel": 0.05940789253186321,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1048.351591817263,
+          "sweep2": 1110.6319505195506
+        }
+      },
+      "costs.cindrt": {
+        "max_rel": 0.059407892531863155,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1178.0033264212045,
+          "sweep2": 1247.9860214394128
+        }
+      },
+      "costs.cdirt": {
+        "max_rel": 0.05940789253186305,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 4198.158682898093,
+          "sweep2": 4447.56244276341
+        }
+      },
+      "tfcoil.sig_tf_case": {
+        "max_rel": 0.059246018360007285,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 183702541.79560548,
+          "sweep2": 172818897.63160303
+        }
+      },
+      "superconducting_tfcoil.vv_stress_quench": {
+        "max_rel": 0.05785564411911142,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 11664593.323112138,
+          "sweep2": 10989730.763015999
+        }
+      },
+      "costs.coecap": {
+        "max_rel": 0.056101839609713836,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 96.6876427520305,
+          "sweep2": 102.11199737794622
+        }
+      },
+      "build.dr_tf_inboard": {
+        "max_rel": 0.05281496925194418,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.0,
+          "sweep2": 1.0528149692519442
+        }
+      },
+      "build.dr_tf_outboard": {
+        "max_rel": 0.05281496925194418,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 1.0,
+          "sweep2": 1.0528149692519442
+        }
+      },
+      "costs.coe": {
+        "max_rel": 0.05026433096140019,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 110.1689032387534,
+          "sweep2": 115.70646945280058
+        }
+      },
+      "build.dr_shld_vv_gap_outboard": {
+        "max_rel": 0.045102291132875755,
+        "n_changed": 18,
+        "example": {
+          "sweep1": 0.9845948733544867,
+          "sweep2": 0.9401873887285157
+        }
+      }
+    },
+    "census_n_entries": 459
+  },
+  "epsfcn_final": 0.001,
+  "ncalls": 3439,
+  "nvar": 14,
+  "neqns": 3,
+  "nineqns": 15,
+  "wall_s": 31.534255248996487,
+  "mfile": {
+    "ifail": 1.0,
+    "norm_objf": -16.588576508115732,
+    "nviter": 18.0,
+    "ncalls": 0,
+    "process_runtime": 27.874176740646362,
+    "sqsumsq": 5.626654699090426e-11,
+    "epsfcn": 0,
+    "itvars": {
+      "itvar001": 10.872252618484865,
+      "itvar002": 0.11283061300309548,
+      "itvar003": 8.793336169801476e+19,
+      "itvar004": 1.1999999999995152,
+      "itvar005": 0.19359094859320713,
+      "itvar006": 6.410698949368919,
+      "itvar007": 0.21877098080911653,
+      "itvar008": 0.2555038840146371,
+      "itvar009": 0.266011619640486,
+      "itvar010": 0.07587192194030298,
+      "itvar011": 0.0007963317786088564,
+      "itvar012": 0.622599866549825,
+      "itvar013": 0.10000000000100705,
+      "itvar014": 0.001000000016373151
+    },
+    "itvar_names": {
+      "itvar001": "temp_plasma_electron_vol_avg_kev",
+      "itvar002": "beta_total_vol_avg",
+      "itvar003": "nd_plasma_electrons_vol_avg",
+      "itvar004": "hfact",
+      "itvar005": "dr_cs",
+      "itvar006": "q95",
+      "itvar007": "dr_bore",
+      "itvar008": "dr_tf_nose_case",
+      "itvar009": "dr_shld_inboard",
+      "itvar010": "f_nd_alpha_thermal_electron",
+      "itvar011": "f_nd_impurity_electrons(13)",
+      "itvar012": "dr_tf_wp_with_insulation",
+      "itvar013": "f_nd_plasma_pedestal_greenwald",
+      "itvar014": "f_nd_plasma_separatrix_greenwald"
+    }
+  }
+}
