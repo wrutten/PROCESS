@@ -87,3 +87,24 @@ which is true of the main tree even when running from a worktree.
 **How to avoid it:** in a worktree, set `PYTHONPATH` to the worktree root for every measurement
 subprocess, and tighten the assertion to the **exact tree** the task is editing, not a prefix.
 Verify from a directory that is neither tree.
+
+## T7 — Ten models call their own `run()` from `output()`
+
+The deeper form of T1. Instrumenting `run()` is **not** sufficient to separate MDA work from
+reporting work, because `output()` re-enters `run()` in ten models. An instrument that hooks
+`run()` alone will attribute post-solve reporting to the MDA and invent dependency edges — it
+produced two phantom back edges in A2 before the sweep was closed at the end of
+`_call_models_once` instead.
+
+**How to avoid it:** close the sweep at the boundary of `_call_models_once`, not at `run()` entry
+and exit. Treat any edge discovered only during an `output()` call as suspect until proven
+otherwise.
+
+## T8 — `pkill` and `ps` do not work across sandboxed Bash calls
+
+Each sandboxed Bash call gets its own PID namespace, so `ps` shows nothing from a sibling call and
+`pkill` kills nothing. A2 lost a full set of runs to two drivers overlapping while both `ps` and
+`pkill` reported success.
+
+**How to avoid it:** stop background work with `TaskStop`, never with `pkill`. If two runs may
+overlap, serialise them explicitly rather than trying to detect and kill.
