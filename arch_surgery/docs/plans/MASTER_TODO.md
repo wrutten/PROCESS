@@ -52,7 +52,7 @@
 | **PROCESS finding** | — | Defect or critique of *PROCESS itself* | Architecture critiques belong here; implementation defects go to `PROCESS_code_analysis/docs/bug_reports/` |
 | **Decision** | `D<n>` | A recorded user decision | Append-only; a reversal is a new decision referencing the old |
 
-**Numbering** — next free: **A9**, **D9**, **I-5**. Numbers are never reused.
+**Numbering** — next free: **A13**, **D9**, **I-5**. Numbers are never reused.
 
 ---
 
@@ -90,7 +90,7 @@ Open issues only.
 
 | # | Task | Prereqs | Status |
 |---|---|---|---|
-| **A1** | **stage0-rebaseline** — reinstate an env-switched probe against `c0ae5b28`; measure sweep anatomy for all four scenarios; pass the switch-neutrality, determinism and baseline-solve gates. Deliverables: probe, rewritten `idf_probe/README.md`, `idf_probe/STAGE0.md` | — | **IN PROGRESS** (dispatched 2026-08-31) |
+| **A1** | **stage0-rebaseline** — reinstate an env-switched probe against `c0ae5b28`; measure sweep anatomy for all four scenarios; pass the switch-neutrality, determinism and baseline-solve gates. Branch `A1-stage0-rebaseline`; report [`../reports/A1_stage0_rebaseline.md`](../reports/A1_stage0_rebaseline.md). Deliverables: probe, rewritten `idf_probe/README.md`, the report | — | **IN PROGRESS** (dispatched 2026-08-31, before the protocol existed; corrected in flight — see change log) |
 | **A2** | **module-convergence** — Stage 1, the gating measurement. Attribute per-sweep state change to M1 / M2 / M3 to obtain `S₁, S₂, S₃` and identify the laggard; confirm at runtime that `t_plant_pulse_burn` is the only cross-module coupler in a `run()` path. **Instrument must exclude `output()` (I-4).** Gate: predicted saving, with a stop rule if M1 is the laggard | A1 ✓ | QUEUED |
 | **A3** | **build-reorder** — Stage 2. Move `build.run()` to after `PlasmaConfinementTime`. Gate: **bit-identical** results. Expected to be inert; it is a sharp integrity check on the dependency graph | A1 ✓ | QUEUED |
 | **A4** | **burn-time-lift** — Stage 3. Lift `t_plant_pulse_burn` to a design variable with a consistency constraint; verify module independence before adding any solver. Report the `n → n+1` overhead separately from the partition's effect | A2 ✓, A3 ✓ | QUEUED |
@@ -98,6 +98,10 @@ Open issues only.
 | **A6** | **characterise** — Stage 5. Scenario sweep; pulsed and steady-state reported separately; wall clock decomposed into model evaluation, VMCON overhead and I/O | A5 ✓ | QUEUED |
 | **A7** | **repo-readme** — write the repository README for the flattened fork: what this is, the base-commit rationale, the relationship to `functional_PROCESS` and `PROCESS_code_analysis`, and where to start. Add staleness headers to the superseded documents (I-3) | — | QUEUED — awaiting user prompt |
 | **A8** | **plan-relocation** — move `MDA_PARTITION_EXPERIMENT.md` into `docs/plans/` per the plans convention, and fold the corrected speedup mechanism (feed-forward nodes drop from `S_global ×` to `1 ×`, so `|all|` shrinks as well as the sweep counts) into §3.2 | A1 ✓ (the running agent holds the current path) | QUEUED |
+| **A9** | **subdriver-count** *(PROPOSED)* — Stage L0 of [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md): confirm each nested root-find is on a `run()` path **by invocation counting, not by reading** (I-4); time them as a fraction of wall clock; record non-convergence. Read-only, no refactor. Its gate decides whether the runtime claim survives | A1 ✓ | **BLOCKED** on the D5 ruling (open question 1) |
+| **A10** | **subdriver-extract** *(PROPOSED)* — Stage L1: extract each residual into a named function behind an env switch, inner solve remaining the default. Gate: switch unset ⇒ bit-identical | A9 ✓ | **BLOCKED** on the D5 ruling |
+| **A11** | **subdriver-lift-one** *(PROPOSED)* — Stage L2: lift the loosest-tolerance, highest-count residual. Primary result is Jacobian accuracy against a bounded reference; runtime secondary and may regress | A10 ✓ | **BLOCKED** |
+| **A12** | **subdriver-failure-policy** *(PROPOSED)* — Stage L4, independent of the lift: resolve whether `disp=False` at `pfcoil.py:4909` is deliberate, given the identical call at `superconducting.py:1267` uses `disp=True`. Report as a PROCESS finding | — | **PROPOSED** — runnable without the D5 ruling |
 
 ### User-facing standing items (not tasks)
 
@@ -109,6 +113,12 @@ Open issues only.
 
 ## Known open questions (parked, not blocking)
 
+0. **Does D5's model freeze permit lifting a subdriver residual?** **BLOCKING** for A9–A11.
+   Lifting requires edits under `process/models/` to expose residuals. Narrow reading: out of
+   scope. Refined reading: the residual *expressions* are frozen while the *method of driving
+   them to zero* is architecture, and is exactly this project's independent variable. A
+   switch-gated extraction keeps the frozen path byte-identical either way. Needs a recorded
+   `D9`. See [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md) §3.4.
 1. **Which module is the laggard?** Everything in the speedup argument turns on it. A2's
    central measurement.
 2. Post-lift, does `Pulse` (row 39) join a module or remain a standalone feed-forward node?
@@ -124,3 +134,4 @@ Open issues only.
 | Date | Entry |
 |---|---|
 | 2026-08-31 | Queue opened. Repository flattened into the `wrutten/PROCESS` fork (D1); base commit fixed at `c0ae5b28` (D2); `710a75c9` evidence discarded (D4). Experiment plan written and revised after the DSM module decomposition (D8) and the withdrawal of the `b_plasma_vertical_required` finding (I-4). A1 (stage0-rebaseline) dispatched. |
+| 2026-08-31 | Subdriver-lift experiment planned ([`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md)); A9–A12 proposed, A9–A11 blocked on a D5 ruling. Superseded IDF plan moved to `reports/deprecated/`, architecture evaluation to `reports/`. **A1 (stage0-rebaseline) was dispatched before this protocol existed** — its original brief said to commit to `architecture_surgery` and to write its report to `idf_probe/STAGE0.md`; it was corrected in flight to branch `A1-stage0-rebaseline` and to report at `reports/A1_stage0_rebaseline.md`, and given the hard rules (sandbox never overridden, no sibling-clone writes, no `git add -A`). |
