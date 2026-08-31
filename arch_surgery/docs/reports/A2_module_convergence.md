@@ -483,3 +483,83 @@ rule; `runs/a2/_a2_report.json` holds every number quoted above.
 | Date | Entry |
 |---|---|
 | 2026-08-31 | Report written. Instrument (`PROCESS_IDF_PROBE=modules`), A2 harness and T6 fixes committed as `dc6ba4d2`. Gate N PASS 4/4; **Stage-1 gate STOP**. Findings: no module is the laggard and M1 is joint-last in 82 % of the largest scenario's loops; `k = 1` (`times.t_plant_pulse_burn`), with two structurally-present but dynamically-dead back edges recorded; open question 1b resolved *for* H2 (`st_regression` has `k = 0` and the most independent modules); plan §2.3's `pfcoil.py:2727` citation withdrawn as a third instance of trap T1; §2.3a and open question 2 confirmed at runtime; I-8's CPU-time diagnostic shown not to discriminate because the runs are CPU-bound. |
+
+---
+
+## Orchestrator's critical assessment
+
+**Accepted, and the Stage-1 gate is upheld: the MDA partition experiment stops here.** Merged
+`0c0466c5`. This is the outcome the plan was written to make possible, and reaching it in one
+task rather than after building a partition is the point of gating.
+
+### What this task did well
+
+It **separated the two mechanisms the plan bundled together**. §3.2 warned that independence of
+the modules does not imply the partition is faster, and asked for the feed-forward term to be
+credited separately. A2 did exactly that, and the answer is decisive: the hoist is 1.7–8.2 %, the
+partition's own contribution is 3.8–7.2 % on the two large pulsed tokamaks. Had those been
+reported as one number — 4.8–23.2 % — the study would plausibly have continued on a saving that
+belongs almost entirely to a change the partition does not require.
+
+**It resolved open question 1b in the direction I did not expect, and said so.** A1's 39.7 %
+looked like a warning against H2. A2 shows `st_regression` has **zero** live cross-module back
+edges and is the most independent of the four scenarios. The sweep-count signal was not
+diagnostic — which vindicates the plan's own §3.3 caution that sweep counts may be measuring the
+exit criterion rather than the coupling, and is a useful reminder that a suggestive aggregate is
+not evidence of a mechanism.
+
+**It reported the finding that undercuts its own remaining upside.** The loop exits with M2 still
+changing in 24 % of `large_tokamak_nof`'s calls. Per-module solvers would converge state the
+global loop currently leaves moving — *more* work, not less. Volunteering the fact that the
+pessimistic column goes negative, rather than quoting the optimistic one, is the behaviour the
+protocol asks for.
+
+### Where I push back
+
+1. **"No module is the laggard" is a stronger claim than the data licenses, though the gate does
+   not depend on it.** `S₁ ≈ S₂ ≈ S₃ ≈ S_global` is measured under the *current* schedule, where
+   every module sees every other module's most recent state each sweep. That is exactly the
+   condition under which per-module counts would be expected to track each other — the plan says
+   as much in §3.2's second-order caveat. The measurement establishes that **no module is
+   *conspicuously* slower**, which is enough to fail the gate, but it is not the same as showing
+   the modules would converge at similar rates in isolation. The distinction matters only if
+   someone later revives the partition; the gate outcome stands either way.
+
+2. **The cost-weighted and node-count weightings agreeing is reassuring but not independent.**
+   Both are computed from the same evaluation counts; they differ only in the weight vector. Two
+   weightings of one measurement agreeing tells you the result is insensitive to weighting, not
+   that it is robust to a different measurement.
+
+3. **The I-8 result deserves more alarm than it got.** CPU time tracking wall clock to two decimal
+   places while identical work varies by up to 35 % in CPU-seconds is not a contention signature
+   at all — it says the *same instructions* are taking materially more CPU time run to run. That
+   points at frequency scaling, cache or memory-bandwidth effects, or the WSL2 layer, not at
+   scheduling. My earlier reading of I-8 as "probably contention" is not supported by this. It is
+   filed as **I-10** and A18 should not assume the cause is known.
+
+### My own error, recorded
+
+The plan's §2.3 cited `pfcoil.py:2727` as a reader of `t_plant_pulse_burn` inside the MDA. It is
+inside `PFCoil.outvolt()`, reached only from `output()` — **the third instance of trap T1, and it
+was mine, in the document warning about T1.** A2 caught it and withdrew it. The live edge is
+`Pulse → physics` alone, which makes the coupling structure simpler than the plan claimed, not
+weaker: H2 and `k = 1` survive.
+
+The related discovery that **ten models call their own `run()` from `output()`** is the deeper
+version of the same trap and is now T7. It means instrumenting `run()` is insufficient on its own,
+which invalidated two phantom edges before A2 closed the sweep at the end of `_call_models_once`.
+
+### What follows
+
+- **A4 (burn-time-lift) and A5 (module-solvers) are not justified as performance work.** They are
+  withdrawn from the live queue, not deferred — the measurement that would have supported them has
+  been taken and does not.
+- **A13 (feed-forward hoist) is now the only intervention with a positive expected return** —
+  4.6–8.2 % at `k = 0`, with no change to the optimiser's problem and no dimension penalty. It was
+  deferred at the user's instruction before this evidence existed. **Returned to the user as a
+  decision, not revived unilaterally.**
+- **A3 (build-reorder)** remains worth running as an integrity check on the dependency graph, since
+  it predicts a bit-identical result.
+- The architectural critique is unaffected and arguably strengthened: the loop exits before its
+  state converges, ten models call `run()` from `output()`, and a hand-ordered sequence leaves
+  6 % of work in nodes that feed nothing back.
