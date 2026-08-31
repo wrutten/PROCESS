@@ -418,3 +418,78 @@ queue, not in a task report.
 | Date | Entry |
 |---|---|
 | 2026-08-31 | Probe written (`process/core/_idf_probe.py` + hooks in `caller.py`, `solver/evaluators.py`, `solver/solver_handler.py`). `idf_probe/metrics.py` and `compare.py` rewritten for `c0ae5b28`; `run_one.py` rewritten; `run_stage0.py` added. `idf_probe/README.md` rewritten. I-1 worked around with `PYTHONPATH` and proved. Gates (a) and (b) PASS on all runnable scenarios; gate (c) FAILS on `st_regression` because the archived input file predates the base commit. Diagnostic arm with the base commit's own `st_regression` input passes all three gates. Report written. |
+
+---
+
+## 10. Orchestrator's critical assessment
+
+**Accepted as a Stage-0 result. Not merged — gate (c) failed, and protocol §6 freezes the task
+until the fix lands on this branch.** The fix needs a user ruling (see below), so A1 stays open.
+
+### What was done better than asked
+
+Gate (a) was specified as "probe off versus probe on". The report compared **three** arms
+including a `pristine` `git archive` of `c0ae5b28` that has never contained the probe, on **hex
+float literals**, and then checked every line of a ~16,000-line MFILE. That is the correct
+reading of "byte-identical to upstream" and it closes a hole the brief left open. Cross-checking
+the probe's sweep counter against PROCESS's own `n_model_calls` is the same instinct.
+
+**Keeping gate (c) at FAIL while holding a diagnostic arm that passes is the single most
+important thing in this report.** The temptation to quietly adopt the working input and call the
+gate green is exactly what protocol §6 exists to prevent.
+
+Refusing to run `pip install -e` was correct on both counts — it writes outside the sandbox, and
+it would have repointed a sibling clone's environment.
+
+### Four things I would push on
+
+1. **Wall clock is not yet a measurable quantity here, and every downstream headline depends on
+   it.** Two runs that are bit-identical in results differ by up to **7.9 %** in wall time. The
+   partition experiment's Stage-1 gate is "predicted saving > 25 %" and its stop rule is
+   "< 10 %" — both inside or near that noise band at n = 2. **No repetition count or confidence
+   interval is specified anywhere in the plans.** This is a gap A1 surfaced and nobody has
+   costed. Filed as **I-8**; A2 must fix the protocol before it reports any timing.
+
+2. **Finding 4's "model state carries memory across a `call_models` boundary" admits a duller
+   explanation.** `fcnvmc2`'s trailing call runs immediately after `2n` perturbations have left
+   the state at a perturbed point, so it simply starts further from the fixed point — a worse
+   initial guess, not pathological path dependence. The two readings share a mechanism but differ
+   in consequence: benign warm-start sensitivity still makes **sweep counts path-dependent**,
+   which matters for cost prediction, while genuine path dependence in *results* would undermine
+   the idempotence premise outright. The superseded study measured result path-independence
+   exactly, which favours the duller reading. A2 should test both rather than adopt the dramatic
+   one.
+
+3. **Finding 2 sharpens E2 (converge-y) in a way the report does not draw out.** If 94–96 % of
+   sweeps are gradient perturbations, then a change acting inside every sweep is multiplied by
+   `2n` — good for E1 and E2. But the report does **not** measure what `objective_function` and
+   `constraint_eqns` cost relative to `_call_models_once`, and E1's hoist of the objective and
+   constraint evaluation out of the loop saves exactly that. **E1's saving is therefore still
+   unquantified**; A13 must measure it before claiming it. E2's case rests on gradient quality
+   regardless, which is unaffected.
+
+4. **Losing `st_regression` costs more than one data point.** It is the **only** scenario with
+   `i_pulsed_plant = 0`, and the MDA partition plan (§2.3) uses precisely that to test whether
+   cross-module coupling exists in the *absence* of the burn-time edge — the cheapest test of H2
+   in the whole design. Without it, H2 loses its free control. This raises the stakes on the
+   scenario-set ruling well above "one of four scenarios is broken".
+
+### Registry finding — elevated
+
+§8's result invalidates the queue's reserved-ranges table as written.
+`N_ITERATION_VARIABLES_MAX = 177` **with 177 taken**: there is no free iteration-variable number.
+Every experiment that lifts anything — A4 (burn-time-lift), A9–A11 (subdriver lift) — needs the
+cap raised first, or a retired gap reused, which would silently reinterpret existing `IN.DAT`
+files. Filed as **I-7**. The cap lives in `numerics.py`, outside `process/models/`, so raising it
+is D5-safe, but it is a shared change that must land once rather than per branch.
+
+### Process failure, mine not the agent's
+
+The two admin commits `787481a3` and `ac485237` landed on `A1-stage0-rebaseline` because I
+committed into a **shared working tree** while the agent was switching branches. Repaired by
+fast-forwarding `architecture_surgery` onto them — the two commits sat contiguously at the base
+of A1's stack, so no history was rewritten and A1 now descends correctly.
+
+The root cause is a protocol defect: `PROCESS_code_analysis` runs each task in an **isolated
+worktree**, and I carried across "its own branch" without the worktree. One tree, two actors,
+`git checkout` under each other's feet. Filed as **I-6**, with the protocol amended.
