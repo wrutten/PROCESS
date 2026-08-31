@@ -356,7 +356,64 @@ Recorded, not investigated — Stage 1 (A2, module-convergence) owns this ground
 
 ---
 
-## 8. Change log
+## 8. Registry state at `c0ae5b28`, for number-block reservation
+
+The queue reserves ranges of iteration-variable and constraint numbers per experiment so
+that two branches cannot allocate the same number and silently misread each other's
+`IN.DAT` files, and it asks this task — the first to read both registries at the base
+commit — to report the concrete first-free numbers. Here they are.
+
+**Constraint equations** — registered by `@ConstraintManager.register_constraint(<n>, …)` in
+`process/core/solver/constraints.py`:
+
+| | |
+|---|---|
+| Registered | **82** equations |
+| Range used | 1 – 92 |
+| Unused numbers inside that range | 10, 38, 47, 49, 55, 57, 58, 69, 70, 71 (retired) |
+| **First free number above the range** | **93** |
+| Hard cap | `N_CONSTRAINT_EQUATIONS_MAX = 500` (the size of `numerics.icc`) |
+| Headroom | 93 – 500, i.e. **408 numbers** |
+
+There is one thing to do before number 93 is usable: `numerics.lablcc`, the list of
+constraint descriptions, has exactly **92** entries, so it must be extended in step. It
+carries a `TODO` warning that its comments are parsed by tooling, so extend it, do not
+restructure it.
+
+**Iteration variables** — keys of `ITERATION_VARIABLES` in
+`process/core/solver/iteration_variables.py`:
+
+| | |
+|---|---|
+| Registered | **83** variables |
+| Range used | 1 – 177 |
+| Unused numbers inside that range | **94** of them, first few: 8, 9, 14, 15, 21, 22, 24 – 28, 30, 32 – 36, … |
+| **First free number above the range** | **none** |
+| Hard cap | `N_ITERATION_VARIABLES_MAX = 177` — and it is the size of *both* `numerics.ixc` and `numerics.lablxc` |
+| Headroom above the cap | **zero** |
+
+**This is a constraint on the plan, and it should be settled before A4 (burn-time-lift) or
+A9–A11 (subdriver lift) start.** Number 177 is taken
+(`f_a_tf_turn_cable_space_extra_void`), and the cap equals it exactly. Adding an iteration
+variable at `c0ae5b28` therefore requires one of:
+
+1. **raise `N_ITERATION_VARIABLES_MAX`** to 178 or beyond, which resizes `ixc` and `lablxc`
+   — a one-line change in `process/data_structure/numerics.py`, outside `process/models/`,
+   so it does not breach the model freeze (D5); or
+2. **reuse a retired number** from the 94 gaps. Cheaper, and *worse*: an existing `IN.DAT`
+   naming a retired `ixc` would silently be reinterpreted as the new variable rather than
+   rejected. I would not do this.
+
+Option 1 is the safe one, and because the two lift experiments both need at least one new
+iteration variable, whoever raises the cap first should raise it far enough for both blocks
+rather than by one.
+
+I have **not** allocated any block. That is the orchestrator's call, and it belongs in the
+queue, not in a task report.
+
+---
+
+## 9. Change log
 
 | Date | Entry |
 |---|---|
