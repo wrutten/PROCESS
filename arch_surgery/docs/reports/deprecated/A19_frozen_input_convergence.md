@@ -637,3 +637,70 @@ records.
 | Date | Entry |
 |---|---|
 | 2026-08-31 | Report written. Instrument (`PROCESS_IDF_PROBE=frozen`), driver and analysis committed as `7fd6b3ae`. **Gate N19 PASS 4/4** (0 differing MFILE lines, 0 restore mismatches in 2 447 replays); **method control exact** (7 058/7 058); **validation control passes in its corrected form** — `S₁_alone` equals coupled `S₁` on 569/569 and 8/8 loops of the two `k = 0`-like scenarios, and equals the coupled-with-coupler-pinned `S₁` on 100 % of loops in all four. Findings: **`S₂` is invariant** under frozen inputs in all 2 447 loops, refuting the "M2 chases a moving target" and "M1 gates everything" readings; `S₁`'s fall is entirely the `k = 1` lift; `S₃` falls for both reasons. **Gate S1 recomputed: partition contribution 11.3–19.5 % on three of four scenarios — the middle band, nothing at 25 %**; netted for the lift's dimension penalty, 6.6–14.5 % on the two large pulsed tokamaks. New: the laggard moves from M1 to **M2** under the partition; A2's optimistic censoring bound shown never to be attained; the lift shown to buy nothing without the partition; A2's measured-cost feed-forward weight shown not to reproduce (I-10). |
+
+---
+
+## Orchestrator's critical assessment
+
+**Accepted. The verdict is the middle band, and I am not reviving A4/A5 on it — that is the
+user's call (open question 1d).** Merged `026b2e3a`.
+
+### Two errors of mine this task exposed
+
+**The brief's premise was wrong.** I wrote that "M1 has no live back edge from M2 or M3", which
+omits `Pulse` — the `k = 1` coupler itself, which feeds M1. The validation control was designed
+around a false premise and would have looked like a failure. Diagnosing it rather than reporting a
+broken control, and then proving the diagnosis four ways (`k = 0` scenarios matching on 569/569
+and 8/8 loops, burn-time-pinned sequences matching on 100 % of loops in all four, a field-level
+trace isolating the burn-time family, and a whole-sequence replay reproducing coupled `Sᵢ` on
+7 058/7 058 pairs), is better work than the brief asked for.
+
+**And my directional argument was refuted.** I claimed M2 was "chasing a moving target" and so
+`S₂` would be biased high. `S₂` with M1 solved to convergence first is **identical, per
+`call_models`, in all 2 447 loops of all four scenarios.** Freezing M1 moves `S₂` in zero loops.
+The user's sharper form — M1 gating everything downstream — is refuted by the same measurement.
+
+**The estimate was nonetheless biased against the partition, by a mechanism neither of us named:**
+the lift's removal of the `Pulse → M1` edge lowers `S₁`. So the sensitivity analysis reached a
+correct conclusion through incorrect reasoning. That is worth recording as a caution rather than a
+success: a mechanism argument that is not measured can be wrong and still point the right way, and
+if it had pointed the wrong way we would have closed the question on it.
+
+### Where I push back, or add
+
+1. **"Middle band" understates how much the frame has changed.** A2's position was "clearly not
+   worth building". A19's is **"cannot be told without building it"** — because netting the
+   lift's 4.8–5.0 % gradient penalty brings the two large pulsed tokamaks to 6.6–14.5 %, and the
+   remaining uncertainty is now dominated by **H5**, which the plan calls the likeliest failure and
+   which no replay can measure. Those are different situations and the queue should say so.
+
+2. **Retire the measured-cost weighting, do not merely deprioritise it.** A feed-forward weight
+   moving 6.4 % → 4.4 % on identical code is I-10 reaching the gate arithmetic. A weighting whose
+   instability is comparable to the effects it is used to resolve is not a second opinion, it is
+   noise with a decimal point. Node counts are exact; where a conclusion depends on a weight, it
+   should use them. **This is a stronger conclusion than the report draws, and it applies
+   retroactively to A2's measured-cost column.**
+
+3. **A2's optimistic censoring column must be struck, not just left unused.** A19 shows the true
+   `S₂` exceeds `S_global` on *every* censored loop, so that column was never attainable. A2's
+   report lists it with a reversal path; the reversal path must not be taken, and the report now
+   says so.
+
+4. **The laggard moving to M2 is the finding that matters most for any revival.** §3.2's condition
+   was that a *small* module must drive the loop. M2 is 42 % of measured cost. The condition was
+   unmet under A2 (M1, 38 %) and is still unmet under A19 (M2, 42 %) — the identity of the laggard
+   changed, the structural obstacle did not.
+
+5. **The lift is not separable, and this is the sharpest practical contrast in the study.** `max Sᵢ`
+   is unchanged to four decimals when the burn-time variable is pinned: the lift buys nothing on
+   its own. The feed-forward hoist buys 4.6–8.2 % on its own, at `k = 0`, with no dimension
+   penalty. If anything survives this experiment as a change worth making, it is the hoist.
+
+### Process
+
+The report flagged that `MASTER_TODO.md` held a duplicated, interleaved block. That was **my**
+corruption, introduced at `bb5d440c` by a string-splice that matched a numbered item in the
+protocol list instead of the open-questions list; later edits then landed in whichever copy the
+match hit first. Repaired at `e8625136`, and again at `23e9b393` after this merge reintroduced it
+from the branch. Adding the row to both copies rather than restructuring someone else's file was
+the right call.
