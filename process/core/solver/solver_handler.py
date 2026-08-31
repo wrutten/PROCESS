@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 from tabulate import tabulate
 
-from process.core import constants, process_output
+from process.core import _idf_probe, constants, process_output
 from process.core.solver.evaluators import Evaluators
 from process.core.solver.iteration_variables import (
     load_iteration_variables,
@@ -79,9 +79,13 @@ class SolverHandler:
         # If VMCON optimisation has failed then try altering value of epsfcn
         if self.solver_name == "vmcon":
             if ifail != SolverOutputCondition.CONVERGED:
+                if _idf_probe.ENABLED:
+                    _idf_probe.record_retry("epsfcn_x10", ifail)
                 with epsfcn_context(self.data.numerics, 10):
                     ifail = self.solver.solve()
             if ifail != SolverOutputCondition.CONVERGED:
+                if _idf_probe.ENABLED:
+                    _idf_probe.record_retry("epsfcn_x0.1", ifail)
                 with epsfcn_context(self.data.numerics, 0.1):
                     ifail = self.solver.solve()
 
@@ -98,6 +102,8 @@ class SolverHandler:
                     "Rerunning VMCON with a new initial estimate of the second "
                     "derivative matrix."
                 )
+                if _idf_probe.ENABLED:
+                    _idf_probe.record_retry("hessian_reset_b2", ifail)
                 self.solver.set_b(2.0)
                 ifail = self.solver.solve()
 

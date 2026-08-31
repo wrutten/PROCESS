@@ -5,6 +5,7 @@ import math
 
 import numpy as np
 
+from process.core import _idf_probe
 from process.core.caller import Caller
 from process.core.model import DataStructure
 
@@ -57,6 +58,9 @@ class Evaluators:
             tuple containing: objfn objective function, conf(m) constraint
             functions
         """
+        if _idf_probe.ENABLED:
+            _idf_probe.set_phase("fn")
+
         # Output array for constraint functions
         conf = np.zeros(m, dtype=np.float64, order="F")
 
@@ -111,6 +115,9 @@ class Evaluators:
             cnorm (numpy.array (lcnorm, m)) constraint gradients, i.e. cnorm[i, j] is
             the derivative of constraint j w.r.t. variable i
         """
+        if _idf_probe.ENABLED:
+            _idf_probe.set_phase("grad")
+
         xfor = np.zeros(n, dtype=np.float64, order="F")
         xbac = np.zeros(n, dtype=np.float64, order="F")
         cfor = np.zeros(m, dtype=np.float64, order="F")
@@ -147,6 +154,9 @@ class Evaluators:
         # variable in the solution vector is inconsistent with its value
         # shown elsewhere in the output file, which is a factor (1-epsfcn)
         # smaller (i.e. its xbac value above).
+        if _idf_probe.ENABLED:
+            _idf_probe.set_phase("grad_reconcile")
+
         self.caller.call_models(xv, m)
 
         return fgrd, cnorm

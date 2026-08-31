@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from tabulate import tabulate
 
-from process.core import constants
+from process.core import _idf_probe, constants
 from process.core import process_output as po
 from process.core.io.mfile import MFile
 from process.core.process_output import OutputFileManager, ovarre
@@ -93,6 +93,9 @@ class Caller:
             if values are non-idempotent after successive
             evaluations
         """
+        if _idf_probe.ENABLED:
+            _idf_probe.call_models_begin()
+
         objf_prev = None
         conf_prev = None
 
@@ -119,12 +122,17 @@ class Caller:
                     "Model evaluations idempotent, returning objective "
                     "function and constraints"
                 )
+                if _idf_probe.ENABLED:
+                    _idf_probe.call_models_end()
                 return objf, conf
 
             # Not idempotent: still changing, so evaluate models again
             logger.debug("Model evaluations not idempotent: evaluating again")
             objf_prev = objf
             conf_prev = conf
+
+        if _idf_probe.ENABLED:
+            _idf_probe.call_models_end(converged=False)
 
         raise RuntimeError(
             "After 10 model evaluations at the current optimisation parameter "
@@ -258,6 +266,9 @@ class Caller:
         xc : np.array
             Array of optimisation parameters
         """
+        if _idf_probe.ENABLED:
+            _idf_probe.sweep()
+
         # Number of active iteration variables
         nvars = len(xc)
 
