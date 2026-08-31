@@ -59,3 +59,18 @@ anything; creating a *worktree* does.
 **How to avoid it:** gate on sweep and model-evaluation counts, which are exact and reproduce
 bit-for-bit. Interleave arms and pair the differences; pin thread counts; record CPU time as a
 contention diagnostic; run when the machine is otherwise idle.
+
+## T6 — A worktree does not redirect the editable install
+
+The `PROCESS_surgery_env` editable install points at the **main checkout**,
+`/home/wrutten/projects/PROCESS_surgery`. A task working in a `git worktree` gets the worktree's
+`process/` only when cwd happens to be the worktree root — and measurement subprocesses run in
+their own working directories, so they import the **main tree** instead. The task would silently
+measure code it is not editing.
+
+Worse, A1's guard does not catch it: it asserts `process.__file__` is under `PROCESS_surgery`,
+which is true of the main tree even when running from a worktree.
+
+**How to avoid it:** in a worktree, set `PYTHONPATH` to the worktree root for every measurement
+subprocess, and tighten the assertion to the **exact tree** the task is editing, not a prefix.
+Verify from a directory that is neither tree.
