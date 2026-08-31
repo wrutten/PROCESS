@@ -142,14 +142,42 @@ robustness are new.
 
 ### C7 — Timing protocol (closes I-8)
 
-**A1 measured two bit-identical runs differing by up to 7.9 % in wall clock, while the partition
-plan gates on 25 % and stops below 10 %.** Single-run timings are not measurements.
+**A1 measured a worst within-arm wall-clock spread of 19.6 % at `n = 5`, while the partition plan
+gates on 25 % and stops below 10 %.** Single-run timings are not measurements, and at that spread
+a 10 % effect is not resolvable at all.
 
-The harness must: take `n ≥ 5` repetitions per (scenario, arm); report median and a
-bootstrap interval, never a bare mean; discard the first run in a fresh environment (numba JIT);
-and refuse to emit a timing comparison whose intervals overlap — reporting "indistinguishable"
-instead. Model-evaluation and sweep counts stay the primary mechanism diagnostic precisely
-because they are exact.
+**Most of this is probably contention, not the code.** The machine has 16 cores but **7 GB of
+RAM**, no thread-pinning variables are set (so every process defaults OpenBLAS to all 16 cores),
+and other sessions run concurrently. Two mechanisms fit: BLAS oversubscription when processes
+overlap, and page-cache eviction under memory pressure perturbing numba cache loads. Supporting
+evidence: A1's 2 SE band on the *difference* between arms was 3–9 % against a 19.6 % marginal
+spread, which is the signature of **common-mode** noise.
+
+The protocol therefore attacks the difference, not the absolute:
+
+1. **Interleave the arms and take paired differences.** Run `A,B,A,B,…` rather than all-A then
+   all-B, and difference within each pair. Blocked ordering lets a slow period bias one arm
+   entirely; interleaving turns drift into common-mode noise that cancels. **This is the single
+   highest-value change** — the gates care about the ratio between arms, not absolute time.
+2. **Pin threads, identically across arms**: `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`,
+   `MKL_NUM_THREADS=1`, `NUMBA_NUM_THREADS=1`. The workload is serial per process, so this costs
+   little and removes oversubscription variance.
+3. **Record CPU time alongside wall clock** (`resource.getrusage`). This is a **diagnostic, not
+   just a mitigation**: process CPU time is far less sensitive to other processes' scheduling, so
+   if the CPU-time spread is much narrower than the wall-clock spread, contention is confirmed as
+   the cause. If both are equally wide, the variance is in the code and the machine is exonerated.
+   **Run this diagnostic before investing in the rest of the protocol** — it decides whether the
+   problem is worth solving this way.
+4. **Record load average and available memory in every `metrics.json`**, so a contaminated run can
+   be flagged or excluded after the fact rather than silently averaged in.
+5. Choose `n` from a target minimum detectable effect, not by habit; variance is not uniform
+   across scenarios, so a per-scenario `n` is cheaper than a uniform one. Discard the first run in
+   a fresh environment (numba JIT).
+6. Refuse to emit a timing comparison whose intervals overlap — report "indistinguishable".
+
+Sweep and model-evaluation counts stay the primary mechanism diagnostic: they are exact and
+reproduce bit-for-bit, so they carry the mechanism while wall clock carries the headline with its
+interval attached.
 
 ### C8 — DSM node map
 
