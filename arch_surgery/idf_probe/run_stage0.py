@@ -78,20 +78,16 @@ ARMS = build_arms(DEFAULT_REPS)
 def _env(tree: Path) -> dict:
     """Environment for one run.
 
-    The interpreter is expected to be an environment whose editable install
-    already points at this tree (`PROCESS_surgery_env`), so nothing is
-    injected for the surgery arms -- runs resolve `process` exactly the way
-    every later stage will.  `PYTHONPATH` is set *only* for a tree that is not
-    the installed one, which in practice is the `pristine` arm's throwaway
-    checkout of the base commit: there is no other way to import a tree that
-    is not installed.  Either way `run_one.py` asserts which tree it actually
-    imported (`--expect-tree`) and aborts before doing any work if it is
-    wrong -- a standing rule, not a workaround.
+    `PYTHONPATH` is set to the tree under test for **every** run, without
+    exception.  Trap T6: `PROCESS_surgery_env`'s editable install points at the
+    *main* checkout, not at whichever `git worktree` a task is running in, and
+    a measurement subprocess has its own working directory -- so without an
+    explicit `PYTHONPATH` it silently imports the main checkout and measures
+    code nobody is editing.  `run_one.py` additionally asserts the *exact*
+    tree it imported (`--expect-tree`), not merely a path prefix.
     """
     env = dict(os.environ)
-    env.pop("PYTHONPATH", None)
-    if tree != SURGERY_TREE:
-        env["PYTHONPATH"] = str(tree)
+    env["PYTHONPATH"] = str(tree)
     env["MPLCONFIGDIR"] = str(RUNS / "_mplconfig")
     env.pop("PROCESS_IDF_PROBE", None)
     return env

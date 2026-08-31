@@ -9,7 +9,7 @@ A model attribute written by one model and read by another looks like a dependen
 one if the read happens in an **`output()` method** — those run once after the solve, outside the
 MDA and outside the finite-difference stencil.
 
-**It has bitten twice.**
+**It has bitten three times.**
 
 - `physics.b_plasma_vertical_required` is written by `pfcoil.py` and read in
   `PlasmaFields.output()`. It looked like a Coils→Physics feedback edge closing a cross-module
@@ -20,9 +20,22 @@ MDA and outside the finite-difference stencil.
   codebase. Its only caller chain ends at `output_confinement_comparison`, a reporting method. It
   never enters the stencil.
 
+- `pfcoil.py:2727` reads `times.t_plant_pulse_burn` and was cited in the MDA partition plan's
+  §2.3 as the M2-side read that made the burn-time edge symmetric — half the evidence for the
+  central hypothesis. It is inside `PFCoil.outvolt()`, called only from `PFCoil.output()`. A2's
+  runtime census sees no read of that field by `pfcoil` inside the MDA.
+
 **How to avoid it:** confirm a candidate lies on a `run()` path **by counting invocations during an
 optimisation run**, not by reading call graphs. Any instrument that greps attribute access must
 exclude `output()` paths explicitly.
+
+**And note the shape of the hazard, measured (A2, 2026-08-31): ten model objects call their own
+`run()` from inside their `output()` method** — `costs`, `availability`, `pulse`, `divertor`,
+`structure`, `ccfe_hcpb`, `power.acpow`, `vacuum`, `buildings`, `water_use` — three times each
+per run, during the final output idempotence check. So even an instrument that hooks `run()`
+rather than grepping names will record `output()`-path traffic unless it *closes the sweep* at
+the end of `Caller._call_models_once` and refuses anything entered afterwards. Before A2's
+instrument did that, it reported two back-edge fields that exist only on the output path.
 
 ## T2 — `= ` matches `==`
 

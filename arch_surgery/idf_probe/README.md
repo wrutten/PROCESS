@@ -50,8 +50,29 @@ It also records solver retries (`SolverHandler.run` has three retry branches), a
 records `nvar`, the constraint counts, `ifail`, `norm_objf`, the constraint residual norm and
 the final iteration variables.
 
-Stage 0 implements exactly one probe mode, `baseline`: **record, change nothing**. The
-control flow with the probe on is identical to the control flow with it off.
+Stage 0 implements one probe mode, `baseline`: **record, change nothing**. The control flow
+with the probe on is identical to the control flow with it off.
+
+Stage 1 (A2, module-convergence) adds a second mode, `modules`, in
+`process/core/_idf_probe_modules.py` — imported only when that mode is selected, so no other
+arm pays for its existence. It records everything `baseline` records and additionally:
+
+* which of the three candidate modules (M1 Physics, M2 Coils, M3 Plant) still has changing
+  state after each sweep, and which specific fields — giving `S_1`, `S_2`, `S_3` beside
+  `S_global`;
+* every read and every write of a data-structure field, attributed to the model node
+  executing at the time, so a dependency edge is established from observed traffic;
+* the wall-clock cost of each node, excluding the probe's own snapshot work, used as a
+  weighting for the Stage-1 gate arithmetic (never as a timing claim).
+
+`modules` mode is also a *record-only* mode: gate N in `analyse_a2.py` checks that it produces
+byte-identical MFILEs and identical sweep counts to `control` and `baseline`.
+
+**`run()` versus `output()` (trap T1).** Ten model objects call their own `run()` from their
+`output()` method. Those invocations happen after the solve, outside the MDA. The instrument
+closes the sweep at the end of `Caller._call_models_once` and refuses any node entered
+afterwards, so they cannot contribute a write, a read or an edge; the count of refused calls
+is reported in the summary as `output_path_calls_refused`.
 
 ---
 
@@ -62,8 +83,9 @@ at the base commit.
 
 | File | Change |
 |---|---|
-| `process/core/_idf_probe.py` | **new.** All probe state and logic. Reads `PROCESS_IDF_PROBE` once, at import. |
-| `process/core/caller.py` | 4 hooks: `call_models` entry, its converged return, its non-converged `raise`, and one in `_call_models_once`. Plus one import. |
+| `process/core/_idf_probe.py` | **new.** All probe state and logic. Reads `PROCESS_IDF_PROBE` once, at import. Imports `_idf_probe_modules` only in `modules` mode. |
+| `process/core/_idf_probe_modules.py` | **new (A2).** The Stage-1 module-attribution instrument. Never imported unless `PROCESS_IDF_PROBE=modules`. |
+| `process/core/caller.py` | 7 hooks: `call_models` entry, its converged return, its non-converged `raise`, one at the top of `_call_models_once` and one at its end, and a pair bracketing the objective/constraint evaluation. Plus one import. |
 | `process/core/solver/evaluators.py` | 3 hooks: phase marker at the top of `fcnvmc1`, at the top of `fcnvmc2`, and before `fcnvmc2`'s trailing consistency call. Plus one import. |
 | `process/core/solver/solver_handler.py` | 3 hooks, one at each retry branch in `SolverHandler.run`. Plus one import. |
 
@@ -98,10 +120,21 @@ Its editable install points at this tree, so `import process` resolves here from
 directory. Check it before a measurement session:
 
 ```bash
-cd /tmp && /home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python -c \
-  "import process, pathlib; p = pathlib.Path(process.__file__).resolve(); print(p); \
-   assert pathlib.Path('/home/wrutten/projects/PROCESS_surgery') in p.parents"
+cd /tmp && PYTHONPATH=<the tree under test> \
+  /home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python -c \
+  "import process, pathlib, os; p = pathlib.Path(process.__file__).resolve(); print(p); \
+   assert p.parent.parent == pathlib.Path(os.environ['PYTHONPATH']).resolve()"
 ```
+
+> **Trap T6 — the environment does not follow your worktree.** The editable install points at
+> the **main checkout** `/home/wrutten/projects/PROCESS_surgery`, not at whichever
+> `git worktree` a task branch lives in. `import process` resolves to a worktree only when the
+> current directory happens to be that worktree's root — and every measurement subprocess runs
+> in its own working directory, so without an explicit `PYTHONPATH` a task measures code it is
+> not editing. Set `PYTHONPATH=<tree>` for **every** subprocess (`run_a2.py` and `run_stage0.py`
+> now do, unconditionally), and assert the **exact** tree, not a path prefix: a prefix test
+> against `PROCESS_surgery` passes for the main checkout too, which is exactly the failure it
+> is supposed to catch.
 
 > **Do not use `PROCESS_env`.** Its editable install points at
 > `/home/wrutten/dev_libraries/PROCESS`, a different clone pinned at the superseded commit

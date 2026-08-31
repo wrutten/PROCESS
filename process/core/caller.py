@@ -103,8 +103,12 @@ class Caller:
         for _ in range(10):
             self._call_models_once(xc)
             # Evaluate objective function and constraints
+            if _idf_probe.ENABLED:
+                _idf_probe.objective_begin()
             objf = objective_function(self.data.numerics.i_figure_merit, self.data)
             conf, _, _, _, _ = constraints.constraint_eqns(m, -1, self.data)
+            if _idf_probe.ENABLED:
+                _idf_probe.objective_end()
 
             if objf_prev is None and conf_prev is None:
                 # First run: run again to check idempotence
@@ -267,7 +271,7 @@ class Caller:
             Array of optimisation parameters
         """
         if _idf_probe.ENABLED:
-            _idf_probe.sweep()
+            _idf_probe.sweep(self.models, self.data)
 
         # Number of active iteration variables
         nvars = len(xc)
@@ -406,6 +410,9 @@ class Caller:
         self.models.costs.run()
 
         # FISPACT and LOCA model (not used)- removed
+
+        if _idf_probe.ENABLED:
+            _idf_probe.sweep_end()
 
 
 def finalise(models, data, ifail: int, non_idempotent_msg: str | None = None):
