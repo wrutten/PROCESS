@@ -169,7 +169,8 @@ def validation_control(S):
     for a, b in (("S1_alone", "S1_coupled"), ("S1_alone", "S1_fullreplay"),
                  ("S1_alone", "S1_liftreplay"), ("S1_alone", "S1_pulse"),
                  ("S1_alone", "S1_build"), ("S2_frozen", "S2_liftreplay"),
-                 ("S3_frozen", "S3_liftreplay")):
+                 ("S3_frozen", "S3_liftreplay"), ("S2_frozen", "S2_fullreplay"),
+                 ("S3_frozen", "S3_fullreplay"), ("S1_liftreplay", "S1_fullreplay")):
         pairs = [(s.get(a), s.get(b)) for s in S if s.get(a) is not None and s.get(b) is not None]
         eq = sum(1 for x, y in pairs if x == y)
         out[f"{a} vs {b}"] = {
@@ -338,6 +339,12 @@ def main():
                 "S1_alone", "S1_pulse", "S1_build", "S2_frozen", "S3_frozen",
                 "S1_alone_noinject", "S2_frozen_noinject", "S3_frozen_noinject"]
         block["sweeps"] = {k: _stats([s.get(k) for s in S]) for k in keys}
+        # max over the three modules: what a per-module-state exit test would
+        # cost the *coupled* loop, with and without the k = 1 lift.
+        for tag, ks in (("max_fullreplay", ("S1_fullreplay", "S2_fullreplay", "S3_fullreplay")),
+                        ("max_liftreplay", ("S1_liftreplay", "S2_liftreplay", "S3_liftreplay")),
+                        ("max_frozen", ("S1_alone", "S2_frozen", "S3_frozen"))):
+            block["sweeps"][tag] = _stats([max(s[k] for k in ks) for s in S])
         block["sweeps_by_phase"] = {
             ph: {k: _stats([s.get(k) for s in S if s["phase"] == ph]) for k in keys}
             for ph in sorted({s["phase"] for s in S})
@@ -352,6 +359,8 @@ def main():
                     S, w, ("S1_alone", "S2_frozen", "S3_frozen"), censor)
                 gates[f"coupled_uncensored/{wname}/{censor}"] = gate(
                     S, w, ("S1_fullreplay", "S2_fullreplay", "S3_fullreplay"), censor)
+                gates[f"lift_only/{wname}/{censor}"] = gate(
+                    S, w, ("S1_liftreplay", "S2_liftreplay", "S3_liftreplay"), censor)
                 gates[f"a2_coupled/{wname}/{censor}"] = a2_gate_from_calls(
                     calls, w, censor)
         block["gates"] = gates
