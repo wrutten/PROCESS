@@ -369,9 +369,16 @@ peer of the optimizer rather than as its interior.
 >
 > The same arithmetic gives A1's "above floor" column directly: 37.8 %, 42.1 %, 39.7 %, 27.3 % of
 > sweeps across the four scenarios are the only ones a convergence-side change can act on *while
-> the floor stays at 2*. Removing the floor is therefore worth **up to 31 %** of MDA sweeps — and
-> since 94-96 % of sweeps are finite-difference gradient perturbations and the MDA is ~89 % of
-> runtime, that multiplies across essentially the whole solve.
+> the floor stays at 2*.
+>
+> **Correction, 2026-09-01, measured (A18).** An earlier revision of this addendum read "removing
+> the floor is therefore worth **up to 31 %** of MDA sweeps". That is an upper bound requiring one
+> sweep to be saved on *every* solve, and it was written in a way that invited it to be read as an
+> expectation. **Measured, it is worth 1.53 %, 1.55 %, 1.79 % and 10.7 %** across the four
+> scenarios. The floor is real — a correct fixed-point arm converges 4.7-30 % of design points in a
+> single sweep, which is structurally impossible under the current loop — but the saving is
+> realised only where the state is already converged on entry, and most solves need three or four
+> sweeps regardless. **Quote the measurement, not the bound.**
 >
 > **A second defect in the same predicate.** `caller.py:70` tests agreement with
 > `np.allclose(..., equal_nan=True)`, so **a state that has gone NaN in two consecutive sweeps is

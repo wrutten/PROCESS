@@ -85,8 +85,15 @@ objective and constraint values from two successive passes. Those quantities are
 the model state, so they do not exist when the loop is entered: the loop must run once purely to
 produce something to compare against, then again to compare. The first pass yields no information
 about whether anything has converged. A stopping test based on the model state itself has no such
-requirement, because the entering state is already available. **Predicted effect: up to one pass
-saved per solve, which is 630 of 2 027 passes — 31 %.**
+requirement, because the entering state is already available.
+
+**Predicted effect: at most one pass saved per solve.** If every solve saved one, that would be
+630 of 2 027 passes, or 31 % — but that figure is an **upper bound that requires the state to be
+already converged on entry every time**, and there is no reason to expect that. The saving is
+realised only on solves that would otherwise have stopped at the floor; on a solve needing four
+passes, removing the floor saves nothing. **The bound is therefore expected to be far from
+attained, and the quantity actually being predicted is the fraction of solves that converge
+immediately, which is not known in advance.**
 
 **H2 — The loop is stopping on the wrong quantity, and this is measurable.** The objective and
 constraints are *summaries* of the state. State that no constraint depends on sensitively can

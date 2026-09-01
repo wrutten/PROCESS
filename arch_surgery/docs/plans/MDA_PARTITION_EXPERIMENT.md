@@ -329,7 +329,7 @@ Peak RSS is **423 MB** (measured, same run), which closes the memory branch of I
 
 | Effect | Expected | Basis | Confidence |
 |---|---|---|---|
-| **Floor removal** (R -> A0) | **0-31 %** of sweeps | 630 of `large_tokamak_nof`'s 2 027 sweeps are the information-free second sweep. 31 % is the ceiling if the strict predicate cost nothing — it will cost something | direction certain, magnitude unknown |
+| ~~**Floor removal** (R -> A0)~~ **MEASURED (A18)** | **1.53 / 1.55 / 1.79 / 10.7 %** | The 0-31 % band was an upper bound needing a sweep saved on *every* solve; it is saved only where the state is already converged on entry (4.7-30 % of design points). The floor is real and an order of magnitude less valuable than claimed | **settled** |
 | **Strict predicate** (R -> A0) | **negative** — more sweeps | A19: `grad_reconcile` `S2 = 5.00` against `S_global = 3.93`, i.e. a module iterated to its own criterion needs more than the loop gives it. A2: state is still moving at exit in 24 % of calls | direction certain |
 | **Feed-forward hoist** (both arms) | **4.6-8.2 %** of node-evaluations | A2, node-count weighting. `k = 0`, no dimension penalty, separable | firm |
 | **Block vs flat** (A0 -> A1) | **negative to +19.5 %** | A19's gross contribution, *predicate-bound*; the tight inner tolerance biases low (§5.2) | weak |
