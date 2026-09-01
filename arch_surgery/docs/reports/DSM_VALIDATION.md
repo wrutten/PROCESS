@@ -67,7 +67,30 @@ Switch-by-switch comparison of the four experiment scenarios against the DSM's s
 | `i_blanket_type` | unset | unset | **1** | **1** | unset |
 | `i_tf_turn_type` | unset | unset | unset | **2** | unset |
 
-(14 further config switches are identical across all five decks, `istell` and `ife` among them.)
+(14 further switches from the population below are identical across all five decks, `istell` and
+`ife` among them.)
+
+> **The counts are population-dependent, and the population must be stated (corrected
+> 2026-09-01).** The `PROCESS_code_analysis` executor could not reproduce "12 / 5" under any
+> denominator built from `ProcessConfig`'s own field set — it gets all-fields **17 / 7**,
+> minus-derived **15 / 7**, set-in-both **8 / 4**. Both sides are right: **these are different
+> field populations, so it is a non-comparison rather than a correction**, and the fault is that
+> this entry first published a bare count.
+>
+> **Our population, stated so the number is reproducible:** 33 hand-selected switch names, grepped
+> directly from the decks, **not** `ProcessConfig`'s field set — it adds `itart`, `i_tf_sup`,
+> `i_blanket_type`, `i_tf_turn_type`, `i_plasma_ignited`, `i_rad_loss` (which the presets carry
+> only for the non-tokamak configs) and omits fields `ProcessConfig` derives rather than reads.
+> Method: strip `*` comments, match `^<name>\s*=\s*<value>`, treat **absent from the deck as a
+> distinct value**, and count a switch as differing if value-or-absence differs. That last choice
+> is why our counts run lower than the all-fields denominator: a switch absent from *both* decks
+> counts as agreeing here.
+>
+> **What survives every denominator, and is the only load-bearing claim:** `st_regression` diverges
+> from the DSM's source deck roughly **twice as far** as `low_aspect_ratio_DEMO`, on all four
+> denominators (17/7, 15/7, 8/4, 12/5). The verdict table below rests on the ordering and on
+> *which* switches differ — `i_pulsed_plant`, `itart`, `i_single_null`, the TF path — never on the
+> count itself. Quote the ratio, not the integer.
 
 **Verdict, per scenario:**
 

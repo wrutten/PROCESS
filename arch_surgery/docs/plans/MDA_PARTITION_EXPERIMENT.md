@@ -72,9 +72,12 @@ descends from `c0ae5b28` — the coordinate systems match.
 
 > **The DSM is configuration-specific (V6, 2026-09-01).** It resolves conditionals against the
 > analysis tool's `tokamak` preset, which is built from `examples/data/large_tokamak_IN.DAT`. That
-> deck matches `large_tokamak_nof` and `large_tokamak_eval` **exactly** on every switch the config
-> models, differs from `low_aspect_ratio_DEMO` in 5, and differs from `st_regression` in **12** —
-> including `i_pulsed_plant`, `itart`, `i_single_null` and the TF path. **The module decomposition
+> deck matches `large_tokamak_nof` and `large_tokamak_eval` **exactly**, and diverges from
+> `st_regression` roughly **twice as far** as from `low_aspect_ratio_DEMO` — on our 33-switch
+> population, 12 against 5; on the analysis tool's own field set, 17/7, 15/7 or 8/4 depending on
+> the denominator. **The ordering holds under every denominator; the integer does not travel, so
+> quote the ratio.** What matters is *which* switches differ: `i_pulsed_plant`, `itart`,
+> `i_single_null`, `i_plasma_current` and the TF path. **The module decomposition
 > below is therefore authoritative for the two large tokamaks, a near neighbour for the DEMO case,
 > and an extrapolation for `st_regression`.** Phase A's *predicate* does not depend on this — the
 > coupling set is instrumented at run time — but the **block arm's module boundaries do**. Full
