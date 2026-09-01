@@ -431,8 +431,11 @@ conditions cut it down, and the third is not bounded by anything measured so far
    (D14). Phase B's own comparison has to be run.
 2. **The lift costs a design variable.** These decks carry 20, 19, 14 and 2 `ixc` entries;
    the lift makes that 21, 20, — and 3. PROCESS takes central differences, so a gradient
-   evaluation costs `2n` MDA solves, and one more variable is **+5.0 %** on
-   `large_tokamak_nof` and **+5.3 %** on `low_aspect_ratio_DEMO`. Composing:
+   evaluation costs `2n` MDA solves, and one more variable is `1/n` more: **+5.0 %** on
+   `large_tokamak_nof` and **+5.3 %** on `low_aspect_ratio_DEMO`. *(Stated against the*
+   ***current*** *cost. A19's `4.8-5.0 %` is the same penalty against the* ***new*** *cost,
+   `1/(n+1)`. Both are correct; neither is meaningful without the denominator, which is the
+   T11 failure mode. Everything below uses the current-cost form.)* Composing:
    `1.050 x 0.708 = 0.743` and `1.053 x 0.704 = 0.741` — about **-26 %** on model
    evaluations, *if the optimiser's major-iteration count does not change*.
 3. **Nothing bounds whether it changes.** Adding a variable and a consistency constraint
