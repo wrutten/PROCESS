@@ -1,8 +1,23 @@
-> **Document status** — **CURRENT · task open, not merged.**
-> The task report for A13 (feedforward-hoist). The code it describes is commit **`dc267a56`** on
-> branch `A13-feedforward-hoist`, branched from **`4433bc67`** on `architecture_surgery`;
-> experiment base commit `c0ae5b28`. This report is committed on top of that code commit and
-> describes it; no `process/` change was made after it.
+> **Document status** — **ARCHIVED · FINDINGS CURRENT, WITH ONE CLAIM NARROWED**
+> The task report for A13 (feedforward-hoist), merged to `architecture_surgery` on 2026-09-01 at
+> experiment base commit `c0ae5b28`. **Its position in `deprecated/` records lifecycle, not
+> staleness** (trap T3): the three gate tables and the 6.56 / 6.76 / 6.64 / 2.63 % saving are
+> current evidence.
+>
+> **Orchestrator's narrowing of §6.** The sentence "three decks agree to three significant
+> figures" claims more than the arithmetic supports. Applying A2's cost model *on A13's own node
+> set and unit* computes the tail's share of model evaluations from **this run's own** sweep and
+> call counts — the same quantities the gate counted. The exact match is an **algebraic identity,
+> not an independent confirmation**: a prediction recomputed from the measurement it is being
+> compared against cannot disagree with it. What §6 does establish, and it is worth having, is
+> that **the whole apparent 4.6–8.2 % vs 6.6 % gap is accounted for by node set and unit** — A2's
+> band includes `Pulse` and weights by DSM rows — leaving **no unexplained residue**. That is a
+> reconciliation, and the report should be read as making that claim and not a stronger one. The
+> measured numbers stand exactly as reported.
+>
+> The predicate finding in §4 is the more important result and is not narrowed: the hoistable node
+> set **depends on the active figure of merit**, because `objectives.py` reads `costs.coe` (FOM 6)
+> and `costs.cdirt`/`costs.concost` (FOM 7).
 
 # A13 (feedforward-hoist) — running the tail once instead of every sweep
 
