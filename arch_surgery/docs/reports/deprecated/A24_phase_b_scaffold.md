@@ -1,8 +1,14 @@
-> **Document status** — **LIVE · CURRENT**
-> The task report for A24 (phase-b-scaffold), open at the time of writing. It describes branch
-> `A24-phase-b-scaffold`, off `architecture_surgery` at **`7a0f3f6e`** (experiment base commit
-> `c0ae5b28`), and its numbers are current evidence. It will be archived to `deprecated/` at
-> merge; position in that folder would record lifecycle, not staleness (trap T3).
+> **Document status** — **ARCHIVED · FINDINGS CURRENT**
+> The task report for A24 (phase-b-scaffold), merged to `architecture_surgery` on 2026-09-01 at
+> experiment base commit `c0ae5b28`. **Position in `deprecated/` records lifecycle, not staleness**
+> (trap T3). The orchestrator read the `pulse.py` and `subsolve.py` diffs line by line before
+> merging and confirms: the arithmetic `(abs(vs)/v) - t_ramp` is moved **verbatim** into
+> `burn_time_root`, `calculate_burn_time` keeps its negative-burn-time diagnostic, and `subsolve`'s
+> default path is a pure passthrough to `direct(*args)`. D5 and D11/D14(b) are satisfied.
+>
+> **Its §1 premise correction is the most consequential thing in it** and is now carried in the
+> experiment plan: the burn-time site is **not** an inner root-find, so lifting it removes no
+> inner-solve work. Any A4/A25 claim of "removing an inner solver" would be false.
 
 # A24 (phase-b-scaffold) — the registry append, the VP5 seam, and the gate harness
 

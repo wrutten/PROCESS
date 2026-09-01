@@ -460,6 +460,27 @@ The burn time itself is never the moving field — it settles in pass 1; the cos
 one-step lag from M1 running before `pulse` in the block order. That is `k = 1` behaving as a
 single one-step cycle should, and it costs exactly one outer pass.
 
+### 4.1b The burn-time site is closed-form, not a root-find — corrected by A24
+
+**Framework §2.5 and every brief before A24 described the VP5 default as "the existing inner
+root-find". For the burn time that is wrong.** `Pulse.run` assigns a closed-form expression in one
+statement: `t_burn = abs(vs_cs_pf_total_burn) / v_plasma_loop_burn - t_fusion_ramp`. There is no
+iteration at the site at all.
+
+Three consequences, and the second is the one that constrains what Phase B may claim:
+
+1. **The extraction was easier and safer than budgeted.** D14(b)'s "structural only" is met with no
+   judgement call — the arithmetic moved character for character into `burn_time_root`, and the
+   bit-identity gate over 121 295 quantities confirms it.
+2. **Lifting the burn time removes no inner-solve work, because there is none to remove.** A4/A25
+   must never describe its result as "removing an inner solver". What the lift buys is a change of
+   **loop topology** — the one-step cycle `pulse → physics` disappears, which is exactly what A22
+   measured at −29.2 / −29.6 / −32.4 % of model evaluations. That is the whole mechanism, and
+   §4.1a's arithmetic already accounts for it correctly.
+3. **The expectation does not transfer to A9–A11.** Those subdriver sites *are* genuine nested
+   root-finds, so the subdriver-lift experiment's cost model is a different one and cannot borrow
+   this result in either direction.
+
 ### 4.2 What would count as the existence proof
 
 Any **one** of these, measured fairly and reported with its dropped-point census:

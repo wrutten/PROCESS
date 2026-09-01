@@ -6,6 +6,29 @@
 > recorded hazard that a document's directory says when its task closed, not whether its numbers
 > still hold).
 
+> **Orchestrator's correction, added 2026-09-01 after A21 (partition-report) re-derived these
+> numbers from the artifacts.** Three statements in the body below are wrong or incomplete as
+> written. Each was re-checked independently by the orchestrator against
+> `arch_surgery/idf_probe/runs/a18/` before being recorded here; the corrected values are what
+> `MDA_partition_exp_results.md` uses.
+>
+> 1. **§7.5's hoist saving of `−9.5 %` is loop-only.** The engine records post-loop tail runs in a
+>    separate field, `hoist_tail_node_calls`, which the headline total omits. **Net of the tail the
+>    flat control saves 6.38 / 6.55 / 13.70 / 5.71 %** — which is what makes it commensurable with
+>    A13's driver-side 6.56 / 6.76 / 6.64 / 2.63 %. Not an arithmetic error; the accounting was
+>    unstated, and the two figures read as a conflict until it is.
+> 2. **§7.2's "the block arm's outer count falls on 43 and 115 design points and rises on none" is
+>    measured against arm R**, in a passage otherwise about `A0 → A1`. **Against the flat control A0
+>    the counts are 36 of 149 and 100 of 297.** "Rises on none" is also false against R — it fails
+>    on `st_regression` (7 of 144) and `large_tokamak_eval` (5 of 10) — and true against A0 on all
+>    four decks.
+> 3. **§7.5's "all four arms show an exit residual of 8.11e+08"** on hoisted `st_regression`: all
+>    four do fail that audit on the same 7 of 144 points, but **A1 sits at 2.76e+07**, not 8.11e+08.
+>
+> Two wording points also corrected downstream: the ladder cost is **26 / 20 / 19 %** per deck, not
+> an unattributed "19–26 %"; and this report's own `1 800/1 800` vs `600/600` denominator
+> inconsistency resolves to **600/600**, by counting the artifacts.
+
 # A18 (experiment-framework) — Phase A of the MDA partition experiment
 
 | | |
