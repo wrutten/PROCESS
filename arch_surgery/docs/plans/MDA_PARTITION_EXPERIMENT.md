@@ -1,16 +1,13 @@
 # MDA partitioning experiment — plan
 
-> **Document status** — CURRENT · plan for the MDA partition experiment · last revised
-> 2026-08-31 against A2 (module-convergence)'s measurements.
+> **Document status** — CURRENT · **live experiment, revived** · last revised 2026-08-31
+> against A19 (frozen-input-convergence).
 
-**Status:** **Stage 0 COMPLETE** (A1, merged `e9747707`). **Stage 1 COMPLETE (A2,
-module-convergence) and its gate STOPS the study** — see the Stage 1 section and §3.2. Stages 3-5
-are not authorised on this evidence. **A19 (frozen-input-convergence, 2026-08-31) re-measured the
-one assumption that STOP rests on and moved the partition's contribution from 2.3-7.2 % into the
-10-25 % band on the two large pulsed tokamaks — the middle band, not a reopening; nothing reaches
-25 %.** The STOP therefore stands unless the user revises it; §3.2 carries A19's numbers and the
-two corrections that pull against them. · **Base commit:** `c0ae5b28` · **Branch:**
-`architecture_surgery`
+**Status:** **AUTHORISED TO PROCEED** (user, 2026-08-31 — decision D12), under this plan's own
+Stage-1 rule for the 10–25 % band: *"proceed with the expectation revised down and stated"*. §4
+states it. Stage 0 (A1) and Stage 1 (A2, A19) are complete; Stages 2–5 are live, and **the
+feed-forward hoist — formerly candidate E1 / task A13 — is folded in as Stage 1b** rather than
+kept as a separate deferred experiment. · **Base commit:** `c0ae5b28`
 
 **Scope:** tokamak only. Stellarator and IFE take an early return in `_call_models_once`
 and are out of scope throughout.
@@ -409,7 +406,43 @@ replicate of the large-tokamak cases.
 
 ---
 
-## 4. Experiment design
+## 4. The revised expectation, stated
+
+The Stage-1 gate did not clear 25 %. Proceeding is licensed by the 10–25 % rule, which obliges
+this plan to write down what it now expects rather than carrying the original claim forward.
+
+| Component | Expected saving | Basis |
+|---|---|---|
+| **Feed-forward hoist** (Stage 1b) | **4.6–8.2 %** | A2. Separable, `k = 0`, no dimension penalty |
+| **Partition beyond the hoist** | **11.3–19.5 %** gross | A19, node-count weighting |
+| … netted for the lift's `2n → 2(n+1)` cost | **6.6–14.5 %** | A19 §7. The penalty is 4.8–5.0 % and is *not* in the gross figure |
+| **Combined, realistic** | **≈ 11–22 %** | Two large pulsed tokamaks |
+
+**Five things this plan now asserts that it did not before, all measured:**
+
+1. **`k = 1` is confirmed at runtime**, and `st_regression` needs no lift at all (`i_pulsed_plant = 0`).
+2. **`S₂` is invariant** under frozen upstream inputs — identical in all 2 447 replayed loops. M2
+   was never chasing a moving target; the original §3.2 worry was wrong for M2.
+3. **Under the partition the laggard becomes M2**, at 41.7–43.1 % of measured cost. §3.2's
+   condition — that a *small* module drive the loop — **is still not met**. This is the single
+   strongest argument against the expectation above, and it is stated rather than netted away.
+4. **The lift is not separable**; `max Sᵢ` is unchanged when the coupler is pinned. It buys nothing
+   without the partition. The hoist, by contrast, is separable — which is why it goes first.
+5. **The loop exits with state still moving** in 24 % of `large_tokamak_nof`'s calls. Per-module
+   solvers converging state to their own criteria will do work the global loop currently skips.
+   **This is the mechanism most likely to consume the expected saving**, and Stage 4 must measure
+   it rather than assume it away.
+
+**H5 is now the dominant residual risk.** Whether the consistency constraint changes VMCON's
+iteration count is unmeasured, cannot be measured by replay, and sits on top of every figure
+above. If H5 costs more than ~10 % in optimiser iterations, the whole saving is gone.
+
+**Weighting.** Node counts only. The measured-cost weighting is retired for any quantity a
+conclusion depends on (I-10: a feed-forward weight moved 6.4 % → 4.4 % across identical code).
+
+---
+
+## 5. Experiment design
 
 ### Stage 0 — Re-baseline at `c0ae5b28` · **COMPLETE**
 
@@ -438,7 +471,7 @@ Two results from Stage 0 that bear directly on this plan:
   finish at the two-sweep floor against only 12–20 % of gradient-phase calls — which is §3.3's
   coupling-versus-exit-criterion ambiguity showing up in the baseline itself.
 
-### Stage 1 — Per-module convergence rates (the gating stage) · **COMPLETE — GATE: STOP**
+### Stage 1 — Per-module convergence rates (the gating stage) · **COMPLETE — gate did not clear 25 %; proceeding under the 10–25 % rule (D12)**
 
 Done as A2 (module-convergence). Report:
 [`../reports/A2_module_convergence.md`](../reports/A2_module_convergence.md). Instrument:
@@ -479,6 +512,27 @@ within-arm spread 19.6 % at `n = 5`), so it confirms rather than decides.
 separable; if most of the predicted saving comes from `|FF|` rather than from `Sᵢ` differing across
 modules, the honest conclusion is that the hoist is the win and the partition is not.
 
+### Stage 1b — Hoist the feed-forward tail out of the loop · **folded in from candidate E1**
+
+Run the nodes that feed nothing back **once, after** the fixed point, instead of on every sweep:
+`CsFatigue` (38) and rows 52–55 (`WaterUse`, `Costs`, `Objective`, `Constraints`), plus whatever
+else the SCC decomposition places outside the cycles.
+
+Pure `caller.py`. **No new design variables, no dimension penalty, `k = 0`.** Expected 4.6–8.2 %.
+
+**Why it comes first.** It is the only separable component — it does not depend on the lift, the
+reorder or the solvers, and it is the one part of the expected saving that survives if H5 sinks
+the rest. Taking it first means a positive result is banked before the risky work starts.
+
+**A framework constraint this creates.** The feed-forward set is **not static**: `Pulse` (row 39)
+is inside the loop while the coupler is unlifted and joins the feed-forward tail once Stage 3
+lifts it (§2.3a). So the hoist's node set is a function of which arms are active, and the
+framework's `in_loop(node)` hook must be arm-dependent rather than a constant list.
+
+**Gate.** Exact agreement with the Stage-0 baseline on `norm_objf` **and the full MFILE**. A node
+believed feed-forward that in fact writes something an upstream model reads would silently change
+results, and this is what catches it.
+
 ### Stage 2 — Reorder `Build`
 
 Move `build.run()` to after `PlasmaConfinementTime`. Nothing else changes.
@@ -501,6 +555,12 @@ separately, so it is not confused with the partition's effect.
 
 ### Stage 4 — Per-module solvers
 
+**Carries A19's warning.** The global loop exits with M2's state still changing in 24 % of
+`large_tokamak_nof`'s calls, because its exit test is on the objective and constraints, not on
+state. Per-module solvers with per-module state criteria will converge that state — **more work,
+not less**. Measure the extra sweeps this costs *before* comparing wall clock, or the comparison
+is not at matched final accuracy.
+
 Only if Stages 1–3 pass. Wrap each module in its own solver; retire the global loop.
 
 **Gates.** As Stage 3, plus: measured `Sᵢ` under partitioning compared against Stage 1's
@@ -514,7 +574,7 @@ rather than asserted.
 
 ---
 
-## 5. Measurement protocol
+## 6. Measurement protocol
 
 **Primary:** wall clock to converged solution, at matched final accuracy.
 **Secondary:** model evaluations, sweeps per module, VMCON iterations, solver retries.
@@ -530,7 +590,7 @@ converged to the same place to the same precision.
 
 ---
 
-## 6. Threats to validity
+## 7. Threats to validity
 
 | Threat | Handling |
 |---|---|
@@ -544,7 +604,7 @@ converged to the same place to the same precision.
 
 ---
 
-## 7. Open questions
+## 8. Open questions
 
 1. ~~**Which module is the laggard?**~~ **ANSWERED (A2): none is.** The three modules stop
    changing together and M1 is joint-last in over 80 % of loops in both large pulsed cases

@@ -25,7 +25,7 @@ attributable.
 | VP | Where | Baseline behaviour | Variants (task) |
 |---|---|---|---|
 | **VP1 — sequence** | `_call_models_once` | the hand-written call order | `Build` moved (A3); DSM-sequenced order (A15, *deferred*) |
-| **VP2 — loop membership** | `call_models` | every node runs every sweep | feed-forward tail hoisted out (A13, *deferred*) |
+| **VP2 — loop membership** | `call_models` | every node runs every sweep | feed-forward tail hoisted out — **live**, folded into the partition as its Stage 1b (D12) |
 | **VP3 — convergence predicate** | `call_models` | agreement on objective + constraints | agreement on coupling variables (A14, *deferred*) |
 | **VP4 — loop topology** | `call_models` | one global fixed-point loop | per-module solvers over M1/M2/M3 (A5) |
 | **VP5 — lifted unknowns** | models + solver | inner root-find | unknown from the design vector, residual as a constraint (A4, A9–A11) |
@@ -90,6 +90,18 @@ experiments must not add hooks ad hoc.
 `note_subsolve` is **read-only and independent of VP5** — it is how A9 (subdriver-count) measures
 failure incidence without extracting anything, and it should land first.
 
+### C2a — The feed-forward set is dynamic, not a constant
+
+**`in_loop(node)` must be a function of the active arm set.** `Pulse` (DSM row 39) is inside the
+fixed-point loop while `times.t_plant_pulse_burn` is unlifted, and becomes a pure feed-forward
+node once VP5 lifts it — A2 §6.2 and the partition plan §2.3a establish this from its two state
+writes. So a hoist arm that hard-codes the feed-forward node list would be **wrong in exactly one
+configuration**: VP2 combined with VP5.
+
+The framework must therefore derive the set from `(DSM node map, active arms)` at run time and
+record the resolved set in `metrics.json`. A hard-coded list is a latent defect that only fires
+when two arms compose, which is the hardest kind to notice.
+
 ### C3 — The VP5 pattern
 
 One pattern, applied identically at every lifted residual, so the diff under `process/models/` is
@@ -101,6 +113,11 @@ mechanical and reviewable:
    performs *exactly* the original call with the original tolerances and failure policy.
 3. When the site is lifted, `subsolve` instead returns the value from the design vector and
    records the residual for the constraint layer.
+
+**Measured consequence (A19):** the burn-time lift is **not separable** — `max Sᵢ` is unchanged to
+four decimals when the coupler is pinned, so lifting alone buys nothing without VP4. VP5 must be
+measured *with* the partition, never as a standalone arm claiming a saving. The feed-forward hoist
+is the opposite and is separable; do not generalise from one to the other.
 
 Step 2 must be **provably inert**: `subsolve`'s default path is the original call, so the frozen
 arm is byte-identical. That is what keeps the model freeze intact and is the reason the
@@ -232,7 +249,7 @@ D5's freeze, and it is checked by the neutrality gate on every arm, not argued o
 | **F5** | `note_subsolve` census hook (read-only) | Lets A9 measure failure incidence with no extraction | A9 |
 | **F6** | C6 correctness + robustness gates | Needed before any behaviour-changing arm | A3 onward |
 | **F7a** | VP1 hook (`model_sequence`) | Needed by A3 (build-reorder), Stage 2 of the partition | A3 |
-| ~~F7b~~ | ~~VP2 hook (`in_loop`)~~ | Consumer A13 deferred — build with it, not before | *(deferred)* |
+| **F7b** | VP2 hook (`in_loop`) — **arm-dependent, not a constant set** | The partition's Stage 1b needs it; the node set changes with the arms (see below) | partition Stage 1b |
 | ~~F8~~ | ~~VP3 hook (`converged`)~~ | Consumer A14 deferred | *(deferred)* |
 | **F9** | VP5 pattern + constraint layer | The largest piece; serves A4 and A9–A11 together | A4, A9–A11 |
 | **F10** | VP4 (`solve_blocks`) | Largest architectural change; wants everything else settled | A5 |
@@ -241,8 +258,9 @@ F1–F6 are framework-only: no behaviour changes, so they merge under the neutra
 determinism gates alone. **F1–F3 are the minimum before any further experiment runs**, because
 without them arms are unidentifiable and timings unreportable.
 
-**Scope note (2026-08-31).** E1–E5 are deferred, so the live path is **F1–F6, F7a, F9, F10** —
-serving A2–A5 (partition) and A9–A11 (subdriver lift). VP2 and VP3 remain in the variant-point
+**Scope note (revised 2026-08-31, D12).** The partition experiment is authorised to proceed and
+the feed-forward hoist is folded into it, so the live path is **F1–F6, F7a, F7b, F9, F10**.
+E2–E5 remain deferred; only E1 has been absorbed. VP2 and VP3 remain in the variant-point
 model because they are what makes it a complete account of the driver's degrees of freedom, but
 their hooks are built with their consumers, not now. Building an unused hook would mean carrying
 a neutrality obligation for a variant nobody is testing.
