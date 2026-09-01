@@ -150,6 +150,24 @@ def main() -> int:
         default=None,
         help="assert process.__file__ lives under this directory",
     )
+    ap.add_argument(
+        "--perturb-delta",
+        type=float,
+        default=None,
+        help="A25/D15: multi-start perturbation size, e.g. 0.05 for 5 %%. "
+        "Each iteration variable's initial value is multiplied by 1 + delta*u "
+        "with u drawn in [-1, 1] from a hash of (--perturb-seed, ixc number) "
+        "-- keyed on the VARIABLE NUMBER, not on its position, so the two arms "
+        "give bit-identical factors to every variable they share even though "
+        "the variant's design vector is one longer.",
+    )
+    ap.add_argument(
+        "--perturb-seed",
+        type=int,
+        default=0,
+        help="start index of the multi-start campaign; 0 leaves the deck's own "
+        "point unperturbed even when --perturb-delta is given.",
+    )
     args = ap.parse_args()
 
     outdir = Path(args.outdir).resolve()
@@ -252,10 +270,91 @@ def main() -> int:
         list(_subsolve.SITES) if _subsolve is not None else None
     )
 
+    # VP4 (A25): whether the imported tree resolved a per-module solve arm, at
+    # what tolerance, and against which deck's coupling-state artifact.  Read
+    # from the modules, not from the environment (the A3/A13/A24 pattern).
+    result["arch_module_solve_env"] = os.environ.get("PROCESS_ARCH_MODULE_SOLVE")
+    result["arch_tau_env"] = os.environ.get("PROCESS_ARCH_TAU")
+    result["arch_ystate_env"] = os.environ.get("PROCESS_ARCH_YSTATE")
+    try:
+        from process.core.solver import module_solve as _module_solve
+    except ImportError:
+        _module_solve = None
+    result["arch_module_solve_module_present"] = _module_solve is not None
+    result["arch_module_solve_name"] = (
+        getattr(_module_solve, "MODULE_SOLVE_NAME", None)
+        if _module_solve is not None
+        else None
+    )
+    result["arch_module_solve_tau"] = (
+        getattr(_module_solve, "TAU", None) if _module_solve is not None else None
+    )
+
     result["arch_sequence_env"] = os.environ.get("PROCESS_ARCH_SEQUENCE")
     result["arch_sequence_name"] = getattr(_caller, "SEQUENCE_NAME", None)
     head = getattr(_caller, "SEQUENCE_HEAD", None)
     result["arch_sequence_head"] = list(head) if head is not None else None
+
+    # ------------------------------------------------------------------
+    # D15(a) multi-start: perturb the *initial design vector*, identically in
+    # both arms.  The hook wraps ``load_scaled_bounds`` rather than
+    # ``load_iteration_variables`` because it must run after BOTH: the scaled
+    # bounds are what a perturbed start is clamped into, and a start outside
+    # its own box is not a start, it is a different problem.
+    #
+    # Nothing under ``process/`` is touched: this is a harness monkeypatch on
+    # the measurement side, applied identically to baseline and variant.
+    # ------------------------------------------------------------------
+    result["perturb_delta"] = args.perturb_delta
+    result["perturb_seed"] = args.perturb_seed
+    if args.perturb_delta and args.perturb_seed:
+        import hashlib
+
+        import process.core.solver.solver_handler as _sh
+
+        _orig_bounds = _sh.load_scaled_bounds
+        _record: dict = {}
+
+        def _factor(seed: int, ivar: int, delta: float) -> float:
+            """``1 + delta*u``, ``u`` in [-1, 1), from a hash of (seed, ivar).
+
+            Keyed on the iteration-variable NUMBER so that the arms agree on
+            every shared variable regardless of how many variables each has.
+            """
+            h = hashlib.sha256(f"a25|{seed}|{ivar}".encode()).digest()
+            u = int.from_bytes(h[:8], "big") / float(1 << 64)  # [0, 1)
+            return 1.0 + delta * (2.0 * u - 1.0)
+
+        def _perturbed(data):
+            _orig_bounds(data)
+            nums = data.numerics
+            n = int(nums.n_iteration_variables)
+            rows = []
+            n_clamped = 0
+            for i in range(n):
+                ivar = int(nums.ixc[i])
+                f = _factor(args.perturb_seed, ivar, args.perturb_delta)
+                before = float(nums.xcm[i])
+                want = before * f
+                lo = float(nums.itv_scaled_lower_bounds[i])
+                hi = float(nums.itv_scaled_upper_bounds[i])
+                got = min(max(want, lo), hi)
+                if got != want:
+                    n_clamped += 1
+                nums.xcm[i] = got
+                rows.append({
+                    "ixc": ivar,
+                    "factor": f,
+                    "scaled_before": before,
+                    "scaled_after": got,
+                    "clamped": got != want,
+                })
+            _record["per_variable"] = rows
+            _record["n_variables"] = n
+            _record["n_clamped_to_bounds"] = n_clamped
+
+        _sh.load_scaled_bounds = _perturbed
+        result["perturbation"] = _record
 
     from process.main import SingleRun
 
@@ -282,6 +381,24 @@ def main() -> int:
         result["loadavg"] = os.getloadavg()
     except OSError:
         result["loadavg"] = None
+
+    # VP4 cost unit: individual model node calls, split at the solve/output
+    # boundary.  Recorded on both arms.
+    result["node_calls_total"] = getattr(_caller, "NODE_CALLS", [None])[0]
+    result["node_calls_solve_phase"] = getattr(
+        _caller, "NODE_CALLS_AT_OUTPUT", [None]
+    )[0]
+    _tot = getattr(_caller, "MODULE_SOLVE_TOTALS", None)
+    if _tot is not None:
+        _tot = dict(_tot)
+        _tot["moved_constants"] = sorted(_tot.get("moved_constants", ()))
+        result["module_solve_totals"] = _tot
+    result["arch_module_solve_yspec"] = None
+    if _module_solve is not None and getattr(_module_solve, "ENABLED", False):
+        try:
+            result["arch_module_solve_yspec"] = _module_solve.load_spec()[1]
+        except Exception:
+            result["arch_module_solve_yspec"] = {"error": traceback.format_exc()}
 
     result["probe"] = (
         _idf_probe.summary()
@@ -337,6 +454,48 @@ def main() -> int:
             "rcm": _hexes(rcm),
             "conf_l2": _hex(sum(r * r for r in rcm) ** 0.5),
         }
+
+    # A25 / plan section 2.5: **the variant must satisfy its own consistency
+    # residual.**  Without this check the variant could "win" by returning a
+    # point that is not on the burn-time consistency manifold at all, which is
+    # not a solution to the same problem.  Computed directly from the returned
+    # state through the model's own extracted relation, not read back from a
+    # table, and recorded whenever the deck names icc = 93 -- so a deck that
+    # does not name it reports ``null`` rather than a silent pass.
+    result["constraint_93"] = None
+    if sr is not None:
+        try:
+            nums = sr.data.numerics
+            m_all = int(nums.n_equality_constraints) + int(
+                nums.n_inequality_constraints
+            )
+            icc = [int(v) for v in nums.icc[:m_all]]
+            if 93 in icc:
+                from process.models.pulse import burn_time_residual
+
+                t_burn = float(sr.data.times.t_plant_pulse_burn)
+                res_s = float(
+                    burn_time_residual(
+                        t_burn,
+                        sr.data.pf_coil.vs_cs_pf_total_burn,
+                        sr.data.physics.v_plasma_loop_burn,
+                        sr.data.times.t_plant_pulse_fusion_ramp,
+                    )
+                )
+                j = icc.index(93)
+                result["constraint_93"] = {
+                    "position_in_icc": j,
+                    "is_in_equality_block": j < int(nums.n_equality_constraints),
+                    "n_equality_constraints": int(nums.n_equality_constraints),
+                    "t_plant_pulse_burn_s": t_burn,
+                    "residual_s": res_s,
+                    "residual_relative_to_burn_time": (
+                        abs(res_s) / abs(t_burn) if t_burn else None
+                    ),
+                    "normalised_residual_rcm": float(nums.rcm[j]),
+                }
+        except Exception:
+            result["constraint_93"] = {"error": traceback.format_exc()}
 
     # MFILE is the independent cross-check (and the only source of ifail).
     try:

@@ -353,3 +353,70 @@ the same nominal toggle. Recorded here rather than fixed, because changing a mer
 out of A13's scope.
 
 Full numbers and method in [`A13_feedforward_hoist.md`](A13_feedforward_hoist.md).
+
+## V11 — The three-module partition of the *coupling state* is exact on all four decks
+
+Measured by A25 (phase-b-variant), which needed per-module write sets to restrict each inner
+solve's convergence test and could not assume them. The `PROCESS_IDF_PROBE=modules` write census
+(`__setattr__` interception unioned with snapshot differencing at node boundaries, confined to
+`Caller._call_models_once` — traps T1 and T7) was mapped to modules through the committed DSM node
+map and intersected with each deck's committed `ystate` component set.
+
+| deck | M1 | M2 | M3 | `PULSE` | `FF` | covered / components | in **two** modules | written by **none** |
+|---|---|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | 258 | 240 | 221 | 2 | 119 | 840 / 840 | **0** | **0** |
+| `low_aspect_ratio_DEMO` | 259 | 244 | 221 | 2 | 120 | 846 / 846 | **0** | **0** |
+| `st_regression` | 268 | 216 | 223 | **0** | 120 | 827 / 827 | **0** | **0** |
+| `large_tokamak_eval` | 258 | 240 | 221 | 2 | 119 | 840 / 840 | **0** | **0** |
+
+**Every coupling component is written by exactly one module on every deck.** Decision D8's
+decomposition is a *partition* of the written state at run time, not merely a grouping — which is
+the property a block Gauss-Seidel schedule needs and which nothing had previously checked. The
+`PULSE` column reproduces V5 and V10c from a third instrument: two writes on the pulsed decks,
+zero on `st_regression`.
+
+**Consequence, and it is not a validation footnote.** A25 first tried to take each inner solve's
+convergence test over the whole coupling vector, reasoning that a component no running node writes
+cannot move, so the subsets could not matter. That reasoning is wrong for a reason unrelated to the
+DSM: `ystate`'s predicate scores a component `inf` whenever *either* snapshot is not
+float-viewable, which in a fresh process is every field no model has yet written. The M1 inner
+solve was therefore held open by `ccfe_hcpb.pnuc_tot_blk_sector` — an M3 field M1 cannot touch —
+until it hit its cap. **Equality of values is not equality of scores**, and the partition above is
+load-bearing rather than descriptive.
+
+## V12 — `objective_constraints` is correctly flagged `in_call_models_once: false`, and that flag is load-bearing
+
+The node map assigns `objective_constraints` to module `FF`. It is the objective and
+constraint-vector evaluation, not a call site inside `Caller._call_models_once`, and the map says
+so with `in_call_models_once: false`. A25's first block schedule read the module label and ignored
+the flag, which gave the `FF` block a non-empty node set that executed nothing — **789 block
+sweeps of pure no-ops** on `large_tokamak_nof`, charged against the schedule and invisible in the
+model-evaluation count because no model ran.
+
+**The map is right; the consumer was wrong.** Recorded because the flag looks like metadata and is
+not: any consumer that derives an execution schedule from `module` alone will build one containing
+a node that cannot execute.
+
+## V13 — After the burn-time lift `Pulse` *is* feed-forward, but the hoist cannot see it
+
+Framework note C2a and A13's report both predict that `pulse` joins the feed-forward tail
+automatically once the burn-time coupler is lifted, because the hoisted node set is derived at run
+time rather than hard-coded. **Measured under the lift: it does not.**
+
+The substance of the prediction is correct. Under `PROCESS_ARCH_LIFT=burn_time`, `Pulse`'s two
+writes are `times.t_plant_pulse_burn` — which the optimiser now owns and `subsolve` returns
+untouched — and `constraints.t_current_ramp_up_min`, whose only reader anywhere in `process/` is
+constraint equation 41 (`constraints.py:1102`), a constraint rather than a model. So `Pulse` feeds
+nothing back into the model sequence.
+
+The mechanism fails because the derivation asks the **committed DSM node map** for each node's
+module and hoists those in `HOIST_MODULES = {"FF"}`. `pulse`'s module there is `"PULSE"`,
+statically. Lifting a coupler does not relabel a committed artifact. **"Derived at run time" was
+true of the node *set* and false of the node *classification*.**
+
+Cost of the gap, with denominators, from A25's gate runs: `pulse` ran 1 314 times over 660
+`call_models` on `large_tokamak_nof` where a hoisted `pulse` would run 660 — 654 avoidable node
+calls, **1.5 %** of that arm's 43 426. On `low_aspect_ratio_DEMO`: 2 089 against 1 050, **1.5 %**
+of 69 986. Not taken by A25, because changing which nodes the hoist selects mid-task would change
+the architecture being measured, and because the fix is a decision about the node map rather than a
+patch in `caller.py`.
