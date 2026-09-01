@@ -760,3 +760,101 @@ python arch_surgery/fixedpoint/tables.py --report report.json
 `run_all()` is importable and takes the same arguments. Artifacts land under
 `arch_surgery/idf_probe/runs/a18/`, which is untracked; the summaries and verdicts in this document
 are what is committed.
+
+---
+
+## Orchestrator's critical assessment (appended at merge, 2026-09-01)
+
+**Verdict: accepted and merged. The task did what it was asked, and two of its three results
+contradict the plan that commissioned it — including the plan's headline claim, which was mine.**
+
+### What was done better than asked
+
+**Gate F was failed, root-caused, and the whole pipeline re-run.** Replay fidelity came out
+599/600. The cause is a genuine property of PROCESS that nobody had noticed: `Caller.call_models`
+does not always compare a constraint vector of the same length, because the `fsolve` path passes
+`meq` alone (`solver.py:383`), so `large_tokamak_eval`'s loop compares a 2-vector on 25 calls and
+a 25-vector on 6. Arm R had hard-coded the total. The fix records the length per design point, and
+**every artifact was regenerated from scratch** so that no result mixes instrument versions. The
+obvious rival explanation — uncaptured state on the model objects — was tested and refuted rather
+than assumed away. This is the behaviour §6 of the protocol asks for and it is rare to see it
+taken this literally.
+
+**A0f earned its place, exactly as predicted.** On `large_tokamak_nof` the reference and flat arms
+produce *identically* 9 471 model evaluations — a 0.00 % difference — decomposing into +1.55 % for
+the strict predicate and −1.53 % for the floor removal. Per design point they do not agree at all
+(8 points cheaper, 7 dearer). A study without A0f would have reported "no effect" from two real,
+opposed effects. The user's instruction to build it up front is vindicated by the one scenario
+where it mattered most.
+
+### The plan's headline claim is refuted, and the error was the orchestrator's
+
+The partition plan (§1.2, §4.1) and the architecture evaluation's F8 addendum both state that
+removing the two-sweep floor is worth **"up to 31 %"** of sweeps, on the arithmetic that one
+information-free sweep per `call_models` is 630 of 2 027. **Measured: 1.53 %, 1.55 %, 1.79 % and
+10.7 %.**
+
+The arithmetic assumed a sweep is saved on *every* solve. It is saved only where the state is
+already converged on entry, which is 4.7 %, 5.1 %, 6.3 % and 30 % of design points. "Up to" was
+formally correct and practically misleading, and it was presented as the single most valuable
+finding behind the task. **The floor is real — A0's histogram has a `1:` column that is
+structurally impossible for the other arms — and it is worth about a fiftieth of what was
+claimed.** Both documents must be corrected; the report `MDA_partition_exp_results.md` §2 (H1) is
+now wrong as written and must not be published in its current form.
+
+### The unit problem, which is the most consequential finding here
+
+**In sweeps the block arm wins on every scenario. In model evaluations it loses by 33–47 %.** Both
+are exact counts of real things. They disagree because a sweep over M1 is not the same work as a
+sweep over everything.
+
+This reaches further than the block arm. The plan's mechanism argument (§5.3) weights modules by
+**DSM rows** — `|M1| = 24`, `|M2| = 10`, `|M3| = 12` — and that unit does not correspond to
+execution: **M1 is 24 DSM rows but 2 of the 21 executing model calls**, because `physics.run()`
+orchestrates a sub-model block internally. So the argument "M1 dominates the node count, therefore
+partitioning saves little" is stated in a unit that overstates M1 by an order of magnitude.
+
+Three candidate units, none of them satisfactory:
+
+| Unit | Exact? | Tracks work? |
+|---|---|---|
+| DSM rows | yes | no — M1 is 52 % of rows, 38 % of measured cost |
+| model calls | yes | no — `physics.run()` and `cryostat.run()` count the same |
+| measured cost | **no** — issue I-10 | yes |
+
+A18 chose model evaluations and refused to apply a cost weight, on the grounds that the only
+available weight is a timing. That is the right call under this project's rules, and it leaves a
+real hole: **the exact units are in the wrong currency and the right currency is not exact.** No
+conclusion about the partition's cost should be stated without naming its unit, and §5.3 of the
+plan needs rewriting rather than annotating.
+
+### A reproducibility gap the task did not flag
+
+**The per-quantity scales are computed from the harvest and never persisted.** `YState.from_points`
+derives `s_i = median |y_i|` and uses it, but no artifact records the result, and `runs/` is
+git-ignored. The predicate therefore depends on data that is not recorded anywhere.
+
+In practice the numbers do reproduce — the determinism gate passes bit-for-bit and the harvest is
+deterministic given a deterministic PROCESS run. What is lost is **auditability**: it is not
+possible, after the fact, to inspect which scale a quantity received or to notice that one is
+absurd. Given that the exclusion list is the design's most dangerous artifact and the scales are
+what separate "excluded" from "included", they should be written to a committed artifact. Small
+change; should be made before the results are published.
+
+*(For the record, the scaling convention itself has precedent inside PROCESS: VMCON normalises each
+iteration variable by its initial value, `scale[i] = 1.0/value`, having first rejected zero, NaN
+and infinity — `iteration_variables.py:343-348`. The principle is the codebase's own. The code is
+not reusable, since it covers ~20 design variables rather than ~2 288 state fields, and its choice
+of the *initial* value is poorer than a median over observed states for this purpose.)*
+
+### What now stands as evidence
+
+- Appending, categorisation, the τ ladder and all five gates: **accepted**.
+- The floor effect: **accepted, and an order of magnitude smaller than claimed**.
+- The block arm's cost: **accepted in model evaluations, with the unit named**. It is not a
+  refutation of the partition in every unit, and must not be reported as one.
+- `st_regression` at 1.018: the one near-break-even, and the scenario with no cross-module coupler
+  — consistent with the partition helping only where the blocks are genuinely independent.
+- PROCESS's loop stopping with the cost model still moving (8/600): **a new finding about the
+  program**, independent of the experiment, and worth routing.
+
