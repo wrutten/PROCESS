@@ -1,624 +1,458 @@
 # MDA partitioning experiment — plan
 
-> **Document status** — CURRENT · **live experiment, revived** · last revised 2026-08-31
-> against A19 (frozen-input-convergence).
+> **Document status** — CURRENT · **live experiment** · rewritten 2026-09-01 against D13
+> (two-phase design). Supersedes the staged 0-5 design; the evidence from A1, A2 and A19 is
+> carried forward in §1.4 and §5, not discarded.
 
-**Status:** **AUTHORISED TO PROCEED** (user, 2026-08-31 — decision D12), under this plan's own
-Stage-1 rule for the 10–25 % band: *"proceed with the expectation revised down and stated"*. §4
-states it. Stage 0 (A1) and Stage 1 (A2, A19) are complete; Stages 2–5 are live, and **the
-feed-forward hoist — formerly candidate E1 / task A13 — is folded in as Stage 1b** rather than
-kept as a separate deferred experiment. · **Base commit:** `c0ae5b28`
+**Status:** **AUTHORISED TO PROCEED** (D12), **restructured into two phases** (D13).
+· **Base commit:** `c0ae5b28` · **Scope:** tokamak only — stellarator and IFE take an early
+return in `_call_models_once`.
 
-**Scope:** tokamak only. Stellarator and IFE take an early return in `_call_models_once`
-and are out of scope throughout.
-
----
-
-## 0. What this experiment is, and what it is not
-
-The question is whether **the arrangement of solvers and optimisers alone** — with every
-physics and engineering model left exactly as upstream wrote it — measurably changes the
-cost of solving PROCESS.
-
-That constraint is what distinguishes this from `functional_PROCESS`. A rewritten back-end
-cannot answer the architecture question, because any measured difference confounds the
-architecture with the rewrite. Here the models are frozen at `c0ae5b28`; only the driver
-changes. A full IDF/MDF/SAND comparison on the rewritten back-end is a separate, later
-study, and this experiment is not a stepping stone to it — it is the control it will need.
-
-**Superseded work.** The earlier IDF experiment plan and its Stage-0 probe measured
-`710a75c9` and are retained for methodology only. Every number in them is stale and none is
-carried into this plan as evidence.
+**What this plan is for.** An **existence proof**: one fair case in which a simple, minimally
+invasive change to the *arrangement* of solvers measurably changes the cost of solving PROCESS,
+with every physics and engineering model untouched. It is **not** a verdict on whether this
+particular partition should be adopted, and it does not claim to have found an optimal
+architecture. That reframing (user, 2026-09-01) sets every gate below: the burden is
+**fairness**, not effect size.
 
 ---
 
-## 1. The hypothesis
+## 1. Problem context
 
-`Build` is called earlier in the sequence than its module membership warrants, and
-`times.t_plant_pulse_burn` is the only variable closing a cycle across the whole model
-sequence. Moving `Build` to after `PlasmaConfinementTime` and lifting `t_plant_pulse_burn`
-to the optimiser as a design variable with a consistency constraint should leave three
-mutually independent modules, each with internal cycles of its own. Giving each module its
-own solver should reduce wall-clock time to solution without increasing the number of
-optimiser iterations.
+### 1.1 The question
 
-Testable claims:
+Does the arrangement of solvers and optimisers alone — with the models frozen — measurably
+change the cost of solving PROCESS?
 
-| | Claim | Status |
-|---|---|---|
-| **H1** | `Build` sits inside Module 1's span but belongs to Module 2 | **Supported** (§2.2) |
-| **H2** | `t_plant_pulse_burn` is the only variable closing a cross-module cycle | **CONFIRMED at run time** (A2). `k = 1`: it is the only back edge whose value changes between sweeps. Two further back edges exist and carry constants — see §2.3 |
-| **H3** | After the reorder and the lift, the three modules are independent | **Supported** — with the lift there is no live cross-module back edge left, and `st_regression`, which lacks the coupler structurally, already has none (A2 §7) |
-| **H4** | Per-module solvers reduce wall clock | **REFUTED in prediction** (A2). The modules converge *together*: predicted saving beyond the separable feed-forward hoist is 2.3-7.2 % on the two large pulsed tokamaks, and negative under the pessimistic treatment of censored counts. See §3.2 |
-| **H5** | It does not cost optimiser iterations | Untested, and now moot — H4's failure means the lift is not worth making for performance |
+The frozen models are what makes the question answerable. A rewritten back-end cannot isolate
+the architecture's contribution, because any measured difference confounds the architecture
+with the rewrite. That is why this study is the control a later IDF/MDF/SAND comparison on
+`functional_PROCESS` will need, and not a stepping stone to it (D5, D7).
 
----
+### 1.2 What the driver does today
 
-## 2. What the code and the DSM say
+`Caller.call_models` ([caller.py:73-144](../../../process/core/caller.py#L73)) re-runs the whole
+26-model sequence until the **objective function and the constraint vector** stop changing, at
+`rtol = 1e-6`, capped at 10 sweeps. `_call_models_once` executes a hand-written order.
 
-Findings below are from `c0ae5b28` and from
-`dependency_analysis/output/tokamak/dsm_collapsed.html` (regenerated 2026-08-31, pin
-`PROCESS_at_36ac820e`, which descends from `c0ae5b28` — so the coordinate systems match).
+Three properties of that loop matter to this experiment, and all three are defects rather than
+design choices:
 
-### 2.1 The module decomposition
+**It converges on the wrong quantities.** `objf` and `conf` are *functionals* of the state. The
+DSM's feedback edges identify **coupling variables**; those are what a fixed-point iteration is
+supposed to converge. Coupling variables that do not move `f` or `c` by `rtol` are declared
+converged — and the finite-difference stencil differences exactly `f` and `c`, so residual
+motion invisible to the exit test is precisely what pollutes the gradient. A2 measured this
+happening: in **24 % of `large_tokamak_nof`'s calls the state is still changing when the loop
+declares idempotence**, driven almost entirely by
+`pf_coil.stress_z_cs_self_midplane_profile`.
 
-The collapsed DSM's 56 rows, with the proposed partition:
+**It has a structural floor of two sweeps, and that floor is an artefact.** Because `objf` and
+`conf` do not exist at entry, the loop must evaluate once purely to manufacture a `prev` to
+compare against, then again to compare. The first sweep yields no information about
+convergence. A coupling-variable predicate has no such problem: the entering state **is** `y0`
+— it persists in the data structure from the previous call, with the new design vector injected
+on top — so one sweep gives `y1 = G(y0)` and `norm(y1 - y0)` is immediately testable.
+**The floor for a proper fixed-point iteration is 1, not 2.**
+
+The size of that artefact, measured: of `large_tokamak_nof`'s **2 027** in-loop sweeps, **1 260**
+are the structural minimum of two per call. One information-free sweep per call is **630 sweeps,
+31.1 % of the total**, and the same arithmetic gives A1's "above floor" column directly —
+37.8 %, 42.1 %, 39.7 %, 27.3 % of sweeps are the only ones any convergence-side change can act
+on *while the floor stays at 2*.
+
+**Its convergence test treats NaN as agreement.** `np.allclose(..., equal_nan=True)`
+([caller.py:70](../../../process/core/caller.py#L70)) means a state that has gone NaN in two
+consecutive sweeps is reported converged.
+
+### 1.3 What the DSM says
+
+From `dependency_analysis/output/tokamak/dsm_collapsed.html`, pin `PROCESS_at_36ac820e`, which
+descends from `c0ae5b28` — the coordinate systems match.
 
 | Rows | Contents | Role |
 |---|---|---|
-| 1–3 | `COOR_SingleRun`, `VMCON`, `MDA_Idempotence` | driver stack |
-| **4, 6–28** | `PlasmaGeom`; `Physics` … `PlasmaConfinementTime` | **Module 1 — Physics** (24 nodes) |
-| **5, 29–37** | `Build`; `CICCSuperconductingTFCoil` … `pfcoil_functions` | **Module 2 — Coils** (10 nodes) |
-| 38 | `CsFatigue` | feed-forward, between M2 and M3 |
-| **39** | **`Pulse`** | **the articulation point — see §2.3. Becomes feed-forward once lifted** |
-| **40–51** | `Divertor` … `Availability` | **Module 3 — Plant** (12 nodes) |
-| 52–55 | `WaterUse`, `Costs`, `Objective`, `Constraints` | feed-forward outputs |
-| 56 | `MDA_Output` | — |
+| 1-3 | `COOR_SingleRun`, `VMCON`, `MDA_Idempotence` | driver stack, not in a sweep |
+| **4, 6-28** | `PlasmaGeom`; `Physics` … `PlasmaConfinementTime` | **M1 — Physics** (24 nodes) |
+| **5, 29-37** | `Build`; `CICCSuperconductingTFCoil` … `pfcoil_functions` | **M2 — Coils** (10 nodes) |
+| 38 | `CsFatigue` | feed-forward |
+| **39** | **`Pulse`** | the articulation point — belongs to no module |
+| **40-51** | `Divertor` … `Availability` | **M3 — Plant** (12 nodes) |
+| 52-55 | `WaterUse`, `Costs`, `Objective`, `Constraints` | feed-forward outputs |
+| 56 | `MDA_Output` | not in a sweep |
 
-Each of the three modules contains internal cycles in the collapsed DSM, so each warrants a
-solver of its own. Note the size asymmetry: **M1 is more than twice M2 or M3**. §3.2 turns on
-that fact.
+`|all| = 52`. Each module carries internal cycles, so each warrants a solver of its own. **M1 is
+more than twice either other module** — the fact §5.2 turns on.
 
-### 2.2 H1 — `Build` is misplaced, and moving it is safe
+**`Build` is misplaced.** It is DSM row 5 (M2) but `_call_models_once`
+([caller.py:249](../../../process/core/caller.py#L249)) runs it at sequence position 4, between
+`plasma_geom` and `physics` — inside M1's span. That interleaving, M1, M2, M1…, M2…, is what
+prevents wrapping a solver around a contiguous span. Static check: `build.py` reads seven
+`physics` attributes and every one is written by `plasma_geometry.py`, M1's *first* node;
+in the other direction the physics package reads only `dr_fw_plasma_gap_inboard/_outboard` from
+`build`, also written by `plasma_geometry.py`. So the reorder should be **exactly result-neutral**
+— which makes it a sharp test of the dependency graph rather than a source of speedup.
 
-`Build` is DSM row **5**, i.e. Module 2, but `_call_models_once`
-([process/core/caller.py:249](../../../process/core/caller.py#L249)) executes it at sequence
-position **4** — between `plasma_geom` and `physics`, inside Module 1's span. The execution
-order therefore interleaves the modules as M1, M2, M1…, M2…, which is what prevents wrapping
-a solver around a contiguous span. **The reorder is the enabler for the whole partition**,
-not a source of speedup in itself.
+**`Pulse` is the articulation point, and `k = 1`.** At
+[pulse.py:158](../../../process/models/pulse.py#L158) it computes `times.t_plant_pulse_burn`
+from `pf_coil.vs_cs_pf_total_burn` (M2) and `physics.v_plasma_loop_burn` (M1); `physics` reads it
+back at [physics.py:504](../../../process/models/physics/physics.py#L504) and
+[physics.py:948](../../../process/models/physics/physics.py#L948). `M1 -> M2 -> Pulse -> M1` is
+the one cycle spanning modules. A2 confirmed at run time that it is the **only** back edge whose
+value changes between sweeps.
 
-Static confirmation that the move is safe: `build.py` reads seven attributes from the
-`physics` namespace (`i_single_null`, `itart`, `kappa`, `rmajor`, `rminor`, `triang`,
-`triangularity`), and every one is written by `plasma_geometry.py` — Module 1's *first* node,
-row 4 — not by anything later in Module 1. In the other direction the physics package reads
-only `dr_fw_plasma_gap_inboard` / `_outboard` from `build`, both also written by
-`plasma_geometry.py`. Intersecting build's 41 writes against the physics package's 516
-accesses leaves `physics.itart` and `divertor.n_divertors`, both configuration flags.
+Two further cross-module back edges are structurally present and **dead**: `build.dr_fw_inboard`
+/ `dr_fw_outboard` (written by `FirstWall`, M3; read by `Build`, M2) are functions of pure
+inputs, and `pf_power.vpfskv` (M3 -> `Pulse`) is the literal `20.0e0`. If a future model ever
+computes `radius_fw_channel`, `dr_fw_wall` or `vpfskv`, `k` goes from 1 to 3.
 
-So `Build` depends on `PlasmaGeom` only, and nothing between rows 6 and 28 depends on
-`Build`. Moving it to after `PlasmaConfinementTime` should be **exactly result-neutral** —
-which makes it a sharp test of the dependency graph (§4, Stage 2).
+**`Pulse` becomes feed-forward once the coupler is lifted.** It makes exactly two state writes —
+`times.t_plant_pulse_burn` (the coupler) and `constraints.t_current_ramp_up_min`, read only by
+`constraints.py:1101`, DSM row 55, downstream of everything. Post-lift the first stops being an
+edge *from* `Pulse`, so `Pulse` has no consumer upstream of itself. Confirmed at run time in all
+four scenarios; in `st_regression` (`i_pulsed_plant = 0`) it writes nothing at all.
 
-### 2.3 H2 — `Pulse` is the articulation point
+**A vestige corroborates the whole picture.** `physics.py:513` still executes
+`times.t_burn_0 = times.t_plant_pulse_burn` under a comment referring to "convergence loop in
+fcnvmc1, evaluators.f90". `t_burn_0` has no reader anywhere in `process/`, and `evaluators.f90`
+no longer exists. The Fortran original carried a **dedicated burn-time reconciliation loop**; the
+Python port folded it into the generic idempotence loop and left the write behind. Burn time was
+historically known to be *the* reconciliation variable. That is the organic-architecture thesis
+in one dead line.
 
-`Pulse` is row 39 and belongs to no module. It is the node that closes M1 and M2 into a single
-cycle. At [process/models/pulse.py:158](../../../process/models/pulse.py#L158):
+**One candidate coupler was checked and rejected.** `pfcoil.py` writes
+`physics.b_plasma_vertical_required` and `plasma_fields.py` (row 10, M1) references it — but
+inside `PlasmaFields.output()`, not `run()`. It does not participate in the MDA. This is trap
+**T1**, and it has now produced three false positives in this project, one of them in an earlier
+revision of this document.
 
-```python
-if self.data.pulse.i_pulsed_plant == 1:
-    self.data.times.t_plant_pulse_burn = self.calculate_burn_time(
-        vs_cs_pf_total_burn = pf_coil.vs_cs_pf_total_burn,   # Module 2 output
-        v_plasma_loop_burn  = physics.v_plasma_loop_burn,    # Module 1 output
-        t_plant_pulse_fusion_ramp = ...,
-    )
-```
+### 1.4 What has already been measured, and what survives
 
-`physics` reads `t_plant_pulse_burn` back at
-[physics.py:504](../../../process/models/physics/physics.py#L504) and again at
-[physics.py:948](../../../process/models/physics/physics.py#L948). One node, consuming from both
-modules and feeding one of them, is precisely the structure that a lifted variable plus a
-consistency constraint dissolves.
-
-> **Correction (A2, 2026-08-31).** This paragraph previously also cited
-> [pfcoil.py:2727](../../../process/models/pfcoil.py#L2727) as an M2-side read, making the edge
-> look symmetric. **It is not on a `run()` path**: that line is inside `PFCoil.outvolt()`, whose
-> only caller is `PFCoil.output()`. **Third instance of trap T1**, and it was in this plan's
-> central section. Runtime instrumentation sees no read of `t_plant_pulse_burn` by `pfcoil`
-> inside the MDA. The mechanism survives — `Pulse` consumes `pf_coil.vs_cs_pf_total_burn`
-> (M2) and `physics.v_plasma_loop_burn` (M1) and feeds M1, so `M1 -> M2 -> Pulse -> M1` is
-> still a cycle spanning both modules — but the claimed M2-side read is withdrawn.
-
-> **Two further cross-module back edges exist, and both are dead (A2, 2026-08-31).** Runtime
-> census, all four scenarios: `build.dr_fw_inboard` and `build.dr_fw_outboard` are written by
-> `FirstWall` (M3, row 41) and read by `Build` (M2, row 5); `pf_power.vpfskv` is written by
-> `Power` (M3, row 48) and read by `Pulse` (row 39). **Neither value changes between sweeps** —
-> the first is a function of two pure inputs no model computes, the second is the literal
-> `20.0e0`. So `k = 1` stands. They are recorded because they are *structurally* present: if a
-> future model ever computes `radius_fw_channel`, `dr_fw_wall` or `vpfskv`, an M3 -> M2 back
-> edge becomes live and the partition acquires a second and a third coupler.
-
-**A vestige corroborates this.** `physics.py:513` still executes:
-
-```python
-# Reset second self.data.times.t_plant_pulse_burn value (self.data.times.t_burn_0).
-# This is used to ensure that the burn time is used consistently;
-# see convergence loop in fcnvmc1, evaluators.f90
-self.data.times.t_burn_0 = self.data.times.t_plant_pulse_burn
-```
-
-`t_burn_0` has **no reader anywhere** in `process/` outside its own declaration, and
-`evaluators.f90` no longer exists. The Fortran original carried a *dedicated burn-time
-reconciliation loop*; the Python port folded it into the generic idempotence loop and left the
-write behind. Burn time was historically known to be **the** reconciliation variable. This is
-the organic-architecture thesis in a single dead line, and it is worth quoting in the write-up.
-
-**Caveat on scope: the edge is conditional.** The whole `pulse` body is behind
-`if i_pulsed_plant == 1` and the default is `0`. Of the four scenarios, `st_regression` sets
-`i_pulsed_plant = 0` — it is a *steady-state spherical tokamak* (`runtitle = ST Regression`,
-`itart = 1`, `aspect = 1.8`; `istell` unset, so it is a tokamak and in scope). In that case
-`t_plant_pulse_burn` is never written by `Pulse` and the M1/M2 cycle this hypothesis targets
-**does not exist**. It should therefore have been a free control: the partition should already
-hold there.
-
-> **Measured, and it does not behave that way (A1, 2026-08-31).** `st_regression`'s above-floor
-> sweep fraction is **39.7 %** — sitting *between* `large_tokamak_nof` (37.8 %) and
-> `low_aspect_ratio_DEMO` (42.1 %), not below them. With the burn-time edge structurally absent
-> it does about as much reconciliation work as the two pulsed cases.
->
-> This is **not a refutation**. Sweep count is not coupling; `st_regression` also differs in
-> `itart` and in `nvar` (14 against 20 and 19), and §3.3's warning that sweep counts may be
-> measuring the exit criterion rather than the coupling applies with full force here. But the
-> cheapest test of H2 in the whole design has returned **a sign H2 does not predict**, and the
-> free control this section relied on is no longer free.
->
-> **RESOLVED by A2 (2026-08-31), in the hypothesis's favour.** The prediction was tested
-> directly and **it holds**. `st_regression` has **zero live cross-module back edges** — its only
-> back edges are the two dead `build.dr_fw_*` ones above — and `Pulse` writes nothing at all
-> there. Its modules are also the most nearly independent of the four scenarios
-> (`S₁ = 2.64`, `S₂ = 2.80`, `S₃ = 2.91` against `S_global = 3.31`) and it shows the largest
-> predicted partition saving.
->
-> **A1's 39.7 % was not diagnostic**, exactly as §3.3 warned. `st_regression` reaches a
-> comparable `S_global` by a different route: each module has internal cycles needing three
-> sweeps, and the loop's exit criterion adds sweeps beyond module convergence (§3.2). Sweep
-> count is not coupling, and this scenario now demonstrates that rather than merely being
-> caveated by it.
-
-### 2.3a `Pulse` becomes feed-forward once the lift is made — verified
-
-`Pulse` makes exactly **two** state writes:
-
-| Write | Consumers | Position |
+| Task | Result | Status under this plan |
 |---|---|---|
-| `times.t_plant_pulse_burn` ([pulse.py:158](../../../process/models/pulse.py#L158)) | `physics` (M1), `pfcoil` (M2), `availability` (M3), `costs` | the lifted variable |
-| `constraints.t_current_ramp_up_min` ([pulse.py:247](../../../process/models/pulse.py#L247)) | `constraints.py:1101` only | DSM row 55 — downstream of everything |
+| **A1** (stage 0) | Gates pass 4/4; baseline counts; 94-96 % of sweeps are FD perturbations | **carried forward** |
+| **A2** (module convergence) | `k = 1` confirmed; **no module is the laggard** — M1 joint-last in 82-85 % of loops; partition contribution 3.8-7.2 % | **predicate-bound — see below** |
+| **A19** (frozen-input replay) | `S2` invariant under frozen inputs (2 447 loops, zero exceptions); `S1`'s fall is *entirely* the `k = 1` lift; contribution 11.3-19.5 % gross, 6.6-14.5 % netted; **laggard moves to M2** at 41.7-43.1 % of cost; **the lift is not separable** | **predicate-bound — see below** |
 
-Post-lift the first stops being an edge *from* `Pulse`: `physics` and `pfcoil` read the
-design-vector value, which originates outside the MDA. The second only ever went forward. **So
-`Pulse` has no consumer upstream of itself and becomes a pure feed-forward node**, correctly placed
-at row 39 between M2 and M3.
+**The `Si` from A2 and A19 do not transfer to this plan.** Every one of them was measured under
+the `objf`/`conf` predicate with its two-sweep floor. Phase A converges on coupling variables
+with a floor of 1. That is a different iteration, and its sweep counts are a different quantity.
+A2's and A19's numbers remain valid as statements about *the code as it stands* — and §4 uses
+them as priors — but no gate in this plan may be read off them.
 
-Two consequences. It resolves the plan's own open question 2. And it means `Pulse` **joins the
-feed-forward set**, so the `1 × |FF|` term of §3.2 gains a node — `Pulse` would run once per
-`call_models` rather than every sweep.
-
-*(Checked with care: an earlier extraction reported a third write, `pulse.i_pulsed_plant`, which
-was a regex artefact — `= ` matching `== 1`. `Pulse` only reads that switch. See trap T2.)*
-
-> **Confirmed at run time (A2, 2026-08-31).** In all three pulsed scenarios `Pulse` writes
-> exactly those two fields and nothing else. In `st_regression` (`i_pulsed_plant = 0`) it writes
-> **nothing** — the `t_current_ramp_up_min` write is behind the same switch. **This closes the
-> plan's open question 2: `Pulse` joins the feed-forward set.**
-
-### 2.4 A candidate coupler, checked and rejected
-
-`pfcoil.py` writes `physics.b_plasma_vertical_required` and `plasma_fields.py` (row 10,
-Module 1) references it, which looks like an M2 → M1 back edge. It is not: the reference is
-inside `PlasmaFields.output()`, a report-writing method invoked once after the solve, not
-inside `run()`. It does not participate in the MDA. Recorded here because the same
-false-positive shape — a name shared between `run()` and `output()` — will recur in any
-name-level analysis, and Stage 1's instrument must exclude `output()` paths explicitly.
+What **does** transfer, because it is structural rather than predicate-bound: `k = 1`, the module
+decomposition, `Pulse` becoming feed-forward, the two dead back edges, the `Build` misplacement,
+and A19's finding that the lift buys nothing without the partition.
 
 ---
 
-## 3. Critical assessment
+## 2. Proposed approach
 
-### 3.1 What is strong about this
+### 2.1 Two phases (D13)
 
-**The `k` economics are excellent.** The previous IDF plan died on the lift penalty: with `k`
-coupling variables raised to the optimiser, gradient cost scales as `n + k + 1`, and at
-`n = 14–20` a `k ≈ 10` lift ate most of the projected saving. Lifting **one** variable takes
-gradient cost from `n + 1` to `n + 2` — about **5 % at n = 20**. Essentially all of any saving
-survives to the bottom line. That is a far better risk/reward profile than the architecture it
-replaces.
+**Phase A removes the optimiser entirely** and compares fixed-point architectures at fixed design
+points. **Phase B** reintroduces VMCON to host the lifted coupler.
 
-**The partition is derived, not assumed.** The three modules come out of the DSM, and the
-articulation point (`Pulse`, row 39, belonging to no module) falls out of the same analysis
-rather than being posited. That is the right order of operations.
+The split is not staging convenience. It buys four things:
 
-**It is cheaply falsifiable.** Stage 2 predicts a bit-identical result; Stage 1's central
-measurement is three instrumented baseline runs. The study can be abandoned for very little.
+1. **H5 is absent, not mitigated.** The dominant residual risk in the previous design was that a
+   consistency constraint changes VMCON's path in ways replay cannot predict. With no optimiser
+   there is no path to perturb.
+2. **The metric becomes a count.** Sweeps and model evaluations are exact and reproduce
+   bit-for-bit. This resolves the standing conflict between the old §6 ("primary: wall clock")
+   and the project rule that no conclusion rests on a timing (I-10).
+3. **VP4 becomes testable without VP5.** Without an optimiser there is no host for a lifted
+   design variable — so the coupler is handled by an **outer fixed-point loop** instead. That
+   **inverts the old Stage 3 -> Stage 4 dependency**: the partition no longer needs the lift to
+   decouple the modules.
+4. **Phase A touches no `process/` code at all** (§3.1), so it carries no D11 approval burden and
+   its neutrality is trivially satisfied.
 
-### 3.2 The speedup argument needs a mechanism, and it is not the one implied
+### 2.2 What "a proper fixed-point iteration" means here
 
-H3 ⇏ H4. Independence of the modules does not by itself make three solvers faster than one
-loop. Consider what each costs:
+Phase A does **not** reimplement the idempotence loop. It implements plain **Gauss-Seidel
+(Picard) iteration** on a declared coupling-variable vector `y`:
 
-- **Today:** one un-converged quantity *anywhere* forces a re-run of **all 56 nodes**. Total
-  cost ≈ `S_global × |all|`, where `S_global` is set by the slowest-converging part.
-- **Partitioned:** each module iterates alone, **and the feed-forward nodes drop out of the loop
-  entirely** — they run once, not `S_global` times. Total cost ≈
-  `S₁ × |M1| + S₂ × |M2| + S₃ × |M3| + 1 × |FF|`.
+```
+y_{m+1} = G(y_m)          G = one pass over the in-loop node sequence
+stop when  max_i |y_{m+1,i} - y_{m,i}| / (|y_{m,i}| + atol_i)  <  1e-6
+```
 
-The second term matters as much as the first: `|all|` shrinks as well as the sweep counts, because
-`CsFatigue` (38), `Pulse` (39, once lifted) and rows 52–55 currently re-run on every sweep despite
-feeding nothing back. **That saving is available without partitioning at all** — it is candidate E1
-in the deferred register — so the partition must be credited only with what remains after it.
+with these decisions settled:
+
+| | Decision | Rationale |
+|---|---|---|
+| **Floor** | **1 sweep**, not 2 | The entry state is `y0`. Nothing needs manufacturing (§1.2) |
+| **`y` set** | **(b) all state written by in-loop models**, derived from the probe | Does not depend on the DSM being complete — and the DSM has produced three T1 false positives |
+| **Cross-check** | **(a) DSM feedback-edge variables**, evaluated in parallel every sweep | Disagreement about when a point converged is a **DSM validation result** (§3.4) |
+| **Tolerance** | `rtol = 1e-6` per component, with an absolute floor | Mirrors today's `rtol`; on a different quantity, so *not* the same strictness |
+| **Exclusions** | accumulating fields only, each **measured and justified** in the report | Counters and accumulators never converge; an unjustified exclusion is the same class of silent defect as the NaN loophole |
+| **NaN** | **never converged** | Today's `equal_nan=True` is not reproduced |
+| **Acceleration** | **none** — plain Gauss-Seidel | Aitken/Anderson is a separate variant point; folding it in confounds it with the topology change |
+
+**Hard cuts.** Inner (per-module) **20** sweeps; outer **20** iterations; and a **global budget of
+200 module-sweeps per design point**. Reaching any of them marks the point **invalid** — never a
+budget to be quietly consumed. The full sweep histogram is recorded so that pressure against a
+cap is visible rather than inferred.
+
+### 2.3 Arms
+
+A **design point** is the pair `(x, y0)` — the design vector *and* the entry state it was reached
+with — restored bit-identically for every arm. Not `x` alone: the entry state is what makes the
+comparison paired, and it is what A19's harness already restores field by field.
+
+| Arm | What it is | Role |
+|---|---|---|
+| **R — reference** | today's `call_models`, unmodified | **not a competitor.** Measures the size of the two defects in §1.2 |
+| **A0 — flat** | one Gauss-Seidel loop over all in-loop nodes, converging `y` | **the control** |
+| **A1 — block** | outer Gauss-Seidel over the coupler; inner Gauss-Seidel per M1/M2/M3 | the partition |
+
+The **feed-forward hoist** (`CsFatigue`, rows 52-55, and `Pulse` when the coupler is lifted) is
+applied to **both** A0 and A1 in the first results, so it cancels and the comparison is purely
+topological. The framework builds it as a toggle (VP2) so a later run can isolate it.
+
+Q4 is settled in favour of merit over mimicry: **A0 is a correct implementation, not a
+reproduction of today's loop.** R exists precisely so that the artefact's size is measured rather
+than argued.
+
+### 2.4 Protocol
+
+**Harvest.** One instrumented baseline run per scenario saves `(x, y0)` at every `call_models`,
+cached to disk so the harvest is paid once rather than per arm.
+
+**Subsample.** All `fn` and `grad_reconcile` points, plus **1 in 5** `grad` points. 94.5 % of
+points are gradient perturbations, and A19 §5.2 established they behave no differently
+(3.19 sweeps against `fn`'s 3.53 on `large_tokamak_nof`). This is what keeps a full four-scenario,
+three-arm pass inside a few minutes (§3.3).
+
+**Exit audit — this is how "matched final accuracy" is enforced.** On termination every arm gets
+one further full sweep and the **same global residual** is evaluated and recorded. If A1
+terminates at a larger global residual than A0, their counts are not comparable and the report
+must say so. Matched accuracy is *verified per point*, not assumed from a shared tolerance
+setting.
+
+**Pairwise drop.** A design point enters the comparison only if **every** arm converged it.
+Dropped points are reported with their count and their arm attribution beside every result —
+because a control that cannot converge a point is itself a finding about the code as it stands.
+
+**Phase B**, once Phase A has a result: lift `t_plant_pulse_burn` to VMCON as design variable 178
+with a consistency constraint, and ask the sharper question — **does hosting the coupler on the
+optimiser beat hosting it on an outer fixed-point loop?** — with Phase A's winner as the control.
+H5 returns here, and here it can be measured.
+
+---
+
+## 3. Implementation impact
+
+### 3.1 Phase A changes no PROCESS code
+
+This is the single most important implementation fact about the new design. The replay harness
+calls the models' bound `run()` methods directly, as A19's already does, so the entire Phase A
+comparison lives under `arch_surgery/`:
+
+| File | Change |
+|---|---|
+| `arch_surgery/idf_probe/` -> `_experiment.py` | harvest hook: save `(x, y0)` per `call_models` |
+| `arch_surgery/fixedpoint/engine.py` | *new* — Gauss-Seidel, predicate, caps, exit audit |
+| `arch_surgery/fixedpoint/arms.py` | *new* — A0 / A1 / R construction from the node map |
+| `arch_surgery/fixedpoint/ystate.py` | *new* — `y` extraction, norm, exclusion list |
+| `arch_surgery/docs/data/dsm_node_map.json` | *new* — checked-in node -> row -> module map (C8) |
+| `process/` | **none** |
+
+Consequences: **no D11 approval is needed for Phase A**; switch-neutrality is satisfied by
+construction because nothing in the production path changes; and the harness cannot perturb the
+baseline it is measuring.
+
+The harness must preserve two properties A19 established and proved:
+
+- **Warm start.** In the real solve each call starts from the previous call's state. Restoring a
+  saved `y0` reproduces that exactly. Replaying cold, or in shuffled order, would overstate every
+  arm's cost.
+- **Exact restore.** A19 verified 0 mismatched fields across all 2 288 data-structure fields in
+  2 447 replays, and its full-sequence replay reproduced the coupled loop's `Si` on 7 058/7 058
+  pairs. That control is not optional; it is what separates "M1 converges faster alone" from "my
+  replay is broken".
+
+**Trap T7 applies.** Ten models call `run()` from `output()`. The replay must call the *unwrapped*
+bound methods captured before instrumentation, as A19's does.
+
+### 3.2 Phase B changes PROCESS code, and needs approval
+
+| File | Change | Gate |
+|---|---|---|
+| `process/core/caller.py` | VP1 (sequence), VP2 (`in_loop`), VP3 (`converged`), VP4 (`solve_blocks`) hooks | neutrality: arm-off byte-identical |
+| `process/core/solver/iteration_variables.py` | append key **178** (D10 — appended, never fitted into a gap) | `IN.DAT` language divergence stated in the write-up |
+| `process/core/solver/constraints.py` | append constraint **93**, `lablcc` extended in step | as above |
+| `process/models/pulse.py` | residual extraction only, under the VP5 pattern | **D11 — user approval before merging** |
+
+### 3.3 Runtime
+
+Measured, not estimated: `large_tokamak_nof` warm in an isolated subprocess is **15.9 s internal
+for 2 027 sweeps = 7.8 ms per model sequence** (an upper bound — it includes VMCON and I/O). One
+full pass over all four scenarios is ~8 200 sweeps, about **64 s**.
+
+Phase A's cost is that multiplied by however much the strict predicate raises the sweep count,
+times the number of arms — and **the multiplier is the quantity Phase A exists to measure**, so it
+cannot be budgeted in advance:
+
+| If the strict predicate averages | multiplier | 3 arms, no subsample |
+|---|---|---|
+| ~5 sweeps | 1.6x | ~6 min |
+| ~8 sweeps | 2.5x | ~9 min |
+| pressed to the cap of 20 | 6.2x | ~21 min |
+
+With the 1-in-5 `grad` subsample and a cached harvest, the **worst case falls to roughly 5 min**
+and a re-run after a code change to 2-3 min. That is the configuration to build.
+
+Peak RSS is **423 MB** (measured, same run), which closes the memory branch of I-10.
+
+---
+
+## 4. Expected results
+
+### 4.1 The four effects, separately
+
+| Effect | Expected | Basis | Confidence |
+|---|---|---|---|
+| **Floor removal** (R -> A0) | **0-31 %** of sweeps | 630 of `large_tokamak_nof`'s 2 027 sweeps are the information-free second sweep. 31 % is the ceiling if the strict predicate cost nothing — it will cost something | direction certain, magnitude unknown |
+| **Strict predicate** (R -> A0) | **negative** — more sweeps | A19: `grad_reconcile` `S2 = 5.00` against `S_global = 3.93`, i.e. a module iterated to its own criterion needs more than the loop gives it. A2: state is still moving at exit in 24 % of calls | direction certain |
+| **Feed-forward hoist** (both arms) | **4.6-8.2 %** of node-evaluations | A2, node-count weighting. `k = 0`, no dimension penalty, separable | firm |
+| **Block vs flat** (A0 -> A1) | **negative to +19.5 %** | A19's gross contribution, *predicate-bound*; the tight inner tolerance biases low (§5.2) | weak |
+
+The first two act in opposite directions and **A0 vs R measures their sum, not either one**. If a
+separate number is wanted for each, a fourth arm — strict predicate with the floor kept at 2 — is
+the way to get it, and it is cheap. Recommended if the sum comes out near zero, since that is the
+case where the two effects cancelling is indistinguishable from neither existing.
+
+### 4.2 What would count as the existence proof
+
+Any **one** of these, measured fairly and reported with its dropped-point census:
+
+- **A0 vs R** significantly below 1.0 in model evaluations at matched or better final accuracy —
+  i.e. a correct fixed-point implementation is cheaper than the incumbent loop *and* converges
+  something the incumbent does not. This is the most likely winner and the least invasive change
+  in the whole portfolio.
+- **The hoist**, on its own, at 4.6-8.2 % with `k = 0` and bit-identical results.
+- **A1 vs A0** significantly below 1.0 on any scenario.
+
+`st_regression` is the most promising scenario for the third: it has **zero live cross-module back
+edges** (`i_pulsed_plant = 0`, so `Pulse` writes nothing), the largest module-convergence gaps of
+the four, and A19 put its partition contribution at 18.0-18.1 %. It needs no lift at all, which
+makes it the one scenario where the partition is available with `k = 0`.
+
+### 4.3 What the experiment produces even if every arm ties
+
+A quantified account of the driver's convergence behaviour under a correct predicate: how many
+sweeps the real problem needs when the state — rather than a functional of it — is converged, how
+often the incumbent loop stops early, and which coupling variables are the last to settle. A2 and
+A19 already produced publishable critique from measurement alone; Phase A extends it to the
+predicate itself.
+
+---
+
+## 5. Critical assessment
+
+### 5.1 What is strong
+
+**The economics are excellent, and measured.** 94-96 % of all sweeps are finite-difference
+gradient perturbations, and each one is a full MDA solve. At 2 027 sweeps x 7.8 ms the MDA is
+**~89 % of runtime**. So a per-call saving multiplies across essentially the whole run. This
+sharpens the architecture evaluation's summary line, *"derivatives are the bottleneck, not the
+architecture"*: derivatives are the bottleneck **because each derivative component costs a full
+MDA solve**, and cutting MDA cost per call is how you attack that without touching a model or
+writing an adjoint.
+
+**`k = 1`.** The previous IDF plan died on the lift penalty — gradient cost scales as `n + k + 1`,
+and at `n = 14-20` a `k ~ 10` lift ate the saving. Lifting **one** variable costs 4.8-5.0 % (A19,
+measured against the confirmed `2n` central-difference stencil). And Phase A avoids even that,
+because an outer loop hosts the coupler for free.
+
+**The partition is derived, not assumed.** The modules come out of the DSM and the articulation
+point falls out of the same analysis rather than being posited.
+
+**It is cheap to abandon.** No `process/` edits, a few minutes per pass, and the reference arm
+alone produces a result.
+
+### 5.2 Where it is most likely to break
+
+**The tight inner tolerance is conservative against the partition — deliberately, and it must be
+reported that way.** Converging M1 to `1e-6` against an outer coupler value that is about to
+change is the known-inefficient regime for block methods; flat Gauss-Seidel never pays it because
+it has no inner loop to over-solve. So **if A1 loses, the result does not distinguish "the
+partition does not help" from "the partition was run in its worst configuration"**, and the report
+must state the loss as an upper bound. Inner tolerance is the first axis to open if that happens.
+
+**M2 is the laggard under partitioning, and M2 is not small.** §5.3's mechanism needs the global
+loop to be driven by a *small* module. A19 found the laggard moves from M1 to M2, which is 10 of
+46 module nodes but **41.7-43.1 % of measured cost**. The condition is still not met. This is the
+strongest single argument against A1 winning, and it is stated rather than netted away.
+
+**A correct predicate may not converge where a loose one always did.** Today's loop never hits its
+cap of 10 (`call_models_nonconverged = 0`, measured). Under a strict predicate some points will
+not converge — possibly in **A0, the control**. That would be a significant finding about the code
+as it stands, and simultaneously a censoring problem: the pairwise-drop rule keeps the comparison
+honest but shrinks the sample, and a large drop set makes the remaining comparison unrepresentative
+of exactly the hard points that matter. **Report the drop census first, before any ratio.**
+
+**The exclusion list is a silent-failure surface.** Excluding a field that genuinely couples would
+declare convergence that has not happened, in every arm at once, invisibly. Hence the requirement
+that each exclusion be measured and justified rather than asserted.
+
+**Models may raise off the consistency manifold.** Physics models can be presented states the
+idempotence loop would never have produced. Budget guard work as real work.
+
+**A fixed point may not exist at every design point.** Gauss-Seidel converges only where the
+iteration is contractive. The loose predicate has been hiding non-convergence, not preventing it.
+
+### 5.3 The mechanism, and why it is weaker than it first looks
+
+Independence of the modules does not by itself make three loops faster than one. Compare:
+
+- **Flat:** one un-converged quantity anywhere re-runs all 52 nodes. Cost ~ `S_global x |all|`.
+- **Block:** each module iterates alone and the feed-forward nodes leave the loop entirely.
+  Cost ~ `S1 x |M1| + S2 x |M2| + S3 x |M3| + 1 x |FF|`.
 
 With `|M1| = 24`, `|M2| = 10`, `|M3| = 12`, **the saving is real only if the modules need
-materially different sweep counts** — specifically, only if the global loop is currently being
-driven by a *small* module. If M3 is the laggard, partitioning stops re-running M1's 24 nodes
-for M3's benefit and the win is large. If **M1** is the laggard, `S_global ≈ S₁`, and since M1
-dominates the node count, the partition saves almost nothing.
+materially different sweep counts, and specifically only if a *small* module is driving the
+loop.** A2 measured that they stop changing together and M1 — the big one — is joint-last in
+82-85 % of loops. A19 then showed that under partitioning the laggard becomes M2, also not small.
+Both measurements were made under the old predicate and neither transfers directly, but neither
+gives any reason to expect the condition to be met under the new one.
 
-**This is the single most important thing to measure, and it is measurable before any refactor
-is written.** Instrument the existing loop to record, per sweep, which module still has
-changing state. That yields `S₁`, `S₂`, `S₃` under the current architecture and predicts the
-speedup analytically. If M1 is the laggard, the honest conclusion is available for the cost of
-three runs. This measurement is now the Stage 1 gate.
+**Node counts are the weighting.** The measured-cost weighting is retired for anything a
+conclusion depends on: I-10 showed a feed-forward cost weight moving 6.4 % -> 4.4 % across runs of
+identical code, which had already reached the arithmetic behind a gate decision.
 
-> **MEASURED (A2, 2026-08-31): there is no laggard, and the honest conclusion is the one this
-> section anticipated.** Mean sweeps per `call_models`:
->
-> | Scenario | `S_global` | `S₁` (M1) | `S₂` (M2) | `S₃` (M3) |
-> |---|---|---|---|---|
-> | `large_tokamak_nof` | 3.217 | 3.159 | 2.979 | 3.216 |
-> | `low_aspect_ratio_DEMO` | 3.455 | 3.146 | 3.202 | 3.269 |
-> | `st_regression` | 3.314 | 2.640 | 2.800 | 2.911 |
-> | `large_tokamak_eval` | 2.455 | 2.455 | 2.273 | 2.455 |
->
-> The three modules stop changing together. **M1 is joint-last in 82 % of `large_tokamak_nof`'s
-> 630 loops and 85 % of `low_aspect_ratio_DEMO`'s 1 240**, and is never strictly ahead in either.
-> `S_global ≈ S₁` is the case this section identified as fatal.
->
-> **Two corrections to the arithmetic above, both from A2's measurements.**
->
-> 1. **`|all|` is 52, not 56.** Rows 1-3 are the driver stack and row 56 is the output node;
->    none runs inside a sweep. The feed-forward term is rows 38 and 52-55 (5 nodes) plus `Pulse`
->    once lifted.
-> 2. **Node counts are a poor cost weight.** Measured cost share inside a sweep is
->    M1 38 %, M2 41-44 %, M3 12-15 %, feed-forward 6 %, `Pulse` 0.3 %. M3 is 26 % of the module
->    nodes but 12-15 % of the work; M2 is 22 % of the nodes but over 40 %. Three nodes carry the
->    run: `physics`, `pfcoil` and the superconducting TF-coil model.
->
-> **The gate result.** Predicted saving as a fraction of today's cost, with the separable
-> feed-forward hoist credited separately as this section requires:
->
-> | Scenario | total | of which hoist | of which **partition** |
-> |---|---|---|---|
-> | `large_tokamak_nof` | 8.4 % | 4.6 % | **3.8 %** |
-> | `low_aspect_ratio_DEMO` | 11.8 % | 4.6 % | **7.2 %** |
-> | `st_regression` | 20.4 % | 4.6 % | **15.8 %** |
-> | `large_tokamak_eval` | 4.8 % | 1.7 % | **3.2 %** |
->
-> (measured-cost weighting, censored per-module counts treated optimistically; under DSM node
-> counts the totals are 10.2 / 15.0 / 23.2 / 8.3 % and the verdict is the same. Under the
-> pessimistic treatment the partition contribution on `large_tokamak_nof` is **negative**.)
->
-> **Nothing reaches the 25 % proceed threshold, and on the two large pulsed tokamaks the
-> partition's own contribution is at or below the 10 % stop line.** Most of what is available is
-> the hoist. Per this section's own crediting rule, the honest conclusion is that **the hoist is
-> the win and the partition is not**.
->
-> **A third mechanism, not anticipated here.** The loop's exit test is on the objective function
-> and the constraint vector only, so state that no constraint depends on sensitively can still be
-> moving when the loop declares idempotence. In `large_tokamak_nof` that happens in **24 % of
-> loops**, driven almost entirely by `pf_coil.stress_z_cs_self_midplane_profile`. Per-module
-> solvers converging their own state would do *more* work there, not less — which is why the
-> pessimistic column can go negative, and why any future comparison "at matched final accuracy"
-> (§3.3) has to confront this directly.
-
-A second-order effect cuts the other way and is worth watching: converging M1 fully before M2
-runs changes the *information* M2 receives, so per-module sweep counts under partitioning need
-not equal those measured in the coupled loop. Treat the analytic prediction as an estimate to
-be checked at Stage 3, not as a result.
-
-> **MEASURED (A19, 2026-08-31) — this paragraph is half confirmed and half refuted, and it did
-> not need Stage 3.** A19 replayed 2 447 of the four scenarios' 2 451 `call_models` with each
-> module iterated in isolation on frozen upstream inputs, restoring the data structure exactly
-> afterwards (byte-identical MFILE against `control`, 4 / 4 scenarios).
->
-> **Confirmed: the counts do change, and A2's estimate was biased against the partition.**
->
-> | Scenario | `S₁` coupled → frozen | `S₂` coupled → frozen | `S₃` coupled → frozen |
-> |---|---|---|---|
-> | `large_tokamak_nof` | 3.226 → **2.544** | 3.226 → **3.226** | 3.283 → **2.461** |
-> | `low_aspect_ratio_DEMO` | 3.144 → **2.561** | 3.201 → **3.201** | 3.287 → **2.527** |
-> | `st_regression` | 2.638 → **2.638** | 2.800 → **2.800** | 2.938 → **2.482** |
-> | `large_tokamak_eval` | 2.400 → **2.400** | 2.000 → **2.000** | 2.300 → **2.000** |
->
-> **Refuted: the mechanism is not "the information M2 receives".** `S₂` measured with M1 solved
-> to convergence first is **identical, per `call_models`, to `S₂` in the coupled loop — 2 447
-> loops, four scenarios, zero exceptions.** M2 is not chasing a moving target and never was.
-> `S₁`'s fall is *entirely* the `k = 1` lift: `S₁` with M1 alone equals `S₁` measured in the
-> whole untouched sequence with `times.t_plant_pulse_burn` pinned, in 100 % of loops in all four
-> scenarios. Only `S₃` shows a genuine frozen-input effect beyond the lift, worth 0.10–0.46
-> sweeps.
->
-> **The gate moves into the 10–25 % band and still does not reach 25 %.** Partition contribution
-> beyond the hoist, node counts / measured cost: `large_tokamak_nof` **14.9 / 11.3 %** (A2:
-> 2.3 / 3.8 %), `low_aspect_ratio_DEMO` **19.5 / 16.8 %** (A2: 6.8 / 7.2 %), `st_regression`
-> **18.1 / 18.0 %** (A2: 15.2 / 15.8 %), `large_tokamak_eval` **−0.4 / −1.3 %**.
->
-> **Two corrections that pull the other way.**
->
-> 1. **The lift's dimension penalty is not in this arithmetic.** The gradient uses central
->    differences, `2n` perturbation calls, confirmed exactly; lifting one variable makes it
->    `2(n+1)`, a **4.8 % / 5.0 %** penalty on total model evaluations at `n = 20` / `n = 19`.
->    Netted, the two large pulsed tokamaks are at **6.6–10.2 %** and **11.8–14.5 %**. §3.1's
->    "essentially all of any saving survives to the bottom line" is optimistic at these margins.
-> 2. **The laggard moves from M1 to M2, not to a small module.** Because `S₂` does not move, M2
->    is joint-last in 76 % / 73 % of the two large pulsed tokamaks' loops under the partition and
->    strictly last in 39 % / 36 %. M2 is 10 of the 46 module nodes but **41.7–43.1 % of the
->    measured cost**. This section's condition — the loop being driven by a *small* module — is
->    still not met.
->
-> **And the lift buys nothing on its own.** `max(S₁, S₂, S₃)` — what a per-module-state exit test
-> would cost the *monolithic* loop — is unchanged to four decimals by pinning the coupler, in
-> every scenario, because M2 is always the binding module. The lift's value is realised only
-> through the partition, so unlike the feed-forward hoist it is **not** separable and is
-> correctly credited to the partition.
->
-> Full detail: [`../reports/A19_frozen_input_convergence.md`](../reports/A19_frozen_input_convergence.md).
-
-### 3.3 Where it is most likely to break
-
-**H5 is the real risk.** Adding an equality consistency constraint changes the geometry of the
-feasible set. VMCON must now drive to zero a residual that was previously satisfied identically
-by construction. Iteration count can rise, line searches can shorten, and previously feasible
-starting points may no longer be feasible. The hypothesis treats "no compromise in optimiser
-iterations" as the null; it should be treated as the thing most likely to fail. Note also that
-this is the *only* place the optimiser sees a change — so if H5 fails, it fails cleanly and
-attributably, which is a virtue.
-
-**Sweep counts may be measuring the exit criterion, not the coupling.** The idempotence loop
-has a structural floor of two sweeps and exits on a relative tolerance. If that tolerance is
-loose relative to the accuracy actually achieved, part of the observed sweep count is an
-artefact of the criterion. A partition that "converges faster" could then be indistinguishable
-from simply loosening a tolerance. **Every comparison must be made at matched final accuracy,
-not matched tolerance settings.**
-
-**Wall clock will improve less than sweep count.** Constraint and objective evaluation, VMCON
-linear algebra and output writing do not shrink when sweeps do. Quote wall clock as the
-headline and treat sweep counts as a mechanism diagnostic.
-
-**Models may not be evaluable off the consistency manifold.** Physics models can raise on
-states the idempotence loop would never have presented. Budget guard/bounds work as real work,
-not as a contingency.
-
-### 3.4 Scope limits to state up front
-
-Four scenarios, tokamak only. `i_pulsed_plant` splits them into two regimes with structurally
-different coupling graphs, so results never pool across them. `st_regression` additionally sets
-`itart = 1`, which activates a different TF-coil path — useful for coverage, but it is not a
-replicate of the large-tokamak cases.
-
----
-
-## 4. The revised expectation, stated
-
-The Stage-1 gate did not clear 25 %. Proceeding is licensed by the 10–25 % rule, which obliges
-this plan to write down what it now expects rather than carrying the original claim forward.
-
-| Component | Expected saving | Basis |
-|---|---|---|
-| **Feed-forward hoist** (Stage 1b) | **4.6–8.2 %** | A2. Separable, `k = 0`, no dimension penalty |
-| **Partition beyond the hoist** | **11.3–19.5 %** gross | A19, node-count weighting |
-| … netted for the lift's `2n → 2(n+1)` cost | **6.6–14.5 %** | A19 §7. The penalty is 4.8–5.0 % and is *not* in the gross figure |
-| **Combined, realistic** | **≈ 11–22 %** | Two large pulsed tokamaks |
-
-**Five things this plan now asserts that it did not before, all measured:**
-
-1. **`k = 1` is confirmed at runtime**, and `st_regression` needs no lift at all (`i_pulsed_plant = 0`).
-2. **`S₂` is invariant** under frozen upstream inputs — identical in all 2 447 replayed loops. M2
-   was never chasing a moving target; the original §3.2 worry was wrong for M2.
-3. **Under the partition the laggard becomes M2**, at 41.7–43.1 % of measured cost. §3.2's
-   condition — that a *small* module drive the loop — **is still not met**. This is the single
-   strongest argument against the expectation above, and it is stated rather than netted away.
-4. **The lift is not separable**; `max Sᵢ` is unchanged when the coupler is pinned. It buys nothing
-   without the partition. The hoist, by contrast, is separable — which is why it goes first.
-5. **The loop exits with state still moving** in 24 % of `large_tokamak_nof`'s calls. Per-module
-   solvers converging state to their own criteria will do work the global loop currently skips.
-   **This is the mechanism most likely to consume the expected saving**, and Stage 4 must measure
-   it rather than assume it away.
-
-**H5 is now the dominant residual risk.** Whether the consistency constraint changes VMCON's
-iteration count is unmeasured, cannot be measured by replay, and sits on top of every figure
-above. If H5 costs more than ~10 % in optimiser iterations, the whole saving is gone.
-
-**Weighting.** Node counts only. The measured-cost weighting is retired for any quantity a
-conclusion depends on (I-10: a feed-forward weight moved 6.4 % → 4.4 % across identical code).
-
----
-
-## 5. Experiment design
-
-### Stage 0 — Re-baseline at `c0ae5b28` · **COMPLETE**
-
-Done as A1 (stage0-rebaseline), merged `e9747707`. Report:
-[`../reports/deprecated/A1_stage0_rebaseline.md`](../reports/deprecated/A1_stage0_rebaseline.md).
-
-**All three gates PASS 4/4** under `PROCESS_surgery_env` at `n = 5`: switch-neutrality (0 differing
-MFILE lines across 11 arms, on hex float literals), determinism (bit- and sweep-identical), and
-`ifail = 1` on every scenario.
-
-Measured baseline, for later stages to compare against:
-
-| Scenario | `nvar` | constraints | `call_models` | sweeps | mean/call | above floor |
-|---|---|---|---|---|---|---|
-| `large_tokamak_nof` | 20 | 26 | 630 | 2029 | 3.22 | 37.8 % |
-| `low_aspect_ratio_DEMO` | 19 | 25 | 1240 | 4286 | 3.46 | 42.1 % |
-| `st_regression` | 14 | 18 | 570 | 1891 | 3.31 | 39.7 % |
-| `large_tokamak_eval` | 2 | 25 | 11 | 29 | 2.45 | 27.3 % |
-
-Two results from Stage 0 that bear directly on this plan:
-
-- **94–96 % of all sweeps are finite-difference gradient perturbations.** A change acting inside
-  every sweep is multiplied by `2n`; a change that does not touch a perturbation is capped at a few
-  per cent. This cuts *for* the `k = 1` economics of §3.1.
-- **Perturbed points are systematically harder to reconcile.** 47–53 % of function-phase calls
-  finish at the two-sweep floor against only 12–20 % of gradient-phase calls — which is §3.3's
-  coupling-versus-exit-criterion ambiguity showing up in the baseline itself.
-
-### Stage 1 — Per-module convergence rates (the gating stage) · **COMPLETE — gate did not clear 25 %; proceeding under the 10–25 % rule (D12)**
-
-Done as A2 (module-convergence). Report:
-[`../reports/A2_module_convergence.md`](../reports/A2_module_convergence.md). Instrument:
-`PROCESS_IDF_PROBE=modules`, a record-only mode verified byte-identical to `control` and
-`baseline` across 15 916-18 691 MFILE lines on all four scenarios.
-
-**Outcome: `k = 1` as hypothesised, but no module is the laggard and the predicted saving does
-not reach the threshold.** (**Revised by A19**: the predicted saving is higher than A2 computed —
-11.3-19.5 % partition contribution rather than 2.3-15.8 % — because A2's `Sᵢ` were measured with
-the `k = 1` coupler still live. It still does not reach 25 %, and under the partition the laggard
-becomes M2. See §3.2.) The stop rule below is met on two of its three clauses. Stages 3-5 are
-not authorised on this evidence; Stage 2 (A3) is still worth running as an integrity check, and
-the feed-forward hoist (A13 / E1), which delivers 4.6-8.2 % with `k = 0` and no change to the
-optimiser's problem, should be reconsidered. The original design of the stage is retained below.
-
-
-Extend the probe to attribute state change to modules: after each sweep, record which of M1 /
-M2 / M3 still has changing state, and which specific entries. This gives `S₁`, `S₂`, `S₃` and
-identifies the laggard, under the *current* architecture, with no refactor.
-
-Also: confirm at runtime that `t_plant_pulse_burn` is the only variable whose read in a
-`run()` path consumes a write from a later module. The instrument must exclude `output()`
-paths (§2.4). Use `st_regression` as the control — with `i_pulsed_plant = 0` the burn-time
-edge is absent, so any residual cross-module coupling there is *another* coupler.
-
-**Gate — computed from exact counts, not from wall clock.** Predict the saving from
-`S_global × |all|` versus `Σ Sᵢ × |Mᵢ| + 1 × |FF|`. Sweep and model-evaluation counts are exact and
-reproduce bit-for-bit; **wall clock cannot resolve a 10 % effect on this machine** (I-8: worst
-within-arm spread 19.6 % at `n = 5`), so it confirms rather than decides.
-
-- Predicted saving **> 25 %** in weighted model evaluations, and `k = 1` → proceed.
-- **10–25 %**, or `k = 2–3` → proceed with the expectation revised down and stated.
-- **< 10 %**, or M1 is the laggard, or `k > 3` → **stop and report**. The measured per-module
-  convergence structure is then itself the deliverable — a publishable quantified critique with no
-  refactor. ← **this is what happened**
-
-**Credit the partition only with what E1 would not already deliver.** The feed-forward hoist is
-separable; if most of the predicted saving comes from `|FF|` rather than from `Sᵢ` differing across
-modules, the honest conclusion is that the hoist is the win and the partition is not.
-
-### Stage 1b — Hoist the feed-forward tail out of the loop · **folded in from candidate E1**
-
-Run the nodes that feed nothing back **once, after** the fixed point, instead of on every sweep:
-`CsFatigue` (38) and rows 52–55 (`WaterUse`, `Costs`, `Objective`, `Constraints`), plus whatever
-else the SCC decomposition places outside the cycles.
-
-Pure `caller.py`. **No new design variables, no dimension penalty, `k = 0`.** Expected 4.6–8.2 %.
-
-**Why it comes first.** It is the only separable component — it does not depend on the lift, the
-reorder or the solvers, and it is the one part of the expected saving that survives if H5 sinks
-the rest. Taking it first means a positive result is banked before the risky work starts.
-
-**A framework constraint this creates.** The feed-forward set is **not static**: `Pulse` (row 39)
-is inside the loop while the coupler is unlifted and joins the feed-forward tail once Stage 3
-lifts it (§2.3a). So the hoist's node set is a function of which arms are active, and the
-framework's `in_loop(node)` hook must be arm-dependent rather than a constant list.
-
-**Gate.** Exact agreement with the Stage-0 baseline on `norm_objf` **and the full MFILE**. A node
-believed feed-forward that in fact writes something an upstream model reads would silently change
-results, and this is what catches it.
-
-### Stage 2 — Reorder `Build`
-
-Move `build.run()` to after `PlasmaConfinementTime`. Nothing else changes.
-
-**Gate.** Results **bit-identical** to Stage 0. §2.2 predicts exactly this. A difference means
-the dependency graph missed an edge, and Stage 1's conclusions are unsafe. This is a cheap
-integrity check on the instrument — run it even though it is expected to be inert.
-
-### Stage 3 — Lift `t_plant_pulse_burn`
-
-Add it as a design variable, add a consistency constraint tying it to the value `Pulse`
-computes, and remove the idempotence loop's responsibility for reconciling it. Verify the
-modules are now independent before adding any solver.
-
-**Gates.** *Correctness*: `norm_objf` agrees with Stage 0 to a stated tolerance **and** a
-post-solve feasibility audit passes. Do **not** gate on iteration variables — some are not
-identified by the problem and will differ at an unchanged optimum. *Robustness*: `ifail = 1`
-on all four scenarios, no retries beyond baseline. *Cost*: report the `n → n+1` overhead
-separately, so it is not confused with the partition's effect.
-
-### Stage 4 — Per-module solvers
-
-**Carries A19's warning.** The global loop exits with M2's state still changing in 24 % of
-`large_tokamak_nof`'s calls, because its exit test is on the objective and constraints, not on
-state. Per-module solvers with per-module state criteria will converge that state — **more work,
-not less**. Measure the extra sweeps this costs *before* comparing wall clock, or the comparison
-is not at matched final accuracy.
-
-Only if Stages 1–3 pass. Wrap each module in its own solver; retire the global loop.
-
-**Gates.** As Stage 3, plus: measured `Sᵢ` under partitioning compared against Stage 1's
-predictions (§3.2), and wall clock at matched final accuracy.
-
-### Stage 5 — Characterise
-
-Sweep the scenario set, report pulsed and steady-state separately, and decompose the
-wall-clock change into model evaluation, VMCON overhead and I/O so the mechanism is visible
-rather than asserted.
-
----
-
-## 6. Measurement protocol
-
-**Primary:** wall clock to converged solution, at matched final accuracy.
-**Secondary:** model evaluations, sweeps per module, VMCON iterations, solver retries.
-**Correctness:** `norm_objf`, post-solve constraint feasibility, `ifail`.
-
-**Isolation is mandatory.** `OutputFileManager` holds file handles as class attributes and
-initialisation mutates a global data structure, so **every run gets a fresh subprocess and its
-own working directory**. Discard the first run in a fresh environment for timing — JIT
-compilation dominates it.
-
-**Matched accuracy, not matched settings.** Before comparing, verify baseline and variant have
-converged to the same place to the same precision.
-
----
-
-## 7. Threats to validity
+### 5.4 Threats to validity
 
 | Threat | Handling |
 |---|---|
-| Sweep count reflects the loop's exit criterion, not coupling | Compare at matched final accuracy; report the criterion's slack. **Confirmed real by A2**: in 24 % of `large_tokamak_nof`'s loops the state is still changing when the loop exits |
-| Partitioning changes per-module convergence vs. the coupled loop | **Measured by A19 (2026-08-31) without building the partition**, by replaying each module in isolation from a saved state and restoring it. It does change, in the partition's favour, by +8 to +12 percentage points of partition contribution on the two large pulsed tokamaks — but the mechanism is the `k = 1` coupler, not the information M2 receives, and `S₂` does not move at all. Threat closed; §3.2 carries the numbers |
-| Name-level analysis conflates `run()` and `output()` paths | Instrument excludes `output()`; §2.4 is the worked example |
-| Consistency constraint changes optimiser behaviour | Measured as a first-class result (H5), not assumed away |
-| Models raise off the consistency manifold | Budgeted as Stage 3 work; failures reported, not silently worked around |
-| `i_pulsed_plant` splits the coupling graph in two | Never pool pulsed and steady-state results |
-| Four scenarios, tokamak only | No claim about stellarator, IFE, or unsampled configurations |
+| Sweep count measures the exit criterion, not the coupling | The exit audit (§2.4) verifies matched final accuracy per point. This is the threat Phase A exists to remove |
+| Arms compared over different populations | Pairwise drop; drop census reported before any ratio |
+| The trajectory is not stable — a different predicate would visit different design points | **Accepted, not engineered around.** Phase A measures cost-to-converge *these* points from *these* entry states. It is a per-point mechanism result, not a re-run solve. Sound for an existence proof; insufficient for an adoption decision, which is Phase B's job |
+| DSM misses an edge | `y` set (b) does not depend on the DSM; set (a) runs as cross-check; disagreements become DSM findings, recorded in [`../reports/DSM_VALIDATION.md`](../reports/DSM_VALIDATION.md) |
+| `run()` / `output()` conflation | Trap T1, three instances. The instrument excludes `output()` paths; the replay calls unwrapped bound methods (T7) |
+| `i_pulsed_plant` splits the coupling graph | Never pool pulsed and steady-state results |
+| Four scenarios, tokamak only | No claim about stellarator, IFE or unsampled configurations. `st_regression` also sets `itart = 1`, a different TF path — coverage, not a replicate |
+
+### 5.5 Scope limits stated up front
+
+Four scenarios. Tokamak only. Phase A is a **per-point mechanism measurement** with the optimiser
+absent — it cannot speak to optimiser iteration count, and it does not claim to. The design points
+come from a baseline VMCON trajectory, so Phase A's answer is "block beats flat *on the points the
+baseline visited*", not a claim about the design space.
 
 ---
 
-## 8. Open questions
+## 6. Open questions
 
-1. ~~**Which module is the laggard?**~~ **ANSWERED (A2): none is.** The three modules stop
-   changing together and M1 is joint-last in over 80 % of loops in both large pulsed cases
-   (§3.2). This is the answer that stops the study.
-2. ~~Does `st_regression`, with no burn-time edge, already exhibit an independent partition?~~
-   **ANSWERED (A2): yes.** Zero live cross-module back edges, and the largest module-convergence
-   gaps of the four scenarios (§2.3).
-3. Is `t_burn_0` truly dead, or read through an MFILE path outside `process/`? If dead,
-   removing it is a small independent contribution. **A2 note:** it is written by `physics` on
-   every sweep and is one of the fields still changing at loop exit in `large_tokamak_nof`, so it
-   costs sweeps as well as bytes.
-3b. **Do the two dead back edges ever come alive?** `build.dr_fw_inboard/outboard` and
-   `pf_power.vpfskv` are structurally present but constant in this deck (§2.3). Any change that
-   makes `radius_fw_channel`, `dr_fw_wall` or `vpfskv` computed rather than fixed would raise `k`
-   from 1 to 3.
-4. How many upstream commits now separate `c0ae5b28` from `ukaea/main`, and does the write-up
-   need to state that drift?
+1. **Do the two dead back edges ever come alive?** `build.dr_fw_inboard/outboard` and
+   `pf_power.vpfskv` are structurally present but constant in this deck. Any change making
+   `radius_fw_channel`, `dr_fw_wall` or `vpfskv` computed would raise `k` from 1 to 3.
+2. **Is `t_burn_0` truly dead**, or read through an MFILE path outside `process/`? It is written
+   by `physics` every sweep and is one of the fields still changing at loop exit in
+   `large_tokamak_nof`, so it costs sweeps as well as bytes.
+3. **How many upstream commits separate `c0ae5b28` from `ukaea/main`**, and does the write-up need
+   to state that drift?
+4. **Does the fourth arm** (strict predicate, floor kept at 2) get built up front, or only if
+   A0 vs R comes out near zero? §4.1 recommends the latter.
