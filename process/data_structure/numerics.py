@@ -289,6 +289,10 @@ class NumericsData:
             "CS achievable stress load cycles lower limit           ",
             "ECRH ignitability                ",  # Stellarator constraint
             "Fuel composition consistency     ",
+            # Fork-only (arch_surgery).  A constraint appended without its
+            # label is a silent reporting gap, so lablcc is extended in step
+            # with the registration in process/core/solver/constraints.py.
+            "Burn time consistency            ",
         ]
     )
     """Labels describing constraint equations (corresponding itvs)<UL>
@@ -391,6 +395,7 @@ class NumericsData:
     * (90) Lower Limit on number of stress load cycles for CS
     * (91) Checking if the design point is ECRH ignitable
     * (92) D/T/He3 ratio in fuel sums to 1
+    * (93) Burn time consistency, fork-only: determines iteration variable 178
     """
 
     ixc: list[int] = field(
@@ -576,6 +581,7 @@ class NumericsData:
     * (173) f_plasma_fuel_deuterium : Deuterium fraction in fuel
     * (174) NOT USED
     * (175) NOT USED
+    * (178) t_plant_pulse_burn : flat-top burn time, fork-only (constraint 93)
     """
     # Issue 287 iteration variables are now defined in module define_iteration_variables in iteration variables.f90
     # WARNING These labels are used as variable names by new_indat(), and possibly
