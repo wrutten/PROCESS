@@ -216,6 +216,7 @@ comparison paired, and it is what A19's harness already restores field by field.
 |---|---|---|
 | **R — reference** | today's `call_models`, unmodified | **not a competitor.** Measures the size of the two defects in §1.2 |
 | **A0 — flat** | one Gauss-Seidel loop over all in-loop nodes, converging `y` | **the control** |
+| **A0f — flat, floor 2** | A0 with the two-sweep floor retained | **isolates the floor effect** from the predicate's cost (open question 4) |
 | **A1 — block** | outer Gauss-Seidel over the coupler; inner Gauss-Seidel per M1/M2/M3 | the partition |
 
 The **feed-forward hoist** (`CsFatigue`, rows 52-55, and `Pulse` when the coupler is lifted) is
@@ -330,10 +331,11 @@ Peak RSS is **423 MB** (measured, same run), which closes the memory branch of I
 | **Feed-forward hoist** (both arms) | **4.6-8.2 %** of node-evaluations | A2, node-count weighting. `k = 0`, no dimension penalty, separable | firm |
 | **Block vs flat** (A0 -> A1) | **negative to +19.5 %** | A19's gross contribution, *predicate-bound*; the tight inner tolerance biases low (§5.2) | weak |
 
-The first two act in opposite directions and **A0 vs R measures their sum, not either one**. If a
-separate number is wanted for each, a fourth arm — strict predicate with the floor kept at 2 — is
-the way to get it, and it is cheap. Recommended if the sum comes out near zero, since that is the
-case where the two effects cancelling is indistinguishable from neither existing.
+The first two act in opposite directions and **A0 vs R measures their sum, not either one**. Arm
+**A0f** (strict predicate, floor kept at 2) separates them and is **built up front** (user,
+2026-09-01): `R -> A0f` is the predicate's cost alone, `A0f -> A0` is the floor removal alone. It
+costs one flag in the engine, and without it a near-zero sum is indistinguishable from neither
+effect existing.
 
 ### 4.2 What would count as the existence proof
 
@@ -505,13 +507,28 @@ baseline visited*", not a claim about the design space.
 
 ## 6. Open questions
 
+**Tracked, not blocking** (user, 2026-09-01):
+
 1. **Do the two dead back edges ever come alive?** `build.dr_fw_inboard/outboard` and
    `pf_power.vpfskv` are structurally present but constant in this deck. Any change making
-   `radius_fw_channel`, `dr_fw_wall` or `vpfskv` computed would raise `k` from 1 to 3.
-2. **Is `t_burn_0` truly dead**, or read through an MFILE path outside `process/`? It is written
-   by `physics` every sweep and is one of the fields still changing at loop exit in
-   `large_tokamak_nof`, so it costs sweeps as well as bytes.
-3. **How many upstream commits separate `c0ae5b28` from `ukaea/main`**, and does the write-up need
-   to state that drift?
-4. **Does the fourth arm** (strict predicate, floor kept at 2) get built up front, or only if
-   A0 vs R comes out near zero? §4.1 recommends the latter.
+   `radius_fw_channel`, `dr_fw_wall` or `vpfskv` computed would raise `k` from 1 to 3. **Keep
+   under observation** — re-check whenever the base commit's relationship to upstream is revisited.
+2. **Is `t_burn_0` truly dead**, or read through an MFILE path outside `process/`? It is written by
+   `physics` every sweep and is one of the fields still changing at loop exit in
+   `large_tokamak_nof`, so it costs sweeps as well as bytes. **Keep under observation.**
+
+**Closed:**
+
+3. ~~How many upstream commits separate `c0ae5b28` from `ukaea/main`?~~ **Not relevant at this
+   time** (user, 2026-09-01). Revisit only if the write-up needs to state drift.
+4. ~~Does the fourth arm get built up front?~~ **Yes — build it up front** (user, 2026-09-01).
+   Arm **A0f**: strict coupling-variable predicate with the floor kept at 2. It separates the two
+   effects that A0-vs-R otherwise measures only as a sum — the floor removal (worth up to 31 %) and
+   the strict predicate's extra cost (negative). Without it, the two cancelling is
+   indistinguishable from neither existing. It costs one more arm in the matrix and no new code
+   beyond a flag in the engine, and it may be wanted later even if the sum comes out clearly
+   signed.
+
+**Arm matrix, settled:** `R` (today's loop, reference) · `A0` (flat, floor 1 — control) ·
+**`A0f`** (flat, floor 2 — isolates the floor effect) · `A1` (block, floor 1). Hoist applied to all
+of them in first results, so it cancels.

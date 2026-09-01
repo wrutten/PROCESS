@@ -7,6 +7,12 @@
 delivered the parts marked *(built, A1)*. · **Base commit:** `c0ae5b28` · **Owns:** the shared
 code every architecture experiment runs on.
 
+**Governing principle — the framework is minimal, and stays minimal.** Build a component when a
+*queued* task needs it, never because a variant point exists in the model below. Every hook carries
+a permanent neutrality obligation, and an unused hook is that obligation with no result behind it.
+Where this document describes a component that no queued task consumes, it is a **specification
+held in reserve**, not work to schedule. §5.1 audits what is currently over-built.
+
 This document specifies the code to build **before** running an experiment. The experiments
 themselves are [`MDA_PARTITION_EXPERIMENT.md`](MDA_PARTITION_EXPERIMENT.md),
 [`SUBDRIVER_LIFT_EXPERIMENT.md`](SUBDRIVER_LIFT_EXPERIMENT.md) and the deferred register
@@ -265,8 +271,16 @@ A checked-in mapping model attribute -> DSM row -> module, generated from the de
 at `PROCESS_at_36ac820e` and committed as data. VP1, VP2, VP4 and C9 all need it, and it must not
 be four hand-written lists that drift apart.
 
-**Validated at run time, not trusted.** A1's `st_regression` failure is the standing example of an
-archived artifact silently going stale against the tree.
+**The map is stable, so the check is small.** It is generated from the same pin the tree descends
+from, and it maps *model attribute -> row -> module* — a mapping VP1 does not disturb, because
+reordering the call sequence does not change which module a node belongs to. So this needs a
+three-line assertion, not a validation subsystem.
+
+**The assertion is `observed nodes are a subset of mapped nodes`, not equality.** Per V6 the map is
+**configuration-specific**: a map generated for the tokamak deck names nodes that do not execute in
+every scenario — `Pulse` writes nothing under `i_pulsed_plant = 0`, and `models.tfcoil.run()` is
+reached in none of the four decks. An equality check would fail on correct runs. A node observed
+that the map does not name is the real error, and that is what to raise on.
 
 ### 2.10 C10 — DSM validation reporting · *new*
 
@@ -285,24 +299,21 @@ merge; it accumulates across tasks and is a deliverable to the dependency-analys
 
 ### 3.1 Build order
 
-| Step | Work | Half | Blocks |
+| Step | Work | Half | Status |
 |---|---|---|---|
-| **F1** | `_idf_probe.py` -> `_experiment.py`; arm parsing; arm identity in `metrics.json` | shared | all |
-| **F4** | C8 DSM node map, with run-time validation | shared | A2, A13, A15, C9 |
-| **F11** | **C9 fixed-point engine** + `harvest` hook + cached harvest and subsample | **Phase A** | **the whole partition Phase A** |
-| **F12** | **C10 DSM validation report** | Phase A | reporting obligation, from F11 onward |
-| **F6** | C6 correctness, matched-accuracy and robustness gates | shared | any behaviour-changing arm |
-| **F2** | C4 registry table + append 178 (proves the mechanism) | Phase B | A4, A9-A11 |
-| **F7a** | VP1 hook (`model_sequence`) | Phase B | A3 |
-| **F7b** | VP2 hook (`in_loop`) — **arm-dependent, not a constant set** | Phase B | hoist in production |
-| **F8** | VP3 hook (`converged`) — **un-deferred by D13** | Phase B | carrying Phase A's predicate into production |
-| **F5** | `note_subsolve` census hook (read-only) | Phase B | A9 |
-| **F9** | VP5 pattern + constraint layer | Phase B | A4, A9-A11 |
-| **F10** | VP4 (`solve_blocks`) | Phase B | A5 |
-| **F3** | C7 timing protocol | context only | no gate — see §5.3 |
+| **F11** | **C9 fixed-point engine** + `harvest` probe mode + cached harvest and subsample | **Phase A** | **build now** — the whole comparison |
+| **F4** | C8 node map + subset assertion | Phase A | **build now** — small |
+| **F12** | C10 DSM validation register | Phase A | **open** (`reports/DSM_VALIDATION.md`) |
+| F1 | consolidate three probe modules to one `_experiment.py`, pure file-merge | shared | approved, **after** Phase A — not a blocker |
+| F2 | C4 registry table + append 178 | Phase B | when a lift is run |
+| F6 | correctness + robustness gates | Phase B | needs a solve |
+| F7a / F7b | VP1 / VP2 hooks in `caller.py` | Phase B | with their consumers |
+| F8 / F10 | VP3 / VP4 hooks in `caller.py` | Phase B | **only if** Phase A's findings are carried into production (open question 4) |
+| F5 / F9 | `note_subsolve`; VP5 pattern + constraint layer | Phase B | **unqueued** — specified, not scheduled |
+| F3 | C7 timing protocol | context | metadata fields only; the rest is a recipe |
 
-**F1, F4, F11, F12 are the minimum before the partition's Phase A runs.** Everything from F2
-downward is Phase B and can wait for Phase A's result.
+**F11 + F4 is the minimum before Phase A runs**, with F12 as a reporting obligation rather than
+code. Everything else waits for a task that consumes it.
 
 ### 3.2 Where the code lives
 
@@ -312,7 +323,8 @@ downward is Phase B and can wait for Phase A's result.
 | `arch_surgery/fixedpoint/arms.py` | R / A0 / A1 construction from the node map | no |
 | `arch_surgery/fixedpoint/ystate.py` | `y` extraction, norm, exclusion list | no |
 | `arch_surgery/docs/data/dsm_node_map.json` | C8 | no |
-| `process/core/_experiment.py` | C1 + C2 hooks; consolidates the three existing probe modules | yes — neutrality-gated, **already present** (§1.4) |
+| `process/core/_idf_probe.py` | one new `harvest` mode — **no new hook site** (§1.4) | yes — mode-gated, existing file |
+| `process/core/_experiment.py` | F1 consolidation of the three probe modules — *after* Phase A | yes — bit-identity gate |
 | `process/core/caller.py` | VP1-VP4 hook sites | yes — neutrality-gated |
 | `process/core/solver/{iteration_variables,constraints}.py` | C4 appends | yes |
 | `process/models/*.py` | VP5 residual extraction | yes — **D11 approval before merging** |
@@ -354,24 +366,66 @@ state still moving — with no `process/` edits and no approval gate.
 
 ## 5. Critical assessment
 
-### 5.1 The framework's own risks
+### 5.1 Over-building audit — what to cut, and what Phase A actually needs
 
-**Over-building is the main one.** Ten variant-point hooks for a portfolio that currently has one
-live experiment is a large surface with a neutrality obligation attached to each. The mitigation is
-the build order: hooks land **with their consumers**, not in advance. F8 is un-deferred only
-because D13 gave it a consumer; F3 is demoted for the opposite reason.
+The variant-point model is a good *description* of the driver's degrees of freedom. It is a bad
+*build list*, and reading it as one is how this document reached ten hooks and twelve build steps
+for a portfolio with one live experiment. The audit:
 
-**The `y` exclusion list is the most dangerous single artifact in the design.** It is a
-hand-maintained list that can cause every arm to declare a convergence that has not happened, with
-no symptom. Hence: each exclusion measured and justified in the report, not asserted, and the
-DSM-derived cross-check set running in parallel to catch a coupling variable wrongly excluded.
+**Phase A needs three things. Not twelve.**
 
-**The DSM node map can go stale.** It is generated at `PROCESS_at_36ac820e` against a tree that
-will move. Run-time validation is mandatory, and A1's `st_regression` failure is the reason.
+| Needed | Why |
+|---|---|
+| **One new probe mode** (`harvest`) | saves `(x, y0)` per `call_models` |
+| **C9, the fixed-point engine** | the entire comparison, in `arch_surgery/` |
+| **C8, the node map** | the block arm's module boundaries |
 
-**Composed arms are untested combinations.** Arms compose mechanically, but C2a is a worked example
-of a defect that appears only in one composition. Any combination used in a result must be gated
-explicitly.
+Everything else in §2 is Phase B or unqueued. Specifically:
+
+**Cut now — `PROCESS_ARCH` arm composition (part of C1).** The comma-separated arm parser exists to
+let two behaviour-changing arms run together. Exactly one composition is known to be needed —
+VP2 with VP5, the C2a case — and it is in Phase B. **Phase A selects its arms in the harness, not
+in PROCESS**, because R / A0 / A1 all live in `arch_surgery/`. The existing single-mode switch
+(`PROCESS_IDF_PROBE=<mode>`, which A1, A2 and A19 each extended) already covers everything Phase A
+does. Build the parser when the first real composition is run.
+
+**Defer entirely — C3 / F9, the VP5 pattern.** It is the largest single piece in the document and
+**no queued task consumes it**. A4 is Phase B; A9-A11 belong to the subdriver experiment, which is
+not queued. It also carries the only `process/models/` edits in the portfolio, hence the only D11
+approval burden. Nothing is lost by leaving it specified and unbuilt.
+
+**Defer — VP3, VP4 and `note_subsolve` hooks in production (F8, F10, F5).** VP3 and VP4 in
+`caller.py` are only needed **if** Phase A's findings are carried into the running code, which is
+open question 4 and not yet decided. Building them first is building for a hypothesis. Phase A
+exercises both concepts entirely outside PROCESS.
+
+**Shrink — C6, the "gate library".** A1's `compare.py` already does neutrality, determinism and
+solves. Of the three additions: **matched-accuracy is not a gate, it is the engine's exit audit**
+and belongs inside C9; correctness (`norm_objf` + feasibility) and robustness need a *solve*, so
+they are Phase B. There is no library to build for Phase A.
+
+**Shrink — C7, the timing protocol.** Already demoted. With counts primary the only parts earning
+their place are the metadata fields, which cost nothing to record, and the rule refusing to quote a
+comparison whose intervals overlap. Interleaved-arm scheduling and the thread-pinning precondition
+are real work that **no live gate depends on**. Keep them as a recipe for the day a timing matters.
+
+**Optional, and not a blocker — F1, the probe consolidation.** Three task-specific probe modules
+(A1's, A2's, A19's, 1 594 lines) have accreted in `process/core/`, and merging them to one
+`_experiment.py` is approved (user, 2026-09-01) on condition it is bit-identical in output with
+negligible runtime cost. But **the harvest mode does not require it** — it can be a fourth mode in
+the existing module. Scope F1 as a **pure file-merge with a bit-identity gate**, not as
+"generalise to arm parsing", and run it *after* Phase A rather than before, so a working instrument
+set is not refactored on the critical path.
+
+**What remains a genuine risk after all that**
+
+- **The `y` exclusion list** is the most dangerous artifact in the design: a hand-maintained list
+  that can make every arm declare a convergence that has not happened, with no symptom. Mitigation
+  is not architectural — it is that each exclusion is measured and justified in the report, and the
+  DSM-derived cross-check set runs in parallel to catch a coupling variable wrongly excluded.
+- **Composed arms are untested combinations.** C2a is the worked example of a defect visible in
+  only one composition. Any combination used in a result is gated explicitly. This is a reporting
+  rule, and costs nothing until Phase B.
 
 ### 5.2 What this framework deliberately does not do
 
