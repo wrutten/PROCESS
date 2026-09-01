@@ -128,12 +128,97 @@ been generated "from our scenario".
 
 ---
 
+## V7 — The DSM's feedback-edge set is not a usable convergence predicate
+
+**Filed by A18 (experiment-framework), 2026-09-01.** This is the C10 cross-check the framework was
+built to run: the coupling set is computed **two ways** — from run-time instrumentation (*set (b)*,
+every field written by a model inside `Caller._call_models_once`) and from the DSM's cross-module
+feedback edges (*set (a)*, the four fields in V2–V5) — and the sweep at which each *would have*
+declared convergence is recorded for every design point.
+
+Flat Gauss-Seidel, τ = 1e-6, all harvested design points, four scenarios:
+
+| Scenario | points | set (a) stops **earlier** | agree | set (a) stops later | mean sweeps set (a) would have skipped |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | 149 | **142 (95.3 %)** | 7 | **0** | 0.96 |
+| `low_aspect_ratio_DEMO` | 297 | **282 (94.9 %)** | 15 | **0** | 1.12 |
+| `st_regression` | 144 | **135 (93.8 %)** | 9 | **0** | 2.44 |
+| `large_tokamak_eval` | 10 | **7** | 3 | **0** | 1.20 |
+
+**Never once later, in 600 design points.** Set (a) is a strict subset of set (b) in behaviour as
+well as in membership: it declares the fixed point reached one to two-and-a-half sweeps before the
+state has actually stopped moving.
+
+**Why, measured rather than argued.** Of the four fields in set (a), **three are `constant` across
+the entire harvest** — `build.dr_fw_inboard`, `build.dr_fw_outboard` and `pf_power.vpfskv`, the
+three edges V3 and V4 already recorded as *structurally present but dead in this deck*. A18's
+categoriser reaches that verdict independently, from 600 entry states, without being told. Only
+`times.t_plant_pulse_burn` is a live continuous coupler, and on `st_regression` **even that is
+absent from set (b) entirely**: with `i_pulsed_plant = 0` no in-loop model writes it, so the
+`Pulse` block's coupling-state subset is empty. That is A2's `k = 0` re-derived by a second
+instrument, and it is why `st_regression` is the scenario where set (a) is most misleading — there
+the whole of set (a) is three constants, so it "converges" on the first sweep, always.
+
+**Verdict: the DSM is not wrong; the *use* would be.** Nothing here contradicts the collapsed
+DSM's edge list. What it refutes is the idea — live in EXPERIMENT_FRAMEWORK.md §2.4 as the
+alternative option (a) — that the feedback-edge set could serve as the convergence predicate. A
+partitioned solver that iterated to agreement on the DSM's couplers alone would exit with the rest
+of the coupling state still moving, on 94–95 % of design points.
+
+**Consequence.** Decision D13's choice of set (b) is vindicated by measurement rather than by
+argument, and set (a) keeps exactly the role the framework gives it: a cross-check that produces
+findings, never the predicate. Recorded here rather than only in A18's report because this register
+accumulates and A18's will be archived.
+
+## V8 — Per-scenario DSM regeneration: the partition survives, and the run-time map needed no change
+
+**Recorded 2026-09-01 from `PROCESS_code_analysis`'s M100 (run-all-scenarios), which V6 was waiting
+on.** V6's pre-commitment was explicit: *if the row ranges defining M1/M2/M3 do not survive under a
+deck differing in 12 switches, the block-arm result for that scenario is withdrawn, not caveated.*
+
+**It survives.**
+
+- `low_aspect_ratio_DEMO` — identical 52-node model layer, identical cross-module cell set
+  (55/55). Nothing new, nothing lost. Survives outright.
+- `st_regression` — survives up to two boundary-respecting model substitutions, with **zero new
+  cross-module cells** among the partition members. Nine cross-module and about 23 intra-module
+  cells are *lost*; losses never break a block partition.
+
+**The withdrawal is not triggered.** V6's caveat on `st_regression`'s block-arm result is lifted.
+
+**The two substitutions, checked against our own code before this entry was written:**
+
+1. `CICCSuperconductingTFCoil` → `CROCOSuperconductingTFCoil` inside M2 — the `i_tf_turn_type` flip
+   that D9 patched into our deck. Our node map **already carries both** (`cicc_sctfcoil` and
+   `croco_sctfcoil` are both M2 in `_idf_probe_modules.NODE_MODULE`), and both are top-level
+   `run()` calls behind the branch at `caller.py:321` / `:328`. The refinement worth recording is
+   semantic: **M2 contains "the TF coil model, selected by `i_tf_turn_type`", not any one class**,
+   and `docs/data/dsm_node_map.json` now says so in `modules.M2.membership_note`.
+2. `ElectronCyclotron` is new in `st_regression` (the `i_hcd_primary` flip) and the sibling assigns
+   it to M1. **It is not a node at our granularity**: it is constructed in `main.py` and consumed
+   inside the physics-orchestrated block, and never appears as a top-level `run()` in
+   `_call_models_once`. It therefore cannot enter our observed-node set and needs no entry.
+
+**Why no change was needed, and why that is the point.** Our node map and coupling set are derived
+from **run-time instrumentation across all four scenarios**, not from the DSM's single-deck graph.
+A map built from the DSM alone would have been wrong for `st_regression` and would be under repair
+now. The run-time map was already right, without knowing this result — which is the argument for
+set (b) over set (a), now tested rather than asserted. Read together with **V7**, the two entries
+say the same thing from opposite directions: the DSM is a good description and a poor predicate.
+
 ## Open
 
-- **The collapsed DSM's 56 rows do not map one-to-one onto the 26 `run()` calls** in
+- ~~**The collapsed DSM's 56 rows do not map one-to-one onto the 26 `run()` calls** in
   `_call_models_once`. Node-count weighting (`|M1| = 24`, `|M2| = 10`, `|M3| = 12`, `|all| = 52`)
   is therefore in DSM-row units, not model-call units. This has not caused an error, but the two
-  units are easy to confuse in a cost argument and the node map (C8) should carry both.
+  units are easy to confuse in a cost argument and the node map (C8) should carry both.~~
+  **Addressed by A18**: `docs/data/dsm_node_map.json` carries a `units` block with both
+  `dsm_rows` (24 / 10 / 12 / 1 / 5, 52 executed of 56) and `model_calls`, and no caller can ask
+  for "the node count" without naming the unit. **Still open in one respect**: a per-node DSM
+  *row number* is not available in this repository — trap T9 forbids reading the sibling's
+  generated exports live — so the map fills in only the rows our own committed documents state
+  (5, 39, 41, 48) and leaves the rest `null`. Closing that needs a per-row name export from
+  `PROCESS_code_analysis`, requested rather than scraped.
 - **Rows 1-3 and 56 are not executed inside a sweep** (`COOR_SingleRun`, `VMCON`,
   `MDA_Idempotence`, `MDA_Output`). An earlier revision of the partition plan used `|all| = 56`;
   the correct figure is 52. Corrected by A2.

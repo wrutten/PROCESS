@@ -252,6 +252,7 @@ def main() -> int:
         row = {
             "call_index": p["call_index"],
             "phase": p.get("phase"),
+            "m": p.get("m"),
             "s_global_live": p.get("s_global"),
             "loop_converged_live": p.get("loop_converged"),
             "arms": {},
@@ -264,7 +265,9 @@ def main() -> int:
                 result["restore_mismatch_fields"] = sorted(
                     set(result["restore_mismatch_fields"]) | set(bad)
                 )[:40]
-            sw = E.Sweeper(models, data, node_order, p["x"], p["nvars"])
+            sw = E.Sweeper(
+                models, data, node_order, p["x"], p["nvars"], m=p.get("m")
+            )
             try:
                 if arm == "R":
                     out = E.solve_reference(sw, ln)

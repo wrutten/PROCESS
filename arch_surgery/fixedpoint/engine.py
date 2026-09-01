@@ -85,7 +85,7 @@ class Sweeper:
     arise here: the replay process never calls ``output()`` at all.
     """
 
-    def __init__(self, models, data, node_order, x, nvars):
+    def __init__(self, models, data, node_order, x, nvars, m=None):
         self.models = models
         self.data = data
         self.x = np.asarray(x, dtype=float)
@@ -102,8 +102,18 @@ class Sweeper:
         self._objective_function = objective_function
         self._constraint_eqns = _constraints.constraint_eqns
         nums = data.numerics
-        self._m = int(nums.n_equality_constraints) + int(
-            nums.n_inequality_constraints
+        # The length of the constraint vector ``Caller.call_models`` compares.
+        # It is not always ``n_equality + n_inequality``: on the fsolve path
+        # ``solver.py:383`` calls ``fcnvmc1`` with ``meq`` alone, so an
+        # evaluation run's idempotence loop compares a 2-vector while its final
+        # call compares a 25-vector.  Arm R reproduces that loop, so it takes
+        # the value the harvest recorded for this design point and only falls
+        # back to the total when the harvest predates that record.
+        self._m = (
+            int(m)
+            if m
+            else int(nums.n_equality_constraints)
+            + int(nums.n_inequality_constraints)
         )
 
     @staticmethod

@@ -41,6 +41,16 @@ MODULES = {
         "dsm_rows": [[5, 5], [29, 37]],
         "n_dsm_rows": 10,
         "in_loop": True,
+        "membership_note": (
+            "M2 contains *the TF coil model, selected by i_tf_turn_type* -- not "
+            "any one class. The switch chooses between the cable-in-conduit and "
+            "cross-conductor superconducting turn models (caller.py:321 and "
+            "caller.py:328), and both are M2 members. Per-scenario DSM "
+            "regeneration by PROCESS_code_analysis (2026-09-01) shows "
+            "st_regression substituting one for the other *within* M2, with no "
+            "new cross-module cells; describing the module by the switch rather "
+            "than by a class name is what makes that a non-event."
+        ),
     },
     "M3": {
         "label": "Plant",
@@ -206,9 +216,23 @@ def main() -> int:
         "dsm_source_deck": "examples/data/large_tokamak_IN.DAT",
         "decision": "D8",
         "caveats": [
-            "Configuration-specific (DSM_VALIDATION.md V6). Exact on "
-            "large_tokamak_nof and large_tokamak_eval; a near neighbour on "
-            "low_aspect_ratio_DEMO; an extrapolation on st_regression.",
+            "Configuration-specific in origin (DSM_VALIDATION.md V6): generated "
+            "for the tool's tokamak preset, which matches large_tokamak_nof and "
+            "large_tokamak_eval exactly. RESOLVED 2026-09-01 by per-scenario DSM "
+            "regeneration in PROCESS_code_analysis (M100): the three-module "
+            "partition survives on low_aspect_ratio_DEMO outright (identical "
+            "52-node model layer, identical 55/55 cross-module cell set) and on "
+            "st_regression up to two boundary-respecting model substitutions "
+            "with zero new cross-module cells. The pre-committed withdrawal of "
+            "the st_regression block-arm result is therefore NOT triggered.",
+            "Neither substitution touches this map, because this map is derived "
+            "from run-time instrumentation across all four scenarios rather than "
+            "from the DSM's single-deck graph. The TF-turn substitution is "
+            "already covered (both cicc_sctfcoil and croco_sctfcoil are M2 "
+            "members), and ElectronCyclotron is not a node at this granularity "
+            "-- it is constructed in main.py and consumed inside the "
+            "physics-orchestrated block, never as a top-level run() in "
+            "_call_models_once.",
             "Per-node DSM row numbers are not available in this repository. "
             "Trap T9 forbids reading the dependency-analysis repository's "
             "generated exports live. Only the rows our own committed "

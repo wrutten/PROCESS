@@ -161,6 +161,14 @@ _captured_this_call = False
 _last_x = None
 _last_nvars = None
 
+#: Length of the constraint vector the idempotence loop is comparing.  It is
+#: NOT always ``n_equality + n_inequality``: on the fsolve path
+#: ``solver.py:383`` calls ``fcnvmc1`` with ``meq`` alone, so an evaluation
+#: run's loop compares a 2-vector while its final call compares a 25-vector.
+#: Arm R reproduces ``Caller.call_models``, so it has to know which.
+_last_m: list = [None]
+_m_counts: dict = {}
+
 _points: list = []
 _dropped_for_cap = 0
 _node_order: list = []
@@ -260,6 +268,8 @@ def _install(models, data) -> None:
     def _ceq(*a, **kw):
         out = _orig_constraint_eqns(*a, **kw)
         try:
+            _last_m[0] = int(a[0]) if a else None
+            _m_counts[_last_m[0]] = _m_counts.get(_last_m[0], 0) + 1
             _bin_into(_hist_conf, out[0])
         except Exception as exc:
             _errors.append(f"conf bin: {type(exc).__name__}: {exc}")
@@ -338,6 +348,7 @@ def call_models_end(phase: str, converged: bool = True) -> None:
     p["phase"] = phase
     p["s_global"] = rec.get("s_global")
     p["loop_converged"] = bool(converged)
+    p["m"] = _last_m[0]
 
 
 # --------------------------------------------------------------------------
@@ -401,6 +412,7 @@ def summary() -> dict:
         "n_points": len(_points),
         "points_dropped": _dropped_for_cap,
         "n_y_keys": len(y_keys),
+        "constraint_vector_lengths_seen": dict(_m_counts),
         "node_order": list(_node_order),
         "node_order_variants": len(_node_order_seen),
         "n_data_fields": len(M._snap_keys),
