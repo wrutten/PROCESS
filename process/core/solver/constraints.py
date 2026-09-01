@@ -1955,6 +1955,29 @@ def constraint_equation_92(constraint_registration, data):
     )
 
 
+# ---------------------------------------------------------------------------
+# Fork-only constraints (arch_surgery).  Appended from 93 upward; `lablcc` in
+# process/data_structure/numerics.py is extended in step, because a constraint
+# registered without its label is a silent reporting gap.  See
+# arch_surgery/docs/plans/REGISTRY_ALLOCATIONS.md.
+# ---------------------------------------------------------------------------
+
+
+@ConstraintManager.register_constraint(93, "", "=")
+def constraint_equation_93(constraint_registration, data):
+    """Framework placeholder constraint; no physics meaning.
+
+    Pins the framework placeholder iteration variable (178) to 1.0.  Together
+    the pair (178, 93) is a null lift: one design variable and the one equality
+    constraint that determines it, touching no model.  It exists to prove that
+    the constraint registry can be appended to and that an appended entry no
+    deck references is inert.
+
+    framework_placeholder: fork-only placeholder on the numerics data structure
+    """
+    return eq(data.numerics.framework_placeholder, 1.0, constraint_registration)
+
+
 def constraint_eqns(m: int, ieqn: int, data: DataStructure):
     """Evaluates the constraints given the current state of PROCESS.
 

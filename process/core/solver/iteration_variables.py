@@ -239,6 +239,16 @@ ITERATION_VARIABLES = {
     175: IterationVariable("kappa", "physics", 0.00, 10.00),
     176: IterationVariable("f_st_coil_aspect", "stellarator", 0.70, 1.30),
     177: IterationVariable("f_a_tf_turn_cable_space_extra_void", "tfcoil", 0.01, 1.0),
+    # --- Fork-only entries (arch_surgery). Appended, never fitted into one of
+    # the 94 gaps in 1-177: reusing a gap would silently reinterpret any
+    # existing IN.DAT that names that number.  See
+    # arch_surgery/docs/plans/REGISTRY_ALLOCATIONS.md.
+    #
+    # 178 is a framework placeholder, not a physics quantity.  It exists to
+    # prove that the registry can be appended to, and is determined by the
+    # matching placeholder constraint 93.  It is referenced by no scenario
+    # deck, so it is inert unless an IN.DAT names it in `ixc`.
+    178: IterationVariable("framework_placeholder", "numerics", 0.1, 10.0),
 }
 
 
