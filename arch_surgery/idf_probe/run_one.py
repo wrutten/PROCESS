@@ -32,6 +32,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
+#: The study's frozen base commit (decision D2).  Every number is rederived
+#: here; a tree that does not descend from it is measuring something else.
+BASE_COMMIT = "c0ae5b28"
+
 
 def _hex(v):
     if v is None:
@@ -41,6 +45,86 @@ def _hex(v):
 
 def _hexes(seq):
     return [float(v).hex() for v in seq]
+
+
+def _git(tree, *args):
+    """Run one git command in *tree*; return its stripped output, or None."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", tree, *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+    return out.stdout.strip() or None
+
+
+def _provenance(tree):
+    """Which tree, branch and commit this run is actually using.
+
+    Recorded in every run's metrics and printed at startup.  Issue I-11: a task
+    agent's working copy was once created from the wrong starting commit, and
+    nothing in the output would have said so -- the code compiles, the run
+    succeeds, and the numbers look reasonable.  Provenance that is only written
+    to a file is provenance nobody reads in time, so it is printed too.
+    """
+    branch = _git(tree, "rev-parse", "--abbrev-ref", "HEAD")
+    if branch == "HEAD":  # detached
+        branch = "(detached)"
+    status = _git(tree, "status", "--porcelain")
+    return {
+        "tree_git_head": _git(tree, "rev-parse", "HEAD"),
+        "tree_git_branch": branch,
+        "tree_git_describe": _git(tree, "describe", "--always", "--dirty"),
+        "tree_git_dirty": bool(status),
+        # Every number in this study is rederived at this commit; anything
+        # measured elsewhere is not comparable.  See decisions D2 and D4.
+        "tree_contains_base_commit": _descends_from(tree, BASE_COMMIT),
+    }
+
+
+def _descends_from(tree, commit):
+    """True if *tree*'s HEAD descends from *commit*; None if it cannot be told.
+
+    ``merge-base --is-ancestor`` answers through its exit status and prints
+    nothing, so it needs its own runner rather than :func:`_git`.
+    """
+    try:
+        return (
+            subprocess.run(
+                ["git", "-C", tree, "merge-base", "--is-ancestor", commit, "HEAD"],
+                capture_output=True,
+                check=False,
+            ).returncode
+            == 0
+        )
+    except Exception:
+        return None
+
+
+def _print_provenance(result):
+    """Print the provenance banner, so a wrong tree is visible immediately."""
+    head = result.get("tree_git_head") or "unknown"
+    lines = [
+        "-" * 68,
+        f"  tree     {result['tree']}",
+        f"  branch   {result.get('tree_git_branch') or 'unknown'}",
+        f"  commit   {head[:12]}"
+        + ("  [UNCOMMITTED CHANGES]" if result.get("tree_git_dirty") else ""),
+    ]
+    if result.get("tree_contains_base_commit") is False:
+        lines.append(
+            f"  WARNING  this tree does not descend from the base commit "
+            f"{BASE_COMMIT[:8]}."
+        )
+        lines.append(
+            "           Numbers from it are not comparable with the rest of "
+            "the study."
+        )
+    lines.append("-" * 68)
+    print("\n".join(lines), flush=True)
 
 
 def main() -> int:
@@ -122,15 +206,8 @@ def main() -> int:
                 f"PYTHONPATH={expect} for this subprocess."
             )
     result["tree"] = str(process_file.parent.parent)
-    try:
-        result["tree_git_head"] = subprocess.run(
-            ["git", "-C", result["tree"], "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout.strip() or None
-    except Exception:
-        result["tree_git_head"] = None
+    result.update(_provenance(result["tree"]))
+    _print_provenance(result)
 
     try:
         from process.core import _idf_probe
