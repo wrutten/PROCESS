@@ -56,6 +56,25 @@ scenarios differ in 11 606 of 13 441 shared floats.
 `n_ifail_1 = 0` over four runs that all had `ifail = 1`. Fixed and re-exercised; the fix is
 `gates._ifail`, and the synthetic check that catches it is permanent.
 
+**One premise in the brief needs correcting, and the orchestrator should carry it forward.** The
+task brief and the framework's §2.5 both describe the VP5 default as *"the existing inner
+root-find"*. **At the burn-time site there is no root-find.** `Pulse.run` assigns a **closed-form**
+expression, `t_burn = |Vs| / V_loop − t_ramp`, in one statement. Three consequences:
+
+1. The extraction was possible with the arithmetic untouched — the expression moved character for
+   character — so D14(b)'s "structural only" condition is met without any judgement call. Had it
+   been an iterative solve, re-parameterising it would have been much harder to keep bit-identical
+   and the honest answer might have been to stop and report.
+2. **Lifting the burn time saves no inner-solve work**, because there is none to save. Whatever
+   A4 measures, it is the effect of moving an unknown into the design vector and its residual into
+   the constraint set — never the removal of a nested iteration. A report that describes A4's
+   result as "removing an inner solver" would be wrong.
+3. The framework's VP5 description covers **two different things**: A4's site (a closed-form
+   assignment) and A9–A11's sites (genuine inner root-finds, e.g. the H-factor bracket in
+   `confinement_time.py`). `subsolve`'s `direct` argument is generic enough for both — it is "the
+   model's own solve, whatever that is" — but the *expectation* of a saving is not transferable
+   between them. Do not generalise from one to the other.
+
 **One thing the bit-identity gate structurally cannot see**, and which is therefore checked
 separately: the extracted residual is never called on the default path, so nothing in the gate
 constrains it. It is checked directly — `burn_time_residual(burn_time_root(u), u) == 0.0`
