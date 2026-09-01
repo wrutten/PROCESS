@@ -85,13 +85,27 @@ class Sweeper:
     arise here: the replay process never calls ``output()`` at all.
     """
 
-    def __init__(self, models, data, node_order, x, nvars, m=None):
+    def __init__(self, models, data, node_order, x, nvars, m=None, pin=None):
         self.models = models
         self.data = data
         self.x = np.asarray(x, dtype=float)
         self.nvars = int(nvars)
         self.node_order = [n for n in node_order]
         self._callables = self._resolve(models, self.node_order)
+        # A22: ``pin`` holds a set of ``"namespace.field"`` names at the value
+        # they had when this Sweeper was built -- i.e. at the harvested entry
+        # state, after ``restore``.  It is re-imposed after **every** node
+        # call, so a model that writes a pinned field has that write discarded
+        # before any later model can read it.  This is the counterfactual for
+        # "the quantity has been lifted onto the optimiser and is therefore an
+        # input to the loop, constant within one solve".  Empty by default:
+        # with ``pin=None`` this class behaves exactly as A18 wrote it.
+        self._pin = []
+        if pin:
+            for f in pin:
+                ns_name, _, fld = f.partition(".")
+                obj = getattr(data, ns_name)
+                self._pin.append((obj, fld, object.__getattribute__(obj, fld)))
         from process.core.solver import constraints as _constraints
         from process.core.solver.iteration_variables import (
             set_scaled_iteration_variable,
@@ -148,9 +162,13 @@ class Sweeper:
         scenario, so the convention is recorded, not defended.
         """
         self.inject()
+        for obj, fld, v in self._pin:
+            object.__setattr__(obj, fld, v)
         for n in names:
             self._callables[n]()
             budget.node_calls += 1
+            for obj, fld, v in self._pin:
+                object.__setattr__(obj, fld, v)
 
     def eval_objective(self):
         objf = self._objective_function(
@@ -318,6 +336,7 @@ def solve_block(
     inner_cap: int = INNER_CAP,
     outer_cap: int = OUTER_CAP,
     global_cap: int = GLOBAL_MODULE_SWEEP_CAP,
+    recorder=None,
 ) -> dict:
     """Block Gauss-Seidel: an outer loop over blocks, inner solves inside.
 
@@ -327,6 +346,13 @@ def solve_block(
     inner solve would be a pass with a guaranteed answer.
 
     **``k = 0`` is handled by falling out, not by a special case.**
+    ``recorder`` (A22) is an optional object with ``inner(outer, label, s,
+    res)`` and ``outer_pass(outer, res)`` methods.  It is handed the same
+    :class:`Residual` objects the predicate already computed, so it can name
+    the fields above ``tau`` without changing what is computed or when.  With
+    ``recorder=None`` -- the default, and what every A18 arm passes -- this
+    function is byte-for-byte the routine A18 measured.
+
     ``st_regression`` has ``i_pulsed_plant = 0``, so ``Pulse`` writes nothing
     and there is no coupler at all; the outer loop then converges on its first
     iteration because nothing a later block writes moves an earlier block's
@@ -362,6 +388,8 @@ def solve_block(
                     sweeper.run_nodes(nodes, budget)
                     y = YSpec.read(bound)
                     res = spec.residual(y_prev, y, subset=subset)
+                    if recorder is not None:
+                        recorder.inner(outer, label, s, res)
                     moved |= {spec.name(i) for i in res.moved_constant}
                     y_prev = y
                     if s >= floor and res.converged(tau):
@@ -374,6 +402,8 @@ def solve_block(
             y = YSpec.read(bound)
             res = spec.residual(y_outer_prev, y)
             trace.append(res.brief(tau))
+            if recorder is not None:
+                recorder.outer_pass(outer, res)
             moved |= {spec.name(i) for i in res.moved_constant}
             y_outer_prev = y
             if outer >= floor and res.converged(tau):
