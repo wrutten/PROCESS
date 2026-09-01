@@ -2,9 +2,10 @@
 
 **Found:** `PROCESS_surgery`, MDA partition experiment, while specifying a replacement convergence
 predicate (D13, 2026-09-01).
-**Study commit:** PROCESS `c0ae5b28`, the `PROCESS_surgery` base commit. `c0ae5b28` is an ancestor
-of this study's analysis pin `PROCESS_at_36ac820e`, so the line is expected to be present at the
-pin as well — **verify before citing at the pin.**
+**Study commit:** PROCESS `c0ae5b28`, the `PROCESS_surgery` base commit.
+**Verified at the pin** by the `PROCESS_code_analysis` orchestrator, 2026-09-01, read from the
+frozen reference tree: the line is present **unchanged** at `PROCESS_at_36ac820e`, `caller.py:70`,
+and it is the only `equal_nan` in the file.
 **Status:** **REPORTED, NOT PATCHED.** Nothing has been changed in any tree. `PROCESS_surgery`
 freezes the models and the base commit, so this is a finding, not a fix.
 **Filed here rather than written into `PROCESS_code_analysis` directly** because `PROCESS_surgery`'s
@@ -82,11 +83,38 @@ change to the convergence predicate is exactly the independent variable of the e
 run there. It is reported so the defect is on record rather than only inside an experiment's
 design notes.
 
+## 4a. Both definitions of "converged" share this one predicate — and there is a second route in
+
+**Verified by the `PROCESS_code_analysis` orchestrator at the pin, 2026-09-01**, and re-checked
+here at `c0ae5b28`.
+
+`MDA_Output` — the second convergence loop, which compares successive MFILEs variable by variable —
+does **not** have a predicate of its own. `caller.py:205` calls the same
+`self.check_agreement(previous_value, current_value)`. So F12's "two incompatible definitions of
+converged" both run through **one code path and one `equal_nan=True`**. Fixing the keyword fixes
+both loops; it also means the defect's blast radius is larger than the idempotence loop alone,
+since `MDA_Output` is the one whose result is reported to the user.
+
+**The second route.** One line above, at `caller.py:204`:
+
+```python
+current_value = mfile_data.get(var, np.nan)
+```
+
+A variable present in the *previous* MFILE and **absent from the current one** defaults to `NaN`.
+Combined with `equal_nan=True`, a variable that was NaN last sweep and then disappears entirely is
+compared NaN-to-NaN and **counts as agreeing**. Same direction as the primary finding — a state
+that should be loud is quiet — by a different mechanism.
+
+(The complementary case is handled correctly: a variable that was *finite* and then disappears
+compares finite-to-NaN, `allclose` returns `False`, and it is reported as non-converged.)
+
 ## 5. Related
 
 - **F8 / F3** in [`PROCESS_architecture_evaluation.md`](../PROCESS_architecture_evaluation.md):
   the same predicate converges *functionals of the state* rather than the coupling variables, which
   is also what gives the loop its structural floor of two sweeps.
 - **F12**, same document: `MDA_Idempotence` and `MDA_Output` use two different definitions of
-  "converged" on the same system, both capped at 10, both at `rtol = 1e-6`. `MDA_Output`'s
-  comparison (`caller.py:199-204`) should be checked for the same `equal_nan` treatment.
+  "converged" on the same system. §4a resolves what that means for this defect — they share one
+  predicate, so they share one loophole, and `MDA_Output` adds a second route through
+  `.get(var, np.nan)`.

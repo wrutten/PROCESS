@@ -395,6 +395,24 @@ stencil regardless.
 predicates, on the same system. A run can satisfy one and not the other, and
 only the second is reported to the user.
 
+> **Addendum, 2026-09-01 — the two definitions share one predicate, which makes F12 worse than
+> "Low" in one specific respect.** Verified independently at `c0ae5b28` and at the analysis pin
+> `PROCESS_at_36ac820e` (the latter by the `PROCESS_code_analysis` orchestrator, from its frozen
+> reference tree).
+>
+> `MDA_Output` has no predicate of its own: `caller.py:205` calls the same
+> `Caller.check_agreement`. So the two definitions differ in *what* they compare — objective and
+> constraints versus MFILE variables — while sharing the single comparison function, and therefore
+> sharing its `equal_nan=True`. **A stably-NaN quantity satisfies both.** Since `MDA_Output` is the
+> loop whose result is reported to the user, the shared loophole reaches the user-facing path, not
+> only the optimiser-facing one.
+>
+> `MDA_Output` also adds a **second route**: `caller.py:204` reads
+> `current_value = mfile_data.get(var, np.nan)`, so a variable present in the previous MFILE and
+> absent from the current one defaults to NaN and, if it was already NaN, compares equal. Full
+> write-up in
+> [`outgoing/2026-09-01_call_models_equal_nan_converged.md`](outgoing/2026-09-01_call_models_equal_nan_converged.md) §4a.
+
 ### F13 — Relative FD step with no floor (Low)
 
 `xfor[i] = xv[j] * (1.0 + epsfcn)` — at `xv[j] == 0` the perturbation is zero and
