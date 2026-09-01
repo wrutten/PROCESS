@@ -30,8 +30,15 @@ in `arch_surgery/`.
 - **Never modify a sibling clone.** `/home/wrutten/dev_libraries/PROCESS`,
   `/home/wrutten/projects/functional_PROCESS` and `/home/wrutten/projects/PROCESS_code_analysis`
   are other working trees. Read them; never write to them.
+  **`/home/wrutten/projects/PROCESS_surgery_worktrees/` is not one of them** — it holds this
+  repository's own task worktrees, created by
+  [`arch_surgery/bin/new_task_worktree.sh`](arch_surgery/bin/new_task_worktree.sh), and writing
+  there is normal task work.
 - **Never commit to `main`.** `main` tracks upstream PROCESS. All work is on
-  `architecture_surgery` or a task branch off it.
+  `architecture_surgery` or a task branch off it. **`main` carries none of this project** — no
+  `CLAUDE.md`, no `arch_surgery/`, no `TRAPS.md` — so a tree checked out there has no rules
+  loaded at all. If you are an agent and your tree has no `arch_surgery/` directory, **you are on
+  the wrong branch: stop and say so** rather than working (I-11).
 - **Never push without the user's explicit approval**, per push.
 
 ## Working rules
