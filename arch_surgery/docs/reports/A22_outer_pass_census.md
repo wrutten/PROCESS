@@ -140,7 +140,8 @@ signal — on all 112 of the 112 design points where it moved. All five are writ
 | `physics.vs_plasma_total_required` | `physics` | M1 | 112/112 |
 
 **The full set above tau on the outer-pass-2 residual** — the residual that forces a third pass —
-on the 112 of 149 design points that have a non-empty one. Over those 112, the number of fields above tau is minimum 12, median 46, maximum 52. The most
+on the 112 of 149 design points that have a non-empty one. Over those 112, the number of fields
+above tau is minimum 12, median 46, maximum 52. The most
 frequent, with the model that writes each:
 
 | field | written by | module | frequency |
