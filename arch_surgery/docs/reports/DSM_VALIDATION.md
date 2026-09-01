@@ -265,3 +265,68 @@ the physics package reads only `dr_fw_plasma_gap_inboard`/`_outboard` from `buil
 
 Full numbers and method in [`A3_build_reorder.md`](A3_build_reorder.md) (archived to
 `deprecated/` at merge; folder position records lifecycle, not validity — trap T3).
+
+
+## V10 — The feed-forward tail is real, but only two of its five DSM rows can be hoisted
+
+**A confirmation and a correction, from A13 (feedforward-hoist).** The DSM's `FF` module is
+right about what feeds nothing back; what is wrong is any cost weighting that treats all of it as
+work a driver change can defer.
+
+### V10a — `costs` and `water_use` are genuinely feed-forward, measured
+
+| | |
+|---|---|
+| **Claim tested** | nothing `costs` or `water_use` writes is read by any model that runs before them inside the idempotence loop |
+| **Evidence** | A13, base `4433bc67`, four scenarios, each run in a fresh subprocess. Deferring both nodes out of every sweep and running them once after the fixed point leaves the result **bit-identical**: **0 differing MFILE lines** of 16 174 / 16 435 / 18 692 / 15 917 and **0 differing MFILE floats**, as hex literals with no tolerance, of 13 559 / 13 455 / 13 493 / 13 487 — **121 295 quantities compared in total**. `ifail = 1` throughout; sweeps unchanged at 2 029 / 4 286 / 1 891 / 29. Run-time write sets, from fingerprinting all 2 288 data-structure fields across the two nodes: `water_use` writes 8 fields, `costs` 102 (103 on `st_regression`) |
+| **Verdict** | **DSM correct.** If either node fed anything back, the deferred trajectory would diverge and the MFILE would say so |
+| **Consequence** | The hoist is available with `k = 0` and no dimension penalty, and it is worth 6.56 / 6.76 / 6.64 / 2.63 % of model evaluations on the four decks |
+
+### V10b — Only 2 of `FF`'s 5 rows are hoistable, so a 5-row weighting overstates the hoist
+
+`FF` is `|FF| = 5` DSM rows: row 38 plus rows 52-55. Of those:
+
+* **`CsFatigue` (row 38) is not a driver call site at all.** It never appears in
+  `_call_models_once`; it runs nested inside an M2 node. A driver-level hoist cannot reach it.
+* **`objective_constraints` is the convergence test.** The committed node map already flags it
+  `in_call_models_once: false`, and it is the objective function plus the constraint residuals —
+  the very quantities `Caller.call_models` compares to decide it has converged. It cannot be
+  hoisted out of the loop that uses it.
+* **`costs` and `water_use` are the whole hoistable set** — 2 rows, and 2 of the 21 model-call
+  nodes a deck executes.
+
+**Why it matters, with the number.** A2's Stage-1 gate weighted the hoist by `w_Pulse + w_FF` =
+6 of 52 DSM rows and published **4.6-8.2 %**. Restated over the node set a driver hoist can
+actually defer, and in model-call units, the same arithmetic gives **6.56 / 6.76 / 6.64 / 5.25 %**,
+and the measurement returns **6.56 / 6.76 / 6.64 / 2.63 %** — the last short because the deck's
+figure of merit reads a `costs` output (V10c). **This is not a defect in the DSM.** The module
+boundary is correct; the error is in reading a row count as a count of deferrable driver work.
+Anything that weights architecture options by DSM rows should first ask, per row, whether the
+driver can address it.
+
+### V10c — `Pulse` is not feed-forward before the lift, measured both ways
+
+`Pulse` writes exactly two fields on the three pulsed decks — `times.t_plant_pulse_burn` and
+`constraints.t_current_ramp_up_min` — and **zero** on `st_regression`, which reproduces V5 exactly
+from an independent instrument. Both fields are read by the idempotence loop's own predicate:
+`t_plant_pulse_burn` by `objectives.py` (figures of merit 14, 16, 19) and both by
+`constraints.py`. So `Pulse` cannot be deferred while the burn-time coupler is in the loop, which
+is framework item C2a stated as a measurement rather than an expectation.
+
+### V10d — the loop's predicate reads the tail on one of the four decks
+
+`objectives.py` reads `costs.coe` (figure of merit 6) and `costs.cdirt` / `costs.concost` (7); all
+three are in the `costs` model's measured write set. `constraints.py` reads **nothing** any
+hoisted node writes, on any of the four decks (denominators: 2 288 fields fingerprinted, 17
+distinct data reads in `objectives.py`, 212 in `constraints.py`). Evaluating all 16 figures of
+merit before and after each tail node confirms the same set by measurement: only 6 and 7 move, and
+only across `costs`.
+
+`large_tokamak_eval` sets no `minmax` and therefore takes the **default** figure of merit, **7**.
+On that deck the driver must keep `costs` inside the loop. **Consequence for Phase B:**
+`arch_surgery/fixedpoint/arms.py:hoisted_nodes()` has no such guard and would hoist `costs` there
+anyway, so on that deck the engine and the incumbent driver would be hoisting different sets under
+the same nominal toggle. Recorded here rather than fixed, because changing a merged instrument was
+out of A13's scope.
+
+Full numbers and method in [`A13_feedforward_hoist.md`](A13_feedforward_hoist.md).

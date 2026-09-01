@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,7 +19,7 @@ from process.core.solver import constraints
 from process.core.solver.iteration_variables import set_scaled_iteration_variable
 from process.core.solver.objectives import objective_function
 from process.data_structure.blanket_variables import BlktModelTypes
-from process.data_structure.numerics import PROCESSRunMode
+from process.data_structure.numerics import FiguresOfMerit, PROCESSRunMode
 from process.models.tfcoil.base import TFConductorModel
 from process.models.tfcoil.superconducting import SuperconductingTFTurnType
 
@@ -64,6 +66,139 @@ if SEQUENCE_NAME not in _SEQUENCE_HEADS:
 SEQUENCE_HEAD: tuple[str, ...] = _SEQUENCE_HEADS[SEQUENCE_NAME]
 
 
+# --------------------------------------------------------------------------
+# VP2 (framework hook F7b) -- the feed-forward tail runs once, after the
+# fixed point, instead of on every sweep.
+#
+# Some model nodes feed nothing back: nothing they write is read by any model
+# that runs before them inside the idempotence loop.  Running them on every
+# sweep is wasted work -- their inputs are final only once the loop has
+# settled, and their outputs affect nothing the loop is deciding.  The hoist
+# defers them out of the sweep and runs them once, after ``call_models`` has
+# reached its fixed point.
+#
+# ``off`` is the default and is upstream behaviour exactly: every node runs on
+# every sweep, and the deferral list is never even created.
+#
+# The **node set is derived at run time, not hard-coded** (framework item
+# C2a).  Membership comes from the committed DSM node map, so it follows the
+# arm: when a later variant point lifts the burn-time coupler out of the loop,
+# ``pulse`` joins the feed-forward tail and the derivation picks it up without
+# a list edit here.  What *is* fixed in this file is which call sites were
+# made deferrable at all; ``_HOIST_UNCOVERED`` below turns a node that should
+# be hoisted but has no deferrable call site into an import-time error rather
+# than a silent in-loop evaluation.
+_HOIST_MODULES: dict[str, frozenset[str]] = {
+    "off": frozenset(),
+    "feedforward": frozenset({"FF"}),
+}
+
+HOIST_NAME: str = os.environ.get("PROCESS_ARCH_HOIST", "").strip() or "off"
+
+if HOIST_NAME not in _HOIST_MODULES:
+    raise RuntimeError(
+        f"PROCESS_ARCH_HOIST={HOIST_NAME!r} is not a recognised hoist "
+        f"setting; expected one of {tuple(_HOIST_MODULES)} (or unset for "
+        f"{'off'!r})."
+    )
+
+#: Node-map modules whose nodes are deferred out of the sweep.
+HOIST_MODULES: frozenset[str] = _HOIST_MODULES[HOIST_NAME]
+
+#: True when any node is hoisted.  With the hoist off this guards every branch
+#: the variant point adds, so the default path is upstream's.
+HOIST_ENABLED: bool = bool(HOIST_MODULES)
+
+#: Call sites in :meth:`Caller._call_models_once` routed through
+#: :meth:`Caller._node` and therefore capable of being deferred.  This is a
+#: property of *this file*, not of the arm: it says which statements were
+#: rewritten, not which nodes are hoisted.
+DEFERRABLE_NODES: tuple[str, ...] = ("pulse", "water_use", "costs")
+
+#: Figures of merit whose objective metric reads a field the node writes, and
+#: which therefore cannot have that node deferred: the idempotence loop in
+#: :meth:`Caller.call_models` tests ``objf`` and ``conf``, so hoisting a node
+#: the objective reads would leave the loop converging on state it has
+#: deliberately stopped updating.  ``objectives.py`` reads ``costs.coe``
+#: (figure of merit 6) and ``costs.cdirt``/``costs.concost`` (7); all three are
+#: written by the ``costs`` model.  No other figure of merit, and no
+#: constraint equation, reads a field written by a hoisted node -- measured,
+#: not assumed (task A13).
+_FOM_READS_NODE: dict[str, frozenset[int]] = {
+    "costs": frozenset({
+        int(FiguresOfMerit.COST_OF_ELECTRICITY),
+        int(FiguresOfMerit.CAPITAL_COST),
+    }),
+}
+
+#: Committed DSM node map (framework component C8).  Read only when the hoist
+#: is on; never read live from the dependency-analysis repository (trap T9).
+NODE_MAP_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "arch_surgery"
+    / "docs"
+    / "data"
+    / "dsm_node_map.json"
+)
+
+
+def _resolve_hoist_nodes() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Nodes this arm hoists, and any it should hoist but cannot.
+
+    Returns
+    -------
+    tuple
+        ``(hoisted, uncovered)`` -- the deferrable nodes the node map assigns
+        to a hoisted module, and the mapped nodes that a hoisted module claims
+        but that have no deferrable call site.
+    """
+    if not HOIST_ENABLED:
+        return (), ()
+    if not NODE_MAP_PATH.exists():
+        raise RuntimeError(
+            f"PROCESS_ARCH_HOIST={HOIST_NAME!r} needs the committed DSM node "
+            f"map at {NODE_MAP_PATH}, which is not present."
+        )
+    nodes = json.loads(NODE_MAP_PATH.read_text())["nodes"]
+    hoisted = tuple(
+        n for n in DEFERRABLE_NODES if nodes.get(n, {}).get("module") in HOIST_MODULES
+    )
+    uncovered = tuple(
+        sorted(
+            n
+            for n, entry in nodes.items()
+            if entry.get("module") in HOIST_MODULES
+            and entry.get("in_call_models_once")
+            and n not in DEFERRABLE_NODES
+        )
+    )
+    return hoisted, uncovered
+
+
+HOIST_NODES, _HOIST_UNCOVERED = _resolve_hoist_nodes()
+
+if _HOIST_UNCOVERED:
+    raise RuntimeError(
+        f"PROCESS_ARCH_HOIST={HOIST_NAME!r} would hoist {list(_HOIST_UNCOVERED)}, "
+        f"but those nodes have no deferrable call site in Caller."
+        f"_call_models_once. Add them to DEFERRABLE_NODES and route their "
+        f"call sites through Caller._node."
+    )
+
+
+def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
+    """The nodes actually deferred, for a run using *i_figure_merit*.
+
+    The arm's node set less any node whose output the idempotence loop's own
+    predicate reads.  Public so that a measurement harness can record the
+    tail a run resolved without reconstructing the rule.
+    """
+    fom = abs(int(i_figure_merit))
+    return tuple(
+        n for n in HOIST_NODES if fom not in _FOM_READS_NODE.get(n, frozenset())
+    )
+
+
 class Caller:
     """Calls physics and engineering models."""
 
@@ -83,6 +218,42 @@ class Caller:
         """
         self.models = models
         self.data = data
+        # VP2: the deferral list for the current sweep, or ``None`` when
+        # nothing is deferred.  ``None`` is the default and the only value the
+        # hoist-off path ever sees.
+        self._pending: list | None = None
+        # VP2: the tail resolved for the current ``call_models``.  Re-resolved
+        # on every call rather than memoised: it depends on the deck's figure
+        # of merit, and a scan may change the deck between calls.
+        self._hoist_tail: frozenset[str] = frozenset()
+
+    # -- VP2 -------------------------------------------------------------
+
+    def _resolve_hoist_tail(self) -> frozenset[str]:
+        """The nodes this run defers out of the sweep.
+
+        The arm's node set (``HOIST_NODES``) less any node the idempotence
+        loop's own predicate reads.  ``call_models`` tests the objective
+        function and the constraint residuals, so a node whose output the
+        active figure of merit reads must keep running inside the loop --
+        otherwise the loop would be testing state it has deliberately stopped
+        updating, and would converge on a different criterion than upstream's.
+        """
+        if not HOIST_ENABLED:
+            return frozenset()
+        return frozenset(resolved_hoist_tail(self.data.numerics.i_figure_merit))
+
+    def _node(self, name: str, run) -> None:
+        """Run one model node now, or defer it to the hoisted tail."""
+        if self._pending is not None and name in self._hoist_tail:
+            self._pending.append((name, run))
+            return
+        run()
+
+    def _run_hoisted_tail(self, pending: list) -> None:
+        """Run the deferred feed-forward nodes, once, in sequence order."""
+        for _name, run in pending:
+            run()
 
     @staticmethod
     def check_agreement(
@@ -136,9 +307,23 @@ class Caller:
         objf_prev = None
         conf_prev = None
 
+        # VP2: with the hoist on, the feed-forward nodes are collected instead
+        # of run, and the last sweep's collection is run once the loop has
+        # settled.  With the hoist off ``_pending`` stays ``None`` and nothing
+        # below this line differs from upstream.
+        if HOIST_ENABLED:
+            self._hoist_tail = self._resolve_hoist_tail()
+            pending: list | None = [] if self._hoist_tail else None
+        else:
+            pending = None
+
         # Evaluate models up to 10 times; any more implies non-converging values
         for _ in range(10):
+            if pending is not None:
+                pending.clear()
+                self._pending = pending
             self._call_models_once(xc)
+            self._pending = None
             # Evaluate objective function and constraints
             if _idf_probe.ENABLED:
                 _idf_probe.objective_begin()
@@ -163,6 +348,10 @@ class Caller:
                     "Model evaluations idempotent, returning objective "
                     "function and constraints"
                 )
+                # VP2: the fixed point is reached, so the feed-forward tail
+                # runs once, on the converged state.
+                if pending:
+                    self._run_hoisted_tail(pending)
                 if _idf_probe.ENABLED:
                     _idf_probe.call_models_end()
                 return objf, conf
@@ -205,6 +394,12 @@ class Caller:
         # TODO The only way to ensure idempotence in all outputs is by comparing
         # mfiles at this stage
         previous_mfile_data = None
+
+        # VP2: the hoist applies to the optimiser's evaluation path only.
+        # This is the final-output path, where ``models.write`` re-enters every
+        # model's ``run()`` from its ``output()`` anyway (trap T7), so nothing
+        # is deferred here.
+        self._pending = None
 
         try:  # noqa: PLW0717
             # Evaluate models up to 10 times; any more implies non-converging values
@@ -368,8 +563,10 @@ class Caller:
         # Poloidal field and central solenoid model
         self.models.pfcoil.run()
 
-        # Pulsed reactor model
-        self.models.pulse.run()
+        # Pulsed reactor model.  Deferrable (VP2): ``pulse`` is the
+        # articulation point and joins the feed-forward tail only once the
+        # burn-time coupler is lifted out of the loop.
+        self._node("pulse", self.models.pulse.run)
 
         self.models.divertor.run()
 
@@ -431,8 +628,8 @@ class Caller:
         # Availability model
         self.models.availability.run()
 
-        # Water usage in secondary cooling system
-        self.models.water_use.run()
+        # Water usage in secondary cooling system.  Deferrable (VP2).
+        self._node("water_use", self.models.water_use.run)
 
         # Costs model
         """Cost switch values
@@ -442,7 +639,8 @@ class Caller:
         1    |  2015 Kovari model
         2    |  Custom model
         """
-        self.models.costs.run()
+        # Deferrable (VP2).
+        self._node("costs", self.models.costs.run)
 
         # FISPACT and LOCA model (not used)- removed
 

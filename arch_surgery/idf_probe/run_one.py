@@ -225,6 +225,15 @@ def main() -> int:
     # of silently reporting the arm the driver *asked* for.
     from process.core import caller as _caller
 
+    # VP2 (A13): whether the imported tree resolved a feed-forward hoist, and
+    # which nodes it resolved.  Read from the module, not the environment, so a
+    # tree that predates the variant point reports ``None`` rather than the arm
+    # the driver asked for.
+    result["arch_hoist_env"] = os.environ.get("PROCESS_ARCH_HOIST")
+    result["arch_hoist_name"] = getattr(_caller, "HOIST_NAME", None)
+    hoist_nodes = getattr(_caller, "HOIST_NODES", None)
+    result["arch_hoist_nodes"] = list(hoist_nodes) if hoist_nodes is not None else None
+
     result["arch_sequence_env"] = os.environ.get("PROCESS_ARCH_SEQUENCE")
     result["arch_sequence_name"] = getattr(_caller, "SEQUENCE_NAME", None)
     head = getattr(_caller, "SEQUENCE_HEAD", None)
@@ -280,6 +289,14 @@ def main() -> int:
             "epsfcn_final": float(nums.epsfcn),
             "i_process_run_mode": int(nums.i_process_run_mode),
             "i_figure_merit": int(nums.i_figure_merit),
+            # VP2 (A13): the tail this run actually deferred -- the arm's node
+            # set less any node the active figure of merit reads.  Recorded
+            # per run because it depends on the deck, not only on the arm.
+            "arch_hoist_tail_resolved": (
+                list(_caller.resolved_hoist_tail(nums.i_figure_merit))
+                if hasattr(_caller, "resolved_hoist_tail")
+                else None
+            ),
             "itvar_names": [
                 str(nums.lablxc[int(nums.ixc[i]) - 1]).strip() for i in range(n)
             ],
