@@ -187,8 +187,15 @@ def main() -> int:
     ap.add_argument("--scenarios", nargs="*", default=SCENARIOS)
     ap.add_argument("--tau", type=float, default=TAU)
     ap.add_argument("--max-points", type=int, default=0)
+    ap.add_argument("--hoist", type=int, default=0)
     ap.add_argument("--sensitivity", action="store_true")
     ap.add_argument("--tag", default="")
+    ap.add_argument(
+        "--ref-subdir", default="",
+        help="A18 replay directory holding the arm-A0 record to compare "
+             "against; defaults to replay_tau<tau>_hoist<hoist>. The tau "
+             "ladder runs are under replay_ladder_tau<tau>.",
+    )
     args = ap.parse_args()
 
     a18 = Path(args.a18_runs).resolve()
@@ -211,7 +218,8 @@ def main() -> int:
         out.mkdir(parents=True)
         shutil.copy(SCENARIOS_DIR / f"{s}.IN.DAT", out / f"{s}.IN.DAT")
         src = a18 / s / "harvest" / "harvest.pkl"
-        ref = a18 / s / f"replay_tau{args.tau:g}_hoist0" / "result.json"
+        sub = args.ref_subdir or f"replay_tau{args.tau:g}_hoist{args.hoist}"
+        ref = a18 / s / sub / "result.json"
         if not src.exists():
             print(f"  MISSING harvest for {s}: {src}", flush=True)
             rows.append({"scenario": s, "returncode": 127})
@@ -236,9 +244,18 @@ def main() -> int:
             "--out", str(out / "result.json"),
             "--expect-tree", str(TREE),
             "--tau", repr(args.tau),
+            "--hoist", str(args.hoist),
         ]
         if ref.exists():
             cmd += ["--a18", str(ref)]
+        else:
+            # Not tolerated silently: without the reference this deck's G1 and
+            # G2 would simply be absent, and an absent comparison reads like a
+            # passing one in a summary table.
+            print(f"  NO A18 REFERENCE for {s}: {ref}", flush=True)
+            rows.append({"scenario": s, "returncode": 125,
+                         "missing_reference": str(ref)})
+            continue
         if args.max_points:
             cmd += ["--max-points", str(args.max_points)]
         if args.sensitivity:

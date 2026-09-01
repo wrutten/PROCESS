@@ -141,6 +141,9 @@ COUNT_KEYS = (
     "node_calls",
     "outer",
     "cross_converged_at",
+    # Present only when the feed-forward hoist is on; ``dict.get`` returns
+    # ``None`` on both sides otherwise, so it compares harmlessly at hoist 0.
+    "hoist_tail_node_calls",
 )
 
 
@@ -445,6 +448,8 @@ def main() -> int:
     ap.add_argument("--a18", default=None,
                     help="A18's replay result.json, the A0 of record")
     ap.add_argument("--max-points", type=int, default=0)
+    ap.add_argument("--hoist", type=int, default=0,
+                    help="feed-forward hoist setting, matching A18's arms")
     ap.add_argument("--sensitivity", action="store_true",
                     help="add the arm-level 1-ULP arm and the comparator "
                          "self-test (protocol §12)")
@@ -541,8 +546,10 @@ def main() -> int:
         if i is not None:
             cross_subset.add(i)
 
-    ln = A.loop_nodes(node_order, node_module, hoist=False)
-    ln_block, blocks = block_order(node_order, node_module, ynode, hoist=False)
+    hoist = bool(args.hoist)
+    ln = A.loop_nodes(node_order, node_module, hoist=hoist)
+    hn = A.hoisted_nodes(node_order, node_module, hoist=hoist)
+    ln_block, blocks = block_order(node_order, node_module, ynode, hoist=hoist)
     perm = describe_permutation(ln, ln_block)
     if not perm["is_permutation"]:
         raise SystemExit(
@@ -554,8 +561,10 @@ def main() -> int:
 
     # The exit audit uses the same node set and the same order for every arm,
     # as A18 did, so that a difference in the audit reflects a difference in
-    # the terminal state and nothing else.
-    audit_nodes = ln
+    # the terminal state and nothing else.  ``replay.py`` audits with the
+    # **hoist-off** node set whatever the arm's hoist setting is, so that the
+    # two settings are audited on the same footing; that is reproduced here.
+    audit_nodes = A.loop_nodes(node_order, node_module, hoist=False)
 
     ulp_pick = None
     arm_specs = [("A0", ln), ("A0perm", ln_block)]
@@ -573,7 +582,8 @@ def main() -> int:
         "task": "A23 (flat-arm-permutation)",
         "scenario": args.scenario,
         "tau": args.tau,
-        "hoist": False,
+        "hoist": hoist,
+        "hoisted_nodes": hn,
         "tree": str(process_file.parent.parent),
         "caller_switches": {
             "SEQUENCE_NAME": _caller.SEQUENCE_NAME,
@@ -619,6 +629,13 @@ def main() -> int:
                     sw, spec, nodes, args.tau, floor=1,
                     cross_subset=cross_subset or None,
                 )
+                if hoist and hn and out["converged"]:
+                    # replay.py's convention: the tail runs once, after the
+                    # fixed point, on a separate budget that is not charged to
+                    # the arm's node_calls.
+                    b = E.Budget(0)
+                    sw.run_nodes(hn, b)
+                    out["hoist_tail_node_calls"] = b.node_calls
                 out["audit"] = E.exit_audit(sw, spec, audit_nodes, args.tau)
                 out["restore_mismatch"] = len(bad)
             except Exception:
@@ -642,6 +659,11 @@ def main() -> int:
     comparisons = {}
     if args.a18:
         a18 = json.load(open(args.a18))
+        if a18["tau"] != args.tau or bool(a18["hoist"]) != hoist:
+            raise SystemExit(
+                f"reference {args.a18} was run at tau={a18['tau']} "
+                f"hoist={a18['hoist']}, not tau={args.tau} hoist={hoist}"
+            )
         ref = {p["call_index"]: p["arms"].get("A0") for p in a18["points"]}
         comparisons["a18_reference"] = {
             "path": str(Path(args.a18).resolve()),
@@ -704,6 +726,9 @@ def main() -> int:
 
     summary = {
         "scenario": args.scenario,
+        "tau": args.tau,
+        "hoist": hoist,
+        "hoisted_nodes": hn,
         "n_points": len(points),
         "n_harvest_points": len(all_points),
         "n_errors": len(result["errors"]),
