@@ -1,10 +1,38 @@
-> **Document status** — **OPEN · TASK REPORT**
-> The task report for A25 (phase-b-variant), on branch `A25-phase-b-variant` at experiment base
-> commit `c0ae5b28`. Not merged. Every number in it was measured in the isolated worktree
-> `/home/wrutten/projects/PROCESS_surgery_worktrees/A25-phase-b-variant`, in
-> `PROCESS_surgery_env`, with the **exact** tree asserted in every measurement subprocess (trap
-> T6). Archive to `reports/deprecated/` at merge; folder position will then record lifecycle,
-> not validity (trap T3).
+> **Document status** — **ARCHIVED · VERDICT CURRENT · ONE CAVEAT OVERTURNED**
+> The task report for A25 (phase-b-variant), merged to `architecture_surgery` on 2026-09-01 at
+> experiment base commit `c0ae5b28`. **Position in `deprecated/` records lifecycle, not staleness**
+> (trap T3). The verdict, the gate tables and the cost distributions are current evidence.
+>
+> ## The orchestrator overturned caveat 1, and the correction makes the verdict *stronger*
+>
+> The report argues that the variant's 13 refused starts are an artifact: that
+> `Caller.check_agreement(nan, nan)` returns `True`, so the baseline "reports `ifail = 1` over a
+> NaN state" and is credited with successes it should not get. **The first half is true and the
+> second half is not.**
+>
+> - **Confirmed directly:** `check_agreement(nan, nan)` does return `True`. The loophole is real
+>   and remains a genuine PROCESS defect (already filed with `PROCESS_code_analysis`).
+> - **Refuted from this task's own artifacts:** on **all 13** starts where the variant refused and
+>   the baseline succeeded, the baseline's final MFILE is **entirely finite** — `0` non-finite of
+>   13, across `low_aspect_ratio_DEMO` (1), `st_regression` (2) and `large_tokamak_eval` (10). The
+>   detector was shown capable of firing first (protocol §12): it flags 9 of the 300 retained
+>   MFILEs, all on `large_tokamak_nof` starts 014 and 017, which are the starts *both* arms crash
+>   on. So the baseline did not return a NaN state on any of the 13.
+>
+> **The mechanism is therefore different, and it is a real property of the architecture.** The
+> variant's per-module solve examines *intermediate module state that the global loop never tests*.
+> A transient non-finite `current_drive.eta_cd_dimensionless_hcd_primary` inside M1's inner sweeps
+> is fatal to it under D15(d)'s raise-on-failure policy, while the baseline's global loop passes
+> through the same transient and converges to a finite answer. **The robustness deficit is real,
+> not an accounting artifact**, and the negative verdict is better supported than the report claims.
+>
+> What remains open is whether **D15(d)'s policy**, not the architecture, is what costs those
+> starts: raising on a transient is a decision, not an architectural necessity. That is a
+> legitimate follow-up and is *not* the same as tuning past a gate — but it must be run and
+> reported, never assumed.
+>
+> The agent was right not to re-run with the field excluded; that would have been tuning. The error
+> was in the inference from the loophole's existence to its having operated here.
 
 # A25 (phase-b-variant) — Phase B implemented, gated and run
 
