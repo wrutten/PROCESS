@@ -123,3 +123,24 @@ Confirmed by their orchestrator, 2026-08-31, on their own initiative.
 pin and validated at run time. A task proposing to read their `output/` instead of our committed
 copy is a design error, not an optimisation. If a re-derivation is genuinely needed, warn that
 session before it runs.
+
+## T10 — `process.__version__` reports the wrong commit in a frozen archive
+
+`_version.py` is written when a tree is archived and then frozen with it. So a pinned reference
+tree can report a **version string from a different commit than the one it actually contains**.
+Measured case, reported by `PROCESS_code_analysis` 2026-09-01: their archive
+`PROCESS_at_36ac820e` has `process.__version__` reporting **`710a75c9`** — the superseded commit
+this project has already discarded evidence from (D4).
+
+**Why it is a trap and not a nuisance:** `__version__` is the obvious thing to reach for when
+writing "assert I imported the right tree", it looks authoritative, and it fails *silently* by
+agreeing with a plausible-looking wrong answer.
+
+**The rule:** assert on **`process.__file__`** — the path — never on `__version__`.
+`arch_surgery/idf_probe/run_one.py:108` does this correctly and must keep doing it. Do not add a
+`__version__` check believing it strengthens the assertion; it weakens it, because a passing
+`__version__` check on the wrong tree is worse than no check at all.
+
+This compounds with the standing environment hazard: `PROCESS_env` points at a *different clone at
+a different commit* and imports without error. Path assertion is the only thing that catches it.
+

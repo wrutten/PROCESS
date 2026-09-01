@@ -138,25 +138,58 @@ Both tracked on `architecture_surgery`, working tree clean; `st_regression` last
 This precaution exists because the deck was **not** under version control until I-9 was found — the
 root `.gitignore`'s `*.DAT` swallowed it — so deck provenance is checkable now and was not before.
 
-**What the answer decides.** Whether `st_regression`'s collapsed DSM still shows three modules with
-internal cycles, and whether the row ranges defining them survive under a deck differing in 12
-switches. **If they do not, the block-arm result for that scenario is withdrawn, not caveated.**
-Until the DSMs exist, block-arm results on `st_regression` and `low_aspect_ratio_DEMO` carry this
-caveat and the two large tokamaks lead the write-up.
+**RESOLVED, 2026-09-01 — the partition SURVIVES both scenarios. The withdrawal condition is NOT
+triggered.**
 
-**Also note:** the DSM source deck is `examples/data/large_tokamak_IN.DAT`, which is **not** one of
-the four experiment scenarios. `large_tokamak_nof` is a regression deck. They agree on every
-modelled switch, but they are different files, and no result should describe the DSM as having
-been generated "from our scenario".
+`PROCESS_code_analysis` regenerated per-scenario collapsed DSMs (their M100). Result:
 
----
+| Scenario | Model layer | Cross-module cells | Verdict |
+|---|---|---|---|
+| `low_aspect_ratio_DEMO` | identical, 52 nodes | **55 / 55 identical** — none new, none lost | **survives outright** |
+| `st_regression` | 52 nodes, two substitutions | **zero new**; 9 lost, ~23 intra-module lost | **survives**, boundaries intact |
 
-## Open
+**Losses never break a block partition** — removing an edge cannot create a cycle across a
+boundary. Only *new* cross-module cells could, and there are none.
 
-- **The collapsed DSM's 56 rows do not map one-to-one onto the 26 `run()` calls** in
-  `_call_models_once`. Node-count weighting (`|M1| = 24`, `|M2| = 10`, `|M3| = 12`, `|all| = 52`)
-  is therefore in DSM-row units, not model-call units. This has not caused an error, but the two
-  units are easy to confuse in a cost argument and the node map (C8) should carry both.
-- **Rows 1-3 and 56 are not executed inside a sweep** (`COOR_SingleRun`, `VMCON`,
-  `MDA_Idempotence`, `MDA_Output`). An earlier revision of the partition plan used `|all| = 56`;
-  the correct figure is 52. Corrected by A2.
+**The row mapping is independently confirmed.** They resolved our rows through the export's
+`supermodel_execution_order` (+3 for the driver rows at 1–3) and our ranges land on **exact
+semantic boundaries** under it: M1 ends precisely at `ImpurityRadiation` (28), M2 precisely at
+`CSCoil` (37), M3 = `Divertor` … `Availability` (40–51). Ranges chosen independently landing on
+semantic joints is strong evidence the mapping is right rather than coincidental.
+
+**Two substitutions in `st_regression`, both boundary-respecting — and both already handled here:**
+
+1. `CICCSuperconductingTFCoil` → `CROCOSuperconductingTFCoil`, a drop-in inside M2 (the
+   `i_tf_turn_type` flip, i.e. our D9 patch). Its entire coupling neighbourhood is CICC's.
+   **Our node map already carries both** (`cicc_sctfcoil` and `croco_sctfcoil`, both M2), and both
+   are top-level `run()` calls behind a branch at `caller.py:321` / `:328`.
+2. `ElectronCyclotron` is new (the `i_hcd_primary` flip) and couples only with `CurrentDrive` and
+   `Physics`, both M1. **It is not a node at our granularity** — constructed at `main.py:681` and
+   passed *into* the physics-orchestrated block, never a top-level `run()`.
+
+`CsFatigue` disappears (row 38, outside the partition). One new intra-M3 cell,
+`CCFE_HCPB → Availability`.
+
+**Membership refinement adopted:** M2 contains *"the TF coil model, selected by `i_tf_turn_type`"*,
+**not** a named class. Describing a module by a class name is what would have made this look like a
+structural change when it is a substitution.
+
+**Why our map needed no patch, and what that vindicates.** The map and the coupling set are derived
+from **runtime instrumentation across all four scenarios** (`y` set (b)), not from the DSM's
+single-deck graph (set (a)). A map built from the DSM alone would have been wrong for
+`st_regression` and would need patching now. **The choice of (b) over (a) was made on the argument
+that the DSM might be incomplete; it has now been tested against exactly that failure and held.**
+
+**Artefacts** (regenerated on their merged `3f8a822`; both decks sha256-verified against our
+published hashes before every run):
+
+- `dependency_analysis/output/st_regression/{dsm_collapsed.html, process_dependencies.json, diagnostics.txt}` — 2 580 nodes / 16 928 edges
+- `dependency_analysis/output/low_aspect_ratio_DEMO/{same three}` — 2 667 / 18 291
+- **Compare these by `diagnostics.txt`, never by the html/json hashes** — those embed run-specific
+  UUIDs. The `diagnostics.txt` hashes were byte-identical across two independent runs and are the
+  content-identity witness.
+
+**Consequence:** `st_regression`'s block-arm result no longer carries the extrapolation caveat, and
+the pre-committed withdrawal does not fire. The two large tokamaks still lead the write-up on the
+separate ground that their DSM was generated for exactly their configuration.
+
