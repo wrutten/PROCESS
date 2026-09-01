@@ -346,18 +346,20 @@ def solve_block(
     inner solve would be a pass with a guaranteed answer.
 
     **``k = 0`` is handled by falling out, not by a special case.**
-    ``recorder`` (A22) is an optional object with ``inner(outer, label, s,
-    res)`` and ``outer_pass(outer, res)`` methods.  It is handed the same
-    :class:`Residual` objects the predicate already computed, so it can name
-    the fields above ``tau`` without changing what is computed or when.  With
-    ``recorder=None`` -- the default, and what every A18 arm passes -- this
-    function is byte-for-byte the routine A18 measured.
-
     ``st_regression`` has ``i_pulsed_plant = 0``, so ``Pulse`` writes nothing
     and there is no coupler at all; the outer loop then converges on its first
     iteration because nothing a later block writes moves an earlier block's
     state.  That is a measurement, not an assumption, and the recorded outer
     count is what says whether it held.
+
+    ``recorder`` (A22) is an optional object with ``inner(outer, label, s,
+    res)`` and ``outer_pass(outer, res)`` methods.  It is handed the same
+    :class:`Residual` objects the predicate already computed, so it can name
+    the fields above ``tau`` without changing what is computed or when.  With
+    ``recorder=None`` -- the default, and what every A18 arm passes -- this
+    function is the routine A18 measured; A22's gate re-checks that on 600
+    design points, against A18's recorded counts, residual traces and exit
+    audits, with no tolerance applied anywhere in the comparison.
     """
     budget = Budget(global_cap)
     bound = spec.bind(sweeper.data)
