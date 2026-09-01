@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -25,6 +26,42 @@ if TYPE_CHECKING:
     from process.main import Models
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------
+# VP1 (framework hook F7a) -- the model call sequence is a driver choice.
+#
+# The first three tokamak nodes are unconditional and adjacent, and they are
+# the only part of the sequence VP1 currently varies, so the variant point is
+# a list of node names that ``_call_models_once`` walks.  Everything after
+# them is switch-selected on the input deck and is left exactly as upstream
+# wrote it; this is a permutation of three calls, not a scheduler.
+#
+# ``upstream`` is the order upstream PROCESS uses and is the default: with
+# ``PROCESS_ARCH_SEQUENCE`` unset the loop below issues ``plasma_geom``,
+# ``build``, ``physics`` in that order, which is what the three straight-line
+# statements it replaced did.
+#
+# ``build_after_physics`` (task A3) moves ``build`` -- DSM row 5, module M2
+# Coils -- from inside M1 Physics' span to the head of M2's span, so that M1
+# becomes contiguous in the call order and a per-module solver can wrap it.
+# The selection is resolved once at import, never per call.
+_SEQUENCE_HEADS: dict[str, tuple[str, ...]] = {
+    "upstream": ("plasma_geom", "build", "physics"),
+    "build_after_physics": ("plasma_geom", "physics", "build"),
+}
+
+SEQUENCE_NAME: str = os.environ.get("PROCESS_ARCH_SEQUENCE", "").strip() or "upstream"
+
+if SEQUENCE_NAME not in _SEQUENCE_HEADS:
+    raise RuntimeError(
+        f"PROCESS_ARCH_SEQUENCE={SEQUENCE_NAME!r} is not a recognised model "
+        f"sequence; expected one of {tuple(_SEQUENCE_HEADS)} (or unset for "
+        f"{'upstream'!r})."
+    )
+
+#: Resolved node order for the head of the tokamak model sequence.
+SEQUENCE_HEAD: tuple[str, ...] = _SEQUENCE_HEADS[SEQUENCE_NAME]
 
 
 class Caller:
@@ -295,14 +332,12 @@ class Caller:
             return
 
         # Tokamak calls
-        # Plasma geometry model
-        self.models.plasma_geom.run()
-
-        # Machine Build Model
-        # Radial build
-        self.models.build.run()
-
-        self.models.physics.run()
+        # Plasma geometry model, machine build model (radial build) and
+        # physics.  Their relative order is the VP1 variant point; see
+        # SEQUENCE_HEAD at module level.  With PROCESS_ARCH_SEQUENCE unset
+        # this is plasma_geom, build, physics -- the upstream order.
+        for _node in SEQUENCE_HEAD:
+            getattr(self.models, _node).run()
 
         # Toroidal field coil model
 

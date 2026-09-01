@@ -219,6 +219,17 @@ def main() -> int:
     result["probe_mode"] = _idf_probe.MODE if _idf_probe else None
     result["probe_module_present"] = _idf_probe is not None
 
+    # VP1 (A3): which model-call sequence the imported tree actually resolved.
+    # Recorded from the imported module, not from the environment variable, so
+    # that a run against a tree that predates the variant point says so instead
+    # of silently reporting the arm the driver *asked* for.
+    from process.core import caller as _caller
+
+    result["arch_sequence_env"] = os.environ.get("PROCESS_ARCH_SEQUENCE")
+    result["arch_sequence_name"] = getattr(_caller, "SEQUENCE_NAME", None)
+    head = getattr(_caller, "SEQUENCE_HEAD", None)
+    result["arch_sequence_head"] = list(head) if head is not None else None
+
     from process.main import SingleRun
 
     # I-8 diagnostic: CPU time beside wall clock.  If the CPU-time spread
