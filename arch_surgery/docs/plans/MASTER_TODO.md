@@ -164,6 +164,7 @@ and the interference analysis, is [`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCH
   no thread pinning, concurrent sessions are the leading suspect for I-8's spread.
 
 ---
+| **A21** | **partition-report** — deliver the experiment as **one runnable file plus one academic reference document**, for a reader who has not followed the queue. (a) `MDA_partition_experiment.py`: a single clean entry point over A18's gated `arch_surgery/fixedpoint/` package, concise jargon-free docstring, runs the whole of Phase A end to end. (b) `MDA_partition_exp_results.md`: goal, hypothesis, method (culminating in *run this one file*), results, critical discussion, conclusion — then a **second pass criticising the method and results, with the findings folded back into the discussion**. **Results must come from an actual run; nothing is written ahead of the data** | **A18** | **QUEUED** — deliberately sequenced *after* A18 (user, 2026-09-01) rather than built in parallel: a second implementation would duplicate the agent's work, diverge from it, and produce numbers from code its gates do not cover |
 
 ## Known open questions (parked, not blocking)
 
