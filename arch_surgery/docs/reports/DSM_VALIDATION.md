@@ -266,6 +266,29 @@ the physics package reads only `dr_fw_plasma_gap_inboard`/`_outboard` from `buil
 Full numbers and method in [`A3_build_reorder.md`](A3_build_reorder.md) (archived to
 `deprecated/` at merge; folder position records lifecycle, not validity — trap T3).
 
+### V9a — corroborated a second time, in a different driver and at the trajectory level
+
+**A23 (flat-arm-permutation) tested the same claim independently and more sharply.** A3 compared
+*final output* in PROCESS's own driver. A23 compared the *whole trajectory* in the experiment's
+fixed-point engine: arm A0 replayed with `physics` and `build` transposed reproduces A18's recorded
+A0 on **600 of 600 design points across the four decks**, with **0** differing — sweep counts,
+model-evaluation counts, the converged flag, the moved-constant list, the residual max, argmax
+name and above-tau count **at every sweep**, and the exit audit. Extended over every setting A18
+recorded A0 under (hoist off and on, and the tolerance ladder at 1e-4 / 1e-6 / 1e-8): **2 400 of
+2 400 identical.**
+
+Identical *trajectories*, not merely identical fixed points, is the stronger statement: if either
+node read anything the other writes inside the loop, the first sweep after transposition would
+already differ. It does not, anywhere.
+
+| | |
+|---|---|
+| **Why this is worth a separate entry** | The DSM interleaves these two nodes at row level — `build` holds row 5 and rows 29–37, `physics` holds row 4 and rows 6–28 — so `build`'s row sits *inside* `physics`'s span. **That interleaving does not correspond to a call-level data dependence.** Row adjacency in the collapsed DSM is not evidence of coupling between the call sites those rows belong to; this is a **granularity mismatch** of the kind protocol §11 exists to record, and it is the third distinct instance of DSM granularity misleading a reader (see V5, V10b) |
+| **Teeth** | The comparison was shown capable of failing before its zeros were accepted: one ULP of one design-vector component moves **488 of 600** points; a reversed-order control arm moves **575 of 600** |
+| **Scope, and it is narrow** | This licenses "**one transposition of two adjacent nodes is inert**". It does **not** license "node order does not matter to the flat arm" — the reversed-order control is the counterexample, on the same instrument, on the same points |
+
+Full numbers and method in [`A23_flat_arm_permutation.md`](A23_flat_arm_permutation.md).
+
 
 ## V10 — The feed-forward tail is real, but only two of its five DSM rows can be hoisted
 

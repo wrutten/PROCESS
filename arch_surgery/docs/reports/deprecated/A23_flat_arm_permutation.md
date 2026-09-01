@@ -1,8 +1,17 @@
-> **Document status** — **OPEN TASK REPORT · CURRENT**
-> The task report for **A23 (flat-arm-permutation)**, on branch `A23-flat-arm-permutation`,
-> describing the measurement instrument at commit **`9ff42fbe`** (branch point `10a38195` on
-> `architecture_surgery`; experiment base commit `c0ae5b28`). Its numbers are current evidence.
-> It moves to `deprecated/` at merge, which records lifecycle and not staleness (trap T3).
+> **Document status** — **ARCHIVED · FINDINGS CURRENT**
+> The task report for A23 (flat-arm-permutation), merged to `architecture_surgery` on 2026-09-01 at
+> experiment base commit `c0ae5b28`. **Its position in `deprecated/` records lifecycle, not
+> staleness** (trap T3): the 600/600 and 2 400/2 400 nulls are current evidence and they are what
+> license Phase A's `A0 → A1` to be described as the module grouping alone.
+>
+> The orchestrator re-derived the gate independently from the four `result.json` artifacts before
+> merging: `G2_A0perm_vs_a18` identical on 149/149, 297/297, 144/144 and 10/10 with zero skips,
+> `replay_never_entered_caller` true on all four decks, and the sensitivity arms moving 488/600
+> (one ULP) and 575/600 (reversed order). No claim was narrowed.
+>
+> **Read the scope caveat as binding.** This licenses "one transposition of two adjacent nodes is
+> inert", never "node order does not matter"; the reversed-order control is the counterexample on
+> the same instrument and the same points. See also **V9a** in `DSM_VALIDATION.md`.
 
 # A23 (flat-arm-permutation) — was the flat arm's node order part of what Phase A measured?
 
