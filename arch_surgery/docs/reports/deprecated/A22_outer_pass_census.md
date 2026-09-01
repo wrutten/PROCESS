@@ -1,8 +1,17 @@
-> **Document status** — **LIVE · CURRENT**
-> The task report for A22 (outer-pass-census), open at the time of writing. It describes branch
-> `A22-outer-pass-census`, off `architecture_surgery` at **`703dd7d4`** (experiment base commit
-> `c0ae5b28`), and its numbers are current evidence. It will be archived to `deprecated/` at
-> merge; position in that folder would record lifecycle, not staleness (trap T3).
+> **Document status** — **ARCHIVED · FINDINGS CURRENT**
+> The task report for A22 (outer-pass-census), merged to `architecture_surgery` on 2026-09-01.
+> **Its position in `deprecated/` records lifecycle, not staleness** (trap T3): every number in it
+> is current evidence, rederived at experiment base commit `c0ae5b28`, and its verdict is what
+> unblocked Phase B. The orchestrator verified the 600/600 gate independently from the raw
+> `census.json` artifacts before merging, and confirmed that the burn time is category
+> `continuous` — not `constant` — on all three pulsed decks, so the pin arm is not trivially
+> satisfied on any of them.
+>
+> **Read §4 with `MDA_PARTITION_EXPERIMENT.md` §4.1a beside it.** The -29 % here is the block arm
+> against itself with one coupler removed. §4.1a carries the finite-difference arithmetic that
+> turns it into a Phase B expectation (about -26 %, conditional on the optimiser's major-iteration
+> count not moving, which nothing yet bounds).
+
 
 # A22 (outer-pass-census) — which fields are still moving when a second outer pass is needed
 

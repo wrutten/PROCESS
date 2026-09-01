@@ -409,6 +409,54 @@ The first two act in opposite directions and **A0 vs R measures their sum, not e
 costs one flag in the engine, and without it a near-zero sum is indistinguishable from neither
 effect existing.
 
+### 4.1a What the burn-time lift is worth, and the arithmetic that limits it
+
+**A22 (outer-pass-census) confirmed `k = 1`, per deck, and measured what removing that one
+coupler is worth to the loop.** The counterfactual is the block arm with
+`times.t_plant_pulse_burn` held at its entry value, re-imposed after every model call — the
+loop topology Phase B creates by making the burn time an optimiser input:
+
+| deck | block-arm model evaluations | burn time held fixed | change | mean outer passes |
+|---|---|---|---|---|
+| `large_tokamak_nof` | 13 906 | 9 848 | **-29.2 %** | 2.7047 -> 1.9530 |
+| `low_aspect_ratio_DEMO` | 28 070 | 19 774 | **-29.6 %** | 2.7205 -> 1.9495 |
+| `large_tokamak_eval` | 618 | 418 | **-32.4 %** | 2.4000 -> 1.7000 |
+| `st_regression` | 9 917 | 9 917 | 0.0 % | 2.1389 (no burn-time coupler) |
+
+**This is not Phase B's expected saving, and quoting it as one would repeat T11.** Three
+conditions cut it down, and the third is not bounded by anything measured so far.
+
+1. **It is the block arm against itself**, over one deck's harvested design points, at
+   tau = 1e-6. It is not the block arm against today's driver, which is Phase B's baseline
+   (D14). Phase B's own comparison has to be run.
+2. **The lift costs a design variable.** These decks carry 20, 19, 14 and 2 `ixc` entries;
+   the lift makes that 21, 20, — and 3. PROCESS takes central differences, so a gradient
+   evaluation costs `2n` MDA solves, and one more variable is **+5.0 %** on
+   `large_tokamak_nof` and **+5.3 %** on `low_aspect_ratio_DEMO`. Composing:
+   `1.050 x 0.708 = 0.743` and `1.053 x 0.704 = 0.741` — about **-26 %** on model
+   evaluations, *if the optimiser's major-iteration count does not change*.
+3. **Nothing bounds whether it changes.** Adding a variable and a consistency constraint
+   changes the SQP subproblem VMCON solves. The major-iteration count could move in either
+   direction by more than 26 %, which is precisely why H5 measures the paired distribution
+   over 20-30 multi-starts rather than a single run, and why robustness outranks cost
+   (D15).
+
+**The pin arm is a topology probe, not a candidate architecture.** Holding the burn time
+away from its self-consistent value moves the exit objective on `low_aspect_ratio_DEMO` by a
+median relative 4.9e-4 and a maximum of 3.6e-1 over 297 points. Phase B must drive the
+burn-time residual to zero through a constraint, and equivalence is a gate it still has to
+pass — the -29 % is the loop-side saving that becomes available *once that gate passes*, not
+before.
+
+**What the census cost the premise, and what it cost nothing.** M1 (Physics) is the module
+that re-solves — on 112/149, 229/297 and 7/10 points — and the five fields it rewrites are the
+same five on every such point, all written by `physics`, all burn-time-dependent:
+`times.t_burn_0`, `times.t_plant_pulse_plasma_present`, `times.t_plant_pulse_total`,
+`physics.vs_plasma_burn_required`, `physics.vs_plasma_total_required`. M2 never re-solves.
+The burn time itself is never the moving field — it settles in pass 1; the cost is the
+one-step lag from M1 running before `pulse` in the block order. That is `k = 1` behaving as a
+single one-step cycle should, and it costs exactly one outer pass.
+
 ### 4.2 What would count as the existence proof
 
 Any **one** of these, measured fairly and reported with its dropped-point census:
