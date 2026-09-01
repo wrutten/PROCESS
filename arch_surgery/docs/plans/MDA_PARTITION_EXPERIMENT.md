@@ -257,6 +257,73 @@ H5 returns here, and here it can be measured.
 
 ---
 
+### 2.5 Phase B, and how H5 gets measured
+
+**H5** is the risk that adding a consistency constraint changes the optimiser's behaviour enough
+to consume the saving. It is the one thing replay cannot reach, and it needs a protocol designed
+before the run rather than an interpretation afterwards.
+
+**The difficulty.** The baseline solves an *n*-variable problem. The variant solves *n*+1 with an
+extra equality constraint. These are different problems, so *"the variant took more optimiser
+iterations"* is not evidence of anything — the two arms follow different paths through different
+spaces, and a single pair of runs is one sample from each.
+
+**1. The metric is model evaluations, never iterations.** Count every model evaluation from start
+to converged solution. Evaluations are the same unit of work in both arms, are exact, and
+reproduce bit-for-bit. Iteration counts are not comparable and are recorded only as diagnostics.
+
+**2. "Converged" means all three of these, checked identically for both arms.**
+
+- `norm_objf` agreement to a stated tolerance (decision D6);
+- a post-solve feasibility audit — every constraint satisfied to a stated tolerance;
+- **for the variant only: the consistency residual is within tolerance.** Without this the variant
+  can "win" by returning a point that is not on the consistency manifold at all, which is not a
+  solution to the same problem. This check is not optional and its omission would invalidate the
+  comparison.
+
+Never gate on iteration variables: some are not identified by the problem and differ at an
+unchanged optimum (D6).
+
+**3. Multi-start, because one run is one sample from a path distribution.** Perturb the initial
+design vector and solve from each start, comparing **distributions** rather than single numbers.
+
+- 20-30 starts per scenario, per arm.
+- Perturbations are **scale-aware** — each variable multiplied by `1 + δᵢ` — and **identical
+  across arms**, so the comparison stays paired.
+- The variant's extra variable is initialised from the deck's own burn time, and that choice is
+  stated rather than tuned.
+
+This also delivers the robustness answer as a by-product, and **robustness outranks cost**: the
+fraction of starts each arm solves (`ifail = 1`) is a first-class result. An arm that is cheaper
+on the starts it solves and fails on more of them has not won.
+
+**4. Attribution, so a loss is explained rather than reported.** If the variant costs more,
+decompose it: extra *optimiser iterations* (H5 proper) against extra *evaluations per iteration*
+(the `2n → 2(n+1)` gradient penalty, already measured at 4.8-5.0 %). Both are countable, and they
+answer different questions — one is the constraint hurting the search, the other is a known and
+predictable dimension cost.
+
+**5. Secondary: convergence history, not just the endpoint.** Record objective against cumulative
+model evaluations for every run. This distinguishes *"the variant is slower per unit of progress"*
+from *"the variant took a longer path to the same place"*, which the endpoint count alone cannot.
+
+**6. Outcomes, declared in advance.**
+
+| Finding | Reading |
+|---|---|
+| Variant's median evaluation count lower, success rate no worse | the architecture wins |
+| Variant's success rate worse | **H5 fails; that is the headline regardless of cost** |
+| Distributions overlap substantially | inconclusive, reported as such — not resolved by picking a summary statistic |
+
+**7. Cost.** Roughly 30 starts x 2 arms x 4 scenarios at 15-30 s each: about one to two hours. The
+outputs are counts and success flags, so machine load does not threaten them.
+
+**8. What it cannot answer.** Whether the result transfers to other decks, other starting-point
+distributions, or a different optimiser. And it is counts, not time; a timing comparison can be
+added under the paired protocol but is not the evidence.
+
+---
+
 ## 3. Implementation impact
 
 ### 3.1 Phase A changes no PROCESS code
