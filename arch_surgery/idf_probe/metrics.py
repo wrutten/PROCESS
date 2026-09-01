@@ -21,6 +21,13 @@ SCALAR_KEYS = (
     "n_iteration_variables",
     "n_solver_iterations",
     "process_runtime",
+    # Issue I-12: PROCESS's 1990 cost model diverges where net electric power
+    # is not positive, which makes the idempotence loop's relative predicate
+    # arbitrarily tight there.  Phase B's multi-starts visit such points by
+    # design, so the drop census in `gates.py` flags them -- which it can only
+    # do if the quantity is recorded.  Additive: not part of any gate's
+    # comparison set.
+    "p_plant_electric_net_mw",
 )
 
 #: Keys whose value legitimately varies between otherwise identical runs.

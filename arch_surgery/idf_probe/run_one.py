@@ -234,6 +234,24 @@ def main() -> int:
     hoist_nodes = getattr(_caller, "HOIST_NODES", None)
     result["arch_hoist_nodes"] = list(hoist_nodes) if hoist_nodes is not None else None
 
+    # VP5 (A24): whether the imported tree resolved a lifted sub-solve site,
+    # and which sites.  Read from the module rather than the environment, so a
+    # tree that predates the variant point -- the ``parent`` arm, where the
+    # module does not exist at all -- reports ``None`` instead of echoing back
+    # the arm the driver asked for.
+    result["arch_lift_env"] = os.environ.get("PROCESS_ARCH_LIFT")
+    try:
+        from process.core.solver import subsolve as _subsolve
+    except ImportError:
+        _subsolve = None
+    result["arch_lift_module_present"] = _subsolve is not None
+    result["arch_lift_sites"] = (
+        sorted(_subsolve.LIFTED_SITES) if _subsolve is not None else None
+    )
+    result["arch_lift_known_sites"] = (
+        list(_subsolve.SITES) if _subsolve is not None else None
+    )
+
     result["arch_sequence_env"] = os.environ.get("PROCESS_ARCH_SEQUENCE")
     result["arch_sequence_name"] = getattr(_caller, "SEQUENCE_NAME", None)
     head = getattr(_caller, "SEQUENCE_HEAD", None)

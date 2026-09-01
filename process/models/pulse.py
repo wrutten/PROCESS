@@ -7,6 +7,7 @@ from typing import ClassVar
 from process.core import constants
 from process.core import process_output as po
 from process.core.model import Model
+from process.core.solver.subsolve import SITE_BURN_TIME, subsolve
 from process.data_structure.pfcoil_variables import PFConductorModel
 
 logger = logging.getLogger(__name__)
@@ -129,6 +130,95 @@ class PulseTimings:
         return int(self.n_pf_active_points_total - 1)
 
 
+# ---------------------------------------------------------------------------
+# VP5 (framework hook F9) -- the burn-time residual, extracted so that its
+# solution method becomes a driver choice.
+#
+# The burn time is fixed by the volt-seconds the CS and PF coils have left for
+# the flat-top: the plasma consumes `v_plasma_loop_burn` volts for
+# `t_plant_pulse_burn + t_plant_pulse_fusion_ramp` seconds.  PROCESS has always
+# solved that relation for `t_plant_pulse_burn` inside `Pulse.run`, in closed
+# form, and written the answer into the data structure; the optimiser never
+# sees the unknown and never sees the residual.
+#
+# These two functions say the same thing twice, once as a residual and once as
+# its root, so that the driver can choose which one it uses:
+#
+#   * `burn_time_residual` is what constraint equation 93 evaluates when the
+#     burn time is lifted into the design vector (iteration variable 178);
+#   * `burn_time_root` is the closed-form solve, and is what `Pulse.run` uses
+#     by default -- it holds the original expression, moved but **not
+#     changed** (decisions D5 and D11: this is structural work, not a change to
+#     what the model computes).
+#
+# `burn_time_residual(burn_time_root(*inputs), *inputs) == 0` identically, and
+# is checked as such in `arch_surgery/idf_probe/gates.py`.
+# ---------------------------------------------------------------------------
+
+
+def burn_time_root(
+    vs_cs_pf_total_burn: float,
+    v_plasma_loop_burn: float,
+    t_plant_pulse_fusion_ramp: float,
+) -> float:
+    """The burn time that makes :func:`burn_time_residual` zero.
+
+    The closed-form root, in the unchanged form PROCESS has always used.
+    Separated from :meth:`Pulse.calculate_burn_time` so that the constraint
+    layer can evaluate the same relation without the negative-burn-time
+    diagnostic, which is a reporting side effect of the model call and not part
+    of the relation.
+
+    Parameters
+    ----------
+    vs_cs_pf_total_burn : float
+        Total volt-seconds in CS and PF coils available for burn (V·s)
+    v_plasma_loop_burn : float
+        Plasma loop voltage during burn (V)
+    t_plant_pulse_fusion_ramp : float
+        Time for fusion ramp (s)
+
+    Returns
+    -------
+    float
+        Calculated burn time (s)
+    """
+    return (
+        abs(vs_cs_pf_total_burn) / v_plasma_loop_burn
+    ) - t_plant_pulse_fusion_ramp
+
+
+def burn_time_residual(
+    t_plant_pulse_burn: float,
+    vs_cs_pf_total_burn: float,
+    v_plasma_loop_burn: float,
+    t_plant_pulse_fusion_ramp: float,
+) -> float:
+    """Burn-time consistency residual, zero at a consistent design point.
+
+    Parameters
+    ----------
+    t_plant_pulse_burn : float
+        Burn time being tested (s)
+    vs_cs_pf_total_burn : float
+        Total volt-seconds in CS and PF coils available for burn (V·s)
+    v_plasma_loop_burn : float
+        Plasma loop voltage during burn (V)
+    t_plant_pulse_fusion_ramp : float
+        Time for fusion ramp (s)
+
+    Returns
+    -------
+    float
+        ``t_plant_pulse_burn`` less the burn time the coils can support (s)
+    """
+    return t_plant_pulse_burn - burn_time_root(
+        vs_cs_pf_total_burn,
+        v_plasma_loop_burn,
+        t_plant_pulse_fusion_ramp,
+    )
+
+
 class Pulse(Model):
     """Class containing pulsed reactor calculations"""
 
@@ -153,12 +243,24 @@ class Pulse(Model):
         if self.data.pulse.i_pulsed_plant == 1:
             self.tohswg(output=output)
 
-            #  Burn time calculation
+            #  Burn time calculation.  VP5 seam: with `PROCESS_ARCH_LIFT`
+            #  unset this calls `calculate_burn_time` with exactly the
+            #  arguments the straight-line assignment it replaced used, and
+            #  assigns exactly what that assignment assigned.  With
+            #  `burn_time` lifted, the burn time is a design variable and this
+            #  returns it untouched, leaving constraint equation 93 to enforce
+            #  the relation.
 
-            self.data.times.t_plant_pulse_burn = self.calculate_burn_time(
-                vs_cs_pf_total_burn=self.data.pf_coil.vs_cs_pf_total_burn,
-                v_plasma_loop_burn=self.data.physics.v_plasma_loop_burn,
-                t_plant_pulse_fusion_ramp=self.data.times.t_plant_pulse_fusion_ramp,
+            self.data.times.t_plant_pulse_burn = subsolve(
+                burn_time_residual,
+                self.data.times.t_plant_pulse_burn,
+                (
+                    self.data.pf_coil.vs_cs_pf_total_burn,
+                    self.data.physics.v_plasma_loop_burn,
+                    self.data.times.t_plant_pulse_fusion_ramp,
+                ),
+                site=SITE_BURN_TIME,
+                direct=self.calculate_burn_time,
             )
 
     def tohswg(self, output: bool):
@@ -299,9 +401,11 @@ class Pulse(Model):
         float
             Calculated burn time (s)
         """
-        t_plant_pulse_burn = (
-            abs(vs_cs_pf_total_burn) / v_plasma_loop_burn
-        ) - t_plant_pulse_fusion_ramp
+        t_plant_pulse_burn = burn_time_root(
+            vs_cs_pf_total_burn,
+            v_plasma_loop_burn,
+            t_plant_pulse_fusion_ramp,
+        )
 
         if t_plant_pulse_burn < 0.0e0:
             logger.error(

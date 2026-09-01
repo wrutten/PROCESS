@@ -19,6 +19,7 @@ from process.models.physics.physics import (
     PlasmaBeta,
     PlasmaIgnitionModel,
 )
+from process.models.pulse import burn_time_root
 from process.models.tfcoil.base import TFConductorModel
 
 ConstraintSymbolType = Literal["=", ">=", "<="]
@@ -1951,6 +1952,43 @@ def constraint_equation_92(constraint_registration, data):
         + data.physics.f_plasma_fuel_tritium
         + data.physics.f_plasma_fuel_helium3,
         1.0,
+        constraint_registration,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fork-only constraints (arch_surgery).  Appended from 93 upward; `lablcc` in
+# process/data_structure/numerics.py is extended in step, because a constraint
+# registered without its label is a silent reporting gap.  See
+# arch_surgery/docs/plans/REGISTRY_ALLOCATIONS.md.
+# ---------------------------------------------------------------------------
+
+
+@ConstraintManager.register_constraint(93, "sec", "=")
+def constraint_equation_93(constraint_registration, data):
+    """Equation for burn time consistency
+
+    The residual of variant point VP5's burn-time lift.  `process.models.pulse`
+    normally solves this relation for the burn time in closed form and writes
+    the answer into the data structure; with the site lifted
+    (`PROCESS_ARCH_LIFT=burn_time`) the burn time is instead iteration variable
+    178 and this equation is what determines it.  The relation itself is
+    unchanged -- `burn_time_root` holds the model's own expression.
+
+    Inert until a deck names `icc = 93`.
+
+    t_plant_pulse_burn: burn time (s)
+    vs_cs_pf_total_burn: total V-s in CS and PF coils available for burn (V.s)
+    v_plasma_loop_burn: plasma loop voltage during burn (V)
+    t_plant_pulse_fusion_ramp: time for fusion ramp (s)
+    """
+    return eq(
+        data.times.t_plant_pulse_burn,
+        burn_time_root(
+            data.pf_coil.vs_cs_pf_total_burn,
+            data.physics.v_plasma_loop_burn,
+            data.times.t_plant_pulse_fusion_ramp,
+        ),
         constraint_registration,
     )
 

@@ -239,6 +239,24 @@ ITERATION_VARIABLES = {
     175: IterationVariable("kappa", "physics", 0.00, 10.00),
     176: IterationVariable("f_st_coil_aspect", "stellarator", 0.70, 1.30),
     177: IterationVariable("f_a_tf_turn_cable_space_extra_void", "tfcoil", 0.01, 1.0),
+    # --- Fork-only entries (arch_surgery). Appended, never fitted into one of
+    # the 94 gaps in 1-177: reusing a gap would silently reinterpret any
+    # existing IN.DAT that names that number.  There is no cap to raise --
+    # N_ITERATION_VARIABLES_MAX is max(keys), so appending 178 raises it and
+    # every array sized by it grows in step.  See
+    # arch_surgery/docs/plans/REGISTRY_ALLOCATIONS.md.
+    #
+    # 178 lifts the flat-top burn time out of `process.models.pulse`, where it
+    # is otherwise solved for in closed form and never seen by the optimiser
+    # (variant point VP5).  Constraint 93 is the residual that determines it.
+    # Bounds: strictly positive, since a zero-length flat-top is not a design
+    # point and the iteration variable is scaled by its own value; the upper
+    # bound is the range `process/core/input.py` already accepts for
+    # `t_plant_pulse_burn`.  Both are defaults an input deck may override.
+    #
+    # Inert until a deck names `ixc = 178`: `ixc` selects which variables are
+    # active, and none of the study's scenario decks name it.
+    178: IterationVariable("t_plant_pulse_burn", "times", 1.0, 1.0e8),
 }
 
 
