@@ -66,3 +66,20 @@ env-fork
 !documentation/**/*.html
 process/_version.py
 *.ipynb
+
+# --- PROCESS_surgery: sandbox mount artifacts, not project files ---
+# The agent sandbox bind-mounts /dev/null over these paths, so they appear in
+# the working tree as character devices.  A bare `git add -A` stages them
+# silently; commit 83e18d15 did exactly that with 21 of them.  None belong to
+# upstream PROCESS or to this experiment.
+.bash_profile
+.bashrc
+.profile
+.zshrc
+.zprofile
+.gitconfig
+.gitmodules
+.idea
+.mcp.json
+.ripgreprc
+.claude/
