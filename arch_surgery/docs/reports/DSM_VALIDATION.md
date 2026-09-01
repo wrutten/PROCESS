@@ -90,11 +90,36 @@ DSM is the **block arm's module boundaries**. So:
   recommendation now carries a caveat: its `k = 0` claim is run-time measured by A2 and stands,
   but *which node belongs to which module* there is imported from a different configuration.
 
-**Available fix.** The tool builds a config from any `IN.DAT` through PROCESS's own
-`INPUT_VARIABLES` registry (`ProcessConfig.from_scenario`), so a per-scenario DSM is a supported
-operation rather than new work. **Requested of `PROCESS_code_analysis`:** regenerate the collapsed
-DSM for `st_regression` and `low_aspect_ratio_DEMO` and report whether the module decomposition
-survives. Until then, block-arm results on those two scenarios carry this caveat.
+**Available fix — requested, approved, and executing.** The tool builds a config from any `IN.DAT`
+through PROCESS's own `INPUT_VARIABLES` registry (`ProcessConfig.from_scenario`), so a per-scenario
+DSM is a supported operation rather than new work.
+
+**Status, 2026-09-01:** registered by `PROCESS_code_analysis` as **M100 (run-all-scenarios)**,
+approved by their user, now executing and slot-gated behind a gate suite. It adds a
+`run_all_scenarios` entry point beside `main.py` / `overlap_dsm.py` / `serve_dsm.py`, emitting
+**collapsed unsequenced HTML only** for the two extra decks, into **per-scenario output
+directories**. Both riders were accepted into the executor's brief: the D9 provenance note travels
+with our patched `st_regression` deck, and post-init generation asserts the imported tree rather
+than trusting the environment.
+
+**Deck integrity.** Our hashes were published to them *before* the copy, so their verification is a
+comparison rather than a self-check:
+
+| Deck | sha256 | bytes |
+|---|---|---|
+| `st_regression.IN.DAT` | `3f33d565b47dfef36eb4f40e63f26733f554194c09f1564e9d2f95d2e96ac5c7` | 136 043 |
+| `low_aspect_ratio_DEMO.IN.DAT` | `72845515cdd9779c3b1c2f09f344c6f9ce626576e8e788e71d4df817bd828248` | 30 325 |
+
+Both tracked on `architecture_surgery`, working tree clean; `st_regression` last changed in
+`3baf34b8` (the D9 patch). A mismatch means the copy is wrong and M100 must not proceed on it.
+This precaution exists because the deck was **not** under version control until I-9 was found — the
+root `.gitignore`'s `*.DAT` swallowed it — so deck provenance is checkable now and was not before.
+
+**What the answer decides.** Whether `st_regression`'s collapsed DSM still shows three modules with
+internal cycles, and whether the row ranges defining them survive under a deck differing in 12
+switches. **If they do not, the block-arm result for that scenario is withdrawn, not caveated.**
+Until the DSMs exist, block-arm results on `st_regression` and `low_aspect_ratio_DEMO` carry this
+caveat and the two large tokamaks lead the write-up.
 
 **Also note:** the DSM source deck is `examples/data/large_tokamak_IN.DAT`, which is **not** one of
 the four experiment scenarios. `large_tokamak_nof` is a regression deck. They agree on every
