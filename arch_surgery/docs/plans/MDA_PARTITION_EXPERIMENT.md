@@ -70,7 +70,7 @@ consecutive sweeps is reported converged.
 From `dependency_analysis/output/tokamak/dsm_collapsed.html`, pin `PROCESS_at_36ac820e`, which
 descends from `c0ae5b28` — the coordinate systems match.
 
-> **The DSM is configuration-specific (V6, 2026-09-01).** It resolves conditionals against the
+> **The DSM is configuration-specific — checked, and the partition survives (V6, RESOLVED).** It resolves conditionals against the
 > analysis tool's `tokamak` preset, which is built from `examples/data/large_tokamak_IN.DAT`. That
 > deck matches `large_tokamak_nof` and `large_tokamak_eval` **exactly**, and diverges from
 > `st_regression` roughly **twice as far** as from `low_aspect_ratio_DEMO` — on our 33-switch
@@ -357,12 +357,13 @@ nothing), the largest module-convergence gaps of the four, and A19 put its parti
 18.0-18.1 %. It needs no lift at all, which makes it the one scenario where the partition is
 available with `k = 0`.
 
-**But its module boundaries are an extrapolation (V6).** The DSM was generated under a
-configuration differing from this deck in 12 switches. The `k = 0` claim is run-time measured by A2
-and stands on its own; *which node belongs to which module* does not. **Report `st_regression`'s
-block-arm result with that caveat, or regenerate its DSM first** — the latter is a supported
-operation in the analysis tool and is the cleaner course if it is to carry the headline. The two
-large tokamaks carry no such caveat and should lead the write-up.
+**Its module boundaries were an extrapolation, and have now been checked (V6, RESOLVED
+2026-09-01).** `st_regression`'s own collapsed DSM was regenerated and the three-module partition
+**survives**: zero new cross-module cells, nine lost, boundaries intact, up to two
+boundary-respecting model substitutions that our runtime-derived node map already covered. **The
+pre-committed withdrawal does not fire and the caveat is lifted.** The two large tokamaks still
+lead the write-up, on the separate ground that their DSM was generated for exactly their
+configuration.
 
 ### 4.3 What the experiment produces even if every arm ties
 
@@ -494,7 +495,7 @@ identical code, which had already reached the arithmetic behind a gate decision.
 | Arms compared over different populations | Pairwise drop; drop census reported before any ratio |
 | The trajectory is not stable — a different predicate would visit different design points | **Accepted, not engineered around.** Phase A measures cost-to-converge *these* points from *these* entry states. It is a per-point mechanism result, not a re-run solve. Sound for an existence proof; insufficient for an adoption decision, which is Phase B's job |
 | DSM misses an edge | `y` set (b) does not depend on the DSM; set (a) runs as cross-check; disagreements become DSM findings, recorded in [`../reports/DSM_VALIDATION.md`](../reports/DSM_VALIDATION.md) |
-| **DSM was generated for a different configuration** | **V6.** Exact match for `large_tokamak_nof` and `large_tokamak_eval`; 5 switches out on `low_aspect_ratio_DEMO`; **12 out on `st_regression`**. Affects the block arm's module boundaries only, not the predicate. Lead with the two large tokamaks; caveat or regenerate for the others |
+| ~~DSM was generated for a different configuration~~ | **CLOSED (V6, 2026-09-01)** by regenerating per-scenario DSMs. The partition survives on both inspection scenarios — `low_aspect_ratio_DEMO` identically (55/55 cross-module cells), `st_regression` with zero new cross-module cells and two substitutions our runtime-derived map already carried. Row mapping independently confirmed to land on exact semantic boundaries |
 | `run()` / `output()` conflation | Trap T1, three instances. The instrument excludes `output()` paths; the replay calls unwrapped bound methods (T7) |
 | `i_pulsed_plant` splits the coupling graph | Never pool pulsed and steady-state results |
 | Four scenarios, tokamak only | No claim about stellarator, IFE or unsampled configurations. `st_regression` also sets `itart = 1`, a different TF path — coverage, not a replicate |
