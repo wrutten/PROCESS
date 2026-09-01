@@ -1,8 +1,16 @@
-> **Document status** — **LIVE · CURRENT**
-> The task report for A3 (build-reorder), open at the time of writing. It describes branch
-> `A3-build-reorder`, off `architecture_surgery` at **`c9cc917f`** (experiment base commit
-> `c0ae5b28`), and its numbers are current evidence. It will be archived to `deprecated/` at
-> merge; position in that folder would record lifecycle, not staleness (trap T3).
+> **Document status** — **ARCHIVED · FINDINGS CURRENT**
+> The task report for A3 (build-reorder), merged to `architecture_surgery` on 2026-09-01 at
+> experiment base commit `c0ae5b28`. **Its position in `deprecated/` records lifecycle, not
+> staleness** (trap T3): the gate table is current evidence.
+>
+> **Orchestrator's addition, which this report could not have contained.** Cross-reading A3
+> against A18 shows that **A18's block arm was already running A3's order.** `arms.build_blocks`
+> groups nodes by module, giving `M1 = [plasma_geom, physics]` and `M2 = [build, …]`, while
+> `arms.loop_nodes` keeps the harvested upstream order for the flat arm. So Phase A's
+> **A0 → A1 comparison varied the grouping and this sequence permutation together**, and nobody
+> had named that confound. A3 retires most of it — the permutation is bit-identical *and*
+> sweep-count-identical in the incumbent driver — but the flat arm under the permuted order was
+> never measured directly. See **A23** in the queue for the cheap check that closes it.
 
 # A3 (build-reorder) — moving `build` out of M1's span
 
