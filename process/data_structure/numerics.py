@@ -289,10 +289,6 @@ class NumericsData:
             "CS achievable stress load cycles lower limit           ",
             "ECRH ignitability                ",  # Stellarator constraint
             "Fuel composition consistency     ",
-            # Fork-only (arch_surgery).  A constraint appended without its
-            # label is a silent reporting gap, so lablcc is extended in step
-            # with the registration in process/core/solver/constraints.py.
-            "Framework placeholder consistency",
         ]
     )
     """Labels describing constraint equations (corresponding itvs)<UL>
@@ -395,7 +391,6 @@ class NumericsData:
     * (90) Lower Limit on number of stress load cycles for CS
     * (91) Checking if the design point is ECRH ignitable
     * (92) D/T/He3 ratio in fuel sums to 1
-    * (93) Framework placeholder, fork-only: pins iteration variable 178
     """
 
     ixc: list[int] = field(
@@ -581,7 +576,6 @@ class NumericsData:
     * (173) f_plasma_fuel_deuterium : Deuterium fraction in fuel
     * (174) NOT USED
     * (175) NOT USED
-    * (178) framework_placeholder : fork-only placeholder, no physics meaning
     """
     # Issue 287 iteration variables are now defined in module define_iteration_variables in iteration variables.f90
     # WARNING These labels are used as variable names by new_indat(), and possibly
@@ -683,16 +677,6 @@ class NumericsData:
 
     factor: float = 0.1e0
     ftol: float = 1.0e-4
-
-    framework_placeholder: float = 1.0
-    """Fork-only (arch_surgery) framework placeholder; no physics meaning.
-
-    Target of iteration variable 178 and of the placeholder constraint 93,
-    which pins it to 1.0.  It is written by nothing and read by nothing else,
-    so unless an IN.DAT names `ixc = 178` and `icc = 93` it takes no part in
-    any solve.  It lives on the numerics (driver) data rather than on any
-    physics data structure so that the placeholder pair cannot touch a model.
-    """
 
 
 CREATE_DICTS_FROM_DATACLASS = NumericsData
