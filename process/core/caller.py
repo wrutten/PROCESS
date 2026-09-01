@@ -16,6 +16,7 @@ from process.core import process_output as po
 from process.core.io.mfile import MFile
 from process.core.process_output import OutputFileManager, ovarre
 from process.core.solver import constraints
+from process.core.solver import module_solve
 from process.core.solver.iteration_variables import set_scaled_iteration_variable
 from process.core.solver.objectives import objective_function
 from process.data_structure.blanket_variables import BlktModelTypes
@@ -199,6 +200,144 @@ def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
     )
 
 
+# --------------------------------------------------------------------------
+# VP4 (framework hook F7c) -- one flat loop, or a solve per module.
+#
+# Upstream runs the whole model sequence and tests two derived scalars for
+# idempotence.  ``per_module`` instead iterates each DSM module to its own
+# fixed point, in the block order A3's VP1 makes available by giving M1 a
+# contiguous span, with an outer loop over whatever cross-module coupling
+# remains.  The arm, its caps and its predicate live in
+# ``process/core/solver/module_solve.py``; what lives here is the schedule and
+# the node filter, because those are properties of *this* call sequence.
+#
+# ``off`` is the default and is upstream behaviour exactly: ``_active_nodes``
+# stays ``None``, every node runs on every sweep, and ``call_models`` never
+# enters the block path.
+MODULE_SOLVE_NAME: str = module_solve.MODULE_SOLVE_NAME
+MODULE_SOLVE_ENABLED: bool = module_solve.ENABLED
+
+#: Model evaluations, counted as **individual model node calls** -- the unit
+#: Phase A and A22 use (``engine.Budget.node_calls``), and the unit Phase B's
+#: cost comparison is stated in.  ``numerics.n_model_calls`` counts *sweeps* of
+#: ``_call_models_once``, which is not comparable between a flat loop and a
+#: block schedule: a block sweep runs one module, not all of them.  A plain
+#: integer increment per node call, on both arms, touching no float and
+#: changing no branch a result depends on.
+NODE_CALLS: list[int] = [0]
+
+#: :data:`NODE_CALLS` at the moment the final-output path is entered.  The
+#: cost figure Phase B compares is the **solve** phase: everything before
+#: ``write_output_files``.  The output phase re-enters every model's ``run()``
+#: from its ``output()`` (trap T7) and is identical work in both arms, so
+#: pooling it into the cost would dilute the very quantity being compared.
+NODE_CALLS_AT_OUTPUT: list[int | None] = [None]
+
+#: Roll-up of the block schedule's own counts across every ``call_models`` of a
+#: run.  Diagnostics: reported beside the cost figure, never gated on.
+MODULE_SOLVE_TOTALS: dict = {
+    "n_call_models": 0,
+    "block_sweeps": 0,
+    "outer_pass_hist": {},
+    "inner_sweeps_by_block": {},
+    "inner_solves_by_block": {},
+    "moved_constants": set(),
+    "n_call_models_with_moved_constant": 0,
+    "n_failed": 0,
+}
+
+
+def _resolve_node_modules() -> dict[str, str]:
+    """``node -> DSM module`` from the committed node map.
+
+    Read only when VP4 is on, from the same committed artifact the hoist uses
+    and never live from the dependency-analysis repository (trap T9).
+    """
+    if not MODULE_SOLVE_ENABLED:
+        return {}
+    if not NODE_MAP_PATH.exists():
+        raise RuntimeError(
+            f"PROCESS_ARCH_MODULE_SOLVE={MODULE_SOLVE_NAME!r} needs the "
+            f"committed DSM node map at {NODE_MAP_PATH}, which is not present."
+        )
+    nodes = json.loads(NODE_MAP_PATH.read_text())["nodes"]
+    # ``in_call_models_once`` is load-bearing, not decoration.  The map names
+    # ``objective_constraints`` as an FF-module node, but it is the
+    # objective/constraint evaluation, not a call site inside
+    # ``_call_models_once``.  Including it gave the FF block a non-empty node
+    # set that executed nothing -- 789 block sweeps of pure no-ops on
+    # large_tokamak_nof, charged against the schedule and invisible in the node
+    # count.  Found by reading the block census, not by inspection.
+    return {
+        n: e["module"]
+        for n, e in nodes.items()
+        if e.get("module") and e.get("in_call_models_once")
+    }
+
+
+NODE_MODULE: dict[str, str] = _resolve_node_modules()
+
+
+def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
+    """``((label, frozenset(nodes), iterate), ...)`` for one run's outer pass.
+
+    Membership comes from the committed node map, so a node that this deck
+    never executes simply never appears -- the filter in :meth:`Caller._node`
+    is a predicate on names, not a list of calls to make.
+
+    **The hoist composes here, and that composition is the thing to get
+    right.**  With VP2 on, the feed-forward nodes the active figure of merit
+    does *not* read are removed from the ``FF`` block and returned separately
+    as the tail, to be run once after the outer fixed point.  Any FF node the
+    figure of merit *does* read -- ``costs`` under figures of merit 6 and 7 --
+    stays inside the loop, in the ``FF`` block, exactly as ``resolved_hoist_tail``
+    already decides for the flat arm.  Getting that wrong would either hoist a
+    node the predicate reads or leave the whole tail in the loop, and the two
+    failures look alike from outside.
+
+    Returns
+    -------
+    tuple
+        ``(schedule, tail)`` -- the blocks of one outer pass, and the nodes
+        deferred to after the fixed point (empty when VP2 is off).
+    """
+    tail = (
+        frozenset(resolved_hoist_tail(i_figure_merit))
+        if HOIST_ENABLED
+        else frozenset()
+    )
+    by_module: dict[str, set[str]] = {}
+    for node, mod in NODE_MODULE.items():
+        by_module.setdefault(mod, set()).add(node)
+    schedule = []
+    for label in module_solve.BLOCK_ORDER:
+        nodes = frozenset(by_module.get(label, set()) - tail)
+        schedule.append((label, nodes, label in module_solve.ITERATED))
+    return tuple(schedule), tail
+
+
+def _roll_up(stats: dict) -> None:
+    """Fold one ``call_models``'s block counts into the run's totals."""
+    t = MODULE_SOLVE_TOTALS
+    t["n_call_models"] += 1
+    t["block_sweeps"] += stats["block_sweeps"]
+    key = str(stats["outer_passes"])
+    t["outer_pass_hist"][key] = t["outer_pass_hist"].get(key, 0) + 1
+    for label, total in stats["inner_totals"].items():
+        t["inner_sweeps_by_block"][label] = (
+            t["inner_sweeps_by_block"].get(label, 0) + total
+        )
+    for label, counts in stats["inner_counts"].items():
+        t["inner_solves_by_block"][label] = t["inner_solves_by_block"].get(
+            label, 0
+        ) + len([c for c in counts if c])
+    if stats["moved_constants"]:
+        t["n_call_models_with_moved_constant"] += 1
+    t["moved_constants"].update(stats["moved_constants"])
+    if not stats["converged"]:
+        t["n_failed"] += 1
+
+
 class Caller:
     """Calls physics and engineering models."""
 
@@ -226,6 +365,18 @@ class Caller:
         # on every call rather than memoised: it depends on the deck's figure
         # of merit, and a scan may change the deck between calls.
         self._hoist_tail: frozenset[str] = frozenset()
+        # VP4: the nodes the current block sweep may run, or ``None`` when the
+        # whole sequence runs.  ``None`` is the default and the only value the
+        # flat-loop path ever sees.
+        self._active_nodes: frozenset[str] | None = None
+        # VP4: the coupling-state spec, the per-module subsets its inner
+        # solves test, and their provenance.  Loaded once.
+        self._yspec = None
+        self._yprov = None
+        self._ysubsets: dict | None = None
+        #: VP4 diagnostics for the last ``call_models`` -- block sweeps, outer
+        #: passes and inner counts.  Reported, never gated on.
+        self.module_solve_stats: dict | None = None
 
     # -- VP2 -------------------------------------------------------------
 
@@ -243,11 +394,35 @@ class Caller:
             return frozenset()
         return frozenset(resolved_hoist_tail(self.data.numerics.i_figure_merit))
 
+    def _acpow(self) -> None:
+        """``power.acpow`` as a node callable.
+
+        A method rather than a lambda so that the node table holds the same
+        kind of object for every entry, and so nothing on the default path
+        builds a closure per sweep.
+        """
+        self.models.power.acpow(output=False)
+
     def _node(self, name: str, run) -> None:
-        """Run one model node now, or defer it to the hoisted tail."""
+        """Run one model node now, defer it, or skip it for this block.
+
+        Three variant points meet in these five lines, and the order matters:
+
+        1. **VP4** -- when a block sweep is in progress, a node outside the
+           block does not run at all.  This is checked first, so the hoist
+           never collects a node during someone else's block.
+        2. **VP2** -- a node in the resolved feed-forward tail is collected
+           instead of run.  The block path never sets ``_pending``, because
+           under VP4 the tail is a block of its own that runs once after the
+           outer fixed point; this branch is the flat arm's.
+        3. Otherwise the node runs, and is counted.
+        """
+        if self._active_nodes is not None and name not in self._active_nodes:
+            return
         if self._pending is not None and name in self._hoist_tail:
             self._pending.append((name, run))
             return
+        NODE_CALLS[0] += 1
         run()
 
     def _run_hoisted_tail(self, pending: list) -> None:
@@ -278,6 +453,187 @@ class Caller:
             return np.allclose(previous, current, rtol=1.0e-6, equal_nan=True)
         return False
 
+    # -- VP4 -------------------------------------------------------------
+
+    def _sweep_block(self, xc: np.ndarray, nodes: frozenset) -> None:
+        """One pass of ``_call_models_once`` restricted to *nodes*.
+
+        The sequence itself is not duplicated: the same ``_call_models_once``
+        walks the same switch dispatch in the same order, and ``_node`` drops
+        the calls that do not belong to this block.  A second copy of the model
+        sequence -- one measured, one not -- is how the variant silently stops
+        computing what the baseline computes, so there is only ever one.
+        """
+        self._active_nodes = nodes
+        try:
+            self._call_models_once(xc)
+        finally:
+            self._active_nodes = None
+
+    def _call_models_by_module(
+        self, xc: np.ndarray, m: int
+    ) -> tuple[float, np.ndarray]:
+        """Block Gauss-Seidel over the DSM modules, then objective and constraints.
+
+        Each iterated block is solved to its own fixed point on the coupling
+        state before the next block runs; an outer loop closes the cross-module
+        coupling.  The predicate is Phase A's, on ``y``, at ``tau`` -- never
+        ``objf``/``conf``, which no single module determines (D14(c)).
+
+        Raises
+        ------
+        ModuleSolveFailure
+            if an inner solve, the outer loop or the global block budget hits
+            its cap.  Decision **D15(d)**: a failed per-module solve raises and
+            counts as a failed start, so the arms' failure modes are comparable.
+        """
+        if self.data.stellarator.istell != 0 or self.data.ife.ife != 0:
+            raise module_solve.ModuleSolveFailure(
+                "PROCESS_ARCH_MODULE_SOLVE is a tokamak-only variant point: "
+                "the stellarator and IFE paths return from _call_models_once "
+                "before any node the DSM partition names, so a block schedule "
+                "over them would be a schedule over nothing."
+            )
+
+        if self._yspec is None:
+            self._yspec, self._yprov = module_solve.load_spec()
+            self._ysubsets, _ = module_solve.load_subsets(self._yspec)
+        spec = self._yspec
+        subsets = self._ysubsets
+        tau = module_solve.TAU
+
+        schedule, tail = module_schedule(self.data.numerics.i_figure_merit)
+        bound = spec.bind(self.data)
+        read = spec.read
+
+        # VP4 never uses VP2's deferral list: under a block schedule the tail
+        # is a block, run once after the outer fixed point.
+        self._pending = None
+
+        y_outer_prev = read(bound)
+        block_sweeps = 0
+        inner_counts: dict[str, list[int]] = {lab: [] for lab, _n, _i in schedule}
+        outer_trace: list[dict] = []
+        moved_constants: set = set()
+
+        def charge() -> None:
+            nonlocal block_sweeps
+            block_sweeps += 1
+            if block_sweeps > module_solve.GLOBAL_BLOCK_SWEEP_CAP:
+                raise module_solve.ModuleSolveFailure(
+                    f"global block-sweep cap "
+                    f"({module_solve.GLOBAL_BLOCK_SWEEP_CAP}) reached at "
+                    f"tau={tau:g}"
+                )
+
+        converged = False
+        outer = 0
+        for outer in range(1, module_solve.OUTER_CAP + 1):
+            for label, nodes, iterate in schedule:
+                if not nodes:
+                    inner_counts[label].append(0)
+                    continue
+                if not iterate:
+                    charge()
+                    self._sweep_block(xc, nodes)
+                    inner_counts[label].append(1)
+                    continue
+                # The inner test is restricted to the module's own write set,
+                # as Phase A's block arm restricts it.  Not an optimisation:
+                # ``ystate``'s predicate scores any component that is not
+                # float-viewable in *either* snapshot as ``inf``, and in a
+                # fresh process that is every field no model has written yet --
+                # so an unrestricted inner test is held open for ever by a
+                # field the running module cannot touch.
+                subset = subsets.get(label)
+                y_prev = read(bound)
+                inner_ok = False
+                s = 0
+                for s in range(1, module_solve.INNER_CAP + 1):
+                    charge()
+                    self._sweep_block(xc, nodes)
+                    y = read(bound)
+                    res = spec.residual(y_prev, y, subset=subset)
+                    moved_constants |= {
+                        spec.name(i) for i in res.moved_constant
+                    }
+                    y_prev = y
+                    if res.converged(tau):
+                        inner_ok = True
+                        break
+                inner_counts[label].append(s)
+                if not inner_ok:
+                    self.module_solve_stats = self._module_stats(
+                        block_sweeps, outer, inner_counts, outer_trace,
+                        moved_constants, converged=False, cap_hit="inner",
+                        tail=tail,
+                    )
+                    _roll_up(self.module_solve_stats)
+                    raise module_solve.ModuleSolveFailure(
+                        f"module {label} did not converge in "
+                        f"{module_solve.INNER_CAP} inner sweeps at tau={tau:g}; "
+                        f"max scaled residual {res.max:g} on "
+                        f"{res.brief(tau)['argmax']}, "
+                        f"{res.n_above(tau)} components above tau"
+                    )
+            y = read(bound)
+            res = spec.residual(y_outer_prev, y)
+            outer_trace.append(res.brief(tau))
+            moved_constants |= {spec.name(i) for i in res.moved_constant}
+            y_outer_prev = y
+            if res.converged(tau):
+                converged = True
+                break
+
+        if not converged:
+            self.module_solve_stats = self._module_stats(
+                block_sweeps, outer, inner_counts, outer_trace,
+                moved_constants, converged=False, cap_hit="outer", tail=tail,
+            )
+            _roll_up(self.module_solve_stats)
+            raise module_solve.ModuleSolveFailure(
+                f"the outer loop over modules did not converge in "
+                f"{module_solve.OUTER_CAP} passes at tau={tau:g}"
+            )
+
+        # VP2 inside VP4: the feed-forward tail runs once, on the converged
+        # state.  Charged like any other block sweep.
+        if tail:
+            charge()
+            self._sweep_block(xc, tail)
+
+        if _idf_probe.ENABLED:
+            _idf_probe.objective_begin()
+        objf = objective_function(self.data.numerics.i_figure_merit, self.data)
+        conf, _, _, _, _ = constraints.constraint_eqns(m, -1, self.data)
+        if _idf_probe.ENABLED:
+            _idf_probe.objective_end()
+
+        self.module_solve_stats = self._module_stats(
+            block_sweeps, outer, inner_counts, outer_trace, moved_constants,
+            converged=True, cap_hit=None, tail=tail,
+        )
+        _roll_up(self.module_solve_stats)
+        return objf, conf
+
+    @staticmethod
+    def _module_stats(
+        block_sweeps, outer, inner_counts, outer_trace, moved_constants,
+        *, converged, cap_hit, tail,
+    ) -> dict:
+        """The block schedule's own counts, for the run record."""
+        return {
+            "converged": converged,
+            "cap_hit": cap_hit,
+            "block_sweeps": block_sweeps,
+            "outer_passes": outer,
+            "inner_counts": {k: list(v) for k, v in inner_counts.items()},
+            "inner_totals": {k: sum(v) for k, v in inner_counts.items()},
+            "outer_residual_trace": outer_trace,
+            "moved_constants": sorted(moved_constants),
+            "hoisted_tail": sorted(tail),
+        }
+
     def call_models(self, xc: np.ndarray, m: int) -> tuple[float, np.ndarray]:
         """Evaluate models until results are idempotent.
 
@@ -303,6 +659,16 @@ class Caller:
         """
         if _idf_probe.ENABLED:
             _idf_probe.call_models_begin()
+
+        # VP4: the block schedule replaces the flat loop entirely -- including
+        # its predicate, which decision D14(c) requires: a per-module solver
+        # cannot test a global objective, because one module does not determine
+        # it.  With VP4 off nothing below this line differs from upstream.
+        if MODULE_SOLVE_ENABLED:
+            objf, conf = self._call_models_by_module(xc, m)
+            if _idf_probe.ENABLED:
+                _idf_probe.call_models_end()
+            return objf, conf
 
         objf_prev = None
         conf_prev = None
@@ -531,14 +897,14 @@ class Caller:
         # physics.  Their relative order is the VP1 variant point; see
         # SEQUENCE_HEAD at module level.  With PROCESS_ARCH_SEQUENCE unset
         # this is plasma_geom, build, physics -- the upstream order.
-        for _node in SEQUENCE_HEAD:
-            getattr(self.models, _node).run()
+        for _head_node in SEQUENCE_HEAD:
+            self._node(_head_node, getattr(self.models, _head_node).run)
 
         # Toroidal field coil model
 
         # Toroidal field coil resistive model
         if self.data.tfcoil.i_tf_sup == TFConductorModel.WATER_COOLED_COPPER:
-            self.models.copper_tf_coil.run()
+            self._node("copper_tf_coil", self.models.copper_tf_coil.run)
 
         # Toroidal field coil superconductor model
         if self.data.tfcoil.i_tf_sup == TFConductorModel.SUPERCONDUCTING:
@@ -548,34 +914,34 @@ class Caller:
                 )
                 == SuperconductingTFTurnType.CABLE_IN_CONDUIT
             ):
-                self.models.cicc_sctfcoil.run()
+                self._node("cicc_sctfcoil", self.models.cicc_sctfcoil.run)
             elif (
                 SuperconductingTFTurnType(
                     self.data.superconducting_tfcoil.i_tf_turn_type
                 )
                 == SuperconductingTFTurnType.CROSS_CONDUCTOR
             ):
-                self.models.croco_sctfcoil.run()
+                self._node("croco_sctfcoil", self.models.croco_sctfcoil.run)
 
         if self.data.tfcoil.i_tf_sup == TFConductorModel.HELIUM_COOLED_ALUMINIUM:
-            self.models.aluminium_tf_coil.run()
+            self._node("aluminium_tf_coil", self.models.aluminium_tf_coil.run)
 
         # Poloidal field and central solenoid model
-        self.models.pfcoil.run()
+        self._node("pfcoil", self.models.pfcoil.run)
 
         # Pulsed reactor model.  Deferrable (VP2): ``pulse`` is the
         # articulation point and joins the feed-forward tail only once the
         # burn-time coupler is lifted out of the loop.
         self._node("pulse", self.models.pulse.run)
 
-        self.models.divertor.run()
+        self._node("divertor", self.models.divertor.run)
 
         # First wall model
-        self.models.fw.run()
+        self._node("fw", self.models.fw.run)
 
-        self.models.shield.run()
+        self._node("shield", self.models.shield.run)
 
-        self.models.vacuum_vessel.run()
+        self._node("vacuum_vessel", self.models.vacuum_vessel.run)
 
         # Blanket model
         """Blanket switch values
@@ -589,44 +955,47 @@ class Caller:
         """
         if self.data.fwbs.i_blanket_type == BlktModelTypes.CCFE_HCPB:
             # CCFE HCPB model
-            self.models.ccfe_hcpb.run()
+            self._node("ccfe_hcpb", self.models.ccfe_hcpb.run)
 
         elif self.data.fwbs.i_blanket_type == BlktModelTypes.DCLL:
             # DCLL model
-            self.models.dcll.run()
+            self._node("dcll", self.models.dcll.run)
 
-        self.models.cryostat.run()
+        self._node("cryostat", self.models.cryostat.run)
 
         # Structure Model
-        self.models.structure.run()
+        self._node("structure", self.models.structure.run)
 
         # Tight aspect ratio machine model
         if (
             self.data.physics.itart == 1
             and self.data.tfcoil.i_tf_sup != TFConductorModel.SUPERCONDUCTING
         ):
-            self.models.tfcoil.run()
+            self._node("tfcoil", self.models.tfcoil.run)
 
         # Power model
-        self.models.power.run()
+        self._node("power", self.models.power.run)
 
         # Vacuum model
-        self.models.vacuum.run()
+        self._node("vacuum", self.models.vacuum.run)
 
         # Buildings model
-        self.models.buildings.run()
+        self._node("buildings", self.models.buildings.run)
 
         # These two methods need to be run after vacuum/buildings otherwise
         # output changes quite a lot
         # TODO: split these two sections into a new model with a .run method
         # Plant AC power requirements
-        self.models.power.acpow(output=False)
+        self._node("power.acpow", self._acpow)
 
         # Plant heat transport pt 2 & 3
-        self.models.power.plant_electric_production()
+        self._node(
+            "power.plant_electric_production",
+            self.models.power.plant_electric_production,
+        )
 
         # Availability model
-        self.models.availability.run()
+        self._node("availability", self.models.availability.run)
 
         # Water usage in secondary cooling system.  Deferrable (VP2).
         self._node("water_use", self.models.water_use.run)
@@ -764,6 +1133,10 @@ def write_output_files(
     ifail : int
         solver return code
     """
+    # VP4 accounting: the solve phase ends here.  One integer read, on both
+    # arms; see NODE_CALLS_AT_OUTPUT.
+    if NODE_CALLS_AT_OUTPUT[0] is None:
+        NODE_CALLS_AT_OUTPUT[0] = NODE_CALLS[0]
     n = data.numerics.n_iteration_variables
     x = data.numerics.xcm[:n]
     # Call models, ensuring output mfiles are fully idempotent
