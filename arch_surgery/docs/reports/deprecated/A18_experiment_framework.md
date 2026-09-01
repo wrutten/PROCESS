@@ -979,3 +979,68 @@ of the *initial* value is poorer than a median over observed states for this pur
 - PROCESS's loop stopping with the cost model still moving (8/600): **a new finding about the
   program**, independent of the experiment, and worth routing.
 
+---
+
+## Orchestrator's second assessment — the scale-persistence fix (2026-09-01)
+
+**Reviewed before merging this time.** The first A18 merge was made before the review finished,
+which was the orchestrator's process error and is why protocol §5 now states that the assessment
+gates the merge. This round followed the amended rule.
+
+**Accepted.** The gap is closed properly and the fix produced three things nobody asked for.
+
+### What was verified independently, not taken on report
+
+- **The artefacts exist and are auditable**: four tracked files, 170-206 kB each, one component per
+  line, each carrying key, category, scale as decimal *and* exact hex float, the design-point count
+  the scale was measured over, and for constants the value held. `large_tokamak_nof` records 840
+  coupling keys over 149 design points.
+- **The guard aborts rather than warns.** `replay.py` compares a hash over every key, category and
+  scale and raises on `MISMATCH`; the agent tested it by corrupting the committed record and
+  confirmed exit before any work. An untested guard is not a guard, and this one was tested.
+- **The node order in the artefact independently confirms the unit finding.** It lists **21
+  executing model calls**, of which M1 is **two** (`plasma_geom`, `physics`) against its 24 DSM
+  rows. This was previously derived by reading `caller.py`; it is now a recorded property of the
+  measurement itself.
+
+### The defect that matters most, and why it does not invalidate the first merge
+
+`analyse.gates` **reported PASS when a gate arm was missing** — an absent run left its comparison
+`None` while the remaining comparisons still passed. That is precisely the silent-failure shape the
+suite exists to prevent, and it was found by the agent, in its own code, while re-running.
+
+The first merge's gates are nonetheless safe, for a reason worth recording rather than assuming.
+The old predicate was `"PASS" if checks and all(...)`, so an **empty** arm set already yielded FAIL;
+only a **partially** present set could produce a false PASS. And the change log's ordering settles
+it: the defect was fixed (entry 21) *before* the full pipeline was re-run (entry 22), so every gate
+now standing was computed with the completeness check active. **The claim is safe because it was
+re-derived, not because the defect was harmless.**
+
+### A finding from reading the artefact rather than running anything
+
+Continuous scales span **2.4x10^-22 to 9.1x10^21** — 43 orders of magnitude — and two to six
+components per scenario have a working magnitude *below* numpy's hidden `atol = 1e-8`. For
+`physics.sigmav_dt_average` at 3x10^-22 that default sits **fourteen orders of magnitude above the
+quantity itself** and would pass any change whatsoever.
+
+This is the F1-addendum finding again, now on the coupling set and sharper than either previous
+measurement of it. It also retro-justifies a design decision: the framework's rule that `atol_i` be
+chosen deliberately per component rather than inherited was adopted on argument, and the artefact
+shows what inheriting would have cost.
+
+### One inconsistency, minor, recorded rather than resolved
+
+The agent's completion summary reports replay fidelity as **1800/1800**; the report says **600/600**
+throughout, and 600 is the total design-point count across the four scenarios (149 + 297 + 144 +
+10). The likely explanation is cumulative replays across the three pipeline runs, but the two
+numbers were not reconciled. **The report is the artefact of record and says 600/600.** Flagged
+because a headline number differing between a summary and its report is the shape of trap T11, and
+should not be left for a later reader to notice.
+
+### What this does not change
+
+The two-sweep floor stands at 1.5-1.8 %. All 24 result files were verified identical in content
+before and after the change, differing only by the added record and by wall clock. **No headline
+number moved**, which is what a persistence change should do and what was checked rather than
+assumed.
+
