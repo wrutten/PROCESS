@@ -61,6 +61,15 @@
    The orchestrator's admin work goes on `architecture_surgery` in the main checkout; task work
    goes in its own worktree.
 11. **DSM findings go in a standing register, not a task report.** Anything found to be wrong, missing or misleading about the dependency analysis — a phantom edge, a dead edge, an extraction artefact, a granularity mismatch — gets an entry in [`../reports/DSM_VALIDATION.md`](../reports/DSM_VALIDATION.md) **when it is found**, with the edge, the evidence, which artifact is wrong and the consequence. That report **accumulates and is never archived** at merge, unlike task reports (protocol §7). Rationale: trap T1 has now been rediscovered three times independently, once inside a plan's central section, because each finding was buried in the task report that happened to find it. The register is also a deliverable back to `PROCESS_code_analysis`.
+12a. **Never `git add -A` unscoped in this repository.** Stage explicit paths —
+   `git add arch_surgery process <file>` — or `git add -u`. The agent sandbox bind-mounts
+   `/dev/null` over `.bashrc`, `.mcp.json`, `.claude/` and about eighteen other paths, so they
+   appear in the working tree as **character devices** that `git status` reports as ordinary
+   untracked files. A bare `git add -A` stages them silently; **the orchestrator did exactly that
+   in `83e18d15` and committed 21 of them**, and only noticed because the *next* `git add -A`
+   aborted with `can only add regular files, symbolic links or git-directories`. They are now in
+   `.gitignore`, which stops a recurrence but would not have stopped the first one — the habit is
+   the fix.
 12. **A gate must be shown capable of failing before its zeros are accepted**, and every count
    of mismatches carries the **denominator** of things actually compared. Perturb the thing the
    gate watches by the smallest amount that should register — a 1-ULP change to one output is
