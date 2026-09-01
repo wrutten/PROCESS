@@ -44,6 +44,13 @@ sys.path.insert(0, str(HERE))
 from compare_a3 import _floats, _mfile_path, _VARNAME, compare_pair  # noqa: E402
 from compare_a13 import acceptance, saving  # noqa: E402
 
+SCENARIOS = [
+    "large_tokamak_nof",
+    "low_aspect_ratio_DEMO",
+    "st_regression",
+    "large_tokamak_eval",
+]
+
 #: A results line that is safe to perturb: a plain float, not run metadata.
 TARGET = "(rmajor)"
 
@@ -211,7 +218,7 @@ def main() -> int:
         "acceptance_predicate_ulp": {
             args.scenario: acceptance_perturb(runs, args.scenario)
         },
-        "count_gate": {s: count_gate(runs, s) for s in ("large_tokamak_nof",)},
+        "count_gate": {s: count_gate(runs, s) for s in SCENARIOS},
     }
     (runs / "_gate_sensitivity_a13.json").write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
