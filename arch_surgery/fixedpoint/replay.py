@@ -37,6 +37,8 @@ sys.path.insert(0, str(HERE.parent))
 
 from fixedpoint import arms as A  # noqa: E402
 from fixedpoint import engine as E  # noqa: E402
+from fixedpoint.gen_ystate import OUT_DIR as YSTATE_DIR  # noqa: E402
+from fixedpoint.gen_ystate import harvest_identity  # noqa: E402
 from fixedpoint.nodemap import NodeMap  # noqa: E402
 from fixedpoint.ystate import YSpec, _same  # noqa: E402
 
@@ -96,6 +98,51 @@ def verify_restore(bound) -> list:
 # --------------------------------------------------------------------------
 # Driver
 # --------------------------------------------------------------------------
+
+
+def _check_ystate(scenario: str, spec: YSpec, harvest_path, harvest) -> dict:
+    """Compare the live categorisation against the committed record.
+
+    Three outcomes.  ``OK`` -- the committed record exists and agrees, on both
+    the harvest identity and the categorisation hash.  ``MISSING`` -- no record
+    is committed yet, which is not fatal (it is how the first run of a new
+    scenario behaves) but is reported in every result file.  ``MISMATCH`` --
+    the record exists and disagrees, which aborts the run.
+    """
+    path = YSTATE_DIR / f"ystate_{scenario}.json"
+    live_sha = spec.components_sha256()
+    if not path.exists():
+        return {
+            "status": "MISSING",
+            "path": str(path),
+            "live_components_sha256": live_sha,
+            "detail": "no committed ystate record for this scenario",
+        }
+    rec = json.loads(path.read_text())
+    # The spec is already built and the harvest already loaded; only the
+    # identity needs recomputing, which is a hash rather than a re-measurement.
+    fresh = {"harvest": harvest_identity(Path(harvest_path), harvest)}
+    diffs = []
+    if rec.get("components_sha256") != live_sha:
+        diffs.append(
+            f"components_sha256 committed={rec.get('components_sha256')} "
+            f"live={live_sha}"
+        )
+    for k in ("content_sha256", "file_sha256"):
+        a = (rec.get("harvest") or {}).get(k)
+        b = (fresh.get("harvest") or {}).get(k)
+        if a != b:
+            diffs.append(f"harvest {k} committed={a} live={b}")
+    return {
+        "status": "MISMATCH" if diffs else "OK",
+        "path": str(path.relative_to(YSTATE_DIR.parent.parent.parent)),
+        "components_sha256": live_sha,
+        "harvest_content_sha256": (fresh.get("harvest") or {}).get("content_sha256"),
+        "scales_measured_over_n_design_points": rec.get(
+            "scales_measured_over_n_design_points"
+        ),
+        "detail": "; ".join(diffs) if diffs else "committed record agrees",
+    }
 
 
 def y_index_by_node(spec: YSpec, writes_by_node: dict) -> dict:
@@ -183,6 +230,23 @@ def main() -> int:
     models, data = sr.models, sr.data
 
     spec = YSpec.from_harvest(harvest["y_keys"], all_points)
+
+    # The committed record of what every coupling quantity was decided to be
+    # (arch_surgery/docs/data/ystate_<scenario>.json).  Re-derived here from
+    # the harvest and compared, so that a scale set cannot be silently paired
+    # with a harvest it was not measured from -- the scales decide which
+    # quantities are excluded from the convergence test, and a wrong exclusion
+    # would make every architecture declare a convergence that has not
+    # happened, with no symptom.
+    ystate_check = _check_ystate(args.scenario, spec, args.harvest, harvest)
+    if ystate_check["status"] == "MISMATCH":
+        raise SystemExit(
+            "ystate MISMATCH for "
+            f"{args.scenario}: the committed categorisation and scales do not "
+            "match the ones this harvest produces "
+            f"({ystate_check['detail']}). Regenerate with gen_ystate.py and "
+            "commit, or point at the harvest the record was measured from."
+        )
     ynode = y_index_by_node(spec, harvest["writes_by_node"])
 
     # C10: the DSM's feedback-edge set, resolved to y component indices.  It
@@ -227,6 +291,7 @@ def main() -> int:
             for lab, nodes, sub, it in blocks
         ],
         "y_census": spec.census(),
+        "ystate_record": ystate_check,
         "dsm_cross_check": {
             "fields": cross_fields,
             "resolved_in_y": len(cross_subset),

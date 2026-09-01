@@ -1,0 +1,206 @@
+#!/usr/bin/env python
+"""Write the committed record of what every coupling quantity was decided to be.
+
+**Why this exists.**  The convergence predicate scales each quantity by a
+characteristic magnitude measured from the harvest, and decides from the same
+measurement whether a quantity is tested at all.  Those scales were previously
+computed, used and thrown away: the harvest cache lives under
+``arch_surgery/idf_probe/runs/``, which is untracked, so after a run nobody
+could inspect which scale a given quantity received or notice that one was
+absurd.  The numbers still reproduced -- the harvest is deterministic and the
+replay determinism gate is bit-for-bit -- so this is not a correctness fix.
+What was missing is **auditability**, and it matters here more than it usually
+would, because the scales are exactly what separates an excluded quantity from
+an included one, and a wrong exclusion makes every architecture declare a
+convergence that has not happened, with no symptom.
+
+The artifact is ``arch_surgery/docs/data/ystate_<scenario>.json``, a tracked
+path.  ``replay.py`` re-derives the same categorisation from the harvest and
+**refuses to run** if it does not match the committed record, so a scale set
+cannot be silently paired with a different harvest.
+
+Usage
+-----
+    PYTHONPATH=<tree> python gen_ystate.py            # every scenario
+    PYTHONPATH=<tree> python gen_ystate.py --check    # verify, do not write
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import pickle
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+
+from fixedpoint.ystate import YSpec  # noqa: E402
+
+TREE = HERE.parent.parent
+RUNS = TREE / "arch_surgery" / "idf_probe" / "runs" / "a18"
+OUT_DIR = TREE / "arch_surgery" / "docs" / "data"
+
+SCENARIOS = [
+    "large_tokamak_nof",
+    "low_aspect_ratio_DEMO",
+    "st_regression",
+    "large_tokamak_eval",
+]
+
+
+def harvest_identity(path: Path, harvest: dict) -> dict:
+    """Two hashes: the file as bytes, and its content as meaning.
+
+    The file hash is the cheap one.  The content hash is the one that matters:
+    it covers the coupling-key set, the model sequence and, per design point,
+    the identity and the design vector as exact hex float literals.  It is
+    therefore invariant to how ``pickle`` happens to lay bytes out, and it
+    changes if and only if the harvest is a different measurement.
+    """
+    fh = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            fh.update(chunk)
+
+    ch = hashlib.sha256()
+    for k in harvest["y_keys"]:
+        ch.update(f"{k[0]}.{k[1]}\n".encode())
+    ch.update(("|".join(harvest["node_order"]) + "\n").encode())
+    for p in harvest["points"]:
+        ch.update(
+            f"{p['call_index']}|{p.get('phase')}|{p.get('s_global')}|"
+            f"{p.get('m')}|{p['nvars']}|".encode()
+        )
+        ch.update(",".join(float(v).hex() for v in p["x"]).encode())
+        ch.update(b"\n")
+
+    phases: dict = {}
+    for p in harvest["points"]:
+        phases[p.get("phase")] = phases.get(p.get("phase"), 0) + 1
+    return {
+        "path": str(path.relative_to(TREE)),
+        "file_sha256": fh.hexdigest(),
+        "content_sha256": ch.hexdigest(),
+        "n_design_points": len(harvest["points"]),
+        "design_points_by_phase": dict(
+            sorted(phases.items(), key=lambda kv: str(kv[0]))
+        ),
+        "n_coupling_keys": len(harvest["y_keys"]),
+        "node_order": list(harvest["node_order"]),
+    }
+
+
+def build(scenario: str) -> tuple[dict, Path]:
+    hp = RUNS / scenario / "harvest" / "harvest.pkl"
+    if not hp.exists():
+        raise SystemExit(
+            f"no harvest for {scenario} at {hp}; run "
+            f"'run_phase_a.py harvest --scenarios {scenario}' first"
+        )
+    with open(hp, "rb") as fh:
+        harvest = pickle.load(fh)
+    assert harvest["format"] == "a18-harvest-1", harvest["format"]
+    spec = YSpec.from_harvest(harvest["y_keys"], harvest["points"])
+    rec = spec.audit_record(
+        scenario=scenario, harvest=harvest_identity(hp, harvest)
+    )
+    rec["tree_git_head"] = (
+        subprocess.run(
+            ["git", "-C", str(TREE), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        or None
+    )
+    return rec, OUT_DIR / f"ystate_{scenario}.json"
+
+
+def render(rec: dict) -> str:
+    """Pretty at the top level, **one component per line** below it.
+
+    Every component is recorded in full -- nothing is truncated -- but a
+    component per line keeps the file greppable and makes a diff show exactly
+    which quantity's category or scale moved.  Fully expanded at ``indent=2``
+    these files are ~270 kB each; one line per component is ~200 kB and reads
+    better.  See the note in the A18 report on why they are committed at all.
+    """
+    comps = rec.pop("components")
+    head = json.dumps(rec, indent=2)
+    assert head.endswith("\n}")
+    body = ",\n".join(
+        "    " + json.dumps(c, separators=(", ", ": ")) for c in comps
+    )
+    rec["components"] = comps  # leave the caller's dict as it was found
+    return head[:-2] + ',\n  "components": [\n' + body + "\n  ]\n}\n"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scenarios", nargs="*", default=SCENARIOS)
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="do not write; fail if the committed record differs",
+    )
+    args = ap.parse_args()
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    bad = 0
+    for s in args.scenarios:
+        rec, out = build(s)
+        text = render(rec)
+        if args.check:
+            if not out.exists():
+                print(f"{s:24s} MISSING  {out.name}")
+                bad += 1
+                continue
+            committed = json.loads(out.read_text())
+            # Compare what the predicate depends on, not the raw text.
+            # ``tree_git_head`` is provenance and moves with every commit; if
+            # it were part of the comparison this check would cry wolf after
+            # every commit, and a guard that cries wolf is a guard that gets
+            # ignored.
+            diffs = [
+                k
+                for k in ("components_sha256", "census", "n_components",
+                          "scales_measured_over_n_design_points")
+                if committed.get(k) != rec.get(k)
+            ]
+            diffs += [
+                f"harvest.{k}"
+                for k in ("content_sha256", "file_sha256", "n_design_points")
+                if (committed.get("harvest") or {}).get(k)
+                != (rec.get("harvest") or {}).get(k)
+            ]
+            if committed.get("components") != rec.get("components"):
+                diffs.append("components")
+            note = ""
+            if committed.get("tree_git_head") != rec.get("tree_git_head"):
+                note = (
+                    f"  (recorded at {str(committed.get('tree_git_head'))[:8]}, "
+                    f"tree now {str(rec.get('tree_git_head'))[:8]} -- "
+                    f"provenance only, not compared)"
+                )
+            print(
+                f"{s:24s} {'MATCH' if not diffs else 'DIFFERS'}  {out.name}"
+                f"{'' if not diffs else '  ' + ', '.join(diffs)}{note}"
+            )
+            bad += 0 if not diffs else 1
+            continue
+        out.write_text(text)
+        c = rec["census"]
+        print(
+            f"{s:24s} {len(text):>8d} bytes  {rec['n_components']} components  "
+            f"({c['n_continuous']} continuous, {c['n_discrete']} discrete, "
+            f"{c['n_constant']} constant, {c['n_nan_in_harvest']} nan)  "
+            f"sha={rec['components_sha256'][:12]}"
+        )
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -98,17 +98,28 @@ def gates(runs: Path, scenarios) -> dict:
         row["inertness_control_vs_harvest"] = cmp("control", "harvest_inert")
         row["inertness_control_vs_harvest_with_cache"] = cmp("control", "harvest")
 
+        # A gate with a missing arm is not a gate that passed.  Before this
+        # check, an absent run made its comparison ``None`` and the remaining
+        # comparisons could still report PASS -- the exact shape of silent
+        # failure this suite exists to prevent.
+        required = ("pristine", "control", "harvest_inert", "harvest_rep2",
+                    "harvest")
+        absent = [a for a in required if a not in arms]
         checks = [v for v in row.values() if isinstance(v, dict) and
                   "mfile_differing_lines" in v]
-        row["status"] = (
-            "PASS"
-            if checks and all(
-                not v["exact_signature_differing_fields"]
-                and v["mfile_differing_lines"] == 0
-                for v in checks
+        if absent:
+            row["status"] = "INCOMPLETE"
+            row["missing_arms"] = absent
+        else:
+            row["status"] = (
+                "PASS"
+                if checks and all(
+                    not v["exact_signature_differing_fields"]
+                    and v["mfile_differing_lines"] == 0
+                    for v in checks
+                )
+                else "FAIL"
             )
-            else "FAIL"
-        )
         row["ifail"] = {a: (m.get("mfile") or {}).get("ifail") for a, m in arms.items()}
 
         # Determinism is sweep-for-sweep as well as bit-for-bit.
@@ -308,6 +319,7 @@ def replay_report(res: dict) -> dict:
         "n_points": len(pts),
         "n_harvest_points": res.get("n_harvest_points"),
         "y_census": res["y_census"],
+        "gate_ystate_record": res.get("ystate_record"),
         "y_scales_summary": res.get("y_scales_summary"),
         "node_map_check": res.get("node_map_check"),
         "node_map_counts": res.get("node_map_counts"),
