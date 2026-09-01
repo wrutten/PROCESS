@@ -144,3 +144,37 @@ agreeing with a plausible-looking wrong answer.
 This compounds with the standing environment hazard: `PROCESS_env` points at a *different clone at
 a different commit* and imports without error. Path assertion is the only thing that catches it.
 
+## T11 — A number published without the condition that limits it
+
+Three instances in this project, all by the orchestrator, all surviving its own review:
+
+| | Claim | The missing qualifier | Caught by |
+|---|---|---|---|
+| 1 | Three descending timing samples read as a settling trend | Only two were content-identical; the third ran on lighter code | the sibling study |
+| 2 | "`st_regression` differs in 12 switches, `low_aspect_ratio_DEMO` in 5" | No denominator stated — the population was 33 hand-picked names, not the analysis tool's field set, which gives 17/7, 15/7 or 8/4 | the sibling study |
+| 3 | "Removing the two-sweep floor is worth **up to 31 %**" | The bound binds *only* where the state is already converged on entry. Measured: **1.5-1.8 %** | measurement (A18) |
+
+**One shape.** A quantity is computed over an aggregate — 630 calls x 1 sweep, three samples, 33
+switches — and published without the qualifier that constrains where it applies. Each was formally
+defensible ("up to", "these switches") and each was read, correctly, as an estimate.
+
+**Why the hedge does not save it.** Instance 3 carried "up to", and the expectation table said
+"0-31 %, magnitude unknown". The surrounding prose called it *"plausibly the largest effect in the
+whole portfolio"*. A hedge contradicted by its own framing is not a hedge.
+
+**The specific error in instance 3 is worth keeping**, because it is a reasoning failure rather
+than a bookkeeping one. The first sweep of the idempotence loop yields no *convergence
+information* — true — and this was treated as meaning it is *extra work*. It is not: it is work
+that would be done anyway. If the state settles after `k` sweeps then `F(y_{k-1}) = F(y_k)`, so the
+old predicate stops at `k` and the new one stops at `k`. **They cost the same for every `k >= 2`.**
+The floor binds only at `k = 1`. Two lines of counterfactual would have shown this, and were never
+written.
+
+**A confirming statistic was also misread.** 1 260 of 2 027 sweeps sit at the floor (62 %), which
+was taken as "lots of room". Sitting at the floor means *converging as fast as possible*, not
+*wasting a sweep*.
+
+**The practice.** Before publishing a number, write the population or condition it holds over **in
+the same sentence**. If that cannot be done in one clause, the number is not ready. This is
+cheaper than it sounds and would have caught all three.
+
