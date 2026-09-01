@@ -279,8 +279,9 @@ rather than counted as agreement.
    near miss; a tolerance one third tighter would have failed it. The tolerance was fixed from
    PROCESS's own rtol before the run, and it is not being adjusted after.
 2. **The variant terminates at a looser final accuracy than the baseline on three decks** — the
-   equality-residual ratio is 8.6× on `large_tokamak_nof`, 5 342× on `low_aspect_ratio_DEMO` and
-   85× on `large_tokamak_eval`, all still far below the audit's 1e-6 absolute ceiling and below
+   `sqsumsq` ratio is **9.0×** on `large_tokamak_nof`, **5 342×** on `low_aspect_ratio_DEMO` and
+   **93×** on `large_tokamak_eval` (the largest single equality residual moves by 8.6×, 5 551× and
+   85× respectively), all still far below the audit's 1e-6 absolute ceiling and below
    PROCESS's own `epsvmc`. It is reported because "matched final accuracy" means comparing at the
    residual achieved, not asserting it is equal (plan §3.3). `st_regression` is the exception: the
    variant is *tighter* there, 2.55e-14 against 5.02e-14.
