@@ -318,6 +318,8 @@ from *"the variant took a longer path to the same place"*, which the endpoint co
 **7. Cost.** Roughly 30 starts x 2 arms x 4 scenarios at 15-30 s each: about one to two hours. The
 outputs are counts and success flags, so machine load does not threaten them.
 
+**7a. The variant includes the hoist (D15), so name the result accordingly.** The Phase B arm carries the lift, the per-module solvers **and** the feed-forward hoist. Its headline is therefore *the proposed architecture*, never *the partition's benefit*: the hoist is separable, was measured at 4.6-8.2 % in Phase A terms, and a combined number quoted as the partition's would be a units error of exactly the kind trap T11 records. An excluding arm can be run later — the hoist is a toggle (VP2) — and until it is, the components are not separately attributable.
+
 **8. What it cannot answer.** Whether the result transfers to other decks, other starting-point
 distributions, or a different optimiser. And it is counts, not time; a timing comparison can be
 added under the paired protocol but is not the evidence.
