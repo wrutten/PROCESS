@@ -6,7 +6,7 @@ every hook site in the instrumented modules short-circuits on a single global
 boolean load, and no probe state is created or mutated.  No floating-point
 work is performed on the disabled path.
 
-Two modes are supported:
+Four modes are supported:
 
 ``baseline``
     Record the shape of the existing MDA solve without altering control flow:
@@ -19,6 +19,16 @@ Two modes are supported:
     and every read/write of a data-structure field attributed to the model
     node performing it.  Implemented in ``_idf_probe_modules``, which is
     imported only in this mode.  (Stage 1 / A2.)
+
+``harvest``
+    Everything ``modules`` records, plus a **design-point harvest**: for a
+    sampled subset of ``call_models`` invocations the design vector and the
+    full entry state are copied out to disk, so that the Phase A fixed-point
+    architectures in ``arch_surgery/fixedpoint/`` can be replayed from
+    bit-identical starting points without re-running the optimiser once per
+    arm.  Also bins the magnitude distribution of ``objf`` and the constraint
+    vector.  Implemented in ``_idf_probe_harvest``, imported only in this
+    mode.  (A18.)
 
 ``frozen``
     Everything ``modules`` records, plus a **replay**: on a sampled subset of
@@ -81,7 +91,7 @@ __all__ = [
     "write_summary",
 ]
 
-VALID_MODES = ("baseline", "modules", "frozen")
+VALID_MODES = ("baseline", "modules", "frozen", "harvest")
 
 _raw = os.environ.get("PROCESS_IDF_PROBE", "").strip()
 MODE: str | None = _raw or None
@@ -99,6 +109,8 @@ if MODE == "modules":
     from process.core import _idf_probe_modules as _mod
 elif MODE == "frozen":
     from process.core import _idf_probe_frozen as _mod
+elif MODE == "harvest":
+    from process.core import _idf_probe_harvest as _mod
 else:
     _mod = None
 

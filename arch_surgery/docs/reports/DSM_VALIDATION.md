@@ -193,3 +193,57 @@ published hashes before every run):
 the pre-committed withdrawal does not fire. The two large tokamaks still lead the write-up on the
 separate ground that their DSM was generated for exactly their configuration.
 
+## V7 — The DSM's feedback-edge set is not a usable convergence predicate
+
+**Filed by A18 (experiment-framework), 2026-09-01.** This is the C10 cross-check the framework was
+built to run: the coupling set is computed **two ways** — from run-time instrumentation (*set (b)*,
+every field written by a model inside `Caller._call_models_once`) and from the DSM's cross-module
+feedback edges (*set (a)*, the four fields in V2–V5) — and the sweep at which each *would have*
+declared convergence is recorded for every design point.
+
+Flat Gauss-Seidel, τ = 1e-6, all harvested design points, four scenarios:
+
+| Scenario | points | set (a) stops **earlier** | agree | set (a) stops later | mean sweeps set (a) would have skipped |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | 149 | **142 (95.3 %)** | 7 | **0** | 0.96 |
+| `low_aspect_ratio_DEMO` | 297 | **282 (94.9 %)** | 15 | **0** | 1.12 |
+| `st_regression` | 144 | **135 (93.8 %)** | 9 | **0** | 2.44 |
+| `large_tokamak_eval` | 10 | **7** | 3 | **0** | 1.20 |
+
+**Never once later, in 600 design points.** Set (a) is a strict subset of set (b) in behaviour as
+well as in membership: it declares the fixed point reached one to two-and-a-half sweeps before the
+state has actually stopped moving.
+
+**Why, measured rather than argued.** Of the four fields in set (a), **three are `constant` across
+the entire harvest** — `build.dr_fw_inboard`, `build.dr_fw_outboard` and `pf_power.vpfskv`, the
+three edges V3 and V4 already recorded as *structurally present but dead in this deck*. A18's
+categoriser reaches that verdict independently, from 600 entry states, without being told. Only
+`times.t_plant_pulse_burn` is a live continuous coupler, and on `st_regression` **even that is
+absent from set (b) entirely**: with `i_pulsed_plant = 0` no in-loop model writes it, so the
+`Pulse` block's coupling-state subset is empty. That is A2's `k = 0` re-derived by a second
+instrument, and it is why `st_regression` is the scenario where set (a) is most misleading — there
+the whole of set (a) is three constants, so it "converges" on the first sweep, always.
+
+**Verdict: the DSM is not wrong; the *use* would be.** Nothing here contradicts the collapsed
+DSM's edge list. What it refutes is the idea — live in EXPERIMENT_FRAMEWORK.md §2.4 as the
+alternative option (a) — that the feedback-edge set could serve as the convergence predicate. A
+partitioned solver that iterated to agreement on the DSM's couplers alone would exit with the rest
+of the coupling state still moving, on 94–95 % of design points.
+
+**Consequence.** Decision D13's choice of set (b) is vindicated by measurement rather than by
+argument, and set (a) keeps exactly the role the framework gives it: a cross-check that produces
+findings, never the predicate. Recorded here rather than only in A18's report because this register
+accumulates and A18's will be archived.
+
+## V8 — Per-scenario DSM regeneration
+
+**Merged into V6 above** (2026-09-01). A18 (experiment-framework) and the orchestrator wrote this
+result up independently from the same `PROCESS_code_analysis` delivery — the M100 regeneration V6
+was waiting on — and two accounts of one result is how two accounts start to diverge. V6 carries
+it: the partition survives on both inspection scenarios, the pre-committed withdrawal is not
+triggered, and the run-time-derived node map needed no change.
+
+A18's independent contribution to that conclusion is kept in **V7**, which is a different finding
+and not a duplicate: the DSM's feedback-edge set, had it been used as the convergence predicate,
+would have stopped early on 94-95 % of design points.
+
