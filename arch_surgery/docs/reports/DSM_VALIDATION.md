@@ -247,3 +247,21 @@ A18's independent contribution to that conclusion is kept in **V7**, which is a 
 and not a duplicate: the DSM's feedback-edge set, had it been used as the convergence predicate,
 would have stopped early on 94-95 % of design points.
 
+
+## V9 — `Build` is genuinely separable from `Physics`, measured
+
+**A confirmation, not a defect.** The partition plan §1.3 predicted from a static reading that
+moving `Build` (DSM row 5, M2) across `Physics` would be *exactly* result-neutral: `build.py` reads
+seven `physics` attributes and every one is written by `plasma_geometry.py`, M1's first node, while
+the physics package reads only `dr_fw_plasma_gap_inboard`/`_outboard` from `build`, also written by
+`plasma_geometry.py`. A3 (build-reorder) made the move and tested the prediction.
+
+| | |
+|---|---|
+| **Claim tested** | no live edge runs from any node between `Build`'s old position (sequence index 1) and its new one (index 2) back into `Build` |
+| **Evidence** | A3, base `c9cc917f`, four scenarios, each run in a fresh subprocess. **0 differing MFILE lines** out of 16 174 / 16 435 / 18 692 / 15 917 and **0 differing MFILE floats**, compared as hex literals with no tolerance, out of 13 559 / 13 455 / 13 493 / 13 487. `ifail = 1` throughout; sweeps unchanged at 2029 / 4286 / 1891 / 29; the 21 executing node calls per sweep unchanged node by node |
+| **Verdict** | **DSM correct.** The prediction holds by measurement, not by argument. The comparison was shown to detect a 1-ULP change in a single value before its zeros were accepted |
+| **Consequence** | M1 (Physics) is now contiguous in the call order, which is what A5 / F10 needed. **Scope:** a bit-identical result shows no *live* edge on these four decks; it does not show none exists structurally, and it does not transfer to a deck resolving different switches — the same limit V6 places on the module boundaries |
+
+Full numbers and method in [`A3_build_reorder.md`](A3_build_reorder.md) (archived to
+`deprecated/` at merge; folder position records lifecycle, not validity — trap T3).
