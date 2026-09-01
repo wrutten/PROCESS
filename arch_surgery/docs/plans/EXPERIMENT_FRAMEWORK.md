@@ -190,6 +190,14 @@ stop when  max_i |y_{m+1,i} - y_{m,i}| / (|y_{m,i}| + atol_i)  <  rtol
 | Acceleration | **none** | Aitken/Anderson is a separate variant point and would confound the topology change |
 | Caps | inner **20**, outer **20**, global **200 module-sweeps per design point** | Reaching any marks the point **invalid** — never a budget |
 
+**One extra thing the harvest records — an outstanding commitment.** Alongside `(x, y0)`, the
+harvest emits the **magnitude distribution of `objf` and the constraint vector**, binned the same
+way as the MFILE measurement in the architecture evaluation's F1 addendum. That addendum quantified
+the hidden-`atol` hole on the MFILE set — `MDA_Output`'s set — and explicitly left the idempotence
+loop's own set unmeasured. It falls out of the harvest for free, and **`PROCESS_code_analysis` is
+waiting on it** to write their Owed report on-target for both loops in one document
+(agreed 2026-09-01). Do not let this ship without it.
+
 **Design point.** The pair `(x, y0)` — design vector *and* entry state — restored bit-identically
 for every arm. Not `x` alone: the entry state is what makes the comparison paired.
 
