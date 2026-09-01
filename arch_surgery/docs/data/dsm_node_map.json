@@ -1,0 +1,610 @@
+{
+  "format": "a18-node-map-1",
+  "generated_by": "arch_surgery/fixedpoint/gen_node_map.py",
+  "derived_from": "process/core/_idf_probe_modules.py NODE_MODULE -- A2's mapping, itself built from decision D8's collapsed-DSM decomposition and validated against a run-time node census in four scenarios. Not reinvented here.",
+  "tree_git_head": "734396856cfb53daba2ec9e71f196b25184239bf",
+  "dsm_pin": "PROCESS_at_36ac820e",
+  "dsm_source_deck": "examples/data/large_tokamak_IN.DAT",
+  "decision": "D8",
+  "caveats": [
+    "Configuration-specific (DSM_VALIDATION.md V6). Exact on large_tokamak_nof and large_tokamak_eval; a near neighbour on low_aspect_ratio_DEMO; an extrapolation on st_regression.",
+    "Per-node DSM row numbers are not available in this repository. Trap T9 forbids reading the dependency-analysis repository's generated exports live. Only the rows our own committed documents state are filled in; the rest are null.",
+    "DSM-row units and model-call units are NOT interchangeable: 52 sweep-executed rows against 26 model calls."
+  ],
+  "units": {
+    "dsm_rows": {
+      "M1": 24,
+      "M2": 10,
+      "M3": 12,
+      "PULSE": 1,
+      "FF": 5,
+      "executed_in_a_sweep": 52,
+      "total_rows": 56,
+      "not_executed_in_a_sweep": {
+        "1": "COOR_SingleRun",
+        "2": "VMCON",
+        "3": "MDA_Idempotence",
+        "56": "MDA_Output"
+      }
+    },
+    "model_calls": {
+      "mapped_total": 28,
+      "note": "Nodes the map names. A given deck executes a subset: the TF-coil branch and the blanket branch are switch-selected and models.tfcoil.run() is reached in none of the four experiment decks."
+    }
+  },
+  "module_order": {
+    "X": -1,
+    "M1": 0,
+    "M2": 1,
+    "PULSE": 2,
+    "M3": 3,
+    "FF": 4
+  },
+  "dsm_feedback_edges": {
+    "provenance": "A2's run-time cross-module back-edge census at c0ae5b28, cross-checked against the collapsed DSM in reports/DSM_VALIDATION.md V1-V5.",
+    "live": [
+      {
+        "field": "times.t_plant_pulse_burn",
+        "writer": "pulse",
+        "writer_module": "PULSE",
+        "reader": "physics",
+        "reader_module": "M1",
+        "note": "A2's k = 1. Dead in st_regression (i_pulsed_plant = 0)."
+      }
+    ],
+    "dead_in_this_deck": [
+      {
+        "field": "build.dr_fw_inboard",
+        "writer": "fw",
+        "writer_module": "M3",
+        "reader": "build",
+        "reader_module": "M2",
+        "note": "V3: structurally present, never changes between sweeps"
+      },
+      {
+        "field": "build.dr_fw_outboard",
+        "writer": "fw",
+        "writer_module": "M3",
+        "reader": "build",
+        "reader_module": "M2",
+        "note": "V3"
+      },
+      {
+        "field": "pf_power.vpfskv",
+        "writer": "power",
+        "writer_module": "M3",
+        "reader": "pulse",
+        "reader_module": "PULSE",
+        "note": "V4: the value is the literal 20.0e0"
+      }
+    ],
+    "withdrawn": [
+      {
+        "field": "physics.b_plasma_vertical_required",
+        "note": "V1 / trap T1 -- the read is on an output() path only"
+      },
+      {
+        "field": "times.t_plant_pulse_burn",
+        "note": "V2 / trap T1 -- the pfcoil-side read is in PFCoil.outvolt()"
+      }
+    ]
+  },
+  "modules": {
+    "M1": {
+      "label": "Physics",
+      "dsm_rows": [
+        [
+          4,
+          4
+        ],
+        [
+          6,
+          28
+        ]
+      ],
+      "n_dsm_rows": 24,
+      "in_loop": true
+    },
+    "M2": {
+      "label": "Coils",
+      "dsm_rows": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "n_dsm_rows": 10,
+      "in_loop": true
+    },
+    "M3": {
+      "label": "Plant",
+      "dsm_rows": [
+        [
+          40,
+          51
+        ]
+      ],
+      "n_dsm_rows": 12,
+      "in_loop": true
+    },
+    "PULSE": {
+      "label": "Pulse -- the articulation point, belonging to no module",
+      "dsm_rows": [
+        [
+          39,
+          39
+        ]
+      ],
+      "n_dsm_rows": 1,
+      "in_loop": true
+    },
+    "FF": {
+      "label": "feed-forward tail (CsFatigue row 38; rows 52-55)",
+      "dsm_rows": [
+        [
+          38,
+          38
+        ],
+        [
+          52,
+          55
+        ]
+      ],
+      "n_dsm_rows": 5,
+      "in_loop": false
+    },
+    "X": {
+      "label": "design-vector injection -- not a model, not a DSM row",
+      "dsm_rows": [],
+      "n_dsm_rows": 0,
+      "in_loop": true
+    }
+  },
+  "nodes": {
+    "<x_inject>": {
+      "module": "X",
+      "dsm_row": null,
+      "dsm_row_range": [],
+      "kind": "injection",
+      "invocation": "set_scaled_iteration_variable(x, nvars, data)",
+      "in_call_models_once": true
+    },
+    "aluminium_tf_coil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.aluminium_tf_coil.run()",
+      "in_call_models_once": true
+    },
+    "availability": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.availability.run()",
+      "in_call_models_once": true
+    },
+    "build": {
+      "module": "M2",
+      "dsm_row": 5,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.build.run()",
+      "in_call_models_once": true
+    },
+    "buildings": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.buildings.run()",
+      "in_call_models_once": true
+    },
+    "ccfe_hcpb": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.ccfe_hcpb.run()",
+      "in_call_models_once": true
+    },
+    "cicc_sctfcoil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.cicc_sctfcoil.run()",
+      "in_call_models_once": true
+    },
+    "copper_tf_coil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.copper_tf_coil.run()",
+      "in_call_models_once": true
+    },
+    "costs": {
+      "module": "FF",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          38,
+          38
+        ],
+        [
+          52,
+          55
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.costs.run()",
+      "in_call_models_once": true
+    },
+    "croco_sctfcoil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.croco_sctfcoil.run()",
+      "in_call_models_once": true
+    },
+    "cryostat": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.cryostat.run()",
+      "in_call_models_once": true
+    },
+    "dcll": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.dcll.run()",
+      "in_call_models_once": true
+    },
+    "divertor": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.divertor.run()",
+      "in_call_models_once": true
+    },
+    "fw": {
+      "module": "M3",
+      "dsm_row": 41,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.fw.run()",
+      "in_call_models_once": true
+    },
+    "objective_constraints": {
+      "module": "FF",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          38,
+          38
+        ],
+        [
+          52,
+          55
+        ]
+      ],
+      "kind": "objective_block",
+      "invocation": "objective_function(...) + constraint_eqns(...)",
+      "in_call_models_once": false
+    },
+    "pfcoil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.pfcoil.run()",
+      "in_call_models_once": true
+    },
+    "physics": {
+      "module": "M1",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          4,
+          4
+        ],
+        [
+          6,
+          28
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.physics.run()",
+      "in_call_models_once": true
+    },
+    "plasma_geom": {
+      "module": "M1",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          4,
+          4
+        ],
+        [
+          6,
+          28
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.plasma_geom.run()",
+      "in_call_models_once": true
+    },
+    "power": {
+      "module": "M3",
+      "dsm_row": 48,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.power.run()",
+      "in_call_models_once": true
+    },
+    "power.acpow": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.power.acpow(output=False)",
+      "in_call_models_once": true
+    },
+    "power.plant_electric_production": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.power.plant_electric_production()",
+      "in_call_models_once": true
+    },
+    "pulse": {
+      "module": "PULSE",
+      "dsm_row": 39,
+      "dsm_row_range": [
+        [
+          39,
+          39
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.pulse.run()",
+      "in_call_models_once": true
+    },
+    "resistive_tf_coil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.resistive_tf_coil.run()",
+      "in_call_models_once": true
+    },
+    "sctfcoil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.sctfcoil.run()",
+      "in_call_models_once": true
+    },
+    "shield": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.shield.run()",
+      "in_call_models_once": true
+    },
+    "structure": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.structure.run()",
+      "in_call_models_once": true
+    },
+    "tfcoil": {
+      "module": "M2",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          5,
+          5
+        ],
+        [
+          29,
+          37
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.tfcoil.run()",
+      "in_call_models_once": true
+    },
+    "vacuum": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.vacuum.run()",
+      "in_call_models_once": true
+    },
+    "vacuum_vessel": {
+      "module": "M3",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          40,
+          51
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.vacuum_vessel.run()",
+      "in_call_models_once": true
+    },
+    "water_use": {
+      "module": "FF",
+      "dsm_row": null,
+      "dsm_row_range": [
+        [
+          38,
+          38
+        ],
+        [
+          52,
+          55
+        ]
+      ],
+      "kind": "model_call",
+      "invocation": "models.water_use.run()",
+      "in_call_models_once": true
+    }
+  }
+}
