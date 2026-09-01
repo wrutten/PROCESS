@@ -42,6 +42,7 @@ during a solve is a hard non-convergence, not an ``equal_nan`` pass.
 
 from __future__ import annotations
 
+import hashlib
 import math
 
 import numpy as np
@@ -99,6 +100,82 @@ def _same(a, b) -> bool:
         return False
 
 
+#: A constant array longer than this is recorded by summary plus a content
+#: hash rather than element by element.  The point of the artifact is that a
+#: reader can spot an absurd scale or a wrong exclusion; 32 elements is enough
+#: to eyeball, and a 500-element constant printed in full would bury the
+#: components that matter.  The hash keeps the record exact.
+MAX_INLINE_ELEMENTS = 32
+
+
+def _shape_of(v) -> dict:
+    """Static description of a component: what kind of thing it is."""
+    if isinstance(v, np.ndarray):
+        return {"kind": "ndarray", "dtype": str(v.dtype), "shape": list(v.shape),
+                "n_elements": int(v.size)}
+    if isinstance(v, list):
+        return {"kind": "list", "n_elements": len(v)}
+    return {"kind": type(v).__name__}
+
+
+def _hash_of(v) -> str:
+    """Content hash of a value, used where it is too large to inline."""
+    h = hashlib.sha256()
+    if isinstance(v, np.ndarray):
+        h.update(str(v.dtype).encode())
+        h.update(str(v.shape).encode())
+        h.update(np.ascontiguousarray(v).tobytes())
+    else:
+        h.update(repr(v).encode())
+    return h.hexdigest()
+
+
+def _value_record(v):
+    """The value a constant holds, exactly where that is reasonable.
+
+    Floats carry their hex literal as well as their decimal form, so the
+    record is exact rather than round-tripped.  Arrays and lists are inlined
+    up to ``MAX_INLINE_ELEMENTS`` and otherwise summarised with a content
+    hash -- never silently truncated.
+    """
+    if isinstance(v, (float, np.floating)):
+        f = float(v)
+        return {"value": f, "hex": f.hex()}
+    if isinstance(v, (bool, np.bool_)):
+        return {"value": bool(v)}
+    if isinstance(v, (int, np.integer)):
+        return {"value": int(v)}
+    if v is None or isinstance(v, str):
+        return {"value": v}
+    if isinstance(v, (np.ndarray, list)):
+        a = np.asarray(v)
+        rec = {"n_elements": int(a.size), "sha256": _hash_of(v)}
+        if a.size <= MAX_INLINE_ELEMENTS:
+            rec["value"] = a.tolist()
+        else:
+            rec["elided"] = (
+                f"{a.size} elements, summarised rather than inlined; "
+                f"sha256 above is of the exact contents"
+            )
+            if a.dtype.kind in "fiu":
+                finite = a[np.isfinite(a)] if a.dtype.kind == "f" else a
+                if finite.size:
+                    rec["min"] = float(np.min(finite))
+                    rec["max"] = float(np.max(finite))
+                    rec["n_nonzero"] = int(np.count_nonzero(a))
+        return rec
+    return {"repr": repr(v)[:200]}
+
+
+def _n_distinct(vals) -> int | None:
+    """How many distinct values a discrete component took over the harvest."""
+    try:
+        return len({repr(v) if not isinstance(v, np.ndarray) else _hash_of(v)
+                    for v in vals})
+    except Exception:
+        return None
+
+
 def _char_mag(fv) -> float:
     """Characteristic magnitude of one harvested value.
 
@@ -121,11 +198,15 @@ def _char_mag(fv) -> float:
 class YSpec:
     """Categories and scales for the coupling state, measured from a harvest."""
 
-    def __init__(self, keys, category, scale, n_points):
+    def __init__(self, keys, category, scale, n_points, detail=None):
         self.keys = list(keys)
         self.category = list(category)
         self.scale = list(scale)
         self.n_harvest_points = n_points
+        #: Per-component audit detail, captured **as the categorisation is
+        #: measured** rather than reconstructed afterwards, so the committed
+        #: artifact cannot drift from the decision it records.
+        self.detail = list(detail) if detail is not None else []
         self.idx_continuous = [
             i for i, c in enumerate(self.category) if c == CONTINUOUS
         ]
@@ -143,6 +224,7 @@ class YSpec:
         keys = [tuple(k) for k in y_keys]
         category: list[str] = []
         scale: list[float] = []
+        detail: list[dict] = []
         states = [p["state"] for p in points]
         for key in keys:
             vals = [st.get(key) for st in states]
@@ -152,30 +234,52 @@ class YSpec:
                 fv is not None and not np.all(np.isfinite(fv)) for fv in fvs
             )
             constant = all(_same(vals[0], v) for v in vals[1:]) if vals else True
+            rec = {"key": f"{key[0]}.{key[1]}", **_shape_of(vals[0] if vals else None)}
 
             if has_nan:
                 category.append(NAN_IN_HARVEST)
                 scale.append(0.0)
+                rec["category"] = NAN_IN_HARVEST
+                detail.append(rec)
                 continue
             if constant:
                 category.append(CONSTANT)
                 scale.append(0.0)
+                rec["category"] = CONSTANT
+                rec["value"] = _value_record(vals[0] if vals else None)
+                detail.append(rec)
                 continue
             if not is_float:
                 category.append(DISCRETE)
                 scale.append(0.0)
+                rec["category"] = DISCRETE
+                rec["n_distinct_values"] = _n_distinct(vals)
+                detail.append(rec)
                 continue
             mags = [_char_mag(fv) for fv in fvs]
             nz = [m for m in mags if m > 0.0]
             s = float(np.median(nz)) if nz else 0.0
-            if s <= 0.0:
+            degenerate = s <= 0.0
+            if degenerate:
                 # varies, but every harvested value is identically zero:
                 # cannot happen for a float that varies, recorded rather than
                 # assumed.  Fall back to an absolute test.
                 s = 1.0
             category.append(CONTINUOUS)
             scale.append(s)
-        return cls(keys, category, scale, len(points))
+            rec["category"] = CONTINUOUS
+            rec["scale"] = s
+            rec["scale_hex"] = float(s).hex()
+            rec["n_points_scale_measured_over"] = len(nz)
+            rec["char_mag_min"] = float(min(mags)) if mags else None
+            rec["char_mag_max"] = float(max(mags)) if mags else None
+            if degenerate:
+                rec["scale_fallback"] = (
+                    "every harvested value is identically zero; scale set to 1.0, "
+                    "making the test absolute rather than relative"
+                )
+            detail.append(rec)
+        return cls(keys, category, scale, len(points), detail)
 
     # -- reporting -------------------------------------------------------
 
@@ -193,6 +297,76 @@ class YSpec:
             "discrete_fields": [
                 f"{self.keys[i][0]}.{self.keys[i][1]}" for i in self.idx_discrete
             ],
+        }
+
+    def components_sha256(self) -> str:
+        """Hash of the categorisation and scales, exactly.
+
+        Covers every key, its category and its scale as a hex float literal,
+        so two spec sets are identical iff this matches.  This is what makes
+        the committed artifact checkable rather than decorative.
+        """
+        h = hashlib.sha256()
+        for i, k in enumerate(self.keys):
+            h.update(f"{k[0]}.{k[1]}|{self.category[i]}|".encode())
+            h.update(float(self.scale[i]).hex().encode())
+            h.update(b"\n")
+        return h.hexdigest()
+
+    def audit_record(self, *, scenario: str, harvest: dict) -> dict:
+        """The committed artifact: what every component was decided to be.
+
+        The convergence predicate depends on these scales, so without this
+        nobody can inspect after the fact which scale a quantity received, or
+        notice that one is absurd.  That matters more here than it usually
+        would: the scales are exactly what separates an excluded quantity from
+        an included one, and a wrong exclusion makes every architecture declare
+        a convergence that has not happened, with no symptom.
+        """
+        return {
+            "format": "a18-ystate-1",
+            "scenario": scenario,
+            "generated_by": "arch_surgery/fixedpoint/gen_ystate.py",
+            "harvest": harvest,
+            "scales_measured_over_n_design_points": self.n_harvest_points,
+            "method": {
+                "y_set": (
+                    "set (b) of EXPERIMENT_FRAMEWORK.md 2.4: every "
+                    "data-structure field written by a model node inside "
+                    "Caller._call_models_once, from run-time instrumentation "
+                    "rather than from the DSM."
+                ),
+                "scale": (
+                    "s_i = median |y_i| over the harvested design points, "
+                    "restricted to the points where the component is nonzero, "
+                    "so a component that is zero at half the points is still "
+                    "scaled by its own working magnitude."
+                ),
+                "array_scale": (
+                    "Per-array, not per-element: the median over design points "
+                    "of max|elements|. Elements of one array share units, and a "
+                    "per-element scale would make a quiet element of a loud "
+                    "array hypersensitive."
+                ),
+                "categories": {
+                    CONTINUOUS: "float-valued and varies; tested as max|dy_i|/s_i < tau",
+                    DISCRETE: "not float-valued; tested by exact equality",
+                    CONSTANT: (
+                        "identical at every harvested design point; excluded "
+                        "from the tolerance test, but asserted to stay constant "
+                        "at run time -- a move blocks convergence and is named"
+                    ),
+                    NAN_IN_HARVEST: (
+                        "NaN or infinity somewhere in the harvest itself; "
+                        "excluded and counted, never silently admitted"
+                    ),
+                },
+                "max_inline_elements": MAX_INLINE_ELEMENTS,
+            },
+            "census": self.census(),
+            "components_sha256": self.components_sha256(),
+            "n_components": len(self.keys),
+            "components": self.detail,
         }
 
     def name(self, i: int) -> str:

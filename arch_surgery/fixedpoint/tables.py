@@ -150,6 +150,22 @@ def gates(rep: dict) -> None:
     for k, v in det.items():
         print(f"| {k} (determinism) | {v['status']} | |")
 
+    print("\n### Committed scale record (ystate)\n")
+    hdr = ["scenario/run", "status", "components sha256", "harvest content sha256",
+           "points scales measured over"]
+    print("| " + " | ".join(hdr) + " |")
+    print("|" + "---|" * len(hdr))
+    for key, r in sorted(rep.get("replays", {}).items()):
+        y = r.get("gate_ystate_record")
+        if not y:
+            continue
+        print("| " + " | ".join(str(x) for x in [
+            key, y.get("status"),
+            (y.get("components_sha256") or "")[:16],
+            (y.get("harvest_content_sha256") or "")[:16],
+            y.get("scales_measured_over_n_design_points"),
+        ]) + " |")
+
 
 def ladder(rep: dict) -> None:
     lad = rep.get("tau_ladder") or {}

@@ -92,7 +92,10 @@ watching only `objf` and `conf` never notices. The three fixed-point arms fail t
 pristine `git archive` of `c0ae5b28`; determinism bit-for-bit *and* sweep-for-sweep; harvest
 inertness 0 differing lines; replay fidelity **600/600** design points reproducing the live loop's
 sweep count exactly; restore exactness **0 mismatched fields** across all 2 288 fields in every
-restore of every arm of every design point — 2 400 in the headline comparison alone. The drop census is **100 % on every arm, every scenario** — no design point
+restore of every arm of every design point — 2 400 in the headline comparison alone. A sixth check
+was added after review and is now gated too: the categorisation and scales the predicate depends on
+are **committed as data** and re-derived and compared on every replay, which aborts on a mismatch
+(§4.1). The drop census is **100 % on every arm, every scenario** — no design point
 was dropped, and no cap was reached by any arm at any time.
 
 **One gate failed on the way and was fixed rather than reported around**, and the sequence is
@@ -230,6 +233,8 @@ registry and the data structure, which is everything the harvest needs.
 | `arch_surgery/fixedpoint/nodemap.py` | loader and the subset assertion | no |
 | `arch_surgery/fixedpoint/gen_node_map.py` | generator for the map above | no |
 | `arch_surgery/fixedpoint/ystate.py` | the coupling state, its categories, scales and predicate | no |
+| `arch_surgery/fixedpoint/gen_ystate.py` | writes the committed record of that categorisation | no |
+| `arch_surgery/docs/data/ystate_<scenario>.json` | **the committed categorisation and scales**, four files | no |
 | `arch_surgery/fixedpoint/engine.py` | **C9** — Gauss-Seidel, caps, exit audit | no |
 | `arch_surgery/fixedpoint/arms.py` | R / A0 / A0f / A1, and the hoist toggle | no |
 | `arch_surgery/fixedpoint/replay.py` | the per-scenario replay subprocess | no |
@@ -370,6 +375,106 @@ harvest itself and is excluded and counted rather than silently admitted. `low_a
 raises `RuntimeWarning: invalid value` in `pfcoil.py` during the replay — and raises the *same*
 warnings in the live instrumented run, so it is upstream behaviour on that deck, not a replay
 artefact. No new NaN appeared in any exit audit, in any arm, in any scenario.
+
+---
+
+### 4.1 The categorisation and scales are committed, and checkable
+
+Everything above is *measured* from the harvest — which meant, in the first version of this work,
+that it was measured, used, and then thrown away. The harvest cache lives under
+`arch_surgery/idf_probe/runs/`, which is untracked, so after a run nobody could inspect which scale
+a given quantity had received, or notice that one was absurd.
+
+**That was an auditability gap, not a correctness one.** The numbers reproduce: the harvest is
+deterministic and the replay determinism gate is bit-for-bit. But the scales are exactly what
+separates an excluded quantity from an included one, and §5.1 of EXPERIMENT_FRAMEWORK.md names the
+exclusion list as "the most dangerous artifact in this design" — a wrong exclusion makes every arm
+declare a convergence that has not happened, with no symptom. A quantity that can do that should
+not be invisible after the fact.
+
+The categorisation is therefore written to a **tracked** artifact, one per scenario:
+`arch_surgery/docs/data/ystate_<scenario>.json`. Each records, for every one of the 827–846
+coupling components: its key, its category, its scale as both a decimal and an exact hex float
+literal, how many design points that scale was measured over, the range of characteristic
+magnitudes it was taken from, and — for a constant — the value it holds. Plus the census, the
+method, and the identity of the harvest it was measured from.
+
+| Scenario | file size | components | continuous | discrete | constant | NaN | `components_sha256` |
+|---|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | 209 kB | 840 | 694 | 5 | 140 | 1 | `ae7ade12782a…` |
+| `low_aspect_ratio_DEMO` | 210 kB | 846 | 698 | 5 | 143 | 0 | `1c42f50fbe76…` |
+| `st_regression` | 195 kB | 827 | 582 | 2 | 243 | 0 | `08fef5941199…` |
+| `large_tokamak_eval` | 174 kB | 840 | 285 | 0 | 555 | 0 | `95818def74f2…` |
+
+**Nothing is truncated.** 790 kB of tracked JSON across four files is more than a summary and less
+than a burden — the repository already tracks a 136 kB input deck — so the full component list is
+recorded rather than summarised. Two presentation choices keep it that way without losing anything:
+one component per line, which makes the files greppable and makes a diff name exactly which
+quantity's category or scale moved; and, for a *constant array* longer than 32 elements, a summary
+plus a SHA-256 of the exact contents instead of the elements inline. The threshold is stated in the
+file itself (`method.max_inline_elements`), and the hash keeps the record exact.
+
+**It is a check, not a dump.** `replay.py` re-derives the categorisation from the harvest it was
+handed and compares it against the committed record on two hashes — `components_sha256` over every
+key, category and scale, and a `content_sha256` over the harvest's own coupling keys, model
+sequence and per-design-point identity and design vector as hex floats. **A mismatch aborts the
+run** rather than being recorded and ignored. That is what stops a scale set being silently paired
+with a harvest it was not measured from. The guard was tested by corrupting the committed record:
+the run exits non-zero, before doing any work, and writes no result file.
+
+`gen_ystate.py --check` re-runs the same comparison without writing. It deliberately compares
+*meaning* rather than raw text: `tree_git_head` is provenance and moves with every commit, so
+including it would make the check cry wolf after every commit, and a guard that cries wolf is a
+guard that gets ignored. Provenance drift is printed as a note.
+
+**The harvest itself is byte-reproducible.** A full re-harvest of `large_tokamak_eval` from a fresh
+PROCESS run reproduced the committed record exactly, *including* the SHA-256 of the harvest pickle.
+So the guard is not brittle — a legitimate re-harvest does not trip it — and the harvest is
+deterministic at the file level, which is a stronger statement than the MFILE identity gate alone
+makes.
+
+**Persisting the scales changed no behaviour, and this was verified rather than assumed.** All 24
+replay result files were regenerated and compared against copies taken before the change: **24 of
+24 identical in content** — every count, every residual, every trace entry — the only differences
+being the added `ystate_record` block and `wall_s`, which is a timing and is never evidence here.
+
+### 4.2 What the record shows, now that it can be read
+
+The point of an audit artifact is that someone looks at it. Doing so:
+
+**The scales span 43 orders of magnitude.** From `physics.sigmav_dt_average` at 3 × 10⁻²² (a
+fusion reactivity, m³ s⁻¹) to `physics.nTtau` at 3 × 10²¹ (a triple product). Across four scenarios
+the range is 2.4 × 10⁻²² to 9.1 × 10²¹.
+
+| Scenario | continuous | scale < 1e-8 | scale < 1e-2 | min scale | max scale |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | 694 | 2 (0.3 %) | 37 (5.3 %) | 2.96e-22 | 3.25e+21 |
+| `low_aspect_ratio_DEMO` | 698 | 2 (0.3 %) | 35 (5.0 %) | 2.44e-22 | 4.74e+21 |
+| `st_regression` | 582 | 6 (1.0 %) | 39 (6.7 %) | 4.25e-22 | 9.11e+21 |
+| `large_tokamak_eval` | 285 | 2 (0.7 %) | 18 (6.3 %) | 2.81e-22 | 4.64e+21 |
+
+**This is the §5 finding again, now on the coupling set rather than the constraint set, and it is
+sharper.** Had the predicate inherited `numpy`'s hidden `atol = 1e-8`, then for
+`sigmav_dt_average` — whose entire working magnitude is 3 × 10⁻²² — the absolute term would be
+**fourteen orders of magnitude larger than the quantity itself**, and any change whatsoever would
+have passed unconditionally. Two to six components per scenario are in that position, and 5–7 %
+are in the regime where the absolute term would dominate the relative one. A single absolute
+tolerance is not defensible on a set with this spread, and the per-quantity scale is not a
+refinement but a requirement.
+
+**Nothing looks absurd, and the degenerate case never fired.** Every smallest scale is a
+recognisable physical quantity at a recognisable magnitude: plasma resistance at 4 × 10⁻⁹ Ω,
+electron mass density at 1.4 × 10⁻⁷, plasma inductance at 1.3 × 10⁻⁵. The fallback for a component
+that varies but is identically zero at every harvested point — which would make its test absolute
+rather than relative — was applied **zero times in 2 259 continuous components** across all four
+scenarios.
+
+**Six scales were measured over fewer points than the harvest holds**, because those quantities
+are zero at some design points and the scale is taken over the non-zero ones. Five are on
+`large_tokamak_nof` (129 of 149 points: the auxiliary-heating current-drive family, zero when no
+auxiliary power is being driven) and one on `st_regression` (129 of 144: `costs.coeoam`). None is
+below 20 points, so none is a scale measured from too little to mean anything. This is recorded
+per component in the artifact, so it can be checked rather than trusted.
 
 ---
 
@@ -673,6 +778,10 @@ tuned to make a number look better.
 | 7 | **The global cap counts one module-sweep per flat sweep and one per inner sub-sweep** | Makes the 200 cap a real guard for the block arm without making it bind absurdly early for the flat arm. Nothing came close to it | Change `Budget.charge_module_sweep` accounting in `engine.py` |
 | 8 | **Both hoist settings are reported, with hoist off as the headline** | The brief asks for the hoist applied to all arms in first results; running both costs one extra pass and lets arm R stay literally "today's loop" in the headline table | Quote §7.5's hoist-on columns as the headline instead |
 | 9 | **`control_rep2` dropped from the gate suite** | A1 already gated the tree's own determinism at this base commit; what is new is the harvest arm, whose replicate is present | Re-add the tuple entry in `run_phase_a.cmd_gates` |
+| 10 | **The categorisation and scales are committed in full, one component per line, rather than summarised** | 790 kB across four tracked files, against a repository that already tracks a 136 kB input deck. A summary would not let a reader find the one absurd scale, which is the whole purpose | Set `MAX_INLINE_ELEMENTS` lower, or emit only `census` + `components_sha256` from `gen_ystate.py` |
+| 11 | **A mismatch between the committed record and the live harvest aborts the replay** | A check that records a mismatch and continues is not a check. The failure it guards against — a scale set paired with the wrong harvest — is silent by construction | In `replay.py`, downgrade the `SystemExit` to a recorded field |
+| 12 | **`gen_ystate.py --check` compares meaning, not raw text** | `tree_git_head` moves with every commit; including it would make the check fail after every commit, and a guard that cries wolf is one that gets ignored | Compare `out.read_text() == render(rec)` instead |
+| 13 | **A gate with a missing arm now reports INCOMPLETE, not PASS** | Found while re-running: an absent run made its comparison `None` and the remaining comparisons could still report PASS. That is the exact shape of silent failure the suite exists to prevent | Remove the `required` / `absent` check in `analyse.gates` |
 
 ---
 
@@ -739,6 +848,14 @@ scales baked in or derived on the fly, and that is a design problem this task di
 | 12 | Re-run complete: replay fidelity **600/600**, all five gates PASS, drop census 100 % on every arm. |
 | 13 | `run_all()` added to `run_phase_a.py` as a callable entry point with every parameter surfaced in `PARAMETERS`, a plain-language docstring and a stated output shape; `all` subcommand added to the CLI. |
 | 14 | This report written. |
+| 15 | **Coordinator review, post-merge**: the per-quantity scales were computed, used and never persisted, so the convergence predicate depended on data that existed nowhere after a run. Auditability gap, not a correctness one. |
+| 16 | `YSpec` now captures per-component audit detail as the categorisation is measured, rather than reconstructing it afterwards, so the artifact cannot drift from the decision it records. `gen_ystate.py` writes `arch_surgery/docs/data/ystate_<scenario>.json` — a tracked path. |
+| 17 | `replay.py` re-derives the categorisation and **aborts** if it disagrees with the committed record, on the categorisation hash or on the harvest identity. Guard tested by corrupting the record: exits 1, before doing any work, writing no result. |
+| 18 | First implementation rebuilt the whole spec twice per replay (it called the generator's `build()`, re-loading a 72 MB pickle). Restructured to reuse the loaded harvest and built spec before any measurement run was made with it. |
+| 19 | **Verified that persisting the scales changed nothing**: all 24 replay result files regenerated and compared against pre-change copies — 24/24 identical in content, differing only by the added `ystate_record` and by `wall_s`. |
+| 20 | Reading the new artifact produced a finding: continuous scales span 2.4e-22 to 9.1e+21, and 2–6 components per scenario have a working magnitude *below* numpy's hidden `atol = 1e-8` — where inheriting that default would have made agreement unconditional. §4.2. |
+| 21 | Two defects found while re-running and fixed: `gen_ystate.py --check` would have false-alarmed on every commit via `tree_git_head`; and `analyse.gates` reported PASS when a gate arm was missing. |
+| 22 | Full pipeline re-run (ladder, all replays, gate suite) on the changed code. |
 
 ---
 
@@ -751,6 +868,10 @@ git archive c0ae5b28 | tar -x -C /some/dir/pristine_c0ae5b28
 # everything, in order
 PYTHONPATH=<tree> python arch_surgery/fixedpoint/run_phase_a.py all \
     --pristine-tree /some/dir/pristine_c0ae5b28
+
+# the committed categorisation and scales -- regenerate, or verify
+PYTHONPATH=<tree> python arch_surgery/fixedpoint/gen_ystate.py
+PYTHONPATH=<tree> python arch_surgery/fixedpoint/gen_ystate.py --check
 
 # tables
 python arch_surgery/fixedpoint/analyse.py --out report.json
