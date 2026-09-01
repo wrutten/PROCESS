@@ -295,6 +295,48 @@ Combined cost, per VMCON iteration, *measured* from the loop structure:
 Essentially all runtime is inside a block the current architecture draws as a
 peer of the optimizer rather than as its interior.
 
+> **Addendum, 2026-09-01 (`c0ae5b28`) — the floor is a *consequence of F3*, not an independent
+> finding, and it is not intrinsic to fixed-point iteration.**
+>
+> `objf` and `conf` are **functionals of the state**, and they do not exist when `call_models` is
+> entered. So the loop must evaluate once purely to manufacture a `prev` to compare against, then
+> again to compare. **The first sweep yields no information about convergence.** That is the whole
+> mechanism of the floor.
+>
+> A coupling-variable predicate has no such problem. The entering state **is** `y0` — it persists
+> in the data structure from the previous `call_models`, with the new design vector injected on
+> top — so one sweep gives `y1 = G(y0)` and `norm(y1 - y0)` is immediately testable.
+> **The floor for a proper fixed-point iteration is 1, not 2.** F8 is therefore the *price* of F3
+> ("the MDA converges the wrong variable"), and fixing F3 removes F8 for free.
+>
+> **Quantified at the current base commit** (`large_tokamak_nof`, warm, isolated subprocess —
+> these figures are at `c0ae5b28` and supersede the `710a75c9` table above):
+>
+> | | |
+> |---|---|
+> | `call_models` calls | 630 |
+> | sweeps inside the loop | 2 027 |
+> | at the structural floor of 2 | **1 260 (62.2 %)** |
+> | information-free second sweeps | **630 — 31.1 % of all sweeps** |
+>
+> The same arithmetic gives A1's "above floor" column directly: 37.8 %, 42.1 %, 39.7 %, 27.3 % of
+> sweeps across the four scenarios are the only ones a convergence-side change can act on *while
+> the floor stays at 2*. Removing the floor is therefore worth **up to 31 %** of MDA sweeps — and
+> since 94-96 % of sweeps are finite-difference gradient perturbations and the MDA is ~89 % of
+> runtime, that multiplies across essentially the whole solve.
+>
+> **A second defect in the same predicate.** `caller.py:70` tests agreement with
+> `np.allclose(..., equal_nan=True)`, so **a state that has gone NaN in two consecutive sweeps is
+> reported converged**. Filed separately as a PROCESS bug report; see
+> [`outgoing/2026-09-01_call_models_equal_nan_converged.md`](outgoing/2026-09-01_call_models_equal_nan_converged.md).
+>
+> **Consequence for §6's ranking.** "Give the MDA a coupling-variable predicate" removes **F3, F8
+> and F12 simultaneously** — the wrong convergence variable, the two-sweep floor, and one of the
+> two incompatible definitions of "converged". It needs no model changes and no new design
+> variables. On this evidence it is the highest-value single change in the whole document, and it
+> is now the control arm of the MDA partition experiment's Phase A
+> ([`../plans/MDA_PARTITION_EXPERIMENT.md`](../plans/MDA_PARTITION_EXPERIMENT.md) §2.2).
+
 ### F9 — The blackboard (Medium)
 
 Models take no arguments and return nothing:

@@ -70,6 +70,17 @@ consecutive sweeps is reported converged.
 From `dependency_analysis/output/tokamak/dsm_collapsed.html`, pin `PROCESS_at_36ac820e`, which
 descends from `c0ae5b28` — the coordinate systems match.
 
+> **The DSM is configuration-specific (V6, 2026-09-01).** It resolves conditionals against the
+> analysis tool's `tokamak` preset, which is built from `examples/data/large_tokamak_IN.DAT`. That
+> deck matches `large_tokamak_nof` and `large_tokamak_eval` **exactly** on every switch the config
+> models, differs from `low_aspect_ratio_DEMO` in 5, and differs from `st_regression` in **12** —
+> including `i_pulsed_plant`, `itart`, `i_single_null` and the TF path. **The module decomposition
+> below is therefore authoritative for the two large tokamaks, a near neighbour for the DEMO case,
+> and an extrapolation for `st_regression`.** Phase A's *predicate* does not depend on this — the
+> coupling set is instrumented at run time — but the **block arm's module boundaries do**. Full
+> switch table and the requested fix in
+> [`../reports/DSM_VALIDATION.md`](../reports/DSM_VALIDATION.md) V6.
+
 | Rows | Contents | Role |
 |---|---|---|
 | 1-3 | `COOR_SingleRun`, `VMCON`, `MDA_Idempotence` | driver stack, not in a sweep |
@@ -335,10 +346,18 @@ Any **one** of these, measured fairly and reported with its dropped-point census
 - **The hoist**, on its own, at 4.6-8.2 % with `k = 0` and bit-identical results.
 - **A1 vs A0** significantly below 1.0 on any scenario.
 
-`st_regression` is the most promising scenario for the third: it has **zero live cross-module back
-edges** (`i_pulsed_plant = 0`, so `Pulse` writes nothing), the largest module-convergence gaps of
-the four, and A19 put its partition contribution at 18.0-18.1 %. It needs no lift at all, which
-makes it the one scenario where the partition is available with `k = 0`.
+`st_regression` is the most promising scenario for the third **on the evidence, and the weakest on
+the instrument**: it has zero live cross-module back edges (`i_pulsed_plant = 0`, so `Pulse` writes
+nothing), the largest module-convergence gaps of the four, and A19 put its partition contribution at
+18.0-18.1 %. It needs no lift at all, which makes it the one scenario where the partition is
+available with `k = 0`.
+
+**But its module boundaries are an extrapolation (V6).** The DSM was generated under a
+configuration differing from this deck in 12 switches. The `k = 0` claim is run-time measured by A2
+and stands on its own; *which node belongs to which module* does not. **Report `st_regression`'s
+block-arm result with that caveat, or regenerate its DSM first** — the latter is a supported
+operation in the analysis tool and is the cleaner course if it is to carry the headline. The two
+large tokamaks carry no such caveat and should lead the write-up.
 
 ### 4.3 What the experiment produces even if every arm ties
 
@@ -349,6 +368,45 @@ A19 already produced publishable critique from measurement alone; Phase A extend
 predicate itself.
 
 ---
+
+### 4.4 Robustness — expected to change, in both directions
+
+Robustness is not a side effect here; **Phase A converts it from an assumption into a measured
+quantity**, and the drop census (§2.4) is the measurement. Today's loop supplies no robustness
+signal at all: `call_models_nonconverged = 0` on every scenario, so the incumbent never fails and
+there is nothing to compare. Every Phase A arm will produce a failure rate, which is new
+information regardless of how the cost comparison lands.
+
+**Expected improvements**
+
+- **Gradients stop being differenced across unconverged states.** The loop currently exits with
+  state still moving in 24 % of `large_tokamak_nof`'s calls, and 94-96 % of calls are FD stencil
+  points — so this is the mechanism behind F2/F3, and a state-based predicate removes it. This is
+  the strongest robustness argument in the plan, and it predicts *fewer* VMCON retries, not more.
+- **The NaN loophole closes.** `equal_nan=True` currently reports a NaN state as converged
+  (§1.2). Detecting it is strictly better than propagating it.
+- **Failure becomes localised.** Under the block arm a module that will not converge is
+  identifiable *as that module*. Today an unconverged quantity anywhere costs sweeps and then
+  exits quietly.
+
+**Expected degradations**
+
+- **A strict predicate will fail where a loose one always succeeded.** This is the big one, and it
+  is not a regression in the code's behaviour — the non-convergence was always there, unreported —
+  but as delivered software it converts silent tolerance into loud failure. Whether that reads as
+  more or less robust depends on which property is being valued, and the report must say which.
+- **Models evaluated off the consistency manifold may raise.** Per-module solvers present states
+  the coupled loop would never produce. A19 is strong evidence against this: **every module ran in
+  isolation without raising, in all 2 447 replays**. But those replays used the loose predicate;
+  strict iteration pushes further from the manifold.
+- **Phase B only — H5.** An equality consistency constraint changes the geometry of the feasible
+  set, so previously feasible starting points may not be. Unmeasured, and unmeasurable by replay.
+- **Phase B only — `n` rises by 1**, costing 4.8-5.0 % in gradient evaluations and whatever
+  generic difficulty a higher-dimensional SQP problem carries.
+
+**Block Gauss-Seidel's own convergence basin is a low risk here**, specifically because `k = 1` and
+A19 measured `S2` to be insensitive to the coupler: the outer iteration should be near-trivial.
+That reasoning does not transfer to a deck where the coupler is live and strong.
 
 ## 5. Critical assessment
 
@@ -431,6 +489,7 @@ identical code, which had already reached the arithmetic behind a gate decision.
 | Arms compared over different populations | Pairwise drop; drop census reported before any ratio |
 | The trajectory is not stable — a different predicate would visit different design points | **Accepted, not engineered around.** Phase A measures cost-to-converge *these* points from *these* entry states. It is a per-point mechanism result, not a re-run solve. Sound for an existence proof; insufficient for an adoption decision, which is Phase B's job |
 | DSM misses an edge | `y` set (b) does not depend on the DSM; set (a) runs as cross-check; disagreements become DSM findings, recorded in [`../reports/DSM_VALIDATION.md`](../reports/DSM_VALIDATION.md) |
+| **DSM was generated for a different configuration** | **V6.** Exact match for `large_tokamak_nof` and `large_tokamak_eval`; 5 switches out on `low_aspect_ratio_DEMO`; **12 out on `st_regression`**. Affects the block arm's module boundaries only, not the predicate. Lead with the two large tokamaks; caveat or regenerate for the others |
 | `run()` / `output()` conflation | Trap T1, three instances. The instrument excludes `output()` paths; the replay calls unwrapped bound methods (T7) |
 | `i_pulsed_plant` splits the coupling graph | Never pool pulsed and steady-state results |
 | Four scenarios, tokamak only | No claim about stellarator, IFE or unsampled configurations. `st_regression` also sets `itart = 1`, a different TF path — coverage, not a replicate |

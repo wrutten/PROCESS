@@ -70,6 +70,41 @@ solves) at the strength this framework needs — neutrality verified against a p
 
 `note_retry()` has **never fired** in any run, so it is verified by inspection only.
 
+### 1.4 PROCESS is not pristine, and what to do about it
+
+`architecture_surgery` carries **1 632 lines of change to `process/` since `c0ae5b28`**:
+
+| File | Lines | Kind |
+|---|---|---|
+| `process/core/_idf_probe.py` | +296 | new — A1's probe |
+| `process/core/_idf_probe_modules.py` | +688 | new — A2's module instrument |
+| `process/core/_idf_probe_frozen.py` | +610 | new — A19's replay instrument |
+| `process/core/caller.py` | +14 | 6 guarded hook calls, 1 import |
+| `process/core/solver/evaluators.py` | +10 | 3 guarded hook calls, 1 import |
+| `process/core/solver/solver_handler.py` | +8 | 3 guarded hook calls, 1 import |
+
+**Every edit to an existing file is additive.** The complete diff to the three PROCESS files is
+three import lines plus twelve `if _idf_probe.ENABLED:` guards. **No original line of logic is
+changed, reordered or deleted.** And it is not merely asserted: A1 gated switch-neutrality against
+a pristine `git archive` of `c0ae5b28` — probe-off runs byte-identical on hex float literals and
+whole-MFILE identity, four scenarios, eleven arms.
+
+**So a fresh branch is not needed for correctness.** What *is* wrong is the shape: three
+task-specific probe modules accreted one per task, inside `process/core/`, where a fourth would
+otherwise follow. That is what **F1** exists to fix — consolidate to one `_experiment.py` with arm
+parsing, and re-gate neutrality on the consolidated module.
+
+**Phase A needs no new hook site at all.** The existing `sweep(models, data)` call
+(`caller.py:273`) already receives both the model registry and the data structure, so the
+harvest of `(x, y0)` is a new *mode* inside the probe module rather than a new call site in
+PROCESS. Phase A therefore adds **zero** lines to `caller.py`.
+
+**Recommendation.** Build F1 as a consolidation task on `architecture_surgery`, not a fresh branch
+from `c0ae5b28`. A fresh branch would discard A1's neutrality verification, A2's module instrument
+and A19's replay harness — the last of which is the Phase A instrument — and would have to
+re-derive all three under the same gates to get back to where the tree already is. The clean-tree
+property that matters is *provable neutrality*, and that already holds.
+
 ---
 
 ## 2. Proposed approach
@@ -277,7 +312,7 @@ downward is Phase B and can wait for Phase A's result.
 | `arch_surgery/fixedpoint/arms.py` | R / A0 / A1 construction from the node map | no |
 | `arch_surgery/fixedpoint/ystate.py` | `y` extraction, norm, exclusion list | no |
 | `arch_surgery/docs/data/dsm_node_map.json` | C8 | no |
-| `process/core/_experiment.py` | C1 + C2 hooks | yes — neutrality-gated |
+| `process/core/_experiment.py` | C1 + C2 hooks; consolidates the three existing probe modules | yes — neutrality-gated, **already present** (§1.4) |
 | `process/core/caller.py` | VP1-VP4 hook sites | yes — neutrality-gated |
 | `process/core/solver/{iteration_variables,constraints}.py` | C4 appends | yes |
 | `process/models/*.py` | VP5 residual extraction | yes — **D11 approval before merging** |

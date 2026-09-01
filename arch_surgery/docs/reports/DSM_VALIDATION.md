@@ -31,6 +31,78 @@ it is found, not at write-up.
 | **V4** | `pf_power.vpfskv`: `Power` (M3, row 48) -> `Pulse` (row 39) | Structurally present; the value is the literal `20.0e0` | **DSM correct, edge dead** | As V3 |
 | **V5** | `Pulse` (row 39) writes three fields, including `pulse.i_pulsed_plant` | Regex artefact — `= ` matched `== 1`. `Pulse` only *reads* that switch. Run-time census: exactly two writes in pulsed scenarios, **zero** in `st_regression` | **Extraction method wrong**, not the DSM | Trap **T2**. `Pulse` has exactly two state writes, which is what makes it feed-forward post-lift |
 
+## V6 — The DSM is config-specific, and matches only two of our four scenarios
+
+**This is the most consequential entry in this register, and it was not previously recorded
+anywhere.**
+
+The dependency analysis resolves conditionals against a `ProcessConfig`. Its `tokamak` preset —
+`dependency_analysis/core/inputs/config.py`, `tokamak_default` — is built from
+**`examples/data/large_tokamak_IN.DAT`**, and every module boundary this project quotes (M1 = rows
+4, 6-28; M2 = rows 5, 29-37; M3 = rows 40-51) was derived under that configuration. A different
+deck resolves different branches and can therefore produce a different graph.
+
+Switch-by-switch comparison of the four experiment scenarios against the DSM's source deck
+(only differing switches shown):
+
+| switch | DSM source | `large_tokamak_nof` | `low_aspect_ratio_DEMO` | `st_regression` | `large_tokamak_eval` |
+|---|---|---|---|---|---|
+| `i_plasma_geometry` | 0 | 0 | **10** | 0 | 0 |
+| `i_single_null` | 1 | 1 | 1 | **0** | 1 |
+| `i_plasma_current` | 4 | 4 | 4 | **9** | 4 |
+| `i_beta_component` | 1 | 1 | 1 | **3** | 1 |
+| `i_beta_fast_alpha` | 1 | 1 | 1 | **unset** | 1 |
+| `i_confinement_time` | 34 | 34 | 34 | **unset** | 34 |
+| `i_hcd_primary` | 10 | 10 | 10 | **13** | 10 |
+| **`i_pulsed_plant`** | **1** | **1** | **1** | **0** | **1** |
+| `pulsetimings` | 0 | 0 | 0 | **unset** | 0 |
+| `i_div_heat_load` | 2 | 2 | **unset** | **unset** | 2 |
+| `inuclear` | 1 | 1 | 1 | **0** | 1 |
+| `i_cs_superconductor` | 1 | 1 | **5** | **unset** | 1 |
+| `i_pf_superconductor` | 3 | 3 | 3 | **9** | 3 |
+| `output_costs` | 1 | 1 | **0** | 1 | 1 |
+| `i_tf_sc_mat` | 1 | 1 | **5** | **9** | 1 |
+| `itart` | unset | unset | unset | **1** | unset |
+| `i_tf_sup` | unset | unset | unset | **1** | unset |
+| `i_blanket_type` | unset | unset | **1** | **1** | unset |
+| `i_tf_turn_type` | unset | unset | unset | **2** | unset |
+
+(14 further config switches are identical across all five decks, `istell` and `ife` among them.)
+
+**Verdict, per scenario:**
+
+| Scenario | Correspondence | Standing of the module decomposition |
+|---|---|---|
+| `large_tokamak_nof` | **exact** on every switch the config models | **Authoritative.** The DSM was generated for this configuration |
+| `large_tokamak_eval` | **exact** | **Authoritative.** (Same deck family, evaluation mode rather than optimisation) |
+| `low_aspect_ratio_DEMO` | **5 switches differ** — plasma-geometry model, CS and TF superconductor materials, blanket type, cost output | **Probably sound, unverified.** The differences select alternative correlations *within* M1 and M2 nodes rather than obviously adding or removing edges — but "probably" is not "measured" |
+| `st_regression` | **12 switches differ**, including `i_pulsed_plant`, `itart`, `i_single_null`, `i_plasma_current` and the TF path | **Extrapolation, not measurement.** It corresponds to *none* of the tool's presets — closest is `tart` (`itart=1`), which also sets `i_tf_sup=0` where this deck sets `1` |
+
+**Consequence for the partition experiment.** The Phase A *predicate* is unaffected: the coupling
+set is derived from run-time instrumentation (`y` set (b)), not from the DSM. What depends on the
+DSM is the **block arm's module boundaries**. So:
+
+- On `large_tokamak_nof` and `large_tokamak_eval` the block arm rests on a DSM generated for
+  exactly that configuration.
+- On `low_aspect_ratio_DEMO` it rests on a near neighbour.
+- **On `st_regression` it rests on an extrapolation**, and the partition plan's §4.2 previously
+  named `st_regression` as the *most promising* scenario for a block-vs-flat win. That
+  recommendation now carries a caveat: its `k = 0` claim is run-time measured by A2 and stands,
+  but *which node belongs to which module* there is imported from a different configuration.
+
+**Available fix.** The tool builds a config from any `IN.DAT` through PROCESS's own
+`INPUT_VARIABLES` registry (`ProcessConfig.from_scenario`), so a per-scenario DSM is a supported
+operation rather than new work. **Requested of `PROCESS_code_analysis`:** regenerate the collapsed
+DSM for `st_regression` and `low_aspect_ratio_DEMO` and report whether the module decomposition
+survives. Until then, block-arm results on those two scenarios carry this caveat.
+
+**Also note:** the DSM source deck is `examples/data/large_tokamak_IN.DAT`, which is **not** one of
+the four experiment scenarios. `large_tokamak_nof` is a regression deck. They agree on every
+modelled switch, but they are different files, and no result should describe the DSM as having
+been generated "from our scenario".
+
+---
+
 ## Open
 
 - **The collapsed DSM's 56 rows do not map one-to-one onto the 26 `run()` calls** in
