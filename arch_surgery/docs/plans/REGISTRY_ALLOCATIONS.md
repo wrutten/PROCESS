@@ -61,19 +61,41 @@ upstream.
 | Task | Iteration variables | Constraints | Purpose | Status |
 |---|---|---|---|---|
 | *(baseline at `c0ae5b28`)* | 1–177, 83 used | 1–92, 82 used | upstream | — |
-| **F2** (framework), done by A20 (registry-append) | **178** — `framework_placeholder` | **93** — framework placeholder consistency | first append; proves the mechanism and the neutrality of an unreferenced entry | **ALLOCATED** 2026-09-01 |
-| **A4** (burn-time-lift) | 179 | 94 | `t_plant_pulse_burn` + its consistency constraint | reserved, not allocated |
-| **A9–A11** (subdriver lift) | 180–183 | 95–98 | up to four lifted residuals, one per site | reserved, not allocated |
+| **F2** (framework), attempted by A20 (registry-append) | *(none)* | *(none)* | proved the append mechanism, then **withdrew the code** | **WITHDRAWN** 2026-09-01 — see below |
+| **A4** (burn-time-lift) | **178** | **93** | `t_plant_pulse_burn` + its consistency constraint | reserved, not allocated |
+| **A9–A11** (subdriver lift) | 179–182 | 94–97 | up to four lifted residuals, one per site | reserved, not allocated |
 
-Next free: iteration variable **179**, constraint **94**.
+**Next free: iteration variable 178, constraint 93.** Nothing is allocated. The registries at
+`HEAD` are byte-identical to `c0ae5b28`.
 
-**A4's and A9–A11's constraint reservations were shifted by one** when F2 took constraint 93.
-The queue row for A20 (registry-append) assigns 93 to F2 (`MASTER_TODO.md`, and decision D10 —
-"constraints append from 93"), while an earlier version of this table had reserved 93 for A4.
-Both cannot hold; the queue row is the later statement, so F2 took 93 and everything below it
-moved up one. Nothing was allocated under the old numbering, so no code or deck refers to the
-superseded reservations. To reverse: renumber the F2 pair's constraint and restore 93 → A4,
-94–97 → A9–A11.
+### Why F2 allocated nothing, and what survives from it
+
+A20 (registry-append) appended iteration variable 178 and constraint 93 as a synthetic
+placeholder, gated it on all four scenarios, and the code was then **withdrawn by the user's
+ruling** (2026-09-01): synthetic content does not earn a permanent place in a frozen tree.
+
+The three edits stood or fell together and could not be partially kept. Constraint 93's body was
+`eq(data.numerics.framework_placeholder, 1.0, …)`, so it existed only to pin a field invented for
+it in `process/data_structure/numerics.py`; and the `lablcc` extension existed only to label that
+constraint. Withdraw the field and the other two have nothing to act on.
+
+**Nothing was lost by withdrawing it**, because the deliverable was knowledge, not code:
+
+- `N_ITERATION_VARIABLES_MAX` is derived as `max(keys)` and **twelve** arrays sized by it grow in
+  step — the earlier table named four.
+- Appending is **inert**: 0 differing MFILE lines against a pristine `git archive` of `c0ae5b28`,
+  all four scenarios, probe on and off.
+- The input-language divergence is **one-way**, measured both directions: a fork deck fed to
+  upstream is refused at *input-parse time* with `ProcessValidationError` before any model runs,
+  while an upstream deck runs here byte-identically. That is precisely the loud failure that
+  reusing one of the 94 gaps would **not** give — decision D10's rationale confirmed by experiment
+  rather than argued.
+
+**A4 now takes 178 and 93**, and needs no invented field: `t_plant_pulse_burn` already exists in
+`process/data_structure/times_variables.py`. Its append will still require extending `lablcc` in
+`process/data_structure/numerics.py`, which D10 mandates and which is therefore not a discretionary
+edit — worth knowing in advance, since that file sits outside the default-permitted surface named
+in `CLAUDE.md` and carries an upstream warning that its `lablcc` comments feed code generation.
 
 *Reserved* means the range is held; *allocated* means the entry exists in the registry. A task
 allocates only the numbers it actually uses, and updates this table in the same commit.
