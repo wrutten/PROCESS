@@ -339,3 +339,75 @@ untracked; the numbers above are the committed summary.
 | 10 | 2026-09-01 | Supplementary live demonstration of the (178, 93) pair on a scratch deck; solves, `ifail = 1`, objective unchanged to 3.2e-12 relative. |
 | 11 | 2026-09-01 | `tests/unit` run: 843 passed, 4 skipped; constraint 93 auto-exercised by upstream's own parametrised test. |
 | 12 | 2026-09-01 | Allocation table updated in the same commit as the append: F2's row moved to ALLOCATED, A4 and A9–A11 constraint reservations shifted by one (AD2), measured facts folded into the rule and divergence sections. |
+
+---
+
+## Orchestrator's critical assessment (appended at merge, 2026-09-01)
+
+**Verdict: the task succeeded and its code was withdrawn. Those are not in tension.** A20
+(registry-append) was commissioned to prove a mechanism, and it did. The proof is the report; the
+placeholder was scaffolding, and scaffolding comes down.
+
+### What was ruled, and why
+
+The user ruled (2026-09-01) that the synthetic placeholder does not earn a permanent place in a
+frozen tree. All three edits — the `framework_placeholder` field, constraint 93, and the `lablcc`
+label — stood or fell together: constraint 93's body was
+`eq(data.numerics.framework_placeholder, 1.0, …)`, so it existed only to pin a field invented for
+it, and the label existed only to label the constraint. `process/` is now byte-identical to
+`c0ae5b28` apart from the probe.
+
+**The orchestrator mis-framed this decision on first presentation** and the correction matters for
+anyone reading the queue later. The `lablcc` extension was described as *unavoidable*, on the
+grounds that decision D10 mandates extending `lablcc` for any constraint append and that `lablcc`
+lives in `process/data_structure/numerics.py`. That is true of **A4's real append**; it was not
+true *now*, because withdrawing the placeholder removes the constraint that needed labelling.
+Presenting a conditional as unconditional narrowed a decision that was actually wider.
+
+### What the task did better than asked
+
+Three things, each of which changed what the report can claim:
+
+1. **It ran the full matrix on the branch base *before* appending.** Without that, a neutrality
+   failure would have been ambiguous between the append and the branch. This was not in the brief.
+2. **It measured the input-language divergence in both directions.** The finding that a fork deck
+   is refused by upstream at *input-parse time*, before any model runs, is the sharpest available
+   confirmation of D10: it is exactly the loud failure that reusing one of the 94 gaps would not
+   give. D10 was reasoned; it is now demonstrated.
+3. **It found twelve arrays sized by the derived cap where the allocation table named four**, by
+   enumeration rather than by trusting the table. The table was incomplete and nobody knew.
+
+### The finding that outlives the task
+
+`set_active_constraints` (`process/core/init.py:1280`) iterates
+`range(ConstraintManager.num_constraints())` over `icc`, which holds `N_CONSTRAINT_EQUATIONS_MAX =
+500` slots. **The loop bound is registry size, not the deck's constraint count** — two unrelated
+quantities that happen to be ordered favourably. A deck naming more constraints than exist in the
+registry has its tail silently ignored, with no error. Verified independently by the orchestrator.
+
+Unreachable in the four scenarios (they name 18–26), but it is the same shape as the `equal_nan`
+defect already filed with `PROCESS_code_analysis`: a quiet failure where a loud one belongs.
+Recommended for their bug-report register.
+
+### Process observations
+
+- **The worktree was seeded at `6df46205` — upstream `main`**, not an ancestor of
+  `architecture_surgery`, with no `arch_surgery/` directory. The agent detected this and created
+  its branch at the correct commit. Had it not, the work would have proceeded from the wrong base
+  and produced plausible-looking output. The sibling A18 worktree seeded correctly, so this is not
+  systematic — but "agent silently works from the wrong base" is a failure mode worth watching for.
+- **The allocation conflict was the orchestrator's**, not the agent's: the A20 queue row assigned
+  constraint 93 to F2 while the allocation table had reserved it for A4. The agent detected the
+  contradiction, resolved it by taking the later statement, and recorded a reversal path. Correct
+  handling of a defect it did not create.
+- **`ruff` is not installed in `PROCESS_surgery_env`**, so the repository's linter could not run
+  over the changed files. Now moot for `process/`, since those changes are withdrawn.
+
+### What this task does *not* establish
+
+The gates certify that appending is inert **for the four scenarios in this deck set**, with the
+probe on and off. They say nothing about a deck that names 178, which was exercised only in a
+scratch run reported as supplementary and not gated. When A4 makes the real append, the neutrality
+gate must be re-run — this task's result does not transfer to a different pair of numbers attached
+to a real variable, and should not be cited as if it does.
+
