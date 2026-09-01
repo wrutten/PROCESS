@@ -135,6 +135,54 @@ rather than an expectation.
 **The ordering should be inverted:** `epsvmc` must be *looser* than the achievable
 gradient accuracy, or the MDA tolerance must be tightened until it is not.
 
+> **Addendum, 2026-09-01 — the MDA agreement tolerance is not `1e-6`, and for 18 % of reported
+> quantities it is orders of magnitude looser than the table above states.** Raised by the
+> `PROCESS_code_analysis` orchestrator (its bug_reports "Owed" entry on the same predicate);
+> quantified here at `c0ae5b28`.
+>
+> `np.allclose(a, b, rtol=1.0e-6)` does not test a relative tolerance. It tests
+>
+> ```
+> |a - b|  <=  atol + rtol * |b|          with numpy's default atol = 1e-8
+> ```
+>
+> so the absolute term dominates whenever `|b| < atol/rtol = ` **1e-2**. Below that crossover the
+> test is effectively *absolute at 1e-8*, which in relative terms is **looser**, not tighter:
+>
+> | `\|x\|` | effective relative tolerance |
+> |---|---|
+> | 1e-6 | **1.0e-2** |
+> | 1e-4 | **1.0e-4** |
+> | 1e-3 | 1.1e-5 |
+> | 1e-2 | 2.0e-6 |
+> | ≥ 1 | 1.0e-6 |
+>
+> **How much of the state this reaches**, measured from `large_tokamak_nof`'s MFILE (11 191 numeric
+> entries, 10 813 nonzero) — the MFILE set is exactly what `MDA_Output` compares, so this is
+> on-target for that loop rather than an analogy:
+>
+> | band | count | share of nonzero |
+> |---|---|---|
+> | `< 1e-8` — **agreement is unconditional** | 203 | 1.9 % |
+> | 1e-8 … 1e-6 | 10 | 0.1 % |
+> | 1e-6 … 1e-4 | 120 | 1.1 % |
+> | 1e-4 … 1e-2 | 1 614 | 14.9 % |
+> | **total below the 1e-2 crossover** | **1 947** | **18.0 %** |
+> | ≥ 1e-2 (tolerance is genuinely ~1e-6 relative) | 8 866 | 82.0 % |
+>
+> **203 quantities are small enough that any change whatever passes the test.** For a quantity at
+> 1e-4 the effective relative tolerance is 1.0e-4 — two orders of magnitude looser than this
+> section's table claims.
+>
+> **This makes F1's inversion worse, not better.** The noise floor is not a single number at 1e-6;
+> it is magnitude-dependent, and for a fifth of the reported state it is far above 1e-6. An
+> `epsvmc` of 1e-7 is being asked to resolve quantities whose reproducibility floor is, in places,
+> 1e-2 relative.
+>
+> *Scope:* measured on the MFILE set (`MDA_Output`'s comparison). The idempotence loop compares
+> `objf` and the constraint vector, a different and smaller set, through the same predicate — the
+> mechanism is identical but the magnitude distribution has not been measured there.
+
 ### F2 — Finite differences across an iterative solver (High)
 
 `fcnvmc2` (`evaluators.py:133-151`) takes **central differences** with a relative

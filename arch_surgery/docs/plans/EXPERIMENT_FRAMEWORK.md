@@ -183,7 +183,8 @@ stop when  max_i |y_{m+1,i} - y_{m,i}| / (|y_{m,i}| + atol_i)  <  rtol
 | Floor | **1 sweep** | The entry state *is* `y0`. Today's floor of 2 exists only because `objf`/`conf` do not exist at entry, so the loop must evaluate once to manufacture a comparand |
 | `y` set | **(b)** all state written by in-loop models, from the probe | Independent of the DSM's completeness |
 | Cross-check set | **(a)** DSM feedback-edge variables, evaluated in parallel | Disagreement is a DSM validation result (C10) |
-| `rtol` | `1e-6` per component, absolute floor per component | Mirrors today's value on a different quantity — *not* the same strictness |
+| `rtol` | `1e-6` per component | The *nominal* value today. **Do not describe it as "the same as today's"** — see the row below |
+| `atol_i` | **chosen deliberately, per component, and recorded** | Today's predicate is `np.allclose(rtol=1e-6)`, whose hidden `atol=1e-8` dominates for `\|y\|<1e-2`. Measured at `c0ae5b28`: **18.0 % of nonzero MFILE quantities fall below that crossover** and 203 are small enough that *any* change passes. Inheriting numpy's default would silently reproduce that hole; leaving `atol_i = 0` makes near-zero components unconvergeable. Both failure modes are real, so the choice is stated per component, not defaulted (architecture evaluation F1 addendum) |
 | Exclusions | accumulating fields only, **each measured and justified** | Counters never converge; an unjustified exclusion is a silent, arm-wide false convergence |
 | NaN | **never converged** | Today's `equal_nan=True` reports a NaN state as converged; not reproduced |
 | Acceleration | **none** | Aitken/Anderson is a separate variant point and would confound the topology change |

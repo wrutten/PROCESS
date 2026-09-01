@@ -196,7 +196,7 @@ with these decisions settled:
 | **Floor** | **1 sweep**, not 2 | The entry state is `y0`. Nothing needs manufacturing (§1.2) |
 | **`y` set** | **(b) all state written by in-loop models**, derived from the probe | Does not depend on the DSM being complete — and the DSM has produced three T1 false positives |
 | **Cross-check** | **(a) DSM feedback-edge variables**, evaluated in parallel every sweep | Disagreement about when a point converged is a **DSM validation result** (§3.4) |
-| **Tolerance** | `rtol = 1e-6` per component, with an absolute floor | Mirrors today's `rtol`; on a different quantity, so *not* the same strictness |
+| **Tolerance** | `rtol = 1e-6` per component; **`atol_i` chosen and recorded per component** | Today's `np.allclose(rtol=1e-6)` carries a hidden `atol=1e-8` that dominates below `\|y\| = 1e-2` — **18.0 % of nonzero MFILE quantities**, with 203 so small that any change passes. Neither numpy's default nor zero is safe; the choice is stated, not inherited |
 | **Exclusions** | accumulating fields only, each **measured and justified** in the report | Counters and accumulators never converge; an unjustified exclusion is the same class of silent defect as the NaN loophole |
 | **NaN** | **never converged** | Today's `equal_nan=True` is not reproduced |
 | **Acceleration** | **none** — plain Gauss-Seidel | Aitken/Anderson is a separate variant point; folding it in confounds it with the topology change |
