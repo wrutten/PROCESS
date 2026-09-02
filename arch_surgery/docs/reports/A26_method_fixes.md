@@ -336,9 +336,106 @@ inputs and has a perfectly good fixed point. An accumulator in the sense that wo
 exclusion would have to carry a value **across** sweeps, and none does.
 
 The search is the search; the run is the verdict. `ACCUMULATORS` is therefore **empty**, and that
-is a measured result rather than an oversight. §5.3 reports what the A26 predicate did with the
-previously excluded components, which is the check that matters: if one of them genuinely could not
-converge, it shows up there as invalid design points, named.
+is a measured result rather than an oversight. §5.3 is the check that matters: if one of them
+genuinely could not converge, it shows up there as invalid design points, named.
+
+### 5.3 What testing everything actually did: nothing, on all three decks, at all three floors
+
+Every arm re-run at τ = 1e-6 under `SPEC_MODE_A26`, at floors 0.1, 1.0 and 10.0:
+
+| deck | components tested | previously excluded, now tested | at the floor | design points invalidated | model evaluations vs A18 |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | **840 / 840** | 140 constant + 1 non-finite | 40 | **0 of 149**, every arm, every floor | **identical, every arm, every floor** |
+| `low_aspect_ratio_DEMO` | **846 / 846** | 143 constant | 41 | **0 of 297** | **identical** |
+| `st_regression` | **827 / 827** | 243 constant | 54 | **0 of 144** | **identical** |
+
+"Identical" means exactly that: R / A0 / A0f / A1 total 9 471 / 9 471 / 9 618 / 13 906 on
+`large_tokamak_nof`, 21 021 / 19 992 / 20 307 / 28 070 on `low_aspect_ratio_DEMO` and
+9 744 / 10 395 / 10 584 / 9 917 on `st_regression` — the same numbers A18 recorded, to the last
+digit, with 526 previously untested components now in the predicate.
+
+**Three things follow, and the third is the one that matters.**
+
+1. **The exclusion was harmless on these decks.** Every quantity A18 dropped for never having
+   varied was genuinely inert: including it changes no count and invalidates no design point. A18's
+   numbers are retrospectively confirmed under a strictly stronger test.
+2. **The scale floor does not bind.** A decade in each direction — 0.1 and 10.0 — gives *identical*
+   counts on every deck and every arm. The 40 / 41 / 54 components with no measurable magnitude
+   never come within a decade of the tolerance, so the judgement in §5.1 has, on this evidence, no
+   consequence at all. That is the strongest possible answer to "what changes if it moves a decade":
+   nothing does, and the choice is therefore safe rather than merely defended.
+3. **The hazard is closed for the future, at zero cost.** §6.3(ii)'s objection was never that the
+   exclusion *had* misled — it was that if an excluded quantity genuinely coupled, every
+   arrangement would inherit the same false convergence with no symptom. That is now structurally
+   impossible: there is nothing to exclude. The fix costs nothing measured and removes a class of
+   silent failure.
+
+**And the limit, stated.** This is evidence about **these three decks**. `large_tokamak_eval` — the
+deck where the guard was weakest, with 555 of 840 components classified constant from a ten-point
+harvest — is dropped from the study (§9), and its behaviour under the A26 predicate is reported
+separately in §5.4 as a historical check rather than as part of the result.
+
+The user's expectation was that testing everything would make some design points invalid, and said
+that would itself be a reportable result. **It did not**, on any deck, at any floor, for any arm —
+0 of 590 design points — and that is the reportable result instead.
+
+### 5.4 On the dropped deck it was **not** harmless — and a published claim is wrong
+
+`large_tokamak_eval` was run under the A26 predicate too, as a historical check, because it is the
+deck where §6.3(ii) said the guard was weakest. It is the only deck where the exclusion mattered,
+and it mattered in the **opposite direction** to the one anyone was worried about:
+
+| arm | A18, exclusions on | A26, everything tested | change |
+|---|---|---|---|
+| R | 462 | 462 | — (R does not use this predicate) |
+| A0 | 525 | **378** | **−28.0 %** |
+| A0f | 588 | **504** | **−14.3 %** |
+| A1 | 618 | **457** | **−26.1 %** |
+
+All 10 points converge either way, at every floor. **Excluding quantities made convergence
+harder, not easier**, and the mechanism is exact: an excluded constant is guarded by an
+**assertion that it is bit-identical**, which is far stricter than the scaled tolerance the same
+quantity gets when it is included. Two quantities on that deck are not in fact constant, so the
+assertion fired, blocked convergence, and bought extra sweeps. Per point, from the recorded
+residual traces: call index 4 goes 3 sweeps → 1, index 5 goes 3 → 1, index 10 goes 3 → 1, index 9
+goes 3 → 2, with `n_constant_moved = 2` on exactly the passes A18 spent and `0` under A26.
+
+**The published claim this contradicts.** §6.3 of the results report states:
+
+> *"across all 600 design points, all four arrangements and both hoist settings exactly **one**
+> constant moved — `ccfe_hcpb.x_shield`, on 3 of `st_regression`'s 144 points — and it blocked
+> convergence at those passes rather than passing silently."*
+
+Read directly out of A18's own recorded artifacts, at both hoist settings:
+
+| deck | constants that moved | occurrences | design points affected, per arm |
+|---|---|---|---|
+| `large_tokamak_nof` | none | 0 | 0 of 149 |
+| `low_aspect_ratio_DEMO` | none | 0 | 0 of 297 |
+| `st_regression` | `ccfe_hcpb.x_shield` | 3 | 1 of 144 |
+| **`large_tokamak_eval`** | **`physics.vs_plasma_burn_required`, `physics.vs_plasma_total_required`** | **21 each** | **7 of 10** |
+
+**Three constants moved, not one, and the two that were missed are on 7 of 10 points of a deck, in
+every arm, at both hoist settings.** The sentence is wrong as written, and the error has a
+consequence: `large_tokamak_eval`'s §4.4 percentages — including the **+27.3 %** and **−10.7 %**
+that §6.5.3 itself called "two of the report's largest percentages" — were computed against arms
+whose convergence was being blocked by a bit-identity assertion on two quantities that are simply
+not constant there.
+
+**What it does and does not change.**
+
+- **It does not touch the three retained decks.** Zero movers on both large tokamaks; one mover on
+  one point of `st_regression`, whose counts are identical under both predicates (§5.3).
+- **It is an independent second reason to drop `large_tokamak_eval`** (§9), which was already
+  decided on other grounds. The deck's numbers were weaker than the report knew.
+- **It is the strongest argument for fix 3 that the task found**, and it was not the argument fix 3
+  was commissioned on. §6.3(ii) feared an excluded quantity that genuinely couples would produce a
+  *false convergence*. The measured failure is the mirror image: a quantity that is not really
+  constant produces a *false non-convergence*, and inflates a cost figure. Both are removed by
+  having nothing to exclude.
+- **The results report needs a correction.** I have not made it (§13): it is a standing document
+  and the orchestrator's assessment gates changes to it. The correction is to §6.3's second bullet
+  and to §4.1's guard row, and it should carry this table.
 
 ---
 
