@@ -412,6 +412,51 @@ def stage_campaign(args, runs_root: Path) -> int:
         runs_root)
 
 
+def stage_audit(args, runs_root: Path) -> int:
+    """Is the robustness comparison on a level basis?  Measured, not assumed.
+
+    Cost is compared at matched achieved accuracy; robustness is compared at a
+    fixed tolerance. Those are not the same basis, and a fixed tolerance is not
+    a fixed accuracy. So for every starting point the campaign ran, one further
+    full pass of every model at the first optimiser evaluation, from an
+    identical entry state in every arrangement, and then the run **stops** --
+    that pass changes the state, so a run that takes one cannot also be a cost
+    measurement. These runs are cheap for exactly that reason.
+
+    The direction is not assumed either: a looser convergence could raise a
+    success rate (an easier test to satisfy) or lower it (a worse point handed
+    to the optimiser). It is measured, and the whole distribution is reported,
+    because robustness is a tail property and a median can hide a tail.
+    """
+    cal = _a28(args, runs_root) / "_calibration_a28.json"
+    delta = args.delta
+    if delta is None:
+        if not cal.exists():
+            print("the accuracy census needs the campaign's perturbation "
+                  "size; run --stages calibrate first, or pass --delta.")
+            return 2
+        delta = json.loads(cal.read_text())["campaign_delta"]
+    rc = ER.run_step(
+        "accuracy census: what each arrangement delivers at the campaign's "
+        "own tolerance",
+        [_py(), PROBE / "run_a28.py", "audit",
+         "--runs", _a28(args, runs_root),
+         "--scenarios", *args.scenarios,
+         "--arms", *[a for a in args.arms if a in CORE_ARMS],
+         "--starts", str(args.starts), "--delta", repr(delta),
+         "--jobs", str(args.jobs)],
+        runs_root)
+    if rc:
+        return rc
+    return ER.run_step(
+        "accuracy census: the distributions, paired",
+        [_py(), PROBE / "a28_analysis.py", "accuracy_census",
+         "--runs", _a28(args, runs_root),
+         "--scenarios", *args.scenarios,
+         "--arms", *[a for a in args.arms if a in CORE_ARMS]],
+        runs_root)
+
+
 def stage_tables(args, runs_root: Path) -> int:
     """Turn the recorded results into the tables the report quotes."""
     return ER.run_step(
@@ -437,6 +482,9 @@ STAGES = [
     ER.Stage("campaign", stage_campaign,
              "the paired multi-start campaign, then robustness and cost",
              130, 6, 4500),
+    ER.Stage("audit", stage_audit,
+             "is the robustness comparison on a level basis? measured",
+             12, 2, 700),
     ER.Stage("ladder", stage_ladder,
              "tolerance ladders and cost at matched achieved accuracy",
              35, 4, 1200),

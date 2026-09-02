@@ -444,35 +444,56 @@ def sensitivity(runs: Path, scenarios, ref: str = "baseline",
         out["variant_crashed"] = {"status": r["status"], "must_be": "FAIL"}
 
         # -- two genuinely different scenarios ---------------------------
-        d = tmp / "cross" / ref
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "metrics.json").write_text(
-            (src / scenarios[0] / ref / "metrics.json").read_text()
-        )
-        d = tmp / "cross" / arm
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "metrics.json").write_text(
-            (src / scenarios[1] / ref / "metrics.json").read_text()
-        )
-        r = gate_scenario(tmp, "cross", ref, arm)
-        out["two_different_scenarios"] = {
-            "status": r["status"],
-            "pair": [scenarios[0], scenarios[1]],
-            "objf_relative_difference": r["checks"]["norm_objf"][
-                "relative_difference"
-            ],
-            "must_be": "FAIL",
-        }
+        # This tooth compares two genuinely different scenarios, so it needs
+        # two.  Reported NOT APPLICABLE rather than silently skipped when only
+        # one was run -- a tooth that could not be applied is not a tooth that
+        # bit, and a smoke run must say which of its checks it did not perform.
+        if len(scenarios) < 2:
+            out["two_different_scenarios"] = {
+                "status": "NOT APPLICABLE",
+                "pair": list(scenarios),
+                "must_be": None,
+                "why_not_applicable": (
+                    "only one scenario was run, and this perturbation "
+                    "compares two different ones.  Not counted as a pass"
+                ),
+            }
+        else:
+            d = tmp / "cross" / ref
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "metrics.json").write_text(
+                (src / scenarios[0] / ref / "metrics.json").read_text()
+            )
+            d = tmp / "cross" / arm
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "metrics.json").write_text(
+                (src / scenarios[1] / ref / "metrics.json").read_text()
+            )
+            r = gate_scenario(tmp, "cross", ref, arm)
+            out["two_different_scenarios"] = {
+                "status": r["status"],
+                "pair": [scenarios[0], scenarios[1]],
+                "objf_relative_difference": r["checks"]["norm_objf"][
+                    "relative_difference"
+                ],
+                "must_be": "FAIL",
+            }
 
     verdicts = {
         k: v for k, v in out.items()
         if isinstance(v, dict) and v.get("must_be")
     }
+    na = [
+        k for k, v in out.items()
+        if isinstance(v, dict) and v.get("status") == "NOT APPLICABLE"
+    ]
     out["_summary"] = {
         "n_checks_that_must_fail": len(verdicts),
         "n_that_did_fail": sum(
             1 for v in verdicts.values() if v["status"] == "FAIL"
         ),
+        "n_not_applicable": len(na),
+        "not_applicable": na,
         "all_teeth_bite": all(v["status"] == "FAIL" for v in verdicts.values()),
     }
     return out

@@ -1451,15 +1451,17 @@ def main() -> int:
                     k: v for k, v in r.items()
                     if isinstance(v, dict) and v.get("must_be")
                 }
+                na = [
+                    k for k, v in r.items()
+                    if isinstance(v, dict)
+                    and v.get("status") == "NOT APPLICABLE"
+                ]
                 r["_summary"] = {
                     "n_checks_that_must_fail": len(verdicts),
                     "n_that_did_fail": sum(
                         1 for v in verdicts.values() if v["status"] == "FAIL"),
-                    "n_not_applicable": 2,
-                    "not_applicable": [
-                        "constraint_93_off_manifold",
-                        "constraint_93_in_inequality_block",
-                    ],
+                    "n_not_applicable": len(na),
+                    "not_applicable": na,
                     "all_teeth_bite": all(
                         v["status"] == "FAIL" for v in verdicts.values()),
                 }
@@ -1472,6 +1474,9 @@ def main() -> int:
             "n_that_did_fail": sum(x["n_that_did_fail"] for x in summaries),
             "n_not_applicable": sum(
                 x.get("n_not_applicable", 0) for x in summaries),
+            "not_applicable_names": sorted({
+                n for x in summaries for n in x.get("not_applicable", [])
+            }),
             "not_applicable_why": (
                 "the two constraint-93 perturbations watch a quantity that "
                 "only exists on an arm carrying the burn-time lift.  On an arm "
