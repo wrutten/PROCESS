@@ -188,7 +188,8 @@ def cmd_gate(args) -> int:
     for s in args.scenarios:
         r = replay(s, "gate_a18repro", tau=1e-6, hoist=args.hoist,
                    spec_mode="a18", predicate_guard=0,
-                   arms=["R", "A0", "A0f", "A1"])
+                   arms=["R", "A0", "A0f", "A1"],
+                   max_points=getattr(args, "max_points", 0))
         rows.append(r)
         old = A18_RUNS / s / (
             f"replay_tau1e-06_hoist{args.hoist}" ) / "result.json"
@@ -222,20 +223,27 @@ def cmd_gate(args) -> int:
 def cmd_ladder(args) -> int:
     """fix 1: cost versus achieved accuracy, for both arms, per deck."""
     rows = []
+    mp = getattr(args, "max_points", 0)
+    flat_t = getattr(args, "flat_taus", None) or FLAT_TAUS
+    joint_t = getattr(args, "joint_taus", None) or BLOCK_JOINT_TAUS
+    inner_t = getattr(args, "inner_taus", None) or BLOCK_INNER_TAUS
     for s in args.scenarios:
-        for t in FLAT_TAUS:
+        for t in flat_t:
             rows.append(replay(s, f"acc_flat_tau{t:g}", tau=t,
                                hoist=args.hoist, spec_mode=args.spec_mode,
-                               scale_floor=args.scale_floor, arms=["A0"]))
-        for t in BLOCK_JOINT_TAUS:
+                               scale_floor=args.scale_floor, arms=["A0"],
+                               max_points=mp))
+        for t in joint_t:
             rows.append(replay(s, f"acc_block_joint{t:g}", tau=t,
                                hoist=args.hoist, spec_mode=args.spec_mode,
-                               scale_floor=args.scale_floor, arms=["A1"]))
-        for t in BLOCK_INNER_TAUS:
+                               scale_floor=args.scale_floor, arms=["A1"],
+                               max_points=mp))
+        for t in inner_t:
             rows.append(replay(s, f"acc_block_inner{t:g}", tau=CALIBRATED_TAU,
                                inner_tau=t, hoist=args.hoist,
                                spec_mode=args.spec_mode,
-                               scale_floor=args.scale_floor, arms=["A1"]))
+                               scale_floor=args.scale_floor, arms=["A1"],
+                               max_points=mp))
     (RUNS / f"_ladder_{args.spec_mode}.json").write_text(json.dumps(rows, indent=2))
     return 0 if all(r["returncode"] == 0 for r in rows) else 1
 
@@ -281,6 +289,14 @@ def main() -> int:
         p.add_argument("--hoist", type=int, default=0)
         p.add_argument("--spec-mode", default="a18")
         p.add_argument("--scale-floor", type=float, default=1.0)
+        # A smoke run needs every stage to execute without every design point
+        # being replayed.  Zero means "all", which is the default and is what
+        # every published number was taken at; a smoke run's counts are its
+        # own and must not be compared with the report's.
+        p.add_argument("--max-points", type=int, default=0)
+        p.add_argument("--flat-taus", nargs="*", type=float, default=None)
+        p.add_argument("--joint-taus", nargs="*", type=float, default=None)
+        p.add_argument("--inner-taus", nargs="*", type=float, default=None)
 
     for name, fn in (("gate", cmd_gate), ("ladder", cmd_ladder),
                      ("spec", cmd_spec), ("timing", cmd_timing)):

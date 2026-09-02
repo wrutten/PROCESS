@@ -53,6 +53,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parent.parent
 PROBE = TREE / "arch_surgery" / "idf_probe"
+#: Where the recorded design points and every replay land.  A26/A28 made this
+#: overridable, with the default unchanged, for two reasons.  A from-scratch
+#: reproduction on a clean checkout must be able to write somewhere the caller
+#: chooses; and in a task worktree ``runs/a18`` is usually a **symlink into the
+#: main checkout's untracked run tree**, so a rebuild here would silently
+#: overwrite the shared recording every other task replays.  Set with
+#: ``--runs``; ``MDA_partition_experiment.py`` refuses to rebuild through such
+#: a symlink rather than doing it.
 RUNS = PROBE / "runs" / "a18"
 SCENARIOS_DIR = PROBE / "scenarios"
 
@@ -456,6 +464,8 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("all", help="run the whole of Phase A end to end")
+    p.add_argument("--runs", default=None,
+                   help="where to write (default: idf_probe/runs/a18)")
     p.add_argument("--scenarios", nargs="*", default=SCENARIOS)
     p.add_argument("--tau", type=float, default=TAU)
     p.add_argument("--arms", nargs="*", default=list(DEFAULT_ARMS))
@@ -476,17 +486,23 @@ def main() -> int:
         p.add_argument("--scenarios", nargs="*", default=SCENARIOS)
 
     p = sub.add_parser("harvest")
+    p.add_argument("--runs", default=None,
+                   help="where to write (default: idf_probe/runs/a18)")
     common(p)
     p.add_argument("--grad-stride", type=int, default=GRAD_STRIDE)
     p.add_argument("--other-stride", type=int, default=OTHER_STRIDE)
     p.set_defaults(fn=cmd_harvest)
 
     p = sub.add_parser("gates")
+    p.add_argument("--runs", default=None,
+                   help="where to write (default: idf_probe/runs/a18)")
     common(p)
     p.add_argument("--pristine-tree", default=None)
     p.set_defaults(fn=cmd_gates)
 
     p = sub.add_parser("ladder")
+    p.add_argument("--runs", default=None,
+                   help="where to write (default: idf_probe/runs/a18)")
     common(p)
     p.add_argument("--hoist", type=int, default=0)
     p.add_argument("--max-points", type=int, default=0)
@@ -494,6 +510,8 @@ def main() -> int:
     p.set_defaults(fn=cmd_ladder)
 
     p = sub.add_parser("replay")
+    p.add_argument("--runs", default=None,
+                   help="where to write (default: idf_probe/runs/a18)")
     common(p)
     p.add_argument("--tau", type=float, default=TAU)
     p.add_argument("--arms", nargs="*", default=list(DEFAULT_ARMS))
@@ -505,6 +523,15 @@ def main() -> int:
     p.set_defaults(fn=cmd_replay)
 
     args = ap.parse_args()
+
+    # ``--runs`` redirects everything this script writes.  Rebound on the
+    # module rather than threaded through twenty call sites, because every one
+    # of them reads the module global and a partial redirection would put half
+    # a run in each place -- which is worse than no redirection at all.
+    if getattr(args, "runs", None):
+        global RUNS
+        RUNS = Path(args.runs).resolve()
+        PARAMETERS["runs_dir"] = str(RUNS)
     RUNS.mkdir(parents=True, exist_ok=True)
     (RUNS / "_mplconfig").mkdir(exist_ok=True)
     return args.fn(args)

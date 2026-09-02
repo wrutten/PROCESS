@@ -286,11 +286,16 @@ def _perturb(rec: dict, path: list, value):
     return rec
 
 
-def sensitivity(runs: Path, scenarios) -> dict:
+def sensitivity(runs: Path, scenarios, ref: str = "baseline",
+                arm: str = "variant") -> dict:
     """Show each predicate failing on a deliberately corrupted input.
 
     The **production** predicates are used unmodified; only the data they read
     is perturbed, by the smallest amount that should register.
+
+    ``ref`` and ``arm`` default to A25's arm names so that A25's invocation is
+    unchanged.  A28 runs three arms (decision D18) and passes its own, so that
+    each arm's gate is shown capable of failing rather than only one of them.
     """
     import copy
     import tempfile
@@ -303,18 +308,18 @@ def sensitivity(runs: Path, scenarios) -> dict:
         tmp = Path(td)
 
         def stage(mutate_variant=None, mutate_baseline=None, scenario=s):
-            for arm, mut in (("baseline", mutate_baseline), ("variant", mutate_variant)):
-                d = tmp / scenario / arm
+            for a, mut in ((ref, mutate_baseline), (arm, mutate_variant)):
+                d = tmp / scenario / a
                 d.mkdir(parents=True, exist_ok=True)
                 rec = copy.deepcopy(
                     json.loads(
-                        (src / scenario / arm / "metrics.json").read_text()
+                        (src / scenario / a / "metrics.json").read_text()
                     )
                 )
                 if mut:
                     rec = mut(rec)
                 (d / "metrics.json").write_text(json.dumps(rec))
-            return gate_scenario(tmp, scenario, "baseline", "variant")
+            return gate_scenario(tmp, scenario, ref, arm)
 
         # -- objf: one unit in the last place of norm_objf ---------------
         def ulp(rec):
@@ -439,17 +444,17 @@ def sensitivity(runs: Path, scenarios) -> dict:
         out["variant_crashed"] = {"status": r["status"], "must_be": "FAIL"}
 
         # -- two genuinely different scenarios ---------------------------
-        d = tmp / "cross" / "baseline"
+        d = tmp / "cross" / ref
         d.mkdir(parents=True, exist_ok=True)
         (d / "metrics.json").write_text(
-            (src / scenarios[0] / "baseline" / "metrics.json").read_text()
+            (src / scenarios[0] / ref / "metrics.json").read_text()
         )
-        d = tmp / "cross" / "variant"
+        d = tmp / "cross" / arm
         d.mkdir(parents=True, exist_ok=True)
         (d / "metrics.json").write_text(
-            (src / scenarios[1] / "baseline" / "metrics.json").read_text()
+            (src / scenarios[1] / ref / "metrics.json").read_text()
         )
-        r = gate_scenario(tmp, "cross", "baseline", "variant")
+        r = gate_scenario(tmp, "cross", ref, arm)
         out["two_different_scenarios"] = {
             "status": r["status"],
             "pair": [scenarios[0], scenarios[1]],

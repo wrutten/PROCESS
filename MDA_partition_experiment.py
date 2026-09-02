@@ -59,17 +59,33 @@ HOW TO RUN IT
 -------------
     python MDA_partition_experiment.py
 
+Try the smoke mode first.  It exercises every stage on one deck in a few
+minutes, so you can confirm the machinery works before committing hours::
+
+    python MDA_partition_experiment.py --quick
+
 Add --parent-tree to include the two driver-side measurements::
 
     git archive c0ae5b28 | tar -x -C /some/dir/pristine_c0ae5b28
     python MDA_partition_experiment.py --parent-tree /some/dir/pristine_c0ae5b28
+
+To compare a finished run against the published numbers, running nothing::
+
+    python MDA_partition_experiment.py --verify
 
 To print the tables from artifacts that already exist, running nothing::
 
     python MDA_partition_experiment.py --analyse-only --runs-root <dir>
 
 Output lands under ``arch_surgery/idf_probe/runs/`` in this tree, which is not
-tracked by git; the tables it prints are what the report quotes.
+tracked by git; the tables it prints are what the report quotes.  Nothing is
+written to the tracked tree.
+
+**Nothing is assumed to exist.**  The recorded design points that every replay
+stage reads are treated as a cache to be verified, not a dependency to be
+trusted: they are checked before use and rebuilt if they are absent.  Building
+them is the expensive part of a from-scratch run and the estimate printed at
+startup says so.
 
 WHAT THIS FILE IS AND IS NOT
 ----------------------------
@@ -95,13 +111,15 @@ produces numbers of the wrong program.
 from __future__ import annotations
 
 import argparse
-import os
-import subprocess
+import json
 import sys
-import time
 from pathlib import Path
 
 TREE = Path(__file__).resolve().parent
+sys.path.insert(0, str(TREE / "arch_surgery"))
+
+import experiment_runner as ER  # noqa: E402
+
 FIXEDPOINT = TREE / "arch_surgery" / "fixedpoint"
 PROBE = TREE / "arch_surgery" / "idf_probe"
 RUNS_ROOT = PROBE / "runs"
@@ -143,34 +161,64 @@ NEEDS_PARENT_TREE = ("driver_hoist", "driver_reorder")
 
 
 def _env(runs_root: Path) -> dict:
-    """Environment for a measurement subprocess.
-
-    PYTHONPATH names this tree explicitly.  A ``git worktree`` does not
-    redirect an editable install, so without this a subprocess running in its
-    own working directory imports the main checkout instead of the tree being
-    edited -- silently, and with a passing result.
-    """
-    env = dict(os.environ)
-    env["PYTHONPATH"] = str(TREE)
-    env["MPLCONFIGDIR"] = str(runs_root / "_mplconfig")
-    # The instrumentation switches are cleared rather than assumed absent: an
-    # inherited one would change what is being measured without saying so.
-    for k in ("PROCESS_IDF_PROBE", "PROCESS_ARCH_SEQUENCE", "PROCESS_ARCH_HOIST"):
-        env.pop(k, None)
-    return env
+    """Environment for a measurement subprocess.  See experiment_runner."""
+    return ER.subprocess_env(runs_root)
 
 
 def _run(label: str, cmd: list[str], runs_root: Path) -> int:
-    print(f"\n=== {label}\n    {' '.join(cmd)}", flush=True)
-    t0 = time.perf_counter()
-    rc = subprocess.run(cmd, env=_env(runs_root), cwd=str(TREE)).returncode
-    dt = time.perf_counter() - t0
-    # The elapsed time is progress information, not a measurement: no
-    # conclusion in this experiment rests on a timing, and identical work has
-    # been observed to vary by up to 35 % in processor time on this machine.
-    print(f"--- {label}: exit {rc} ({dt:.1f} s elapsed, not a measurement)",
-          flush=True)
-    return rc
+    """One measurement subprocess.  See experiment_runner."""
+    return ER.run_step(label, cmd, runs_root)
+
+
+def _ensure_harvest(args, runs_root: Path) -> int:
+    """The recorded design points, checked and rebuilt if absent.
+
+    Every replay stage reads a harvest recorded by running PROCESS once per
+    deck with a recording hook.  It is 35 MB a deck and is not tracked, so in a
+    worktree it is usually reached through a symlink into the main checkout's
+    untracked run tree.
+
+    **It is a cache to be verified, not a dependency to be trusted.**  If any
+    deck's harvest is missing this rebuilds it, which is the expensive part of
+    a from-scratch run.  Skipping the stage instead would leave a later stage
+    reporting a table over a population nobody chose.
+    """
+    a18 = runs_root / "a18"
+    # **A worktree usually reaches the recording through a symlink into the
+    # main checkout's untracked run tree**, because it is 35 MB a deck and is
+    # not duplicated.  Rebuilding through that symlink would silently
+    # overwrite the shared recording every other task in the project replays.
+    # Refused, with the exact fix, rather than done.
+    if a18.is_symlink() and not str(a18.resolve()).startswith(str(TREE)):
+        st0 = ER.harvest_status(runs_root, args.scenarios)
+        if not st0["summary"]["complete"]:
+            print(
+                f"\nCANNOT REBUILD: {a18} is a symlink to "
+                f"{a18.resolve()},\n  which is outside this tree.  Rebuilding "
+                f"the recording there would overwrite\n  the shared one every "
+                f"other task replays.\n\nTHE FIX:\n    "
+                f"python {Path(sys.argv[0]).name} --runs-root "
+                f"{runs_root.parent}/runs_fresh ...\n", flush=True)
+            return 2
+    st = ER.harvest_status(runs_root, args.scenarios)
+    print("\nrecorded design points (the replay stages' input)")
+    print(f"  location        {st['root']}"
+          + (f"  ->  {st['resolves_to']}" if st["is_symlink"] else ""))
+    for s, v in st["per_scenario"].items():
+        print(f"  {s:<24}"
+              + (f"present, {v['harvest_bytes'] / 2**20:.0f} MB"
+                 if v["harvest_present"] else "ABSENT -- will be rebuilt"))
+    if st["summary"]["complete"]:
+        return 0
+    print("  rebuilding the missing harvest(s).  This runs PROCESS once per "
+          "deck with\n  a recording hook and is the slow part of a "
+          "from-scratch run.", flush=True)
+    return _run(
+        "record the design points a real optimisation visits",
+        [sys.executable, str(FIXEDPOINT / "run_phase_a.py"), "harvest",
+         "--runs", str(runs_root / "a18"),
+         "--scenarios", *args.scenarios],
+        runs_root)
 
 
 def stage_phase_a(args, runs_root: Path) -> int:
@@ -182,7 +230,17 @@ def stage_phase_a(args, runs_root: Path) -> int:
     counts can be shown to reproduce exactly -- and once more with the
     feed-forward models lifted out of the loop.
     """
+    a18 = runs_root / "a18"
+    if a18.is_symlink() and not str(a18.resolve()).startswith(str(TREE)):
+        print(f"\nCANNOT RUN phase_a: {a18} is a symlink to "
+              f"{a18.resolve()},\n  outside this tree.  This stage RECORDS "
+              f"design points and would overwrite the\n  shared recording "
+              f"every other task replays.\n\nTHE FIX:\n    python "
+              f"{Path(sys.argv[0]).name} --runs-root "
+              f"{runs_root.parent}/runs_fresh ...\n", flush=True)
+        return 2
     cmd = [sys.executable, str(FIXEDPOINT / "run_phase_a.py"), "all",
+           "--runs", str(a18),
            "--scenarios", *args.scenarios,
            "--tau", repr(args.tau),
            "--reps", str(args.reps)]
@@ -206,6 +264,9 @@ def stage_census(args, runs_root: Path) -> int:
     feed-forward models held fixed.  Reuses phase A's recorded design points
     rather than recording new ones.
     """
+    rc = _ensure_harvest(args, runs_root)
+    if rc:
+        return rc
     return _run(
         "outer-pass census (which quantity forces a second pass)",
         [sys.executable, str(FIXEDPOINT / "run_a22.py"),
@@ -224,6 +285,9 @@ def stage_permutation(args, runs_root: Path) -> int:
     arrangement exactly; a reversed-order arm runs alongside it to show the
     check can fail.
     """
+    rc = _ensure_harvest(args, runs_root)
+    if rc:
+        return rc
     return _run(
         "node-order control (grouping versus ordering)",
         [sys.executable, str(FIXEDPOINT / "run_a23.py"),
@@ -334,9 +398,15 @@ def stage_method_gate(args, runs_root: Path) -> int:
     that the model sub-trees are hash-identical to the recording commit --- no
     longer holds, and an empirical reproduction replaces it.
     """
+    rc = _ensure_harvest(args, runs_root)
+    if rc:
+        return rc
     return _run("A26 method gate: reproduce A18 bit for bit",
                 [sys.executable, str(FIXEDPOINT / "run_a26.py"), "gate",
-                 "--scenarios", *args.scenarios],
+                 "--a18-runs", str(runs_root / "a18"),
+                 "--runs", str(runs_root / "a26"),
+                 "--scenarios", *args.scenarios]
+                + (["--max-points", "12"] if args.quick else []),
                 runs_root)
 
 
@@ -348,14 +418,23 @@ def stage_accuracy(args, runs_root: Path) -> int:
     both arrangements across ladders of tolerance, records what each actually
     delivered, and reads cost off at equal delivered accuracy.
     """
+    rc = _ensure_harvest(args, runs_root)
+    if rc:
+        return rc
     rc = _run("A26: cost-versus-accuracy ladders",
               [sys.executable, str(FIXEDPOINT / "run_a26.py"), "ladder",
-               "--scenarios", *args.scenarios],
+               "--a18-runs", str(runs_root / "a18"),
+               "--runs", str(runs_root / "a26"),
+               "--scenarios", *args.scenarios]
+              + (["--max-points", "12", "--flat-taus", "0.0001", "1e-06",
+                  "--joint-taus", "0.0001", "1e-06", "--inner-taus", "0.01"]
+                 if args.quick else []),
               runs_root)
     if rc:
         return rc
     return _run("A26: cost at matched achieved accuracy",
                 [sys.executable, str(FIXEDPOINT / "accuracy.py"),
+                 "--runs", str(runs_root / "a26"),
                  "--scenarios", *args.scenarios,
                  "--out", str(runs_root / "a26" / "matched_accuracy.json")],
                 runs_root)
@@ -385,6 +464,89 @@ STAGE_FN = {
     "tables": stage_tables,
 }
 
+#: What each stage costs on this machine, so the estimate printed before the
+#: run is an estimate and not a shrug.  Measured, at four parallel jobs where
+#: the stage runs in parallel and serially where trap T8 requires it.
+STAGE_TABLE = [
+    ER.Stage("phase_a", stage_phase_a,
+             "record the design points, check the hook, calibrate the "
+             "tolerance, replay four arrangements", 150, 8, 30000),
+    ER.Stage("method_gate", stage_method_gate,
+             "reproduce the recorded results bit for bit", 25, 4, 900),
+    ER.Stage("accuracy", stage_accuracy,
+             "tolerance ladders and cost at matched achieved accuracy",
+             45, 5, 1600),
+    ER.Stage("pulse_gate", stage_pulse_gate,
+             "the burn-time model out of the loop, in PROCESS's own driver",
+             4, 2, 200),
+    ER.Stage("census", stage_census,
+             "which quantity forces a second pass", 20, 3, 700),
+    ER.Stage("permutation", stage_permutation,
+             "grouping versus node ordering", 25, 3, 900),
+    ER.Stage("driver_hoist", stage_driver_hoist,
+             "the feed-forward hoist, in PROCESS's own driver", 8, 3, 400,
+             optional_reason="no --parent-tree, so there is nothing to "
+                             "compare against"),
+    ER.Stage("driver_reorder", stage_driver_reorder,
+             "the build/physics reorder, in PROCESS's own driver", 8, 3, 400,
+             optional_reason="no --parent-tree, so there is nothing to "
+                             "compare against"),
+    ER.Stage("tables", stage_tables, "print the tables the report quotes",
+             1, 1, 1),
+]
+
+#: The published numbers this run can be checked against.  A disagreement is a
+#: FINDING to surface, not an error to swallow.
+PUBLISHED_PATH = TREE / "arch_surgery" / "docs" / "data" / "a21_published.json"
+
+
+def stage_verify(args, runs_root: Path) -> int:
+    """Compare this run's numbers with the published ones, per deck."""
+    if not PUBLISHED_PATH.exists():
+        print(f"no published numbers at {PUBLISHED_PATH}; nothing to verify "
+              f"against.")
+        return 2
+    pub = json.loads(PUBLISHED_PATH.read_text())
+    records = []
+    rep = runs_root / "phase_a_report.json"
+    if rep.exists():
+        d = json.loads(rep.read_text())
+        for arm in ("R", "A0", "A0f", "A1"):
+            meas = {}
+            for s, rec in (d.get("per_scenario") or {}).items():
+                v = ((rec.get("cost") or {}).get("totals_over_kept_starts")
+                     or {}).get(arm)
+                if v is None:
+                    v = (((rec.get("arms") or {}).get(arm) or {})
+                         .get("net_model_evaluations"))
+                if v is not None:
+                    meas[s] = v
+            if meas:
+                records.append(ER.verify_table(
+                    f"net model evaluations, arm {arm}",
+                    pub.get(f"net_model_evaluations_{arm}", {}), meas))
+    acc = runs_root / "a26" / "matched_accuracy.json"
+    if acc.exists():
+        d = json.loads(acc.read_text())
+        meas = {}
+        for s, rec in (d.get("per_scenario") or d).items():
+            try:
+                meas[s] = rec["at_the_calibration_point"]["ratio_block_over_flat"]
+            except Exception:
+                pass
+        if meas:
+            records.append(ER.verify_table(
+                "A1/A0 at the calibration point, matched achieved accuracy",
+                pub.get("matched_accuracy_ratio", {}), meas,
+                exact=False, rtol=1e-3))
+    if not records:
+        print("nothing to verify: no analysis artifacts found under "
+              f"{runs_root}.  Run the experiment first.")
+        return 2
+    (runs_root / "_verification_phase_a.json").write_text(
+        json.dumps(records, indent=2, default=str))
+    return ER.print_verification(records)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(
@@ -407,60 +569,89 @@ def main() -> int:
     ap.add_argument("--stages", nargs="*", default=None,
                     help=f"run only these stages, in order. One or more of: "
                          f"{', '.join(STAGES)}")
+    ap.add_argument("--quick", action="store_true",
+                    help="smoke mode: one deck, a short ladder and a single "
+                         "repetition.  Exercises every stage in minutes.  Its "
+                         "counts are its own and must not be compared with "
+                         "the report's")
+    ap.add_argument("--verify", action="store_true",
+                    help="run nothing; compare a finished run's numbers with "
+                         "the published ones, per deck, with denominators")
     ap.add_argument("--analyse-only", action="store_true",
                     help="run nothing; print the tables from artifacts that "
                          "already exist")
     ap.add_argument("--runs-root", default=str(RUNS_ROOT),
                     help="where the artifacts live (default: this tree's "
-                         "arch_surgery/idf_probe/runs)")
+                         "arch_surgery/idf_probe/runs, which is untracked)")
     args = ap.parse_args()
 
+    if args.quick:
+        args.scenarios = args.scenarios[:1]
+        args.reps = 1
+
     runs_root = Path(args.runs_root).resolve()
+
+    if args.verify:
+        ER.print_provenance()
+        return stage_verify(args, runs_root)
+
     if args.analyse_only:
-        stages = ["tables"]
-    elif args.stages:
+        ER.print_provenance()
+        runs_root.mkdir(parents=True, exist_ok=True)
+        (runs_root / "_mplconfig").mkdir(exist_ok=True)
+        return stage_tables(args, runs_root)
+
+    ER.check_prerequisites(
+        args.scenarios,
+        need_artifacts=("ystate_{scenario}.json", "dsm_node_map.json"),
+        runs_root=runs_root,
+    )
+
+    if args.stages:
         unknown = [s for s in args.stages if s not in STAGES]
         if unknown:
             print(f"unknown stage(s): {unknown}; known: {list(STAGES)}")
             return 2
-        stages = [s for s in STAGES if s in args.stages]
+        chosen = [s for s in STAGES if s in args.stages]
     else:
-        stages = list(STAGES)
+        chosen = list(STAGES)
 
+    stages = [x for x in STAGE_TABLE if x.name in chosen]
     skipped = []
     if not args.parent_tree:
-        skipped = [s for s in stages if s in NEEDS_PARENT_TREE]
-        stages = [s for s in stages if s not in NEEDS_PARENT_TREE]
+        skipped = [x for x in stages if x.name in NEEDS_PARENT_TREE]
+        stages = [x for x in stages if x.name not in NEEDS_PARENT_TREE]
+        print("NOTE: no --parent-tree given, so the neutrality check (this "
+              "tree against an\n      untouched copy of the base commit) is "
+              "skipped inside the phase_a stage\n      as well as the two "
+              "driver-side stages below.")
 
-    print("MDA partition experiment, Phase A")
-    print(f"  tree            {TREE}")
-    print(f"  artifacts       {runs_root}")
-    print(f"  decks           {', '.join(args.scenarios)}")
-    print(f"  tolerance       {args.tau:g}")
-    print(f"  stages          {', '.join(stages) or '(none)'}")
-    if skipped:
-        print(f"  SKIPPED         {', '.join(skipped)} -- no --parent-tree, "
-              f"so there is nothing to compare against")
+    ER.print_provenance()
+    ER.print_plan("MDA partition experiment, Phase A (the optimiser is absent)",
+                  stages, quick=args.quick, scenarios=args.scenarios,
+                  runs_root=runs_root, skipped=skipped)
     runs_root.mkdir(parents=True, exist_ok=True)
     (runs_root / "_mplconfig").mkdir(exist_ok=True)
 
     results: dict[str, int] = {}
-    for s in stages:
-        results[s] = STAGE_FN[s](args, runs_root)
-        if results[s] != 0:
+    for x in stages:
+        results[x.name] = STAGE_FN[x.name](args, runs_root)
+        if results[x.name] != 0:
             # A failed stage stops the run rather than letting later stages
             # report tables built on a partial result.
-            print(f"\nSTOPPING: stage '{s}' exited {results[s]}.", flush=True)
+            print(f"\nSTOPPING: stage '{x.name}' exited {results[x.name]}.",
+                  flush=True)
             break
 
     print("\n=== summary")
-    for s in STAGES:
-        if s in results:
-            print(f"  {s:16s} {'ok' if results[s] == 0 else f'FAILED ({results[s]})'}")
-        elif s in skipped:
-            print(f"  {s:16s} skipped (no --parent-tree)")
+    for name in STAGES:
+        if name in results:
+            v = results[name]
+            print(f"  {name:16s} {'ok' if v == 0 else f'FAILED ({v})'}")
+        elif any(x.name == name for x in skipped):
+            print(f"  {name:16s} skipped (no --parent-tree)")
         else:
-            print(f"  {s:16s} not run")
+            print(f"  {name:16s} not run")
     return 0 if all(v == 0 for v in results.values()) else 1
 
 
