@@ -50,12 +50,18 @@ is *worth* anything — what it removes is the claim that it costs.
   is gone.
 - **§5 — nothing is excluded for never having varied.** All 840 / 846 / 827 components are now
   tested; 40 / 41 / 54 of them at the recorded scale floor of 1.0; the exclusion list is empty and
-  that is a measured result, not an omission.
+  that is a measured result, not an omission. On the three retained decks this changes **no count
+  at all**, at any of three floors a decade apart — the fix costs nothing and closes the hazard.
+  On the **dropped** deck it changes them by 14–28 %, and tracing that found **a published claim in
+  the results report that is wrong**: three constants moved during A18's runs, not one (§5.4).
 - **§6 — a comparison that cannot say what it varies refuses to run**, for any number of arms, and
   the hoist becomes a three-slot routing rule keyed on the driver's own measured predicate read set.
 - **§7 — `pulse` leaves the model loop under the lift**, into a pre-predicate slot that never hands
-  the optimiser a stale constraint vector. **The gate plan §4.1d specifies is vacuous on all four
-  decks** and would have reported a meaningless zero; the non-vacuous gate is here instead.
+  the optimiser a stale constraint vector. Gate PASS on both pulsed decks with the whole output file
+  bit-identical; worth **3.35 % and 3.31 %** of net model evaluations, against A25's ~1.5 %
+  estimate. **The gate plan §4.1d specifies is vacuous on all four decks** — no deck activates the
+  one constraint that reads the field — and would have reported a meaningless zero; the non-vacuous
+  gate is here instead.
 - **§8 — timings carry an interval**, and were taken only after 71.5 % of the block arm's
   coupling-state read traffic — pure bookkeeping whose result was discarded — had been removed.
 - **§9 — `large_tokamak_eval` dropped**, dated in every entry point, with merged four-deck tables
@@ -636,6 +642,36 @@ never instead of it.
 **The MFILE zeros are the user-facing statement**: the whole answer is unchanged, byte for byte,
 with `pulse` out of the loop.
 
+### 7.3 What it is worth, with its composition — and the accounting trap in my own first number
+
+The first run gave "1 940 model evaluations removed, **5.26 %**" on both decks. **That number is
+wrong, and it is wrong in exactly the way §4 exists to prevent**: `Caller.NODE_CALLS` counts
+in-loop evaluations only, because `_run_hoisted_tail` calls each model directly rather than through
+`Caller._node`. So it counts what the loop stopped doing and not what the tail started doing. I
+re-ran with a sweep counter added rather than publish a difference whose composition I could not
+state (trap T11), and the decomposition is clean:
+
+| | `large_tokamak_nof` | `low_aspect_ratio_DEMO` |
+|---|---|---|
+| sweeps, arm A → arm B | 1 942 → **1 942** | 3 014 → **3 014** |
+| `call_models` invocations | 660 → 660 | 1 050 → 1 050 |
+| in-loop model evaluations | 36 860 → 34 920 | 57 228 → 54 216 |
+| in-loop evaluations removed | 1 940 | 3 012 |
+| tail evaluations added (`pulse`, once per `call_models`) | +660 | +1 050 |
+| **net model evaluations** (§4's definition) | **38 180 → 36 900** | **59 328 → 57 366** |
+| **net saving** | **1 280, = 3.35 %** | **1 962, = 3.31 %** |
+
+**The sweep count does not move at all** — 1 942 and 3 014 either way — which is the mechanism
+stated exactly: `pulse` leaving the loop removes work *within* passes and not passes, the same
+shape as A13's hoist (§4.4.3 of the results report). And it confirms from the other side that the
+loop's own trajectory is untouched: if removing `pulse` had changed anything the predicate sees,
+the sweep counts would have moved.
+
+**Against A25's estimate.** A25 left this as "roughly 1.5 % not taken". Measured, it is
+**3.35 % and 3.31 %** of net model evaluations. Larger than estimated, and still not the reason to
+do it: the reason is that leaving `pulse` iterating inside the MDA would make the Phase B variant
+not the architecture the study claims to be testing.
+
 ---
 
 ## 8. Fix 5 — timings, with an interval, and taken in the right order
@@ -935,3 +971,7 @@ remaining traffic, not 90 %.** Anyone quoting it should quote that arithmetic wi
 | 2026-09-02 | Reproduction gate PASS: 0 differing of 4 800 arm records, 64 800 record keys, 32/32 sensitivity cases caught, both hoist settings, four decks. |
 | 2026-09-02 | Matched-accuracy analysis **corrected mid-task**: the first version read the rungs in tolerance order and reported +21.9 % where the lower envelope reports −4.3 %. The envelope is the honest reading and is now what `curve()` computes; the dropped rungs are kept and named. |
 | 2026-09-02 | Deck list reduced to three, dated and reasoned in every entry point. `MDA_partition_experiment.py` gains `method_gate`, `accuracy` and `pulse_gate` stages so the root entry point is still the single entry point. |
+| 2026-09-02 | Spec sweep: testing every component at three scale floors changes **no count on any of the three decks**. On the dropped `large_tokamak_eval` it changes them by 14–28 %, which traced to two quantities that are not constant and whose bit-identity assertion was blocking convergence — and to a **wrong published claim** in the results report (§5.4). |
+| 2026-09-02 | Timings taken, five repetitions, after the subset-aware read. Counts identical across repetitions 1 920 / 1 920; the p10–p90 band is 50–143 % of the median, an order of magnitude wider than the effects in question. |
+| 2026-09-02 | `pulse` pre-predicate gate: **PASS** on both pulsed decks, 0 differing of 1 710 recorded predicate values, 0 of 45 120 constraint entries, 0 of 32 663 MFILE lines and 0 of 22 303 MFILE floats, 8/8 sensitivity cases caught. |
+| 2026-09-02 | The pulse saving was re-measured with a sweep counter added, because the first run gave a model-evaluation difference whose composition could not be stated — publishing it without that would have been the T11 shape again. |

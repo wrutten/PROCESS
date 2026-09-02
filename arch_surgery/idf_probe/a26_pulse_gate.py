@@ -77,6 +77,18 @@ def run_recorded(deck: Path, outdir: Path) -> dict:
 
     rec: list[dict] = []
     original = caller_mod.Caller.call_models
+    # Sweeps, counted directly.  Without this the model-evaluation difference
+    # cannot be decomposed into "pulse runs less often" and "the loop takes a
+    # different number of sweeps", and a number whose composition cannot be
+    # stated is not ready to publish (trap T11).
+    sweeps = [0]
+    original_once = caller_mod.Caller._call_models_once
+
+    def wrapped_once(self, xc):
+        sweeps[0] += 1
+        return original_once(self, xc)
+
+    caller_mod.Caller._call_models_once = wrapped_once
 
     def wrapped(self, xc, m):
         objf, conf = original(self, xc, m)
@@ -99,6 +111,7 @@ def run_recorded(deck: Path, outdir: Path) -> dict:
         sr.run()
     finally:
         caller_mod.Caller.call_models = original
+        caller_mod.Caller._call_models_once = original_once
 
     pre, post = caller_mod.resolved_hoist_tails(sr.data.numerics.i_figure_merit)
     return {
@@ -109,6 +122,8 @@ def run_recorded(deck: Path, outdir: Path) -> dict:
         # once per ``call_models``.  ``NODE_CALLS_AT_OUTPUT`` is the count at
         # the moment the final-output path is entered, so the optimisation's
         # own work can be separated from the post-solve output path.
+        "sweeps_total": sweeps[0],
+        "n_loop_nodes": len(caller_mod.SEQUENCE_HEAD),
         "node_calls_total": caller_mod.NODE_CALLS[0],
         "node_calls_at_output": caller_mod.NODE_CALLS_AT_OUTPUT[0],
         "hoist_name": caller_mod.HOIST_NAME,
@@ -144,6 +159,8 @@ def compare(a: dict, b: dict) -> dict:
         if ca["t_plant_pulse_burn"] != cb["t_plant_pulse_burn"]:
             diff_burn += 1
     return {
+        "sweeps_total": {"a": a.get("sweeps_total"), "b": b.get("sweeps_total")},
+        "sweeps_removed": (a.get("sweeps_total") or 0) - (b.get("sweeps_total") or 0),
         "node_calls_total": {"a": a.get("node_calls_total"),
                              "b": b.get("node_calls_total")},
         "node_calls_at_output": {"a": a.get("node_calls_at_output"),
