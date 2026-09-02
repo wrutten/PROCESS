@@ -526,6 +526,48 @@ compares at **matched final accuracy** via the exit audit rather than at matched
 settings: the arms reach different residuals from the same τ, and A1 terminates far more converged
 than A0, which is why the block-vs-flat cost figures are stated as upper bounds.
 
+### 4.1d `pulse` leaves the MDA under the lift — the VP2 x VP5 composition, which never fired
+
+**Raised by the user, 2026-09-01, and confirmed.** Once the burn time is a design variable, `pulse`
+should no longer be iterated inside the MDA at all: it should run **once per optimiser evaluation**,
+not once per sweep. A25 noticed it did not and left it as a ~1.5 % improvement not taken; the
+framework had predicted it (§2.5, "`pulse` becomes a pure feed-forward node once VP5 lifts it") and
+had explicitly flagged **VP2 combined with VP5 as a latent defect that fires only when two arms
+compose**. It never fired, because A13's hoist derives its node set from the **static** node-map
+label, and `pulse` is labelled `PULSE`, not `FF`.
+
+**Why it is right, measured rather than argued.** `pulse` writes exactly two fields on the pulsed
+decks. Under the lift `times.t_plant_pulse_burn` becomes a **no-op** — `subsolve` returns the design
+variable untouched. The other, `constraints.t_current_ramp_up_min`, is written in `tohswg()` and read
+in exactly one place in the tree: a **constraint equation** (`process/core/solver/constraints.py`).
+**No model reads it.** So post-lift `pulse` writes nothing any in-loop model consumes, and A22's pin
+arm — which is precisely the lift's loop topology — already measured the consequence without anyone
+drawing it: **zero** above-tau fields on any outer pass from 2 onwards, on 149/149 and 297/297 points.
+
+**The user's own framing is the correct one and should be kept in the write-up:** this is *not*
+feed-forward in the sense `water_use` and `costs` are. `pulse`'s output **is** consumed, by the
+constraint layer, within the optimiser loop. What is true is narrower and more useful — it has no
+feedback *into the MDA*, so iterating it is wasted work.
+
+**The implementation correction, which is the part that is easy to get wrong.** `pulse` **cannot**
+simply be added to A13's existing hoisted tail. That tail runs *after* `objf` and `conf` are
+evaluated, which is safe for `water_use` and `costs` only because A13 measured that no constraint
+reads anything they write (2 288 fields). `pulse` writes a field a constraint equation **does** read.
+Hoisting it into that tail would hand the optimiser a constraint vector built from a **stale**
+`t_current_ramp_up_min` — a defect that would show up as a small, plausible, wrong `conf`, which is
+the hardest kind to catch. The tail therefore splits:
+
+| group | members | runs |
+|---|---|---|
+| **pre-constraint, once** | `pulse` (post-lift only) | once per `call_models`, on the converged state, **before** `objf`/`conf` are evaluated |
+| **post-constraint, once** | `water_use`, `costs` | once per `call_models`, after `conf`, as A13 built it |
+
+Both run **once per optimiser evaluation** rather than once per sweep. **Gate:** with the lift on,
+the constraint vector must be bit-identical to the arm that runs `pulse` every sweep — that is the
+check that the split is correct, and it must be shown capable of failing (protocol §12) before its
+zeros are accepted. The node-set derivation must also stop keying on the static label and become
+arm-dependent, which is what framework item **C2a** always required.
+
 ### 4.2 What would count as the existence proof
 
 Any **one** of these, measured fairly and reported with its dropped-point census:
