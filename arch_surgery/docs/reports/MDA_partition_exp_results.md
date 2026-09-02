@@ -39,6 +39,8 @@
 > which includes the very percentages §6.5.3 called its largest — a further reason the deck is
 > dropped (D17).
 >
+> **And §6.3's harvest-reuse licence no longer holds at the current tip.** That paragraph argues the licence from the driver being entered zero times during a replay, which was right when written; but A25 changed `process/models/pulse.py` and `process/data_structure/numerics.py`, so the sub-trees it relies on are no longer hash-identical to the recording commit. A26 replaced the argument with an **empirical reproduction gate** — every arm reproducing its own recorded results, 0 differing of 4 800 arm records over 64 800 keys, 32/32 sensitivity cases caught — which is stronger than the provenance argument it replaces. The paragraph's closing lesson still stands; its licence does not.
+>
 > **A28 rewrites this document** to fold in both phases on the corrected instrument. Until then, treat
 > §§4.4.2, 5.3, 6.1, 6.3 and 8 as superseded and this banner as the current statement.
 
