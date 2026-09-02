@@ -9,7 +9,72 @@
 
 ---
 
-PLACEHOLDER_VERDICT
+## 1. Verdict
+
+### The matched-accuracy comparison overturns Phase A's headline
+
+**Phase A reported that the three-block partition costs 46.8 % and 40.4 % more model evaluations
+than the flat control on the two large pulsed decks. Measured at matched *achieved* accuracy, it
+costs 4.3 % and 4.5 % *less*.** On the third deck, where it was already reported 4.6 % cheaper, it
+is 13.1 % cheaper.
+
+| deck | n | published, at matched **tolerance** | measured, at matched **achieved accuracy** |
+|---|---|---|---|
+| `large_tokamak_nof` | 149 | **+46.8 %** | **−4.3 %** (9 062 against 9 471) |
+| `low_aspect_ratio_DEMO` | 297 | **+40.4 %** | **−4.5 %** (19 087 against 19 992) |
+| `st_regression` | 144 | **−4.6 %** | **−13.1 %** (9 037 against 10 395) |
+
+The report's own §6.1 named this as the strongest objection to its headline and worded the finding
+as *"at most 47 %, 40 % and 18 % more"*. **The bound was doing all the work.** §6.1 also offered a
+counter-argument — that the outer pass counts fall by much less than the inner solves cost, so an
+inexact inner tolerance "would have to recover a very large factor". It recovers all of it. The
+inner solves at τ = 1e-6 were doing work the outer test did not need, and once that stops, the
+handicap is the whole of the published difference.
+
+**Read with its four caveats, which are in §3.3 and are not decoration.** The result is on the p90
+of the exit residual; on the **worst** design point the two arms are indistinguishable (A1/A0 spans
+0.82–1.23), and on the median the comparison cannot be made at all because the median exit residual
+is exactly zero on most rungs. The mechanism is that the over-solving was the cost — at its
+cheapest matched setting the block arm runs 1 172 of 1 248 inner solves in a single sweep, so it is
+barely a block solver. The block arm had eleven ladder rungs against the flat arm's six. And this
+is Phase A, with the optimiser absent.
+
+**So the honest replacement for the headline is: at matched achieved accuracy the partition is at
+parity or cheaper, and the +47 % / +40 % were the handicap.** It still does not say the partition
+is *worth* anything — what it removes is the claim that it costs.
+
+### The rest, in one line each
+
+- **§4 — accounting settled.** The driver-side figure is canonical; the replay engine's is a stated
+  cross-check. One definition, in one module, stated per arm pair; the engine's loop-only headline
+  is gone.
+- **§5 — nothing is excluded for never having varied.** All 840 / 846 / 827 components are now
+  tested; 40 / 41 / 54 of them at the recorded scale floor of 1.0; the exclusion list is empty and
+  that is a measured result, not an omission.
+- **§6 — a comparison that cannot say what it varies refuses to run**, for any number of arms, and
+  the hoist becomes a three-slot routing rule keyed on the driver's own measured predicate read set.
+- **§7 — `pulse` leaves the model loop under the lift**, into a pre-predicate slot that never hands
+  the optimiser a stale constraint vector. **The gate plan §4.1d specifies is vacuous on all four
+  decks** and would have reported a meaningless zero; the non-vacuous gate is here instead.
+- **§8 — timings carry an interval**, and were taken only after 71.5 % of the block arm's
+  coupling-state read traffic — pure bookkeeping whose result was discarded — had been removed.
+- **§9 — `large_tokamak_eval` dropped**, dated in every entry point, with merged four-deck tables
+  left standing as the record.
+
+### And the gate that licenses all of it
+
+Every change that touches previously merged arms was re-run at A18's settings and compared against
+A18's recorded artifacts **bit for bit**: **0 differing of 4 800 arm records over 64 800 record
+keys**, both hoist settings, four decks, with the comparison shown capable of catching a 1-ULP move
+**32 times out of 32**. It failed once first — on 600 of 600 points, over a change in the recorded
+artifact's *shape* that moved no count — and was fixed rather than absorbed (§2).
+
+**One finding that is not about this task's changes**: §6.3's licence for reusing A18's harvest —
+that the model sub-trees are hash-identical to the recording commit — **is no longer true at the
+current tip**, because A25's lift touched `process/models/pulse.py` and
+`process/data_structure/numerics.py`. The reproduction gate is the replacement, and it is a
+stronger claim (§2.1).
+
 
 ---
 
