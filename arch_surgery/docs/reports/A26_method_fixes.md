@@ -654,7 +654,53 @@ converged flags and exit audits exactly, over 600 design points at both hoist se
 4 800 arm records differing, with the comparison shown capable of catching a 1-ULP move in a
 residual trace 32 times out of 32.
 
-### 8.2 What I did **not** do, on instruction: shrink the tracked set
+### 8.2 The timings, and the sentence they have to be read with
+
+Five repetitions of every arm on every one of 40 design points per deck — 200 samples per arm per
+deck — with the first run in a fresh environment discarded. CPU-seconds per design-point solve:
+
+| deck | arm | median | p10–p90 | **p10–p90 spread, as % of the median** |
+|---|---|---|---|---|
+| `large_tokamak_nof` | R | 30.10 ms | 22.93–37.92 | **49.8 %** |
+| | A0 | 40.66 ms | 29.71–59.74 | **73.9 %** |
+| | A0f | 40.34 ms | 29.97–60.41 | **75.5 %** |
+| | A1 | 71.05 ms | 42.15–81.57 | **55.5 %** |
+| `low_aspect_ratio_DEMO` | R | 31.54 ms | 24.29–44.03 | **62.6 %** |
+| | A0 | 41.20 ms | 31.05–56.07 | **60.7 %** |
+| | A0f | 42.08 ms | 31.45–55.83 | **57.9 %** |
+| | A1 | 70.74 ms | 42.97–80.44 | **53.0 %** |
+| `st_regression` | R | 31.38 ms | 23.43–43.18 | **63.0 %** |
+| | A0 | 44.65 ms | 36.27–96.06 | **133.9 %** |
+| | A0f | 45.92 ms | 36.55–102.25 | **143.1 %** |
+| | A1 | 49.12 ms | 43.39–109.36 | **134.3 %** |
+
+Machine state at the time, recorded with the numbers: load average 1.17–1.39 (1-minute), peak
+resident memory 460–543 MB, sequence positions 2, 4 and 6 within one serial run, one repetition
+discarded per deck as warm-up.
+
+**The uncertainty band is wider than the effect, by an order of magnitude, and that is the finding
+about the timings.** The differences this study argues about are 4–5 % in model evaluations. The
+p10–p90 spread on a single arm's own CPU time is **50 % to 143 %** of its own median. No ratio of
+two of these numbers can resolve a 4 % effect, and none is offered. This is the same phenomenon
+I-10 records — identical work varying by up to 35 % in CPU-seconds with the cause unknown — showing
+up again at a larger magnitude on a finer-grained workload.
+
+**Two further reasons not to read the medians as an arm comparison**, both of which would make the
+numbers wrong even if the spread were tight:
+
+1. **They are at matched *tolerance*, not matched accuracy.** A1 at τ = 1e-6 is the over-converged
+   configuration §3 exists to correct. Its median being ~1.7× A0's is a measurement of the
+   handicapped arm.
+2. **A1 still carries per-block bookkeeping A0 does not** — a residual evaluation per inner sweep,
+   and the subset reads of §8.1. A model-evaluation count is blind to that by construction, which
+   is why it is the acceptance quantity; a timing is not.
+
+**What the repetitions did establish, and it is a count**: every arm produced **identical** pass
+counts, model-evaluation counts, module sweeps, converged flags and cap outcomes across all five
+repetitions — **640 of 640 comparisons on each deck, 1 920 in total, 0 mismatches**. That is the
+gate the repetitions exist for; the timings are the by-product.
+
+### 8.3 What I did **not** do, on instruction: shrink the tracked set
 
 Only the `argmax` component can drive a convergence decision, and the coordinator measured that
 just **22 / 24 / 25** of ~840 components ever do on the three decks. Reducing the tracked set to
@@ -778,7 +824,7 @@ inherit the predicate, the spec loading, the subset machinery and the failure po
 Only the `argmax` component can drive a convergence decision, and the coordinator measured that
 just **22 / 24 / 25** of ~840 components ever do, on `large_tokamak_nof` / `low_aspect_ratio_DEMO`
 / `st_regression`. Tracking only those would dwarf the 71.5 % the subset-aware read removed.
-**Not done here, on instruction and on the merits** (§8.2). If it is ever done, the guarded form
+**Not done here, on instruction and on the merits** (§8.3). If it is ever done, the guarded form
 is the only defensible one, and the guard is the whole proposal:
 
 - the **reduced set** is used in the hot path — the inner block sweeps, where the reads are;
@@ -823,7 +869,7 @@ remaining traffic, not 90 %.** Anyone quoting it should quote that arithmetic wi
 ## 13. What I did not do
 
 - **I did not re-run Phase B.** That is a later task, on this instrument.
-- **I did not shrink the tracked coupling set** (§8.2, §11.4) — proposed, with its guard, and
+- **I did not shrink the tracked coupling set** (§8.3, §11.4) — proposed, with its guard, and
   deliberately left for a separate task.
 - **I did not retro-edit merged reports.** The four-deck tables in `MDA_partition_exp_results.md`
   and in the archived task reports stand as the record of what was run. §6.2, §6.3(ii),
