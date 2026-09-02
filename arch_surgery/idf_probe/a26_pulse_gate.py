@@ -102,6 +102,15 @@ def run_recorded(deck: Path, outdir: Path) -> dict:
 
     pre, post = caller_mod.resolved_hoist_tails(sr.data.numerics.i_figure_merit)
     return {
+        # In-loop model evaluations, counted by the driver itself
+        # (``Caller._node`` increments it for every node it runs).  This is the
+        # acceptance quantity: what the placement change is worth is the
+        # difference between running ``pulse`` on every sweep and running it
+        # once per ``call_models``.  ``NODE_CALLS_AT_OUTPUT`` is the count at
+        # the moment the final-output path is entered, so the optimisation's
+        # own work can be separated from the post-solve output path.
+        "node_calls_total": caller_mod.NODE_CALLS[0],
+        "node_calls_at_output": caller_mod.NODE_CALLS_AT_OUTPUT[0],
         "hoist_name": caller_mod.HOIST_NAME,
         "hoist_nodes": list(caller_mod.HOIST_NODES),
         "pre_predicate_tail": list(pre),
@@ -135,6 +144,19 @@ def compare(a: dict, b: dict) -> dict:
         if ca["t_plant_pulse_burn"] != cb["t_plant_pulse_burn"]:
             diff_burn += 1
     return {
+        "node_calls_total": {"a": a.get("node_calls_total"),
+                             "b": b.get("node_calls_total")},
+        "node_calls_at_output": {"a": a.get("node_calls_at_output"),
+                                 "b": b.get("node_calls_at_output")},
+        "model_evaluations_removed": (
+            (a.get("node_calls_at_output") or 0)
+            - (b.get("node_calls_at_output") or 0)
+        ),
+        "model_evaluations_removed_pct": (
+            100.0 * ((a.get("node_calls_at_output") or 0)
+                     - (b.get("node_calls_at_output") or 0))
+            / (a.get("node_calls_at_output") or 1)
+        ),
         "n_call_models": {"a": na, "b": nb},
         "call_counts_equal": na == nb,
         "n_calls_compared": n,

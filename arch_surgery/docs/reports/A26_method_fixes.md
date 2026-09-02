@@ -605,6 +605,37 @@ plus a sensitivity check that perturbs each recorded quantity by **1 ULP** and c
 comparison catches it. A stale-by-one-sweep value on a converged state differs at tolerance level;
 a comparator that rounded would pass it silently.
 
+### 7.2 The gate, run
+
+Two arms per pulsed deck, differing in exactly one setting — `PROCESS_ARCH_HOIST=feedforward`
+against `feedforward_lifted`, with `PROCESS_ARCH_LIFT=burn_time` and A25's derived `ixc = 178` /
+`icc = 93` deck on **both**. Full optimisations, fresh subprocess each, serial, exact tree asserted,
+first run discarded.
+
+| | `large_tokamak_nof` | `low_aspect_ratio_DEMO` |
+|---|---|---|
+| `call_models` invocations compared | **660** | **1 050** |
+| `constraints.t_current_ramp_up_min` differing, as exact hex floats | **0 of 660** | **0 of 1 050** |
+| constraint-vector entries differing, as exact hex floats | **0 of 17 820** | **0 of 27 300** |
+| objective differing | **0 of 660** | **0 of 1 050** |
+| MFILE lines differing | **0 of 16 201** | **0 of 16 462** |
+| MFILE floats differing, as hex | **0 of 11 186** | **0 of 11 117** |
+| sensitivity: 1-ULP perturbations caught | **4 / 4** | **4 / 4** |
+| pre-predicate tail resolved | `pulse` | `pulse` |
+| post-predicate tail resolved | `water_use`, `costs` | `water_use`, `costs` |
+| **status** | **PASS** | **PASS** |
+
+**The non-vacuous line is the first one.** `constraints.t_current_ramp_up_min` is bit-identical at
+every `call_models` return, on 1 710 calls across the two decks — so running `pulse` once on the
+converged state produces exactly the value running it on every sweep produced. That is what makes
+the placement correct rather than merely harmless-looking, and it is not something the constraint
+vector could have told us here, because **`icc = 41` is inactive on every deck** and `conf` could
+not have moved whatever `pulse` did. The zeros in rows 2 and 3 are reported *with* that sentence,
+never instead of it.
+
+**The MFILE zeros are the user-facing statement**: the whole answer is unchanged, byte for byte,
+with `pulse` out of the loop.
+
 ---
 
 ## 8. Fix 5 — timings, with an interval, and taken in the right order
