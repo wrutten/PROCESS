@@ -92,7 +92,13 @@ def rung(path: Path, arm: str) -> dict | None:
     is stated: a rung that dropped points is not comparable to one that did
     not, and the drop census comes before the ratio.
     """
-    res = json.loads(Path(path).read_text())
+    path = Path(path)
+    if not path.exists():
+        # A rung that did not produce a result is a missing rung, not a zero.
+        # Returning None here puts it in the "incomplete" count rather than
+        # silently shortening the curve.
+        return None
+    res = json.loads(path.read_text())
     pts = res["points"]
     conv = [p for p in pts if p["arms"].get(arm, {}).get("converged")]
     if not conv:
@@ -133,9 +139,33 @@ ACCURACY_STAT = "achieved_residual_p90"
 def curve(rungs, *, stat: str = ACCURACY_STAT) -> dict:
     """One arm's cost-versus-achieved-accuracy curve on one deck.
 
-    Rungs whose accuracy statistic is zero are **excluded from the fit and
-    named**: log-log cannot represent a zero residual, and a rung that reached
-    bit-exactness is not on the same continuum as one that did not.
+    **The curve is the lower envelope of the rungs, not the rungs themselves,
+    and getting that wrong was a real defect in the first version of this
+    analysis.**  Several settings can deliver the *same* achieved accuracy at
+    different costs --- on ``large_tokamak_nof`` the block arm reaches
+    1.256e-11 at four different inner tolerances, costing 12 281, 11 543, 9 612
+    and 9 062 model evaluations.  "What does this arm cost at accuracy *a*" has
+    one honest answer: the **cheapest setting that delivers at least *a***,
+    because a user wanting accuracy *a* would simply run that setting.  Taking
+    the rungs in tolerance order instead picks whichever rung happens to be
+    listed at that accuracy, which on that deck reported +21.9 % where the
+    envelope reports −4.3 %.
+
+    So::
+
+        cost(a) = min { cost_i : accuracy_i <= a }
+
+    which is a non-increasing step function of ``a``, and the envelope is its
+    breakpoints.  Rungs the envelope drops are **kept in the record** under
+    ``dominated`` --- a rung that costs more *and* delivers less is a
+    measurement about that setting, not noise.
+
+    Rungs whose accuracy statistic is zero are excluded from the fit and
+    **named**: log-log cannot represent a zero residual, and a rung that
+    reached bit-exactness is not on the same continuum as one that did not.
+    They can never win the envelope at any positive target anyway --- on every
+    deck measured here they are also the most expensive rungs --- but the
+    exclusion is recorded rather than assumed harmless.
     """
     usable, zeros = [], []
     for r in rungs:
@@ -143,28 +173,50 @@ def curve(rungs, *, stat: str = ACCURACY_STAT) -> dict:
         if a is None:
             continue
         (zeros if a <= 0 else usable).append(r)
-    usable.sort(key=lambda r: r[stat])
+    usable.sort(key=lambda r: (r[stat], r["net_model_evaluations"]))
+
+    env, dominated = [], []
+    best = None
+    for r in usable:
+        c = r["net_model_evaluations"]
+        if best is None or c < best:
+            best = c
+            env.append(r)
+        else:
+            dominated.append(r)
+
+    def _pt(r):
+        return {"label": r["label"], "tau": r["tau"], "inner_tau": r["inner_tau"],
+                "accuracy": r[stat], "cost": r["net_model_evaluations"],
+                "n_converged": r["n_converged"], "n_dropped": r["n_dropped"],
+                "mean_sweeps": r["mean_sweeps"]}
+
     return {
         "stat": stat,
+        "envelope_rule": (
+            "cost(a) = min { cost_i : accuracy_i <= a } -- the cheapest "
+            "setting delivering at least the target accuracy"
+        ),
         "n_rungs": len(rungs),
         "n_usable": len(usable),
+        "n_on_envelope": len(env),
         "rungs_at_zero_residual": [r["label"] for r in zeros],
+        "zero_residual_costs": {
+            r["label"]: r["net_model_evaluations"] for r in zeros
+        },
         "range": (
-            {"min": usable[0][stat], "max": usable[-1][stat]}
-            if usable else None
+            {"min": env[0][stat], "max": usable[-1][stat]} if env else None
         ),
-        "points": [
-            {"label": r["label"], "tau": r["tau"], "inner_tau": r["inner_tau"],
-             "accuracy": r[stat], "cost": r["net_model_evaluations"],
-             "n_converged": r["n_converged"], "n_dropped": r["n_dropped"],
-             "mean_sweeps": r["mean_sweeps"]}
-            for r in usable
+        "points": [_pt(r) for r in env],
+        "all_rungs": [_pt(r) for r in usable],
+        "dominated": [
+            {**_pt(r), "dominated_by": next(
+                (e["label"] for e in env
+                 if e[stat] <= r[stat]
+                 and e["net_model_evaluations"] < r["net_model_evaluations"]),
+                None)}
+            for r in dominated
         ],
-        "monotone_in_cost": all(
-            usable[i]["net_model_evaluations"]
-            >= usable[i + 1]["net_model_evaluations"]
-            for i in range(len(usable) - 1)
-        ),
     }
 
 
@@ -173,16 +225,33 @@ def cost_at(curve_rec: dict, accuracy: float) -> dict:
     pts = curve_rec["points"]
     if not pts:
         return {"status": "NO CURVE", "cost": None}
-    lo, hi = pts[0]["accuracy"], pts[-1]["accuracy"]
+    lo = pts[0]["accuracy"]
+    hi = (curve_rec.get("range") or {}).get("max", pts[-1]["accuracy"])
     if accuracy <= 0:
         return {"status": "TARGET IS ZERO -- log-log cannot represent it",
                 "cost": None, "range": [lo, hi]}
-    if not (lo <= accuracy <= hi):
+    if accuracy < lo:
         return {
-            "status": "OUT OF MEASURED RANGE -- not extrapolated",
+            "status": "OUT OF MEASURED RANGE -- tighter than any rung reached, "
+                      "not extrapolated",
             "cost": None,
             "range": [lo, hi],
             "target": accuracy,
+        }
+    if accuracy >= pts[-1]["accuracy"]:
+        # Past the last envelope breakpoint the step function is flat: the
+        # cheapest measured setting already delivers at least this accuracy.
+        # That is a read, not an extrapolation -- but it IS an extrapolation to
+        # claim the arm could go cheaper still, so the flat read is labelled.
+        return {
+            "status": "OK",
+            "cost": float(pts[-1]["cost"]),
+            "bracket": [pts[-1]["label"], pts[-1]["label"]],
+            "interpolation": (
+                "at or beyond the cheapest envelope point; the step function "
+                "is flat here.  Not a claim that a looser setting would cost "
+                "less -- none was measured"
+            ),
         }
     for i in range(len(pts) - 1):
         a0, a1 = pts[i]["accuracy"], pts[i + 1]["accuracy"]
@@ -251,6 +320,12 @@ def compare(flat_curve: dict, block_curve: dict) -> dict:
     }
 
 
+#: The two other accuracy statistics the same curves are rebuilt on, so a
+#: reader can see whether the conclusion depends on the choice.  It should not,
+#: and where it does that is the finding.
+ALTERNATIVE_STATS = ("achieved_residual_p50", "achieved_residual_max")
+
+
 def build(runs_root: Path, scenarios) -> dict:
     """Assemble both arms' curves and the matched-accuracy comparison."""
     out = {
@@ -287,8 +362,16 @@ def build(runs_root: Path, scenarios) -> dict:
         ns = {r["n_points"] for r in flat + block}
         drops = {r["label"]: r["n_dropped"] for r in flat + block
                  if r["n_dropped"]}
+        alt = {}
+        for st in ALTERNATIVE_STATS:
+            fa, ba = curve(flat, stat=st), curve(block, stat=st)
+            alt[st] = {
+                "flat_curve": fa, "block_curve": ba,
+                "matched_accuracy": compare(fa, ba),
+            }
         out["per_scenario"][s] = {
             "status": "OK",
+            "alternative_statistics": alt,
             "design_point_counts": sorted(ns),
             "same_population": len(ns) == 1,
             "rungs_that_dropped_points": drops,
@@ -325,6 +408,16 @@ def render(rec: dict) -> str:
             for p in c["points"]:
                 L.append(f"       {p['label']:26s} {p['accuracy']:13.3e} "
                          f"{p['cost']:12d} {p['mean_sweeps']:7.3f}")
+        for st, a in (d.get("alternative_statistics") or {}).items():
+            rows = [r for r in a["matched_accuracy"]["rows"]
+                    if r["ratio_block_over_flat"] is not None]
+            if rows:
+                L.append(f"    -- same comparison on {st}: A1/A0 ranges "
+                         f"{min(r['ratio_block_over_flat'] for r in rows):.3f} "
+                         f"to {max(r['ratio_block_over_flat'] for r in rows):.3f} "
+                         f"over {len(rows)} matched points")
+            else:
+                L.append(f"    -- same comparison on {st}: no matched points")
         m = d["matched_accuracy"]
         L.append(f"    -- matched: {m['n_matched_points']} of "
                  f"{len(m['rows'])} flat rungs inside the block arm's range "
@@ -336,9 +429,13 @@ def render(rec: dict) -> str:
                 L.append(f"       {r['accuracy']:13.3e} {r['flat_cost']:10d} "
                          f"{'--':>11s} {'--':>7s}  {r['status']}")
             else:
+                flat = "  [flat: no looser block rung measured]" if (
+                    r["bracket"] and r["bracket"][0] == r["bracket"][1]
+                ) else ""
                 L.append(f"       {r['accuracy']:13.3e} {r['flat_cost']:10d} "
                          f"{r['block_cost']:11.0f} "
-                         f"{r['ratio_block_over_flat']:7.3f}  {r['bracket']}")
+                         f"{r['ratio_block_over_flat']:7.3f}  "
+                         f"{r['bracket']}{flat}")
     return "\n".join(L)
 
 
