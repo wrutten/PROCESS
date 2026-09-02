@@ -286,6 +286,11 @@ def main() -> int:
 
     def common(p):
         p.add_argument("--scenarios", nargs="*", default=SCENARIOS)
+        # A from-scratch reproduction must be able to say where the recording
+        # is read from and where the replays are written, rather than assuming
+        # this tree's own layout.
+        p.add_argument("--a18-runs", default=None)
+        p.add_argument("--runs", default=None)
         p.add_argument("--hoist", type=int, default=0)
         p.add_argument("--spec-mode", default="a18")
         p.add_argument("--scale-floor", type=float, default=1.0)
@@ -311,6 +316,14 @@ def main() -> int:
     ))
 
     args = ap.parse_args()
+    global RUNS, A18_RUNS
+    if getattr(args, "runs", None):
+        RUNS = Path(args.runs).resolve()
+    if getattr(args, "a18_runs", None):
+        # NOT resolved: the harvest is usually reached through a symlink into
+        # the main checkout's untracked run tree, and resolving it would take
+        # the path outside this worktree.
+        A18_RUNS = Path(args.a18_runs)
     RUNS.mkdir(parents=True, exist_ok=True)
     (RUNS / "_mplconfig").mkdir(exist_ok=True)
     sys.path.insert(0, str(HERE))

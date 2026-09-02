@@ -1,0 +1,35 @@
+{
+  "_what": "Phase B's published numbers, so that a re-run can be CHECKED against them rather than merely produced.  Read by MDA_partition_opt_experiment.py --verify.  A disagreement is a FINDING to surface, not an error to swallow.",
+  "_source": "arch_surgery/docs/reports/MDA_partition_exp_results.md sections 7.6 and 7.8, and arch_surgery/docs/reports/A28_phase_b_rerun.md section 1.  Three decks from 2026-09-02 (D17), 25 paired starts per arm per deck at delta = 10 %, tau = 1e-6.",
+  "_units": "paired median of net model evaluations in the solve phase, variant / reference, over the drop census's kept starts; and counts of starts.",
+  "gate_passes": {
+    "large_tokamak_nof": true,
+    "low_aspect_ratio_DEMO": true,
+    "st_regression": true
+  },
+  "paired_median_A0p_to_A1p": {
+    "large_tokamak_nof": 0.98370,
+    "low_aspect_ratio_DEMO": 0.78790,
+    "st_regression": 0.93816
+  },
+  "paired_median_R_to_A1p": {
+    "large_tokamak_nof": 1.00483,
+    "low_aspect_ratio_DEMO": 0.76099,
+    "st_regression": 0.94937
+  },
+  "paired_median_R_to_A0p": {
+    "large_tokamak_nof": 1.02132,
+    "low_aspect_ratio_DEMO": 0.96622,
+    "st_regression": 1.03227
+  },
+  "n_both_solve": {
+    "large_tokamak_nof": 22,
+    "low_aspect_ratio_DEMO": 11,
+    "st_regression": 21
+  },
+  "_read_with": [
+    "low_aspect_ratio_DEMO's ratios are over 8 kept starts spanning 0.241 to 3.320 and the deck is reported INCONCLUSIVE.  Its median is published so a re-run can be compared, not because it is a result.",
+    "st_regression's figure is measured at matched TOLERANCE.  At matched achieved accuracy (inner tolerance 0.01) it is 0.9773 over 19 starts with success counts 23 vs 23.  Both readings are in the report.",
+    "A ratio over a distribution of starts moves if any one start's verdict moves, which is why these are compared to a relative tolerance rather than exactly."
+  ]
+}

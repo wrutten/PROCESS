@@ -1898,6 +1898,42 @@ structural rather than a limit of the ladder: solving each block to *its own* fi
 a tight state whatever tolerance is asked for. A matched-accuracy robustness comparison is
 therefore not available on that test case, and saying so is the honest outcome.
 
+#### 7.9.1 Where it *is* available, the verdict moves — and both readings are reported
+
+On `st_regression` a matching setting exists: the block arrangement at outer tolerance 1e-6 and
+**inner tolerance 0.01** delivers 3.28 × 10⁻⁹, which is the flat control's achieved accuracy at
+τ = 1e-6 to three figures. That setting was read off the ladder **before** the re-run, not chosen
+after seeing a success rate. Twenty-five starting points, the same ones, against the same
+unchanged control runs:
+
+| | both solve | only the control | only the variant | neither | success counts | cost, paired median |
+|---|---|---|---|---|---|---|
+| **at matched tolerance** (inner 1e-6) | 21 | **2** | 1 | 1 | 23 vs **22** | **0.938 (−6.18 %)**, n = 20 |
+| **at matched achieved accuracy** (inner 0.01) | 22 | **1** | 1 | 1 | 23 vs **23** | **0.977 (−2.27 %)**, n = 19 |
+
+**Both readings go in the report, with the tolerance each was measured at named. Neither replaces
+the other.**
+
+**At matched achieved accuracy the robustness deficit on this test case disappears and the cost
+advantage shrinks.** The two arrangements solve **23 of 25 each** — not the same 23; one start each
+way — and the architecture is 2.27 % cheaper rather than 6.18 %. By the outcome table declared in
+advance, *"median evaluation count lower, success rate no worse"*, that is the architecture
+winning on this test case at matched accuracy where at matched tolerance it failed the robustness
+criterion by one start.
+
+**Read that narrowly.** It is a **one-start** difference in each direction on a population of 25.
+It says the earlier verdict on this test case was sensitive to a setting that was never chosen for
+robustness purposes, not that the architecture is robustly better. And it moves the cost figure
+against the architecture by 3.9 percentage points, which is the same over-solving effect §4.4.2
+measures in the other direction: at the tighter inner tolerance the variant was buying accuracy
+nobody asked for, and part of what looked like a saving was work the control was not doing.
+
+**Why only this test case.** `large_tokamak_nof` has no setting at which the arrangements are
+equally converged (above). `low_aspect_ratio_DEMO` needs none: the accuracy census shows all three
+arrangements delivering **identical** accuracy on every paired start there, so its robustness
+comparison is already on level footing. So the re-run was run where it was both possible and
+informative, and that is stated rather than left to be inferred from a directory listing.
+
 ### 7.10 Timings, as context and never as evidence
 
 Wall and processor seconds per whole optimisation, over the campaign's own starts, with the median,
@@ -2119,12 +2155,20 @@ them, the architecture alone, over 20–22 paired starting points:
 | test case | architecture, `A0′ → A1′` | robustness, paired | verdict |
 |---|---|---|---|
 | `large_tokamak_nof` | **−1.63 %** (20 of 22 starts cheaper, q1–q3 0.982–0.985) | **identical success sets**, 22 both, 0 either way | **the architecture wins** |
-| `st_regression` | **−6.18 %** (20 of 20 cheaper, q1–q3 0.881–0.948) | 21 both, **2 only the control**, **1 only the variant** — net −1 of 25 | **cheaper, but the success rate is net worse by one start** |
+| `st_regression` | **−6.18 %** (20 of 20 cheaper, q1–q3 0.881–0.948) | 21 both, **2 only the control**, **1 only the variant** — net −1 of 25 | **cheaper, but the success rate is net worse by one start** — *and see below* |
 | `low_aspect_ratio_DEMO` | −21.2 % over **8** starts, ratios 0.241–3.320 | 11 both, 1 only the control, 0 only the variant | **inconclusive** — the distributions overlap, and the plan says so in advance |
 
 **By the outcome table declared before the run, that is: wins on one test case, inconclusive on one,
 and on the third cheaper but failing the robustness criterion by a single start.** Robustness
 outranks cost, and one start is still one start.
+
+**On that third test case the verdict is sensitive to a setting, and both readings are reported.**
+Robustness above is compared at a fixed tolerance; at the setting that makes the two arrangements
+equally converged — read off the ladder before the re-run — they solve **23 of 25 each** and the
+architecture is 2.27 % cheaper rather than 6.18 % (§7.9.1). By the same outcome table that is the
+architecture **winning** there. It is a one-start difference in each direction on 25, so the honest
+statement is that `st_regression`'s verdict turns on a single start and on a tolerance that was
+never chosen for robustness purposes — **not** that the architecture is robustly better.
 
 ### What changed against the first Phase B run, and why
 
