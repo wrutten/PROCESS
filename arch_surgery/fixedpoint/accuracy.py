@@ -185,12 +185,16 @@ def curve(rungs, *, stat: str = ACCURACY_STAT) -> dict:
     ``dominated`` --- a rung that costs more *and* delivers less is a
     measurement about that setting, not noise.
 
-    Rungs whose accuracy statistic is zero are excluded from the fit and
-    **named**: log-log cannot represent a zero residual, and a rung that
-    reached bit-exactness is not on the same continuum as one that did not.
-    They can never win the envelope at any positive target anyway --- on every
-    deck measured here they are also the most expensive rungs --- but the
-    exclusion is recorded rather than assumed harmless.
+    Rungs whose accuracy statistic is zero are excluded **from the fit** and
+    named: log-log cannot represent a zero residual.  They are **not** excluded
+    from the envelope --- :func:`cost_at` takes the cheapest of them whenever
+    it is cheaper than the interpolation, because ``accuracy_i <= a`` holds
+    trivially for a bit-exact rung at every positive target.  An earlier
+    version excluded them from both, on the argument that they are also the
+    most expensive rungs; that is true of the all-settings curve on the decks
+    measured here and **false of a curve restricted to one knob**, where the
+    tight rungs are the bit-exact ones and dropping them reported OUT OF
+    MEASURED RANGE for an arm that in fact reaches the target exactly.
     """
     usable, zeros = [], []
     for r in rungs:
@@ -246,9 +250,33 @@ def curve(rungs, *, stat: str = ACCURACY_STAT) -> dict:
 
 
 def cost_at(curve_rec: dict, accuracy: float) -> dict:
-    """Interpolated cost at a target achieved accuracy.  Never extrapolated."""
+    """Interpolated cost at a target achieved accuracy.  Never extrapolated.
+
+    **A rung whose achieved residual is exactly zero is on the envelope at
+    every positive target**, because ``accuracy_i <= a`` holds trivially.  Such
+    a rung cannot be *interpolated* --- log-log has no representation for zero
+    --- but excluding it from the envelope as well is a different thing, and
+    the first version of this function did that.  It mattered: on
+    ``large_tokamak_nof`` the block arm's three tightest same-knob rungs all
+    reach a bit-exact fixed point, so a comparison restricted to that knob had
+    no rung at all in the flat arm's tight range and was reported OUT OF
+    MEASURED RANGE --- which reads as "the block arm cannot get that accurate"
+    when the truth is the exact opposite.  The honest read there is the
+    cheapest zero-residual rung, exactly, with no interpolation.
+    """
     pts = curve_rec["points"]
+    zero_costs = curve_rec.get("zero_residual_costs") or {}
+    z_best = min(zero_costs.values()) if zero_costs else None
+    z_label = (
+        min(zero_costs, key=lambda k: zero_costs[k]) if zero_costs else None
+    )
     if not pts:
+        if z_best is not None and accuracy > 0:
+            return {"status": "OK", "cost": float(z_best),
+                    "bracket": [z_label, z_label],
+                    "interpolation": "exact: a rung at a bit-exact fixed "
+                                     "point, which is on the envelope at "
+                                     "every positive target"}
         return {"status": "NO CURVE", "cost": None}
     lo = pts[0]["accuracy"]
     hi = (curve_rec.get("range") or {}).get("max", pts[-1]["accuracy"])
@@ -256,6 +284,19 @@ def cost_at(curve_rec: dict, accuracy: float) -> dict:
         return {"status": "TARGET IS ZERO -- log-log cannot represent it",
                 "cost": None, "range": [lo, hi]}
     if accuracy < lo:
+        if z_best is not None:
+            return {
+                "status": "OK",
+                "cost": float(z_best),
+                "bracket": [z_label, z_label],
+                "interpolation": (
+                    "exact: tighter than any interpolable rung, but a rung at "
+                    "a bit-exact fixed point satisfies the envelope at every "
+                    "positive target and is the cheapest that does"
+                ),
+                "range": [lo, hi],
+                "target": accuracy,
+            }
         return {
             "status": "OUT OF MEASURED RANGE -- tighter than any rung reached, "
                       "not extrapolated",
@@ -268,10 +309,14 @@ def cost_at(curve_rec: dict, accuracy: float) -> dict:
         # cheapest measured setting already delivers at least this accuracy.
         # That is a read, not an extrapolation -- but it IS an extrapolation to
         # claim the arm could go cheaper still, so the flat read is labelled.
+        c = float(pts[-1]["cost"])
+        lbl = pts[-1]["label"]
+        if z_best is not None and z_best < c:
+            c, lbl = float(z_best), z_label
         return {
             "status": "OK",
-            "cost": float(pts[-1]["cost"]),
-            "bracket": [pts[-1]["label"], pts[-1]["label"]],
+            "cost": c,
+            "bracket": [lbl, lbl],
             "interpolation": (
                 "at or beyond the cheapest envelope point; the step function "
                 "is flat here.  Not a claim that a looser setting would cost "
@@ -292,6 +337,20 @@ def cost_at(curve_rec: dict, accuracy: float) -> dict:
             c = 10 ** (
                 math.log10(c0) + f * (math.log10(c1) - math.log10(c0))
             )
+            if z_best is not None and z_best < c:
+                # A bit-exact rung is cheaper than the interpolation, and it
+                # satisfies the target exactly.  The envelope takes it.
+                return {
+                    "status": "OK",
+                    "cost": float(z_best),
+                    "bracket": [z_label, z_label],
+                    "interpolation": (
+                        "exact: a rung at a bit-exact fixed point is cheaper "
+                        "here than the interpolation between the bracketing "
+                        "rungs, and satisfies the target"
+                    ),
+                    "interpolated_alternative": c,
+                }
             return {
                 "status": "OK",
                 "cost": c,

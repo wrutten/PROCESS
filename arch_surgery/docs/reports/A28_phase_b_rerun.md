@@ -88,6 +88,47 @@ table the matched-accuracy reading is the architecture winning on that deck. **I
 difference in each direction on 25**, so what it establishes is that the verdict was sensitive to a
 setting never chosen for robustness purposes — not that the architecture is robustly better.
 
+### 1.3a A finding outside Phase B: A26's overturning of Phase A holds under one envelope construction and not the other
+
+The coordinator required the matched-accuracy envelope's asymmetry to be **corrected**, not merely
+declared: the blocked arm has an inner tolerance the flat arm does not, so it gets eleven draws
+against six on a running minimum, and the extra draws sit in one narrow accuracy band. The fix is a
+**matched-count** envelope — six joint rungs against six flat, one knob each — reported beside the
+all-settings one. I regenerated Phase A's ladders to compute it (A26's artifacts no longer exist,
+issue I-14), and it changes the answer:
+
+| deck | **matched-count** (architecture, equal tuning effort) | all-settings (practitioner, A26's published figure) | tuning premium |
+|---|---|---|---|
+| `large_tokamak_nof` | **+33.4 %** | **−4.3 %** | 0.717 |
+| `low_aspect_ratio_DEMO` | **+27.4 %** | **−4.5 %** | 0.750 |
+| `st_regression` | **−15.2 %** | −13.1 % | 1.026 |
+
+**The two constructions disagree in sign on two of three decks, by 32 and 38 percentage points —
+an order of magnitude larger than the effect either reports.** A26's replacement headline, *"at
+matched achieved accuracy the partition is at parity or cheaper on all three decks"*, holds under
+the construction that gives the blocked arm nearly twice the draws and **not** under equal tuning
+effort. My regeneration reproduces A26's all-settings numbers to rounding (−4.32 / −4.53 / −13.06
+against −4.3 / −4.5 / −13.1), so this is a construction difference and not a reproduction failure.
+
+**The mechanism is exact.** On the two large decks the blocked arm's tight *same-knob* rungs reach a
+bit-exact fixed point and cost 12 632 and 25 463; its cheap tight rungs are the *inner-only* ones, at
+9 062 and 19 087. The whole of the −4.3 % and −4.5 % is bought by the second knob.
+
+**And the matched-count reading is biased in the other direction**, which must be said with it. The
+joint ladder is coarse in achieved accuracy — on `large_tokamak_nof` it jumps from 4.3e-07 straight
+to bit-exact — so the read is forced onto a rung that overshoots the target. That is a granularity
+limit of the ladder as run. **The honest object is therefore a bracket**: −4.3 % to +33.4 %, −4.5 %
+to +27.4 %, and −13.1 % to −15.2 %. Only the third is a measurement in the sense the rest of this
+study's numbers are.
+
+**A defect in the envelope construction was found doing this, and it is inherited from A26.** Rungs
+whose achieved residual is exactly zero were excluded from the envelope as well as from the log-log
+fit, on the argument that they can never win it. That is true of the all-settings curve on these
+decks and **false of a curve restricted to one knob**, where the tight rungs *are* the bit-exact
+ones: the matched-count comparison reported OUT OF MEASURED RANGE for an arm that in fact reaches
+the target exactly. `cost_at` now admits them to the envelope while still excluding them from the
+fit. **This changes no all-settings number** — verified: −4.32 / −4.53 / −13.06 either way.
+
 ### 1.4 Six things that qualify it, all measured
 
 1. **`st_regression`'s figure rests on a predicate that is not doing the same thing in the two
@@ -442,4 +483,5 @@ the committed summary.
 | 11 | 2026-09-02 | Coordinator: the envelope's asymmetry must be addressed in the report, not declared in JSON. **Matched-count envelope** implemented for both phases, convexity **measured** rather than assumed, tuning premium reported: **1.000** on one deck, **0.988** on another. |
 | 12 | 2026-09-02 | Coordinator: robustness is compared at fixed τ while cost is compared at matched achieved accuracy. **Accuracy census** over 225 cheap audit runs: the variant ends strictly more converged on 20 of 22 and 25 of 25 starts and never less. |
 | 13 | 2026-09-02 | **Matched-accuracy robustness re-run on `st_regression`**, at the inner tolerance the ladder names: the deficit disappears (23 vs 23) and the cost advantage shrinks from −6.18 % to −2.27 %. Both readings reported. |
-| 14 | 2026-09-02 | Standing results document rewritten: correction banner resolved and removed, §4.4.2 / §4.5(b) / §6.1 / §6.3 / §6.5 updated, §5.5 / §6.6 / §6.7 added, §7 rewritten from "not built" to Phase B's method, gates and results, abstract and conclusion rewritten. |
+| 14 | 2026-09-02 | **Phase A's ladders regenerated** (A26's artifacts are gone, I-14) and its reproduction gate re-taken at this tip: **0 differing of 2 360 arm records over 30 680 keys**, 12/12 sensitivity cases caught. The matched-count envelope then **disagrees in sign with the all-settings one on two of three decks**: +33.4 % / +27.4 % / −15.2 % against −4.3 % / −4.5 % / −13.1 %. A defect in the envelope construction was found and fixed doing it — zero-residual rungs were excluded from the envelope as well as from the fit — which changes no all-settings number. |
+| 15 | 2026-09-02 | Standing results document rewritten: correction banner resolved and removed, §4.4.2 / §4.5(b) / §6.1 / §6.3 / §6.5 updated, §5.5 / §6.6 / §6.7 added, §7 rewritten from "not built" to Phase B's method, gates and results, abstract and conclusion rewritten. |

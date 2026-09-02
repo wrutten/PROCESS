@@ -39,12 +39,14 @@ points a real optimisation visited, which makes its numbers exact counts. **Phas
 optimiser back** and runs whole optimisations from perturbed starting points, which is the only way
 to ask whether the optimiser reacts to the rearrangement.
 
-**Phase A's answer, at matched achieved accuracy: the three-block partition is at parity or cheaper
-than a flat loop** — 4.3 %, 4.5 % and 13.1 % cheaper on three test cases. Compared at matched
-*tolerance*, as this report originally did, it appeared to cost 46.8 % and 40.4 % **more**. The
-whole of that penalty was the blocked arrangement being driven to an accuracy nobody asked for, and
-the correction came from this study's own critical pass. It removes the finding that the partition
-costs; it does not show the partition is worth anything.
+**Phase A's answer is that the published penalty was an artifact of the comparison, and that what
+replaces it depends on how the comparison is built.** Compared at matched *tolerance*, as this
+report originally did, the three-block partition appeared to cost 46.8 % and 40.4 % **more**.
+Compared at matched *achieved* accuracy it costs between **4.3 % less and 33.4 % more**, depending
+on whether the blocked arm is allowed the extra tuning knob the flat arm does not have — the two
+constructions **disagree in sign on two of three test cases, by 32 and 38 percentage points**. Both
+are reported. What survives without qualification is that the partition is nowhere near as expensive
+as the matched-tolerance figure said, and that it is not shown to be worth anything.
 
 **Phase B takes three arrangements, not two, and that is the methodological result.** PROCESS's
 loop and the proposed one stop on different tests, so comparing them directly measures the
@@ -552,42 +554,72 @@ matched tolerance therefore measures a handicap.
 | `st_regression` | 144 | 10 395 | 9 917 | 0.954 | −4.6 % |
 | `large_tokamak_eval` *(dropped, D17)* | 10 | 525 | 618 | 1.177 | +17.7 % |
 
-**At matched achieved accuracy.** Both arms were run across ladders — the flat arm across
-τ ∈ {1e-2 … 1e-8}, the blocked arm across the same joint ladder *and* across an inner-only ladder
-at the calibrated outer tolerance — each run's achieved exit residual was recorded beside its
-cost, and cost is read off each arm's **lower envelope**, `cost(a) = min{cost_i : accuracy_i ≤ a}`,
-interpolated linearly in log₁₀(cost) against log₁₀(accuracy) and never extrapolated. At the
-accuracy the flat control actually delivers at the study's own calibration point:
+**At matched achieved accuracy — and the answer depends on how the comparison is constructed, by
+more than the effect either construction reports.** Both arms were run across ladders — the flat arm
+across τ ∈ {1e-2 … 1e-8}, the blocked arm across the same joint ladder *and* across an inner-only
+ladder at the calibrated outer tolerance — each run's achieved exit residual was recorded beside its
+cost, and cost is read off each arm's **lower envelope**, `cost(a) = min{cost_i : accuracy_i ≤ a}`.
 
-| Test case | n | Flat **A0** cost | Blocked **A1** at the same achieved accuracy | A1 / A0 | Change |
-|---|---|---|---|---|---|
-| `large_tokamak_nof` | 149 | 9 471 | **9 062** | **0.957** | **−4.3 %** |
-| `low_aspect_ratio_DEMO` | 297 | 19 992 | **19 087** | **0.955** | **−4.5 %** |
-| `st_regression` | 144 | 10 395 | **9 037** | **0.869** | **−13.1 %** |
+The blocked arm has **eleven** rungs to the flat arm's **six**, because the inner tolerance is a knob
+the flat arm does not have. §7.13 explains why that is a one-sided advantage before any architecture
+is involved. So the comparison is made twice:
 
-Across every accuracy the flat arm reached that also lies inside the blocked arm's measured range:
+| test case | n | **matched-count** — six joint rungs against six flat, one knob each | **all-settings** — eleven block rungs against six flat |
+|---|---|---|---|
+| `large_tokamak_nof` | 149 | **+33.4 %** (12 632 against 9 471) | **−4.3 %** (9 062 against 9 471) |
+| `low_aspect_ratio_DEMO` | 297 | **+27.4 %** (25 463 against 19 992) | **−4.5 %** (19 087 against 19 992) |
+| `st_regression` | 144 | **−15.2 %** (8 811 against 10 395) | **−13.1 %** (9 037 against 10 395) |
+
+*(at the accuracy the flat control delivers at the study's own calibration point, τ = 1e-6.)*
+
+**On two of three test cases the two constructions disagree in sign, and by 38 and 32 percentage
+points.** That is an order of magnitude larger than the effect either of them reports. **Neither
+number alone is the answer, and reporting one would be choosing on the reader's behalf.**
+
+**What separates them, mechanically.** On the two large test cases the blocked arm's tight
+same-knob rungs reach a **bit-exact fixed point** — the p90 achieved residual is exactly zero — and
+cost 12 632 and 25 463. Its cheap tight rungs are the *inner-only* ones, at 9 062 and 19 087. So
+**the whole of the −4.3 % and −4.5 % is bought by the second knob**, and at equal tuning effort the
+partition costs a third more.
+
+**And the matched-count reading has a bias of its own, in the other direction.** The blocked arm's
+joint ladder is coarse in achieved accuracy: on `large_tokamak_nof` it jumps from 4.3 × 10⁻⁷ at
+τ = 1e-4 straight to bit-exact at τ = 1e-5, with nothing near the 1.3 × 10⁻¹¹ target. The read is
+therefore forced onto a rung that **overshoots** the target, which inflates the ratio. That is a
+granularity limit of the ladder as run, not a property of the architecture.
+
+**So the honest statement is a bracket, and its width is what this ladder can resolve.** On
+`large_tokamak_nof` the partition's cost at matched achieved accuracy lies between **−4.3 % and
++33.4 %**; on `low_aspect_ratio_DEMO` between **−4.5 % and +27.4 %**; on `st_regression`, where the
+two constructions agree to two percentage points, between **−13.1 % and −15.2 %**. Only the third
+is a measurement in the sense the other numbers in this report are.
+
+**This corrects, in part, the correction.** The finding that replaced this report's original
++46.8 % / +40.4 % was that at matched achieved accuracy the partition is *at parity or cheaper on
+all three test cases*. **That holds under one construction of the envelope and not under the
+other**, and the construction that supports it is the one that gives the blocked arm nearly twice
+the draws. What survives without qualification is narrower and is still worth having: **the
+published +46.8 % and +40.4 % were measured at matched tolerance, and at matched accuracy the
+partition is nowhere near that expensive under any construction** — the widest matched-accuracy
+figure is +33.4 %, and the cheapest is −15.2 %.
+
+Across every accuracy the flat arm reached that also lies inside the blocked arm's measured range,
+under the practitioner construction:
 
 | Test case | A1 / A0 over the matched range | matched points |
 |---|---|---|
 | `large_tokamak_nof` | 0.957, 0.968, 0.837, 0.858, *1.150* | 5 of 5 flat rungs |
-| `low_aspect_ratio_DEMO` | 0.955, 0.949, 0.793, 0.902, *1.094* | 5 of 6 (τ = 1e-8 is tighter than any blocked rung reached — reported, not extrapolated) |
+| `low_aspect_ratio_DEMO` | 1.334, 0.955, 0.949, 0.793, 0.902, *1.094* | 6 of 6 |
 | `st_regression` | 0.844, 0.869, 0.871, 0.923, 0.960, *1.119* | 6 of 6 |
 
 *The italicised last entry on each case is the loosest flat rung, where the blocked arm has no rung
 as loose and the envelope is read flat. That is a limit of the ladder, not a win for either arm.*
 
-**These figures are the all-settings construction, and §7.13 explains why that is not the only one
-worth having.** The blocked arm has eleven rungs to the flat arm's six because it has an inner
-tolerance the flat arm does not have, and more draws on a running minimum is a one-sided advantage
-before any architecture is involved. A **matched-count** envelope — the blocked arm's six *joint*
-rungs against the flat arm's six, one knob each — is reported beside it, and the architecture
-headline takes that number. §7.13 states both biases, measures the convexity the second one depends
-on rather than assuming it, and reports the difference between the two constructions as a **tuning
-premium** that belongs to the second knob and not to the partition.
-
-**The replacement claim is narrow and must stay narrow.** This removes the finding that the
-partition *costs*; it does **not** establish that the partition is worth anything. Four things
-bound it, and none is a hedge the surrounding framing contradicts:
+**The replacement claim is narrow and must stay narrow.** What it removes is the *magnitude* of
+the published penalty, not its sign: the +46.8 % and +40.4 % were an artifact of comparing at
+matched tolerance, and at matched accuracy the partition costs somewhere between 4 % less and 33 %
+more depending on how the envelope is built. It does **not** establish that the partition is worth
+anything. Four further things bound it, and none is a hedge the surrounding framing contradicts:
 
 1. **It is statistic-dependent, and the worst-case statistic straddles parity.** Rebuilt on the
    **maximum** exit residual instead of the p90, A1/A0 ranges 0.907–1.150, 0.816–1.228 and
@@ -2087,9 +2119,28 @@ leverage comparable to the quantity being measured. A reader is entitled to see 
 and judge, and a report that showed only the more favourable one would be choosing on the reader's
 behalf.
 
-**Phase A has the same asymmetry and is treated the same way**, so its §4.4.2 figures are also
-reported under both constructions. It is not the case that one phase is affected and the other is
-not.
+**Phase A has the same asymmetry, and there it is not small — it changes the sign of the answer on
+two of three test cases.** Its §4.4.2 figures are reported under both constructions for that reason.
+
+| phase | test case | matched-count (architecture) | all-settings (practitioner) | tuning premium |
+|---|---|---|---|---|
+| **A** | `large_tokamak_nof` | **+33.4 %** | **−4.3 %** | **0.717** |
+| | `low_aspect_ratio_DEMO` | **+27.4 %** | **−4.5 %** | **0.750** |
+| | `st_regression` | −15.2 % | −13.1 % | 1.026 |
+| **B** | `large_tokamak_nof` | −24.2 % | −24.2 % | **1.000** |
+| | `st_regression` | −21.6 % | −22.5 % | 0.988 |
+| | `low_aspect_ratio_DEMO` | *no curve* | *no curve* | — |
+
+*(at each test case's own calibration accuracy; the premium is the all-settings ratio divided by the
+matched-count one, so below 1 means the extra knob made the blocked arm look cheaper than it does at
+equal tuning effort.)*
+
+**In Phase A the second knob is worth 25–28 % on the two large test cases and flips the sign. In
+Phase B it is worth nothing measurable.** The difference is not mysterious: Phase A's blocked arm
+has bit-exact same-knob rungs whose cost is high, so restricting it to one knob forces an expensive
+read; Phase B's ladder is coarser and its joint rungs already dominate the inner ones. **A bias that
+is 1.000 on one phase and 0.717 on another is exactly why it has to be measured per case rather than
+argued about once.**
 
 **What the two constructions actually gave, measured.**
 
@@ -2137,14 +2188,16 @@ model frozen.** That was the question, and the answer is yes in both phases.
 
 ### What each phase established
 
-**Phase A, the optimiser absent.** At matched *achieved* accuracy the three-block partition is at
-parity or cheaper than the flat control on all three retained test cases — **−4.3 %, −4.5 % and
-−13.1 %** — where at matched *tolerance* it appeared to cost **+46.8 % and +40.4 %** more. The
-published penalty was an artifact of the blocked arrangement being driven to an accuracy nobody
-asked for, and the correction was found by this study's own critical pass rather than from outside.
-**The replacement claim is narrower than the one it replaces**: it removes the finding that the
-partition costs; it does not establish that the partition is worth anything, because at its
-cheapest accuracy-matched setting the blocked arm has largely stopped blocking.
+**Phase A, the optimiser absent, and the honest answer is a bracket.** At matched *tolerance* the
+three-block partition appeared to cost **+46.8 % and +40.4 %** more than the flat control. At
+matched *achieved* accuracy it costs **−4.3 % or +33.4 %** on one test case and **−4.5 % or
++27.4 %** on another, depending on whether the blocked arm is allowed the inner tolerance the flat
+arm has no counterpart for; on the third the two constructions agree at **−13.1 % to −15.2 %**. The
+published penalty was an artifact of comparing at matched tolerance — that part is settled — but
+**the claim that replaced it, "at parity or cheaper on all three", holds under one construction of
+the envelope and not the other**, and the one that supports it gives the blocked arm nearly twice
+the draws. What survives without qualification: the partition is nowhere near as expensive as the
+published figure said, and it is not shown to be worth anything.
 
 **Phase B, the optimiser present, and it takes three arrangements to say anything.** Comparing the
 proposed architecture directly against PROCESS as shipped measures the architecture and the
