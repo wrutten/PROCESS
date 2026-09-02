@@ -1,3 +1,23 @@
+> **Document status** — **SUPERSEDED, 2026-09-02.** Replaced by
+> [`2026-09-02_process_defects_from_the_architecture_experiment.md`](2026-09-02_process_defects_from_the_architecture_experiment.md),
+> which carries this finding forward as its §A alongside four further defects. **The central claim
+> below is correct and confirmed**; three things in it are not, and the superseding document
+> corrects them:
+>
+> - **§2's blast-radius argument is too broad.** A NaN cannot reach `check_agreement` through the
+>   *constraint* vector: `constraint_eqns` (`process/core/solver/constraints.py:1997` at
+>   `c0ae5b28`) raises `ProcessValueError` on a non-finite normalised residual first. The reachable
+>   routes are the **objective**, which has no finiteness guard, and `MDA_Output`'s MFILE
+>   comparison.
+> - **Three line numbers are wrong** at `c0ae5b28`: `mfile_data.get(var, np.nan)` is at
+>   `caller.py:192`, not 204; the `check_agreement` call beneath it at `:193`, not 205; the
+>   `RuntimeError` at `:129`, not 140. The `caller.py:51-72` and `:70` citations are correct.
+> - **§3's severity statement now has a measurement behind it**: task A25 checked the 13 starting
+>   points where a stricter predicate refused and stock PROCESS succeeded, and found the baseline's
+>   final MFILE entirely finite on **13 of 13**, over 300 runs.
+>
+> Cite the superseding document. This one is kept because it may already have been filed.
+
 # `call_models` reports a NaN state as converged: `np.allclose(..., equal_nan=True)`
 
 **Found:** `PROCESS_surgery`, MDA partition experiment, while specifying a replacement convergence
