@@ -102,8 +102,8 @@ kept of 25, 3 cheaper / 19 dearer):
 > A28 report §1.4(2): "— the partition alone costs more there …"
 
 **+2.88 % is the price of the partition *and* the lift together.** The lift is half of the user's
-stated independent variable, it enlarges the design vector by one (a measured ~+4.8 % of optimiser
-evaluations: 660 against 630 gradient-bearing `call_models` at the gate point), and its share of
+stated independent variable, it enlarges the design vector by one (a measured +4.8 % of optimiser
+evaluations: 660 against 630 `call_models` at the gate point), and its share of
 the +2.88 % is unknown. The sentence claims an isolation the design does not have. On
 `st_regression` the equivalent statement *would* be true (no lift exists there; `A0p →
 A1p_nohoist` = −3.37 % is the partition alone) — which makes the unqualified cross-deck wording
