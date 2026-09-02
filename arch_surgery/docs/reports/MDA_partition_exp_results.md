@@ -14,6 +14,34 @@
 
 ---
 
+> ## ⚠ CORRECTION PENDING — the headline below is superseded (2026-09-02)
+>
+> **A26 (method-fixes) acted on this report's own §6.1 and the result overturns §4.4.2, §5.3 and §8.**
+> Those sections say the blocked arrangement costs **+46.8 % / +40.4 % / +17.7 %** more, hedged as
+> "at most" because the arms were compared at matched *tolerance* rather than matched *achieved
+> accuracy*. Compared properly — cost read off each arm's lower envelope, `cost(a) = min{cost_i :
+> accuracy_i ≤ a}` — the blocked arrangement costs **−4.3 % / −4.5 %** on the two large pulsed decks
+> and **−13.1 %** on `st_regression`. §6.1's counter-argument, that a loose inner tolerance "would
+> have to recover a very large factor", is refuted: it recovers all of it.
+>
+> **Read the replacement claim narrowly.** This removes the finding that the partition *costs*; it
+> does **not** establish that the partition is worth anything. At its cheapest accuracy-matched
+> setting the blocked arm runs **1 172 of 1 248 inner solves in a single sweep** — it has largely
+> stopped blocking. The comparison rests on the **p90** of achieved accuracy, because the median
+> exit residual is exactly **0** on 15 of 17 rungs, and on the *worst* design point the two arms are
+> indistinguishable (ratio spans 0.82–1.23). The defensible sentence is: **the published penalty was
+> an artifact of over-solving, not a property of the partition.**
+>
+> **§6.3 also contains a factual error.** It states that "exactly **one** constant moved". Three did,
+> verified independently from A18's artifacts: `ccfe_hcpb.x_shield` (9 arm-records, `st_regression`)
+> plus `physics.vs_plasma_burn_required` and `physics.vs_plasma_total_required` (63 arm-records each,
+> `large_tokamak_eval`). On that deck they blocked convergence and inflated its counts by 14–28 %,
+> which includes the very percentages §6.5.3 called its largest — a further reason the deck is
+> dropped (D17).
+>
+> **A28 rewrites this document** to fold in both phases on the corrected instrument. Until then, treat
+> §§4.4.2, 5.3, 6.1, 6.3 and 8 as superseded and this banner as the current statement.
+
 ## Abstract
 
 PROCESS solves a fusion power plant design problem by wrapping an optimiser around a loop that
