@@ -466,28 +466,32 @@ def stage_tables(args, runs_root: Path) -> int:
         runs_root)
 
 
+#: Minutes and megabytes, **measured on this machine** on 2026-09-02 at the
+#: default job count, not estimated.  Three test cases, 25 starting points.
+#: The machine has 16 cores and 7 GB of memory; a run at more than five
+#: parallel jobs starts competing for memory rather than for cores.
 STAGES = [
     ER.Stage("decks", stage_decks,
              "derive the deck with the burn time lifted", 1, 1, 1),
     ER.Stage("neutrality", stage_neutrality,
              "every switch off must equal the base commit, bit for bit",
-             6, 3, 400,
+             5, 3, 250,
              optional_reason="no --parent-tree, so there is nothing to "
                              "compare against"),
     ER.Stage("gate", stage_gate,
              "the arrangements at each deck's own point, and every gate",
-             9, 2, 350),
+             4, 2, 85),
     ER.Stage("calibrate", stage_calibrate,
-             "how large a perturbation the reference survives", 55, 4, 1500),
+             "how large a perturbation the reference survives", 27, 2, 1100),
     ER.Stage("campaign", stage_campaign,
              "the paired multi-start campaign, then robustness and cost",
-             130, 6, 4500),
+             75, 4, 3500),
     ER.Stage("audit", stage_audit,
              "is the robustness comparison on a level basis? measured",
-             12, 2, 700),
+             6, 1, 30),
     ER.Stage("ladder", stage_ladder,
              "tolerance ladders and cost at matched achieved accuracy",
-             35, 4, 1200),
+             55, 3, 1700),
     ER.Stage("tables", stage_tables, "print the tables the report quotes",
              1, 1, 1),
 ]

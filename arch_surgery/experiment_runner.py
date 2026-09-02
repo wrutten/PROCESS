@@ -358,12 +358,18 @@ def print_plan(title: str, stages, *, quick: bool, scenarios, runs_root: Path,
     if quick:
         print(
             "\n  WHAT --quick DOES VERIFY: that every stage runs end to end, "
-            "that the\n  arms import and resolve the variant points they "
-            "claim, that the gates\n  execute and that the analysis reads what "
-            "the runs wrote."
+            "that the\n  arrangements import and resolve the variant points "
+            "they claim, that every\n  gate executes and is shown capable of "
+            "failing, and that the analysis reads\n  what the runs wrote."
             "\n  WHAT IT DOES NOT VERIFY: any published number.  It runs one "
-            "deck with a\n  handful of starts and a short ladder, so its "
-            "counts are its own and must\n  not be compared with the report's."
+            "test case with a\n  handful of starting points and a short "
+            "ladder, so its counts are its own\n  and must not be compared "
+            "with the report's.  Two checks are also weaker here\n  and say "
+            "so where they run: a cross-test-case perturbation needs two test "
+            "cases\n  and is reported NOT APPLICABLE on one, and the "
+            "reproduction gate is NOT\n  truncated even in --quick, because "
+            "comparing a shortened point set against a\n  full recording is "
+            "a different comparison rather than a cheaper one."
         )
     print(flush=True)
 

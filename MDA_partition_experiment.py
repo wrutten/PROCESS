@@ -401,12 +401,16 @@ def stage_method_gate(args, runs_root: Path) -> int:
     rc = _ensure_harvest(args, runs_root)
     if rc:
         return rc
+    # **Not truncated even in --quick.**  This gate compares the fresh replay
+    # against the recorded one point for point, so a truncated population is
+    # not a cheaper version of it -- it is a different comparison, and the gate
+    # correctly refuses with "point sets differ".  A smoke mode that turned a
+    # refusal into a failure would teach the reader to ignore the gate.
     return _run("A26 method gate: reproduce A18 bit for bit",
                 [sys.executable, str(FIXEDPOINT / "run_a26.py"), "gate",
                  "--a18-runs", str(runs_root / "a18"),
                  "--runs", str(runs_root / "a26"),
-                 "--scenarios", *args.scenarios]
-                + (["--max-points", "12"] if args.quick else []),
+                 "--scenarios", *args.scenarios],
                 runs_root)
 
 
@@ -467,22 +471,26 @@ STAGE_FN = {
 #: What each stage costs on this machine, so the estimate printed before the
 #: run is an estimate and not a shrug.  Measured, at four parallel jobs where
 #: the stage runs in parallel and serially where trap T8 requires it.
+#: Minutes and megabytes, **measured on this machine** on 2026-09-02, not
+#: estimated.  ``phase_a``'s figure is for a from-scratch run that records the
+#: design points; with the recording already present it is about a quarter of
+#: that.  ``--quick`` figures are one test case, measured the same day.
 STAGE_TABLE = [
     ER.Stage("phase_a", stage_phase_a,
              "record the design points, check the hook, calibrate the "
-             "tolerance, replay four arrangements", 150, 8, 30000),
+             "tolerance, replay four arrangements", 60, 7, 5000),
     ER.Stage("method_gate", stage_method_gate,
-             "reproduce the recorded results bit for bit", 25, 4, 900),
+             "reproduce the recorded results bit for bit", 4, 1, 90),
     ER.Stage("accuracy", stage_accuracy,
              "tolerance ladders and cost at matched achieved accuracy",
-             45, 5, 1600),
+             22, 1, 90),
     ER.Stage("pulse_gate", stage_pulse_gate,
              "the burn-time model out of the loop, in PROCESS's own driver",
-             4, 2, 200),
+             6, 3, 200),
     ER.Stage("census", stage_census,
-             "which quantity forces a second pass", 20, 3, 700),
+             "which quantity forces a second pass", 6, 1, 300),
     ER.Stage("permutation", stage_permutation,
-             "grouping versus node ordering", 25, 3, 900),
+             "grouping versus node ordering", 6, 1, 300),
     ER.Stage("driver_hoist", stage_driver_hoist,
              "the feed-forward hoist, in PROCESS's own driver", 8, 3, 400,
              optional_reason="no --parent-tree, so there is nothing to "

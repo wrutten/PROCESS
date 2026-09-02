@@ -301,6 +301,28 @@ not an error to swallow.** Neither writes anything into the tracked tree.
 The two files share one runner (`arch_surgery/experiment_runner.py`): they differ in which phase
 they drive, not in how they drive it.
 
+**What they cost, measured on this machine rather than estimated**, three test cases, at the
+default job count (this machine has 16 cores and 7 GB of memory; above five parallel jobs a run
+starts competing for memory rather than for cores):
+
+| | Phase A | Phase B |
+|---|---|---|
+| full run, from scratch | **≈ 105 min** | **≈ 175 min** |
+| `--quick`, one test case | **≈ 13 min** | **≈ 8 min** |
+| untracked run artifacts | ≈ 6 GB | ≈ 7 GB |
+
+**Nothing is assumed to exist.** The recorded design points every replay stage reads are treated as
+a cache to be verified, not a dependency to be trusted: they are checked before use and rebuilt if
+absent, and rebuilding them is most of Phase A's runtime. In a task worktree they are usually
+reached through a symlink into another checkout's untracked run tree, and **the entry point refuses
+to rebuild through such a symlink**, naming the fix — overwriting the shared recording every other
+piece of this study replays is not something a smoke run should be able to do by accident.
+
+*A from-scratch Phase A run of one test case, done on 2026-09-02 to check exactly this, reproduces
+the in-loop model-evaluation counts in §4.4 exactly — 9 471, 9 471, 9 618 and 13 906 for the four
+arrangements on `large_tokamak_nof` — having recorded its own design points rather than reading the
+committed ones.*
+
 That file is at the repository root and is a **wrapper, not a reimplementation**. Each stage it
 runs was written, reviewed and gated as its own piece of work, and the wrapper calls those pieces
 rather than restating them, so that running the experiment from one file and running the stages

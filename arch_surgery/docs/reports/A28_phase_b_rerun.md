@@ -465,6 +465,34 @@ $PY $W/arch_surgery/idf_probe/a28_tables.py        --runs $R
 Raw artifacts stay untracked under `arch_surgery/idf_probe/runs/`; the numbers in this report are
 the committed summary.
 
+**What it costs, measured rather than estimated**, on this machine (16 cores, 7 GB; above five
+parallel jobs it competes for memory rather than cores), three decks, 25 starting points:
+
+| stage | runs | minutes | disk |
+|---|---|---|---|
+| derive the lifted decks | 2 | 1 | 1 MB |
+| switch neutrality *(needs `--parent-tree`)* | 16 | 5 | 250 MB |
+| gate, five arms | 15 | 4 | 85 MB |
+| δ calibration | 108 | 27 | 1.1 GB |
+| the campaign, four arms | 300 | 75 | 3.5 GB |
+| accuracy census | 225 | 6 | 30 MB |
+| ladder, cost + audit | 168 | 55 | 1.7 GB |
+| **total** | **834** | **≈ 175** | **≈ 7 GB** |
+
+`--quick` is one deck, three arms, three starting points and a two-rung ladder: **≈ 8 minutes**,
+75 MB, and it exercises every stage including every gate and every sensitivity check. Phase A's
+entry point is **≈ 105 minutes** from scratch (most of it recording the design points) and
+**≈ 13 minutes** under `--quick`.
+
+**Both entry points were run end to end before this report was written.** Phase B: `--quick` on
+every stage, and the full path for every number quoted. Phase A: `--quick` on every stage, from
+scratch on one test case — and it **reproduces A18's published in-loop model-evaluation counts
+exactly**, 9 471 / 9 471 / 9 618 / 13 906 for R / A0 / A0f / A1 on `large_tokamak_nof`, having
+recorded its own design points rather than reading the committed ones. The full three-deck Phase A
+path was **not** re-run end to end from one command; its `method_gate` and `accuracy` stages were
+run in full on all three decks (§1.3a), and its `phase_a`, `census` and `permutation` stages were
+run in full only on one test case under `--quick`. That is stated rather than implied.
+
 ---
 
 ## 9. Change log (append-only)
