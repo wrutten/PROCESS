@@ -93,6 +93,32 @@
    fix had to move to the dispatch side. **Note also that "descends from `c0ae5b28`" is worthless
    as a check on its own**: upstream `main` descends from it too, so that test passes on exactly
    the tree it is meant to catch.
+15. **Every published number is produced by executing a committed Python script, never by an
+   ad-hoc command line** (user, 2026-09-02: *"Experiment results should always be created by
+   execution of a reproducible python script. I don't want future experiments to be run manually
+   in command line. I want committed traceability of the results."*). Binding on every task from
+   A28 onward. Concretely:
+   - **The script is committed before the numbers are published**, in the same branch, and the
+     report names it and the commit it was run at. A report that cites a figure no committed
+     script can regenerate is incomplete, not merely undocumented.
+   - **No stage may exist only as a shell invocation.** A run reachable only by retyping a
+     `python -m ...` line with flags is not reproducible; wrap it as a stage of the experiment
+     script. Shell is permitted for *inspection* — `ls`, `grep`, reading a JSON — never for
+     producing a number that a report will cite.
+   - **The script owns the whole chain**: deck derivation, gates, calibration, campaign, ladder,
+     analysis, tables. If a stage was run by hand during development, it must be folded into the
+     script and the script re-run before the task reports.
+   - **The report states, per figure, which stage produced it**, so a reader can go from a number
+     to the code that made it without reading the queue.
+   - **Failure is reproducible too.** A gate that failed, a deck that was dropped, a start that
+     was refused — all reachable from the same entry point, so the negative results are as
+     traceable as the positive ones.
+   Rationale: this project's published headline has already been overturned once (A26) and had
+   three separate errors corrected in a merged report (A21). Both were caught only because the
+   artifacts happened to survive; **I-14 shows they do not always survive** — A26's
+   `matched_accuracy.json` was destroyed and Phase A's figures now have to be regenerated rather
+   than re-read. A committed script makes the numbers recoverable from code instead of from
+   artifacts that a `git worktree remove` can delete.
 14. **Standing rules**: the sandbox is never overridden (report blockers and ask); never push
    without per-push approval; never modify a sibling clone; the base commit and the models
    are frozen. See [`../../../CLAUDE.md`](../../../CLAUDE.md).

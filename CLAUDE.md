@@ -43,6 +43,11 @@ in `arch_surgery/`.
 
 ## Working rules
 
+- **Every published number comes from executing a committed Python script**, never from an ad-hoc
+  command line (protocol §15). The script is committed before the numbers are published, the report
+  names it and the commit it ran at, and no stage exists only as a shell invocation. Shell is for
+  inspection, not for producing figures a report will cite. Failure paths — dropped decks, refused
+  starts, failed gates — are reachable from the same entry point.
 - **A failed gate is a result, not an obstacle.** Never tune, retry with different settings, or
   work around a gate to make it pass. Report what failed with the numbers.
 - **Every number is rederived at `c0ae5b28`.** Nothing measured at `710a75c9` (the superseded
