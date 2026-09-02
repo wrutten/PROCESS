@@ -29,6 +29,15 @@ deck as the **p90 over design points**, with p50 and the max reported beside
 it, because a single straggler and five hundred movers are different things
 and ``max`` alone cannot tell them apart.
 
+**p50 is reported but cannot carry the comparison on these decks, and that is a
+measurement rather than a preference.**  The median exit residual is exactly
+**zero** on 15 of 17 rungs on ``large_tokamak_nof`` and 13 of 17 on
+``low_aspect_ratio_DEMO`` --- the state is a bit-exact fixed point of the sweep
+map on most design points, which plan §4.1c already records as the strongest
+evidence against noise-chasing.  A statistic that is zero on most rungs leaves
+almost nothing for a log-log curve to be fitted to, so the p50 comparison comes
+back with one or two matched points and is reported as such rather than quoted.
+
 It is deliberately *not* the objective.  §4.3 already records that on
 ``large_tokamak_nof`` the objective is ``0.2 × rmajor`` and ``rmajor`` **is a
 design variable**, so that deck's objective cannot move with τ at all and its
