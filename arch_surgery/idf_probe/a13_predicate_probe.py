@@ -47,6 +47,20 @@ ALIASES = {"_costs_1990": "costs", "_costs_2015": "costs", "_costs_custom": "cos
 TAIL = ("water_use", "costs")
 
 
+def _fom_reads_node(caller_mod, fom: int, node: str, writes) -> bool:
+    """Whether figure of merit *fom* puts *node* in the pre-predicate slot.
+
+    A26's routing rule, evaluated for one figure of merit.  An unrecognised
+    figure of merit raises inside ``_predicate_read_fields``; that is not a
+    finding about the node, so it is treated as "does not read".
+    """
+    try:
+        reads = caller_mod._predicate_read_fields(fom)
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(writes.get(node, frozenset()) & reads)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenario", required=True)
@@ -180,16 +194,45 @@ def main() -> int:
     result["n_sweeps"] = state["sweeps"]
     result["per_node"] = per_node
 
-    # The table caller.py carries, and whether measurement agrees with it.
-    declared = {
-        node: sorted(ids)
-        for node, ids in getattr(caller_mod, "_FOM_READS_NODE", {}).items()
-    }
+    # The rule caller.py carries, and whether measurement agrees with it.
+    #
+    # A26 replaced the hard-coded ``_FOM_READS_NODE`` table with a routing rule
+    # derived from the driver's own source (``_predicate_read_fields``) and the
+    # committed per-node write census.  So the "declaration" is now derived,
+    # per figure of merit, rather than listed --- which is the whole point, and
+    # is why this probe recomputes it instead of reading a constant.  If
+    # neither is available the probe says so rather than silently comparing
+    # against an empty table, which would make the check pass unconditionally.
+    declared: dict = {}
+    declared_source = "unavailable"
+    if hasattr(caller_mod, "_predicate_read_fields") and hasattr(
+        caller_mod, "_node_write_sets"
+    ):
+        try:
+            writes = caller_mod._node_write_sets()
+            declared_source = "derived: _predicate_read_fields x _node_write_sets"
+            for n in TAIL:
+                ids = sorted(
+                    fom
+                    for fom in range(1, 20)
+                    if _fom_reads_node(caller_mod, fom, n, writes)
+                )
+                declared[n] = ids
+        except Exception as exc:  # noqa: BLE001
+            declared_source = f"derivation failed: {type(exc).__name__}: {exc}"
+    elif hasattr(caller_mod, "_FOM_READS_NODE"):
+        declared = {
+            node: sorted(ids)
+            for node, ids in caller_mod._FOM_READS_NODE.items()
+        }
+        declared_source = "table: _FOM_READS_NODE (pre-A26)"
+    result["declared_source"] = declared_source
     measured = {n: sorted(moved[n]) for n in TAIL}
     result["declared_fom_reads_node"] = declared
     result["measured_fom_moves_across_node"] = measured
-    result["declaration_covers_measurement"] = all(
-        set(measured[n]) <= set(declared.get(n, [])) for n in TAIL
+    result["declaration_covers_measurement"] = (
+        declared_source != "unavailable"
+        and all(set(measured[n]) <= set(declared.get(n, [])) for n in TAIL)
     )
     (outdir / "predicate_probe.json").write_text(json.dumps(result, indent=2))
     print(json.dumps({k: v for k, v in result.items() if k != "traceback"}, indent=2))

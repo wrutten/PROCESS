@@ -21,6 +21,16 @@ Subcommands
 ``ladder``    the tau calibration ladder -- **run this first**, it is a one-off
 ``replay``    the arm comparison at a chosen tau
 
+**A26 note.**  This file still runs Phase A exactly as A18 ran it, and its
+defaults are A18's --- ``--spec-mode a18``'s categorisation, no
+predicate-layer routing, the block arm's inner tolerance equal to its outer
+one.  That is deliberate: A18, A22 and A23's recorded artifacts have to keep
+reproducing, and ``run_a26.py gate`` checks that they do, bit for bit.
+**New measurements go through** :mod:`run_a26`, which exposes the parameters
+A26 added --- the inner tolerance, the coupling-state spec mode and its scale
+floor, the predicate-layer routing, and repetitions for timing.  The one thing
+that changed here is the deck list; see :data:`DROPPED_2026_09_02`.
+
 Usage
 -----
     python run_phase_a.py all --pristine-tree /path/to/c0ae5b28/checkout
@@ -46,11 +56,23 @@ PROBE = TREE / "arch_surgery" / "idf_probe"
 RUNS = PROBE / "runs" / "a18"
 SCENARIOS_DIR = PROBE / "scenarios"
 
+#: **Three decks, from 2026-09-02 (D17).**  ``large_tokamak_eval`` is dropped:
+#: it runs 0 solver iterations, so it cannot inform a study about how an
+#: architecture behaves when the optimiser reacts; its inequality constraints
+#: are never enforced, so its "solution" is not a feasible optimum; and A22
+#: found its evidence weaker than the other pulsed decks (555 of 840 coupling
+#: components classified constant from a 10-point harvest).  It was carrying
+#: two of the results report's largest percentages on ten design points.
+#: **Merged four-deck tables stand as the record of what was run** and are not
+#: retro-edited; anything generated from here on is a three-deck table.  Pass
+#: ``--scenarios`` explicitly to run the dropped deck for a historical
+#: re-derivation.
+DROPPED_2026_09_02 = ("large_tokamak_eval",)
+
 SCENARIOS = [
     "large_tokamak_nof",
     "low_aspect_ratio_DEMO",
     "st_regression",
-    "large_tokamak_eval",
 ]
 
 #: The ladder is a one-off calibration, not a per-arm setting.  tau must be

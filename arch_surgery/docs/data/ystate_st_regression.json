@@ -1,5 +1,8 @@
 {
   "format": "a18-ystate-1",
+  "spec_mode": "a18",
+  "scale_floor": 1.0,
+  "scale_floor_hex": "0x1.0000000000000p+0",
   "scenario": "st_regression",
   "generated_by": "arch_surgery/fixedpoint/gen_ystate.py",
   "harvest": {
@@ -47,18 +50,31 @@
       "continuous": "float-valued and varies; tested as max|dy_i|/s_i < tau",
       "discrete": "not float-valued; tested by exact equality",
       "constant": "identical at every harvested design point; excluded from the tolerance test, but asserted to stay constant at run time -- a move blocks convergence and is named",
-      "nan_in_harvest": "NaN or infinity somewhere in the harvest itself; excluded and counted, never silently admitted"
+      "nan_in_harvest": "NaN or infinity somewhere in the harvest itself; excluded and counted, never silently admitted (SPEC_MODE_A18 only)",
+      "nonfinite": "SPEC_MODE_A26: non-finite somewhere in the harvest, and tested rather than excluded -- the non-finite pattern must be unchanged and the finite entries must satisfy the scaled test",
+      "excluded_accumulator": "SPEC_MODE_A26: excluded, with a per-quantity justification that it accumulates within a sweep and so has no fixed point.  The only admissible justification; 'it never varied' is not one"
     },
+    "a26_note": "In SPEC_MODE_A26 nothing is excluded for never having varied.  Every float component is tested at its own measured magnitude, or at the recorded scale floor where it has none; every non-float component is tested by exact equality.  ACCUMULATORS is the whole exclusion set.",
+    "accumulators": {},
     "max_inline_elements": 32
   },
   "census": {
+    "spec_mode": "a18",
+    "scale_floor": 1.0,
     "n_components": 827,
     "n_continuous": 582,
     "n_discrete": 2,
     "n_constant": 243,
     "n_nan_in_harvest": 0,
+    "n_nonfinite": 0,
+    "n_excluded_accumulator": 0,
+    "n_tested": 584,
+    "n_excluded": 243,
+    "n_scale_from_floor": 0,
+    "excluded_accumulator_fields": {},
     "harvest_points_used": 144,
     "nan_in_harvest_fields": [],
+    "nonfinite_fields": [],
     "discrete_fields": [
       "heat_transport.n_primary_heat_exchangers",
       "superconducting_tfcoil.n_tf_croco_strand_hts_tapes"
@@ -66,7 +82,7 @@
   },
   "components_sha256": "08fef594119972718242c4b8ca520c70ff9d776fa64cf11e28f1480ae1e48a49",
   "n_components": 827,
-  "tree_git_head": "ad4e45364eb2fa5b944391386817657ac5c466ca",
+  "tree_git_head": "7e35987f7dd67c07bb34ff8ff0c90740221bc9ad",
   "components": [
     {"key": "blanket.deg_blkt_inboard_poloidal_plasma", "kind": "float64", "category": "constant", "value": {"value": 145.01535094977916, "hex": "0x1.2207dc1466873p+7"}},
     {"key": "blanket.deg_blkt_outboard_poloidal_plasma", "kind": "float", "category": "constant", "value": {"value": 180.0, "hex": "0x1.6800000000000p+7"}},

@@ -16,7 +16,7 @@ from process.core import process_output as po
 from process.core.io.mfile import MFile
 from process.core.process_output import OutputFileManager, ovarre
 from process.core.solver import constraints
-from process.core.solver import module_solve
+from process.core.solver import module_solve, subsolve
 from process.core.solver.iteration_variables import set_scaled_iteration_variable
 from process.core.solver.objectives import objective_function
 from process.data_structure.blanket_variables import BlktModelTypes
@@ -92,6 +92,32 @@ SEQUENCE_HEAD: tuple[str, ...] = _SEQUENCE_HEADS[SEQUENCE_NAME]
 _HOIST_MODULES: dict[str, frozenset[str]] = {
     "off": frozenset(),
     "feedforward": frozenset({"FF"}),
+    # FF, plus the burn-time articulation point once it has been lifted.
+    "feedforward_lifted": frozenset({"FF", "PULSE"}),
+}
+
+#: Hoist arms that additionally require a lifted site, and which one.
+#:
+#: Plan §4.1d: once the burn time is a design variable, ``Pulse``'s burn-time
+#: write is a no-op (``subsolve`` returns the design variable untouched) and
+#: the only other field it writes on the pulsed decks,
+#: ``constraints.t_current_ramp_up_min``, is read by a constraint equation and
+#: by **no model**.  So post-lift ``pulse`` has no feedback into the MDA and
+#: should run once per optimiser evaluation rather than once per sweep.  This
+#: is the VP2 x VP5 composition the framework predicted and flagged as a latent
+#: defect that fires only when two arms compose; it never fired because the
+#: hoist keyed on the static node-map label and ``pulse`` is labelled
+#: ``PULSE``.
+#:
+#: It is its **own arm name** rather than an automatic consequence of turning
+#: the lift on, for two reasons.  A comparison must be able to vary one thing:
+#: ``feedforward`` and ``feedforward_lifted`` with the same lift setting differ
+#: only in whether ``pulse`` leaves the sweep, which is what makes the gate
+#: below a one-variable comparison.  And an arm that silently changes meaning
+#: with an unrelated environment variable is the failure mode this file already
+#: refuses elsewhere.
+_HOIST_REQUIRES_LIFT: dict[str, str] = {
+    "feedforward_lifted": subsolve.SITE_BURN_TIME,
 }
 
 HOIST_NAME: str = os.environ.get("PROCESS_ARCH_HOIST", "").strip() or "off"
@@ -101,6 +127,16 @@ if HOIST_NAME not in _HOIST_MODULES:
         f"PROCESS_ARCH_HOIST={HOIST_NAME!r} is not a recognised hoist "
         f"setting; expected one of {tuple(_HOIST_MODULES)} (or unset for "
         f"{'off'!r})."
+    )
+
+_needs = _HOIST_REQUIRES_LIFT.get(HOIST_NAME)
+if _needs and not subsolve.is_lifted(_needs):
+    raise RuntimeError(
+        f"PROCESS_ARCH_HOIST={HOIST_NAME!r} hoists the burn-time articulation "
+        f"point out of the sweep, which is only correct once that site is "
+        f"lifted: with PROCESS_ARCH_LIFT={_needs!r} unset, Pulse still solves "
+        f"the burn time in the model and the loop would stop updating it.  "
+        f"Set PROCESS_ARCH_LIFT={_needs}, or use PROCESS_ARCH_HOIST=feedforward."
     )
 
 #: Node-map modules whose nodes are deferred out of the sweep.
@@ -116,21 +152,155 @@ HOIST_ENABLED: bool = bool(HOIST_MODULES)
 #: rewritten, not which nodes are hoisted.
 DEFERRABLE_NODES: tuple[str, ...] = ("pulse", "water_use", "costs")
 
-#: Figures of merit whose objective metric reads a field the node writes, and
-#: which therefore cannot have that node deferred: the idempotence loop in
-#: :meth:`Caller.call_models` tests ``objf`` and ``conf``, so hoisting a node
-#: the objective reads would leave the loop converging on state it has
-#: deliberately stopped updating.  ``objectives.py`` reads ``costs.coe``
-#: (figure of merit 6) and ``costs.cdirt``/``costs.concost`` (7); all three are
-#: written by the ``costs`` model.  No other figure of merit, and no
-#: constraint equation, reads a field written by a hoisted node -- measured,
-#: not assumed (task A13).
-_FOM_READS_NODE: dict[str, frozenset[int]] = {
-    "costs": frozenset({
-        int(FiguresOfMerit.COST_OF_ELECTRICITY),
-        int(FiguresOfMerit.CAPITAL_COST),
-    }),
-}
+#: **The hoist is a routing rule, not an exclusion rule** (plan §4.1d/§4.1e).
+#:
+#: ``Caller.call_models`` stops when ``objf`` and ``conf`` agree between
+#: sweeps, so what makes a node unsafe to defer is that the **predicate
+#: layer** --- the objective *or* the constraint layer --- reads something it
+#: writes.  A node like that must not run *after* ``conf`` is evaluated,
+#: because the optimiser would then be handed a constraint vector built from a
+#: stale value: a small, plausible, wrong ``conf``, which is the hardest kind
+#: of defect to catch.  But it need not stay in the loop either.  It runs
+#: **once, on the converged state, before** ``objf`` and ``conf``.
+#:
+#: Three slots, then:
+#:
+#: =====================  ===============================================
+#: in the loop            the node-map module is not hoisted by this arm
+#: pre-predicate, once    hoisted, and the predicate layer reads something
+#:                        it writes
+#: post-predicate, once   hoisted, and it reads nothing the predicate does
+#: =====================  ===============================================
+#:
+#: This **generalises A13's figure-of-merit guard and replaces it.**  A13 kept
+#: ``costs`` inside the loop on decks whose figure of merit reads it, which is
+#: correct but more conservative than necessary: the pre-predicate slot does
+#: the same job by running the node once instead of every sweep, so the deck
+#: keeps the saving without the staleness.
+#:
+#: Both inputs are **measured, not listed here.**  The predicate's read set is
+#: taken from the driver's own source by
+#: :func:`_predicate_read_fields`; each node's write set comes from the
+#: committed run-time write census at :data:`NODE_WRITESET_PATH`.  Neither is a
+#: hardcoded table that can drift from the code it describes.
+
+#: The two files that make up the idempotence predicate.
+_PREDICATE_SOURCES = (
+    Path(__file__).resolve().parent / "solver" / "objectives.py",
+    Path(__file__).resolve().parent / "solver" / "constraints.py",
+)
+
+#: Committed per-node write sets (framework component C8's sibling), measured
+#: by the ``modules`` write census.  Read only when the hoist is on; never
+#: read live from a generated artifact (trap T9).
+NODE_WRITESET_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "arch_surgery"
+    / "docs"
+    / "data"
+    / "node_writesets.json"
+)
+
+
+def _predicate_read_fields(i_figure_merit: int) -> frozenset[str]:
+    """``{"namespace.field"}`` the predicate layer reads, for this run.
+
+    An AST walk for ``data.<namespace>.<field>`` in a **load** context, so a
+    field that only ever appears on the left of an assignment is not collected
+    (trap T2: ``= `` matches ``==`` when you use a regex; the parser does not
+    have that problem).  The objective side is narrowed to the active figure of
+    merit's own branch of ``objective_function``'s ``if``/``elif`` chain; the
+    constraint side is the **whole** layer, not only the deck's ``icc``.
+
+    The asymmetry is deliberate.  Over-reporting routes a node to the
+    pre-predicate slot, which is never wrong --- only occasionally
+    unnecessary.  Under-reporting hands the optimiser a stale ``conf``.
+    """
+    import ast  # noqa: PLC0415
+
+    fom_name = FiguresOfMerit(abs(int(i_figure_merit))).name
+    fields: set[str] = set()
+
+    class _Reads(ast.NodeVisitor):
+        def __init__(self):
+            self.reads: set[str] = set()
+
+        def visit_Attribute(self, node):  # noqa: N802
+            inner = node.value
+            if (
+                isinstance(inner, ast.Attribute)
+                and isinstance(inner.value, ast.Name)
+                and inner.value.id == "data"
+                and isinstance(node.ctx, ast.Load)
+            ):
+                self.reads.add(f"{inner.attr}.{node.attr}")
+            self.generic_visit(node)
+
+    def _fom_of(test):
+        if (
+            isinstance(test, ast.Compare)
+            and len(test.ops) == 1
+            and isinstance(test.ops[0], ast.Eq)
+            and isinstance(test.comparators[0], ast.Attribute)
+            and isinstance(test.comparators[0].value, ast.Name)
+            and test.comparators[0].value.id == "FiguresOfMerit"
+        ):
+            return test.comparators[0].attr
+        return None
+
+    obj_src, con_src = _PREDICATE_SOURCES
+    fn = None
+    for node in ast.walk(ast.parse(obj_src.read_text(), filename=str(obj_src))):
+        if isinstance(node, ast.FunctionDef) and node.name == "objective_function":
+            fn = node
+            break
+    if fn is None:
+        raise RuntimeError(
+            f"{obj_src} has no objective_function; the hoist's routing rule "
+            f"cannot be derived and must not be guessed."
+        )
+    seen_chain = False
+
+    def walk(stmts):
+        nonlocal seen_chain
+        for st in stmts:
+            name = _fom_of(st.test) if isinstance(st, ast.If) else None
+            if name is not None:
+                seen_chain = True
+                if name == fom_name:
+                    v = _Reads()
+                    for b in st.body:
+                        v.visit(b)
+                    fields.update(v.reads)
+                walk(st.orelse)
+            else:
+                v = _Reads()
+                v.visit(st)
+                fields.update(v.reads)
+
+    walk(fn.body)
+    if not seen_chain:
+        raise RuntimeError(
+            f"{obj_src}'s figure-of-merit chain did not parse; the hoist's "
+            f"routing rule cannot be derived and must not be guessed."
+        )
+    v = _Reads()
+    v.visit(ast.parse(con_src.read_text(), filename=str(con_src)))
+    fields.update(v.reads)
+    return frozenset(fields)
+
+
+def _node_write_sets() -> dict[str, frozenset[str]]:
+    """Per-node write sets from the committed census."""
+    if not NODE_WRITESET_PATH.exists():
+        raise RuntimeError(
+            f"PROCESS_ARCH_HOIST={HOIST_NAME!r} needs the committed per-node "
+            f"write sets at {NODE_WRITESET_PATH}, which is not present.  "
+            f"Generate with arch_surgery/fixedpoint/gen_node_writesets.py."
+        )
+    raw = json.loads(NODE_WRITESET_PATH.read_text())["writes_by_node_union"]
+    return {k: frozenset(v) for k, v in raw.items()}
+
 
 #: Committed DSM node map (framework component C8).  Read only when the hoist
 #: is on; never read live from the dependency-analysis repository (trap T9).
@@ -187,17 +357,34 @@ if _HOIST_UNCOVERED:
     )
 
 
-def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
-    """The nodes actually deferred, for a run using *i_figure_merit*.
+def resolved_hoist_tails(i_figure_merit: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """``(pre_predicate, post_predicate)`` for a run using *i_figure_merit*.
 
-    The arm's node set less any node whose output the idempotence loop's own
-    predicate reads.  Public so that a measurement harness can record the
-    tail a run resolved without reconstructing the rule.
+    Every node the arm hoists is placed in one of the two slots by the routing
+    rule: the predicate layer reads something it writes, or it does not.
+    Nothing is dropped --- a hoisted node always runs exactly once.
+
+    Public so that a measurement harness can record the tails a run resolved
+    without reconstructing the rule.
     """
-    fom = abs(int(i_figure_merit))
-    return tuple(
-        n for n in HOIST_NODES if fom not in _FOM_READS_NODE.get(n, frozenset())
-    )
+    if not HOIST_NODES:
+        return (), ()
+    reads = _predicate_read_fields(i_figure_merit)
+    writes = _node_write_sets()
+    pre, post = [], []
+    for n in HOIST_NODES:
+        (pre if (writes.get(n, frozenset()) & reads) else post).append(n)
+    return tuple(pre), tuple(post)
+
+
+def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
+    """Every deferred node, pre-predicate group first.
+
+    Kept because A13's harness records it.  Anything that has to place a node
+    relative to the predicate evaluation must use :func:`resolved_hoist_tails`.
+    """
+    pre, post = resolved_hoist_tails(i_figure_merit)
+    return pre + post
 
 
 # --------------------------------------------------------------------------
@@ -286,14 +473,14 @@ def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
     is a predicate on names, not a list of calls to make.
 
     **The hoist composes here, and that composition is the thing to get
-    right.**  With VP2 on, the feed-forward nodes the active figure of merit
-    does *not* read are removed from the ``FF`` block and returned separately
-    as the tail, to be run once after the outer fixed point.  Any FF node the
-    figure of merit *does* read -- ``costs`` under figures of merit 6 and 7 --
-    stays inside the loop, in the ``FF`` block, exactly as ``resolved_hoist_tail``
-    already decides for the flat arm.  Getting that wrong would either hoist a
-    node the predicate reads or leave the whole tail in the loop, and the two
-    failures look alike from outside.
+    right.**  With VP2 on, every deferred node is removed from its block and
+    returned as the tail, to be run once after the outer fixed point --- both
+    slots, because a per-module schedule's outer test is on the coupling state
+    and not on ``objf``/``conf``, so nothing here is at risk of reading a
+    stale predicate input.  The **placement** of the two groups relative to
+    the predicate evaluation is ``call_models``'s business, not the
+    schedule's; :func:`resolved_hoist_tails` is the one place that decides
+    which group a node is in.
 
     Returns
     -------
@@ -365,6 +552,11 @@ class Caller:
         # on every call rather than memoised: it depends on the deck's figure
         # of merit, and a scan may change the deck between calls.
         self._hoist_tail: frozenset[str] = frozenset()
+        # VP2 / plan §4.1d: the deferred nodes split into a group that runs
+        # before ``objf``/``conf`` and one that runs after.  Both empty on the
+        # default path.
+        self._hoist_pre: frozenset[str] = frozenset()
+        self._hoist_post: frozenset[str] = frozenset()
         # VP4: the nodes the current block sweep may run, or ``None`` when the
         # whole sequence runs.  ``None`` is the default and the only value the
         # flat-loop path ever sees.
@@ -380,19 +572,20 @@ class Caller:
 
     # -- VP2 -------------------------------------------------------------
 
-    def _resolve_hoist_tail(self) -> frozenset[str]:
-        """The nodes this run defers out of the sweep.
+    def _resolve_hoist_tails(self) -> tuple[frozenset[str], frozenset[str]]:
+        """``(pre_predicate, post_predicate)`` for this run.
 
-        The arm's node set (``HOIST_NODES``) less any node the idempotence
-        loop's own predicate reads.  ``call_models`` tests the objective
-        function and the constraint residuals, so a node whose output the
-        active figure of merit reads must keep running inside the loop --
-        otherwise the loop would be testing state it has deliberately stopped
-        updating, and would converge on a different criterion than upstream's.
+        ``call_models`` stops on ``objf`` and ``conf``, so a node whose output
+        the predicate layer reads cannot run *after* they are evaluated --- the
+        optimiser would get a constraint vector built from a stale value.  It
+        runs **once, before** them, on the converged state.  Everything else
+        runs once after, as A13 built it.  Either way the node leaves the
+        sweep, which is where the saving is.
         """
         if not HOIST_ENABLED:
-            return frozenset()
-        return frozenset(resolved_hoist_tail(self.data.numerics.i_figure_merit))
+            return frozenset(), frozenset()
+        pre, post = resolved_hoist_tails(self.data.numerics.i_figure_merit)
+        return frozenset(pre), frozenset(post)
 
     def _acpow(self) -> None:
         """``power.acpow`` as a node callable.
@@ -678,7 +871,8 @@ class Caller:
         # settled.  With the hoist off ``_pending`` stays ``None`` and nothing
         # below this line differs from upstream.
         if HOIST_ENABLED:
-            self._hoist_tail = self._resolve_hoist_tail()
+            self._hoist_pre, self._hoist_post = self._resolve_hoist_tails()
+            self._hoist_tail = self._hoist_pre | self._hoist_post
             pending: list | None = [] if self._hoist_tail else None
         else:
             pending = None
@@ -714,10 +908,34 @@ class Caller:
                     "Model evaluations idempotent, returning objective "
                     "function and constraints"
                 )
-                # VP2: the fixed point is reached, so the feed-forward tail
-                # runs once, on the converged state.
+                # VP2, split by plan §4.1d.  The fixed point is reached, so
+                # the deferred nodes run once on the converged state --- but
+                # the **pre-predicate** group has to run before ``objf`` and
+                # ``conf`` are the values this call returns, because the
+                # predicate layer reads something it writes.  So it runs, and
+                # then the predicate is re-evaluated on the state it produced.
+                # The post-predicate group runs after, as A13 built it.
+                #
+                # The extra evaluation of the predicate is not an extra sweep:
+                # it is one call to ``objective_function`` and one to
+                # ``constraint_eqns``, on a state that has just converged.
                 if pending:
-                    self._run_hoisted_tail(pending)
+                    pre = [t for t in pending if t[0] in self._hoist_pre]
+                    post = [t for t in pending if t[0] not in self._hoist_pre]
+                    if pre:
+                        self._run_hoisted_tail(pre)
+                        if _idf_probe.ENABLED:
+                            _idf_probe.objective_begin()
+                        objf = objective_function(
+                            self.data.numerics.i_figure_merit, self.data
+                        )
+                        conf, _, _, _, _ = constraints.constraint_eqns(
+                            m, -1, self.data
+                        )
+                        if _idf_probe.ENABLED:
+                            _idf_probe.objective_end()
+                    if post:
+                        self._run_hoisted_tail(post)
                 if _idf_probe.ENABLED:
                     _idf_probe.call_models_end()
                 return objf, conf
