@@ -713,6 +713,50 @@ def rung(runs: Path, scenario: str, label: str, *, ref_objf: dict,
     }
 
 
+def convexity(curve_rec: dict) -> dict:
+    """Is this arm's envelope convex in log10(cost) against log10(accuracy)?
+
+    **This is checked rather than assumed, because a whole bias argument rests
+    on it.**  The matched-accuracy read interpolates linearly between
+    bracketing envelope points, and a chord across a *convex* curve lies
+    **above** it --- so an arm with fewer rungs has wider gaps, more of its
+    curve replaced by an over-estimate, and is made to look more expensive
+    than it is.  If the curve is not convex the argument does not hold and
+    must be dropped rather than asserted.
+
+    Reported as the sign of the discrete second difference at each interior
+    envelope point, with its denominator.
+    """
+    pts = curve_rec.get("points") or []
+    xs = [math.log10(p["accuracy"]) for p in pts if p["accuracy"] > 0]
+    ys = [math.log10(p["cost"]) for p in pts if p["accuracy"] > 0]
+    seconds = []
+    for i in range(1, len(xs) - 1):
+        h1, h2 = xs[i] - xs[i - 1], xs[i + 1] - xs[i]
+        if h1 <= 0 or h2 <= 0:
+            continue
+        # second divided difference; > 0 is convex
+        seconds.append(
+            2 * ((ys[i + 1] - ys[i]) / h2 - (ys[i] - ys[i - 1]) / h1)
+            / (h1 + h2)
+        )
+    n_pos = sum(1 for v in seconds if v > 0)
+    return {
+        "n_envelope_points": len(pts),
+        "n_interior_points_testable": len(seconds),
+        "n_convex": n_pos,
+        "n_concave": len(seconds) - n_pos,
+        "second_differences": seconds,
+        "verdict": (
+            "NOT TESTABLE -- fewer than three envelope points"
+            if not seconds else
+            "CONVEX at every interior point" if n_pos == len(seconds) else
+            "CONCAVE at every interior point" if n_pos == 0 else
+            "MIXED -- the chord argument does not hold uniformly"
+        ),
+    }
+
+
 def ladder(runs: Path, scenarios, *, stat: str = ACCURACY_STAT) -> dict:
     """Cost read off at matched **achieved** accuracy, per deck.
 
@@ -740,14 +784,61 @@ def ladder(runs: Path, scenarios, *, stat: str = ACCURACY_STAT) -> dict:
             "movement is degenerate there"
         ),
         "cost_unit": "net model evaluations in the solve phase",
-        "asymmetry_stated": (
-            "the block arm has an inner tolerance the flat arm does not have, "
-            "so it has more settings tried -- 9 rungs against 5.  That is "
-            "inherent to the architecture rather than a choice, and it is a "
-            "systematic advantage to the block arm.  It is bounded rather "
-            "than removed: the flat arm's rungs are checked for dominance and "
-            "any that the envelope drops are named"
-        ),
+        "asymmetry": {
+            "what": (
+                "the block arm has an inner tolerance the flat arm does not "
+                "have, so more settings are tried: 9 rungs against 5.  TWO "
+                "one-sided biases follow, BOTH favouring the block arm, and "
+                "declaring them is not correcting them"
+            ),
+            "bias_1_sampling": (
+                "a running minimum can only fall as draws are added, never "
+                "rise.  Two arms with identical underlying cost-accuracy "
+                "behaviour, sampled 9 times against 5, give the 9-sample arm "
+                "the lower envelope from sampling alone.  Worse, the four "
+                "extra rungs are NOT spread across the accuracy range: all "
+                "four sit at outer tau = 1e-6 and vary only the inner "
+                "tolerance, so the extra sampling is CONCENTRATED in one "
+                "narrow accuracy band -- and 1e-6 is the study's calibration "
+                "point, which is plausibly near where the matched-accuracy "
+                "readout lands.  The advantage is concentrated where it does "
+                "the most work"
+            ),
+            "bias_2_interpolation": (
+                "cost is read between bracketing envelope points by a chord "
+                "in log10(cost) against log10(accuracy).  Where the curve is "
+                "convex a chord lies ABOVE it, so the arm with fewer points "
+                "has wider gaps, more of its curve replaced by an "
+                "over-estimate, and is made to look dearer than it is.  Same "
+                "direction as bias 1.  Convexity is CHECKED per arm per deck "
+                "under 'convexity' rather than assumed; where the curve is "
+                "not convex this bias does not apply and is dropped"
+            ),
+            "the_fix": (
+                "a MATCHED-COUNT envelope is computed beside the "
+                "all-settings one: the block arm's five JOINT rungs against "
+                "the flat arm's five, same knob, same tau values, five draws "
+                "each.  Both are reported per deck with denominators.  The "
+                "difference between them is a TUNING PREMIUM -- two knobs "
+                "against one.  The all-settings envelope answers a "
+                "practitioner question ('the best I can do with each'); the "
+                "matched-count envelope answers the architecture question "
+                "('what does partitioning cost at equal tuning effort').  "
+                "They can disagree in sign, and if they do that is a finding "
+                "to report rather than reconcile"
+            ),
+            "why_this_is_not_pedantry": (
+                "A26's own analysis flipped sign on an envelope-construction "
+                "choice, +21.9 % to -4.3 %, against a final effect of about "
+                "4 %.  The construction has demonstrated leverage comparable "
+                "to the quantity being measured"
+            ),
+            "headline_rule": (
+                "the ARCHITECTURE headline takes the matched-count number; "
+                "the all-settings number is reported beside it and labelled "
+                "as the practitioner figure"
+            ),
+        },
         "per_scenario": {},
     }
     for s in scenarios:
@@ -796,17 +887,58 @@ def ladder(runs: Path, scenarios, *, stat: str = ACCURACY_STAT) -> dict:
             "n_rungs_flat_usable": len(usable_flat),
             "n_rungs_block_usable": len(usable_block),
         }
+        usable_joint = [
+            r for r in usable_block if r["label"].startswith("A1p_joint")
+        ]
+        rec["n_rungs_block_joint_only"] = len(usable_joint)
         for st in (stat, "achieved_residual_p50", "achieved_residual_max"):
             if not usable_flat or not usable_block:
                 rec[st] = {"status": "NO CURVE"}
                 continue
             cf = curve(usable_flat, stat=st)
             cb = curve(usable_block, stat=st)
-            rec[st] = {
+            entry = {
                 "flat_curve": cf,
-                "block_curve": cb,
-                "comparison": acc_compare(cf, cb),
+                "block_curve_all_settings": cb,
+                "all_settings_comparison": acc_compare(cf, cb),
+                "convexity_flat": convexity(cf),
+                "convexity_block_all_settings": convexity(cb),
             }
+            if usable_joint:
+                cj = curve(usable_joint, stat=st)
+                entry["block_curve_matched_count"] = cj
+                entry["matched_count_comparison"] = acc_compare(cf, cj)
+                entry["convexity_block_matched_count"] = convexity(cj)
+                entry["draws"] = {
+                    "flat": len(usable_flat),
+                    "block_all_settings": len(usable_block),
+                    "block_matched_count": len(usable_joint),
+                    "matched": len(usable_flat) == len(usable_joint),
+                }
+                # The tuning premium: what the second knob buys, at each
+                # accuracy the flat arm reached.  A ratio of ratios, so it is
+                # reported per point rather than as one number.
+                prem = []
+                for a_row, m_row in zip(
+                    entry["all_settings_comparison"]["rows"],
+                    entry["matched_count_comparison"]["rows"],
+                ):
+                    if (a_row.get("ratio_block_over_flat") is None
+                            or m_row.get("ratio_block_over_flat") is None):
+                        prem.append(None)
+                        continue
+                    prem.append(
+                        a_row["ratio_block_over_flat"]
+                        / m_row["ratio_block_over_flat"]
+                    )
+                entry["tuning_premium_all_over_matched"] = prem
+                entry["tuning_premium_note"] = (
+                    "below 1 means the extra knob made the block arm look "
+                    "cheaper than it does at equal tuning effort; that "
+                    "difference is the tuning premium and is not "
+                    "architecture"
+                )
+            rec[st] = entry
         out["per_scenario"][s] = rec
     return out
 

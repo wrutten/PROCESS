@@ -351,6 +351,88 @@ def compare(flat_curve: dict, block_curve: dict) -> dict:
 ALTERNATIVE_STATS = ("achieved_residual_p50", "achieved_residual_max")
 
 
+def convexity(curve_rec: dict) -> dict:
+    """Is this arm's envelope convex in log10(cost) against log10(accuracy)?
+
+    Checked rather than assumed, because a bias argument rests on it: the
+    matched-accuracy read interpolates by a chord between bracketing envelope
+    points, and a chord across a **convex** curve lies above it, so the arm
+    with fewer rungs has more of its curve replaced by an over-estimate.  If
+    the curve is not convex that argument does not hold and is dropped.
+    """
+    pts = curve_rec.get("points") or []
+    xs = [math.log10(p["accuracy"]) for p in pts if p["accuracy"] > 0]
+    ys = [math.log10(p["cost"]) for p in pts if p["accuracy"] > 0]
+    seconds = []
+    for i in range(1, len(xs) - 1):
+        h1, h2 = xs[i] - xs[i - 1], xs[i + 1] - xs[i]
+        if h1 <= 0 or h2 <= 0:
+            continue
+        seconds.append(
+            2 * ((ys[i + 1] - ys[i]) / h2 - (ys[i] - ys[i - 1]) / h1)
+            / (h1 + h2)
+        )
+    n_pos = sum(1 for v in seconds if v > 0)
+    return {
+        "n_envelope_points": len(pts),
+        "n_interior_points_testable": len(seconds),
+        "n_convex": n_pos,
+        "n_concave": len(seconds) - n_pos,
+        "second_differences": seconds,
+        "verdict": (
+            "NOT TESTABLE -- fewer than three envelope points" if not seconds
+            else "CONVEX at every interior point" if n_pos == len(seconds)
+            else "CONCAVE at every interior point" if n_pos == 0
+            else "MIXED -- the chord argument does not hold uniformly"
+        ),
+    }
+
+
+#: The asymmetry between the two arms' ladders, and what is done about it.
+#: **Declaring a bias is not correcting it**, so a matched-count envelope is
+#: computed beside the all-settings one and the architecture headline takes the
+#: matched-count number.
+ASYMMETRY = {
+    "what": (
+        "the block arm has an inner tolerance the flat arm does not have, so "
+        "more settings are tried: 11 rungs against 6 in Phase A.  TWO "
+        "one-sided biases follow, BOTH favouring the block arm"
+    ),
+    "bias_1_sampling": (
+        "a running minimum can only fall as draws are added, never rise.  Two "
+        "arms with identical underlying behaviour, sampled 11 times against "
+        "6, give the 11-sample arm the lower envelope from sampling alone -- "
+        "and the five extra rungs all sit at the calibrated outer tolerance, "
+        "varying only the inner one, so the extra sampling is CONCENTRATED in "
+        "one narrow accuracy band which is plausibly near where the "
+        "matched-accuracy readout lands"
+    ),
+    "bias_2_interpolation": (
+        "cost is read by a chord in log10(cost) against log10(accuracy); "
+        "where the curve is convex a chord lies ABOVE it, so the arm with "
+        "fewer points is made to look dearer.  Same direction as bias 1.  "
+        "Convexity is checked per arm per deck rather than assumed"
+    ),
+    "the_fix": (
+        "a MATCHED-COUNT envelope beside the all-settings one: the block "
+        "arm's six JOINT rungs against the flat arm's six, same knob, same "
+        "tau values.  The difference between them is a TUNING PREMIUM, two "
+        "knobs against one.  The all-settings envelope answers a practitioner "
+        "question; the matched-count envelope answers the architecture "
+        "question.  They can disagree in sign, and that is a finding"
+    ),
+    "why_this_is_not_pedantry": (
+        "this analysis flipped sign once already on an envelope-construction "
+        "choice, +21.9 % to -4.3 %, against a final effect of about 4 %.  The "
+        "construction has leverage comparable to the quantity measured"
+    ),
+    "headline_rule": (
+        "the ARCHITECTURE headline takes the matched-count number; the "
+        "all-settings number is reported beside it as the practitioner figure"
+    ),
+}
+
+
 def build(runs_root: Path, scenarios) -> dict:
     """Assemble both arms' curves and the matched-accuracy comparison."""
     out = {
@@ -365,6 +447,7 @@ def build(runs_root: Path, scenarios) -> dict:
             "net model evaluations = in-loop calls + hoisted tails "
             "(fixedpoint/accounting.py); the audit sweep is never charged"
         ),
+        "asymmetry": dict(ASYMMETRY),
         "per_scenario": {},
     }
     for s in scenarios:
@@ -381,7 +464,12 @@ def build(runs_root: Path, scenarios) -> dict:
             out["per_scenario"][s] = {"status": "INCOMPLETE",
                                       "n_flat": len(flat), "n_block": len(block)}
             continue
+        # The block arm's JOINT rungs alone -- one knob each, same tau values,
+        # same number of draws.  This is the matched-count comparison and it
+        # is what the architecture headline takes.
+        joint = [r for r in block if "joint" in (r.get("label") or "")]
         fc, bc = curve(flat), curve(block)
+        jc = curve(joint) if joint else None
         # Every rung of both arms must be over the same design-point set, or
         # the costs are not comparable.  Checked, not assumed.
         ns = {r["n_points"] for r in flat + block}
@@ -393,7 +481,14 @@ def build(runs_root: Path, scenarios) -> dict:
             alt[st] = {
                 "flat_curve": fa, "block_curve": ba,
                 "matched_accuracy": compare(fa, ba),
+                "convexity_flat": convexity(fa),
+                "convexity_block_all_settings": convexity(ba),
             }
+            if joint:
+                ja = curve(joint, stat=st)
+                alt[st]["block_curve_matched_count"] = ja
+                alt[st]["matched_count"] = compare(fa, ja)
+                alt[st]["convexity_block_matched_count"] = convexity(ja)
         out["per_scenario"][s] = {
             "status": "OK",
             "alternative_statistics": alt,
@@ -402,9 +497,31 @@ def build(runs_root: Path, scenarios) -> dict:
             "rungs_that_dropped_points": drops,
             "flat_rungs": flat,
             "block_rungs": block,
+            "block_rungs_joint_only": joint,
+            "draws": {
+                "flat": len(flat),
+                "block_all_settings": len(block),
+                "block_matched_count": len(joint),
+                "matched": len(flat) == len(joint),
+            },
             "flat_curve": fc,
             "block_curve": bc,
+            "block_curve_matched_count": jc,
             "matched_accuracy": compare(fc, bc),
+            "matched_count": compare(fc, jc) if jc else None,
+            "convexity_flat": convexity(fc),
+            "convexity_block_all_settings": convexity(bc),
+            "convexity_block_matched_count": convexity(jc) if jc else None,
+            "tuning_premium_all_over_matched": (
+                [
+                    (None if (a.get("ratio_block_over_flat") is None
+                              or m.get("ratio_block_over_flat") is None)
+                     else a["ratio_block_over_flat"]
+                     / m["ratio_block_over_flat"])
+                    for a, m in zip(compare(fc, bc)["rows"],
+                                    compare(fc, jc)["rows"])
+                ] if jc else None
+            ),
         }
     return out
 
@@ -414,6 +531,14 @@ def render(rec: dict) -> str:
     L.append("COST AT MATCHED ACHIEVED ACCURACY -- block arm A1 vs flat arm A0")
     L.append(f"accuracy = {rec['accuracy_definition']}")
     L.append(f"cost     = {rec['cost_definition']}")
+    a = rec.get("asymmetry") or {}
+    if a:
+        L.append("")
+        L.append("THE ENVELOPE'S ASYMMETRY, and what is done about it")
+        for k in ("what", "bias_1_sampling", "bias_2_interpolation",
+                  "the_fix", "why_this_is_not_pedantry", "headline_rule"):
+            if a.get(k):
+                L.append(f"  [{k}] {a[k]}")
     for s, d in rec["per_scenario"].items():
         L.append("")
         L.append(f"=== {s}")
@@ -443,24 +568,55 @@ def render(rec: dict) -> str:
                          f"over {len(rows)} matched points")
             else:
                 L.append(f"    -- same comparison on {st}: no matched points")
-        m = d["matched_accuracy"]
-        L.append(f"    -- matched: {m['n_matched_points']} of "
-                 f"{len(m['rows'])} flat rungs inside the block arm's range "
-                 f"{m['block_range']}")
-        L.append(f"       {'achieved p90':>13s} {'flat cost':>10s} "
-                 f"{'block cost':>11s} {'A1/A0':>7s}  bracket / status")
-        for r in m["rows"]:
-            if r["ratio_block_over_flat"] is None:
-                L.append(f"       {r['accuracy']:13.3e} {r['flat_cost']:10d} "
-                         f"{'--':>11s} {'--':>7s}  {r['status']}")
-            else:
-                flat = "  [flat: no looser block rung measured]" if (
-                    r["bracket"] and r["bracket"][0] == r["bracket"][1]
-                ) else ""
-                L.append(f"       {r['accuracy']:13.3e} {r['flat_cost']:10d} "
-                         f"{r['block_cost']:11.0f} "
-                         f"{r['ratio_block_over_flat']:7.3f}  "
-                         f"{r['bracket']}{flat}")
+        dr = d.get("draws") or {}
+        L.append(f"    -- draws: flat {dr.get('flat')}, block all-settings "
+                 f"{dr.get('block_all_settings')}, block matched-count "
+                 f"{dr.get('block_matched_count')}, matched: "
+                 f"{dr.get('matched')}")
+        for key, label in (
+            ("matched_count",
+             "MATCHED-COUNT (joint rungs only, one knob each) -- the "
+             "ARCHITECTURE figure"),
+            ("matched_accuracy",
+             "ALL-SETTINGS (both knobs on the block arm) -- the "
+             "PRACTITIONER figure"),
+        ):
+            m = d.get(key)
+            if not m:
+                L.append(f"    -- {label}: not available")
+                continue
+            L.append(f"    -- {label}: {m['n_matched_points']} of "
+                     f"{len(m['rows'])} flat rungs inside the block arm's "
+                     f"range {m['block_range']}")
+            L.append(f"       {'achieved p90':>13s} {'flat cost':>10s} "
+                     f"{'block cost':>11s} {'A1/A0':>7s}  bracket / status")
+            for r in m["rows"]:
+                if r["ratio_block_over_flat"] is None:
+                    L.append(f"       {r['accuracy']:13.3e} "
+                             f"{r['flat_cost']:10d} {'--':>11s} {'--':>7s}  "
+                             f"{r['status']}")
+                else:
+                    flat = "  [flat: no looser block rung measured]" if (
+                        r["bracket"] and r["bracket"][0] == r["bracket"][1]
+                    ) else ""
+                    L.append(f"       {r['accuracy']:13.3e} "
+                             f"{r['flat_cost']:10d} {r['block_cost']:11.0f} "
+                             f"{r['ratio_block_over_flat']:7.3f}  "
+                             f"{r['bracket']}{flat}")
+        prem = d.get("tuning_premium_all_over_matched")
+        if prem:
+            L.append("    -- tuning premium (all-settings / matched-count), "
+                     "per point: "
+                     + str([None if x is None else round(x, 4)
+                            for x in prem]))
+        for k in ("convexity_flat", "convexity_block_matched_count",
+                  "convexity_block_all_settings"):
+            v = d.get(k)
+            if v:
+                L.append(f"    -- {k}: {v['verdict']} "
+                         f"({v['n_convex']}/"
+                         f"{v['n_interior_points_testable']} interior points "
+                         f"convex, {v['n_envelope_points']} envelope points)")
     return "\n".join(L)
 
 

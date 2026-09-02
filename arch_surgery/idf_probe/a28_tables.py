@@ -207,6 +207,14 @@ def ladder(runs: Path) -> None:
         return
     _rule("5.  Cost at matched ACHIEVED accuracy (not at matched settings)")
     print(f"  {d['construction']}")
+    a = d.get("asymmetry") or {}
+    if a:
+        print(f"\n  THE ENVELOPE'S ASYMMETRY, and what is done about it")
+        for k in ("what", "bias_1_sampling", "bias_2_interpolation",
+                  "the_fix", "why_this_is_not_pedantry", "headline_rule"):
+            if a.get(k):
+                print(f"    [{k}] {a[k]}")
+        print()
     print(f"  accuracy: {d['accuracy_measure'][:110]}...")
     for s, rec in d["per_scenario"].items():
         print(f"\n  {s}   ({rec['n_rungs_flat_usable']} usable flat rungs, "
@@ -227,21 +235,46 @@ def ladder(runs: Path) -> None:
             if not c or c.get("status") == "NO CURVE":
                 print(f"    [{stat}] no curve")
                 continue
-            cmp_ = c["comparison"]
-            print(f"    [{stat}] A1'/A0' over the matched range: "
-                  f"{cmp_['n_matched_points']} matched points, "
-                  f"{cmp_['n_out_of_range']} out of range")
-            for row in cmp_["rows"]:
-                if row["ratio_block_over_flat"] is None:
-                    print(f"        {row['flat_label']:<18} "
-                          f"accuracy {row['accuracy']:.4g}  {row['status']}")
-                else:
-                    print(f"        {row['flat_label']:<18} "
-                          f"accuracy {row['accuracy']:.4g}  "
-                          f"A0' {row['flat_cost']:>8.0f}  "
-                          f"A1' {row['block_cost']:>10.1f}  "
-                          f"ratio {row['ratio_block_over_flat']:.4f}  "
-                          f"({row['change_pct']:+.2f} %)")
+            dr = c.get("draws") or {}
+            print(f"    [{stat}]  draws: flat {dr.get('flat')}, block "
+                  f"all-settings {dr.get('block_all_settings')}, block "
+                  f"matched-count {dr.get('block_matched_count')}")
+            for key, label in (
+                ("matched_count_comparison",
+                 "MATCHED-COUNT (5 joint rungs vs 5 flat) -- the ARCHITECTURE figure"),
+                ("all_settings_comparison",
+                 "ALL-SETTINGS (9 block rungs vs 5 flat) -- the PRACTITIONER figure"),
+            ):
+                cmp_ = c.get(key)
+                if not cmp_:
+                    continue
+                print(f"      {label}: {cmp_['n_matched_points']} matched "
+                      f"points, {cmp_['n_out_of_range']} out of range")
+                for row in cmp_["rows"]:
+                    if row["ratio_block_over_flat"] is None:
+                        print(f"        {row['flat_label']:<18} "
+                              f"accuracy {row['accuracy']:.4g}  "
+                              f"{row['status']}")
+                    else:
+                        print(f"        {row['flat_label']:<18} "
+                              f"accuracy {row['accuracy']:.4g}  "
+                              f"A0' {row['flat_cost']:>8.0f}  "
+                              f"A1' {row['block_cost']:>10.1f}  "
+                              f"ratio {row['ratio_block_over_flat']:.4f}  "
+                              f"({row['change_pct']:+.2f} %)")
+            prem = c.get("tuning_premium_all_over_matched")
+            if prem:
+                print(f"      tuning premium (all-settings / matched-count), "
+                      f"per point: "
+                      f"{[None if x is None else round(x, 4) for x in prem]}")
+            for k in ("convexity_flat", "convexity_block_matched_count",
+                      "convexity_block_all_settings"):
+                v = c.get(k)
+                if v:
+                    print(f"      {k}: {v['verdict']} "
+                          f"({v['n_convex']}/{v['n_interior_points_testable']} "
+                          f"interior points convex, "
+                          f"{v['n_envelope_points']} envelope points)")
 
 
 def h5(runs: Path) -> None:
@@ -333,7 +366,7 @@ def h5(runs: Path) -> None:
                   f"{r['n_starts_visiting_a_non_positive_entry']:>21}"
                   f"{r['total_call_models_entries_audited']:>17}"
                   f"{r['total_non_positive_entries']:>14}"
-                  f"{_fmt(r['min_entry_p_net_mw'], 14, 4)}")
+                  f"{_fmt(r['min_entry_p_net_mw_over_starts'], 14, 4)}")
 
     _rule("10. Quantities the harvest called constant that actually moved")
     print("  A26 §5.4 measured this to matter: on the dropped deck two "

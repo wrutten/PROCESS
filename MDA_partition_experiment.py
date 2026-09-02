@@ -511,20 +511,34 @@ def stage_verify(args, runs_root: Path) -> int:
     rep = runs_root / "phase_a_report.json"
     if rep.exists():
         d = json.loads(rep.read_text())
-        for arm in ("R", "A0", "A0f", "A1"):
+        reps = d.get("replays") or {}
+        for arm in ("A0", "A0f", "A1"):
             meas = {}
-            for s, rec in (d.get("per_scenario") or {}).items():
-                v = ((rec.get("cost") or {}).get("totals_over_kept_starts")
-                     or {}).get(arm)
-                if v is None:
-                    v = (((rec.get("arms") or {}).get(arm) or {})
-                         .get("net_model_evaluations"))
-                if v is not None:
-                    meas[s] = v
+            for key, rec in reps.items():
+                deck, _, label = key.partition("/")
+                if label != "replay_tau1e-06_hoist0":
+                    continue
+                pair = (rec.get("paired") or {}).get(f"R->{arm}") or {}
+                tot = (pair.get("total_node_calls") or {}).get(arm)
+                if tot is not None:
+                    meas[deck] = tot
             if meas:
                 records.append(ER.verify_table(
-                    f"net model evaluations, arm {arm}",
-                    pub.get(f"net_model_evaluations_{arm}", {}), meas))
+                    f"in-loop model evaluations at tau = 1e-6, arm {arm}",
+                    pub.get(f"node_calls_{arm}", {}), meas))
+        meas = {}
+        for key, rec in reps.items():
+            deck, _, label = key.partition("/")
+            if label != "replay_tau1e-06_hoist0":
+                continue
+            pair = (rec.get("paired") or {}).get("R->A1") or {}
+            tot = (pair.get("total_node_calls") or {}).get("R")
+            if tot is not None:
+                meas[deck] = tot
+        if meas:
+            records.append(ER.verify_table(
+                "in-loop model evaluations at tau = 1e-6, arm R",
+                pub.get("node_calls_R", {}), meas))
     acc = runs_root / "a26" / "matched_accuracy.json"
     if acc.exists():
         d = json.loads(acc.read_text())

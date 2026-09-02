@@ -1,0 +1,31 @@
+{
+  "_what": "Phase A's published numbers, so that a re-run can be CHECKED against them rather than merely produced.  Read by MDA_partition_experiment.py --verify.  A disagreement is a FINDING to surface, not an error to swallow.",
+  "_source": "arch_surgery/docs/reports/MDA_partition_exp_results.md, tables 4.4.2 and 4.5, re-derived by A26 (method-fixes) from A18's recorded artifacts and confirmed identical under the A26 predicate at three scale floors.",
+  "_units": "in-loop model evaluations summed over each deck's design points, at tau = 1e-6, hoist off; three decks from 2026-09-02 (D17 drops large_tokamak_eval).",
+  "node_calls_R": {
+    "large_tokamak_nof": 9471,
+    "low_aspect_ratio_DEMO": 21021,
+    "st_regression": 9744
+  },
+  "node_calls_A0": {
+    "large_tokamak_nof": 9471,
+    "low_aspect_ratio_DEMO": 19992,
+    "st_regression": 10395
+  },
+  "node_calls_A0f": {
+    "large_tokamak_nof": 9618,
+    "low_aspect_ratio_DEMO": 20307,
+    "st_regression": 10584
+  },
+  "node_calls_A1": {
+    "large_tokamak_nof": 13906,
+    "low_aspect_ratio_DEMO": 28070,
+    "st_regression": 9917
+  },
+  "matched_accuracy_ratio": {
+    "large_tokamak_nof": 0.957,
+    "low_aspect_ratio_DEMO": 0.955,
+    "st_regression": 0.869
+  },
+  "_matched_accuracy_note": "A1 / A0 at each deck's own calibration point, read off the lower envelope cost(a) = min{cost_i : accuracy_i <= a}.  Compared to a relative tolerance rather than exactly, because it is an interpolated ratio of counts."
+}

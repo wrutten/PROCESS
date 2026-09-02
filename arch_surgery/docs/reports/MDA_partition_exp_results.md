@@ -4,45 +4,22 @@
 
 > **Document status** — **CURRENT · STANDING DOCUMENT.** This is the results report for the MDA
 > partitioning experiment, not a task report: it is **not** archived to `deprecated/` when the task
-> that wrote it closes, and it is updated in place as later phases report. **Phase A is complete
-> and written up in full (§§4–6). Phase B has not been built; §7 states it as a gap and says what
-> it would have to measure.** · Base commit `c0ae5b28` · Companion script:
-> [`MDA_partition_experiment.py`](../../../MDA_partition_experiment.py) at the repository root ·
-> Written by task A21 (partition-report), 2026-09-01, from the recorded artifacts of tasks A18
-> (experiment-framework), A22 (outer-pass-census), A23 (flat-arm-permutation), A13
-> (feedforward-hoist) and A3 (build-reorder).
+> that wrote it closes, and it is updated in place as later phases report. **Both phases are now
+> complete and written up in full** — Phase A in §§4–6, Phase B in §7 — on the instrument A26
+> (method-fixes) corrected. · Base commit `c0ae5b28` · Companion scripts:
+> [`MDA_partition_experiment.py`](../../../MDA_partition_experiment.py) (Phase A) and
+> [`MDA_partition_opt_experiment.py`](../../../MDA_partition_opt_experiment.py) (Phase B), both at
+> the repository root · Written by task A21 (partition-report), 2026-09-01, and rewritten by task
+> A28 (phase-b-rerun), 2026-09-02, from the recorded artifacts of tasks A18 (experiment-framework),
+> A22 (outer-pass-census), A23 (flat-arm-permutation), A13 (feedforward-hoist), A3 (build-reorder),
+> A26 (method-fixes) and A28 itself.
+>
+> **The correction banner this document used to open with has been resolved and removed.** Its
+> content is folded into the body: the matched-accuracy result is §4.4.2 and §4.5(b), the
+> moved-constant correction is §4.1 and §6.3, and the harvest-reuse licence is §6.3. A document
+> should not open with a list of its own errors; it should not contain them.
 
 ---
-
-> ## ⚠ CORRECTION PENDING — the headline below is superseded (2026-09-02)
->
-> **A26 (method-fixes) acted on this report's own §6.1 and the result overturns §4.4.2, §5.3 and §8.**
-> Those sections say the blocked arrangement costs **+46.8 % / +40.4 % / +17.7 %** more, hedged as
-> "at most" because the arms were compared at matched *tolerance* rather than matched *achieved
-> accuracy*. Compared properly — cost read off each arm's lower envelope, `cost(a) = min{cost_i :
-> accuracy_i ≤ a}` — the blocked arrangement costs **−4.3 % / −4.5 %** on the two large pulsed decks
-> and **−13.1 %** on `st_regression`. §6.1's counter-argument, that a loose inner tolerance "would
-> have to recover a very large factor", is refuted: it recovers all of it.
->
-> **Read the replacement claim narrowly.** This removes the finding that the partition *costs*; it
-> does **not** establish that the partition is worth anything. At its cheapest accuracy-matched
-> setting the blocked arm runs **1 172 of 1 248 inner solves in a single sweep** — it has largely
-> stopped blocking. The comparison rests on the **p90** of achieved accuracy, because the median
-> exit residual is exactly **0** on 15 of 17 rungs, and on the *worst* design point the two arms are
-> indistinguishable (ratio spans 0.82–1.23). The defensible sentence is: **the published penalty was
-> an artifact of over-solving, not a property of the partition.**
->
-> **§6.3 also contains a factual error.** It states that "exactly **one** constant moved". Three did,
-> verified independently from A18's artifacts: `ccfe_hcpb.x_shield` (9 arm-records, `st_regression`)
-> plus `physics.vs_plasma_burn_required` and `physics.vs_plasma_total_required` (63 arm-records each,
-> `large_tokamak_eval`). On that deck they blocked convergence and inflated its counts by 14–28 %,
-> which includes the very percentages §6.5.3 called its largest — a further reason the deck is
-> dropped (D17).
->
-> **And §6.3's harvest-reuse licence no longer holds at the current tip.** That paragraph argues the licence from the driver being entered zero times during a replay, which was right when written; but A25 changed `process/models/pulse.py` and `process/data_structure/numerics.py`, so the sub-trees it relies on are no longer hash-identical to the recording commit. A26 replaced the argument with an **empirical reproduction gate** — every arm reproducing its own recorded results, 0 differing of 4 800 arm records over 64 800 keys, 32/32 sensitivity cases caught — which is stronger than the provenance argument it replaces. The paragraph's closing lesson still stands; its licence does not.
->
-> **A28 rewrites this document** to fold in both phases on the corrected instrument. Until then, treat
-> §§4.4.2, 5.3, 6.1, 6.3 and 8 as superseded and this banner as the current statement.
 
 ## Abstract
 
@@ -293,11 +270,23 @@ because an arrangement that cannot solve a problem the others can is itself a fi
 
 ### 3.6 Running it
 
-One command:
+One command per phase:
 
 ```
-python MDA_partition_experiment.py
+python MDA_partition_experiment.py         # Phase A, the optimiser absent
+python MDA_partition_opt_experiment.py     # Phase B, the optimiser present
 ```
+
+Both accept `--quick`, which exercises every stage on one test case in a few minutes so that the
+machinery can be confirmed before hours are committed; both print the tree, branch, commit and
+dirty marker before anything runs, and an honest runtime and disk estimate; both fail immediately
+and name the exact fix when a prerequisite is missing rather than dying in a traceback; and both
+accept `--verify`, which runs nothing and compares a finished run's numbers against the ones
+published here, per test case, with denominators. **A disagreement there is a finding to surface,
+not an error to swallow.** Neither writes anything into the tracked tree.
+
+The two files share one runner (`arch_surgery/experiment_runner.py`): they differ in which phase
+they drive, not in how they drive it.
 
 That file is at the repository root and is a **wrapper, not a reimplementation**. Each stage it
 runs was written, reviewed and gated as its own piece of work, and the wrapper calls those pieces
@@ -312,6 +301,9 @@ in the order they must run:
 | `permutation` | replays the flat arrangement in the blocked arrangement's node order, to check the two differ by the grouping and not by an incidental reordering | `arch_surgery/fixedpoint/run_a23.py` |
 | `driver_hoist` | the feed-forward hoist measured in PROCESS's own driver, against a reference checkout | `arch_surgery/idf_probe/run_a13.py` |
 | `driver_reorder` | the build/physics reorder, likewise | `arch_surgery/idf_probe/run_a3.py` |
+| `method_gate` | re-runs every arrangement at the recording's own settings and compares against the recorded artifacts bit for bit — the licence for reusing the recording at all (§6.3) | `arch_surgery/fixedpoint/run_a26.py` |
+| `accuracy` | the tolerance ladders, and cost read off at matched **achieved** accuracy (§4.4.2) | `run_a26.py`, `arch_surgery/fixedpoint/accuracy.py` |
+| `pulse_gate` | the burn-time model out of the loop under the lift, in PROCESS's own driver | `arch_surgery/idf_probe/run_a26_pulse.py` |
 | `tables` | collates every recorded result into the tables §4 quotes | `arch_surgery/fixedpoint/analyse.py`, `tables.py` |
 
 The last two stages compare against an untouched checkout of the base commit and need one:
@@ -328,11 +320,19 @@ over them. To print the tables from artifacts that already exist, running nothin
 python MDA_partition_experiment.py --analyse-only --runs-root <dir>
 ```
 
-Four test cases are used, spanning two structurally different machine types: two large
+**Test cases.** Phase A ran four, spanning two structurally different machine types: two large
 conventional tokamaks (`large_tokamak_nof`, an optimisation run, and `large_tokamak_eval`, a
 single evaluation run of the same deck), a low-aspect-ratio design (`low_aspect_ratio_DEMO`), and
 a steady-state spherical tokamak (`st_regression`). The last of these lacks the quantity that
 joins the blocks, so its blocks are already separate — it acts as a free control for H3.
+
+**From 2026-09-02 the study runs three.** `large_tokamak_eval` is dropped: it runs **0 solver
+iterations**, so it cannot inform a study about how an architecture behaves when the optimiser
+reacts; its inequality constraints are never enforced, so its "solution" is not a feasible optimum;
+its coupling-state classification rested on ten design points, on which 555 of 840 components look
+constant; and two of those apparent constants are not constant and were inflating its counts
+(§6.3). **Four-case tables in this report are the record of what was run** and are dated as such;
+Phase B and everything measured after that date is three cases and says so.
 
 ### 3.7 Known limitations of the method
 
@@ -520,18 +520,85 @@ on 54, 0 on 235, +1 on 7**. The loose test is not merely permissive; it is also 
 `large_tokamak_eval`'s +27.3 % and −10.7 % are the largest figures in the table and rest on **10
 design points**. They should be read as a direction, not a magnitude.
 
-#### 4.4.2 The block partition against the flat control
+#### 4.4.2 The block partition against the flat control, at matched achieved accuracy
 
-**This is the effect the study was designed around, and it lost.**
+**This is the effect the study was designed around. Measured at matched tolerance it loses badly;
+measured at matched achieved accuracy it does not lose at all — and the second is the honest
+comparison.**
+
+The two arrangements do not deliver the same accuracy when asked for the same tolerance. The
+blocked arrangement solves each block to τ against inputs that are about to change, so it
+terminates about **10⁵ times more converged** than the flat control at the same setting (§4.5(b)).
+It did more work *and* got more accuracy, and only the work appears in a ratio. Comparing at
+matched tolerance therefore measures a handicap.
+
+**At matched tolerance** — the comparison this report carried before A26 measured the alternative:
 
 | Test case | n | Flat **A0** | Blocked **A1** | A1 / A0 | Change |
 |---|---|---|---|---|---|
-| `large_tokamak_nof` | 149 | 9 471 | 13 906 | **1.468** | **+46.8 %** |
-| `low_aspect_ratio_DEMO` | 297 | 19 992 | 28 070 | **1.404** | **+40.4 %** |
-| `st_regression` | 144 | 10 395 | 9 917 | **0.954** | **−4.6 %** |
-| `large_tokamak_eval` | 10 | 525 | 618 | **1.177** | **+17.7 %** |
+| `large_tokamak_nof` | 149 | 9 471 | 13 906 | 1.468 | +46.8 % |
+| `low_aspect_ratio_DEMO` | 297 | 19 992 | 28 070 | 1.404 | +40.4 % |
+| `st_regression` | 144 | 10 395 | 9 917 | 0.954 | −4.6 % |
+| `large_tokamak_eval` *(dropped, D17)* | 10 | 525 | 618 | 1.177 | +17.7 % |
 
-Two things are true at once, and both matter.
+**At matched achieved accuracy.** Both arms were run across ladders — the flat arm across
+τ ∈ {1e-2 … 1e-8}, the blocked arm across the same joint ladder *and* across an inner-only ladder
+at the calibrated outer tolerance — each run's achieved exit residual was recorded beside its
+cost, and cost is read off each arm's **lower envelope**, `cost(a) = min{cost_i : accuracy_i ≤ a}`,
+interpolated linearly in log₁₀(cost) against log₁₀(accuracy) and never extrapolated. At the
+accuracy the flat control actually delivers at the study's own calibration point:
+
+| Test case | n | Flat **A0** cost | Blocked **A1** at the same achieved accuracy | A1 / A0 | Change |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | 149 | 9 471 | **9 062** | **0.957** | **−4.3 %** |
+| `low_aspect_ratio_DEMO` | 297 | 19 992 | **19 087** | **0.955** | **−4.5 %** |
+| `st_regression` | 144 | 10 395 | **9 037** | **0.869** | **−13.1 %** |
+
+Across every accuracy the flat arm reached that also lies inside the blocked arm's measured range:
+
+| Test case | A1 / A0 over the matched range | matched points |
+|---|---|---|
+| `large_tokamak_nof` | 0.957, 0.968, 0.837, 0.858, *1.150* | 5 of 5 flat rungs |
+| `low_aspect_ratio_DEMO` | 0.955, 0.949, 0.793, 0.902, *1.094* | 5 of 6 (τ = 1e-8 is tighter than any blocked rung reached — reported, not extrapolated) |
+| `st_regression` | 0.844, 0.869, 0.871, 0.923, 0.960, *1.119* | 6 of 6 |
+
+*The italicised last entry on each case is the loosest flat rung, where the blocked arm has no rung
+as loose and the envelope is read flat. That is a limit of the ladder, not a win for either arm.*
+
+**The replacement claim is narrow and must stay narrow.** This removes the finding that the
+partition *costs*; it does **not** establish that the partition is worth anything. Four things
+bound it, and none is a hedge the surrounding framing contradicts:
+
+1. **It is statistic-dependent, and the worst-case statistic straddles parity.** Rebuilt on the
+   **maximum** exit residual instead of the p90, A1/A0 ranges 0.907–1.150, 0.816–1.228 and
+   0.824–1.119: on the single worst design point the two arms are not distinguishable. On the
+   **median** the comparison cannot be made at all, because the median exit residual is exactly
+   zero on 15 of 17 rungs on `large_tokamak_nof` and 13 of 17 on `low_aspect_ratio_DEMO` — the
+   state is a bit-exact fixed point on most points. **The correct summary is "at parity or cheaper
+   on the p90; indistinguishable on the worst point".**
+2. **The mechanism is that the over-solving was the cost, not that blocking wins.** The blocked
+   arm's cheapest setting reaching the target accuracy on the two large cases is inner τ = 0.1,
+   where **1 172 of 1 248 inner solves take a single sweep** (71 take two, 5 take three). At that
+   setting the arm is barely a block solver: it is close to a flat sweep in block order with an
+   outer state test.
+3. **The blocked arm had more settings tried** — eleven rungs against six, because the inner
+   tolerance is a parameter the flat arm does not have. Best-of-eleven against best-of-six is a
+   systematic advantage. It is bounded rather than eliminated: the flat arm's rungs are all on its
+   own envelope on all three cases, so its curve is already monotone.
+4. **This is Phase A, with the optimiser absent.** What an optimiser reacting to the arrangement
+   would do is §7.
+
+**The construction matters and getting it wrong flips the sign.** Reading the rungs in tolerance
+order instead of taking the lower envelope gives **+21.9 %** on `large_tokamak_nof` where the
+envelope gives **−4.3 %**. Several settings deliver the same achieved accuracy at different costs —
+on that case the blocked arm reaches 1.256 × 10⁻¹¹ at four different inner tolerances, costing
+12 281, 11 543, 9 612 and 9 062 model evaluations — and "what does this arm cost at accuracy *a*"
+has one honest answer: the cheapest setting delivering at least *a*. The comparison at the tightest
+matched accuracy is exact rather than interpolated: blocked `inner0.1` achieves
+`1.2556721063507803e-11`, **bit-identical** to flat `tau1e-06`, for 9 062 model evaluations against
+9 471, at 2.792 mean sweeps against 3.027.
+
+Two things about the matched-tolerance table remain true and are worth keeping.
 
 **The blocked arrangement does what the partition hypothesis predicted, in the unit the hypothesis
 was stated in.** Its outer pass count is lower everywhere: 2.705 against 3.027 on
@@ -539,27 +606,11 @@ was stated in.** Its outer pass count is lower everywhere: 2.705 against 3.027 o
 `st_regression`, 2.400 against 2.500 on `large_tokamak_eval`. Against the flat control it falls on
 36 of 149, 100 of 297, 120 of 144 and 1 of 10 design points, and **rises on none, on any deck**.
 
-**It buys those outer passes with inner solves, and the inner solves cost more than the outer
-passes save.** Counted in model evaluations — the only unit in which a flat sweep and a per-block
-sweep are commensurable — it is 18 % to 47 % more expensive on three of four cases.
-
-**The one case where it does not lose is the one with no coupler.** `st_regression` sets
-`i_pulsed_plant = 0`, so the burn time that joins the blocks is never written by any in-loop
-model: its blocks are already independent and its outer loop is trivial by construction. That is
-the partition working exactly as designed, and simultaneously the case in which the partition is
-doing the least. Its −4.6 % is also fragile: with the feed-forward models lifted out of the loop —
-the setting in which every arrangement is otherwise better off — it becomes **+0.77 %**.
-
-For completeness, the same comparison with the feed-forward models lifted:
-
-| Test case | Flat **A0** | Blocked **A1** | A1 / A0 |
-|---|---|---|---|
-| `large_tokamak_nof` | 8 569 | 13 100 | 1.529 |
-| `low_aspect_ratio_DEMO` | 18 088 | 26 454 | 1.463 |
-| `st_regression` | 8 683 | 8 750 | 1.008 |
-| `large_tokamak_eval` | 475 | 570 | 1.200 |
-
-*(These counts are the in-loop models only; §4.4.3 states the accounting.)*
+**The one case where it did not lose even at matched tolerance is the one with no coupler.**
+`st_regression` sets `i_pulsed_plant = 0`, so the burn time that joins the blocks is never written
+by any in-loop model: its blocks are already independent and its outer loop is trivial by
+construction. That is the partition working exactly as designed, and simultaneously the case in
+which the partition is doing the least.
 
 **The comparison is the grouping alone, and that had to be established rather than assumed.**
 Building the blocked arrangement by grouping the models by block also transposes two adjacent
@@ -569,7 +620,8 @@ arrangement's node order: identical to the recorded flat arrangement on **600 of
 points, and on **2 400 of 2 400** across every setting the flat arrangement was recorded under
 (both hoist settings and all three tolerances), compared bit-for-bit with no tolerance anywhere —
 pass counts, model-evaluation counts, the converged flag, the full residual trace at every pass,
-and the exit audit. §4.4.4 records what that null does and does not license.
+and the exit audit. §4.4.4 records what that null does and does not license, and §7.4 measures the
+same transposition a second time, in PROCESS's own driver, where it also costs exactly nothing.
 
 #### 4.4.3 The feed-forward hoist
 
@@ -725,10 +777,12 @@ the field is still changing by orders of magnitude when the loop declares itself
 blocked arrangement terminates at a residual roughly **10⁵ times tighter** than the flat control at
 the same tolerance, because its inner solves drive each block to τ and the outer test then passes
 at once. Its +17.7 %, +40.4 % and +46.8 % are therefore **cost at better accuracy, not cost at
-equal accuracy**.
-This is the quantification of the conservatism §3.7 declared in advance, and it is the strongest
-single argument that the blocked arrangement was run in an unfavourable configuration rather than
-being simply worse. §5.3 says what would settle it.
+equal accuracy**. This is the quantification of the conservatism §3.7 declared in advance, and it
+is why §4.4.2 reads cost off at matched *achieved* accuracy instead. **Measured that way the
+handicap is the whole of the published difference**: the blocked arrangement is at parity or
+cheaper on all three retained cases. The exit audit is also the accuracy measure §4.4.2's
+envelopes are built on, which is why it is an instrument identical across arms — one further full
+sweep of the complete model set, at every setting — rather than each arm's own stopping test.
 
 **(c) With the feed-forward models lifted, all four arrangements fail the audit on the same 7 of
 144 points of `st_regression`.** Hoisting does not converge those fields; it stops asking. The
@@ -1008,13 +1062,15 @@ instance — which nothing in this study provides.
 
 Four mechanisms, in decreasing order of how well the data supports them.
 
-**1. It was run in its least favourable configuration, and the exit audit measures how much.** The
-inner blocks are driven to the same tolerance as the outer loop, so the blocked arrangement
-terminates at a residual about 10⁵ times tighter than the flat control at the same nominal
-tolerance. It is paying for accuracy nobody asked for. This was declared conservative in advance,
-and §4.5(b) is the quantification. **The +18 % to +47 % is therefore an upper bound on the
-partition's cost, not an estimate of it.** The obvious next thing to vary is the inner tolerance —
-the inexact-block regime — and it has not been run.
+**1. It was run in its least favourable configuration, and that turned out to be the whole of the
+difference.** The inner blocks were driven to the same tolerance as the outer loop, so the blocked
+arrangement terminated at a residual about 10⁵ times tighter than the flat control at the same
+nominal tolerance. It was paying for accuracy nobody asked for. **The inexact-block regime has now
+been run**: across an inner-tolerance ladder, read off each arm's lower envelope at matched
+achieved accuracy, the partition is at parity or cheaper on all three retained cases (§4.4.2). So
+this mechanism is not one of four candidate explanations for a loss — it *is* the loss, and there
+is no loss left to explain once it is removed. What remains to explain is the narrower fact that
+the partition is not measurably *better* either, and mechanisms 2 to 4 below are about that.
 
 **2. The condition the mechanism needs is not met.** A blocked arrangement saves when a *small*
 block is holding up a *large* one. Measured under the old stopping test, the three blocks stop
@@ -1072,24 +1128,36 @@ study measured one partition, derived from one dependency analysis, on four deck
 Everything in this section is a criticism of the work reported above, made after the results were
 in. Where it changes what §4 or §5 should say, the change has been made there and is cross-noted.
 
-### 6.1 The strongest objection: the losing arm was handicapped and the winning arm was not
+### 6.1 The strongest objection, raised here and then answered by measurement
 
 The blocked arrangement solves each block to τ = 1e-6 against inputs that are about to change. The
 flat arrangement has no inner loop and never pays that. **The two arms are not symmetric in the
 freedom they were given**, and the direction of the asymmetry is exactly the direction of the
-result. The exit audit shows the blocked arm ending up 10⁵ times more converged than the control at
-the same nominal setting — it did more work and got more accuracy, and only the work is counted in
-the ratio.
+matched-tolerance result. The exit audit shows the blocked arm ending up 10⁵ times more converged
+than the control at the same nominal setting — it did more work and got more accuracy, and only
+the work was counted in the ratio.
 
-This was declared in advance, which makes it honest but does not make it fair. **The correct
-statement of the result is that the partition costs *at most* 47 %, 40 % and 18 % more, and that
-the study did not measure what it costs at a comparable inner tolerance.** §4.4.2, §5.3 and §8 are
-worded that way. A study that reported "the partition costs 47 % more" without that clause would
-be overstating its own finding.
+This was declared in advance, which made it honest but did not make it fair. The report's earlier
+wording was that the partition costs *at most* 47 %, 40 % and 18 % more, and that the study had not
+measured what it costs at a comparable inner tolerance. **The bound was doing all the work.**
 
-The counter-argument, and it is not nothing: the outer pass counts fall by much less than the
-inner solves cost, on every case, so an inexact inner tolerance would have to recover a very large
-factor. But "would have to" is not "does not", and the run has not been made.
+**It has since been run, and the objection was correct.** Measured at matched achieved accuracy
+(§4.4.2) the partition is at parity or cheaper on all three retained cases: **−4.3 %, −4.5 % and
+−13.1 %**. The counter-argument this section used to offer — that the outer pass counts fall by
+much less than the inner solves cost, so an inexact inner tolerance "would have to recover a very
+large factor" — is refuted by measurement: it recovers all of it, because the inner solves at
+τ = 1e-6 were doing work the outer test did not need.
+
+**A reversal found by the study's own critical pass is a good outcome, and this is one.** The
+published number was formally hedged and the hedge was correct. What was missing is that nobody had
+measured where inside the bound the answer lay, and the answer turned out to be at the far end.
+**The replacement claim is narrower than the one it replaces**: it removes the finding that the
+partition costs, and it does not establish that the partition is worth anything — at its cheapest
+accuracy-matched setting the blocked arm has largely stopped blocking (§4.4.2, bound 2).
+
+**The same objection, transposed, is the reason Phase B needed a third arm.** A comparison that
+varies two things at once cannot attribute its answer to either, whether the two things are cost
+and accuracy or architecture and stopping rule. §7.1 says what that cost the first Phase B run.
 
 ### 6.2 The winning arm's number is not one number
 
@@ -1121,14 +1189,37 @@ reproduces the live loop's pass count on 600 of 600 points, and the restore is c
 field across all 2 288 fields on every restore. That is a strong guard, but it guards against
 *divergence from the live loop*, not against a systematic bias shared by all arms.
 
-**An excluded quantity that genuinely couples would be invisible.** Quantities that never vary
-across the recording are excluded from the stopping test. If one of them genuinely coupled, every
-arrangement would declare a convergence that had not happened, with no symptom. What guards it: an
-excluded quantity is asserted at runtime to stay constant, and across all 600 design points, all
-four arrangements and both hoist settings exactly **one** constant moved — `ccfe_hcpb.x_shield`, on
-3 of `st_regression`'s 144 points — and it blocked convergence at those passes rather than passing
-silently. On `large_tokamak_eval` this guard is weakest, because 555 of 840 components were
-classified constant from 10 points (§5.4).
+**An excluded quantity that genuinely couples would be invisible — and this is the one place the
+report got a fact wrong.** Quantities that never varied across the recording were excluded from
+the stopping test. If one of them genuinely coupled, every arrangement would declare a convergence
+that had not happened, with no symptom. The guard was that an excluded quantity is asserted at
+runtime to stay constant.
+
+This report previously stated that across all 600 design points, all four arrangements and both
+hoist settings exactly **one** constant moved. **Three did**, read directly out of the recorded
+artifacts and verified independently:
+
+| Test case | constants that moved | occurrences | design points affected, per arm |
+|---|---|---|---|
+| `large_tokamak_nof` | none | 0 | 0 of 149 |
+| `low_aspect_ratio_DEMO` | none | 0 | 0 of 297 |
+| `st_regression` | `ccfe_hcpb.x_shield` | 3 | 1 of 144 |
+| **`large_tokamak_eval`** | **`physics.vs_plasma_burn_required`, `physics.vs_plasma_total_required`** | **21 each** | **7 of 10** |
+
+**On `large_tokamak_eval` the two missed movers blocked convergence and inflated that deck's
+counts by 14–28 %**, which includes the +27.3 % and −10.7 % §6.5 called two of the report's largest
+percentages. The failure mode is the mirror image of the one this bullet feared: a quantity that is
+not really constant produces a *false non-convergence*, not a false convergence, because a
+bit-identity assertion is far stricter than the scaled tolerance the same quantity would get if it
+were included. It is an independent second reason to drop that deck (D17), and it does not touch
+the three retained cases.
+
+**The exclusion is now gone entirely.** Every float-valued component is tested whether or not it
+varied, with a recorded scale floor of 1.0 where no working magnitude could be measured, and the
+exclusion list is empty. On the three retained cases this changes **no count at all**, at any of
+three floors a decade apart, and invalidates **0 of 590** design points — so the fix costs nothing
+measured and closes a class of silent failure. That result is itself the answer to "what if an
+excluded quantity mattered here": on these cases, none did.
 
 **The confound that was nearly missed.** Grouping the models by block also transposed two adjacent
 models, and the flat-to-blocked comparison therefore varied two things. Nobody named it while the
@@ -1138,13 +1229,27 @@ came out clean.** It is that a headline comparison ran, and was written up, with
 confound in it, and that what caught it was an unrelated task's diff rather than any check the
 design contained.
 
-**A methodological point that outlasts the result.** The licence to reuse one task's recording in
-another's replay was originally argued from the git tree being unchanged. That argument stopped
-working the moment two later tasks touched the driver. The replacement is better and should be the
-pattern: the sub-trees that determine model behaviour are hash-identical to the recording commit,
-**and the driver is entered zero times during a replay, counted rather than asserted**. That cuts
-both ways, and it should be said plainly: the bit-identity gates on the driver changes do not
-license the reuse at all, because they gate a path the replay never executes.
+**A methodological point that outlasts the result, and it has now failed twice.** The licence to
+reuse one task's recording in another's replay was first argued from the git tree being unchanged.
+That argument stopped working the moment two later tasks touched the driver. It was then replaced
+by a two-part argument — the sub-trees that determine model behaviour are hash-identical to the
+recording commit, **and** the driver is entered zero times during a replay — and **the first half
+stopped being true as well**, because a later task changed `process/models/pulse.py` and
+`process/data_structure/numerics.py` (inert by default, and gated, but changed).
+
+**The replacement is empirical and is stronger than either provenance argument.** Every arm is
+re-run at the recording's own settings and compared against the recorded artifacts **bit for bit,
+with no tolerance anywhere** — pass counts, model-evaluation counts, module sweeps, the converged
+flag, the cap hit, the inner-solve counts per block, the full residual trace at every pass, the
+named moved constants and every field of the exit audit, floats compared as exact `repr`:
+**0 differing of 4 800 arm records over 64 800 record keys**, both hoist settings, four decks, with
+the comparison shown capable of catching a 1-ULP move **32 times out of 32**. It failed once
+first — on 600 of 600 design points, over a change in the recorded artifact's *shape* that moved no
+count — and was fixed rather than absorbed.
+
+The lesson is not that the argument was wrong each time; it is that **a licence argued from
+provenance decays silently, and one argued from measurement does not.** A reproduction has to be
+re-taken whenever `process/` moves; a hash argument merely stops being checked.
 
 ### 6.4 Where re-deriving the numbers changed the wording
 
@@ -1180,65 +1285,371 @@ Two further wording corrections from the same re-derivation:
   on two decks — `st_regression` rises on 7 of 144 and `large_tokamak_eval` on 5 of 10 — whereas
   against the flat control it holds on all four.
 
-### 6.5 What would most improve this study, in order
+### 6.5 What would most improve this study, in order — and what has since been done
 
-1. **Run the blocked arrangement at a loose inner tolerance.** It is the one change that could
-   overturn the headline, it is a replay rather than a solve, and the design already has the
-   parameter.
-2. **Find an exact per-model cost unit.** Everything in §5.2 is downstream of not having one.
-3. **Enlarge `large_tokamak_eval`'s recording, or drop the deck.** Ten design points is not enough
-   to classify 840 quantities, and the deck currently carries two of the report's largest
-   percentages.
-4. **Give the replay engine's hoist the same figure-of-merit guard the driver has**, so that the
-   two instruments measure one architecture on every deck rather than three of four.
-5. **Route the two findings that are about PROCESS rather than about architecture** — the
-   unconditional-agreement hole in the stopping test, and the cost model diverging at negative net
-   electric power — to the code-analysis study, with their denominators.
+The five items this section carried are now four done and one open. They are kept with their
+outcomes rather than deleted, because what a critical pass asked for and what measurement then
+said are both part of the record.
+
+1. ~~**Run the blocked arrangement at a loose inner tolerance.**~~ **Done, and it overturned the
+   headline** (§4.4.2, §6.1). It was the one change identified as able to do so, and it did.
+2. **Find an exact per-model cost unit.** **Still open**, and everything in §5.2 is downstream of
+   not having one. Nothing in either phase provides it: model evaluations are exact but do not
+   track work, and the only weighting available is a timing this project has retired as evidence.
+3. ~~**Enlarge `large_tokamak_eval`'s recording, or drop the deck.**~~ **Dropped** (D17), on the
+   grounds that it runs 0 solver iterations and so cannot inform a study about an optimiser
+   reacting to an arrangement, that its inequality constraints are never enforced, and that its
+   coupling-state classification rested on ten design points. §6.3 then found a second, independent
+   reason: two of its apparent constants are not constant, and the bit-identity assertion on them
+   was inflating its counts by 14–28 %.
+4. ~~**Give the replay engine's hoist the same figure-of-merit guard the driver has.**~~ **Replaced
+   by something better.** Both guards are gone; the hoist is now a **routing rule** derived from
+   the driver's own measured predicate read set, with three slots — in the loop, once before the
+   objective and constraints are evaluated, once after. That generalises the guard rather than
+   copying it: a node whose output the predicate layer reads leaves the sweep *and* is never stale.
+   The disagreement between the two instruments was only ever on the deck that has since been
+   dropped, and that should be said plainly: it stopped binding because a deck was dropped, not
+   because the rule fixed it. The rule is what handles the next deck with a cost-based objective.
+5. ~~**Route the findings that are about PROCESS rather than about architecture to the
+   code-analysis study.**~~ **Done**, as five defects rather than the four this list named. The
+   fifth is two loop bounds in `init.py` that are not the constraint count. That hand-off also
+   corrected two of *our* records: the "10¹⁸ times tighter" figure is a property of **our**
+   median-scaled predicate and not of upstream's, whose tolerance at the same point is *looser*
+   than ours by 5.3 × 10¹⁸; and a NaN cannot reach the stopping test through the constraint vector,
+   because `constraints.py` raises first.
+
+**A sixth, added by Phase B and larger than any of them: measure the stopping rule and the
+architecture separately.** Phase B's first run compared the proposed architecture directly against
+PROCESS as shipped, which measures both at once, and the stopping-rule term is not small enough to
+ignore. §7.1 is what that cost and what it took to fix.
 
 ---
 
-## 7. Phase B — not built, stated as a gap
+## 7. Phase B — the same question with the optimiser present
 
-**Phase B does not exist.** Nothing in this report is evidence about it, and the experiment plan's
-expectations for it are expectations, not results.
+Phase A removed the optimiser deliberately, which is what made its numbers exact. The price is that
+it cannot answer the question an adoption decision turns on: **what does the arrangement cost in a
+whole optimisation, where the optimiser reacts to it?** Phase B is that measurement. Every run in
+this section is a complete optimisation in PROCESS's own driver, from a starting design vector to a
+converged plant design.
 
-Phase A removed the optimiser deliberately, which is what made its numbers exact. The price is
-that it cannot answer the question an adoption decision turns on: **what does the arrangement cost
-in a whole optimisation, where the optimiser reacts to it?** Phase B is the design for that
-question. It would host the burn time on the optimiser as a design variable with an equality
-consistency constraint, put the per-block solvers and the hoist into PROCESS's own driver, and
-compare against PROCESS as it currently ships.
+### 7.1 Why it takes three arrangements and not two
 
-Four things about it are settled in advance and are worth stating here, because each is a place
-where a careless reading of Phase A would mislead:
+Phase B was first run with two: PROCESS as shipped against the proposed architecture. That
+comparison cannot attribute its own answer, and the reason is the same shape as §6.1's.
 
-- **Its baseline is PROCESS as shipped**, not Phase A's re-implemented flat arm. Our harness
-  against PROCESS's loop compares two codebases; baseline-PROCESS against modified-PROCESS varies
-  one thing.
-- **Its variant carries the lift, the per-block solvers *and* the hoist together.** Its headline is
-  therefore *the proposed architecture*, never *the partition's benefit*. The hoist is separable
-  and is measured separately here; a combined number quoted as the partition's would be exactly
-  the units error this project has recorded.
-- **Robustness outranks cost.** The fraction of perturbed starting points each arm solves is a
-  first-class result. An arm that is cheaper on the starts it solves and fails on more of them has
-  not won.
-- **The metric is model evaluations, never optimiser iterations.** The two arms solve problems of
-  different dimension; iteration counts are not comparable between them and are diagnostics only.
+**The two arrangements stop on different tests.** PROCESS's loop stops when the objective and the
+constraint vector agree between passes under `np.allclose`, with that function's hidden absolute
+tolerance and its `equal_nan=True`. The proposed architecture stops when about 840 measured state
+components agree at a tolerance. So a ratio between them is **architecture plus stopping rule,
+summed** — and the stopping-rule term is not small: Phase A measured it at −3.4 % to +8.6 %,
+against a first Phase B result of +2.0 %. It can dominate the answer and it can flip its sign.
 
-Two Phase A results bear on Phase B and both are constraints rather than encouragement. The
-burn-time counterfactual in §4.7 is the loop-side saving that would become *available* if a
-consistency constraint were driven to zero — about −26 % after the dimension penalty, and
-conditional on an optimiser iteration count that nothing bounds. And **on `large_tokamak_eval`,
-Phase A's hoist and the production hoist resolve different model sets** (§4.4.3), so any future
-table putting a Phase A and a Phase B hoist figure near each other owes the reader that sentence
-for that deck.
+Phase A knew this. Its own design documentation says that PROCESS's loop **"is a reference, not a
+competitor"**, and Phase A accordingly never compared against it — it built a control arrangement,
+A0, for exactly this purpose. The first Phase B run compared against the reference directly, which
+is the mistake Phase A's own design warns about.
 
-A third thing Phase A can already tell Phase B: its perturbed multi-starts will meet §4.8's
-degenerate cost evaluation **by design**, because they deliberately perturb the starting point and
-so will visit infeasible entry states. An arm that happens to visit more of them would show more
-passes for a reason that has nothing to do with architecture. Net electric power at entry should be
-recorded per start, and the count of degenerate starts reported alongside every cost figure, as
-§4.8 does with its 7/144.
+**And it had already contaminated a published verdict.** All 13 starting points that first run's
+variant refused were refusals of non-finite intermediate state — a property of the *stopping rule*,
+which examines state the global loop never looks at — reported as a property of the architecture,
+with no control that could have told the two apart. §7.6 is the measurement that settles it.
+
+So Phase B runs three arrangements:
+
+| | what it is |
+|---|---|
+| **R** | PROCESS as it ships. Every variant point unset, the existing objective/constraint idempotence test, the existing flat loop, the frozen input deck. The relevance anchor: it is what a user actually runs |
+| **A0′** | the same flat loop, stopping instead on the coupling state at τ. One block containing every in-loop model, the **upstream** node order, no hoist, no lift, the frozen deck. The predicate-matched control |
+| **A1′** | the proposed architecture: per-module block solves, the burn time lifted onto the optimiser with a consistency constraint, and the feed-forward models hoisted out of the loop |
+
+and reports three comparisons that mean three different things:
+
+- **`A0′ → A1′` is the headline** — the architecture alone, at matched stopping rule;
+- **`R → A1′`** is reported beside it as the user-facing figure, and is legitimate *only* as that;
+- **`R → A0′`** is what the stopping rule costs on its own, in production.
+
+Two further arrangements are run as diagnostics and never in a headline: **A0′ with the node
+transposition** that grouping into blocks brings with it (§7.4), and **A1′ without the hoist**, so
+the hoist's share is measured inside this architecture rather than quoted from Phase A's
+measurement of the flat one.
+
+**Every ordered pair of arrangements that was run carries a written declaration of exactly what
+differs between them**, checked at run time against the arrangements as they were actually built.
+A difference nobody declared is a refusal, not a warning; so is a declaration of a difference that
+is not there. This is the direct answer to §6.3's confound, one level up: it is what stops a third
+arrangement being added and quietly compared with no declaration.
+
+### 7.2 What A0′ is, and the one thing it needed beyond a configuration
+
+A0′ is the **degenerate single-block case** of the same block solver A1′ uses — the same predicate,
+the same per-deck coupling-state artifact, the same caps, the same failure policy, one block
+containing every in-loop model. It is a schedule branch, not a second solver, and that matters:
+two implementations of one predicate is how they drift.
+
+It needed one correction beyond a configuration, and it is worth stating because it is a real
+property of the block schedule rather than an implementation detail. **With one block covering
+every in-loop model, the outer test is redundant with the block's own inner test.** The inner test
+compares two successive full sweeps over the whole coupling vector; the outer test asks the same
+question of the same index set. But the outer loop compares against the state at *entry*, so it
+always fails on the first pass and always succeeds on the second — buying exactly one extra full
+sweep per optimiser evaluation, for no information. The guard skips it, and it fires on a condition
+evaluated from the schedule that was actually built rather than from the arrangement's name, so a
+schedule that stops being a single block stops taking the guard. Every run records whether it
+fired.
+
+### 7.2a Three things that would otherwise be assumed, stated because they are checked
+
+**The lifted input deck differs from the frozen one in exactly three ways.** The frozen decks are
+never edited (a scenario must not change under a result); a derived copy is written into the run
+directory and carries its provenance in a header comment and a JSON sidecar. The three lines are:
+the burn time becomes design variable 178; its consistency residual becomes equality constraint 93,
+inserted **inside the deck's equality block** and with the equality count raised in the same edit;
+and the design variable's initial value is set. Nothing else changes.
+
+That third line is the one that needs a rule, and **the rule is measured, not chosen: the initial
+value is the burn time the baseline's own idempotence loop settles on at this deck's own starting
+design vector.** That is the state the baseline arm itself enters its first optimiser iteration
+from, and it is the value at which the lifted arrangement's consistency residual at entry is
+**exactly 0.0** on both pulsed test cases. So the two arrangements start from the same design
+point, and the lifted one starts on its own consistency manifold. It closes the objection that the
+variant was handed a better starting guess. One sweep would *not* have done: the first sweep
+computes the burn time from an entry loop voltage that has not settled and gives 9.7 × 10⁵ s on
+`large_tokamak_nof` against a settled 2 568 s. Both numbers are recorded in the sidecar so the
+choice between them is visible.
+
+The equality-block placement is not pedantry. **PROCESS decides which constraints are equalities by
+their position in the deck's constraint list**, not from the constraints themselves. A derived deck
+that appends the consistency constraint at the end makes it the twenty-fourth *inequality*, and
+that variant returns success, a plausible objective, and looks **38 % cheaper** — because nothing
+forces the burn time onto its manifold at all. That is a real defect this study met, and it is why
+the gate checks membership of the equality block directly rather than checking the residual alone.
+
+**The starting points are genuinely paired.** Each perturbation factor is `1 + δ·(2u−1)` with `u`
+drawn from a hash of *(seed, iteration-variable number)* — keyed on the **variable's number, not
+its position in the design vector**. The lifted arrangement's design vector is one longer, so a
+position-keyed perturbation would give the two arrangements different factors for the same physical
+variable and the pairing would be fictitious. Keyed on the number, **every design variable the two
+arrangements share takes an identical factor**, and the whole set is reproducible from the seed
+alone. Perturbed starts are clamped into the deck's own scaled bounds — a start outside its own box
+is a different problem, not a start — and the clamp is counted per variable per start.
+
+**The extra design variable is part of the intervention, not a confound.** Lifting the burn time
+buys its decoupling *by* enlarging the design vector: the arrangement cannot have the one without
+the other. PROCESS takes central differences, so a gradient costs `2n` solves of the model loop and
+one more variable is `1/n` more work — about 5 % on these decks. **That cost is charged to the
+architecture**, and the cost unit does charge it: every finite-difference evaluation goes through
+the same `call_models` path as every other, and nothing in the accounting excludes them. The
+arithmetic is visible in the counts — on `large_tokamak_nof` the lifted arrangement makes 660
+optimiser evaluations against 630, a ratio of 1.048 against the dimension ratio 21/20 = 1.05. A
+comparison that quietly excluded the extra gradient work would be measuring an architecture nobody
+can run.
+
+### 7.3 The gates, and the stop rule
+
+**If the equivalence gate fails, the multi-start campaign is not run.** That is not a formality: if
+the arrangements do not reach the same optimum, a cost comparison between them compares two
+different problems. Nothing was tuned, retried at another setting, or narrowed to make a gate pass.
+
+Four gates, in the order they were run, each shown capable of failing before its zeros were
+accepted.
+
+**(i) Switch neutrality.** The three arrangements are selected by environment variables, and the
+code that reads them sits on the path every run takes — including a run with every switch off. So
+"off means upstream" is a claim about this tree and is gated rather than asserted: every number in
+the output file, on every test case, against an unmodified checkout of the base commit.
+
+| | `large_tokamak_nof` | `low_aspect_ratio_DEMO` | `st_regression` |
+|---|---|---|---|
+| output lines differing / compared | **0** / 16 174 | **0** / 16 435 | **0** / 18 692 |
+| output floats differing / compared, as hex | **0** / 13 559 | **0** / 13 455 | **0** / 13 493 |
+| total quantities compared | 29 760 | 29 916 | 32 206 |
+| `ifail`, sweeps, solver iterations | unchanged | unchanged | unchanged |
+
+**0 of 91 882 quantities differ**, per mode, with the instrumentation hook off *and* on — 183 764
+in total. Its teeth: one unit in the last place of the major radius is caught on 3 of 3 test cases
+as exactly one differing line and one differing float; one ULP of the objective and one of the
+constraint residual norm flip the acceptance predicate on 3 of 3; a changed `ifail` on 3 of 3; and
+two genuinely different test cases differ in **11 606 of 13 441** shared floats.
+
+**(ii) What each comparison declares it varies.** Every ordered pair of arrangements run is
+declared from a closed vocabulary and checked against a flat descriptor of everything a comparison
+could be varying — node sequence, block schedule and its shape, stopping test, sweep floor,
+tolerances, hoist and lift settings, both hoisted groups, loop node set, coupling-state
+specification and its hash, and all three caps — read from what each run **resolved**, never from
+what the driver asked for. **10 of 10 ordered pairs declared and checked on each of the three test
+cases, 0 undeclared, 0 skipped.** Its teeth: an undeclared difference is refused, an over-declared
+manifest is refused, and an arm pair with no declaration at all is refused — 3 of 3.
+
+*This gate did real work rather than confirming an intention.* Its first run **refused
+`R → A0′`**, because the descriptor recorded the two arrangements' single blocks under different
+labels and reported a structural difference where there was none. The fix was to the descriptor,
+not to the declaration: a one-block schedule's label carries no information, and encoding a naming
+choice as a structural difference makes the descriptor lie about what the arrangements differ in.
+
+**(iii) Do the arrangements run the same models, and does the cost unit count what it claims?** A
+block schedule that fails to name a model does not fail — it silently stops running it, because the
+node filter is a predicate on names. The model call sites are read out of the driver's own source
+and checked against what each arrangement resolved: **26 call sites, all covered, on 15 of 15 arm
+records.** The cost unit is checked the same way rather than asserted, by counting model calls per
+name from the harness side: the per-name counts must equal the reported total plus the audit
+sweep's own calls, and **nothing may have been run through the flat hoisted tail**, which does not
+increment the counter. **0 uncounted tail calls on 15 of 15 records.**
+
+*This gate found a defect in its own harness before it passed, which is the fifth consecutive task
+in this project where the requirement to show a gate capable of failing has done so — in every
+case while the gate was already passing.* The call-site extraction matched only plain assignments,
+and the driver's node-order table is an *annotated* assignment, so the three head models —
+`plasma_geom`, `build`, `physics` — were **not in the call-site set at all**. A set that does not
+contain a model cannot notice the model missing, and the coverage figure was over 23 call sites
+rather than 26. Found by the sensitivity check removing a model from a schedule and watching the
+gate go on passing. The check now refuses to report a coverage figure at all if the table does not
+parse, and exercises a head model by name.
+
+**(iv) The equivalence gate.** Not bit identity: A1′ solves a problem with one more design variable
+and one more equality constraint on the two pulsed test cases, so the question is whether the
+arrangements land on the same optimum. Five checks per arrangement per test case — the solver's own
+success flag; the objective to **1e-6 relative**, which is PROCESS's own idempotence tolerance and
+Phase A's first rung and is therefore not a number chosen here; a post-solve feasibility audit on
+the returned point; the achieved final accuracy reported rather than assumed equal; and, for the
+lifted arrangement, the burn-time consistency residual **and** that its constraint sits inside the
+input deck's equality block.
+
+| test case | arrangement | verdict | objective, relative difference | margin to the tolerance | inequalities violated, R / arm | consistency residual |
+|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | A0′ | **PASS** | 4.16e-16 | 2.4 × 10⁹ | 0 / 0 | — |
+| | A1′ | **PASS** | 7.98e-11 | 1.25 × 10⁴ | 0 / 0 | 1.19e-08 |
+| | A0′ reordered | **PASS** | 4.16e-16 | 2.4 × 10⁹ | 0 / 0 | — |
+| | A1′ without the hoist | **PASS** | 7.98e-11 | 1.25 × 10⁴ | 0 / 0 | 1.19e-08 |
+| `low_aspect_ratio_DEMO` | A0′ | **PASS** | 5.06e-15 | 2.0 × 10⁸ | 0 / 0 | — |
+| | A1′ | **PASS** | **6.85e-07** | **1.46** | 0 / 0 | 1.63e-10 |
+| | A0′ reordered | **PASS** | 5.06e-15 | 2.0 × 10⁸ | 0 / 0 | — |
+| | A1′ without the hoist | **PASS** | 6.85e-07 | 1.46 | 0 / 0 | 1.63e-10 |
+| `st_regression` | A0′ | **PASS** | 3.83e-14 | 2.6 × 10⁷ | 0 / 0 | — |
+| | A1′ | **PASS** | 5.03e-14 | 2.0 × 10⁷ | 0 / 0 | — |
+| | A0′ reordered | **PASS** | 3.83e-14 | 2.6 × 10⁷ | 0 / 0 | — |
+| | A1′ without the hoist | **PASS** | 5.10e-14 | 2.0 × 10⁷ | 0 / 0 | — |
+
+**PASS on 12 of 12 arrangement gates.** Three things must be read with it.
+
+1. **`low_aspect_ratio_DEMO`'s lifted arrangement passes with a margin of 1.46, not 10⁴.** Its
+   objective differs by 6.85 × 10⁻⁷ against a 1 × 10⁻⁶ gate — a pass, and the closest thing in
+   Phase B to a near miss. A tolerance one third tighter would have failed it. The tolerance was
+   fixed from PROCESS's own before the run and is not adjusted after.
+2. **A dash in the last column is a test case that names no consistency constraint, not a silent
+   pass.** `st_regression` has `i_pulsed_plant = 0` and an empty measured `PULSE` write set: there
+   is no burn time to lift. It is the `k = 0` control.
+3. **The gate is shown capable of failing on every arrangement, not just one.** Eight deliberately
+   corrupted inputs per arrangement, through the production predicates unmodified: **28 of 28 that
+   must fail, do.** Four more are reported **NOT APPLICABLE rather than counted either way** — the
+   two consistency-residual perturbations watch a quantity that does not exist on an arrangement
+   without the lift, so mutating it changes nothing and the gate correctly still passes. Counting
+   those as passes would be exactly the vacuous-gate failure mode this study has met before.
+
+**And the unit tests.** `tests/unit`: **843 passed, 4 skipped**, the same as the two tasks that
+built this variant's scaffolding.
+
+### 7.4 What the arrangements cost at each test case's own starting point
+
+One run per cell, before any distribution: the deck's own unperturbed design vector.
+
+| test case | arrangement | net model evaluations | sweeps | optimiser iterations | design variables |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | R | 42 567 | 2 030 | 8 | 20 |
+| | A0′ | 43 449 | 2 072 | 8 | 20 |
+| | A0′ reordered | **43 449** | **2 072** | 8 | 20 |
+| | A1′ without the hoist | 44 734 | 9 437 | 8 | 21 |
+| | A1′ | 42 772 | 7 469 | 8 | 21 |
+| `low_aspect_ratio_DEMO` | R | 89 964 | 4 287 | 16 | 19 |
+| | A0′ | 86 877 | 4 140 | 16 | 19 |
+| | A0′ reordered | **86 877** | **4 140** | 16 | 19 |
+| | A1′ without the hoist | 72 064 | 15 014 | 13 | 20 |
+| | A1′ | 68 947 | 11 886 | 13 | 20 |
+| `st_regression` | R | 39 669 | 1 892 | 10 | 14 |
+| | A0′ | 42 756 | 2 039 | 10 | 14 |
+| | A0′ reordered | **42 756** | **2 039** | 10 | 14 |
+| | A1′ without the hoist | 40 725 | 8 620 | 10 | 14 |
+| | A1′ | 37 312 | 7 513 | 10 | 14 |
+
+| test case | `R → A0′` (stopping rule) | `A0′ → A1′` (architecture) | `R → A1′` (user-facing) |
+|---|---|---|---|
+| `large_tokamak_nof` | +2.07 % | **−1.56 %** | +0.48 % |
+| `low_aspect_ratio_DEMO` | −3.43 % | **−20.64 %** | −23.36 % |
+| `st_regression` | +7.78 % | **−12.73 %** | −5.94 % |
+
+**The node transposition costs exactly nothing, measured rather than argued.** A0′ and A0′-reordered
+differ in one thing — whether `build` runs before or after `physics` — and produce **identical**
+counts on all three test cases, to the last model evaluation. Grouping the models into blocks brings
+that transposition with it, so `A0′ → A1′` varies the grouping *and* the order; this measures the
+order term at zero in PROCESS's own driver, as §4.4.4 measured it at zero in the replay engine over
+2 400 arm records. The grouping is what `A0′ → A1′` is measuring.
+
+**The sweep counts are not a cost and are shown to make that concrete.** A1′ runs 7 469 block
+sweeps on `large_tokamak_nof` against R's 2 030, and costs slightly *less*. A block sweep runs one
+module, not all of them; quoting sweeps would say the architecture is 3.7 times more expensive,
+which is a units error and not a measurement.
+
+**One number in that table is not architecture and must not be read as such.** On
+`low_aspect_ratio_DEMO` the lifted arrangements take **13** optimiser iterations where R and A0′
+take 16. Most of that deck's −20.6 % is a shorter search, not a cheaper loop. Iteration counts are
+not comparable between arrangements of different dimension and are diagnostics only; §7.7
+decomposes it.
+
+### 7.9 The envelope's asymmetry, and what is done about it — for both phases
+
+The matched-accuracy comparison in §4.4.2 and the one in §7.8 rest on the same construction, and
+that construction is not neutral between the two arrangements. **Declaring the bias is not
+correcting it**, so both are computed and both are reported.
+
+**The asymmetry.** The blocked arrangement has an inner tolerance the flat one does not have, so
+more settings are tried: eleven rungs against six in Phase A, nine against five in Phase B. That
+is inherent to the architecture — the flat arm has no inner loop to loosen — but it produces **two
+one-sided biases, both favouring the blocked arm.**
+
+**Bias 1, sampling.** A running minimum can only fall as draws are added, never rise. Two
+arrangements with *identical* underlying cost-versus-accuracy behaviour, sampled nine times against
+five, give the nine-sample arm the lower envelope from sampling alone. And the extra rungs are not
+spread across the accuracy range: **every one of them sits at the calibrated outer tolerance and
+varies only the inner one**, so the extra sampling is concentrated in a single narrow accuracy
+band — and that band is at τ = 1e-6, the study's own calibration point, which is plausibly near
+where the matched-accuracy readout lands. The advantage is concentrated exactly where it does the
+most work.
+
+**Bias 2, interpolation.** Cost is read between bracketing envelope points by a chord in
+log₁₀(cost) against log₁₀(accuracy). Where the curve is **convex**, a chord lies *above* it. The
+arm with fewer points has wider gaps, so more of its curve is replaced by an over-estimate, and
+**fewer rungs makes the flat arm look more expensive than it is** — the same direction as bias 1.
+Convexity is not assumed: it is computed per arm per test case from the actual envelope points, as
+the sign of the discrete second difference at every interior point, and reported with its
+denominator. Where the curve is not convex this bias does not apply and is dropped rather than
+asserted.
+
+**The fix, which needs no new runs: a matched-count envelope, reported beside the all-settings
+one.** The blocked arm's *joint* rungs alone — one knob, the same tolerance values, the same number
+of draws as the flat arm — against the flat arm's rungs. Both numbers, per test case, with their
+denominators.
+
+The difference between the two is a **tuning premium**: what the second knob buys, not what the
+partition buys. They answer different questions and both are legitimate:
+
+| construction | what it answers | who it is for |
+|---|---|---|
+| **matched-count** — five joint rungs against five flat | *what does partitioning cost at equal tuning effort?* | **the architecture question. The headline takes this number** |
+| **all-settings** — nine block rungs against five flat | *what is the best I can do with each arrangement?* | a practitioner choosing between two implementations. Reported beside it and labelled as such |
+
+**If the two disagree in sign, that is a finding to report, not to reconcile.**
+
+**Why this is not pedantry, and it is the reason the rule is written down rather than assumed.**
+This study's own matched-accuracy analysis **flipped sign once already on an
+envelope-construction choice** — +21.9 % where the lower envelope gives −4.3 % on
+`large_tokamak_nof` — against a final effect of about 4 %. The construction has demonstrated
+leverage comparable to the quantity being measured. A reader is entitled to see both constructions
+and judge, and a report that showed only the more favourable one would be choosing on the reader's
+behalf.
+
+**Phase A has the same asymmetry and is treated the same way**, so its §4.4.2 figures are also
+reported under both constructions. It is not the case that one phase is affected and the other is
+not.
 
 ---
 

@@ -459,6 +459,11 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=None)
     ap.add_argument("--timeout", type=int, default=3600)
     ap.add_argument("--skip-warm", action="store_true")
+    ap.add_argument("--resume", action="store_true",
+                    help="skip runs that already have a complete, "
+                         "driver-stamped metrics.json.  An interrupted run is "
+                         "re-run; a directory alone is not taken as evidence "
+                         "of a completed run")
     args = ap.parse_args()
 
     runs = Path(args.runs).resolve()
@@ -491,6 +496,26 @@ def main() -> int:
         jobs = jobs_campaign(
             runs, args.scenarios, args.arms, args.starts, args.delta
         )
+
+    if args.resume:
+        # A run is complete only if run_one wrote its metrics AND the driver
+        # stamped the arm into it afterwards; anything less was interrupted
+        # mid-flight and is re-run.  Skipping on the presence of a directory,
+        # or on a metrics file the driver never stamped, would silently keep a
+        # partial record in the population.
+        keep = []
+        for job in jobs:
+            m = job[2] / "metrics.json"
+            if m.exists():
+                try:
+                    if "a28_arm" in json.loads(m.read_text()):
+                        continue
+                except Exception:
+                    pass
+            keep.append(job)
+        print(f"resume: {len(jobs) - len(keep)} of {len(jobs)} already "
+              f"complete, {len(keep)} to run", flush=True)
+        jobs = keep
 
     print(f"{args.mode}: {len(jobs)} runs, {args.jobs} at a time", flush=True)
     log: list[dict] = []
