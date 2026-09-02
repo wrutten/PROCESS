@@ -106,11 +106,23 @@ FIXEDPOINT = TREE / "arch_surgery" / "fixedpoint"
 PROBE = TREE / "arch_surgery" / "idf_probe"
 RUNS_ROOT = PROBE / "runs"
 
+#: **Three decks, from 2026-09-02 (D17).**  ``large_tokamak_eval`` is dropped:
+#: it runs 0 solver iterations, so it cannot inform a study about how an
+#: architecture behaves when the optimiser reacts; its inequality constraints
+#: are never enforced, so its "solution" is not a feasible optimum; and A22
+#: found its evidence weaker than the other pulsed decks (555 of 840 coupling
+#: components classified constant from a 10-point harvest).  It was carrying
+#: two of the results report's largest percentages on ten design points.
+#: **Merged four-deck tables stand as the record of what was run** and are not
+#: retro-edited; anything generated from here on is a three-deck table.  Pass
+#: ``--scenarios`` explicitly to run the dropped deck for a historical
+#: re-derivation.
+DROPPED_2026_09_02 = ("large_tokamak_eval",)
+
 SCENARIOS = [
     "large_tokamak_nof",
     "low_aspect_ratio_DEMO",
     "st_regression",
-    "large_tokamak_eval",
 ]
 
 #: The tolerance the arm comparison runs at.  It is not a free parameter: the
@@ -122,7 +134,8 @@ TAU = 1e-6
 #: The stages, in the order they must run.  ``phase_a`` produces the harvested
 #: design points that ``census`` and ``permutation`` replay, so neither can run
 #: before it.
-STAGES = ("phase_a", "census", "permutation", "driver_hoist", "driver_reorder",
+STAGES = ("phase_a", "method_gate", "accuracy", "pulse_gate",
+          "census", "permutation", "driver_hoist", "driver_reorder",
           "tables")
 
 #: Stages needing an unmodified checkout of the base commit to compare against.
@@ -309,8 +322,62 @@ def stage_tables(args, runs_root: Path) -> int:
     return rc
 
 
+def stage_method_gate(args, runs_root: Path) -> int:
+    """A26's reproduction gate: the instrument is inert where it must be.
+
+    A26 changed code every previously merged arm runs through --- the
+    subset-aware coupling-state read, the restructured residual, the routing
+    rule for hoisted nodes.  This replays at A18's settings and compares
+    against A18's recorded artifacts **bit for bit, with no tolerance**, then
+    perturbs the comparison to show it can fail.  It is also the licence for
+    reusing A18's harvest at all: the argument that licensed it before ---
+    that the model sub-trees are hash-identical to the recording commit --- no
+    longer holds, and an empirical reproduction replaces it.
+    """
+    return _run("A26 method gate: reproduce A18 bit for bit",
+                [sys.executable, str(FIXEDPOINT / "run_a26.py"), "gate",
+                 "--scenarios", *args.scenarios],
+                runs_root)
+
+
+def stage_accuracy(args, runs_root: Path) -> int:
+    """Cost against **achieved** accuracy, for both arms, per test case.
+
+    The blocked arrangement was run with its inner blocks over-converged, so
+    its cost figures were upper bounds rather than a comparison.  This runs
+    both arrangements across ladders of tolerance, records what each actually
+    delivered, and reads cost off at equal delivered accuracy.
+    """
+    rc = _run("A26: cost-versus-accuracy ladders",
+              [sys.executable, str(FIXEDPOINT / "run_a26.py"), "ladder",
+               "--scenarios", *args.scenarios],
+              runs_root)
+    if rc:
+        return rc
+    return _run("A26: cost at matched achieved accuracy",
+                [sys.executable, str(FIXEDPOINT / "accuracy.py"),
+                 "--scenarios", *args.scenarios,
+                 "--out", str(runs_root / "a26" / "matched_accuracy.json")],
+                runs_root)
+
+
+def stage_pulse_gate(args, runs_root: Path) -> int:
+    """`pulse` leaves the model loop once the burn time is a design variable.
+
+    Runs PROCESS's own driver two ways on the lifted deck --- `pulse` on every
+    pass, and `pulse` once per optimiser evaluation before the stopping test is
+    evaluated --- and compares the stopping test's inputs as exact bits.
+    """
+    return _run("A26: pulse pre-predicate placement, in PROCESS's own driver",
+                [sys.executable, str(PROBE / "run_a26_pulse.py")],
+                runs_root)
+
+
 STAGE_FN = {
     "phase_a": stage_phase_a,
+    "method_gate": stage_method_gate,
+    "accuracy": stage_accuracy,
+    "pulse_gate": stage_pulse_gate,
     "census": stage_census,
     "permutation": stage_permutation,
     "driver_hoist": stage_driver_hoist,

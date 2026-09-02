@@ -44,11 +44,23 @@ TREE = HERE.parent.parent
 RUNS = TREE / "arch_surgery" / "idf_probe" / "runs" / "a18"
 OUT_DIR = TREE / "arch_surgery" / "docs" / "data"
 
+#: **Three decks, from 2026-09-02 (D17).**  ``large_tokamak_eval`` is dropped:
+#: it runs 0 solver iterations, so it cannot inform a study about how an
+#: architecture behaves when the optimiser reacts; its inequality constraints
+#: are never enforced, so its "solution" is not a feasible optimum; and A22
+#: found its evidence weaker than the other pulsed decks (555 of 840 coupling
+#: components classified constant from a 10-point harvest).  It was carrying
+#: two of the results report's largest percentages on ten design points.
+#: **Merged four-deck tables stand as the record of what was run** and are not
+#: retro-edited; anything generated from here on is a three-deck table.  Pass
+#: ``--scenarios`` explicitly to run the dropped deck for a historical
+#: re-derivation.
+DROPPED_2026_09_02 = ("large_tokamak_eval",)
+
 SCENARIOS = [
     "large_tokamak_nof",
     "low_aspect_ratio_DEMO",
     "st_regression",
-    "large_tokamak_eval",
 ]
 
 
@@ -81,8 +93,16 @@ def harvest_identity(path: Path, harvest: dict) -> dict:
     phases: dict = {}
     for p in harvest["points"]:
         phases[p.get("phase")] = phases.get(p.get("phase"), 0) + 1
+    try:
+        rel = str(path.relative_to(TREE))
+    except ValueError:
+        # A harvest reached through a symlink into another checkout's
+        # untracked run tree.  Recorded as given rather than raising: the file
+        # and content hashes above are what identify the harvest, and the path
+        # is provenance.
+        rel = str(path)
     return {
-        "path": str(path.relative_to(TREE)),
+        "path": rel,
         "file_sha256": fh.hexdigest(),
         "content_sha256": ch.hexdigest(),
         "n_design_points": len(harvest["points"]),

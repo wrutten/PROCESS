@@ -205,6 +205,7 @@ def _result(**kw) -> dict:
         "node_calls": 0,
         "outer": 0,
         "inner": {},
+        "inner_tau": None,
         "residual_trace": [],
         "moved_constants": [],
         "cross_converged_at": None,
@@ -332,6 +333,7 @@ def solve_block(
     blocks,
     tau: float,
     *,
+    inner_tau: float | None = None,
     floor: int = 1,
     inner_cap: int = INNER_CAP,
     outer_cap: int = OUTER_CAP,
@@ -352,6 +354,17 @@ def solve_block(
     state.  That is a measurement, not an assumption, and the recorded outer
     count is what says whether it held.
 
+    **``inner_tau`` is A26's handicap parameter, and its default is A18's
+    behaviour.**  A18 ran the inner block solves at the *same* tolerance as the
+    outer test, so each block was driven to tau against inputs that were about
+    to change while the flat control never paid that -- the asymmetry §6.1 of
+    the results report names as the strongest objection to Phase A's headline.
+    ``inner_tau=None`` means "use ``tau``", which is exactly what A18 did and
+    is bit-identical to it; any other value loosens (or tightens) the inner
+    solves alone, which is what makes a cost-versus-achieved-accuracy curve
+    possible.  The value actually used is returned in the result under
+    ``inner_tau`` so no artifact can be read without it.
+
     ``recorder`` (A22) is an optional object with ``inner(outer, label, s,
     res)`` and ``outer_pass(outer, res)`` methods.  It is handed the same
     :class:`Residual` objects the predicate already computed, so it can name
@@ -361,8 +374,16 @@ def solve_block(
     design points, against A18's recorded counts, residual traces and exit
     audits, with no tolerance applied anywhere in the comparison.
     """
+    tau_in = float(tau if inner_tau is None else inner_tau)
     budget = Budget(global_cap)
     bound = spec.bind(sweeper.data)
+    # A26: an inner solve tests its own module's subset, so it reads that
+    # subset and no more.  Resolved once per block here, not per sweep.  This
+    # changes what is *copied*, never what is compared -- gated bit-for-bit.
+    inner_bind = {}
+    for _lab, _n, _sub, _it in blocks:
+        sel = spec.subset_indices(_sub)
+        inner_bind[_lab] = (sel, spec.bind_subset(sweeper.data, sel))
     y_outer_prev = YSpec.read(bound)
     inner_counts: dict = {lab: [] for lab, _n, _s, _it in blocks}
     inner_capped: dict = {lab: 0 for lab, _n, _s, _it in blocks}
@@ -382,19 +403,20 @@ def solve_block(
                     sweeper.run_nodes(nodes, budget)
                     inner_counts[label].append(1)
                     continue
-                y_prev = YSpec.read(bound)
+                sel, sub_bound = inner_bind[label]
+                y_prev = YSpec.read(sub_bound)
                 s = 0
                 inner_ok = False
                 for s in range(1, inner_cap + 1):
                     budget.charge_module_sweep()
                     sweeper.run_nodes(nodes, budget)
-                    y = YSpec.read(bound)
-                    res = spec.residual(y_prev, y, subset=subset)
+                    y = YSpec.read(sub_bound)
+                    res = spec.residual_over(sel, y_prev, y)
                     if recorder is not None:
                         recorder.inner(outer, label, s, res)
                     moved |= {spec.name(i) for i in res.moved_constant}
                     y_prev = y
-                    if s >= floor and res.converged(tau):
+                    if s >= floor and res.converged(tau_in):
                         inner_ok = True
                         break
                 inner_counts[label].append(s)
@@ -423,6 +445,7 @@ def solve_block(
         module_sweeps=budget.module_sweeps,
         node_calls=budget.node_calls,
         outer=outer,
+        inner_tau=tau_in,
         inner={
             "counts": inner_counts,
             "capped": inner_capped,

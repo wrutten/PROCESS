@@ -26,11 +26,23 @@ VOLATILE_MFILE_KEYS = (
     "(fileprefix)", "(tagno)", "(branch_name)", "(commsg)", "(process_runtime)",
 )
 
+#: **Three decks, from 2026-09-02 (D17).**  ``large_tokamak_eval`` is dropped:
+#: it runs 0 solver iterations, so it cannot inform a study about how an
+#: architecture behaves when the optimiser reacts; its inequality constraints
+#: are never enforced, so its "solution" is not a feasible optimum; and A22
+#: found its evidence weaker than the other pulsed decks (555 of 840 coupling
+#: components classified constant from a 10-point harvest).  It was carrying
+#: two of the results report's largest percentages on ten design points.
+#: **Merged four-deck tables stand as the record of what was run** and are not
+#: retro-edited; anything generated from here on is a three-deck table.  Pass
+#: ``--scenarios`` explicitly to run the dropped deck for a historical
+#: re-derivation.
+DROPPED_2026_09_02 = ("large_tokamak_eval",)
+
 SCENARIOS = [
     "large_tokamak_nof",
     "low_aspect_ratio_DEMO",
     "st_regression",
-    "large_tokamak_eval",
 ]
 
 
