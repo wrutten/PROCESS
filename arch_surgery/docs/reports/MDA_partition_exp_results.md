@@ -237,7 +237,8 @@ Three further rules follow from problems found in the existing test:
 
 The threshold itself is **calibrated rather than chosen**. Before the main comparison, the flat
 arrangement is run at three thresholds and the threshold is set where tightening it further stops
-changing the answer — beyond that point the loop is converging noise. The calibration is run once
+changing the answer — beyond that point the extra convergence is real but no longer reaches the
+objective. The calibration is run once
 and the resulting threshold is shared by all four arrangements, because a comparison in which the
 arrangements stop at different standards is not a comparison. §4.3 records the ladder.
 
@@ -421,7 +422,22 @@ vector at termination.
 while costing 26 %, 20 % and 19 % more model evaluations on the three optimisation cases and 4 %
 on the evaluation case. Loosening to 1e-4 moves the objective by up to 7.9 × 10⁻⁷ relative, which
 is larger than these decks' own solver convergence parameter of 1e-7, so 1e-4 is not safe even
-though it is 12–15 % cheaper. Past 1e-6, the loop is converging noise.
+though it is 12–15 % cheaper.
+
+**Past 1e-6 the extra work is real convergence that does not reach the answer — it is *not*
+round-off.** An earlier draft of this section said "the loop is converging noise", which is wrong
+and worth correcting explicitly, because the two readings have different consequences. The state
+residual keeps genuinely shrinking past 1e-6: the worst exit residual in the table above falls from
+1.05e-08 to 1.57e-11 and from 1.67e-08 to 9.51e-13 across that step, and measured over every point
+the residual after one further sweep falls by between 32× and 10⁶× per rung of the ladder and never
+levels off. A round-off-limited iteration would flatten instead. What *does* stop is the objective:
+it moves by at most 4.1e-16, 2.0e-13 and 0 relative on the three cases whose objective is actually
+computed — far below these decks' own solver convergence parameter of 1e-7. So the last two decades
+of tolerance refine state the objective does not depend on sensitively, and buy nothing for 19–26 %
+more model evaluations. That is why 1e-6 is the calibration point; it is not because the arithmetic
+has run out of precision. Plan §4.1c carries the measurement and its limits, including the one
+place where the loop genuinely does iterate on a numerical artefact (issue I-12, 7 of 144 points on
+`st_regression`).
 
 Every point converged at every tolerance on the ladder: 1 800 of 1 800 point-solves, no limits, no
 drops.
