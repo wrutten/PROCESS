@@ -1478,9 +1478,7 @@ two populations, the same zero.
 1. **Re-run Phase B on the no-exclusion predicate.** It is the largest single limitation of the
    Phase B numbers, the fix is already built and gated, and Phase A measured it as changing no
    count at three scale floors a decade apart. `st_regression`'s figure most needs it.
-2. **A matched-accuracy robustness comparison where one is possible.** Cost is compared at matched
-   achieved accuracy and robustness is not; §7.9 measures the direction of the resulting bias but
-   does not remove it.
+2. **A matched-accuracy robustness comparison on more than one start population.** §7.9.1 made the comparison on st_regression, the one deck where it is possible and informative; a second starting-point distribution would test whether its one-start-each-way result is stable.
 3. **A thicker matched-accuracy ladder for Phase B.** Two starts per rung is not a distribution,
    and on one test case it yields no curve at all.
 4. **An exact per-model cost unit.** Still open, still the thing everything in §5.2 is downstream
@@ -1819,7 +1817,7 @@ The earlier Phase B run reported that its variant refused 13 starts, all of them
 non-finite intermediate state, and read that as a property of the architecture. There was no
 control that could tell architecture from stopping rule. There is now.
 
-| test case | arrangement | starts not solved | of | refusals by the coupling-state test | quantity named |
+| test case | arrangement | starts whose run crashed | of | refusals by the coupling-state test | quantity named |
 |---|---|---|---|---|---|
 | `large_tokamak_nof` | R | 3 | 25 | 0 | — |
 | | A0′ | 3 | 25 | **0** | — |
@@ -1830,6 +1828,10 @@ control that could tell architecture from stopping rule. There is now.
 | `st_regression` | R | 0 | 25 | 0 | — |
 | | A0′ | 0 | 25 | 0 | — |
 | | A1′ | 0 | 25 | 0 | — |
+
+*(The crash counts above are the refusal population. The full solved/not-solved picture, including
+the `ifail ≠ 1` completions this table does not count — 11 per arm on `low_aspect_ratio_DEMO`,
+1–3 on `st_regression` — is §7.6's.)*
 
 **The answer is: mostly the predicate.** On the one test case where the coupling-state test refuses
 anything at all, the **flat control refuses two of the three**. The control shares the architecture
@@ -1901,8 +1903,9 @@ variable and a consistency constraint did not measurably disturb the search on t
 one**: −4.39 %, −4.32 % and −2.95 % (22 / 22, 11 / 11 and 18 / 19 starts). So on
 `large_tokamak_nof` the architecture without the hoist costs **+2.88 %**, the hoist takes 4.4
 percentage points off, and the combined figure is **−1.63 %**. **The headline is therefore the
-proposed architecture and never the partition's benefit**: the partition alone, on that test case,
-costs more.
+proposed architecture and never the partition's benefit**: the partition-plus-lift, on that test
+case, costs more — and no arm pair varies the lift alone, so the partition's own share is not
+separately identified.
 
 ### 7.9 Is the robustness comparison on a level basis? A measured answer
 
@@ -2284,7 +2287,7 @@ whatever tolerance is asked for.
 **The headline is the proposed architecture, never the partition's benefit.** Three things change
 at once. Measured inside this architecture, the feed-forward hoist alone is worth −4.39 %, −4.32 %
 and −2.95 %; on `large_tokamak_nof` the architecture **without** it costs **+2.88 %**. The
-partition alone, on that test case, costs more.
+partition-plus-lift, on that test case, costs more; no arm isolates the lift, so its share is not separately identified.
 
 **And the matched-accuracy figures for Phase B rest on 1–2 starting points**, against 20–22 for the
 distributional result. They are a different and weaker kind of evidence and are labelled as such.
@@ -2311,7 +2314,7 @@ These may outlast both headlines.
 
 Three test cases, tokamak only, one commit, one starting-point distribution, one perturbation size,
 one optimiser. Phase A is per-solve cost on the design points PROCESS's own optimiser visited;
-Phase B is 25 perturbed starts per arrangement. The coupling-state test is built from a recording
+Phase B is 24 perturbed starts plus each deck's own unperturbed point per arrangement. The coupling-state test is built from a recording
 taken at the **unperturbed** design point, and under 10 % perturbation a quantity that recording
 classified constant moves on **1.7 %, 0.8 % and 24.2 %** of solves — on the third test case that is
 a quarter of them, and it is not equal between arrangements. That is the largest single
@@ -2327,6 +2330,12 @@ All measurements are at base commit `c0ae5b28`, frozen for the duration of the s
 prints the tree, branch and commit it used and asserts the exact tree it imported — by path, never
 by version string, because an archived tree can report a version from a different commit than the
 one it contains. Nothing measured at any other commit is cited.
+Phase B's raw runs were produced incrementally on the A28 task branch and record four successive
+commits (`dc18c05b`, `9634bb06` — the 300-run campaign — `492c6fc8`, `0fae5e1a`), most with
+uncommitted changes present at run time. No commit after `9634bb06` touches `process/` or the
+measurement subprocess, and six repeated configurations (both arms, three decks, the unperturbed
+start at τ = 1e-6) reproduce bit-identically in cost and `norm_objf` across three of those heads
+(A30). The from-scratch verification at one commit is A29's.
 
 Recorded artifacts live under `arch_surgery/idf_probe/runs/` (`a18/`, `a22/`, `a23*/`, `a13/`,
 `a3/`), which is untracked; the committed record is this document, the per-deck coupling-state

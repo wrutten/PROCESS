@@ -50,7 +50,7 @@ comes from the term that was folded in.
 
 This is the measurement A28 was commissioned for, and it is decisive.
 
-| deck | arm | starts not solved | of | refusals by the coupling-state test | quantity named |
+| deck | arm | starts whose run crashed | of | refusals by the coupling-state test | quantity named |
 |---|---|---|---|---|---|
 | `large_tokamak_nof` | R / A0′ / A1′ | 3 / 3 / 3 | 25 | **0 / 0 / 0** | — |
 | `low_aspect_ratio_DEMO` | R | 2 | 25 | 0 | — |
@@ -141,7 +141,7 @@ fit. **This changes no all-settings number** — verified: −4.32 / −4.53 / �
    single largest caveat on this task's numbers.
 2. **The headline is the proposed architecture, never the partition's benefit** (plan §7a). The
    hoist's separable share, measured **inside** this architecture: **−4.39 %, −4.32 %, −2.95 %**. On
-   `large_tokamak_nof` the architecture *without* it costs **+2.88 %** — the partition alone costs
+   `large_tokamak_nof` the architecture *without* it costs **+2.88 %** — the partition-plus-lift costs
    more there, and the combined figure is negative only because of the hoist.
 3. **H5's own risk did not materialise.** The paired optimiser-iteration ratio is exactly **1.000 at
    q1, median and q3** on two decks for every comparison, and moves in the variant's favour on the
