@@ -24,34 +24,45 @@
 ## Abstract
 
 PROCESS solves a fusion power plant design problem by wrapping an optimiser around a loop that
-re-runs twenty-six engineering and physics models until their outputs stop changing. This
-experiment asks whether the **arrangement** of that machinery — how many loops there are, what
-they iterate on, and which models sit inside them — measurably changes the cost of solving, when
-not one line of any physics model is altered.
+re-runs about twenty-six engineering and physics models until their outputs stop changing. This
+experiment asks whether the **arrangement** of that machinery — how many loops there are, what they
+iterate on, which models sit inside them, and which quantities the optimiser owns rather than the
+loop — measurably changes the cost of solving, when not one line of any physics model is altered.
 
 The models are frozen deliberately. A faster program with rewritten models proves nothing about
 architecture, because the rewrite and the rearrangement cannot be told apart afterwards. Freezing
 the models makes the arrangement the only thing that varies, and therefore the only thing a
 measured difference can be attributed to.
 
-The experiment is designed as an **existence proof**. It does not attempt to find the best
-possible arrangement, and it makes no claim that the arrangement it tests should be adopted. It
-asks a narrower question that a single fair comparison can answer: *does a simple change to the
-arrangement produce a difference large enough to care about?*
+It runs in two phases. **Phase A removes the optimiser** and replays four arrangements over design
+points a real optimisation visited, which makes its numbers exact counts. **Phase B puts the
+optimiser back** and runs whole optimisations from perturbed starting points, which is the only way
+to ask whether the optimiser reacts to the rearrangement.
 
-**The answer is yes, and it is not the answer the experiment was designed to look for.** The
-three-block partition that motivated the study **costs more** on three of the four test cases —
-46.8 %, 40.4 % and 17.7 % more model evaluations, over 149, 297 and 10 recorded design points —
-and is 4.6 % cheaper on the fourth, over 144, which is the one case with no quantity joining the
-blocks at all. Those three figures are upper bounds: the blocked arrangement was run with its
-inner blocks over-converged, and §4.5 measures by how much. A change nobody designed the study
-around, running the two models that feed nothing back once after the loop instead of on every
-pass, **saves 6.56 %, 6.76 %, 6.64 % and 2.63 %** of all model evaluations, with every number in
-the output file bit-identical to a reference checkout. Both results are counts, both reproduce
-exactly, and together they say that the arrangement matters — while saying nothing in favour of
-the particular rearrangement the study set out to test.
+**Phase A's answer, at matched achieved accuracy: the three-block partition is at parity or cheaper
+than a flat loop** — 4.3 %, 4.5 % and 13.1 % cheaper on three test cases. Compared at matched
+*tolerance*, as this report originally did, it appeared to cost 46.8 % and 40.4 % **more**. The
+whole of that penalty was the blocked arrangement being driven to an accuracy nobody asked for, and
+the correction came from this study's own critical pass. It removes the finding that the partition
+costs; it does not show the partition is worth anything.
 
----
+**Phase B takes three arrangements, not two, and that is the methodological result.** PROCESS's
+loop and the proposed one stop on different tests, so comparing them directly measures the
+architecture and the stopping rule added together — and the stopping-rule term is +2.1 %, −3.4 %
+and +3.2 %, comparable in size to the architecture term and not of one sign. With a
+predicate-matched control in between, the architecture alone is **1.6 % and 6.2 % cheaper on two
+test cases** (on 20 of 22 and 20 of 20 paired starting points) and **inconclusive on the third**.
+Its robustness is **identical to the control's on one test case** and worse by a single start of 25
+on the other two — and the refusals that an earlier two-arm run attributed to the architecture turn
+out to be **two-thirds the stopping rule**, because the flat control refuses them too.
+
+**The result that is not about the partition is the one that reproduces cleanly.** Running the
+models that feed nothing back once after the loop instead of on every pass removes 6.6 % of model
+evaluations in the flat arrangement with the whole output file bit-identical, and 4.4 %, 4.3 % and
+3.0 % inside the proposed one. On one test case the proposed architecture *without* it costs 2.9 %
+**more** — so the headline is *the proposed architecture*, never *the partition's benefit*.
+
+Every acceptance quantity is a count or an exact bit-comparison. No conclusion rests on a timing.
 
 ## 1. Goal
 
@@ -564,6 +575,15 @@ Across every accuracy the flat arm reached that also lies inside the blocked arm
 
 *The italicised last entry on each case is the loosest flat rung, where the blocked arm has no rung
 as loose and the envelope is read flat. That is a limit of the ladder, not a win for either arm.*
+
+**These figures are the all-settings construction, and §7.13 explains why that is not the only one
+worth having.** The blocked arm has eleven rungs to the flat arm's six because it has an inner
+tolerance the flat arm does not have, and more draws on a running minimum is a one-sided advantage
+before any architecture is involved. A **matched-count** envelope — the blocked arm's six *joint*
+rungs against the flat arm's six, one knob each — is reported beside it, and the architecture
+headline takes that number. §7.13 states both biases, measures the convexity the second one depends
+on rather than assuming it, and reports the difference between the two constructions as a **tuning
+premium** that belongs to the second knob and not to the partition.
 
 **The replacement claim is narrow and must stay narrow.** This removes the finding that the
 partition *costs*; it does **not** establish that the partition is worth anything. Four things
@@ -1121,6 +1141,37 @@ study measured one partition, derived from one dependency analysis, on four deck
 - **The comparison is per-solve cost with the optimiser absent.** Nothing here speaks to optimiser
   iteration counts, robustness of the search, or total runtime.
 
+### 5.5 What Phase B adds, and what it takes away
+
+**It adds the only measurement an adoption decision could rest on**, and it takes away the previous
+version of its own answer.
+
+**What it adds.** Phase A measures what an arrangement costs on the design points PROCESS's own
+optimiser visited. That is sound for an existence proof and silent on the question that matters: a
+loop that is cheaper per solve is worth nothing if the optimiser then takes more solves. Phase B
+answers it, and the answer is that on these test cases **the optimiser barely reacts at all** — the
+paired ratio of optimiser iterations is exactly 1.000 at the lower quartile, the median and the
+upper quartile on two test cases, and moves in the variant's favour on the third. The risk this
+phase was designed around did not materialise. Nothing bounded that in advance, and it could have
+gone the other way by more than the whole saving.
+
+**What it takes away is a verdict, and the mechanism is worth keeping.** Phase B's first run
+compared the proposed architecture against PROCESS as shipped. Phase A's own design documentation
+says that arrangement **"is a reference, not a competitor"**, and Phase A accordingly built a
+control arm rather than comparing against it. The reason is that the two stop on different tests,
+so their ratio contains both terms — and Phase A had already measured the stopping-rule term at
+−3.4 % to +8.6 %, against a Phase B result of +2.0 %. **A study can carry the right warning in one
+phase's design notes and violate it in the next phase's**, and what caught it was reading the two
+phases against each other rather than any check inside either.
+
+**A general lesson, which is the same shape as §6.1's.** Both of this study's reversals are the
+same error: a comparison that varies two things and reports the answer as if it varied one. In
+Phase A the two things were cost and accuracy; in Phase B they were architecture and stopping rule.
+Neither was hidden — both were written down somewhere — and neither had a check capable of noticing.
+The fix in both cases was a **control that differs in exactly one thing**, and in Phase B it is now
+enforced at run time: every ordered pair of arrangements run must declare what differs between them,
+checked against the arrangements as built, and an undeclared difference is a refusal.
+
 ---
 
 ## 6. A second pass: criticising this experiment's own method and results
@@ -1322,6 +1373,62 @@ said are both part of the record.
 architecture separately.** Phase B's first run compared the proposed architecture directly against
 PROCESS as shipped, which measures both at once, and the stopping-rule term is not small enough to
 ignore. §7.1 is what that cost and what it took to fix.
+
+### 6.6 A second pass over Phase B's own results
+
+Everything above criticises Phase A. Phase B needs the same treatment, and four of its results do
+not survive it intact.
+
+**1. The headline rests on two test cases, and one of them is the one with the weakest instrument.**
+`large_tokamak_nof` gives −1.63 % on 20 of 22 starts with a tight interquartile range, and
+`st_regression` gives −6.18 % on 20 of 20 — but on `st_regression` **24 % of all optimiser
+evaluations have a quantity the recording called constant moving inside them**, against 19 % in the
+other arrangement (§7.11). The stopping test is not doing the same thing in the two arms there. The
+`st_regression` figure should be read as provisional until the run is repeated on the
+no-exclusion predicate, and the cleaner of the two headlines is the smaller one.
+
+**2. The third test case is not merely inconclusive; it is inconclusive for a reason that would
+also have made a positive result untrustworthy.** `low_aspect_ratio_DEMO` keeps 8 of 25 starts,
+its ratios span 0.24 to 3.32, and most of its apparent −21 % is the lifted arrangements taking 13
+optimiser iterations where the others take 16. A different search is not a cheaper loop. Had that
+deck come out cleanly negative or cleanly positive, the same objection would apply, and it is worth
+saying that the inconclusive verdict is not the weak case of a result — it is the honest one.
+
+**3. The robustness criterion the plan declared in advance does not quite fit what happened.** It
+reads *"variant's success rate worse ⇒ H5 fails, regardless of cost"*, and the earlier Phase B run
+strengthened it in prose to *"the variant never solves a start the baseline cannot"*. The variant
+now **does** solve a start the control cannot, on `st_regression`, while losing two others. A
+criterion phrased as a rate handles that; a criterion phrased as domination does not. The rate is
+what is applied, and the domination sentence is withdrawn rather than reinterpreted.
+
+**4. A comparison at matched achieved accuracy is not available for robustness on one test case,
+and that is a structural limit rather than a missing run.** On `large_tokamak_nof` the block
+arrangement's loosest measured setting is four orders tighter than the flat one's. Solving each
+block to *its own* fixed point produces a tight state whatever tolerance is asked for, so there is
+no setting at which the two arrangements can be asked an equally easy question. Any future
+comparison on that test case inherits this.
+
+**And one thing that did survive, worth saying because it was checked rather than assumed.** The
+node transposition that grouping into blocks brings with it costs **exactly nothing** in PROCESS's
+own driver — identical counts to the last model evaluation on all three test cases (§7.4) — which
+is the same null Phase A measured over 2 400 arm records in the replay engine. Two instruments,
+two populations, the same zero.
+
+### 6.7 What would most improve the study now, in order
+
+1. **Re-run Phase B on the no-exclusion predicate.** It is the largest single limitation of the
+   Phase B numbers, the fix is already built and gated, and Phase A measured it as changing no
+   count at three scale floors a decade apart. `st_regression`'s figure most needs it.
+2. **A matched-accuracy robustness comparison where one is possible.** Cost is compared at matched
+   achieved accuracy and robustness is not; §7.9 measures the direction of the resulting bias but
+   does not remove it.
+3. **A thicker matched-accuracy ladder for Phase B.** Two starts per rung is not a distribution,
+   and on one test case it yields no curve at all.
+4. **An exact per-model cost unit.** Still open, still the thing everything in §5.2 is downstream
+   of, and neither phase provides it.
+5. **A partition drawn differently.** The study measured one partition, from one dependency
+   analysis. Its own §5.3 mechanism argument says the blocks are not lopsided enough for the saving
+   to be large, and that is a statement about *this* partition.
 
 ---
 
@@ -1595,7 +1702,304 @@ take 16. Most of that deck's −20.6 % is a shorter search, not a cheaper loop. 
 not comparable between arrangements of different dimension and are diagnostics only; §7.7
 decomposes it.
 
-### 7.9 The envelope's asymmetry, and what is done about it — for both phases
+### 7.5 The perturbation size, calibrated on the reference arrangement alone
+
+How far to perturb a starting design vector must not be chosen after seeing a result. It is
+measured on PROCESS as shipped, at 1 %, 5 % and 10 %, twelve starts each — 108 runs — and the
+largest size that still solves most starts is taken. The whole table, not just the choice:
+
+| test case | δ = 1 % | δ = 5 % | δ = 10 % | choice |
+|---|---|---|---|---|
+| `large_tokamak_nof` | 12 / 12 | 12 / 12 | **11 / 12** (1 crashed) | **10 %** |
+| `low_aspect_ratio_DEMO` | 12 / 12 | 9 / 12 (3 fail to converge) | **7 / 12** (4 fail, 1 crashed) | **10 %** |
+| `st_regression` | 12 / 12 | 11 / 12 (1 fails) | **12 / 12** | **10 %** |
+
+**δ = 10 % on every test case**, so one perturbation size runs them all and the three campaigns are
+comparable in it. Two things in that table are worth stating rather than smoothing.
+`low_aspect_ratio_DEMO` is the fragile case, and it is fragile **in the reference arrangement**: at
+10 % the incumbent solves 7 of 12. That is the floor everything else is measured against there, and
+it is a property of the deck and PROCESS's own solver. And `st_regression` is not monotone in δ —
+12, 11, 12 — because multi-start success is a property of a landscape and not a smooth function of
+perturbation size; reading a trend into three points would be reading noise.
+
+*This reproduces the earlier Phase B run's calibration exactly, on every cell of the table. The
+reference arrangement is bit-identical to the one that run used, which the switch-neutrality gate
+establishes, so the reproduction is a check on the harness rather than new evidence.*
+
+### 7.6 Robustness first, because robustness outranks cost
+
+25 starting points per arrangement per test case, the same ones for every arrangement — 300
+complete optimisations. Which starts each arrangement solves, paired:
+
+| test case | comparison | both | only the reference | only the other | neither | offered |
+|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | R → A0′ | 22 | 0 | 0 | 3 | 25 |
+| | **A0′ → A1′** | **22** | **0** | **0** | 3 | 25 |
+| | R → A1′ | 22 | 0 | 0 | 3 | 25 |
+| `low_aspect_ratio_DEMO` | R → A0′ | 12 | **0** | 0 | 13 | 25 |
+| | **A0′ → A1′** | **11** | **1** | **0** | 13 | 25 |
+| | R → A1′ | 11 | 1 | 0 | 13 | 25 |
+| `st_regression` | R → A0′ | 23 | **1** | 0 | 1 | 25 |
+| | **A0′ → A1′** | **21** | **2** | **1** | 1 | 25 |
+| | R → A1′ | 22 | 2 | 0 | 1 | 25 |
+
+**On `large_tokamak_nof` the three arrangements have identical success sets**: the same 22 starts,
+and the same 3 failures, which are the same model-level failure in every arm — a root-find inside a
+superconducting-coil model reporting `Failed to converge after 50 iterations, value is nan`. Not a
+driver failure, and not caused by anything this study built.
+
+**On `st_regression` the proposed architecture solves one start the control cannot** — the first
+time in this study that the variant is not strictly dominated on robustness. It also loses two, so
+the net is −1.
+
+**And the deficit is now attributable, which is the whole reason for the third arrangement.**
+
+### 7.7 The refused starts, re-attributed: predicate or architecture?
+
+The earlier Phase B run reported that its variant refused 13 starts, all of them refusals of
+non-finite intermediate state, and read that as a property of the architecture. There was no
+control that could tell architecture from stopping rule. There is now.
+
+| test case | arrangement | starts not solved | of | refusals by the coupling-state test | quantity named |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | R | 3 | 25 | 0 | — |
+| | A0′ | 3 | 25 | **0** | — |
+| | A1′ | 3 | 25 | **0** | — |
+| `low_aspect_ratio_DEMO` | R | 2 | 25 | 0 | — |
+| | A0′ | 4 | 25 | **2** | `current_drive.eta_cd_dimensionless_hcd_primary` |
+| | A1′ | 5 | 25 | **3** | the same quantity |
+| `st_regression` | R | 0 | 25 | 0 | — |
+| | A0′ | 0 | 25 | 0 | — |
+| | A1′ | 0 | 25 | 0 | — |
+
+**The answer is: mostly the predicate.** On the one test case where the coupling-state test refuses
+anything at all, the **flat control refuses two of the three**. The control shares the architecture
+of PROCESS as shipped — one flat loop over every model — and differs from it only in what it stops
+on. So two thirds of the refusals are the stopping rule declining to call a non-finite state
+converged, and one is the architecture examining intermediate module state that a flat sweep
+overwrites before anything looks at it.
+
+It is the **same quantity** the earlier run named — `current_drive.eta_cd_dimensionless_hcd_primary`,
+which goes `0.0 → NaN` — so this is a re-attribution of that finding rather than a different one.
+And the reference arrangement refuses none of them, because its stopping test is
+`np.allclose(..., equal_nan=True)`, which calls a state that has gone non-finite **idempotent with
+itself**. That behaviour is deliberate here: the reference is PROCESS as shipped and repairing it
+would flatter the comparison. It is filed as a defect against PROCESS and is not endorsed.
+
+**What this does to the earlier verdict.** That verdict — *"the variant never solves a start the
+baseline cannot, and robustness outranks cost, so H5 fails"* — rested on a robustness deficit
+attributed to the architecture. Two thirds of the measured deficit is not the architecture, and on
+one test case the variant now solves a start the control cannot. The verdict does not survive
+unchanged; §8 states what replaces it.
+
+### 7.8 Cost, over the kept starts only
+
+The drop census comes before any ratio. A start leaves the comparison only through this table.
+
+| test case | comparison | kept | crashed | did not converge | objective mismatch | offered |
+|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | all | 22 | 3 | 0 | 0 | 25 |
+| `low_aspect_ratio_DEMO` | R → A0′ | 12 | 4 | 9 | 0 | 25 |
+| | A0′ → A1′ | **8** | 5 | 9 | 3 | 25 |
+| `st_regression` | R → A0′ | 22 | 0 | 2 | 1 | 25 |
+| | A0′ → A1′ | 20 | 0 | 4 | 1 | 25 |
+
+Paired ratio of net model evaluations, per start, per test case, never pooled:
+
+| test case | comparison | n | min | q1 | **median** | q3 | max | cheaper / dearer |
+|---|---|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | R → A0′ *(stopping rule)* | 22 | 1.015 | 1.019 | **1.021 (+2.13 %)** | 1.025 | 1.060 | 0 / 22 |
+| | **A0′ → A1′** *(architecture)* | 22 | 0.848 | 0.982 | **0.984 (−1.63 %)** | 0.985 | 1.138 | **20 / 2** |
+| | R → A1′ *(user-facing)* | 22 | 0.871 | 1.003 | **1.005 (+0.48 %)** | 1.007 | 1.155 | 3 / 19 |
+| `low_aspect_ratio_DEMO` | R → A0′ | 12 | 0.965 | 0.966 | **0.966 (−3.38 %)** | 0.968 | 0.980 | 12 / 0 |
+| | **A0′ → A1′** | **8** | **0.241** | 0.603 | **0.788 (−21.2 %)** | 1.001 | **3.320** | 6 / 2 |
+| | R → A1′ | 8 | 0.233 | 0.582 | **0.761 (−23.9 %)** | 0.968 | 3.213 | 6 / 2 |
+| `st_regression` | R → A0′ | 22 | 0.999 | 1.008 | **1.032 (+3.23 %)** | 1.079 | 2.346 | 1 / 21 |
+| | **A0′ → A1′** | 20 | 0.160 | 0.881 | **0.938 (−6.18 %)** | 0.948 | 0.961 | **20 / 0** |
+| | R → A1′ | 20 | 0.239 | 0.941 | **0.949 (−5.06 %)** | 0.958 | 0.990 | **20 / 0** |
+
+**`low_aspect_ratio_DEMO` is inconclusive and is reported as such.** A median of 0.788 over **8**
+starts whose ratios run from 0.241 to 3.320 is not a result; the plan's own pre-declared outcome
+table says *"distributions overlap substantially → inconclusive, reported as such — not resolved by
+picking a summary statistic"*. Most of that deck's movement is not the loop at all: its lifted
+arrangements take **13** optimiser iterations where the other two take 16, and the paired iteration
+ratio has a median of 0.806 there. A shorter search is not a cheaper loop.
+
+**On the other two the architecture is cheaper at matched stopping rule, and tightly.** −1.63 % on
+20 of 22 starts and −6.18 % on 20 of 20, with interquartile ranges of 0.982–0.985 and 0.881–0.948.
+
+**The stopping rule's own cost is not small and does not have one sign**: +2.13 %, −3.38 %,
++3.23 %. That is the term the earlier two-arm design folded into its answer, and it is comparable
+in size to the architecture term it was folded into.
+
+**The optimiser's own behaviour barely moves, which is the risk this phase existed to test.** The
+paired ratio of optimiser iterations is exactly **1.000 at the lower quartile, the median and the
+upper quartile** on `large_tokamak_nof` and `st_regression`, for every comparison. Adding a design
+variable and a consistency constraint did not measurably disturb the search on those two. On
+`low_aspect_ratio_DEMO` it moved **in the variant's favour**. Nothing bounded this in advance.
+
+**The hoist's separable share, measured inside this architecture rather than quoted from the flat
+one**: −4.39 %, −4.32 % and −2.95 % (22 / 22, 11 / 11 and 18 / 19 starts). So on
+`large_tokamak_nof` the architecture without the hoist costs **+2.88 %**, the hoist takes 4.4
+percentage points off, and the combined figure is **−1.63 %**. **The headline is therefore the
+proposed architecture and never the partition's benefit**: the partition alone, on that test case,
+costs more.
+
+### 7.9 Is the robustness comparison on a level basis? A measured answer
+
+**Cost is compared at matched achieved accuracy. Robustness is compared at a fixed tolerance.**
+Those are not the same basis, and a reader should not have to derive that asymmetry from the code.
+A fixed tolerance is not a fixed accuracy — that is precisely the distinction §4.4.2 shows flipping
+the sign of a cost answer — so if one arrangement converges to a systematically looser final state
+at τ = 1e-6, it is being asked an easier question and its success rate is not comparable.
+
+**So it is measured, not assumed.** For every start the campaign ran, one further full sweep of the
+complete model set at the return of the first optimiser evaluation, from an identical entry state
+in every arrangement. Robustness is a tail property, so the whole distribution is reported:
+
+| test case | arrangement | n | bit-exact 0 | p10 | p50 | p90 | max |
+|---|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | R | 22 | 0 | 1.16e-08 | 5.12e-07 | 7.04e-05 | **1.47e+09** |
+| | A0′ | 22 | 2 | 3.86e-10 | 6.30e-09 | 1.58e-08 | 1.88e-08 |
+| | A1′ | 22 | **17** | 0 | **0** | 2.45e-16 | 4.00e-16 |
+| `low_aspect_ratio_DEMO` | R | 24 | 20 | 0 | 0 | 5.31e-15 | **inf** |
+| | A0′ | 22 | 20 | 0 | 0 | 0 | 5.31e-15 |
+| | A1′ | 22 | 20 | 0 | 0 | 0 | 5.31e-15 |
+| `st_regression` | R | 25 | 0 | 8.76e-08 | 9.30e-08 | 1.00e-07 | 1.04e-07 |
+| | A0′ | 25 | 0 | 2.98e-09 | 3.17e-09 | 3.42e-09 | 3.54e-09 |
+| | A1′ | 25 | 0 | 1.38e-13 | 3.52e-11 | 6.24e-11 | 7.80e-11 |
+
+Paired, start by start:
+
+| test case | R vs A0′ | R vs A1′ | A0′ vs A1′ |
+|---|---|---|---|
+| `large_tokamak_nof` | R looser on **16 of 22**, A0′ on 0 | R looser on **22 of 22**, A1′ on 0 | A0′ looser on **20 of 22**, A1′ on 0 |
+| `low_aspect_ratio_DEMO` | identical on **22 of 22** | identical on **22 of 22** | identical on **22 of 22** |
+| `st_regression` | R looser on **24 of 25**, A0′ on 0 | R looser on **25 of 25**, A1′ on 0 | A0′ looser on **25 of 25**, A1′ on 0 |
+
+**The direction is one-sided and it is the opposite of the one that would flatter the variant.** At
+the campaign's own setting the proposed architecture ends **strictly more converged** than the
+control on 20 of 22 and 25 of 25 starts, and never less; and both end more converged than PROCESS
+as shipped. So the robustness comparison is **conservative against the variant**: it is being asked
+a harder question and still matches the control's success set on one test case, loses one start on
+another, and loses two while gaining one on the third. On `low_aspect_ratio_DEMO` the three deliver
+**identical** accuracy on every paired start, so that test case's robustness comparison is on
+exactly level footing.
+
+**Two things in that table are about PROCESS rather than about architecture.** Its own loop hands
+the optimiser a state whose worst coupling residual is **1.47 × 10⁹** on one start of
+`large_tokamak_nof`, and a **non-finite** one on a start of `low_aspect_ratio_DEMO` — measured at
+the first optimiser evaluation, on a state its stopping test called idempotent.
+
+**And on one test case the variant cannot be made as loose as the control at all.** On
+`large_tokamak_nof` the block arm's loosest measured setting — inner tolerance 0.1, which is barely
+a convergence demand — still delivers 6.8 × 10⁻¹³ against the flat arm's 1.3 × 10⁻⁸. That is
+structural rather than a limit of the ladder: solving each block to *its own* fixed point produces
+a tight state whatever tolerance is asked for. A matched-accuracy robustness comparison is
+therefore not available on that test case, and saying so is the honest outcome.
+
+### 7.10 Timings, as context and never as evidence
+
+Wall and processor seconds per whole optimisation, over the campaign's own starts, with the median,
+the interval, the repetition count and each run's position in the sequence.
+
+| test case | arrangement | n | CPU s median | p10–p90 | spread as % of the median |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | R | 22 | 20.8 | 18.4–22.7 | **21 %** |
+| | A0′ | 22 | 32.4 | 28.5–34.8 | 19 % |
+| | A1′ | 22 | 52.4 | 46.0–56.9 | 21 % |
+| `low_aspect_ratio_DEMO` | R | 23 | 33.5 | 7.3–101.5 | **281 %** |
+| | A0′ | 21 | 53.3 | 11.0–160.1 | 280 % |
+| | A1′ | 20 | 75.4 | 16.4–162.2 | 193 % |
+| `st_regression` | R | 25 | 34.2 | 19.5–130.1 | **323 %** |
+| | A0′ | 25 | 54.4 | 38.1–346.9 | **568 %** |
+| | A1′ | 25 | 96.3 | 53.9–524.1 | 488 % |
+
+**The interval is between 19 % and 568 % of the median, against effects of 1.6 % to 6.2 %. No ratio
+of two of these numbers can resolve one, and none is offered.** On two of the three test cases the
+band is two orders of magnitude wider than the effect. The narrowest case, 19–21 %, is still an
+order of magnitude wider.
+
+Two further reasons not to read the medians as an arrangement comparison, either of which would
+make them wrong even if the band were tight. They are at matched *tolerance*, and §7.9 measures the
+proposed arrangement ending strictly more converged there. And the coupling-state arrangements
+carry per-block bookkeeping the reference does not — a residual evaluation and a state snapshot per
+inner sweep — which a model-evaluation count is blind to by construction, and which is exactly why
+the count is the acceptance quantity and the clock is not. A production implementation of this
+architecture would not do that bookkeeping the way an instrument does.
+
+*Sequence positions are per driver invocation, and the campaign was interrupted by the run
+environment at 173 of 300 and resumed. No run was re-measured — the resume skips only complete,
+driver-stamped records — but the position counter restarts, so positions are comparable within a
+driver invocation and not across the interruption. Recorded because the practice adopted under the
+project's timing rules is that a timing carries its sequence position.*
+
+### 7.11 What Phase B could not do on this instrument
+
+Four things, stated as limits rather than as apologies, and the first is the largest.
+
+**1. The coupling-state test is built from a recording taken at the unperturbed design point, and
+perturbation breaks part of it.** Quantities that never varied across that recording are asserted
+to stay constant, and a bit-identity assertion is far stricter than the scaled tolerance the same
+quantity would get if it were tested normally. Under 10 % perturbation:
+
+| test case | solves where a "constant" moved | of | distinct quantities |
+|---|---|---|---|
+| `large_tokamak_nof` | 234 (A0′) / 241 (A1′) | 13 524 / 14 080 | 89 / 65 |
+| `low_aspect_ratio_DEMO` | 192 / 231 | 28 153 / 28 848 | 91 / 68 |
+| `st_regression` | **13 817 / 10 528** | 57 030 / 54 480 | **180 / 147** |
+
+**On `st_regression` a quarter of all optimiser evaluations have a quantity the recording called
+constant moving inside them**, and the fraction is **not equal between the arrangements** — 24.2 %
+against 19.3 %. That is the exact failure mode Phase A's method review found on the deck it
+dropped, where two false constants inflated its counts by 14–28 %. It is a limitation of this
+Phase B and not of the architecture, and the fix already exists: Phase A's method review replaced
+exclusion-on-constancy with **testing every component at a recorded scale floor**, which changes no
+Phase A count at any of three floors a decade apart. Phase B was run on the earlier artifact for
+continuity with the run it replaces; **re-running it on the no-exclusion predicate is the single
+most valuable thing a successor task could do**, and `st_regression`'s −6.18 % should be read with
+that reservation.
+
+**2. The matched-accuracy ladder is thin, and empty on one test case.** Two starts per rung,
+restricted to the starts every rung of both arms kept: 2, 1 and — on `low_aspect_ratio_DEMO` —
+**no curve at all**, because every rung's achieved residual there is exactly zero.
+
+**3. Robustness is compared at a fixed tolerance** (§7.9). What is known about whether that is fair
+is measured, and the answer is that the comparison is conservative against the variant; but it is
+not a matched-accuracy comparison, and on one test case it cannot be made into one.
+
+**4. One perturbation size, one starting-point distribution, one optimiser, three decks, one
+commit.** The result does not transfer, and nothing here is a recommendation to adopt the
+arrangement.
+
+### 7.12 Issue I-12, which recurs — and an earlier reading of it was wrong
+
+PROCESS's 1990 cost model diverges where net electric power is not positive, which makes a
+median-scaled relative convergence test arbitrarily tight there. Perturbed multi-starts visit
+infeasible entry states **by design**, so this was predicted to recur. Measured at the state each
+optimiser evaluation was **entered** with:
+
+| test case | arrangement | starts visiting a non-positive entry | of | non-positive entries | of | worst |
+|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | R | **2** | 25 | 84 | 13 502 | −92.5 MW |
+| | A0′ | **2** | 25 | 84 | 13 502 | −92.5 MW |
+| | A1′ | **2** | 25 | 88 | 14 058 | −82.0 MW |
+| `low_aspect_ratio_DEMO` | all three | **0** | 25 | 0 | ~28 500 | — |
+| `st_regression` | R | **13** | 25 | 2 586 | 53 675 | −783 MW |
+| | A0′ | **13** | 25 | 2 520 | 57 005 | −783 MW |
+| | A1′ | **13** | 25 | 2 224 | 54 455 | −783 MW |
+
+**It recurs, and on one test case it is not rare: 13 of 25 starting points, and 4.8 % of all
+optimiser evaluations.** It is **identical across arrangements** on every test case, which is what
+matters for the comparison — it inflates every arm's counts together rather than one of them.
+
+**And it corrects an earlier reading.** The first Phase B run reported **zero** degenerate entries
+in 300 runs. That measurement was taken at the point each run *returned*, which is a converged and
+feasible design; the effect is at the states the loop is *entered* with along the way. Measured
+where the issue says to measure it, it is present on two of three test cases. The earlier zero was
+not wrong about what it measured; it measured the wrong place.
+
+### 7.13 The envelope's asymmetry, and what is done about it — for both phases
 
 The matched-accuracy comparison in §4.4.2 and the one in §7.8 rest on the same construction, and
 that construction is not neutral between the two arrangements. **Declaring the bias is not
@@ -1651,54 +2055,145 @@ behalf.
 reported under both constructions. It is not the case that one phase is affected and the other is
 not.
 
+**What the two constructions actually gave, measured.**
+
+| test case | matched-count (architecture) | all-settings (practitioner) | tuning premium | convexity of the flat arm's envelope |
+|---|---|---|---|---|
+| `large_tokamak_nof` | −24.2 % | −24.2 % | **1.000** | **MIXED** — 1 of 2 interior points convex |
+| `st_regression` | −21.6 % | −22.5 % | **0.988** | **CONVEX** — 1 of 1 interior points |
+| `low_aspect_ratio_DEMO` | *no curve* | *no curve* | — | not testable |
+
+*(at the accuracy the flat control delivers at τ = 1e-6; three accuracy statistics give the same
+ranking on both test cases with a curve.)*
+
+**So the bias is real in principle and small in this measurement.** On `large_tokamak_nof` the
+extra four rungs add nothing at all: every one of them is dominated by a joint rung, the block
+arm's envelope has two points either way, and the tuning premium is exactly 1.000. On
+`st_regression` the second knob makes the block arm look **1.2 % cheaper** than it does at equal
+tuning effort — real, one-directional, and an order of magnitude smaller than the effect. The
+headline takes the matched-count number regardless, because the size of a bias is not a reason to
+stop correcting for it.
+
+**Bias 2 is dropped on `large_tokamak_nof` because the measurement says so.** The flat arm's
+envelope there is convex at one interior point and concave at the other, so the chord argument does
+not hold uniformly and is not asserted. On `st_regression` it does hold, and there the all-settings
+reading is the one that benefits — consistent with the premium being below 1.
+
+**And the Phase B ladder is thin, which is a larger limitation than the asymmetry.** It runs 2
+starts per rung, restricted to the starts every rung of both arms kept — 2 on `large_tokamak_nof`,
+1 on `st_regression`, and on `low_aspect_ratio_DEMO` **no curve at all**, because every rung's
+achieved residual there is exactly zero and a log-log envelope cannot represent it. The
+distributional cost result in §7.8 is over 20–22 starts and is the robust one; these matched-
+accuracy figures are over 1–2 and are a different, weaker kind of evidence. **Both are reported and
+neither is presented as the other.**
+
+**Two rungs kept no start and are named rather than hidden.** On `st_regression`, both arms at
+τ = 1e-3 solved none of the offered starts to the acceptance standard. A tolerance at which an arm
+solves nothing is a measurement about that tolerance; letting it empty the common population would
+have deleted the comparison instead of reporting it.
+
 ---
 
 ## 8. Conclusion
 
 **The arrangement of solvers changes the cost of solving PROCESS, measurably, with every physics
-model frozen.** That was the question, and the answer is yes.
+model frozen.** That was the question, and the answer is yes in both phases.
 
-**It is not the partition that demonstrates it.** The three-block partition costs 46.8 %, 40.4 %
-and 17.7 % more model evaluations than the flat control on `large_tokamak_nof`,
-`low_aspect_ratio_DEMO` and `large_tokamak_eval` respectively, over 149, 297 and 10 recorded
-design points, and 4.6 % *less* on `st_regression` over 144 — the one case with no cross-block
-coupler, and therefore the case in which the partition is doing the least. Those figures are
-**upper bounds**: the blocked arm was run with its inner blocks driven to the same tolerance as
-the outer loop, and the exit audit shows it terminating about 10⁵ times more converged than the
-control. What the study has not measured is what the partition costs at a comparable inner
-tolerance.
+### What each phase established
 
-**What demonstrates it is the change nobody designed the study around.** Running the two
-feed-forward models once after the loop instead of on every pass removes **6.56 %, 6.76 %, 6.64 %
-and 2.63 %** of all model evaluations, measured in PROCESS's own driver over whole optimisation
-runs, with **0 of 13 559 / 13 455 / 13 493 / 13 487** output floats differing from the reference
-checkout when compared as hex literals with no tolerance. It changes no pass counts at all: it
-removes work *within* passes, which is why a sweep-counting analysis would have valued it at zero.
-Its hoistable set depends on the deck's figure of merit, not only on the code.
+**Phase A, the optimiser absent.** At matched *achieved* accuracy the three-block partition is at
+parity or cheaper than the flat control on all three retained test cases — **−4.3 %, −4.5 % and
+−13.1 %** — where at matched *tolerance* it appeared to cost **+46.8 % and +40.4 %** more. The
+published penalty was an artifact of the blocked arrangement being driven to an accuracy nobody
+asked for, and the correction was found by this study's own critical pass rather than from outside.
+**The replacement claim is narrower than the one it replaces**: it removes the finding that the
+partition costs; it does not establish that the partition is worth anything, because at its
+cheapest accuracy-matched setting the blocked arm has largely stopped blocking.
 
-**The two-pass floor is real and small.** Removing it is worth 1.53 %, 1.55 %, 1.79 % and 10.7 %,
-realised on the 4.7 %, 5.1 %, 6.3 % and 30 % of design points whose entering state is already
-converged — an order of magnitude below the "up to 31 %" the study carried before measuring it.
-On `large_tokamak_nof` it is cancelled exactly by the cost of the stricter stopping test: 9 471
-model evaluations either way, from two real effects of about 1.5 % pulling in opposite directions.
+**Phase B, the optimiser present, and it takes three arrangements to say anything.** Comparing the
+proposed architecture directly against PROCESS as shipped measures the architecture and the
+stopping rule *summed*, and the stopping-rule term is **+2.13 %, −3.38 % and +3.23 %** — comparable
+in size to the architecture term and not of one sign. With a predicate-matched control between
+them, the architecture alone, over 20–22 paired starting points:
 
-**The stricter stopping test is not the trade it was predicted to be.** It costs 1.55 % and 8.62 %
-on two cases, and *saves* 3.40 % on a third, where 54 of 297 design points converge a pass sooner
-because the objective and constraints were still disagreeing after the model state had settled.
-It converged every one of 600 design points on every arrangement, with no limit reached anywhere —
-the predicted robustness cost did not appear.
+| test case | architecture, `A0′ → A1′` | robustness, paired | verdict |
+|---|---|---|---|
+| `large_tokamak_nof` | **−1.63 %** (20 of 22 starts cheaper, q1–q3 0.982–0.985) | **identical success sets**, 22 both, 0 either way | **the architecture wins** |
+| `st_regression` | **−6.18 %** (20 of 20 cheaper, q1–q3 0.881–0.948) | 21 both, **2 only the control**, **1 only the variant** — net −1 of 25 | **cheaper, but the success rate is net worse by one start** |
+| `low_aspect_ratio_DEMO` | −21.2 % over **8** starts, ratios 0.241–3.320 | 11 both, 1 only the control, 0 only the variant | **inconclusive** — the distributions overlap, and the plan says so in advance |
 
-**The findings that are about PROCESS rather than about architecture may be the durable ones.**
-The loop compares constraint values of which 19 % on one deck are small enough that its test
-reports agreement unconditionally; it stops with the levelised-cost family still moving on 8 of
-600 design points, because those are the outputs its test does not watch; it treats a "not a
-number" state as converged; and its 1990 cost model diverges at negative net electric power in a
-way that makes a scaled relative test roughly 10¹⁸ times too tight on 7 of `st_regression`'s 144
-points.
+**By the outcome table declared before the run, that is: wins on one test case, inconclusive on one,
+and on the third cheaper but failing the robustness criterion by a single start.** Robustness
+outranks cost, and one start is still one start.
 
-**Scope.** Four decks, tokamak only, one commit, per-solve cost with the optimiser absent, on the
-design points PROCESS's own optimiser visited. Phase B, which would put the optimiser back and ask
-what any of this costs in a whole run, has not been built.
+### What changed against the first Phase B run, and why
+
+That run reported that the architecture does not win anywhere and **never solves a start the
+baseline cannot**. Three things move it.
+
+1. **It compared against the wrong arm.** Against PROCESS as shipped the architecture is +0.48 %,
+   −23.9 % and −5.06 %; against a predicate-matched control it is −1.63 %, inconclusive and
+   −6.18 %. The difference is the stopping rule, which that design had no way to subtract.
+2. **Two thirds of the measured robustness deficit is the stopping rule, not the architecture.** On
+   the one test case where the coupling-state test refuses anything, the **flat control refuses two
+   of the three** — the same quantity, `current_drive.eta_cd_dimensionless_hcd_primary`, going
+   non-finite. The control shares PROCESS's own loop and differs only in what it stops on.
+3. **The variant now solves a start the control cannot**, on `st_regression`. The earlier run's
+   strongest sentence no longer holds.
+
+**None of that makes it a clean win**, and the honest summary is the per-test-case table above.
+
+### What the numbers are not
+
+**They are not a matched-accuracy robustness comparison.** Cost is compared at matched achieved
+accuracy; **robustness is compared at a fixed tolerance**, and those are not the same basis. What
+is known about whether that is fair is measured rather than assumed (§7.9): at the campaign's own
+setting the proposed architecture ends **strictly more converged** than the control on 20 of 22 and
+25 of 25 starts and never less, and both end more converged than PROCESS as shipped. So the
+robustness comparison is **conservative against the variant** — it is being asked a harder question.
+On one test case the arrangements deliver **identical** accuracy on every paired start, and there
+the comparison is exactly level. On `large_tokamak_nof` a matched-accuracy robustness comparison is
+**not available at all**: the block arm's loosest measured setting is still four orders tighter
+than the flat arm's, because solving each block to its own fixed point produces a tight state
+whatever tolerance is asked for.
+
+**The headline is the proposed architecture, never the partition's benefit.** Three things change
+at once. Measured inside this architecture, the feed-forward hoist alone is worth −4.39 %, −4.32 %
+and −2.95 %; on `large_tokamak_nof` the architecture **without** it costs **+2.88 %**. The
+partition alone, on that test case, costs more.
+
+**And the matched-accuracy figures for Phase B rest on 1–2 starting points**, against 20–22 for the
+distributional result. They are a different and weaker kind of evidence and are labelled as such.
+
+### The findings that are about PROCESS rather than about architecture
+
+These may outlast both headlines.
+
+- The loop's stopping test compares quantities of which **19 % on one test case are small enough
+  that agreement is unconditional**, and it **treats a "not a number" state as converged**.
+- It **stops with named model outputs still moving** on 8 of 600 replayed design points, always the
+  levelised-cost family, precisely because those are the outputs it does not watch.
+- Measured at the first optimiser evaluation of a perturbed start, it hands the optimiser a state
+  whose worst coupling residual is **1.47 × 10⁹** on one start of `large_tokamak_nof` and
+  **non-finite** on one start of `low_aspect_ratio_DEMO`.
+- Its 1990 cost model **diverges at non-positive net electric power**, traced to a guard written
+  against a zero denominator being applied to a negative one. Under 10 % perturbation this is not
+  an edge case: **2 of 25 and 13 of 25 starting points** visit such a state, and on `st_regression`
+  **2 586 of 53 675** optimiser evaluations are entered from one.
+- Constraint **equality membership is decided by position** in the input deck's list, which once
+  gave this study a plausible, converged, 38 %-cheaper wrong answer until a gate caught it.
+
+### Scope, stated as limits
+
+Three test cases, tokamak only, one commit, one starting-point distribution, one perturbation size,
+one optimiser. Phase A is per-solve cost on the design points PROCESS's own optimiser visited;
+Phase B is 25 perturbed starts per arrangement. The coupling-state test is built from a recording
+taken at the **unperturbed** design point, and under 10 % perturbation a quantity that recording
+classified constant moves on **1.7 %, 0.8 % and 24.2 %** of solves — on the third test case that is
+a quarter of them, and it is not equal between arrangements. That is the largest single
+methodological limitation of Phase B on this instrument and §7.11 states what would remove it.
+Nothing here is a recommendation to adopt the arrangement; it is an existence proof that the
+arrangement matters, and a measurement of by how much on these problems.
 
 ---
 

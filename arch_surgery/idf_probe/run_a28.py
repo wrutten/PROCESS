@@ -429,10 +429,51 @@ def jobs_ladder(runs: Path, scenarios, starts, flat_taus=None,
     return out
 
 
-def jobs_campaign(runs: Path, scenarios, arms, starts, delta) -> list[tuple]:
-    root = runs / "h5"
+def jobs_campaign(runs: Path, scenarios, arms, starts, delta,
+                  inner_tau=None, tag: str = "h5") -> list[tuple]:
+    """The paired multi-start campaign.
+
+    ``inner_tau`` and ``tag`` exist for **the matched-accuracy robustness
+    re-run**: the campaign compares robustness at a fixed tolerance, and a
+    fixed tolerance is not a fixed accuracy.  Where the ladder shows one arm
+    delivering systematically more accuracy at the campaign's tau, that arm is
+    re-run at the setting its own ladder says delivers the OTHER arm's
+    accuracy, into its own directory, and **both readings are reported side by
+    side with the tolerance each was measured at named**.  Never one instead of
+    the other.
+    """
+    root = runs / tag
     return [
-        (s, a, root / s / a / f"start{k:03d}", delta, k, TAU, None, 0)
+        (s, a, root / s / a / f"start{k:03d}", delta, k, TAU, inner_tau, 0)
+        for s in scenarios for a in arms for k in range(0, starts + 1)
+    ]
+
+
+def jobs_audit(runs: Path, scenarios, arms, starts, delta,
+               at_call: int = 1) -> list[tuple]:
+    """The accuracy each arm DELIVERS at the campaign's own setting.
+
+    **The campaign compares robustness at a fixed tolerance, and a fixed
+    tolerance is not a fixed accuracy.**  That is the same objection A26
+    demonstrated for cost, where reading at matched tolerance instead of
+    matched achieved accuracy flipped the sign of the answer.  An arm that
+    converges to a looser final state at tau = 1e-6 is being asked an easier
+    question, and its success rate is not comparable to the other's.
+
+    So the accuracy is measured rather than assumed: for every start the
+    campaign ran, one further full sweep of the complete model set at the
+    return of the ``at_call``-th optimiser evaluation, from the **same entry
+    state** in every arm.  These runs stop immediately afterwards --- the sweep
+    mutates the state --- so they are cheap, and their cost figures are not
+    cost figures.
+
+    The direction is not assumed either.  A looser effective convergence could
+    raise a success rate (an easier test to satisfy) or lower it (a worse point
+    handed to the optimiser).  It is measured.
+    """
+    root = runs / f"h5_audit{at_call}"
+    return [
+        (s, a, root / s / a / f"start{k:03d}", delta, k, TAU, None, at_call)
         for s in scenarios for a in arms for k in range(0, starts + 1)
     ]
 
@@ -441,7 +482,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "mode",
-        choices=["decks", "gate", "calibrate", "ladder", "campaign"],
+        choices=["decks", "gate", "calibrate", "ladder", "campaign", "audit"],
     )
     ap.add_argument("--runs", default=str(HERE / "runs" / "a28"))
     ap.add_argument("--decks", default=None,
@@ -459,6 +500,16 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=None)
     ap.add_argument("--timeout", type=int, default=3600)
     ap.add_argument("--skip-warm", action="store_true")
+    ap.add_argument("--inner-tau", type=float, default=None,
+                    help="campaign mode: the block arm's inner tolerance, for "
+                         "the matched-accuracy robustness re-run")
+    ap.add_argument("--tag", default="h5",
+                    help="campaign mode: the directory the runs land in, so a "
+                         "re-run at another setting does not overwrite the "
+                         "first reading")
+    ap.add_argument("--audit-at-call", type=int, default=1,
+                    help="which optimiser evaluation the accuracy census "
+                         "audits (mode 'audit')")
     ap.add_argument("--resume", action="store_true",
                     help="skip runs that already have a complete, "
                          "driver-stamped metrics.json.  An interrupted run is "
@@ -493,9 +544,14 @@ def main() -> int:
                 "stage (D15(a): the perturbation size is calibrated, not "
                 "chosen)"
             )
-        jobs = jobs_campaign(
-            runs, args.scenarios, args.arms, args.starts, args.delta
-        )
+        if args.mode == "audit":
+            jobs = jobs_audit(runs, args.scenarios, args.arms, args.starts,
+                              args.delta, args.audit_at_call)
+        else:
+            jobs = jobs_campaign(
+                runs, args.scenarios, args.arms, args.starts, args.delta,
+                inner_tau=args.inner_tau, tag=args.tag,
+            )
 
     if args.resume:
         # A run is complete only if run_one wrote its metrics AND the driver

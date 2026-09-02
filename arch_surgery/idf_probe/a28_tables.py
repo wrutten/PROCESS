@@ -217,8 +217,13 @@ def ladder(runs: Path) -> None:
         print()
     print(f"  accuracy: {d['accuracy_measure'][:110]}...")
     for s, rec in d["per_scenario"].items():
+        cp = rec.get("common_population") or {}
         print(f"\n  {s}   ({rec['n_rungs_flat_usable']} usable flat rungs, "
               f"{rec['n_rungs_block_usable']} block)")
+        print(f"    common population: {cp.get('n_common')} start(s) kept by "
+              f"EVERY rung of both arms {cp.get('starts_common_to_every_rung')};"
+              f" rungs keeping no start {cp.get('rungs_that_kept_no_start')}; per-rung kept before restriction "
+              f"{cp.get('per_rung_kept_before_restriction')}")
         print(f"    {'rung':<20}{'tau':>9}{'inner':>9}{'kept/off':>10}"
               f"{'net evals':>11}{'p90 resid':>13}{'max resid':>13}")
         for key in ("rungs_flat_A0p", "rungs_block_A1p"):
@@ -387,6 +392,32 @@ def h5(runs: Path) -> None:
                   f"{r['n_distinct_constants_that_moved']} distinct quantities")
 
 
+def accuracy_census(runs: Path) -> None:
+    d = _get(runs, "_accuracy_at_fixed_tau_a28.json")
+    if not d:
+        print("\n[accuracy census at the campaign's fixed tolerance: not run]")
+        return
+    _rule("10a. Is the robustness comparison on a level basis?  The accuracy "
+          "each arrangement DELIVERS at tau = 1e-6")
+    print(f"  {d['why']}")
+    print(f"  measured at: {d['measured_at']}\n")
+    for s, rec in d["per_scenario"].items():
+        print(f"  {s}")
+        print(f"    {'arm':<16}{'n':>4}{'bit-exact 0':>13}{'p10':>12}"
+              f"{'p50':>12}{'p90':>12}{'max':>12}")
+        for a, r in rec["per_arm"].items():
+            print(f"    {a:<16}{r['n_starts_measured']:>4}"
+                  f"{r['n_bit_exact_zero']:>13}"
+                  f"{_fmt(r['p10'], 12, 3)}{_fmt(r['p50'], 12, 3)}"
+                  f"{_fmt(r['p90'], 12, 3)}{_fmt(r['max'], 12, 3)}")
+        for k, v in rec["paired"].items():
+            print(f"    paired, {k}: {v['verdict']}  "
+                  f"(n = {v['n_paired_starts']}, equal on "
+                  f"{v['n_starts_equal']}, median ratio "
+                  f"{_fmt(v['median_ratio_second_over_first'], 1, 4).strip()})")
+        print()
+
+
 def timings(runs: Path) -> None:
     d = _get(runs, "_timings_a28.json")
     if not d:
@@ -432,6 +463,7 @@ def main() -> int:
     cost_at_the_gate_point(runs, args.scenarios)
     ladder(runs)
     h5(runs)
+    accuracy_census(runs)
     timings(runs)
     return 0
 

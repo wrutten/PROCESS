@@ -627,7 +627,8 @@ def ladder_reference(runs: Path, scenario: str) -> dict:
 
 
 def rung(runs: Path, scenario: str, label: str, *, ref_objf: dict,
-         tau: float, inner_tau: float | None) -> dict | None:
+         tau: float, inner_tau: float | None,
+         restrict: set | None = None) -> dict | None:
     """One ladder rung: its cost, its achieved accuracy, and its census.
 
     **The census comes before the numbers.**  The acceptance test is the
@@ -642,6 +643,10 @@ def rung(runs: Path, scenario: str, label: str, *, ref_objf: dict,
         return None
     kept, dropped = [], {}
     for s in starts:
+        if restrict is not None and s["start"] not in restrict:
+            # Not in the common population.  Named, not silently absent.
+            dropped[s["start"]] = "outside the common population"
+            continue
         if s.get("status") != "ok":
             dropped[s["start"]] = f"crashed:{s.get('status')}"
             continue
@@ -851,27 +856,84 @@ def ladder(runs: Path, scenarios, *, stat: str = ACCURACY_STAT) -> dict:
         # constant: a shortened ladder (a smoke run, or a deck that could not
         # take a rung) must be reported as the ladder it was, with its own
         # denominator, rather than silently reading zeros for the missing ones.
-        flat, block = [], []
         ldir = runs / "ladder" / s
-        for d in sorted(p.name for p in ldir.glob("*")) if ldir.is_dir() else []:
+        names = sorted(p.name for p in ldir.glob("*")) if ldir.is_dir() else []
+
+        def _spec(d):
             if d.startswith("A0p_tau"):
                 t = float(d[len("A0p_tau"):])
-                r = rung(runs, s, d, ref_objf=ref_objf, tau=t, inner_tau=t)
-                if r:
-                    flat.append(r)
-            elif d.startswith("A1p_joint"):
+                return "flat", t, t
+            if d.startswith("A1p_joint"):
                 t = float(d[len("A1p_joint"):])
-                r = rung(runs, s, d, ref_objf=ref_objf, tau=t, inner_tau=t)
-                if r:
-                    block.append(r)
-            elif d.startswith("A1p_inner"):
+                return "block", t, t
+            if d.startswith("A1p_inner"):
                 t = float(d[len("A1p_inner"):])
-                r = rung(runs, s, d, ref_objf=ref_objf, tau=TAU, inner_tau=t)
-                if r:
-                    block.append(r)
+                return "block", TAU, t
+            return None
+
+        # **Every rung must be summed over the SAME starts, or the costs are
+        # not comparable.**  A rung that kept one start and a rung that kept
+        # two are two different populations, and a curve built from both is a
+        # curve of the population as much as of the arm.  The common set is
+        # computed first, in a pass that keeps nothing, and every rung is then
+        # restricted to it.  A26's replay ladder checks the same thing under
+        # `same_population`; the driver ladder has to enforce it, because a
+        # start can fail in one arm and not another.
+        pre = {}
+        for d in names:
+            sp = _spec(d)
+            if sp is None:
+                continue
+            r0 = rung(runs, s, d, ref_objf=ref_objf, tau=sp[1], inner_tau=sp[2])
+            if r0:
+                pre[d] = (sp, r0)
+        # A rung that keeps NO start is a **failed rung**, and it is reported
+        # as one rather than being allowed to empty the intersection and
+        # delete the whole comparison.  Excluding it is not the same as
+        # ignoring it: it is named, with what it kept, and a deck where a
+        # tolerance rung solves nothing is itself a result.
+        empty = [d for d, (_sp, r0) in pre.items() if not r0["n_converged"]]
+        common = None
+        for d, (_sp, r0) in pre.items():
+            if d in empty:
+                continue
+            kept_names = {
+                st["start"] for st in _starts_of(ldir / d)
+            } - set(r0["dropped"])
+            common = kept_names if common is None else (common & kept_names)
+        common = common or set()
+        rec_common = {
+            "starts_common_to_every_rung": sorted(common),
+            "n_common": len(common),
+            "per_rung_kept_before_restriction": {
+                d: r0["n_converged"] for d, (_sp, r0) in pre.items()
+            },
+            "rungs_that_kept_no_start": empty,
+            "rungs_that_kept_no_start_note": (
+                "excluded from the common-population intersection and reported "
+                "here.  A tolerance at which an arm solves none of the offered "
+                "starts is a measurement about that tolerance; letting it "
+                "empty the intersection would delete the comparison instead of "
+                "reporting it"
+            ),
+            "why": (
+                "every rung's cost is summed over these starts and no others, "
+                "so the curves compare arms rather than populations"
+            ),
+        }
+        flat, block = [], []
+        for d, (sp, _r0) in pre.items():
+            if d in empty:
+                continue
+            r = rung(runs, s, d, ref_objf=ref_objf, tau=sp[1], inner_tau=sp[2],
+                     restrict=common)
+            if not r:
+                continue
+            (flat if sp[0] == "flat" else block).append(r)
         usable_flat = [r for r in flat if r.get("net_model_evaluations")]
         usable_block = [r for r in block if r.get("net_model_evaluations")]
         rec: dict = {
+            "common_population": rec_common,
             "reference_norm_objf_per_start": ref_objf,
             "R_norm_objf_at_the_decks_own_point": gate_objf,
             "acceptance": (
@@ -1065,6 +1127,148 @@ def _failure_attribution(runs: Path, scenario: str, arms) -> dict:
     return out
 
 
+def accuracy_at_fixed_tau(runs: Path, scenarios, arms, at_call: int = 1
+                          ) -> dict:
+    """What accuracy each arm DELIVERS at the campaign's fixed tolerance.
+
+    **Cost is compared at matched achieved accuracy; robustness is compared at
+    a fixed tolerance.**  Those are not the same basis, and a fixed tolerance
+    is not a fixed accuracy: A26 measured a sign flip on exactly that
+    distinction for cost.  If one arm converges to a systematically looser
+    final state at tau = 1e-6 it is being asked an easier question, and its
+    success rate is not comparable to the other's.
+
+    This measures it rather than assuming it, over the campaign's own starts,
+    from an identical entry state in every arm.  **Robustness is a tail
+    property, so the whole distribution is reported and not only the median.**
+    """
+    out: dict = {
+        "measured_at": (
+            f"the return of optimiser evaluation {at_call}, one further full "
+            f"sweep of the complete model set, from the same entry state in "
+            f"every arm.  The run stops there: the sweep mutates the state"
+        ),
+        "why": (
+            "the campaign compares robustness at a FIXED TOLERANCE while cost "
+            "is compared at MATCHED ACHIEVED ACCURACY.  Whether that is fair "
+            "is a measurement, not an assumption, and the direction is not "
+            "assumed either: a looser convergence could raise a success rate "
+            "or lower it"
+        ),
+        "per_scenario": {},
+    }
+    root = runs / f"h5_audit{at_call}"
+    for sc in scenarios:
+        rows = {}
+        for a in arms:
+            vals, missing = [], []
+            d = root / sc / a
+            for sd in sorted(d.glob("start*")) if d.is_dir() else []:
+                f = sd / "metrics.json"
+                if not f.exists():
+                    missing.append(sd.name)
+                    continue
+                rec = json.loads(f.read_text()).get("audit_at_call") or {}
+                if "residual_max" in rec:
+                    vals.append(rec["residual_max"])
+                else:
+                    missing.append(sd.name)
+            nz = [v for v in vals if v > 0]
+            rows[a] = {
+                "n_starts_measured": len(vals),
+                "n_missing": len(missing),
+                "starts_missing": missing,
+                "n_bit_exact_zero": len(vals) - len(nz),
+                "p10": _pct(vals, 10), "p50": _pct(vals, 50),
+                "p90": _pct(vals, 90),
+                "max": max(vals) if vals else None,
+                "min": min(vals) if vals else None,
+                "geometric_mean_of_nonzero": (
+                    math.exp(sum(math.log(v) for v in nz) / len(nz))
+                    if nz else None
+                ),
+                "all_values": sorted(vals),
+            }
+        # The paired comparison: same start, both arms.
+        pairs = {}
+        for i, a in enumerate(arms):
+            for b in arms[i + 1:]:
+                da, db = root / sc / a, root / sc / b
+                common = []
+                for sd in sorted(da.glob("start*")) if da.is_dir() else []:
+                    fb = db / sd.name / "metrics.json"
+                    fa = sd / "metrics.json"
+                    if not (fa.exists() and fb.exists()):
+                        continue
+                    ra = json.loads(fa.read_text()).get("audit_at_call") or {}
+                    rb = json.loads(fb.read_text()).get("audit_at_call") or {}
+                    if "residual_max" in ra and "residual_max" in rb:
+                        common.append((sd.name, ra["residual_max"],
+                                       rb["residual_max"]))
+                if not common:
+                    continue
+                looser_a = sum(1 for _n, x, y in common if x > y)
+                looser_b = sum(1 for _n, x, y in common if y > x)
+                pairs[f"{a} vs {b}"] = {
+                    "n_paired_starts": len(common),
+                    f"n_starts_{a}_ends_looser": looser_a,
+                    f"n_starts_{b}_ends_looser": looser_b,
+                    "n_starts_equal": len(common) - looser_a - looser_b,
+                    "median_ratio_second_over_first": statistics.median(
+                        [(y / x) for _n, x, y in common if x > 0]
+                    ) if any(x > 0 for _n, x, y in common) else None,
+                    "verdict": (
+                        "the two arms deliver the same accuracy on every "
+                        "paired start" if looser_a == looser_b == 0
+                        else f"{a} ends looser on {looser_a} of {len(common)}, "
+                             f"{b} on {looser_b}"
+                    ),
+                }
+        out["per_scenario"][sc] = {"per_arm": rows, "paired": pairs}
+    return out
+
+
+def matched_accuracy_robustness(runs: Path, scenario: str, ref: str,
+                                arm: str, tag: str) -> dict:
+    """The same robustness comparison, at matched achieved accuracy.
+
+    The campaign compares robustness at a **fixed tolerance**, and the accuracy
+    census shows that is not a fixed accuracy: on two of three decks the block
+    arm ends strictly tighter than the flat control on essentially every start.
+    So the block arm is re-run at the setting its own ladder says delivers the
+    **flat arm's** accuracy, and **both readings are reported side by side with
+    the tolerance each was measured at named.**  Never one instead of the
+    other, and the tolerance was chosen from the ladder before the re-run, not
+    after seeing a success rate.
+    """
+    a = compare(runs / "h5", scenario, ref, arm)
+    b = compare(runs / tag, scenario, ref, arm)
+    # The reference arm is the SAME runs in both readings -- only the block
+    # arm moved -- so a change in "both solve" is the block arm's.
+    return {
+        "scenario": scenario,
+        "at_matched_tolerance": {
+            "where": f"{runs.name}/h5",
+            "paired_robustness": a["paired_robustness"],
+            "failure_modes": a["failure_modes"],
+            "cost": a["paired_ratio_variant_over_reference"],
+            "n_kept": a["drop_census_reported_before_any_ratio"]["n_kept"],
+        },
+        "at_matched_achieved_accuracy": {
+            "where": f"{runs.name}/{tag}",
+            "paired_robustness": b["paired_robustness"],
+            "failure_modes": b["failure_modes"],
+            "cost": b["paired_ratio_variant_over_reference"],
+            "n_kept": b["drop_census_reported_before_any_ratio"]["n_kept"],
+        },
+        "note": (
+            "the reference arm's runs are identical in both readings; only "
+            "the block arm's setting moved.  If the verdict changes between "
+            "them, THAT is the finding and it is reported as one"
+        ),
+    }
+
+
 def h5(runs: Path, scenarios, arms) -> dict:
     """The paired multi-start campaign, three arms, per deck.
 
@@ -1178,8 +1382,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=[
         "manifests", "manifest_sensitivity", "model_set", "gate",
-        "gate_sensitivity", "calibration", "ladder", "h5", "timings", "all",
+        "gate_sensitivity", "calibration", "ladder", "h5", "timings",
+        "accuracy_census", "matched_robustness", "all",
     ])
+    ap.add_argument("--tag", default="h5_matched")
+    ap.add_argument("--audit-at-call", type=int, default=1)
     ap.add_argument("--runs", required=True)
     ap.add_argument("--scenarios", nargs="*", default=SCENARIOS)
     ap.add_argument("--arms", nargs="*", default=list(CORE_ARMS))
@@ -1281,6 +1488,14 @@ def main() -> int:
         _emit("_ladder_a28.json", ladder(runs, S))
     if args.command in ("h5", "all"):
         _emit("_h5_a28.json", h5(runs / "h5", S, A))
+    if args.command == "matched_robustness":
+        _emit("_matched_robustness_a28.json",
+              matched_accuracy_robustness(runs, args.scenarios[0],
+                                          args.arms[0], args.arms[1],
+                                          args.tag))
+    if args.command in ("accuracy_census", "all"):
+        _emit("_accuracy_at_fixed_tau_a28.json",
+              accuracy_at_fixed_tau(runs, S, A, args.audit_at_call))
     if args.command in ("timings", "all"):
         _emit("_timings_a28.json", timings(runs / "h5", S, A))
     return 0
