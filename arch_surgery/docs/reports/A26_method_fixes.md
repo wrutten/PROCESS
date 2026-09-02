@@ -974,7 +974,8 @@ remaining traffic, not 90 %.** Anyone quoting it should quote that arithmetic wi
 | 2026-09-02 | Spec sweep: testing every component at three scale floors changes **no count on any of the three decks**. On the dropped `large_tokamak_eval` it changes them by 14–28 %, which traced to two quantities that are not constant and whose bit-identity assertion was blocking convergence — and to a **wrong published claim** in the results report (§5.4). |
 | 2026-09-02 | Timings taken, five repetitions, after the subset-aware read. Counts identical across repetitions 1 920 / 1 920; the p10–p90 band is 50–143 % of the median, an order of magnitude wider than the effects in question. |
 | 2026-09-02 | `pulse` pre-predicate gate: **PASS** on both pulsed decks, 0 differing of 1 710 recorded predicate values, 0 of 45 120 constraint entries, 0 of 32 663 MFILE lines and 0 of 22 303 MFILE floats, 8/8 sensitivity cases caught. |
-| 2026-09-02 | The pulse saving was re-measured with a sweep counter added, because the first run gave a model-evaluation difference whose composition could not be stated — publishing it without that would have been the T11 shape again. |
+| 2026-09-02 | The pulse saving was re-measured with a sweep counter added, because the first run gave a model-evaluation difference whose composition could not be stated — publishing it without that would have been the T11 shape again. And the first figure, 5.26 %, was wrong for the reason fix 2 exists: it omitted the tail. Net, 3.35 % / 3.31 %. |
+| 2026-09-02 | `gen_ystate.py --check` began reporting DIFFERS on all four A18 records, because A26 enriched the descriptive `census`. The **records were refreshed, not the check weakened** — `components_sha256`, which is what the predicate depends on and what `replay.py` aborts on, is byte-identical on all four decks, and no component record changed. The reproduction gate was re-run afterwards to confirm. |
 
 ---
 
