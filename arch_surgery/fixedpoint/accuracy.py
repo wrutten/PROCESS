@@ -57,6 +57,22 @@ number quoted past the condition that bounded it (trap T11).
 Where an arm's ladder is non-monotone --- cost rising as accuracy loosens ---
 the rung is kept and flagged.  It is a measurement about the arm, not noise to
 be smoothed.
+
+One bias in this design, named
+-------------------------------
+
+The block arm has **more rungs** than the flat arm: a joint ladder (outer =
+inner) plus an inner-only ladder at the calibrated outer tolerance, because the
+inner tolerance is precisely what §6.1 says was never varied.  The flat arm has
+no inner loop and so has one family.  Comparing envelopes is therefore "best of
+eleven" against "best of six", and more settings tried is a systematic
+advantage.
+
+**What bounds it**: the flat arm's rungs are all *on* its own envelope on every
+deck measured here --- none is dominated --- so its curve is already monotone,
+and an extra flat rung between two existing ones could only land on the
+interpolation the comparison already assumes.  It could not beat the envelope.
+The bias is real but bounded by the interpolation error, not by the rung count.
 """
 
 from __future__ import annotations
