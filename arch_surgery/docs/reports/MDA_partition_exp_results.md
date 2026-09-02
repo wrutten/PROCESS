@@ -648,8 +648,9 @@ anything. Four further things bound it, and none is a hedge the surrounding fram
    0.824–1.119: on the single worst design point the two arms are not distinguishable. On the
    **median** the comparison cannot be made at all, because the median exit residual is exactly
    zero on 15 of 17 rungs on `large_tokamak_nof` and 13 of 17 on `low_aspect_ratio_DEMO` — the
-   state is a bit-exact fixed point on most points. **The correct summary is "at parity or cheaper
-   on the p90; indistinguishable on the worst point".**
+   state is a bit-exact fixed point on most points. **The correct summary of the practitioner
+   construction is "at parity or cheaper on the p90; indistinguishable on the worst point"** — and
+   the matched-count construction is a further caveat on top of that one, not a restatement of it.
 2. **The mechanism is that the over-solving was the cost, not that blocking wins.** The blocked
    arm's cheapest setting reaching the target accuracy on the two large cases is inner τ = 0.1,
    where **1 172 of 1 248 inner solves take a single sweep** (71 take two, 5 take three). At that
@@ -1141,10 +1142,11 @@ difference.** The inner blocks were driven to the same tolerance as the outer lo
 arrangement terminated at a residual about 10⁵ times tighter than the flat control at the same
 nominal tolerance. It was paying for accuracy nobody asked for. **The inexact-block regime has now
 been run**: across an inner-tolerance ladder, read off each arm's lower envelope at matched
-achieved accuracy, the partition is at parity or cheaper on all three retained cases (§4.4.2). So
-this mechanism is not one of four candidate explanations for a loss — it *is* the loss, and there
-is no loss left to explain once it is removed. What remains to explain is the narrower fact that
-the partition is not measurably *better* either, and mechanisms 2 to 4 below are about that.
+achieved accuracy the partition is at parity or cheaper on all three retained cases **under the
+practitioner construction of the envelope**, and 27–33 % dearer on two of them **at equal tuning
+effort** (§4.4.2, §7.13). So this mechanism explains all of the published penalty under one reading
+and part of it under the other. What certainly remains to explain is the narrower fact that the
+partition is not measurably *better* under either, and mechanisms 2 to 4 below are about that.
 
 **2. The condition the mechanism needs is not met.** A blocked arrangement saves when a *small*
 block is holding up a *large* one. Measured under the old stopping test, the three blocks stop
@@ -1247,11 +1249,14 @@ wording was that the partition costs *at most* 47 %, 40 % and 18 % more, and tha
 measured what it costs at a comparable inner tolerance. **The bound was doing all the work.**
 
 **It has since been run, and the objection was correct.** Measured at matched achieved accuracy
-(§4.4.2) the partition is at parity or cheaper on all three retained cases: **−4.3 %, −4.5 % and
-−13.1 %**. The counter-argument this section used to offer — that the outer pass counts fall by
-much less than the inner solves cost, so an inexact inner tolerance "would have to recover a very
-large factor" — is refuted by measurement: it recovers all of it, because the inner solves at
-τ = 1e-6 were doing work the outer test did not need.
+(§4.4.2) the partition is at parity or cheaper on all three retained cases — **−4.3 %, −4.5 % and
+−13.1 %** — under the construction that lets the blocked arm use a tuning knob the flat arm does
+not have, and 27–33 % dearer on two of them at equal tuning effort (§7.13). The counter-argument
+this section used to offer — that the outer pass counts fall by much less than the inner solves
+cost, so an inexact inner tolerance "would have to recover a very large factor" — **is refuted by
+measurement under either construction**: the inner solves at τ = 1e-6 were doing work the outer test
+did not need, and removing that takes the penalty from +46.8 % to somewhere between −4.3 % and
++33.4 %.
 
 **A reversal found by the study's own critical pass is a good outcome, and this is one.** The
 published number was formally hedged and the hedge was correct. What was missing is that nobody had
