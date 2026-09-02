@@ -153,13 +153,37 @@ def _check_ystate(scenario: str, spec: YSpec, harvest_path, harvest) -> dict:
             f"components_sha256 committed={rec.get('components_sha256')} "
             f"live={live_sha}"
         )
-    for k in ("content_sha256", "file_sha256"):
+    # **The content hash is fatal; the file hash is reported.**  The two exist
+    # precisely because they mean different things (``gen_ystate``'s own
+    # docstring): the content hash covers the coupling-key set, the model
+    # sequence and every design point's identity and design vector as exact hex
+    # floats, and "changes if and only if the harvest is a different
+    # measurement"; the file hash covers how ``pickle`` happened to lay bytes
+    # out.  Treating both as fatal made a **from-scratch reproduction
+    # impossible**: a freshly recorded harvest of the same run aborts the replay
+    # on a byte-layout difference the instrument itself documents as
+    # meaningless, while its content hash and the categorisation hash both
+    # agree.  Found by running the entry point from scratch (A28).  A file-hash
+    # difference is now recorded in every result file as a note, so nothing is
+    # hidden -- it simply does not abort.
+    note = None
+    for k in ("content_sha256",):
         a = (rec.get("harvest") or {}).get(k)
         b = (fresh.get("harvest") or {}).get(k)
         if a != b:
             diffs.append(f"harvest {k} committed={a} live={b}")
+    fa = (rec.get("harvest") or {}).get("file_sha256")
+    fb = (fresh.get("harvest") or {}).get("file_sha256")
+    if fa != fb:
+        note = (
+            f"harvest file_sha256 differs (committed={fa} live={fb}) but its "
+            f"content_sha256 and the categorisation hash both agree, so this "
+            f"is the same measurement in a different byte layout -- a "
+            f"re-recorded harvest.  Reported, not fatal"
+        )
     return {
         "status": "MISMATCH" if diffs else "OK",
+        "harvest_file_sha256_note": note,
         "path": str(path.relative_to(YSTATE_DIR.parent.parent.parent)),
         "components_sha256": live_sha,
         "harvest_content_sha256": (fresh.get("harvest") or {}).get("content_sha256"),

@@ -398,6 +398,12 @@ def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
 # ``process/core/solver/module_solve.py``; what lives here is the schedule and
 # the node filter, because those are properties of *this* call sequence.
 #
+# ``flat_state`` is the same predicate on **one block containing every in-loop
+# node** --- decision D18's predicate-matched control ``A0'``.  It exists so
+# that the two things ``R -> A1'`` measures as a sum, the stopping rule and the
+# architecture, can be measured apart: ``R -> A0'`` is the predicate alone and
+# ``A0' -> A1'`` is the architecture alone.
+#
 # ``off`` is the default and is upstream behaviour exactly: ``_active_nodes``
 # stays ``None``, every node runs on every sweep, and ``call_models`` never
 # enters the block path.
@@ -431,6 +437,10 @@ MODULE_SOLVE_TOTALS: dict = {
     "moved_constants": set(),
     "n_call_models_with_moved_constant": 0,
     "n_failed": 0,
+    # A26 §10: how often the single-block guard fired.  Recorded rather than
+    # inferred from the arm name, so a schedule change that stops satisfying
+    # the condition is visible in the run record.
+    "n_call_models_single_block": 0,
 }
 
 
@@ -493,6 +503,16 @@ def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
         if HOIST_ENABLED
         else frozenset()
     )
+    # ``flat_state`` (decision D18's control arm A0') is one block over every
+    # in-loop node: the same predicate, the same caps, the same failure policy,
+    # a different schedule.  It is written as a branch here rather than as a
+    # second solver because A26 §10 measured that it is the degenerate case of
+    # the block schedule, and two implementations of one loop is how they
+    # drift.
+    if module_solve.FLAT_STATE:
+        return (
+            (module_solve.FLAT_BLOCK_LABEL, _loop_node_set(tail), True),
+        ), tail
     by_module: dict[str, set[str]] = {}
     for node, mod in NODE_MODULE.items():
         by_module.setdefault(mod, set()).add(node)
@@ -501,6 +521,48 @@ def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
         nodes = frozenset(by_module.get(label, set()) - tail)
         schedule.append((label, nodes, label in module_solve.ITERATED))
     return tuple(schedule), tail
+
+
+def _loop_node_set(tail=()) -> frozenset[str]:
+    """Every node a block schedule may run, less the hoisted tail.
+
+    Restricted to the labels :data:`module_solve.BLOCK_ORDER` names, so the
+    single-block arm covers **exactly** what the per-module arm's blocks cover
+    between them --- which is what makes ``A0' -> A1'`` a comparison of the
+    schedule and not of the model set.  The node map also carries
+    ``<x_inject>`` (module ``X``): that is the design-vector injection at the
+    head of ``_call_models_once``, not a model, it is not routed through
+    :meth:`Caller._node`, and it runs unconditionally on every sweep of every
+    arm.  Including it would put a name in the filter that no call site ever
+    presents.
+    """
+    labels = set(module_solve.BLOCK_ORDER)
+    return frozenset(
+        n for n, mod in NODE_MODULE.items() if mod in labels
+    ) - frozenset(tail)
+
+
+def _single_block_covers_loop(schedule, tail) -> bool:
+    """Does one iterated block hold every node the loop would sweep?
+
+    When it does, the outer residual test is **redundant with the block's own
+    inner test** and skipping it is a correctness statement, not an
+    optimisation.  The inner test compares two successive sweeps of that block
+    over the whole coupling vector; the outer test asks the same question of
+    the same index set.  Paying it anyway costs exactly one extra full sweep
+    per ``call_models``, because ``y_outer_prev`` is the state at *entry*: pass
+    1 compares the entry state against the converged one and fails, pass 2
+    re-runs the block (one sweep, converging immediately) and passes.
+
+    Measured on the block arm as the wasted-pass effect A0f -> A0, 1.53-1.79 %
+    of model evaluations (A18/A26).  Recorded per call rather than assumed, so
+    a schedule that stops satisfying the condition stops taking the guard.
+    """
+    live = [(lab, nodes, it) for lab, nodes, it in schedule if nodes]
+    if len(live) != 1:
+        return False
+    _lab, nodes, iterate = live[0]
+    return bool(iterate) and nodes == _loop_node_set(tail)
 
 
 def _roll_up(stats: dict) -> None:
@@ -521,6 +583,8 @@ def _roll_up(stats: dict) -> None:
     if stats["moved_constants"]:
         t["n_call_models_with_moved_constant"] += 1
     t["moved_constants"].update(stats["moved_constants"])
+    if stats.get("single_block_outer_test_skipped"):
+        t["n_call_models_single_block"] += 1
     if not stats["converged"]:
         t["n_failed"] += 1
 
@@ -695,7 +759,16 @@ class Caller:
         subsets = self._ysubsets
         tau = module_solve.TAU
 
+        inner_tau = module_solve.INNER_TAU
+
         schedule, tail = module_schedule(self.data.numerics.i_figure_merit)
+        # A26 §10, item 1: with one block covering every in-loop node the outer
+        # residual test asks exactly what the block's own inner test has just
+        # answered, and paying it costs one extra full sweep per call.  The
+        # condition is evaluated from the schedule that was actually built, not
+        # from the arm name, so an arm whose schedule stops being a single
+        # block stops taking the guard.
+        single_block = _single_block_covers_loop(schedule, tail)
         bound = spec.bind(self.data)
         read = spec.read
 
@@ -751,7 +824,7 @@ class Caller:
                         spec.name(i) for i in res.moved_constant
                     }
                     y_prev = y
-                    if res.converged(tau):
+                    if res.converged(inner_tau):
                         inner_ok = True
                         break
                 inner_counts[label].append(s)
@@ -759,16 +832,25 @@ class Caller:
                     self.module_solve_stats = self._module_stats(
                         block_sweeps, outer, inner_counts, outer_trace,
                         moved_constants, converged=False, cap_hit="inner",
-                        tail=tail,
+                        tail=tail, single_block=single_block,
+                        inner_tau=inner_tau,
                     )
                     _roll_up(self.module_solve_stats)
                     raise module_solve.ModuleSolveFailure(
                         f"module {label} did not converge in "
-                        f"{module_solve.INNER_CAP} inner sweeps at tau={tau:g}; "
-                        f"max scaled residual {res.max:g} on "
-                        f"{res.brief(tau)['argmax']}, "
-                        f"{res.n_above(tau)} components above tau"
+                        f"{module_solve.INNER_CAP} inner sweeps at "
+                        f"inner_tau={inner_tau:g}; max scaled residual "
+                        f"{res.max:g} on {res.brief(inner_tau)['argmax']}, "
+                        f"{res.n_above(inner_tau)} components above inner_tau"
                     )
+            if single_block:
+                # The block's own inner test has just compared two successive
+                # full sweeps over the whole coupling vector at ``tau``.  The
+                # outer test would compare the same index set by the same rule;
+                # running it compares the *entry* state instead and therefore
+                # always fails once, buying one wasted sweep.
+                converged = True
+                break
             y = read(bound)
             res = spec.residual(y_outer_prev, y)
             outer_trace.append(res.brief(tau))
@@ -782,6 +864,7 @@ class Caller:
             self.module_solve_stats = self._module_stats(
                 block_sweeps, outer, inner_counts, outer_trace,
                 moved_constants, converged=False, cap_hit="outer", tail=tail,
+                single_block=single_block, inner_tau=inner_tau,
             )
             _roll_up(self.module_solve_stats)
             raise module_solve.ModuleSolveFailure(
@@ -805,6 +888,7 @@ class Caller:
         self.module_solve_stats = self._module_stats(
             block_sweeps, outer, inner_counts, outer_trace, moved_constants,
             converged=True, cap_hit=None, tail=tail,
+            single_block=single_block, inner_tau=inner_tau,
         )
         _roll_up(self.module_solve_stats)
         return objf, conf
@@ -812,12 +896,14 @@ class Caller:
     @staticmethod
     def _module_stats(
         block_sweeps, outer, inner_counts, outer_trace, moved_constants,
-        *, converged, cap_hit, tail,
+        *, converged, cap_hit, tail, single_block=False, inner_tau=None,
     ) -> dict:
         """The block schedule's own counts, for the run record."""
         return {
             "converged": converged,
             "cap_hit": cap_hit,
+            "single_block_outer_test_skipped": bool(single_block),
+            "inner_tau": inner_tau,
             "block_sweeps": block_sweeps,
             "outer_passes": outer,
             "inner_counts": {k: list(v) for k, v in inner_counts.items()},
