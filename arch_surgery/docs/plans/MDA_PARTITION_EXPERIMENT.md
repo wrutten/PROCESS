@@ -559,14 +559,57 @@ the hardest kind to catch. The tail therefore splits:
 
 | group | members | runs |
 |---|---|---|
-| **pre-constraint, once** | `pulse` (post-lift only) | once per `call_models`, on the converged state, **before** `objf`/`conf` are evaluated |
-| **post-constraint, once** | `water_use`, `costs` | once per `call_models`, after `conf`, as A13 built it |
+| **pre-predicate, once** | any node whose writes the **objective or the constraint layer** reads — `pulse`, post-lift | once per `call_models`, on the converged state, **before** `objf`/`conf` are evaluated |
+| **post-predicate, once** | nodes neither layer reads — `water_use`, and `costs` except on a deck whose figure of merit reads it | once per `call_models`, after `conf`, as A13 built it |
+
+**The membership test is the predicate layer, not the constraint layer** (user, 2026-09-01 — the
+first draft of this section said "constraint" and that was too narrow). `process/core/solver/objectives.py`
+reads seventeen model-written fields, including `costs.coe` (figure of merit 6), `costs.cdirt` and
+`costs.concost` (7), and `times.t_plant_pulse_burn` (14, `PULSE_LENGTH`, and two others). A node
+feeding **either** layer is stale-sensitive and belongs in the pre-predicate group.
+
+**This generalises A13's figure-of-merit guard and is strictly better than it.** A13 handled the
+objective case by keeping `costs` **in the loop** on decks whose figure of merit reads it — which is
+correct but more conservative than necessary, and cost `large_tokamak_eval` its hoist saving
+(2.63 % against 5.25 %). The pre-predicate slot does the same job by running the node **once**
+instead of every sweep, recovering the saving without the staleness. The guard becomes a *routing*
+rule rather than an exclusion.
 
 Both run **once per optimiser evaluation** rather than once per sweep. **Gate:** with the lift on,
 the constraint vector must be bit-identical to the arm that runs `pulse` every sweep — that is the
 check that the split is correct, and it must be shown capable of failing (protocol §12) before its
 zeros are accepted. The node-set derivation must also stop keying on the static label and become
 arm-dependent, which is what framework item **C2a** always required.
+
+### 4.1e A consequence of the lift that the remaining three decks expose
+
+Following from §4.1d: `objectives.py` reads `times.t_plant_pulse_burn` directly, so **on a deck
+whose figure of merit is the pulse length, lifting the burn time turns the objective into a design
+variable.** `low_aspect_ratio_DEMO` is exactly that deck (`minmax = -14`, `PULSE_LENGTH`).
+
+This is the standard IDF reformulation and it is legitimate — the objective becomes a design
+variable and constraint 93 carries the consistency — but it is a larger change on that deck than on
+the others, and it has a reporting consequence that must not be lost. With `large_tokamak_eval`
+dropped (D17), the three remaining decks are:
+
+| deck | figure of merit | objective in the baseline | objective in the variant |
+|---|---|---|---|
+| `large_tokamak_nof` | 1, `MAJOR_RADIUS` | a **design variable** already (`0.2 × rmajor`) | design variable |
+| `low_aspect_ratio_DEMO` | −14, `PULSE_LENGTH` | **computed** | becomes a **design variable** under the lift |
+| `st_regression` | −5, `FUSION_GAIN_Q` | **computed** | computed — this deck takes no lift (`k = 0`) |
+
+**So in the Phase B variant, no deck has both a computed objective and the lift.** That is not a
+defect in any single deck's treatment, but it does bound what the equivalence gate can demonstrate:
+`low_aspect_ratio_DEMO` is where the lift is most consequential and is simultaneously the deck where
+the objective stops being a measure of anything the loop computes. §4.3's existing caveat —
+that `large_tokamak_nof`'s zeros in the tolerance calibration are *structural, not evidence*,
+because its objective cannot move with τ — **now applies to `low_aspect_ratio_DEMO`'s variant too**,
+and the re-run's calibration must be read accordingly.
+
+**Also settled by the same arithmetic:** none of the three remaining decks uses figure of merit 6 or
+7, so A13's guard does not bind anywhere in the remaining scope, and **I-13 stops binding with it** —
+the driver and the replay engine hoist the same node set on all three. That is a consequence of
+dropping a deck, not a fix, and should be stated that way.
 
 ### 4.2 What would count as the existence proof
 
