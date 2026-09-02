@@ -38,7 +38,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from fixedpoint.ystate import YSpec  # noqa: E402
+from fixedpoint.ystate import (  # noqa: E402
+    SCALE_FLOOR,
+    SPEC_MODE_A18,
+    SPEC_MODES,
+    YSpec,
+)
 
 TREE = HERE.parent.parent
 RUNS = TREE / "arch_surgery" / "idf_probe" / "runs" / "a18"
@@ -114,7 +119,25 @@ def harvest_identity(path: Path, harvest: dict) -> dict:
     }
 
 
-def build(scenario: str) -> tuple[dict, Path]:
+def out_path(scenario: str, mode: str, scale_floor: float) -> Path:
+    """Where a scenario's committed record lives, per spec mode.
+
+    A26's mode gets its own file rather than overwriting A18's: A18, A22 and
+    A23's recorded artifacts have to keep re-deriving, and ``replay.py``
+    refuses to run against a record that does not match.  A non-canonical
+    scale floor gets its own name too --- such a run is a sensitivity probe and
+    is *meant* to have no committed record, so it reports ``MISSING`` rather
+    than passing silently.
+    """
+    if mode == SPEC_MODE_A18:
+        return OUT_DIR / f"ystate_{scenario}.json"
+    if float(scale_floor) == float(SCALE_FLOOR):
+        return OUT_DIR / f"ystate_a26_{scenario}.json"
+    return OUT_DIR / f"ystate_a26_{scenario}_floor{scale_floor:g}.json"
+
+
+def build(scenario: str, mode: str = SPEC_MODE_A18,
+          scale_floor: float = SCALE_FLOOR) -> tuple[dict, Path]:
     hp = RUNS / scenario / "harvest" / "harvest.pkl"
     if not hp.exists():
         raise SystemExit(
@@ -124,7 +147,8 @@ def build(scenario: str) -> tuple[dict, Path]:
     with open(hp, "rb") as fh:
         harvest = pickle.load(fh)
     assert harvest["format"] == "a18-harvest-1", harvest["format"]
-    spec = YSpec.from_harvest(harvest["y_keys"], harvest["points"])
+    spec = YSpec.from_harvest(harvest["y_keys"], harvest["points"],
+                             mode=mode, scale_floor=scale_floor)
     rec = spec.audit_record(
         scenario=scenario, harvest=harvest_identity(hp, harvest)
     )
@@ -137,7 +161,7 @@ def build(scenario: str) -> tuple[dict, Path]:
         ).stdout.strip()
         or None
     )
-    return rec, OUT_DIR / f"ystate_{scenario}.json"
+    return rec, out_path(scenario, mode, scale_floor)
 
 
 def render(rec: dict) -> str:
@@ -162,6 +186,8 @@ def render(rec: dict) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenarios", nargs="*", default=SCENARIOS)
+    ap.add_argument("--mode", default=SPEC_MODE_A18, choices=list(SPEC_MODES))
+    ap.add_argument("--scale-floor", type=float, default=SCALE_FLOOR)
     ap.add_argument(
         "--check",
         action="store_true",
@@ -171,7 +197,7 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     bad = 0
     for s in args.scenarios:
-        rec, out = build(s)
+        rec, out = build(s, args.mode, args.scale_floor)
         text = render(rec)
         if args.check:
             if not out.exists():
@@ -216,7 +242,10 @@ def main() -> int:
         print(
             f"{s:24s} {len(text):>8d} bytes  {rec['n_components']} components  "
             f"({c['n_continuous']} continuous, {c['n_discrete']} discrete, "
-            f"{c['n_constant']} constant, {c['n_nan_in_harvest']} nan)  "
+            f"{c['n_constant']} constant, {c['n_nan_in_harvest']} nan, "
+            f"{c['n_nonfinite']} nonfinite, {c['n_excluded_accumulator']} "
+            f"excluded)  tested {c['n_tested']}/{c['n_components']}, "
+            f"{c['n_scale_from_floor']} at the floor  "
             f"sha={rec['components_sha256'][:12]}"
         )
     return 1 if bad else 0

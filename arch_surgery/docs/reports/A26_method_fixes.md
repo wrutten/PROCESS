@@ -153,6 +153,33 @@ judgement because that is what it is:
 every result file, and `run_a26.py spec` runs the whole comparison at 0.1, 1.0 and 10.0. Changing
 it is a one-line edit plus a re-run; §5.3 reports what the decade does.
 
+### 5.2 The search for an accumulator, and why the exclusion list is empty
+
+The one admissible exclusion is a quantity that accumulates within a sweep and therefore has no
+fixed point. That has to be **looked for**, not assumed absent, so the frozen models were searched
+by AST — 171 files under `process/`, against the 881 coupling components the three decks' committed
+records name between them — for two patterns:
+
+| pattern | hits |
+|---|---|
+| augmented assignment to a coupling component (`self.data.ns.field += ...`) | **38** |
+| self-referential assignment (`self.data.ns.field = f(self.data.ns.field, ...)`) | **93** |
+
+AST rather than a regex, so trap T2 (`= ` matching `==`) cannot bite: the parser is asked for the
+expression context, and a name that only appears on the left of an assignment is a store.
+
+**None of them is an accumulator in the sense that matters, and the reason is the same for all of
+them**: every hit is a *within-`run()`* accumulation whose target is initialised before the
+accumulation begins — `costs.c22221 = 0` then four `+=` terms, `physics.p_plasma_separatrix_mw`
+built up from its components, and so on. A quantity like that is a pure function of the sweep's
+inputs and has a perfectly good fixed point. An accumulator in the sense that would justify an
+exclusion would have to carry a value **across** sweeps, and none does.
+
+The search is the search; the run is the verdict. `ACCUMULATORS` is therefore **empty**, and that
+is a measured result rather than an oversight. §5.3 reports what the A26 predicate did with the
+previously excluded components, which is the check that matters: if one of them genuinely could not
+converge, it shows up there as invalid design points, named.
+
 ---
 
 ## 6. Fix 4 — the manifest guard, and the routing rule that replaces two guards
