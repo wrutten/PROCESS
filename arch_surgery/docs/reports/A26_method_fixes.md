@@ -9,7 +9,9 @@
 
 ---
 
-## PLACEHOLDER — verdict written last
+PLACEHOLDER_VERDICT
+
+---
 
 ## 2. What was gated, before any number below is read
 
@@ -76,6 +78,99 @@ every design point of every deck, on every recorded quantity. §6.3 should be am
 when the results report is next updated.
 
 ---
+
+## 3. Fix 1 — cost at matched **achieved** accuracy, and what it does to Phase A's headline
+
+### 3.1 The objection, restated
+
+The blocked arrangement solved each block to τ = 1e-6 against inputs that were about to change. The
+flat arrangement has no inner loop and never paid that. The exit audit shows the blocked arm ending
+roughly **10⁵ times more converged** at the same nominal setting: it did more work *and* got more
+accuracy, and only the work was in the ratio. The results report said so, and worded its finding as
+**"the partition costs *at most* 47 %, 40 % and 18 % more"**.
+
+**This replaces "at most" with a measurement.** Both arms were run across ladders — the flat arm
+across τ ∈ {1e-2 … 1e-8}, the block arm across the same joint ladder *and* across an inner-only
+ladder at the calibrated outer tolerance, which is the parameter §6.1 says was never varied — and
+each run's **achieved exit residual** was recorded alongside its cost. Cost is then read off at
+equal achieved accuracy.
+
+- **Accuracy** = the exit audit's global scaled coupling-state residual, taken one further full
+  sweep of the complete model set past termination, identical for every arm at every setting.
+  Summarised per deck as the **p90** over the design points a rung converged. Not the objective:
+  under the lift, two of the three decks have an objective that is a design variable (§9), so
+  objective movement is degenerate there.
+- **Cost** = net model evaluations (§4's definition), which is a count.
+- **Interpolation**: linear in log₁₀(cost) against log₁₀(accuracy), between the two bracketing
+  points of each arm's **lower envelope** `cost(a) = min{cost_i : accuracy_i ≤ a}`. A target
+  outside an arm's measured range is **not** extrapolated; it is reported as out of range, with the
+  range.
+- **Population**: every rung of both arms ran the same design points on each deck — 149, 297, 144 —
+  and **no rung dropped a point on any deck**, so no ratio is over a censored population.
+
+### 3.2 The result, per deck
+
+At the accuracy the flat control actually delivers at the study's own calibration point (τ = 1e-6):
+
+| deck | n | flat A0 cost | block A1 cost at the same achieved accuracy | A1 / A0 | **published, at matched tolerance** |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | 149 | 9 471 | **9 062** | **0.957** | +46.8 % |
+| `low_aspect_ratio_DEMO` | 297 | 19 992 | **19 087** | **0.955** | +40.4 % |
+| `st_regression` | 144 | 10 395 | **9 037** | **0.869** | −4.6 % |
+
+Across every accuracy the flat arm reached that also lies inside the block arm's measured range:
+
+| deck | A1 / A0 over the matched range | matched points |
+|---|---|---|
+| `large_tokamak_nof` | 0.957, 0.968, 0.837, 0.858, *1.150* | 5 of 5 flat rungs |
+| `low_aspect_ratio_DEMO` | 0.955, 0.949, 0.793, 0.902, *1.094* | 5 of 6 (τ = 1e-8 is tighter than any block rung reached — reported, not extrapolated) |
+| `st_regression` | 0.844, 0.869, 0.871, 0.923, 0.960, *1.119* | 6 of 6 |
+
+*The italicised last entry on each deck is the loosest flat rung, where the block arm has no rung
+as loose and the envelope is read flat. That is a limit of the ladder, not a win for either arm,
+and it is labelled as such in the artifact.*
+
+### 3.3 The verdict on the headline, and the caveats that bound it
+
+**The partition does not cost 47 % and 40 % more. At matched achieved accuracy it is at parity or
+cheaper on all three decks** — 4.3 %, 4.5 % and 13.1 % cheaper at each deck's own calibration
+point. **The published +46.8 % and +40.4 % were the handicap, essentially in full.** §6.1's
+counter-argument — "the outer pass counts fall by much less than the inner solves cost, so an
+inexact inner tolerance would have to recover a very large factor" — is refuted by measurement: it
+recovers all of it, because the inner solves at τ = 1e-6 were doing work the outer test did not
+need.
+
+Four things bound that, and none of them is a hedge that the framing contradicts:
+
+1. **It is statistic-dependent, and the worst-case statistic straddles parity.** Rebuilding the
+   same curves on the **maximum** exit residual instead of p90 gives A1/A0 ranging 0.907–1.150,
+   0.816–1.228 and 0.824–1.119. So on the single worst design point the two arms are not
+   distinguishable. On the **median** the comparison cannot be made at all: the median exit
+   residual is exactly zero on 15 of 17 rungs on `large_tokamak_nof` and 13 of 17 on
+   `low_aspect_ratio_DEMO` — the state is a bit-exact fixed point on most points — leaving one or
+   two usable rungs. **The correct summary is "at parity or cheaper on the p90; indistinguishable
+   on the worst point".**
+2. **The mechanism is that the over-solving was the cost — not that the block structure wins.**
+   The block arm's cheapest setting reaching the target accuracy on the two large decks is inner
+   τ = 0.1, where **1 172 of 1 248 inner solves take a single sweep** (71 take two, 5 take three).
+   At that setting the arm is barely a block solver: it is close to a flat sweep in block order
+   with an outer state test. What the measurement establishes is that the partition **does not
+   cost more** once it is not made to over-solve; it does not establish that partitioning is
+   itself worth anything.
+3. **The block arm had more settings tried** — eleven rungs against six, because the inner
+   tolerance is a parameter the flat arm does not have. Best-of-eleven against best-of-six is a
+   systematic advantage. It is bounded rather than eliminated: the flat arm's rungs are all on its
+   own envelope on all three decks (none dominated), so its curve is already monotone and an extra
+   flat rung between two existing ones could only land on the interpolation the comparison already
+   assumes.
+4. **This is Phase A**, with the optimiser absent, at fixed recorded design points. It says what
+   the arrangement costs on the same problems; it says nothing about what an optimiser reacting to
+   the arrangement would do. That is Phase B, and it is still not built.
+
+**A reversal found by our own check is a good outcome, and this is one.** The published number was
+formally hedged ("at most") and the hedge was correct. What was missing is that nobody had measured
+where inside the bound the answer lay, and the answer turns out to be at the far end: the bound was
+doing all the work.
 
 ## 4. Fix 2 — one accounting, and the two instruments made to agree
 
