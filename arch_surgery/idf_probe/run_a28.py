@@ -606,7 +606,43 @@ def main() -> int:
         json.dumps({"mode": args.mode, "wall_s_total": dt, "runs": log},
                    indent=2)
     )
-    return 0 if all(r["rc"] == 0 for r in log) else 1
+    # A29 (replication-verify): the exit code must not conflate "the
+    # instrument failed" with "a perturbed start failed to solve".  In the
+    # measurement modes -- calibrate, campaign, audit, ladder -- a start that
+    # crashes or refuses IS the datum: the published calibration table reads
+    # "11 / 12 (1 crashed)" and "7 / 12 (4 fail, 1 crashed)" at delta = 10 %,
+    # and this driver reproduces exactly those crashes.  Returning 1 for them
+    # made the one-command experiment stop at the first stage whose measured
+    # system ever fails, while the stage-by-stage path in the results
+    # document's section 8 sailed past the same exit code unnoticed -- the
+    # two paths were NOT two paths to the same numbers, which the entry
+    # point's own docstring declares a finding.  Failed runs stay recorded,
+    # per run, in _driver_log_<mode>.json, and the analysis stages do the
+    # drop census before any ratio.
+    #
+    # 'gate' keeps the strict policy: there a failure is an arrangement
+    # failing its own deck's unperturbed point, and nothing downstream is
+    # comparable.  And if EVERY run failed, that is an instrument failure in
+    # any mode -- proceeding would hand the analysis an empty population,
+    # the false pass this project has met before -- so it stays fatal too.
+    n_bad = sum(1 for r in log if r["rc"] != 0)
+    if n_bad:
+        print(f"{n_bad} of {len(log)} runs did not solve; each is recorded "
+              f"in _driver_log_{args.mode}.json.  In mode '{args.mode}' "
+              + ("that is a measured result, not an instrument failure, and "
+                 "the analysis stage reports it before any ratio."
+                 if args.mode != "gate" else
+                 "that is fatal: an arrangement failed its own deck's "
+                 "unperturbed point."),
+              flush=True)
+    if args.mode == "gate":
+        return 0 if n_bad == 0 else 1
+    if n_bad == len(log) and log:
+        print("EVERY run failed, which is an instrument failure in any "
+              "mode, not a measured robustness result.  Stopping.",
+              flush=True)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
