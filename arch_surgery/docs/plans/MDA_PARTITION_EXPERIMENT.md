@@ -481,6 +481,51 @@ Three consequences, and the second is the one that constrains what Phase B may c
    root-finds, so the subdriver-lift experiment's cost model is a different one and cannot borrow
    this result in either direction.
 
+### 4.1c Is a tighter tolerance converging noise? Measured, and no — up to 1e-8
+
+A fair challenge to the τ ladder: at tight tolerance an iteration can stop chasing physics and
+start chasing round-off, in which case extra sweeps buy nothing and sweep counts measure the
+floating-point floor rather than convergence. **The exit audit already answers this and the
+question had not been asked of it.** Every arm takes one further full sweep after it terminates
+and records the same global residual; that post-sweep residual *is* the achievable floor at the
+exit state.
+
+Arm A0, over each deck's own harvested design points, p90 of the post-sweep residual:
+
+| deck | τ = 1e-4 | τ = 1e-6 | τ = 1e-8 |
+|---|---|---|---|
+| `large_tokamak_nof` | 1.32e-05 | 1.26e-11 | **0** (bit-exact) |
+| `low_aspect_ratio_DEMO` | 2.82e-06 | 2.35e-11 | 4.48e-15 |
+| `st_regression` | 6.22e-07 | 1.95e-08 | 5.27e-11 |
+
+**The achieved residual falls by 32× to 10⁶× per step of the ladder and never flattens.** A
+noise-limited iteration would show ratios near 1 — the residual would stop improving no matter how
+much tolerance was demanded. It does the opposite. Two further checks agree: **no point on any deck
+at any τ exits with a post-sweep residual at or above its own tolerance** (0 exceedances of 600),
+and the **median** post-sweep residual is exactly **0.0** at every τ on every deck — the state is a
+*bit-exact* fixed point of the sweep map on most points, which is the strongest possible evidence
+against noise-chasing.
+
+**What this does not establish, stated plainly.**
+
+- **It bounds the ladder that was run, not the concept.** A τ at which this *would* be
+  noise-chasing certainly exists — double precision puts it near 1e-15 to 1e-16 relative — and the
+  ladder stops at 1e-8. "Not converging noise at 1e-8" is measured; "no τ would" is false.
+- **It is a statement about the scaled residual, so it inherits that metric's blind spots.** Each
+  component is divided by its median magnitude across the harvest, and **I-12 is the counterexample
+  in hand**: where `costs.coe` diverges to 6.6e21 against a scale of 1.25e3, the test is ~10¹⁸
+  times tighter than intended and *those* points do iterate to bit-identity for a reason that is
+  numerical, not physical. So the aggregate is clean while a named, measured minority is not.
+- **It is the fixed-point engine's predicate, not PROCESS's `check_agreement`**, which is a
+  different test with its own defects (the hidden `atol`, and `equal_nan=True`).
+
+**Consequence for the results.** τ = 1e-6 sits several orders above the floor everywhere, so
+Phase A's counts are counts of real convergence work, and the requirement to converge fully on all
+coupling variables is satisfied rather than nominally satisfied. This is also why the protocol
+compares at **matched final accuracy** via the exit audit rather than at matched tolerance
+settings: the arms reach different residuals from the same τ, and A1 terminates far more converged
+than A0, which is why the block-vs-flat cost figures are stated as upper bounds.
+
 ### 4.2 What would count as the existence proof
 
 Any **one** of these, measured fairly and reported with its dropped-point census:
