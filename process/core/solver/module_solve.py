@@ -528,7 +528,11 @@ def load_spec(path: str | Path | None = None):
         category.append(c["category"])
         scale.append(float(c.get("scale", 0.0)))
 
-    spec = ys.YSpec(keys, category, scale, record.get("n_components"), comps)
+    spec = ys.YSpec(
+        keys, category, scale, record.get("n_components"), comps,
+        mode=record.get("spec_mode", ys.SPEC_MODE_A18),
+        scale_floor=float(record.get("scale_floor", ys.SCALE_FLOOR)),
+    )
 
     rebuilt = spec.components_sha256()
     committed = record.get("components_sha256")
