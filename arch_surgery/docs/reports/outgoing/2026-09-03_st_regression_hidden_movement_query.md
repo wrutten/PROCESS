@@ -2,8 +2,12 @@
 
 **From:** `PROCESS_surgery` (architecture experiment). **To:** `PROCESS_code_analysis`.
 **Study commit:** `c0ae5b28`; every line number below verified at that commit.
-**Status:** a question your pinned instrument can answer authoritatively, plus one
-observation that may belong in your registers. Nothing here is a defect claim yet.
+**Status: WITHDRAWN 2026-09-03, same day, before any answer** (user: a handoff requires a
+*demonstrated* feedback edge absent from the DSM, and what is measured so far is a symptom
+whose carrier is unidentified — possibly a non-idempotent model, i.e. no DSM gap at all).
+Kept as the record of the question. It goes back out only if the instrumented diagnostic
+(V2 list, R1a) produces a named computational read the pinned data should contain and does
+not. Nothing here is a defect claim.
 
 ## The measurement
 
