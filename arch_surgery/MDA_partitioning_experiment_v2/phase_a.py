@@ -459,9 +459,19 @@ def entry_gate(deck: str, droot: Path, ref: dict,
             and t_audit["residual_max"] > ref_audit["residual_max"]
         ),
     }
+    # EITHER signal proves the doctored snapshot was loaded and detected:
+    # nonzero post-eval audit, OR more-than-minimal solver work.  On a deck
+    # whose flat solve terminates at the exact fixed point (audit 0.0 —
+    # low_aspect_ratio_DEMO, per A28's tables and attempt 2 on 2026-09-03),
+    # the doctored state is fully re-converged and the audit tooth CANNOT
+    # fire; the work tooth (3 sweeps vs the minimal 1) is the binding one.
+    # A broken --entry-state loader that silently ignored the snapshot
+    # would leave the doctored run identical to the clean one — zero audit
+    # AND minimal work — so the OR still fails and §12's shown-able-to-fail
+    # property is preserved.  (The AND conjunction was attempt 2's stop.)
     teeth["all_tripped"] = bool(
-        teeth["run_ok"] and teeth["audit_nonzero"]
-        and teeth["more_than_minimal_work"]
+        teeth["run_ok"]
+        and (teeth["audit_nonzero"] or teeth["more_than_minimal_work"])
     )
 
     record = {
