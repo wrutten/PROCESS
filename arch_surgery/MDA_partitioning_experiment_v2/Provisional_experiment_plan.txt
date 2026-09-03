@@ -1,0 +1,76 @@
+MDA Partitioning Experiment v2 plan:
+Overarching goal: I want to show that architecture matters. In process, we've identified a clean architectural intervention in the partitioning of the overarching MDA.
+
+Performance is measured in model (node) function calls. We can create an estimate of runtime weight afterwards, to weight the different contributions and give a proper impact assessment.
+Robustness is measured in fraction of failed runs, when sampling deviations from a baseline run (the default example run)
+
+We run the experiment for 3 scenarios:
+- large_tokamak_nof
+- low_aspect_ratio_demo
+- st_regression
+St regression is a case that does not need lifting of the coupling variable to partition the MDA. Back-up to show confirm the impact of partitioning for the optimization problem, if it lifting does happen to impact optimizer trajectory/number of iterations.
+
+Phase A: MDA comparison
+
+Goal: compare architecture performance of one integrated MDA, vs partitioned MDAs (without overarching MDA, feedforward equivalence check should be outside of the runtime comparison)
+We accept the limitation that the one coupling variable needs to be handled by the optimiser now. The impact of this is tested in Phase B.
+
+Experiment:
+Compare performance of a single MDA converging all process models versus three partitioned MDAs, running in feedforward.
+Same tolerance settings for all solvers
+Robustness/uncertainty approach: scan 10% deviation over all coupling variable initial guesses. Unconverged cases/failures count to robustness metrics. All others count to performance metrics, providing uncertainty statistics.
+
+Three arms:
+- R baseline process, running its normal MDA idempotence loop over call_models_once.
+- A0: proper implemented MDA fixed point iterator.
+- A1: partition the blocks as done earlier. feedforward is hoised out by definition (can and should not be measured separately)
+
+Hypothesis/expected result:
+This decouples the number of runs the nodes have to do per block. some blocks converge quicker, requiring less model evaluations for those blocks. Secondly, some nodes become fully feedforward, so only need execution once. Together gives a modest speedup, as estimated by model function call numbers.
+
+Check at the end:
+- converged to the same point. If not, raise a problem with the experimental method.
+- accuracy is similar (may be a bit different, but similar order of magnitude is acceptable I'd say)
+
+Performance comparison: node model calls per block (M1,M2,M3,feedforward)
+
+
+
+
+Phase B: MDF comparison
+
+Goal: 
+See if the partitioning of the MDA effects the optimizer meaningfully
+
+Experiment:
+Compare performance of a single MDA converging all process models versus three partitioned MDAs, running in feedforward.
+Same tolerance settings for all solvers. I think optimiser settings can remain default, for comparability with reference.
+Robustness/uncertainty approach: scan 10% deviation over all iteration variable initial guesses, coupling variables should be initialized with comparable values. Unconverged cases/failures count to robustness metrics. All others count to performance metrics, providing uncertainty statistics.
+
+Three arms:
+- R baseline process, for reference
+- A0 proper implementation of the MDA fixed point iterator
+- A1 still one single MDA fixed point iterator, but now with the Pulse feedback variable lifted to the optimiser
+- A2 partitioned MDA under the optimiser (so no overarching MDA in between!)
+
+Hypothesis/expected result:
+Previous results shows a marginal increase in performance of the partitioned case, however this was with an overarching MDA between the partitioned solvers and the optimizer. Removing was estimated to increase performance by 30% if i recall.
+Lifted Pulse coupling variable does not affect number of optimizer iterations. Solution trajectory remains the same.
+
+Check at the end:
+- optimiser should be converged, if not report as failure.
+- is it converged to the same point. if not thats not necessarily a problem, but a caveat on result analysis
+- accuracy of coupling vars is similar (may be a bit different, but similar order of magnitude is acceptable I'd say)
+- lifted coupling variable (pulse) does not affect solver trajectory (
+
+Main headline results to verify thoroughly:
+- comparison of A0 to A2 on performance and robustness. Check if performance gains of MDA case stand match this case, confirming that lifting the variable does not affect the optimization trajectory.
+
+
+Project admin:
+first construct the reproduceable script. Only when that is complete, execute it (after my approval). 
+If possible make it a python notebook. Then you can call it step by step (if that works for you) and I can too.
+Make the experiment self contained in the new arch_surgery/MDA_partitioning_experiment_v2 directory. Include the driving script, input files, output data, analysis report (same format as for previous runs)
+Run the full experiment, only then analyse. While it runs, you can construct the report template, documenting your expectations.
+Check that instrumentation does not impact performance analysis. You may argue on historical checks.
+
