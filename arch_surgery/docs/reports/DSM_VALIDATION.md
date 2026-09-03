@@ -513,3 +513,14 @@ byte-identical to ours (sha256 matched both sides); frozen copies under
    population. Non-idempotent models live here.
 The instrumented `start010` run now has named targets: per-call pass ≥ 2 argmax against
 {ripple, stresscl chain, efc} and the 498-population. Still queued behind A29's heavy slot.
+
+**V14 follow-up 3 (2026-09-03).** The root-cause investigation requested of the sibling study is
+**cancelled** (user: a handoff requires a demonstrated mistake in the dependency analysis, and
+there is none — the `FirstWall → build.dr_fw_*` edge is correctly present and correctly dead, the
+census found no missing edge, and the hub representation and the 498-variable timing exclusion are
+their documented decisions, not defects). Standing rule for this register from here: **a V-entry
+against the dependency analysis, or any cross-study handoff, carries a demonstrated defect with
+variable, `file:line` at the study commit, and run evidence — never a question, a suspicion, or a
+request to revisit a recorded decision.** A31's verdict decides whether anything further goes
+their way (only if it names a component the graph asserts and gets wrong); the non-idempotence
+outcome routes to upstream-PROCESS defect reporting instead.
