@@ -429,8 +429,9 @@ outer pass on **2 802 of 54 480** MDA calls (5.14 %) — recurring through entir
 edge** (A2, confirmed dynamically by A22 at the harvested states: zero cross-module movement of any
 kind). The pulsed decks show exactly **one** such call per run (the cold first call; 22/14 080 and
 20/20 370), which staleness explains. The slow mode is the TF-coil chain:
-`superconducting_tfcoil.a_tf_plasma_case` (written at `tfcoil/resistive.py:320`; the ST deck runs
-the resistive TF model) is the argmax exit residual on 22/28 ladder audit records **in both arms**,
+`superconducting_tfcoil.a_tf_plasma_case` (computed in `tfcoil/superconducting.py` ~line 1878 at
+`c0ae5b28`; `st_regression` has `i_tf_sup = 1` — superconducting TF despite `itart = 1`; the
+orchestrator's first "resistive model" attribution is corrected in the addendum) is the argmax exit residual on 22/28 ladder audit records **in both arms**,
 decaying ~30× per rung of τ. The movement is transient — bit-exact 0 at every accepted optimum —
 and dormant at the harvest, so A2/A22 measured correctly *there*; D15's perturbation visits states
 the harvest never did (the failure mode A22's own caveat predicted).
@@ -457,10 +458,12 @@ withdrawn — volunteered, not owed).** Two pointers that reshape the diagnostic
    configurations** (theirs are the large-tokamak and stellarator decks; `st_regression` is an
    MFILE-level inspection scenario, their D77). Our own **V6** already records the same thing from
    our side: the DSM's source config matches `large_tokamak_*` and differs from `st_regression` on
-   `i_single_null`, `i_plasma_current`, `i_beta_component`. Since the ST deck runs the **resistive**
-   TF model (`tfcoil/resistive.py` writes `a_tf_plasma_case`, our measured slow mode) while the
-   DSM's config runs the superconducting chain, edges specific to the resistive-TF branch may be
-   **absent-by-configuration, not by error** — "the collapsed DSM has no back edge here" partly
+   `i_single_null`, `i_plasma_current`, `i_beta_component`. **Correction while acting on this:** `st_regression` has `i_tf_sup = 1` — the superconducting
+   TF chain, the *same* family as the DSM's config — so the TF-writer path is **not** a
+   configuration difference (the orchestrator's "resistive model" reading is withdrawn). The
+   deck still differs on ten-plus switches (V6: `i_plasma_current = 9`, `i_beta_component = 3`,
+   `i_single_null = 0`, `itart = 1`, `i_pulsed_plant = 0`, …), so branch-liveness differences
+   remain possible elsewhere in the chain — "the collapsed DSM has no back edge here" partly
    means "the DSM never executed this code path". Any future named read must state **which deck's
    switches it needs**; they will check it against the pinned deck-independent *source* as well as
    the export.

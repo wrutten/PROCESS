@@ -21,7 +21,7 @@ coupling-state displacement predicate at τ = 1e-6:
 - On the two pulsed decks this happens **exactly once per optimisation** (22/14 080 and
   20/20 370 evaluations): the cold first call, plain entry-state staleness.
 - The slowest-decaying component is `superconducting_tfcoil.a_tf_plasma_case`
-  (written `tfcoil/resistive.py:320`; the ST deck runs the resistive TF model) — argmax exit
+  (computed in `tfcoil/superconducting.py` ~line 1878; `st_regression` has `i_tf_sup = 1`) — argmax exit
   residual on 22/28 audit records **in a flat single-loop arrangement as well**, so it is a
   property of the coupling structure, not of the blocking.
 - The movement is **transient** (bit-exact 0 at every accepted optimum) and **dormant at the

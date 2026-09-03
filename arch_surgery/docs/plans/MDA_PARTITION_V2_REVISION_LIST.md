@@ -37,8 +37,8 @@ consequences:
 one confirming run pending.** The recurring drift is **contained to `st_regression`**: 2 802 of
 54 480 A1′ calls (5.14 %) need a 3rd–7th outer pass there, against exactly **one call per run**
 on each pulsed deck (22/14 080 and 20/20 370 — the cold first call, maximal staleness, benign).
-The slow mode is the TF-coil chain: `superconducting_tfcoil.a_tf_plasma_case` (written at
-`tfcoil/resistive.py:320`; ST runs the resistive TF model) is the argmax exit residual on 22/28
+The slow mode is the TF-coil chain: `superconducting_tfcoil.a_tf_plasma_case` (computed in `tfcoil/superconducting.py`
+~line 1878; `st_regression` has `i_tf_sup = 1` — superconducting TF, corrected 2026-09-03) is the argmax exit residual on 22/28
 ladder audits **in both arms**, decaying ~30× per rung — a property of the coupling structure,
 not of blocking. The downstream cascade is ~147 fields across 17 modules; it is **transient**
 (bit-exact 0 at every accepted optimum) and dormant at the harvest, which is why A2/A22
@@ -59,8 +59,8 @@ options are keep-it, resolve mechanism (i)/(ii) first, or a declared audited acc
 concession. Confirming run (blocked on the heavy slot): one instrumented `st_regression`
 `start010` recording per-call, per-pass argmax components — and it must record **which deck
 switches the moving chain needs**, because the sibling study's graph exports are built for the
-large-tokamak config while the ST deck runs the **resistive** TF model, so resistive-branch
-edges may be absent from the DSM by configuration rather than by error (DSM register V14
+large-tokamak config and `st_regression` differs from it on ten-plus switches (register V6) though NOT on the
+TF family (`i_tf_sup = 1` in both), so branch-liveness must be checked switch by switch (DSM register V14
 addendum; their D77/I-44).
 
 ## Design items carried from the V1 lessons
