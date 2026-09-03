@@ -350,6 +350,18 @@ def main() -> int:
         else None
     )
 
+    # VP2c (A33): whether the imported tree resolved a post-solve exclusion,
+    # and from which artifact.  Read from the module, not the environment
+    # (the A3/A13/A24 pattern); a tree that predates the variant point
+    # reports ``None`` rather than echoing the arm the driver asked for.
+    result["arch_post_solve_env"] = os.environ.get("PROCESS_ARCH_POST_SOLVE")
+    result["arch_post_solve_enabled"] = getattr(
+        _caller, "POST_SOLVE_ENABLED", None
+    )
+    result["arch_post_solve_artifact"] = getattr(
+        _caller, "POST_SOLVE_PATH", None
+    )
+
     # A28: what the loop and the block schedule actually resolved to, read
     # from the imported modules and the committed node map rather than from
     # the environment.  These are the descriptor a comparison manifest is
@@ -605,6 +617,17 @@ def main() -> int:
         _tot = dict(_tot)
         _tot["moved_constants"] = sorted(_tot.get("moved_constants", ()))
         result["module_solve_totals"] = _tot
+    # VP2c (A33): the post-solve exclusion's own counts -- how many solve-
+    # phase call sites were suppressed, per node, and the one-shot execution
+    # record.  Absent (None) on trees that predate the variant point;
+    # reported only when the switch resolved, so the switch-off record is
+    # unchanged in content.
+    _pst = getattr(_caller, "POST_SOLVE_TOTALS", None)
+    result["post_solve_totals"] = (
+        dict(_pst)
+        if (_pst is not None and getattr(_caller, "POST_SOLVE_ENABLED", False))
+        else None
+    )
     result["arch_module_solve_yspec"] = None
     if _module_solve is not None and getattr(_module_solve, "ENABLED", False):
         try:
