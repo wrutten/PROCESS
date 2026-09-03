@@ -1,0 +1,296 @@
+#!/usr/bin/env python
+"""V2 Phase B — the optimisation comparison (EXPERIMENT_PLAN.md §4).
+
+Arms R / A0 / A1 / A2 across the three decks, N = 25 seed-paired starts, all
+on the a26-mode spec generation.  Stages (protocol §15: every published
+number regenerates from this committed entry point; failure paths are
+reachable from it):
+
+``preflight``
+    The instrumentation and artifact ledger, per arm and deck: which arms
+    can run on the committed driver, and which refuse naming their task.
+    Exit 0 only when every arm of the full campaign is runnable.
+``smoke``
+    The machinery test, NOT a measurement: one baseline run per currently
+    runnable arm-family — R and A0 on ``st_regression`` (a26 artifacts, the
+    real configuration), and A1 on ``large_tokamak_nof`` against the **A18**
+    artifacts (machinery only, stamped as such: the lifted-deck +
+    ``flat_state`` + lift combination has never been run by any earlier
+    task, and its executability is what this smoke establishes; its numbers
+    are not for use).  A2 is reported as refused while trust-mode (A34) and
+    the post-solve capability (A33) are missing.
+``campaign``
+    The full 4-arm × 3-deck × 25-start campaign.  Refuses while
+    ``EXECUTION_APPROVED`` is False, while any arm's instrumentation is
+    missing, or while any deck's a26 write set is absent.
+``tally``
+    The §4 checks from the on-disk records: paired |Δ norm_objf| (hex kept),
+    paired iteration ratios, the A30 failure taxonomy, per-node count sums.
+
+Run from VSCode (F5): no arguments needed — the default stage is ``smoke``
+while execution is unapproved, ``all`` after.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import v2_config as cfg  # noqa: E402
+import v2_runner as vr  # noqa: E402
+
+PB_RUNS = cfg.RUNS / "phase_b"
+DECKS_DIR = cfg.RUNS / "_decks"
+
+
+# --------------------------------------------------------------------------
+# preflight: the ledger
+# --------------------------------------------------------------------------
+
+
+def arm_status(deck: str, arm: str) -> tuple[bool, str]:
+    """(runnable, reason).  An arm refuses by name, never silently."""
+    if arm in ("A1", "A2") and deck not in cfg.PULSED:
+        if arm == "A1":
+            return False, "k = 0: A1 degenerates to A0 on this deck (plan §4) — skipped by design"
+    if arm != "R":
+        if not cfg.ystate_for(deck).exists():
+            return False, f"missing {cfg.ystate_for(deck).name}"
+        if not cfg.writeset_for(deck).exists():
+            led = cfg.INSTRUMENTATION["pulsed_a26_writesets"]
+            return False, (f"missing {cfg.writeset_for(deck).name} — "
+                           f"{led['task']}")
+    if arm == "A2":
+        for key in ("trust_mode", "post_solve"):
+            led = cfg.INSTRUMENTATION[key]
+            if not led["available"]:
+                return False, f"{key} not built — {led['task']}"
+        if not cfg.postsolve_for(deck).exists():
+            return False, (f"missing {cfg.postsolve_for(deck).name} — "
+                           f"{cfg.INSTRUMENTATION['post_solve']['task']}")
+    return True, "ready"
+
+
+def stage_preflight() -> int:
+    PB_RUNS.mkdir(parents=True, exist_ok=True)
+    ledger = {}
+    all_ready = True
+    for deck in cfg.DECKS:
+        for arm in cfg.PHASE_B_ARMS:
+            ok, why = arm_status(deck, arm)
+            ledger[f"{deck}/{arm}"] = {"runnable": ok, "reason": why}
+            skipped_by_design = "skipped by design" in why
+            if not ok and not skipped_by_design:
+                all_ready = False
+            print(f"  {deck:24s} {arm:3s} "
+                  f"{'ready' if ok else 'REFUSED':8s} {why}")
+    record = {"ledger": ledger, "all_ready": all_ready,
+              "execution_approved": cfg.EXECUTION_APPROVED}
+    (PB_RUNS / "preflight.json").write_text(json.dumps(record, indent=2))
+    print(f"\nphase B preflight: {'READY' if all_ready else 'NOT READY'} "
+          f"(execution approved: {cfg.EXECUTION_APPROVED}); "
+          f"ledger in {PB_RUNS / 'preflight.json'}")
+    return 0 if all_ready else 3
+
+
+# --------------------------------------------------------------------------
+# smoke: machinery, not measurement
+# --------------------------------------------------------------------------
+
+
+def stage_smoke() -> int:
+    PB_RUNS.mkdir(parents=True, exist_ok=True)
+    (cfg.RUNS / "_mplconfig").mkdir(parents=True, exist_ok=True)
+    vr.derive_lifted_decks(DECKS_DIR)
+    jobs = [
+        dict(deck="st_regression", arm="R",
+             outdir=PB_RUNS / "smoke" / "st_regression_R",
+             seed=0, delta=None, decks_dir=DECKS_DIR),
+        dict(deck="st_regression", arm="A0",
+             outdir=PB_RUNS / "smoke" / "st_regression_A0",
+             seed=0, delta=None, decks_dir=DECKS_DIR),
+        # Machinery-only: lifted deck + flat_state + lift has no precedent in
+        # any merged task; a26 write sets for pulsed decks are A33's, so this
+        # smoke runs on the A18 generation and says so in its record.
+        dict(deck="large_tokamak_nof", arm="A1",
+             outdir=PB_RUNS / "smoke" / "large_tokamak_nof_A1_a18smoke",
+             seed=0, delta=None, decks_dir=DECKS_DIR,
+             a18_machinery_smoke=True),
+    ]
+    results = vr.run_pool(jobs)
+    verdicts = {}
+    failed = 0
+    for r in results:
+        m = json.loads((Path(r["outdir"]) / "metrics.json").read_text())
+        ok = (r["rc"] == 0 and m.get("status") == "ok"
+              and m.get("node_calls_solve_phase")
+              and (m.get("exact") or {}).get("norm_objf"))
+        verdicts[f"{r['deck']}/{r['arm']}"] = {
+            "rc": r["rc"], "status": m.get("status"),
+            "node_calls_solve_phase": m.get("node_calls_solve_phase"),
+            "norm_objf_hex": (m.get("exact") or {}).get("norm_objf"),
+            "machinery_ok": bool(ok),
+        }
+        failed += 0 if ok else 1
+    a2_ok, a2_why = arm_status("st_regression", "A2")
+    verdicts["A2 (any deck)"] = {"machinery_ok": False, "refused": a2_why}
+    (PB_RUNS / "smoke" / "smoke.json").write_text(json.dumps(verdicts, indent=2))
+    print(json.dumps(verdicts, indent=2))
+    print(f"\nphase B smoke: {len(results) - failed}/{len(results)} machinery "
+          f"runs ok; A2 refused as expected ({a2_why}); smoke numbers are "
+          f"not measurements")
+    return 0 if failed == 0 else 1
+
+
+# --------------------------------------------------------------------------
+# campaign and tally
+# --------------------------------------------------------------------------
+
+
+def stage_campaign() -> int:
+    if not cfg.EXECUTION_APPROVED:
+        print("REFUSED: EXPERIMENT_PLAN.md is a draft — execution is not "
+              "approved (v2_config.EXECUTION_APPROVED).  Run 'smoke'.")
+        return 3
+    if stage_preflight() != 0:
+        print("REFUSED: instrumentation or artifacts missing — see the "
+              "ledger above.")
+        return 3
+    vr.derive_lifted_decks(DECKS_DIR)
+    jobs = []
+    for deck in cfg.DECKS:
+        for arm in cfg.PHASE_B_ARMS:
+            ok, why = arm_status(deck, arm)
+            if not ok:
+                continue  # only the by-design k=0 A1 skip reaches here
+            for k in range(cfg.N_STARTS):
+                jobs.append(dict(
+                    deck=deck, arm=arm,
+                    outdir=PB_RUNS / "campaign" / deck / arm / f"start{k:03d}",
+                    seed=k, delta=cfg.DELTA, decks_dir=DECKS_DIR,
+                ))
+    print(f"campaign: {len(jobs)} runs, {cfg.WORKERS} workers")
+    vr.run_pool(jobs)
+    return stage_tally()
+
+
+def _extract(m: dict) -> dict:
+    return {
+        "status": m.get("status"),
+        "ifail": (m.get("values") or {}).get("ifail"),
+        "norm_objf_hex": (m.get("exact") or {}).get("norm_objf"),
+        "n_solver_iterations": m.get("n_solver_iterations"),
+        "n_model_calls": m.get("n_model_calls"),
+        "node_calls_solve_phase": m.get("node_calls_solve_phase"),
+        "node_census": m.get("node_census"),
+        "constraint_93": m.get("constraint_93"),
+        "exit_audit": m.get("exit_audit"),
+        "entry_census": m.get("entry_census"),
+    }
+
+
+def stage_tally() -> int:
+    """The §4 checks from on-disk records.  Every requested start is a row —
+    a denominator that shrinks without saying so is trap T11."""
+    root = PB_RUNS / "campaign"
+    if not root.exists():
+        print("no campaign records — run the campaign stage first")
+        return 1
+    summary: dict = {"tau": cfg.TAU, "delta": cfg.DELTA,
+                     "n_starts": cfg.N_STARTS}
+    for deck in cfg.DECKS:
+        deck_rows = {}
+        for arm in cfg.PHASE_B_ARMS:
+            arm_dir = root / deck / arm
+            if not arm_dir.exists():
+                continue
+            rows = []
+            for k in range(cfg.N_STARTS):
+                p = arm_dir / f"start{k:03d}" / "metrics.json"
+                rows.append(_extract(json.loads(p.read_text()))
+                            if p.exists() else {"status": "missing"})
+            deck_rows[arm] = rows
+        if not deck_rows:
+            continue
+        deck_summary: dict = {}
+        for arm, rows in deck_rows.items():
+            n_ok = sum(1 for r in rows if r.get("status") == "ok")
+            taxonomy: dict = {}
+            for r in rows:
+                taxonomy[str(r.get("status"))] = (
+                    taxonomy.get(str(r.get("status")), 0) + 1)
+            deck_summary[arm] = {
+                "n_ok": n_ok, "taxonomy": taxonomy,
+                "call_models_total": sum(r.get("n_model_calls") or 0
+                                         for r in rows),
+                "node_calls_total": sum(r.get("node_calls_solve_phase") or 0
+                                        for r in rows),
+            }
+        # paired iteration ratios and objective pairs against A0
+        base = deck_rows.get("A0")
+        if base:
+            for arm in ("A1", "A2", "R"):
+                rows = deck_rows.get(arm)
+                if not rows:
+                    continue
+                pairs, obj_pairs = [], []
+                for rb, ra in zip(base, rows, strict=True):
+                    if rb.get("status") == "ok" and ra.get("status") == "ok":
+                        ib, ia = (rb.get("n_solver_iterations"),
+                                  ra.get("n_solver_iterations"))
+                        if ib and ia:
+                            pairs.append(ia / ib)
+                        obj_pairs.append((rb.get("norm_objf_hex"),
+                                          ra.get("norm_objf_hex")))
+                pairs.sort()
+                med = pairs[len(pairs) // 2] if pairs else None
+                deck_summary[f"A0->{arm}"] = {
+                    "n_pairs": len(pairs),
+                    "iter_ratio_median": med,
+                    "iter_ratio_q1_q3": ([pairs[len(pairs) // 4],
+                                          pairs[3 * len(pairs) // 4]]
+                                         if len(pairs) >= 4 else None),
+                    "iter_bound_1p05_met": (med is not None
+                                            and med <= cfg.ITER_RATIO_MAX),
+                    "norm_objf_hex_equal": sum(
+                        1 for a, b in obj_pairs if a and a == b),
+                    "norm_objf_pairs": len(obj_pairs),
+                }
+        summary[deck] = deck_summary
+    out = PB_RUNS / "tally.json"
+    out.write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
+    print(f"\ntally written to {out} (the |Δ norm_objf| yardstick — the "
+          f"R->A0 spread — and the audit-based checks are computed at "
+          f"analysis time from these records)")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    default = "all" if cfg.EXECUTION_APPROVED else "smoke"
+    ap.add_argument("stage", nargs="?", default=default,
+                    choices=["preflight", "smoke", "campaign", "tally", "all"])
+    args = ap.parse_args()
+    if args.stage == "preflight":
+        return stage_preflight()
+    if args.stage == "smoke":
+        return stage_smoke()
+    if args.stage == "campaign":
+        return stage_campaign()
+    if args.stage == "tally":
+        return stage_tally()
+    rc = stage_preflight()
+    if rc != 0:
+        print("\n'all' stops at preflight while instrumentation is missing.")
+        return rc
+    return stage_campaign()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
