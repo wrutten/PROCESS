@@ -420,3 +420,33 @@ calls, **1.5 %** of that arm's 43 426. On `low_aspect_ratio_DEMO`: 2 089 against
 of 69 986. Not taken by A25, because changing which nodes the hoist selects mid-task would change
 the architecture being measured, and because the fix is a decision about the node map rather than a
 patch in `caller.py`.
+
+## V14 — `st_regression` shows recurring above-τ cross-pass movement with **no known live back edge to carry it**
+
+Under D15's perturbed multi-starts (A28 campaign), the block arm on `st_regression` needs a 3rd–7th
+outer pass on **2 802 of 54 480** MDA calls (5.14 %) — recurring through entire optimisations, on
+25 of 25 starts — where the collapsed DSM for this scenario carries **no live cross-module back
+edge** (A2, confirmed dynamically by A22 at the harvested states: zero cross-module movement of any
+kind). The pulsed decks show exactly **one** such call per run (the cold first call; 22/14 080 and
+20/20 370), which staleness explains. The slow mode is the TF-coil chain:
+`superconducting_tfcoil.a_tf_plasma_case` (written at `tfcoil/resistive.py:320`; the ST deck runs
+the resistive TF model) is the argmax exit residual on 22/28 ladder audit records **in both arms**,
+decaying ~30× per rung of τ. The movement is transient — bit-exact 0 at every accepted optimum —
+and dormant at the harvest, so A2/A22 measured correctly *there*; D15's perturbation visits states
+the harvest never did (the failure mode A22's own caveat predicted).
+
+A source scan eliminated the obvious carriers, in exactly the V1/V2 pattern:
+`physics ← pf_coil.p_pf_electric_supplies_mw` is inside `outplas()` (output path,
+`physics.py:2601` at `c0ae5b28`); `build.dr_fw_plasma_gap_*` is written by `plasma_geometry`
+itself (M1-internal); `physics.b_plasma_*_toroidal` is physics-internal (with a one-sweep stale
+read at `physics.py:387/395` — `b_plasma_inboard_total` computed from the *previous* iteration's
+`b_plasma_inboard_toroidal` — resolved by iteration, worth an upstream note).
+
+**Verdict: open.** Either (i) a computational cross-block read the scan missed — referred to
+`PROCESS_code_analysis` (outgoing report, 2026-09-03), whose pinned instrument can enumerate
+readsets authoritatively; or (ii) a **non-idempotent model** in the coils block (an internal solve
+whose output depends on its own execution history), which is a class **no DSM edge can represent**
+and would need its own register category. Consequence either way: "the collapsed DSM has no back
+edge" does not imply "one outer pass suffices" at states far from self-consistency, and V2's
+trust-mode design must treat edge-liveness as state-dependent (see
+[`../plans/MDA_PARTITION_V2_REVISION_LIST.md`](../plans/MDA_PARTITION_V2_REVISION_LIST.md) R1a).
