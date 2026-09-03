@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """V2 Phase B — the optimisation comparison (EXPERIMENT_PLAN.md §4).
 
-Arms R / A0 / A1 / A2 across the three decks, N = 25 seed-paired starts, all
+Arms R / B0 / B1 / B2 across the three decks, N = 25 seed-paired starts, all
 on the a26-mode spec generation.  Stages (protocol §15: every published
 number regenerates from this committed entry point; failure paths are
 reachable from it):
@@ -12,12 +12,12 @@ reachable from it):
     Exit 0 only when every arm of the full campaign is runnable.
 ``smoke``
     The machinery test, NOT a measurement: one baseline run per currently
-    runnable arm-family — R and A0 on ``st_regression`` (a26 artifacts, the
-    real configuration), and A1 on ``large_tokamak_nof`` against the **A18**
+    runnable arm-family — R and B0 on ``st_regression`` (a26 artifacts, the
+    real configuration), and B1 on ``large_tokamak_nof`` against the **A18**
     artifacts (machinery only, stamped as such: the lifted-deck +
     ``flat_state`` + lift combination has never been run by any earlier
     task, and its executability is what this smoke establishes; its numbers
-    are not for use).  A2 is reported as refused while trust-mode (A34) and
+    are not for use).  B2 is reported as refused while trust-mode (A34) and
     the post-solve capability (A33) are missing.
 ``campaign``
     The full 4-arm × 3-deck × 25-start campaign.  Refuses while
@@ -55,9 +55,9 @@ DECKS_DIR = cfg.RUNS / "_decks"
 
 def arm_status(deck: str, arm: str) -> tuple[bool, str]:
     """(runnable, reason).  An arm refuses by name, never silently."""
-    if arm in ("A1", "A2") and deck not in cfg.PULSED:
-        if arm == "A1":
-            return False, "k = 0: A1 degenerates to A0 on this deck (plan §4) — skipped by design"
+    if arm in ("B1", "B2") and deck not in cfg.PULSED:
+        if arm == "B1":
+            return False, "k = 0: B1 degenerates to B0 on this deck (plan §4) — skipped by design"
     if arm != "R":
         if not cfg.ystate_for(deck).exists():
             return False, f"missing {cfg.ystate_for(deck).name}"
@@ -65,7 +65,7 @@ def arm_status(deck: str, arm: str) -> tuple[bool, str]:
             led = cfg.INSTRUMENTATION["pulsed_a26_writesets"]
             return False, (f"missing {cfg.writeset_for(deck).name} — "
                            f"{led['task']}")
-    if arm == "A2":
+    if arm == "B2":
         for key in ("trust_mode", "post_solve"):
             led = cfg.INSTRUMENTATION[key]
             if not led["available"]:
@@ -111,14 +111,14 @@ def stage_smoke() -> int:
         dict(deck="st_regression", arm="R",
              outdir=PB_RUNS / "smoke" / "st_regression_R",
              seed=0, delta=None, decks_dir=DECKS_DIR),
-        dict(deck="st_regression", arm="A0",
-             outdir=PB_RUNS / "smoke" / "st_regression_A0",
+        dict(deck="st_regression", arm="B0",
+             outdir=PB_RUNS / "smoke" / "st_regression_B0",
              seed=0, delta=None, decks_dir=DECKS_DIR),
         # Machinery-only: lifted deck + flat_state + lift has no precedent in
         # any merged task; a26 write sets for pulsed decks are A33's, so this
         # smoke runs on the A18 generation and says so in its record.
-        dict(deck="large_tokamak_nof", arm="A1",
-             outdir=PB_RUNS / "smoke" / "large_tokamak_nof_A1_a18smoke",
+        dict(deck="large_tokamak_nof", arm="B1",
+             outdir=PB_RUNS / "smoke" / "large_tokamak_nof_B1_a18smoke",
              seed=0, delta=None, decks_dir=DECKS_DIR,
              a18_machinery_smoke=True),
     ]
@@ -137,12 +137,12 @@ def stage_smoke() -> int:
             "machinery_ok": bool(ok),
         }
         failed += 0 if ok else 1
-    a2_ok, a2_why = arm_status("st_regression", "A2")
-    verdicts["A2 (any deck)"] = {"machinery_ok": False, "refused": a2_why}
+    b2_ok, b2_why = arm_status("st_regression", "B2")
+    verdicts["B2 (any deck)"] = {"machinery_ok": False, "refused": b2_why}
     (PB_RUNS / "smoke" / "smoke.json").write_text(json.dumps(verdicts, indent=2))
     print(json.dumps(verdicts, indent=2))
     print(f"\nphase B smoke: {len(results) - failed}/{len(results)} machinery "
-          f"runs ok; A2 refused as expected ({a2_why}); smoke numbers are "
+          f"runs ok; B2 refused as expected ({b2_why}); smoke numbers are "
           f"not measurements")
     return 0 if failed == 0 else 1
 
@@ -220,24 +220,24 @@ def stage_gate() -> int:
 def stage_armgate() -> int:
     """The combined-switch equivalence gate (post-merge integration check).
 
-    A2 runs trust mode AND the post-solve exclusion together — a pairing
+    B2 runs trust mode AND the post-solve exclusion together — a pairing
     neither A33 nor A34 gated alone.  A33 proved the exclusion behaviour-
     neutral under the verified outer loop; this gate proves the same under
-    trust mode: per deck, one A2-config run WITH the post-solve artifact vs
+    trust mode: per deck, one B2-config run WITH the post-solve artifact vs
     one WITHOUT (both trust) must agree bit-for-bit on everything except
     the suppressed nodes' own calls.  Teeth: each comparator fed a
     perturbed reading must trip.
     """
     (cfg.RUNS / "_mplconfig").mkdir(parents=True, exist_ok=True)
     vr.derive_lifted_decks(DECKS_DIR)
-    record: dict = {"gate": "A2 combined-switch equivalence: post-solve ON vs "
+    record: dict = {"gate": "B2 combined-switch equivalence: post-solve ON vs "
                             "OFF under trust mode (per deck)"}
     all_pass = True
     for deck in cfg.DECKS:
         pair = {}
         for tag, with_ps in (("with", True), ("without", False)):
             env_override = None if with_ps else {"PROCESS_ARCH_POST_SOLVE": None}
-            r = vr.run_job(deck, "A2",
+            r = vr.run_job(deck, "B2",
                            PB_RUNS / "armgate" / deck / tag,
                            seed=0, delta=None, decks_dir=DECKS_DIR,
                            node_census=False, drop_env=env_override)
@@ -277,7 +277,7 @@ def stage_armgate() -> int:
               f"(suppressed calls: {delta_calls})")
     (PB_RUNS / "armgate" / "armgate.json").write_text(
         json.dumps(record, indent=2))
-    print(f"\nA2 combined-switch gate: {'PASS' if all_pass else 'FAIL'}")
+    print(f"\nB2 combined-switch gate: {'PASS' if all_pass else 'FAIL'}")
     return 0 if all_pass else 1
 
 
@@ -300,7 +300,7 @@ def stage_campaign() -> int:
               "the result; nothing runs on an ungated driver.")
         return 1
     if stage_armgate() != 0:
-        print("REFUSED: the A2 combined-switch equivalence gate failed — "
+        print("REFUSED: the B2 combined-switch equivalence gate failed — "
               "that failure is the result.")
         return 1
     vr.derive_lifted_decks(DECKS_DIR)
@@ -375,9 +375,9 @@ def stage_tally() -> int:
                                         for r in rows),
             }
         # paired iteration ratios and objective pairs against A0
-        base = deck_rows.get("A0")
+        base = deck_rows.get("B0")
         if base:
-            for arm in ("A1", "A2", "R"):
+            for arm in ("B1", "B2", "R"):
                 rows = deck_rows.get(arm)
                 if not rows:
                     continue
@@ -392,7 +392,7 @@ def stage_tally() -> int:
                                           ra.get("norm_objf_hex")))
                 pairs.sort()
                 med = pairs[len(pairs) // 2] if pairs else None
-                deck_summary[f"A0->{arm}"] = {
+                deck_summary[f"B0->{arm}"] = {
                     "n_pairs": len(pairs),
                     "iter_ratio_median": med,
                     "iter_ratio_q1_q3": ([pairs[len(pairs) // 4],

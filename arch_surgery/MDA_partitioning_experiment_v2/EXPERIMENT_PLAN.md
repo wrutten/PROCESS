@@ -4,6 +4,10 @@
 > execution.** Revision 2 folds in the user's first review round (all seven assessment points
 > accepted; the post-solve hoist of optimiser-irrelevant feed-forward nodes added to the
 > intervention in both phases; parallelisation strategy declared; A32 merged).
+> **Arm naming (user, 2026-09-03):** Phase A arms are **A0** (flat) / **A1** (feed-forward
+> blocks); Phase B arms are **R / B0 / B1 / B2**.  These are V2 names: A28/V1's primed
+> arms A0'/A1' are different objects (B1 carries no blocks; V1's A1' carried the outer
+> loop that B2 does not).
 > Supersedes the user's `Provisional_experiment_plan.txt` (same directory) by incorporating the
 > design discussion of 2026-09-03; draws its licensing measurements from
 > [`../docs/plans/MDA_PARTITION_V2_REVISION_LIST.md`](../docs/plans/MDA_PARTITION_V2_REVISION_LIST.md)
@@ -84,8 +88,8 @@ mode-aware (A32's B1 fix, gated bit-exact against A28's record, teeth shown).
 
 | arm | architecture |
 |---|---|
-| FLAT | one MDA over all models; convergence predicate on the full coupling state at τ. The post-solve-eligible nodes stay **inside** its loop — that is the flat architecture as shipped (measured: A28's `A0'` hoists nothing; `costs`/`pulse`/`water_use` run every sweep) |
-| BLOCKS | three block MDAs in feed-forward order, one shared inner τ, **no outer loop**; per-call feed-forward nodes execute once per call; **post-solve nodes do not run in the measured call at all** — they execute once at the end of the run (uncharged to the per-call cost, present for the audit) |
+| A0 (flat) | one MDA over all models; convergence predicate on the full coupling state at τ. The post-solve-eligible nodes stay **inside** its loop — that is the flat architecture as shipped (measured: A28's `A0'` hoists nothing; `costs`/`pulse`/`water_use` run every sweep) |
+| A1 (blocks) | three block MDAs in feed-forward order, one shared inner τ, **no outer loop**; per-call feed-forward nodes execute once per call; **post-solve nodes do not run in the measured call at all** — they execute once at the end of the run (uncharged to the per-call cost, present for the audit) |
 
 **Attribution (declared).** The FLAT→BLOCKS delta measures **the intervention as one unit**
 (partition + pinned/lifted coupling + both hoists). Only `st_regression` (k = 0, nothing
@@ -141,20 +145,20 @@ charged; V2's arm does not carry that pass).
 | arm | architecture | isolates (vs previous) |
 |---|---|---|
 | R | PROCESS as shipped (its idempotence loop) | anchor |
-| A0 | proper flat fixed-point MDA, predicate-matched | stopping rule (R→A0) |
-| A1 | flat MDA + burn-time coupling lifted to optimiser (constraint 93) | the lift (A0→A1) |
-| A2 | partitioned block MDAs, feed-forward, lifted coupling, **no overarching MDA**, and the deck's post-solve set executed once per run at the accepted optimum instead of once per call | the partition + post-solve hoist (A1→A2) |
+| B0 | proper flat fixed-point MDA, predicate-matched | stopping rule (R→B0) |
+| B1 | flat MDA + burn-time coupling lifted to optimiser (constraint 93) | the lift (B0→B1) |
+| B2 | partitioned block MDAs, feed-forward, lifted coupling, **no overarching MDA**, and the deck's post-solve set executed once per run at the accepted optimum instead of once per call | the partition + post-solve hoist (B1→B2) |
 
 There is no "partitioned with outer loop" bridge arm: no-outer-loop is inherent to feed-forward
 partitioning, not a separable factor — partitioned-with-receipt is not a candidate
-architecture. **A0→A2 is the headline comparison; R→A2 is the user-facing figure; A0→A1 shows
-what the lift alone does.** On `st_regression` (k = 0) A1 degenerates to A0 and is skipped.
+architecture. **B0→B2 is the headline comparison; R→B2 is the user-facing figure; B0→B1 shows
+what the lift alone does.** On `st_regression` (k = 0) B1 degenerates to B0 and is skipped.
 
 **Settings.** Optimiser settings default (comparability with reference). Same τ across arms,
 with the Phase-A similarity criterion re-applied at accepted optima.
 
 **Initial guesses (pre-declared rule).** One perturbation stream, seed-paired across all four
-arms: ±10 % (δ = 0.10) on all iteration-variable initial guesses. In A1/A2 the lifted
+arms: ±10 % (δ = 0.10) on all iteration-variable initial guesses. In B1/B2 the lifted
 variable's initial guess is **the same perturbed value the coupling would start from in
 R/A0** — the lift adds a variable, never a different starting state. (n vs n+1 iteration
 variables is part of the intervention, including its finite-difference gradient cost.)
@@ -163,8 +167,8 @@ variables is part of the intervention, including its finite-difference gradient 
 1. **Same optimum:** per-start paired |Δ norm_objf| plus the post-solve feasibility audit.
    The yardstick for a "harmless" difference is **measured inside the same campaign**: the
    R→A0 paired |Δ norm_objf| spread — the stopping-rule change's own footprint — rather than
-   an assumed state-to-objective sensitivity. Acceptance: the A0→A1 and A0→A2 paired spreads
-   are not larger than the R→A0 spread by more than the declared factor (F, §3's). The full
+   an assumed state-to-objective sensitivity. Acceptance: the B0→B1 and B0→B2 paired spreads
+   are not larger than the R→B0 spread by more than the declared factor (F, §3's). The full
    paired distributions are published either way.
 2. **Iteration multiplier:** paired per-start ratio of optimiser iterations (and of function
    evaluations), median and q1–q3 per deck. Acceptance: median paired iteration ratio
@@ -222,7 +226,7 @@ that — architecture changed performance measurably, physics untouched.
 2. **Pin instrument for Phase A pulsed decks** — revive A22's pin arm under the V2 runner:
    env-switched pin value (`PROCESS_ARCH_PIN_*`), value sourced from the perturbation stream;
    no-op when unset (switch-neutrality gated).
-3. **A2 trust-mode driver path** — partitioned `module_solve` without the outer verification
+3. **B2 trust-mode driver path** — partitioned `module_solve` without the outer verification
    loop; env-switched; the constraint-93 lift wiring exists (A25/A28). Driver scope only
    (`process/core/solver/`, `caller.py`).
 3a. **Post-solve hoist instrument (task A33)** — two pieces. *(i) The classification:* per
@@ -271,12 +275,12 @@ that — architecture changed performance measurably, physics untouched.
    median ONLY; extremes are published, never judged.
 4. **Phase A deck coverage: all three decks — CONFIRMED** (the pulsed decks carry the
    pin-value-insensitivity evidence the §5 transfer argument needs).
-5. **Anchor accuracy — OPEN.** Options: **(a)** measured from R per deck in the same
-   campaign (same instrument/starts/spec generation; the headline "at least stock
-   accuracy" becomes measured; expected magnitudes from A28's call-1 audits: 5.1e-07 /
-   9.3e-08 / 0.0) — recommended; **(b)** a number fixed now (rigid, but detached from what
-   R actually delivers under the V2 audit protocol and the a26 generation). The choice
-   changes the strength of the headline sentence, not the runs.
+5. **Anchor accuracy — RESOLVED (user, 2026-09-03): option (a).** The anchor is
+   **measured from R per deck in the same campaign** (same instrument, same starts, same
+   spec generation), with a declared sanity check afterwards: the measured anchors are
+   compared against A28's call-1 magnitudes (5.1e-07 / 9.3e-08 / 0.0) and an anchor that
+   looks wrong (orders away, or degenerate where A28 was not) is investigated before any
+   conclusion cites it.
 6. ~~A32 merge precedes execution~~ **Resolved 2026-09-03:** A32 assessed and merged
    (`637a6bb6`) — tail confirmed dissolved, driver fix gated switch-neutral.
 7. **Post-solve hoist** is part of the intervention in both phases (user decision

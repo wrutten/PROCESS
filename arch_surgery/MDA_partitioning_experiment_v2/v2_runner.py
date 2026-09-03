@@ -37,7 +37,7 @@ _ALL_ARCH_VARS = tuple(_ARCH_VARS) + (
 def deck_for(deck: str, arm: str, decks_dir: Path) -> Path:
     """A1/A2 on a pulsed deck take the derived lifted deck; everyone else the
     frozen scenario (D9: the frozen scenarios are never edited)."""
-    if arm in ("A1", "A2") and deck in cfg.PULSED:
+    if arm in ("B1", "B2") and deck in cfg.PULSED:
         return decks_dir / deck / f"{deck}_lifted.IN.DAT"
     return cfg.IDF_PROBE / "scenarios" / f"{deck}.IN.DAT"
 
@@ -85,19 +85,19 @@ def env_for(deck: str, arm: str, *, a18_machinery_smoke: bool = False) -> dict:
     env["PROCESS_ARCH_YSTATE"] = str(ystate)
     env["PROCESS_ARCH_WRITESET"] = str(writeset)
 
-    if arm == "A0":
+    if arm == "B0":
         env["PROCESS_ARCH_MODULE_SOLVE"] = "flat_state"
         return env
 
-    if arm == "A1":
-        # Flat solve + the lift, nothing else: A0 -> A1 varies the lift alone
-        # (upstream node order kept; resequencing belongs to A1 -> A2).
+    if arm == "B1":
+        # Flat solve + the lift, nothing else: B0 -> B1 varies the lift alone
+        # (upstream node order kept; resequencing belongs to B1 -> B2).
         env["PROCESS_ARCH_MODULE_SOLVE"] = "flat_state"
         if deck in cfg.PULSED:
             env["PROCESS_ARCH_LIFT"] = "burn_time"
         return env
 
-    if arm == "A2":
+    if arm == "B2":
         env["PROCESS_ARCH_SEQUENCE"] = "build_after_physics"
         env["PROCESS_ARCH_MODULE_SOLVE"] = "per_module"
         if deck in cfg.PULSED:
@@ -105,7 +105,7 @@ def env_for(deck: str, arm: str, *, a18_machinery_smoke: bool = False) -> dict:
         env["PROCESS_ARCH_HOIST"] = (
             "feedforward_lifted" if deck in cfg.PULSED else "feedforward"
         )
-        # A2 is the designed architecture: trust mode (A34) + the post-solve
+        # B2 is the designed architecture: trust mode (A34) + the post-solve
         # exclusion (A33).  The phase script refuses the arm while either
         # ledger entry is off, so reaching here with one missing is a bug,
         # not a configuration.

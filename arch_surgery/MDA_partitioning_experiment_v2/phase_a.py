@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """V2 Phase A — per-call MDA cost, no optimiser (EXPERIMENT_PLAN.md §3).
 
-FLAT vs BLOCKS at one shared τ, N = 25 seeded coupling-state perturbations
+A0 (flat) vs A1 (feed-forward blocks) at one shared τ, N = 25 seeded coupling-state perturbations
 per deck, coupling pinned on the pulsed decks, post-solve nodes absent from
 the measured call.  Stages:
 
 ``preflight``
     The instrumentation ledger.  Phase A cannot run at all until A34 lands
-    (single-MDA-eval mode for both arms; trust mode for BLOCKS; the pin for
+    (single-MDA-eval mode for both arms; trust mode for A1; the pin for
     the pulsed decks) and, on the pulsed decks, until A33's a26 write sets
     land.  Each gap refuses by task name — never a silent skip.
 ``campaign``
     Per deck: the FLAT-converged reference point, the equivalence gate
-    (BLOCKS pinned at the FLAT value must reproduce the FLAT fixed point
+    (A1 pinned at A0's converged value must reproduce A0's fixed point
     within audit resolution, teeth), then N paired single-eval runs per arm
     at seeded ±δ coupling perturbations.  Refuses while preflight refuses
     or while ``EXECUTION_APPROVED`` is False.
