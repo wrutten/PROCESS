@@ -139,3 +139,28 @@ paired iteration ratio reported (a ratio ≠ 1.000 flags search-path contaminati
 `low_aspect_ratio_DEMO` lesson); paired multi-start robustness with drop census at matched
 measured accuracy; audits at a pre-declared sample of interior calls (first + accepted), since B2's
 risk is interior accuracy feeding gradients; timings as context only; every rule pre-declared.
+
+## R10 — Phase A V2 (MDA solve only, no optimiser): the simplified two-arm design (user, 2026-09-03)
+
+**Correction to R9's accuracy story, Phase A scope:** the measured bit-exact overshoot belongs to
+the **nested** arm and is produced by its verification pass (a full extra pass of block solves
+polishing already-tiny dust to the exact fixed point). A **pure feed-forward** chain has no second
+visit: each block's dust freezes at its own ~τ exit, and the audit sees ~ρᵢ·δᵢ per block — the
+same order as the flat arm's exit. **Expectation, declared in advance: flat and feed-forward at
+one shared τ deliver similar, τ-grade accuracy.** Consequence: matched τ is an acceptable setting
+for THIS pair, with the (uncharged) exit audit as the per-point check; the envelope machinery is
+the fallback only if the audit refutes the expectation.
+
+**Arms: two.** Flat (one loop, predicate on the full state at τ) vs feed-forward blocks (three
+chained block MDAs, one shared inner τ, no outer loop). **No nested arm**: at Phase A's evaluation
+states the drift is measured dormant (A22: zero above-τ movement on pass ≥ 2 at every harvested
+point) and the audit covers exceptions for free — an outer loop would be pure receipt. The nested
+arm's remaining role is Phase-B-only (hostile states), parked.
+
+**Performance: per-node evaluation counts, with weighting-invariance bounds.** Publish n_i per
+node per arm; for any nonnegative per-node cost weighting the weighted ratio lies in
+[min_i n_B/n_F, max_i n_B/n_F] — so the count table plus that min/max pair bounds the architecture
+effect under EVERY per-node cost model, timing-free. A tight bracket proves the unweighted count
+representative; a wide one is reported with the extremal nodes named. Timings at most one
+contextual weighting inside the bracket. Evaluation points: the harvested design points, per deck,
+never pooled; audit at every point; drop census; all rules pre-declared.
