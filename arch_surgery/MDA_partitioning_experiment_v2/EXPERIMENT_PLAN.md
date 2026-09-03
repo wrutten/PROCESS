@@ -248,17 +248,35 @@ that — architecture changed performance measurably, physics untouched.
 7. **Neutrality gates** — reproduction gate per deck at the V2 driver commit (item 3 changes
    the driver, so the gate re-runs after it), teeth included.
 
-## Appendix B — Open questions for the user's review
+## Appendix B — Review decisions (user, 2026-09-03) and the one open question
 
-1. **N starts:** 25 per deck per arm (Phase B: 4 arms × 3 decks × 25 ≈ 275 optimisations
-   after the k = 0 degeneracy; order 6–10 h serial wall time by A28 experience). Acceptable,
-   or resize?
-2. **Similarity factor F = 10** on the audit medians — confirm or tighten.
-3. **Iteration-ratio acceptance ≤ 1.05** on the median — confirm.
-4. **Phase A deck coverage:** all three decks (recommended: the pin scan is the pulsed decks'
-   pin-value insensitivity evidence, needed by §5), or `st_regression` + one pulsed deck?
-5. **Anchor accuracy:** measured from R at its shipped predicate per deck (recommended), or
-   fixed numerically in advance?
+1. **N starts: 25 per deck per arm — CONFIRMED.** Declared companion rule: robustness is a
+   count of 25, so **a robustness difference of ≤ 2 starts is reported as "not resolved at
+   N = 25"**, never as a verdict (A28 precedent: one deck's verdict turned on a single
+   start and was flagged, not claimed); the affected deck may be extended (e.g. to 50) as a
+   dated amendment if a 1–2-start difference matters for the conclusion.
+2. **Similarity factor F = 10 — CONFIRMED**, for both phases, at median and p90. What it
+   bounds: the ratio of the two arms' *delivered accuracies* (each arm's own audited
+   distance-to-fixed-point), not a distance between their answers. Licensing measurement:
+   A28's at-call audits put the pathology this must catch (the receipted arm's overshoot)
+   at a **30–90×** gap, and the benign contraction-factor scale at O(1–10) — 10 separates
+   the two measured regimes. Clause: a deck where the audit reads 0.0 for every arm (as
+   `low_aspect_ratio_DEMO`'s call-1 audit did in A28) counts as trivially similar, and the
+   report says so.
+3. **Iteration-ratio median ≤ 1.05 — CONFIRMED.** Licensing measurements: A28 measured
+   paired medians of exactly 1.000/1.000 with the lift in place; and the A28-vs-A32
+   comparison (identical code, spec change only, same 25 starts) measured the noise floor —
+   **median 1.000, 16/25 pairs bit-identical, individual pairs 0.59–1.81** — so per-start
+   iteration counts are last-bit-dust-sensitive by ±80 % and the bound applies to the
+   median ONLY; extremes are published, never judged.
+4. **Phase A deck coverage: all three decks — CONFIRMED** (the pulsed decks carry the
+   pin-value-insensitivity evidence the §5 transfer argument needs).
+5. **Anchor accuracy — OPEN.** Options: **(a)** measured from R per deck in the same
+   campaign (same instrument/starts/spec generation; the headline "at least stock
+   accuracy" becomes measured; expected magnitudes from A28's call-1 audits: 5.1e-07 /
+   9.3e-08 / 0.0) — recommended; **(b)** a number fixed now (rigid, but detached from what
+   R actually delivers under the V2 audit protocol and the a26 generation). The choice
+   changes the strength of the headline sentence, not the runs.
 6. ~~A32 merge precedes execution~~ **Resolved 2026-09-03:** A32 assessed and merged
    (`637a6bb6`) — tail confirmed dissolved, driver fix gated switch-neutral.
 7. **Post-solve hoist** is part of the intervention in both phases (user decision
