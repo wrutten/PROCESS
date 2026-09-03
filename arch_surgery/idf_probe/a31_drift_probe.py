@@ -723,9 +723,36 @@ def stage_analyze(with_a0p: bool) -> int:
             "scaled_by_call_pass": a["scaled_by_call_pass"],
         }
 
+    # A28 campaign-wide census (read-only, main checkout): on how many of
+    # the 25 recorded A1' starts does the run-level moved-constant union
+    # name pf_power.srcktpm, and how do the calls-with-moved-constant
+    # counts sit against the 3+-pass tail.  The traced evidence covers two
+    # starts; this states how far the named mechanism's *fingerprint*
+    # extends across the campaign without re-running it.
+    census = {"n_starts_read": 0, "n_with_srcktpm_in_union": 0,
+              "per_start": {}}
+    for p in sorted(A28_REF_DIR.glob("start*/metrics.json")):
+        rec = json.loads(p.read_text())
+        tot = rec.get("module_solve_totals") or {}
+        hist = tot.get("outer_pass_hist") or {}
+        n3plus = sum(v for kk, v in hist.items() if int(kk) >= 3)
+        has = "pf_power.srcktpm" in (tot.get("moved_constants") or [])
+        census["n_starts_read"] += 1
+        census["n_with_srcktpm_in_union"] += bool(has)
+        census["per_start"][p.parent.name] = {
+            "srcktpm_in_moved_constant_union": has,
+            "calls_at_3plus_passes": n3plus,
+            "n_call_models_with_moved_constant": tot.get(
+                "n_call_models_with_moved_constant"),
+        }
+    summary["a28_campaign_census"] = census
+
     out = RUNS / "analysis" / "summary.json"
     out.write_text(json.dumps(summary, indent=2))
     print(f"analysis written to {out}")
+    print(f"\nA28 campaign census: srcktpm in the moved-constant union of "
+          f"{census['n_with_srcktpm_in_union']} of "
+          f"{census['n_starts_read']} recorded A1' starts")
 
     # console digest: the verdict table
     print("\ncomponents failing the pass>=2 joint test "
