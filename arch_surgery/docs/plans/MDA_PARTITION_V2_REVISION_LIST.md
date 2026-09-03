@@ -33,11 +33,23 @@ consequences:
    delivers slightly less accuracy on those calls, priced by the audit; benign;
 2. **state-dependent cross-block coupling** waking at states far from the harvest → trust-mode
    is structurally wrong on those calls.
-Identify which, per deck: per-call outer-pass counts exist in aggregate only, so this likely
-needs one instrumented re-run of a heavy-tail start recording *which components* move on
-pass ≥ 2 and *which module wrote them* (the A22 pattern). Until then, trust-mode's fallback
-design is "first call verified, or verify-on-demand"; after it, either pure one-pass or a
-declared accuracy concession.
+**Identified from artifacts (orchestrator, 2026-09-03), one confirming run pending.** The
+heavy tail is entirely `st_regression`, and the mechanism is (2) in a dormant form: a genuine
+**M2 → M1 back edge** — `physics` reads TF-coil-derived fields (`b_plasma_*_toroidal` via
+`tfcoil.ripple_b_tf_plasma_edge`, `build.r_tf_outboard_mid`) but is scheduled first, so at
+states far from self-consistency its pass-1 output is computed against stale coil values and
+pass 2 moves > τ, cascading through the coils block (`superconducting_tfcoil.a_tf_plasma_case`
+is the argmax slow mode, 22/28 ladder audits, in BOTH arms) into the ~100-field blanket/fwbs
+geometry census. At harvested states the edge carries nothing — which is why A2/A22 correctly
+measured zero cross-module movement there ("k = 1, confirmed at the harvest" meeting its
+predicted failure mode). The drift is transient (bit-exact 0 at every accepted optimum) and
+the outer loop resolves it in 1–5 extra passes on 3.2 % of calls. Consequences for R1:
+trust-mode's one-pass design is unsafe where this edge is live; the V2 options are (a) keep
+the verify pass on decks where it fires — on `st_regression` it is NOT vacuous — (b) treat
+the TF-field coupling as a second lift candidate (k = 2), or (c) price the staleness as a
+declared accuracy concession, audited per run. Confirming run (blocked on the heavy slot,
+A29): one instrumented `st_regression` `start010` recording per-call, per-pass argmax
+components and pass counts, to tie the 3+-pass calls to this edge beyond aggregates.
 
 ## Design items carried from the V1 lessons
 
