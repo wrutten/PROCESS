@@ -476,3 +476,9 @@ withdrawn — volunteered, not owed).** Two pointers that reshape the diagnostic
    encode same-pass vs next-pass timing** (their I-44), so the caveat V14 states — no back edge
    does not imply one pass suffices — is one they already hold as true for that timing class, and
    `physics.py:387/:395` reads as a textbook member of it.
+
+**V14 follow-up (2026-09-03).** On the user's instruction (*"Ensure that process_code_analysis
+parses the same scenario config as you run"*), the alignment request went to their orchestrator:
+per-deck graph exports (or a switch-conditioned liveness diff) built from our three frozen
+`IN.DAT`s, `st_regression` first. Our register V6 table was sent as the delta list, with the
+`i_tf_sup = 1` correction. Outcome to be recorded here when they answer.
