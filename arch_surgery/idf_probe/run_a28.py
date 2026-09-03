@@ -171,6 +171,11 @@ _ARCH_VARS = (
     "PROCESS_ARCH_INNER_TAU",
     "PROCESS_ARCH_YSTATE",
     "PROCESS_ARCH_WRITESET",
+    # A31 / A33: later variant points' switches are cleared here too, so an
+    # inherited one can never change what an arm measures without saying so.
+    "PROCESS_ARCH_PASS_TRACE",
+    "PROCESS_ARCH_PASS_TRACE_FULL_FROM",
+    "PROCESS_ARCH_POST_SOLVE",
 )
 
 

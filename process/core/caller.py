@@ -388,6 +388,179 @@ def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
 
 
 # --------------------------------------------------------------------------
+# VP2c (task A33, V2 plan section 1 / Appendix A item 3a) -- the post-solve
+# hoist: nodes whose outputs the optimiser never consumes leave the per-call
+# path entirely.
+#
+# VP2 (above) moves a feed-forward node out of the sweep but still runs it
+# once per optimiser evaluation.  VP2c goes further for the nodes that earn
+# it: a node whose outputs reach NO objective read, NO active-constraint read
+# and NO solve-phase model read cannot change anything the optimiser decides,
+# so running it even once per call is pure cost.  Such nodes are excluded from
+# every solve-phase sweep and executed **exactly once per run**, at the
+# accepted optimum, before the output phase begins.
+#
+# Membership is **derived, not asserted**: the committed per-deck artifact
+# ``arch_surgery/docs/data/postsolve_<scenario>.json`` is produced by
+# ``arch_surgery/idf_probe/a33_postsolve.py classify`` from the deck's
+# objective/constraint read sets (AST), the run-time write census and a
+# backward crawl of the collapsed DSM, and is validated here on load:
+#
+# * ``nodes_sha256`` must match a recomputation over the load-bearing fields,
+#   so a hand-edited artifact is refused rather than trusted;
+# * the artifact must be for THIS deck -- ``i_figure_merit`` and the active
+#   ``icc`` list are checked against the run's own numerics at first use,
+#   because another deck's exclusion list is a silently wrong answer;
+# * every listed node must exist in the committed node map as a
+#   ``_call_models_once`` call site;
+# * a node whose measured write set intersects the predicate layer's read set
+#   (the deck's objective branch plus the whole constraint layer, the same
+#   rule VP2's routing uses) is refused: that node is one the deck keeps
+#   per-call, and excluding it would hand the optimiser a stale objective or
+#   constraint vector -- the quiet wrong answer this file refuses everywhere.
+#
+# ``off`` (the variable unset) is the default and is byte-identical to the
+# behaviour without this section -- gated against A32's record (protocol
+# section 12), not asserted.
+POST_SOLVE_PATH: str | None = os.environ.get("PROCESS_ARCH_POST_SOLVE") or None
+POST_SOLVE_ENABLED: bool = POST_SOLVE_PATH is not None
+
+if POST_SOLVE_ENABLED and not Path(POST_SOLVE_PATH).exists():
+    raise RuntimeError(
+        f"PROCESS_ARCH_POST_SOLVE={POST_SOLVE_PATH!r} does not exist.  There "
+        f"is no default and no fallback: a run asked to exclude nodes must "
+        f"refuse rather than silently run everything."
+    )
+
+#: Diagnostics for the run record.  Integer counts and names only.
+POST_SOLVE_TOTALS: dict = {
+    "artifact": POST_SOLVE_PATH,
+    "nodes": None,                      # filled after validation
+    "n_call_sites_suppressed": 0,       # solve-phase _node sites skipped
+    "suppressed_by_node": {},
+    "executed_once": None,              # set by write_output_files
+    "validated": False,
+}
+
+_POST_SOLVE_CACHE: dict = {}
+
+
+def _post_solve_nodes(data) -> frozenset[str]:
+    """The validated exclusion set for this run.  Cached after first use.
+
+    Validation needs the run's own deck (figure of merit, active constraint
+    list), so it happens on the first ``call_models`` rather than at import.
+    Every check refuses loudly; none falls back.
+    """
+    cached = _POST_SOLVE_CACHE.get("nodes")
+    if cached is not None:
+        return cached
+
+    import hashlib  # noqa: PLC0415 - validation path only
+
+    record = json.loads(Path(POST_SOLVE_PATH).read_text())
+    if record.get("format") != "a33-postsolve-1":
+        raise RuntimeError(
+            f"post-solve artifact {POST_SOLVE_PATH} has format "
+            f"{record.get('format')!r}, expected 'a33-postsolve-1'."
+        )
+    nodes = list(record["post_solve_nodes"])
+
+    # (1) the artifact must rebuild its own hash: a truncated, reordered or
+    # hand-edited file is refused.
+    payload = json.dumps(
+        {
+            "scenario": record.get("scenario"),
+            "i_figure_merit": record.get("deck", {}).get(
+                "i_figure_merit_expected"
+            ),
+            "icc": record.get("deck", {}).get("icc_expected_at_runtime"),
+            "post_solve_nodes": nodes,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    rebuilt = hashlib.sha256(payload).hexdigest()
+    committed = record.get("nodes_sha256")
+    if rebuilt != committed:
+        raise RuntimeError(
+            f"post-solve artifact {POST_SOLVE_PATH} does not rebuild: "
+            f"nodes_sha256 is {rebuilt} recomputed against {committed} "
+            f"recorded in the file.  The exclusion list would not be the "
+            f"derived one."
+        )
+
+    # (2) the artifact must be for THIS deck.
+    ifm = int(data.numerics.i_figure_merit)
+    want_ifm = record["deck"]["i_figure_merit_expected"]
+    if ifm != want_ifm:
+        raise RuntimeError(
+            f"post-solve artifact {POST_SOLVE_PATH} was derived for "
+            f"i_figure_merit={want_ifm} but this run has {ifm}: wrong deck."
+        )
+    m_all = int(data.numerics.n_equality_constraints) + int(
+        data.numerics.n_inequality_constraints
+    )
+    icc = sorted(int(v) for v in data.numerics.icc[:m_all])
+    want_icc = sorted(record["deck"]["icc_expected_at_runtime"])
+    if icc != want_icc:
+        raise RuntimeError(
+            f"post-solve artifact {POST_SOLVE_PATH} was derived for the "
+            f"active constraint set {want_icc} but this run has {icc}: "
+            f"wrong deck, or the deck changed under the artifact."
+        )
+
+    # (3) every listed node must be a known _call_models_once call site.
+    if not NODE_MAP_PATH.exists():
+        raise RuntimeError(
+            f"PROCESS_ARCH_POST_SOLVE needs the committed DSM node map at "
+            f"{NODE_MAP_PATH}, which is not present."
+        )
+    known = {
+        n
+        for n, e in json.loads(NODE_MAP_PATH.read_text())["nodes"].items()
+        if e.get("in_call_models_once")
+    }
+    unknown = sorted(set(nodes) - known)
+    if unknown:
+        raise RuntimeError(
+            f"post-solve artifact {POST_SOLVE_PATH} names {unknown}, which "
+            f"are not _call_models_once call sites in the committed node map."
+        )
+
+    # (4) a node the deck keeps per-call is refused: its measured writes must
+    # not intersect what the predicate layer reads for this figure of merit.
+    scenario = record.get("scenario")
+    per_scenario = json.loads(NODE_WRITESET_PATH.read_text())["per_scenario"]
+    if scenario not in per_scenario:
+        raise RuntimeError(
+            f"post-solve artifact {POST_SOLVE_PATH} names scenario "
+            f"{scenario!r}, which has no run-time write census in "
+            f"{NODE_WRITESET_PATH}."
+        )
+    writes_by_node = per_scenario[scenario]["writes_by_node"]
+    reads = _predicate_read_fields(ifm)
+    for n in nodes:
+        overlap = sorted(set(writes_by_node.get(n, ())) & reads)
+        if overlap:
+            raise RuntimeError(
+                f"post-solve artifact {POST_SOLVE_PATH} lists {n!r}, but the "
+                f"predicate layer reads {overlap[:5]} out of its measured "
+                f"write set: this deck keeps {n!r} per-call, and excluding "
+                f"it would hand the optimiser a stale objective or "
+                f"constraint vector."
+            )
+
+    resolved = frozenset(nodes)
+    _POST_SOLVE_CACHE["nodes"] = resolved
+    POST_SOLVE_TOTALS["nodes"] = sorted(resolved)
+    POST_SOLVE_TOTALS["validated"] = True
+    POST_SOLVE_TOTALS["scenario"] = scenario
+    POST_SOLVE_TOTALS["nodes_sha256"] = committed
+    return resolved
+
+
+# --------------------------------------------------------------------------
 # VP4 (framework hook F7c) -- one flat loop, or a solve per module.
 #
 # Upstream runs the whole model sequence and tests two derived scalars for
@@ -621,6 +794,14 @@ class Caller:
         # default path.
         self._hoist_pre: frozenset[str] = frozenset()
         self._hoist_post: frozenset[str] = frozenset()
+        # VP2c (A33): the post-solve exclusion set for the current
+        # ``call_models``, or ``None`` when nothing is excluded.  ``None`` is
+        # the default and the only value the switch-off path ever sees; it is
+        # also what the output-phase and audit Callers keep, because they
+        # never enter ``call_models`` -- which is what lets the one-shot
+        # post-solve execution and the exit audit run the very nodes the
+        # solve phase excluded.
+        self._post_solve: frozenset[str] | None = None
         # VP4: the nodes the current block sweep may run, or ``None`` when the
         # whole sequence runs.  ``None`` is the default and the only value the
         # flat-loop path ever sees.
@@ -663,18 +844,30 @@ class Caller:
     def _node(self, name: str, run) -> None:
         """Run one model node now, defer it, or skip it for this block.
 
-        Three variant points meet in these five lines, and the order matters:
+        Four variant points meet in these lines, and the order matters:
 
         1. **VP4** -- when a block sweep is in progress, a node outside the
            block does not run at all.  This is checked first, so the hoist
            never collects a node during someone else's block.
-        2. **VP2** -- a node in the resolved feed-forward tail is collected
+        2. **VP2c** -- a node in the validated post-solve set does not run in
+           any solve-phase sweep at all; it runs once per run, at the accepted
+           optimum (``write_output_files``).  Checked before VP2's collection
+           so an excluded node is never gathered into the per-call tail
+           either.  ``_post_solve`` is set only inside ``call_models``, so the
+           output path and the exit audit -- which call
+           ``_call_models_once`` on their own Callers -- still run everything.
+        3. **VP2** -- a node in the resolved feed-forward tail is collected
            instead of run.  The block path never sets ``_pending``, because
            under VP4 the tail is a block of its own that runs once after the
            outer fixed point; this branch is the flat arm's.
-        3. Otherwise the node runs, and is counted.
+        4. Otherwise the node runs, and is counted.
         """
         if self._active_nodes is not None and name not in self._active_nodes:
+            return
+        if self._post_solve is not None and name in self._post_solve:
+            POST_SOLVE_TOTALS["n_call_sites_suppressed"] += 1
+            by = POST_SOLVE_TOTALS["suppressed_by_node"]
+            by[name] = by.get(name, 0) + 1
             return
         if self._pending is not None and name in self._hoist_tail:
             self._pending.append((name, run))
@@ -965,6 +1158,12 @@ class Caller:
         """
         if _idf_probe.ENABLED:
             _idf_probe.call_models_begin()
+
+        # VP2c: resolve (and on first use validate) the post-solve exclusion
+        # set.  With the switch off ``_post_solve`` stays ``None`` and nothing
+        # below this line differs.
+        if POST_SOLVE_ENABLED:
+            self._post_solve = _post_solve_nodes(self.data)
 
         # VP4: the block schedule replaces the flat loop entirely -- including
         # its predicate, which decision D14(c) requires: a per-module solver
@@ -1472,6 +1671,24 @@ def write_output_files(
     x = data.numerics.xcm[:n]
     # Call models, ensuring output mfiles are fully idempotent
     caller = Caller(models, data)
+    # VP2c (A33): the excluded nodes run exactly once per run, HERE -- after
+    # the optimiser has accepted, before any output work.  The mechanism is
+    # the block sweep: the same ``_call_models_once`` walks the same dispatch
+    # in sequence order and ``_node`` drops everything outside the set.  This
+    # is the same pattern the output path applies to every node (inject the
+    # accepted x, sweep); it is counted in ``node_calls_total`` but lands
+    # after the solve-phase counter was frozen above, so the skipped nodes'
+    # own calls are visible in the total and absent from the solve phase.
+    # ``caller`` here never enters ``call_models``, so its ``_post_solve`` is
+    # ``None`` and the exclusion does not apply to this sweep -- nor to the
+    # output phase below, which re-runs every model to MFILE idempotence
+    # exactly as upstream does.
+    if POST_SOLVE_ENABLED:
+        ps = _post_solve_nodes(data)
+        POST_SOLVE_TOTALS["executed_once"] = sorted(ps)
+        POST_SOLVE_TOTALS["executed_once_at_node_calls"] = NODE_CALLS[0]
+        if ps:
+            caller._sweep_block(x, ps)
     if runtime is not None:
         ovarre(
             constants.MFILE,
