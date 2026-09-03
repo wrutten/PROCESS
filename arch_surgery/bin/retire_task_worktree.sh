@@ -33,7 +33,16 @@ for d in "$SRC"/arch_surgery/idf_probe/runs*/ ; do
     # namespace anything not already task-scoped, so it cannot collide
     case "$name" in a[0-9]*|A[0-9]*) target="$DEST_RUNS/$name" ;;
                     *) target="$DEST_RUNS/${BRANCH%%-*}_$name" ;; esac
-    if [ -e "$target" ]; then echo "  skip (exists): $name" >&2; continue; fi
+    # NEVER skip on collision -- a skipped entry is destroyed by the forced
+    # worktree removal below.  I-15: this script's original skip-and-continue
+    # destroyed A29's entire replication tree (375 clean-commit run records)
+    # because its runs/a28 collided with the main tree's.  On collision,
+    # namespace with the task branch; if even that exists, add a timestamp.
+    if [ -e "$target" ]; then target="$DEST_RUNS/${BRANCH}_$name"; fi
+    if [ -e "$target" ]; then target="${target}_$(date +%Y%m%dT%H%M%S)"; fi
+    # symlinks into the main tree are the one thing genuinely skipped: moving
+    # them would shadow the shared recording they point at.
+    if [ -L "$e" ]; then echo "  skip (symlink): $name" >&2; continue; fi
     mkdir -p "$DEST_RUNS"; mv "$e" "$target" && moved=$((moved+1))
   done
 done
