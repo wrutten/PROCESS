@@ -319,6 +319,18 @@ def main() -> int:
         list(_subsolve.SITES) if _subsolve is not None else None
     )
 
+    # A34 (pin instrument): the pinned burn time, read from the module rather
+    # than the environment (the A3/A13/A24 pattern), with the exact value as
+    # a hex float.  ``None`` on a tree that predates the instrument and on
+    # every unpinned run.
+    result["arch_pin_burn_time_env"] = os.environ.get("PROCESS_ARCH_PIN_BURN_TIME")
+    _pin = getattr(_subsolve, "PIN_BURN_TIME", None) if _subsolve else None
+    result["arch_pin_burn_time"] = _pin
+    result["arch_pin_burn_time_hex"] = _hex(_pin)
+    result["arch_pin_enabled"] = (
+        bool(getattr(_subsolve, "PIN_ENABLED", False)) if _subsolve else None
+    )
+
     # VP4 (A25): whether the imported tree resolved a per-module solve arm, at
     # what tolerance, and against which deck's coupling-state artifact.  Read
     # from the modules, not from the environment (the A3/A13/A24 pattern).
@@ -346,6 +358,14 @@ def main() -> int:
     )
     result["arch_module_solve_flat_state"] = (
         getattr(_module_solve, "FLAT_STATE", None)
+        if _module_solve is not None
+        else None
+    )
+    # A34 (trust mode): which outer-loop policy the imported tree resolved.
+    # ``None`` on a tree that predates the variant point.
+    result["arch_outer_env"] = os.environ.get("PROCESS_ARCH_OUTER")
+    result["arch_outer_mode"] = (
+        getattr(_module_solve, "OUTER_MODE", None)
         if _module_solve is not None
         else None
     )
