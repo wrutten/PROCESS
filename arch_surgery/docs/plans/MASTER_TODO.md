@@ -235,6 +235,7 @@ and the interference analysis, is [`ARCHITECTURE_EXPERIMENT_CANDIDATES.md`](ARCH
 | A15 | **dsm-sequencing** — E3. **A3 no longer folds into it** while it is deferred | DEFERRED |
 | A16 | **convergence-predicate-audit** — E4, read-only | DEFERRED |
 | A17 | **fixed-count-scan** — E5, read-only | DEFERRED |
+| — | **experiment-v2** — from-scratch revision of the MDA partition experiment: the variant loses its outer verification loop (a ~38 % receipt, vacuous on 95.1 % of 88 930 measured calls), correctness moves to uncharged instruments, matched measured accuracy becomes the only comparison basis, and the lift gets its own arm. [`MDA_PARTITION_V2_REVISION_LIST.md`](MDA_PARTITION_V2_REVISION_LIST.md) | **PLANNED, not authorised** (user, 2026-09-03) |
 | — | **sequencing-comparison** — retired to [`deprecated/SEQUENCING_COMPARISON_EXPERIMENT.md`](deprecated/SEQUENCING_COMPARISON_EXPERIMENT.md); if revived its home is the `functional_PROCESS` programme, not this one | OUT OF SCOPE |
 
 ### Merged
