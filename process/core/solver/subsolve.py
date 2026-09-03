@@ -53,10 +53,14 @@ from __future__ import annotations
 import os
 
 __all__ = [
+    "BURN_TIME_IXC",
     "LIFTED_SITES",
     "LIFT_ENABLED",
+    "PIN_BURN_TIME",
+    "PIN_ENABLED",
     "SITES",
     "SITE_BURN_TIME",
+    "assert_burn_time_pinned",
     "is_lifted",
     "subsolve",
 ]
@@ -92,6 +96,88 @@ LIFT_ENABLED: bool = bool(LIFTED_SITES)
 def is_lifted(site: str) -> bool:
     """Whether *site*'s unknown comes from the design vector in this run."""
     return LIFT_ENABLED and site in LIFTED_SITES
+
+
+# --------------------------------------------------------------------------
+# A34 (pin instrument): the burn-time coupling held at a supplied value.
+#
+# Phase A of the V2 experiment measures the per-call MDA cost of the lifted
+# architecture **without an optimiser** (EXPERIMENT_PLAN.md section 3).  In
+# the lifted architecture the optimiser holds the burn time fixed within any
+# single evaluation; with no optimiser present, something else has to own the
+# variable.  ``PROCESS_ARCH_PIN_BURN_TIME=<float>`` is that owner: the value
+# is written into ``times.t_plant_pulse_burn`` at ``Caller`` initialisation
+# (caller.py), and nothing in the solve phase may overwrite it.
+#
+# The guarantee is structural, and it rests on the lift: with
+# ``PROCESS_ARCH_LIFT=burn_time``, ``subsolve`` returns the data-structure
+# value instead of running the model's own solve, so ``Pulse.run``'s write is
+# the identity.  Without the lift the model would overwrite the pin on the
+# first sweep and the pin would be a wish, which is why pin-without-lift is
+# an import-time error rather than a value that quietly loses.  The second
+# possible writer -- the design-vector injection at the head of every sweep
+# -- exists only on a deck that names ``ixc = 178``, and ``Caller`` refuses
+# that combination (the pin replaces the optimiser as the variable's owner;
+# two owners is a fight the sweep head would win silently).
+#
+# The guarantee is also **checked, not trusted**: ``assert_burn_time_pinned``
+# runs at the end of every model sweep and raises on any bit-level change.
+# A tripwire rather than a re-pin, deliberately -- re-forcing the value each
+# sweep would mask an unknown writer instead of naming it.
+#
+# Unset -- the default -- ``PIN_ENABLED`` is False, every call site's guard
+# is dead, and behaviour is byte-identical (gated, protocol 12; never
+# asserted).
+# --------------------------------------------------------------------------
+
+#: Iteration-variable number of the lifted burn time
+#: (``arch_surgery/docs/plans/REGISTRY_ALLOCATIONS.md``).
+BURN_TIME_IXC = 178
+
+_pin_raw = os.environ.get("PROCESS_ARCH_PIN_BURN_TIME", "").strip()
+
+#: The pinned burn time in seconds, or ``None`` (the default: no pin).
+#: Accepts a decimal literal or -- so a measured value can be passed with no
+#: round-trip loss -- a C99 hex float literal (``float.hex()`` output).
+PIN_BURN_TIME: float | None = (
+    None
+    if not _pin_raw
+    else float.fromhex(_pin_raw)
+    if _pin_raw.lower().lstrip("+-").startswith("0x")
+    else float(_pin_raw)
+)
+
+#: True when the burn time is pinned.  Guards every branch the instrument
+#: adds, so the default path is upstream's.
+PIN_ENABLED: bool = PIN_BURN_TIME is not None
+
+if PIN_ENABLED and not is_lifted(SITE_BURN_TIME):
+    raise RuntimeError(
+        f"PROCESS_ARCH_PIN_BURN_TIME={_pin_raw!r} is set without "
+        f"PROCESS_ARCH_LIFT={SITE_BURN_TIME}.  The pin's guarantee that the "
+        f"solve phase never overwrites the value rests on the lift making "
+        f"Pulse's burn-time write the identity; without it the model would "
+        f"overwrite the pin on the first sweep.  Set "
+        f"PROCESS_ARCH_LIFT={SITE_BURN_TIME}, or unset the pin."
+    )
+
+
+def assert_burn_time_pinned(data) -> None:
+    """Raise if the pinned burn time has moved.  Bit comparison, no tolerance.
+
+    Called (guarded on :data:`PIN_ENABLED`) at the end of every model sweep,
+    so an overwrite is named at the sweep that made it rather than surfacing
+    as a quietly wrong measurement.
+    """
+    v = float(data.times.t_plant_pulse_burn)
+    if v != PIN_BURN_TIME:
+        raise RuntimeError(
+            f"the pinned burn time was overwritten during the solve phase: "
+            f"PROCESS_ARCH_PIN_BURN_TIME={PIN_BURN_TIME!r} "
+            f"({PIN_BURN_TIME.hex()}) but times.t_plant_pulse_burn now holds "
+            f"{v!r} ({v.hex()}).  Some writer other than the pin owns this "
+            f"variable; that is a finding, not a condition to re-pin over."
+        )
 
 
 def subsolve(residual, x0, args, *, site: str, direct):

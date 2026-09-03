@@ -136,9 +136,11 @@ __all__ = [
     "ITERATED",
     "MODULE_SOLVE_NAME",
     "OUTER_CAP",
+    "OUTER_MODE",
     "PASS_TRACE_PATH",
     "TAU",
     "TRACE_ENABLED",
+    "TRUST_OUTER",
     "ModuleSolveFailure",
     "block_order",
     "iterated",
@@ -235,6 +237,64 @@ if ENABLED and not YSTATE_PATH:
         f"for the deck being run.  There is no default: the predicate's "
         f"scales are per-deck, and silently taking another deck's scales "
         f"would change what 'converged' means with no symptom."
+    )
+
+# --------------------------------------------------------------------------
+# A34 (trust mode): whether the outer joint predicate is evaluated at all.
+# --------------------------------------------------------------------------
+
+#: The two outer-loop policies of the block schedule.
+#:
+#: ``verify`` is the default and is the arm as A25 built it and A28/A32
+#: measured it: after each pass of the block schedule the outer joint
+#: predicate compares the whole coupling state across the pass, and the
+#: schedule repeats until that test passes (the verification receipt).
+#:
+#: ``trust`` is V2's Phase-A BLOCKS / Phase-B A2 policy
+#: (``MDA_partitioning_experiment_v2/EXPERIMENT_PLAN.md`` section 3, Appendix
+#: A item 3): the block schedule runs **exactly once** -- each block's inner
+#: solve still converges at its own inner tolerance, the feed-forward tail
+#: still runs once at the end -- and the outer joint predicate is **never
+#: evaluated**: no outer pass 2, no verification receipt.  Feed-forward
+#: partitioning asserts there is no cross-block coupling left to verify;
+#: whether that assertion holds is measured by the **uncharged exit audit**,
+#: outside the arm, not by an in-loop receipt the arm pays for.
+#:
+#: An unrecognised value is an import-time error, not a silent fallback (the
+#: A3/A13/A25 pattern: a misspelled arm that quietly runs the baseline makes a
+#: whole measurement worthless).
+_OUTER_MODES = ("verify", "trust")
+
+OUTER_MODE: str = os.environ.get("PROCESS_ARCH_OUTER", "").strip() or "verify"
+
+if OUTER_MODE not in _OUTER_MODES:
+    raise RuntimeError(
+        f"PROCESS_ARCH_OUTER={OUTER_MODE!r} is not a recognised outer-loop "
+        f"policy; expected one of {_OUTER_MODES} (or unset for 'verify')."
+    )
+
+#: True when the outer joint predicate is skipped.  Every call site guards on
+#: this, so with the variable unset the hook costs one module-attribute read
+#: per outer pass and touches nothing else -- and that neutrality is **gated**
+#: against A32's recorded start000 (protocol 12), not asserted.
+TRUST_OUTER: bool = OUTER_MODE == "trust"
+
+if TRUST_OUTER and not ENABLED:
+    raise RuntimeError(
+        "PROCESS_ARCH_OUTER=trust is set with PROCESS_ARCH_MODULE_SOLVE=off, "
+        "which has no outer loop to trust.  A switch that silently does "
+        "nothing is how an arm ends up mislabelled; unset it, or select a "
+        "block-schedule arm."
+    )
+
+if TRUST_OUTER and FLAT_STATE:
+    raise RuntimeError(
+        "PROCESS_ARCH_OUTER=trust is set with "
+        "PROCESS_ARCH_MODULE_SOLVE=flat_state, whose single block's own inner "
+        "test IS the joint test -- the single-block guard already skips the "
+        "redundant outer pass, so 'trust' has nothing left to switch off "
+        "there.  A knob that silently does nothing is how an arm ends up "
+        "mislabelled; trust mode is a per_module policy."
     )
 
 # --------------------------------------------------------------------------

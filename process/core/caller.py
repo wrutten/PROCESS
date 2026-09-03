@@ -633,6 +633,39 @@ class Caller:
         #: VP4 diagnostics for the last ``call_models`` -- block sweeps, outer
         #: passes and inner counts.  Reported, never gated on.
         self.module_solve_stats: dict | None = None
+        # A34 (pin instrument): the burn-time coupling held at the
+        # env-supplied value, written once here -- "fixed at initialisation"
+        # -- and never overwritten during the solve phase (the tripwire at the
+        # end of ``_call_models_once`` raises on any bit-level change).  With
+        # PROCESS_ARCH_PIN_BURN_TIME unset this branch is dead and nothing
+        # differs from upstream.
+        if subsolve.PIN_ENABLED:
+            self._apply_burn_time_pin()
+
+    def _apply_burn_time_pin(self) -> None:
+        """Write the pinned burn time into the data structure, refusing decks
+        that would fight over it.
+
+        The pin replaces the optimiser as the variable's owner (the lifted
+        architecture's per-call structure without an optimiser -- V2 plan
+        section 3).  A deck that names ``ixc = 178`` hands the same variable
+        to the design-vector injection at the head of every sweep, which
+        would silently overwrite the pin; two owners is a refusal, not a
+        race.
+        """
+        nums = self.data.numerics
+        n = int(nums.n_iteration_variables)
+        ixc = [int(v) for v in nums.ixc[:n]]
+        if subsolve.BURN_TIME_IXC in ixc:
+            raise RuntimeError(
+                f"PROCESS_ARCH_PIN_BURN_TIME={subsolve.PIN_BURN_TIME!r} is "
+                f"set, but this deck names ixc = {subsolve.BURN_TIME_IXC} "
+                f"(the lifted burn time), so the design-vector injection at "
+                f"the head of every sweep would overwrite the pin.  The pin "
+                f"replaces the optimiser as the variable's owner: run it on "
+                f"a deck without ixc = {subsolve.BURN_TIME_IXC}."
+            )
+        self.data.times.t_plant_pulse_burn = subsolve.PIN_BURN_TIME
 
     # -- VP2 -------------------------------------------------------------
 
@@ -868,6 +901,19 @@ class Caller:
                 # outer test would compare the same index set by the same rule;
                 # running it compares the *entry* state instead and therefore
                 # always fails once, buying one wasted sweep.
+                converged = True
+                break
+            # A34 (trust mode): with PROCESS_ARCH_OUTER=trust the schedule has
+            # now run exactly once -- every iterated block converged at its
+            # own inner tolerance -- and the outer joint predicate below is
+            # never evaluated: no outer pass 2, no verification receipt.
+            # ``outer`` stays 1, so the run record's outer_pass_hist shows
+            # {1: n} and a tally can see the mode.  Whether the feed-forward
+            # assertion held is measured by the uncharged exit audit, outside
+            # the arm.  With the variable unset TRUST_OUTER is False and this
+            # is one attribute read per outer pass -- neutrality gated against
+            # A32's record (protocol 12), not asserted.
+            if module_solve.TRUST_OUTER:
                 converged = True
                 break
             y = read(bound)
@@ -1343,6 +1389,13 @@ class Caller:
         self._node("costs", self.models.costs.run)
 
         # FISPACT and LOCA model (not used)- removed
+
+        # A34 (pin instrument): the tripwire.  A pinned burn time that any
+        # model call moved is named at the sweep that moved it -- a check,
+        # never a re-pin, because re-forcing the value would mask the writer.
+        # Dead branch with the pin unset.
+        if subsolve.PIN_ENABLED:
+            subsolve.assert_burn_time_pinned(self.data)
 
         if _idf_probe.ENABLED:
             _idf_probe.sweep_end()
