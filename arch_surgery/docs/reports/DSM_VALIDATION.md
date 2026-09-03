@@ -482,3 +482,31 @@ parses the same scenario config as you run"*), the alignment request went to the
 per-deck graph exports (or a switch-conditioned liveness diff) built from our three frozen
 `IN.DAT`s, `st_regression` first. Our register V6 table was sent as the delta list, with the
 `i_tf_sup = 1` correction. Outcome to be recorded here when they answer.
+
+**V14 follow-up 2 (2026-09-03) — the per-deck exports arrived and reshape the question.**
+Provenance: built by the sibling study at their instrument commit `bd74dacb` from deck files
+byte-identical to ours (sha256 matched both sides); frozen copies under
+`arch_surgery/idf_probe/runs/dsm_exports/` (untracked; sha256 of the graphs:
+`582b4a5f…` st, `0c3f23b7…` lad). Three results from querying the `st_regression` graph:
+1. **The user's candidate — V3's `FirstWall → Build` edge — is refuted as the carrier**, now at
+   perturbed states too: `dr_fw_inboard = 2·radius_fw_channel + 2·dr_fw_wall`, and the export
+   confirms both inputs are written **only by `COOR_SingleRun`** (the input loader). The field is
+   frozen after the first evaluation; its appearance in A28's moved census is a first-call
+   initialization artifact, once per run. V3 stands.
+2. **"Why is the link not in the collapsed DSM" now has an answer: it is there, deliberately
+   disguised.** Loop-carried (next-iteration) flow is encoded in a pseudo-node
+   `MDA_Idempotence` (absorbing `Caller`/`check_agreement`), not as collapsed-DSM cells — the
+   sibling's I-44 decision (same-pass vs next-pass timing is diagnostic, not figure). On
+   `st_regression` its coil-side writers are **named**: `Build::plasma_outboard_edge_toroidal_ripple`,
+   `CROCOSuperconductingTFCoil::stresscl`, `PFCoil::efc` — three genuine M2 → (next pass) M1
+   pathways, read by `PlasmaCurrent`, `PlasmaBootstrapCurrent`, `PlasmaInductance`, `PlasmaProfile`
+   and the physics function collections. These are the sharpened candidates for the recurring
+   3+-pass movement (the stress chain touches `a_tf_plasma_case`, our measured slow mode).
+3. **The instrument declares the mechanism-(ii) blind spot as a measured population**: its
+   `coupling_bound` note states **498 variables** are written and read by one and the same model
+   and by no other pair, and "whether such a read takes this sweep's value or the last one depends
+   on statement order inside the body, which is not measured" — excluded from the coupling set
+   rather than assumed into it. Our `physics.py:387/395` stale read is a member of exactly this
+   population. Non-idempotent models live here.
+The instrumented `start010` run now has named targets: per-call pass ≥ 2 argmax against
+{ripple, stresscl chain, efc} and the 498-population. Still queued behind A29's heavy slot.
