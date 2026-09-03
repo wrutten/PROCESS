@@ -776,6 +776,16 @@ class Caller:
         # is a block, run once after the outer fixed point.
         self._pending = None
 
+        # A31 (drift-diagnostic): the joint-test trace's call index.  With
+        # PROCESS_ARCH_PASS_TRACE unset TRACE_ENABLED is False, the index is
+        # never computed and no hook below runs — neutrality is gated against
+        # A28's recorded counts (protocol §12), not asserted.
+        trace_call = (
+            MODULE_SOLVE_TOTALS["n_call_models"] + 1
+            if module_solve.TRACE_ENABLED
+            else 0
+        )
+
         y_outer_prev = read(bound)
         block_sweeps = 0
         inner_counts: dict[str, list[int]] = {lab: [] for lab, _n, _i in schedule}
@@ -823,6 +833,15 @@ class Caller:
                     moved_constants |= {
                         spec.name(i) for i in res.moved_constant
                     }
+                    # A31: under the single-block guard the outer test below
+                    # is skipped, so THIS residual is the joint test — the
+                    # flat arm's movement lives here.  Full snapshots: the
+                    # single block has no subset in the write-set artifact.
+                    if module_solve.TRACE_ENABLED and single_block:
+                        module_solve.trace_pass(
+                            "flat_inner", trace_call, s, spec, y_prev, y,
+                            res, tau,
+                        )
                     y_prev = y
                     if res.converged(inner_tau):
                         inner_ok = True
@@ -855,6 +874,14 @@ class Caller:
             res = spec.residual(y_outer_prev, y)
             outer_trace.append(res.brief(tau))
             moved_constants |= {spec.name(i) for i in res.moved_constant}
+            # A31 (drift-diagnostic): record this joint-test evaluation —
+            # which components moved past tau across the pass, before/after
+            # as hex floats — before y_outer_prev is overwritten.
+            if module_solve.TRACE_ENABLED:
+                module_solve.trace_pass(
+                    "outer", trace_call, outer, spec, y_outer_prev, y,
+                    res, tau,
+                )
             y_outer_prev = y
             if res.converged(tau):
                 converged = True
