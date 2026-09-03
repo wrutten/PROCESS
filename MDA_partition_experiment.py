@@ -548,19 +548,41 @@ def stage_verify(args, runs_root: Path) -> int:
                 "in-loop model evaluations at tau = 1e-6, arm R",
                 pub.get("node_calls_R", {}), meas))
     acc = runs_root / "a26" / "matched_accuracy.json"
+    # A29 (replication-verify) found the original extraction here read a
+    # key (``at_the_calibration_point``) that ``accuracy.py`` has never
+    # written, swallowed the KeyError per deck, and silently dropped the
+    # whole matched-accuracy table from the verification -- so "every
+    # compared table agrees" was printed over 4 of the 5 published
+    # tables.  The calibration point is the flat arm's rung at the
+    # experiment's shared tolerance (tau = 1e-6), so the ratio is read
+    # from that row.  A deck where the row cannot be found is now
+    # reported as MISSING in the table rather than dropped without a
+    # word.  And when the artifact itself is absent (issue I-14: a
+    # worktree retirement destroyed exactly this file once), the table is
+    # still emitted, all decks MISSING, with the command that rebuilds it
+    # -- absence must be loud, for the same reason the wrong key had to
+    # be: a verification that quietly narrows its own population is the
+    # shape this project's trap T11 names.
+    meas = {}
     if acc.exists():
         d = json.loads(acc.read_text())
-        meas = {}
         for s, rec in (d.get("per_scenario") or d).items():
-            try:
-                meas[s] = rec["at_the_calibration_point"]["ratio_block_over_flat"]
-            except Exception:
-                pass
-        if meas:
-            records.append(ER.verify_table(
-                "A1/A0 at the calibration point, matched achieved accuracy",
-                pub.get("matched_accuracy_ratio", {}), meas,
-                exact=False, rtol=1e-3))
+            rows = ((rec.get("matched_accuracy") or {}).get("rows")
+                    if isinstance(rec, dict) else None) or []
+            for row in rows:
+                if row.get("flat_label") == "acc_flat_tau1e-06":
+                    meas[s] = row.get("ratio_block_over_flat")
+                    break
+            else:
+                meas[s] = None
+    else:
+        print(f"NOTE: {acc} is absent, so the matched-accuracy table below "
+              f"is all MISSING.\n      Rebuild it with:  python "
+              f"{Path(sys.argv[0]).name} --stages accuracy")
+    records.append(ER.verify_table(
+        "A1/A0 at the calibration point, matched achieved accuracy",
+        pub.get("matched_accuracy_ratio", {}), meas,
+        exact=False, rtol=1e-3))
     if not records:
         print("nothing to verify: no analysis artifacts found under "
               f"{runs_root}.  Run the experiment first.")
