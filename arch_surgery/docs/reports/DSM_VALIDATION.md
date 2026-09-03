@@ -524,3 +524,14 @@ variable, `file:line` at the study commit, and run evidence — never a question
 request to revisit a recorded decision.** A31's verdict decides whether anything further goes
 their way (only if it names a component the graph asserts and gets wrong); the non-idempotence
 outcome routes to upstream-PROCESS defect reporting instead.
+
+**V14 follow-up 3, closure (2026-09-03).** The cancellation landed in time but not free of cost:
+the sibling had already dispatched an investigation agent under their relay precedent — stopped
+two minutes in, nothing produced, zero commits, worktree removed — and their task number **M116 is
+consumed** by the mint-and-cancel, logged in their queue with our reasoning quoted. That consumed
+number is the concrete price of a premature handoff, and is why the demonstrated-defect rule above
+exists. One kernel survives on their side as a parked candidate for their user: the
+statement-order classifier splitting self-coupled reads into same-sweep / last-sweep (our
+question (b)), which they note is the engine their I-44 diagnostic would need anyway. Their
+standing position mirrors ours: variable, `file:line` at the study commit, run evidence — or
+nothing. The per-deck export lane (their D77 inspection scenarios) remains available on request.
