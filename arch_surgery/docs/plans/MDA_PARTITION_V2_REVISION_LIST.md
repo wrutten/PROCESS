@@ -215,3 +215,13 @@ declared broken and only end-to-end numbers are quoted for that deck.
 **Phase A's role under this logic:** mechanism and attribution (per-node counts, weighting bounds,
 warmth scaling, the predicted Phase B number), cheap and optimiser-noise-free; Phase B confirms
 the multiplier and the prediction. A confirming Phase B is deliberately small.
+
+**R1a — RESOLVED (A31, merged 2026-09-03, `3a75b264`).** Neither candidate: the recurring tail is
+`pf_power.srcktpm`, a harvest-constant flickering by 1–2 ULPs at hostile states under the
+predicate's exact-equality assertion on constants; nothing above τ moves on any recurring failing
+test (1,293/1,294 on the heaviest start). Both arms pay it; the flat control pays two flickering
+constants. **Under the a26-mode spec the tail dissolves by construction** (flicker scores 4.1e-16
+against τ = 1e-6) — so V2 runs on the a26-mode spec, one confirming campaign run closes it, and
+**trust-mode on `st_regression` is back on the table**. The cold-first-call staleness (once per
+run, all decks) remains the only real pass-2 phenomenon: "verify the first call, trust thereafter"
+handles it. Full record: `deprecated/A31_drift_diagnostic.md` and DSM register V14 follow-up 4.
