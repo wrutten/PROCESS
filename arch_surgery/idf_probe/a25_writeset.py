@@ -63,11 +63,25 @@ def _git_head() -> str | None:
         return None
 
 
-def build(scenario: str, probe_runs: Path) -> dict:
+def build(scenario: str, probe_runs: Path, *, spec_variant: str | None = None) -> dict:
+    """``spec_variant`` selects which committed ystate generation to pair with.
+
+    ``None`` (the default) reads ``ystate_<scenario>.json`` and reproduces the
+    original artifact byte-for-byte from the same probe census.  A variant name
+    (e.g. ``"a26"``) reads ``ystate_<variant>_<scenario>.json`` instead: the
+    subsets are the same measurement — the write census does not depend on the
+    spec's categorisation — but the artifact is stamped against that
+    generation's ``components_sha256``, which is what ``load_subsets``'s
+    pairing check requires.
+    """
     node_map = json.loads((DATA / "dsm_node_map.json").read_text())
     nodes = node_map["nodes"]
 
-    ystate = json.loads((DATA / f"ystate_{scenario}.json").read_text())
+    ystate_name = (
+        f"ystate_{scenario}.json" if spec_variant is None
+        else f"ystate_{spec_variant}_{scenario}.json"
+    )
+    ystate = json.loads((DATA / ystate_name).read_text())
     y_keys = [c["key"] for c in ystate["components"]]
     y_index = {k: i for i, k in enumerate(y_keys)}
 
@@ -121,9 +135,16 @@ def build(scenario: str, probe_runs: Path) -> dict:
             h.update(b"|")
             h.update(k.encode())
 
-    return {
+    rec_head = {
         "format": "a25-writeset-1",
         "scenario": scenario,
+    }
+    if spec_variant is not None:
+        # Disclosed provenance for a non-default generation; omitted for the
+        # default so regenerating the original artifact stays byte-identical.
+        rec_head["spec_variant"] = spec_variant
+        rec_head["ystate_artifact"] = ystate_name
+    return rec_head | {
         "generated_by": "arch_surgery/idf_probe/a25_writeset.py",
         "derived_from": (
             "PROCESS_IDF_PROBE=modules write census over a baseline run of "
@@ -157,6 +178,10 @@ def main() -> int:
     ap.add_argument("--probe-runs", required=True)
     ap.add_argument("--out", default=str(DATA))
     ap.add_argument("--scenarios", nargs="*", default=SCENARIOS)
+    ap.add_argument("--spec-variant", default=None,
+                    help="pair against ystate_<variant>_<scenario>.json and "
+                         "write writeset_<variant>_<scenario>.json (default: "
+                         "the original ystate_<scenario>.json generation)")
     args = ap.parse_args()
 
     out = Path(args.out).resolve()
@@ -164,8 +189,10 @@ def main() -> int:
     probe_runs = Path(args.probe_runs).resolve()
 
     for s in args.scenarios:
-        rec = build(s, probe_runs)
-        (out / f"writeset_{s}.json").write_text(json.dumps(rec, indent=2))
+        rec = build(s, probe_runs, spec_variant=args.spec_variant)
+        name = (f"writeset_{s}.json" if args.spec_variant is None
+                else f"writeset_{args.spec_variant}_{s}.json")
+        (out / name).write_text(json.dumps(rec, indent=2))
         c = rec["census"]
         print(
             f"{s:24s} by module {c['n_by_module']}  covered "

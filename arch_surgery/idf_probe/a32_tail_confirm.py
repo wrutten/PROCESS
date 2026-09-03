@@ -1,98 +1,92 @@
 #!/usr/bin/env python
-"""A32 (tail-confirm): run the confirming campaign A31 left derived -- and
-report why it cannot run on the committed driver.
+"""A32 (tail-confirm): run the confirming campaign A31 left derived.
 
 The task
 --------
 A31 (drift-diagnostic) named the mechanism behind ``st_regression``'s
 recurring 3rd-7th-outer-pass tail (A28: 2 802 of 54 480 ``A1'`` calls at
 3+ passes): the A18-mode coupling-state spec asserts **exact equality** on
-the harvest-constant ``pf_power.srcktpm``, which flickers by 1-2 ULPs at
-hostile states.  Under the committed a26-mode spec
-(``arch_surgery/docs/data/ystate_a26_st_regression.json``, ``srcktpm``
-reclassified continuous at scale 1106.688) the flicker scores 4.11e-16
-against tau = 1e-6, so the tail should dissolve.  A32 was to demonstrate
-that end-to-end: all 25 ``A1'`` starts plus the three heaviest ``A0'``
+harvest-constants (``pf_power.srcktpm`` and the blanket geometry family),
+which flicker by 1-2 ULPs at hostile states.  Under the committed a26-mode
+spec (``arch_surgery/docs/data/ystate_a26_st_regression.json``, those
+components reclassified continuous with measured scales) the flicker
+scores ~4e-16 against tau = 1e-6, so the tail should dissolve.  A32
+demonstrates that end-to-end: all 25 ``A1'`` starts plus three ``A0'``
 starts, everything exactly A28's machinery except ``PROCESS_ARCH_YSTATE``
-pointing at the a26-mode spec.
+(and, forced by it, ``PROCESS_ARCH_WRITESET``) pointing at the a26-mode
+generation.
 
-The result (stage ``preflight``): **the campaign cannot start.**  The
-committed driver refuses the a26-mode artifact before a single model runs,
-for two independent reasons, and lifting either requires a change under
-``process/`` -- which this task is forbidden to make ("no process/ change
-of any kind ... if you find you do, stop and report").  This script
-therefore demonstrates the blocker reproducibly instead of working around
-it (a failed gate is a result, not an obstacle):
+History: the blocker (found and demonstrated at ``e8915f40``)
+-------------------------------------------------------------
+The campaign could not start on the driver as first committed, for two
+independent reasons, both validation checks doing exactly what they were
+built to do -- refuse a spec/write-set pairing nobody had generated:
 
-**B1 -- the spec loader rebuilds every artifact as SPEC_MODE_A18.**
-``process/core/solver/module_solve.py`` (``load_spec``) constructs
+**B1 -- the spec loader rebuilt every artifact as SPEC_MODE_A18.**
+``process/core/solver/module_solve.py`` (``load_spec``) constructed
 ``YSpec(keys, category, scale, n, comps)`` with no ``mode`` and no
-``scale_floor``, so the rebuilt spec hashes its components *without* the
+``scale_floor``, so the rebuilt spec hashed its components *without* the
 mode preamble that ``arch_surgery/fixedpoint/ystate.py``'s
-``components_sha256`` prepends for any non-A18 mode
-(``mode=a26|floor=0x1.0000000000000p+0\\n``).  The a26 artifact's committed
-``components_sha256`` includes that preamble, the A18-style rebuild does
-not, the two can never match, and ``load_spec`` raises "ystate artifact
-... does not rebuild".  No a26-mode artifact has ever been loaded by the
-in-tree driver: A26's SPEC_MODE_A26 measurements ran through
-``arch_surgery/fixedpoint/replay.py``, which builds its specs offline via
-``YSpec.from_harvest(mode=...)`` and only cross-checks the committed
-record.
+``components_sha256`` prepends for any non-A18 mode.  The a26 artifact's
+committed sha includes that preamble, the A18-style rebuild does not, and
+``load_spec`` raised "ystate artifact ... does not rebuild".  No a26-mode
+artifact had ever been loaded by the in-tree driver: A26's SPEC_MODE_A26
+measurements ran through ``arch_surgery/fixedpoint/replay.py``, offline.
 
-**B2 -- there is no a26-generation write-set artifact.**
+**B2 -- there was no a26-generation write-set artifact.**
 ``load_subsets`` (same file) refuses any write set whose
-``ystate_components_sha256`` differs from the loaded spec's --
-deliberately: "the two artifacts are not from the same deck and
-generation".  The only committed write set for this deck,
-``writeset_st_regression.json``, pins the A18 generation, and the
-committed generator (``a25_writeset.py``) is hard-wired to
-``ystate_<scenario>.json``.  Even with B1 fixed, the run refuses here.
+``ystate_components_sha256`` differs from the loaded spec's; the only
+committed write set pinned the A18 generation.
 
-Neither blocker is a defect in what it guards: both checks are doing
-exactly what they were built to do -- refuse a spec/write-set pairing
-nobody has generated.  The missing piece is (i) one line in ``load_spec``
-passing the record's ``spec_mode`` and ``scale_floor`` through to
-``YSpec`` (provably neutral for A18-mode artifacts: ``mode`` enters only
-the sha preamble and the serialisation, never the residual -- but that is
-to be *gated* per protocol 12 after the change, not asserted here), and
-(ii) an a26-generation write set (same subsets -- the module write sets do
-not depend on the spec's categorisation -- re-stamped against the a26
-spec's sha).  Both need the user's authorisation.
+Both were lifted in the follow-up commit on this branch, under the
+driver-scope rule (CLAUDE.md: ``process/core/solver/`` changes by
+default; the physics under ``process/models/`` untouched): ``load_spec``
+now passes the record's own ``spec_mode`` and ``scale_floor`` through to
+``YSpec`` (an A18 artifact takes the byte-identical path -- **gated**, not
+asserted, by re-running the ``gate`` stage on the fixed driver), and
+``a25_writeset.py --spec-variant a26`` generated
+``writeset_a26_st_regression.json`` from the same probe census that
+reproduces the committed A18 write set exactly (every field but
+``tree_git_head``) as its control.  The same pairing gap exists for the
+a26 artifacts of the other three decks; V2 owns those.
 
 Stages (protocol 15: every published number comes from executing this
 committed script; failure paths are reachable from the same entry point)
 ------------------------------------------------------------------------
 ``gate``
-    The brief's protocol-12 reproduction gate, run even though the
-    campaign it licenses cannot start: one **A18-mode** ``A1'`` run at
-    start000, exactly A28's configuration (via A31's proven recipe), must
-    reproduce A28's recorded start000 bit-for-bit on three exact fields --
-    ``node_calls_solve_phase`` 37312, ``outer_pass_hist`` {1:9, 2:560,
-    3:1}, ``norm_objf`` hex.  Teeth: each field's comparator perturbed by
-    the smallest registrable amount must trip.  This isolates the blocker:
-    the harness is fine, the spec loader is the whole of what is missing.
+    The protocol-12 reproduction gate, now doing double duty: one
+    **A18-mode** ``A1'`` run at start000, exactly A28's configuration,
+    must reproduce A28's recorded start000 bit-for-bit on three exact
+    fields -- ``node_calls_solve_phase`` 37312, ``outer_pass_hist``
+    {1:9, 2:560, 3:1}, ``norm_objf`` hex -- **on the fixed driver**, which
+    gates the B1 change's switch-neutrality for A18-mode runs.  Teeth:
+    each field's comparator perturbed by the smallest registrable amount
+    must trip.
 ``preflight``
-    The blocker, demonstrated four ways, all recorded in
-    ``runs/a32/preflight/blocker.json``:
-    (a) both committed spec artifacts rebuilt in-process through
-    ``fixedpoint/ystate.YSpec`` under both modes, ``components_sha256``
-    per (artifact, mode) -- showing exactly which hash the loader computes
-    and which the artifact carries;
-    (b) the write-set pairing: the committed write set's recorded
-    ``ystate_components_sha256`` against both specs;
-    (c) ``module_solve.load_spec`` called in a fresh subprocess under the
-    **exact campaign environment** (``run_a28.env_for``, ``PYTHONPATH``
-    pinned, tree asserted -- traps T6/T10) on the A18 artifact (control:
-    must load) and on the a26 artifact (must refuse, error captured);
-    (d) one full campaign-style ``A1'`` start000 run attempted under the
-    a26 spec -- the campaign's own first run, refusing at spec load with
-    no model evaluated.
-``campaign`` / ``a0p``
-    Refuse with the blocker message while ``preflight`` finds B1 standing.
-    They are the failure path made reachable, not stubs to be filled by
-    editing this docstring's verdict away: when the driver change is
-    authorised and merged, the follow-up task extends these stages and
-    re-gates.
+    The loadability record, kept as the campaign's precondition: sha
+    rebuilds under both modes, both write-set pairings, ``load_spec`` in
+    fresh subprocesses under the exact campaign environment, and (full
+    mode) one campaign-style ``A1'`` start000 run under the a26 spec.
+    While the blocker stood this demonstrated it four ways (the committed
+    record at ``e8915f40``); on the fixed driver it must come back CLEAR.
+``campaign``
+    All 25 ``A1'`` starts (A28's exact enumeration: seed = k,
+    delta = 0.10) under the a26-mode spec, then the tally.
+``a0p``
+    The three ``A0'`` starts heaviest in A28's records by the flat arm's
+    own flicker signature.  The flat arm shows **no** 3+-pass tail
+    anywhere in A28 (0 of 57 030 calls) -- its flicker appears as the
+    moved-constant counter (13 817 of 57 030 calls) -- so these runs
+    confirm THAT collapses, not a pass histogram.
+``traced``
+    One ``A1'`` run at start010 (A28's heaviest tail, 858 calls at 3+
+    passes) with A31's env-switched pass trace on, under the a26 spec:
+    per-call outer-pass counts from the trace verify BY CALL INDEX that
+    any surviving 3+-pass call is the cold first call, and name what its
+    extra pass converged.
+``tally``
+    Re-derive the comparison tables from the run records on disk (also
+    run automatically at the end of ``campaign`` / ``a0p``).
 
 Isolation: every PROCESS run is a fresh subprocess in its own working
 directory, ``PYTHONPATH`` pinned to this worktree and the exact tree
@@ -124,7 +118,8 @@ from a31_drift_probe import gate_compare, gate_extract, gate_teeth  # noqa: E402
 #: The main checkout: A28's recorded metrics live there and are read,
 #: never written.
 MAIN = Path("/home/wrutten/projects/PROCESS_surgery")
-A28_REF_DIR = MAIN / "arch_surgery/idf_probe/runs/a28/h5/st_regression/A1p"
+A28_REF = MAIN / "arch_surgery/idf_probe/runs/a28/h5/st_regression"
+A28_REF_DIR = A28_REF / "A1p"
 
 SCENARIO = "st_regression"
 #: D15's calibrated perturbation size, exactly as the A28 campaign ran it.
@@ -133,6 +128,22 @@ DELTA = 0.10
 YSTATE_A18 = DATA / f"ystate_{SCENARIO}.json"
 YSTATE_A26 = DATA / f"ystate_a26_{SCENARIO}.json"
 WRITESET = DATA / f"writeset_{SCENARIO}.json"
+#: The a26-generation write set (B2's fix): same measured subsets as the A18
+#: generation -- regenerated by ``a25_writeset.py --spec-variant a26`` from
+#: the same probe census, which reproduces the committed A18 artifact exactly
+#: (every field but ``tree_git_head``) as its control -- stamped against the
+#: a26 spec's ``components_sha256`` so ``load_subsets``'s pairing check holds.
+WRITESET_A26 = DATA / f"writeset_a26_{SCENARIO}.json"
+
+#: All 25 campaign starts, exactly A28's enumeration (``jobs_campaign``:
+#: seed = k, delta = DELTA for every k including 0).
+A1P_STARTS = tuple(range(25))
+#: The flat arm shows **no** 3+-pass tail anywhere in A28's records (0 of
+#: 57 030 calls) -- its share of the flicker appears as the moved-constant
+#: counter instead (13 817 of 57 030 calls with >= 1 moved constant).  The
+#: three A0' starts are therefore the heaviest by THAT phenomenon in A28's
+#: records: start009 (3 868), start010 (3 637), start012 (1 588).
+A0P_STARTS = (9, 10, 12)
 
 
 # --------------------------------------------------------------------------
@@ -147,6 +158,7 @@ def run_one_a32(
     seed: int,
     delta: float | None,
     ystate: Path,
+    trace: bool = False,
     timeout: int = 5400,
 ) -> dict:
     """One isolated run, the A28 way, with the coupling-state spec explicit.
@@ -154,11 +166,12 @@ def run_one_a32(
     Mirrors ``a31_drift_probe.run_one_a31`` (which the A31 neutrality gate
     proved reproduces A28 bit-for-bit) with two deliberate differences:
     ``PROCESS_ARCH_YSTATE`` is set from the ``ystate`` argument -- the one
-    experimental variable of this task -- and no trace is taken (A28's
-    campaign ran untraced).  The exit audit stays on the **A18** artifact
-    for every run, a26 runs included: it is the yardstick A28's recorded
-    exit residuals were measured with, and changing it would change the
-    ruler alongside the thing being measured.
+    experimental variable of this task -- and the campaign runs untraced as
+    A28's did (``trace`` exists only for the ``traced`` diagnostic stage).
+    The exit audit stays on the **A18** artifact for every run, a26 runs
+    included: it is the yardstick A28's recorded exit residuals were
+    measured with, and changing it would change the ruler alongside the
+    thing being measured.
     """
     if outdir.exists():
         shutil.rmtree(outdir)
@@ -180,6 +193,12 @@ def run_one_a32(
     env.pop("PROCESS_ARCH_PASS_TRACE", None)
     env.pop("PROCESS_ARCH_PASS_TRACE_FULL_FROM", None)
     env["PROCESS_ARCH_YSTATE"] = str(ystate)
+    if ystate == YSTATE_A26:
+        # load_subsets refuses a write set from another spec generation, so
+        # an a26-spec run must carry the a26-generation write set (B2).
+        env["PROCESS_ARCH_WRITESET"] = str(WRITESET_A26)
+    if trace:
+        env["PROCESS_ARCH_PASS_TRACE"] = str(outdir / "pass_trace.jsonl")
     t0 = time.perf_counter()
     try:
         proc = subprocess.run(
@@ -204,6 +223,7 @@ def run_one_a32(
     rec["a32_delta"] = delta
     rec["a32_seed"] = seed
     rec["a32_ystate"] = str(ystate)
+    rec["a32_traced"] = trace
     mpath.write_text(json.dumps(rec, indent=2))
     wall = time.perf_counter() - t0
     print(f"  {arm} seed={seed} ystate={ystate.name} rc={rc} {wall:6.1f}s "
@@ -214,12 +234,18 @@ def run_one_a32(
 
 
 # --------------------------------------------------------------------------
-# stage: gate (the brief's protocol-12 reproduction gate, A18 mode)
+# stage: gate (the protocol-12 reproduction gate, A18 mode, fixed driver)
 # --------------------------------------------------------------------------
 
 
 def stage_gate() -> int:
-    """A18-mode A1' start000 must reproduce A28's record bit-for-bit."""
+    """A18-mode A1' start000 must reproduce A28's record bit-for-bit.
+
+    On the fixed driver this is the switch-neutrality gate for the B1
+    change: ``load_spec`` now passes ``spec_mode``/``scale_floor`` through,
+    and an A18 artifact must take the byte-identical path.  If any field
+    moves, the campaign does not run -- that failure is the result.
+    """
     outdir = RUNS / "gate" / "A1p_start000"
     r = run_one_a32("A1p", outdir, seed=0, delta=DELTA, ystate=YSTATE_A18)
     ref_path = A28_REF_DIR / "start000" / "metrics.json"
@@ -244,7 +270,7 @@ def stage_gate() -> int:
 
 
 # --------------------------------------------------------------------------
-# stage: preflight (the blocker, demonstrated)
+# stage: preflight (the campaign's precondition; the blocker's record)
 # --------------------------------------------------------------------------
 
 
@@ -262,8 +288,8 @@ def _rebuild_shas(artifact: Path, ys) -> dict:
 
     This is the project's own hash (``YSpec.components_sha256``), not a
     re-implementation: the artifact's component list is fed to ``YSpec``
-    once per mode, exactly as ``module_solve.load_spec`` would (mode a18,
-    its hard default) and as a mode-aware loader would (the artifact's own
+    once per mode, exactly as the old mode-blind loader would (mode a18)
+    and as the fixed mode-aware loader does (the artifact's own
     ``spec_mode`` and ``scale_floor``).
     """
     rec = json.loads(artifact.read_text())
@@ -288,7 +314,8 @@ def _rebuild_shas(artifact: Path, ys) -> dict:
         )
         out[f"rebuilt_as_{mode}"] = spec.components_sha256()
     out["loader_rebuild_matches_artifact"] = (
-        out["rebuilt_as_a18"] == out["committed_components_sha256"]
+        out[f"rebuilt_as_{rec.get('spec_mode', 'a18')}"]
+        == out["committed_components_sha256"]
     )
     out["mode_aware_rebuild_matches_artifact"] = (
         out[f"rebuilt_as_{rec.get('spec_mode')}"]
@@ -325,6 +352,8 @@ def _subprocess_load_spec(ystate: Path, outdir: Path) -> dict:
     """``module_solve.load_spec`` under the exact campaign environment."""
     env = env_for(SCENARIO, "A1p", RUNS, TAU, None)
     env["PROCESS_ARCH_YSTATE"] = str(ystate)
+    if ystate == YSTATE_A26:
+        env["PROCESS_ARCH_WRITESET"] = str(WRITESET_A26)
     proc = subprocess.run(
         [sys.executable, "-c", _SUBPROC_LOAD_SPEC, str(TREE)],
         env=env, capture_output=True, text=True, cwd=str(outdir),
@@ -340,7 +369,10 @@ def _subprocess_load_spec(ystate: Path, outdir: Path) -> dict:
     return rec
 
 
-def stage_preflight() -> int:
+def stage_preflight(quick: bool = False) -> int:
+    """``quick=True`` skips (d), the full campaign-style run -- used by the
+    campaign stages as their precondition so probes (a)-(c) still guard
+    every run without paying a whole extra solve each time."""
     outdir = RUNS / "preflight"
     outdir.mkdir(parents=True, exist_ok=True)
     ys = _ystate_module()
@@ -352,7 +384,8 @@ def stage_preflight() -> int:
         "a26": _rebuild_shas(YSTATE_A26, ys),
     }
 
-    # (b) the write-set pairing
+    # (b) the write-set pairings: the A18 generation's (A28's), and the a26
+    # generation's (B2's fix; absent while B2 stood)
     ws = json.loads(WRITESET.read_text())
     writeset = {
         "path": str(WRITESET),
@@ -366,38 +399,61 @@ def stage_preflight() -> int:
             == shas["a26"]["committed_components_sha256"]
         ),
     }
+    if WRITESET_A26.exists():
+        ws26 = json.loads(WRITESET_A26.read_text())
+        writeset_a26 = {
+            "path": str(WRITESET_A26),
+            "exists": True,
+            "ystate_components_sha256": ws26.get("ystate_components_sha256"),
+            "pairs_with_a26_spec": (
+                ws26.get("ystate_components_sha256")
+                == shas["a26"]["committed_components_sha256"]
+            ),
+            "subsets_identical_to_a18_generation": (
+                ws26.get("subsets") == ws.get("subsets")
+            ),
+        }
+    else:
+        writeset_a26 = {"path": str(WRITESET_A26), "exists": False,
+                        "pairs_with_a26_spec": False}
 
     # (c) load_spec in a fresh subprocess under the exact campaign env
     load_a18 = _subprocess_load_spec(YSTATE_A18, outdir)
     load_a26 = _subprocess_load_spec(YSTATE_A26, outdir)
 
-    # (d) the campaign's own first run, attempted under the a26 spec
-    attempt = run_one_a32(
-        "A1p", outdir / "A1p_start000_a26_attempt",
-        seed=0, delta=DELTA, ystate=YSTATE_A26,
-    )
-    # run_one.py catches the crash and stamps its traceback into
-    # metrics.json (status "crashed"); stderr carries nothing.
-    attempt_metrics = json.loads(
-        (Path(attempt["outdir"]) / "metrics.json").read_text()
-    )
-    tb = attempt_metrics.get("traceback") or ""
-    attempt["status"] = attempt_metrics.get("status")
-    attempt["refused_at_spec_load"] = (
-        "module_solve.load_spec()" in tb and "does not rebuild" in tb
-    )
-    attempt["zero_models_evaluated"] = (
-        attempt_metrics.get("node_calls_solve_phase") is None
-        and attempt_metrics.get("n_model_calls") is None
-    )
-    attempt["traceback_tail"] = tb[-1200:]
-
     b1_standing = not load_a26.get("loaded", False)
-    b2_standing = not writeset["pairs_with_a26_spec"]
+    b2_standing = not writeset_a26["pairs_with_a26_spec"]
+
+    # (d) the campaign's own first run under the a26 spec -- the refused
+    # attempt while the blocker stood; a full solve once lifted
+    attempt: dict | None = None
+    if not quick:
+        attempt = run_one_a32(
+            "A1p", outdir / "A1p_start000_a26_attempt",
+            seed=0, delta=DELTA, ystate=YSTATE_A26,
+        )
+        # run_one.py catches a crash and stamps its traceback into
+        # metrics.json (status "crashed"); stderr carries nothing.
+        attempt_metrics = json.loads(
+            (Path(attempt["outdir"]) / "metrics.json").read_text()
+        )
+        tb = attempt_metrics.get("traceback") or ""
+        attempt["status"] = attempt_metrics.get("status")
+        attempt["refused_at_spec_load"] = (
+            "module_solve.load_spec()" in tb and "does not rebuild" in tb
+        )
+        attempt["zero_models_evaluated"] = (
+            attempt_metrics.get("node_calls_solve_phase") is None
+            and attempt_metrics.get("n_model_calls") is None
+        )
+        attempt["traceback_tail"] = tb[-1200:]
+
     record = {
         "preflight": "A32 a26-mode spec loadability (the campaign's precondition)",
+        "quick": quick,
         "component_sha256_rebuilds": shas,
         "writeset_pairing": writeset,
+        "writeset_a26_pairing": writeset_a26,
         "load_spec_subprocess_a18_control": load_a18,
         "load_spec_subprocess_a26": load_a26,
         "campaign_first_run_attempt_a26": attempt,
@@ -418,38 +474,206 @@ def stage_preflight() -> int:
 
 
 # --------------------------------------------------------------------------
-# stages: campaign / a0p (refuse while the blocker stands)
+# stages: campaign / a0p (the confirming runs) and tally (the comparison)
 # --------------------------------------------------------------------------
 
 _BLOCKED_MSG = (
-    "A32's campaign is blocked: the committed driver cannot load the "
-    "a26-mode spec (see runs/a32/preflight/blocker.json, and the report "
-    "arch_surgery/docs/reports/A32_tail_confirm.md).  Lifting the blocker "
-    "requires a change under process/ (module_solve.load_spec must pass "
-    "the record's spec_mode and scale_floor through to YSpec) plus an "
-    "a26-generation write-set artifact -- both need the user's "
-    "authorisation.  This stage refuses rather than working around a "
-    "validation check (a failed gate is a result, not an obstacle)."
+    "A32's campaign is blocked: the driver cannot load the a26-mode spec "
+    "or its write set (see runs/a32/preflight/blocker.json and the report "
+    "arch_surgery/docs/reports/A32_tail_confirm.md).  This stage refuses "
+    "rather than working around a validation check (a failed gate is a "
+    "result, not an obstacle)."
 )
 
 
+def _tail3(hist: dict | None) -> int:
+    return sum(v for k, v in (hist or {}).items() if int(k) >= 3)
+
+
+def _extract(metrics: dict) -> dict:
+    t = metrics.get("module_solve_totals") or {}
+    return {
+        "status": metrics.get("status"),
+        "hist": t.get("outer_pass_hist"),
+        "tail3": _tail3(t.get("outer_pass_hist")),
+        "n_call_models": t.get("n_call_models"),
+        "n_moved_constant_calls": t.get("n_call_models_with_moved_constant"),
+        "moved_constants": t.get("moved_constants"),
+        "block_sweeps": t.get("block_sweeps"),
+        "node_calls_solve_phase": metrics.get("node_calls_solve_phase"),
+        "norm_objf_hex": (metrics.get("exact") or {}).get("norm_objf"),
+    }
+
+
+def _tally_arm(arm: str, starts, rundir: Path) -> dict:
+    """Per-start comparison of the a26-spec runs against A28's records.
+
+    Every start requested is a row whether or not its run produced metrics
+    (trap T11: the denominator never shrinks silently).
+    """
+    rows = []
+    for k in starts:
+        name = f"start{k:03d}"
+        ref = _extract(json.loads(
+            (A28_REF / arm / name / "metrics.json").read_text()))
+        mpath = rundir / name / "metrics.json"
+        got = (_extract(json.loads(mpath.read_text())) if mpath.exists()
+               else {"status": "missing", "hist": None, "tail3": None,
+                     "n_call_models": None, "n_moved_constant_calls": None,
+                     "moved_constants": None, "block_sweeps": None,
+                     "node_calls_solve_phase": None, "norm_objf_hex": None})
+        rows.append({
+            "start": name,
+            "a28": {k2: v for k2, v in ref.items() if k2 != "moved_constants"},
+            "a32": {k2: v for k2, v in got.items() if k2 != "moved_constants"},
+            "a32_moved_constants": got.get("moved_constants"),
+            "norm_objf_hex_equal": (
+                ref["norm_objf_hex"] is not None
+                and ref["norm_objf_hex"] == got["norm_objf_hex"]
+            ),
+        })
+    ok = [r for r in rows if r["a32"]["status"] == "ok"]
+    totals = {
+        "n_starts": len(rows),
+        "n_ok": len(ok),
+        "statuses": sorted({str(r["a32"]["status"]) for r in rows}),
+        "a28_tail3_total": sum(r["a28"]["tail3"] for r in rows),
+        "a28_call_models_total": sum(r["a28"]["n_call_models"] or 0
+                                     for r in rows),
+        "a32_tail3_total": sum(r["a32"]["tail3"] or 0 for r in ok),
+        "a32_call_models_total": sum(r["a32"]["n_call_models"] or 0
+                                     for r in ok),
+        "a28_moved_constant_calls_total": sum(
+            r["a28"]["n_moved_constant_calls"] or 0 for r in rows),
+        "a32_moved_constant_calls_total": sum(
+            r["a32"]["n_moved_constant_calls"] or 0 for r in ok),
+        "n_norm_objf_hex_equal": sum(1 for r in ok if r["norm_objf_hex_equal"]),
+    }
+    return {"arm": arm, "rows": rows, "totals": totals}
+
+
+def stage_tally() -> int:
+    summary: dict = {"tau": TAU, "delta": DELTA, "ystate": str(YSTATE_A26)}
+    out = []
+    camp = RUNS / "campaign" / "A1p"
+    if camp.exists():
+        t = _tally_arm("A1p", A1P_STARTS, camp)
+        summary["A1p"] = t
+        out.append(("A1p", t["totals"]))
+    a0p = RUNS / "a0p" / "A0p"
+    if a0p.exists():
+        t = _tally_arm("A0p", A0P_STARTS, a0p)
+        summary["A0p"] = t
+        out.append(("A0p", t["totals"]))
+    if not out:
+        print("no campaign or a0p runs found -- run those stages first")
+        return 1
+    (RUNS / "campaign_summary.json").write_text(json.dumps(summary, indent=2))
+    for arm, tt in out:
+        print(f"\n{arm}: {tt['n_ok']}/{tt['n_starts']} runs ok "
+              f"(statuses {tt['statuses']})")
+        print(f"  3+-pass calls   A28 {tt['a28_tail3_total']:6d} / "
+              f"{tt['a28_call_models_total']}   ->   a26-spec "
+              f"{tt['a32_tail3_total']:6d} / {tt['a32_call_models_total']}")
+        print(f"  moved-constant  A28 {tt['a28_moved_constant_calls_total']:6d}"
+              f" / {tt['a28_call_models_total']}   ->   a26-spec "
+              f"{tt['a32_moved_constant_calls_total']:6d} / "
+              f"{tt['a32_call_models_total']}")
+        print(f"  norm_objf hex-equal to A28: {tt['n_norm_objf_hex_equal']}"
+              f"/{tt['n_ok']} (bit-exactness is NOT expected across a spec "
+              f"change; differences are reported, not judged, here)")
+    print(f"\nsummary written to {RUNS / 'campaign_summary.json'}")
+    return 0
+
+
 def stage_campaign() -> int:
-    if stage_preflight() != 0:
+    if stage_preflight(quick=True) != 0:
         print(f"\n{_BLOCKED_MSG}")
         return 3
-    raise SystemExit(
-        "preflight is CLEAR: the blocker has been lifted since this script "
-        "was written.  The campaign stage was deliberately not implemented "
-        "on an untestable path -- extend it (all 25 A1' starts + A0' "
-        "starts 010/005/015, run_one_a32 with ystate=YSTATE_A26) and "
-        "re-gate per protocol 12 before publishing any number."
-    )
+    root = RUNS / "campaign" / "A1p"
+    for k in A1P_STARTS:
+        run_one_a32("A1p", root / f"start{k:03d}",
+                    seed=k, delta=DELTA, ystate=YSTATE_A26)
+    return stage_tally()
+
+
+def stage_a0p() -> int:
+    if stage_preflight(quick=True) != 0:
+        print(f"\n{_BLOCKED_MSG}")
+        return 3
+    root = RUNS / "a0p" / "A0p"
+    for k in A0P_STARTS:
+        run_one_a32("A0p", root / f"start{k:03d}",
+                    seed=k, delta=DELTA, ystate=YSTATE_A26)
+    return stage_tally()
+
+
+# --------------------------------------------------------------------------
+# stage: traced (which call still takes 3+ passes, by call index)
+# --------------------------------------------------------------------------
+
+
+def stage_traced() -> int:
+    """One traced A1' start010 run under the a26 spec.
+
+    start010 is A28's heaviest tail (858 of 11 370 calls at 3+ passes).
+    The trace (A31's instrument, proven switch-neutral by its own gate)
+    records every joint-test evaluation with its call and pass index, so
+    this stage verifies BY CALL INDEX that any surviving 3+-pass call is
+    the cold first call -- and names what its extra passes converged.
+    """
+    if stage_preflight(quick=True) != 0:
+        print(f"\n{_BLOCKED_MSG}")
+        return 3
+    outdir = RUNS / "traced" / "A1p_start010"
+    r = run_one_a32("A1p", outdir, seed=10, delta=DELTA,
+                    ystate=YSTATE_A26, trace=True)
+    tpath = outdir / "pass_trace.jsonl"
+    if not tpath.exists():
+        print("traced run produced no pass_trace.jsonl")
+        return 1
+    passes_by_call: dict[int, int] = {}
+    argmax_by_call_pass: dict[tuple, dict] = {}
+    with tpath.open() as fh:
+        for line in fh:
+            rec = json.loads(line)
+            if rec.get("kind") != "outer":
+                continue
+            c, p = int(rec["call"]), int(rec["pass"])
+            passes_by_call[c] = max(passes_by_call.get(c, 0), p)
+            if p >= 3:
+                argmax_by_call_pass[(c, p)] = rec.get("argmax") or {}
+    calls_3plus = sorted(c for c, p in passes_by_call.items() if p >= 3)
+    first_call = min(passes_by_call) if passes_by_call else None
+    record = {
+        "run": {"outdir": str(outdir), "rc": r["rc"]},
+        "n_calls_traced": len(passes_by_call),
+        "first_call_index": first_call,
+        "calls_with_3plus_passes": calls_3plus,
+        "n_calls_with_3plus_passes": len(calls_3plus),
+        "all_3plus_are_first_call": (
+            calls_3plus in ([], [first_call])
+        ),
+        "argmax_on_3plus_passes": {
+            f"call{c}_pass{p}": {
+                k2: v for k2, v in a.items()
+                if k2 in ("key", "category", "scaled", "before_hex",
+                          "after_hex")
+            } for (c, p), a in sorted(argmax_by_call_pass.items())
+        },
+        "a28_reference_tail3_start010": 858,
+    }
+    (RUNS / "traced").mkdir(parents=True, exist_ok=True)
+    (RUNS / "traced" / "traced.json").write_text(json.dumps(record, indent=2))
+    print(json.dumps(record, indent=2))
+    return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("stage",
-                    choices=["gate", "preflight", "campaign", "a0p", "all"])
+                    choices=["gate", "preflight", "campaign", "a0p",
+                             "traced", "tally", "all"])
     args = ap.parse_args()
     RUNS.mkdir(parents=True, exist_ok=True)
     (RUNS / "_mplconfig").mkdir(exist_ok=True)
@@ -458,10 +682,22 @@ def main() -> int:
         return stage_gate()
     if args.stage == "preflight":
         return stage_preflight()
-    if args.stage in ("campaign", "a0p"):
+    if args.stage == "campaign":
         return stage_campaign()
-    rc = stage_gate()
-    return stage_preflight() or rc
+    if args.stage == "a0p":
+        return stage_a0p()
+    if args.stage == "traced":
+        return stage_traced()
+    if args.stage == "tally":
+        return stage_tally()
+    # all: the gate first (it licenses everything), then the full pipeline;
+    # any failure stops the chain with that stage's exit code.
+    for fn in (stage_gate, lambda: stage_preflight(False), stage_campaign,
+               stage_a0p, stage_traced):
+        rc = fn()
+        if rc != 0:
+            return rc
+    return 0
 
 
 if __name__ == "__main__":
