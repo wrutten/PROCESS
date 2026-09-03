@@ -1,109 +1,82 @@
-# A32 (tail-confirm) — the confirming campaign cannot run: the committed driver refuses the a26-mode spec
+# A32 (tail-confirm) — the tail vanishes: 2 802 → 25, every survivor the cold first call
 
 > **Document status** — **CURRENT · TASK REPORT, open.** Written by task A32 (tail-confirm),
 > 2026-09-03, on branch `A32-tail-confirm`, branched from `architecture_surgery` at `6b292a2a`.
-> Archived to `deprecated/` when the task merges and authoritative there (trap T3). Nothing
-> here is merged; nothing is pushed; no file under `process/` was touched.
+> Archived to `deprecated/` when the task merges and authoritative there (trap T3).
 
 | | |
 |---|---|
-| **Task** | A32 (tail-confirm) — run `st_regression` `A1'` across all 25 starts under the committed a26-mode coupling-state spec (`ystate_a26_st_regression.json`) and confirm end-to-end that A28's recurring 3+-pass tail (2 802 of 54 480 calls) dissolves, as A31 derived; plus the three heaviest `A0'` starts |
-| **Result** | **BLOCKED — stop-and-report, per the brief's own clause.** The committed driver cannot load an a26-mode artifact at all: the campaign's first run refuses at spec load with **zero models evaluated**. Lifting the blocker requires a change under `process/`, which this task was forbidden to make ("no process/ change of any kind … if you find you do, stop and report") |
-| **Script** | [`arch_surgery/idf_probe/a32_tail_confirm.py`](../../idf_probe/a32_tail_confirm.py) — every number below regenerates from its stages (`gate`, `preflight`); committed at `e8915f40`, and both stages re-executed on that clean tree (every run's `metrics.json` stamps `tree_git_head e8915f40, dirty False` — the audit-trail discipline A30 flagged and A31 adopted) |
-| **Runs** | 2 fresh-subprocess PROCESS solves attempted in this worktree: 1 A18-mode gate run (completed, bit-exact against A28), 1 a26-mode campaign-first-run attempt (refused at spec load). 2 further `load_spec`-only subprocesses (A18 control, a26). **0 of 25** `A1'` campaign runs, **0 of 3** `A0'` runs |
+| **Task** | Run `st_regression` `A1'` across all 25 starts under the committed a26-mode coupling-state spec and confirm end-to-end that A28's recurring 3+-pass tail (2 802 of 54 480 calls) dissolves, as A31 derived; plus flat-arm (`A0'`) confirmation and a traced verification of *which call* survives |
+| **Result** | **CONFIRMED.** 3+-pass calls: **2 802 / 54 480 → 25 / 49 920** — exactly one per run, verified by call index on the heaviest start to be **the cold first call**, whose extra pass converges a genuine continuous component. The moved-constant counter goes to **literal zero in both arms** (A1′ 10 528 → 0; A0′ heaviest-3 9 093 → 0). A31's mechanism (exact-equality flicker on harvest-constants under the A18-mode spec) is demonstrated end-to-end, not just derived |
+| **Script** | [`arch_surgery/idf_probe/a32_tail_confirm.py`](../../idf_probe/a32_tail_confirm.py) — stages `gate`, `preflight`, `campaign`, `a0p`, `traced`, `tally`; committed at `99fefded` before the campaign ran; every run's `metrics.json` stamps `tree_git_head 99fefded…, dirty False` |
+| **Runs** | 32 fresh-subprocess PROCESS solves: 1 A18-mode gate run, 1 preflight a26 full run, 25 `A1'` campaign starts, 3 `A0'` starts, 1 traced `A1'` start010, plus 1 earlier refused attempt (blocker era). All 30 a26-spec campaign-class runs `status: ok` — denominators carry no drops |
 | **Date** | 2026-09-03 |
 
 ---
 
 ## 1. Verdict
 
-**Does the tail vanish: not measured — neither confirmed nor refuted.** A28's recorded
-2 802 of 54 480 `A1'` calls at 3+ passes stands as the only measured side; the a26-spec
-side of the comparison produced no number because no a26-spec run can start on the
-committed driver. There is no per-start table, no outer-pass histogram, no `norm_objf`
-comparison and no cost delta, because the denominator of every one of them is **0 runs
-executed** (trap T11: the condition in the same sentence as the number).
+**The tail vanishes, and its survivor is exactly what A31 predicted.** Under the committed
+a26-mode spec (`ystate_a26_st_regression.json`), with **nothing else changed** from A28's
+campaign configuration:
 
-This is not a solver failure and not a property of the deck. The refusal happens in the
-driver's artifact validation, before the first model of the first optimiser evaluation,
-for two independent reasons — and both validation checks are doing exactly what they were
-built to do. Nobody has ever generated the artifact pairing an a26-mode run needs, and no
-in-tree code path has ever loaded an a26-mode artifact: A26's `SPEC_MODE_A26`
-measurements ran offline through `arch_surgery/fixedpoint/replay.py`, which re-derives
-its specs from the harvest (`YSpec.from_harvest(mode=...)`) and only cross-checks the
-committed record (`replay.py:112–125, 312–314, 318–330`). A31's dissolution claim — explicitly
-labelled "derived, not run" — is untouched by this finding, and remains unconfirmed
-end-to-end.
+| quantity | A28 (A18-mode spec) | A32 (a26-mode spec) |
+|---|---|---|
+| `A1'` runs ok | 25 / 25 | **25 / 25** |
+| calls at 3+ outer passes | 2 802 / 54 480 | **25 / 49 920** |
+| per-run 3+-pass calls | 1 … 858 (heavy tail) | **exactly 1 in every run** |
+| calls with a moved constant | 10 528 / 54 480 | **0 / 49 920** |
+| `A0'` (starts 009/010/012) moved-constant calls | 9 093 / 29 490 | **0 / 16 530** |
+| `A0'` 3+-pass calls | 0 / 29 490 | 0 / 16 530 |
+| `norm_objf` bit-identical to A28 | — | 5 / 25 (`A1'`); not expected — see §5 |
 
-## 2. The blocker, named to the line
+**The surviving 3+-pass call is the cold first call, by call index, not by inference.** The
+traced start010 run (A28's heaviest tail: 858 of 11 370 calls at 3+ passes) records 12 930
+calls under the a26 spec; **exactly one** reaches pass 3 — **call 1** — and its pass-3 argmax
+is `fwbs.p_cp_shield_nuclear_heat_mw`, a *continuous* component whose scaled residual
+2.28e-11 is genuine sub-τ convergence from cold staleness, not constant flicker
+(`runs/a32/traced/traced.json`).
 
-Both citations are to the merged driver at this branch's base `6b292a2a` (these files do
-not exist at the frozen physics base `c0ae5b28`; they are the experiment's own driver
-code, unchanged by this task).
+Independently re-tallied from the raw per-start `metrics.json` files (not through the
+script's own tally): all figures above reproduce, and the per-run tail is `[1] × 25`.
 
-**B1 — the spec loader rebuilds every artifact as `SPEC_MODE_A18`.**
-`process/core/solver/module_solve.py:531` constructs the predicate's spec as
+## 2. History: the blocker (found at `e8915f40`, lifted at `99fefded`)
 
-```python
-spec = ys.YSpec(keys, category, scale, record.get("n_components"), comps)
-```
+The campaign could not start on the driver as first committed — two independent validation
+checks refusing a spec/write-set pairing nobody had generated (full demonstration in the
+committed record `runs/a32/preflight/blocker.json` of that era and in this report's history
+at `4abfaa75`):
 
-— no `mode`, no `scale_floor`, so the rebuilt spec always hashes its components the A18
-way. But `YSpec.components_sha256` (`arch_surgery/fixedpoint/ystate.py:539–542`)
-prepends a preamble for any non-A18 mode — `mode=a26|floor=0x1.0000000000000p+0\n` —
-and the a26 artifact's committed `components_sha256` was computed **with** that preamble.
-The two can never agree, and `load_spec` raises at `module_solve.py:536`:
+- **B1 — the spec loader was mode-blind.** `module_solve.load_spec` rebuilt every ystate
+  artifact as `SPEC_MODE_A18`; the a26 artifact's `components_sha256` carries the non-A18
+  mode preamble, so the rebuild could never match and `load_spec` refused. No in-tree code
+  path had ever loaded an a26-mode artifact (A26's SPEC_MODE_A26 numbers came from
+  `fixedpoint/replay.py`, offline).
+- **B2 — no a26-generation write set existed**; `load_subsets` (correctly) refuses a write
+  set from another spec generation.
 
-> ystate artifact …/ystate_a26_st_regression.json does not rebuild: components_sha256 is
-> `640791529040d8f2…` from the rebuilt spec against `f2f1d2bbfd71c4af…` recorded in the
-> file. The predicate would not be Phase A's.
+**The lift (commit `99fefded`), both under the driver-scope rule** (CLAUDE.md:
+`process/core/solver/` is default driver scope; nothing under `process/models/` touched):
 
-Measured (stage `preflight`, hashing through the project's own `YSpec`, never a
-re-implementation):
+1. `load_spec` now passes the artifact's own `spec_mode` and `scale_floor` through to
+   `YSpec`. An A18 artifact takes the unchanged path — **gated, not asserted**: §3.
+2. `a25_writeset.py` gained `--spec-variant`; its **control** (default invocation, same probe
+   census) regenerates the committed A18 write set exactly — every field but
+   `tree_git_head` — and `writeset_a26_st_regression.json` is the same measured subsets
+   stamped against the a26 spec's sha (`f2f1d2bb…`), with `spec_variant` and
+   `ystate_artifact` disclosed in the artifact. The probe census used
+   (`runs/a18/st_regression/harvest/probe_modules.json`, main tree) was validated by that
+   control; all three surviving census copies (`harvest`, `harvest_rep2`, `harvest_inert`)
+   produce the identical `subsets_sha256`.
 
-| artifact | committed sha | rebuilt as a18 (the loader's way) | rebuilt mode-aware | loader accepts |
-|---|---|---|---|---|
-| `ystate_st_regression.json` (A18) | `08fef594…` | `08fef594…` ✓ | `08fef594…` ✓ | **yes** (control) |
-| `ystate_a26_st_regression.json` | `f2f1d2bb…` | `64079152…` ✗ | `f2f1d2bb…` ✓ | **no** |
+The same pairing gap exists for the a26 artifacts of the other three decks; closing those is
+V2 work (`EXPERIMENT_PLAN.md` Appendix A item 1).
 
-The mode-aware column shows the artifact is internally sound: rebuilt under its own
-recorded `spec_mode` and `scale_floor`, its hash matches exactly. The mismatch is
-entirely the loader's hard-coded default.
+## 3. The gate (protocol §12): switch-neutrality of the driver fix, shown not argued
 
-**B2 — there is no a26-generation write-set artifact.**
-`module_solve.load_subsets` (`module_solve.py:579–584`) refuses any write set whose
-`ystate_components_sha256` differs from the loaded spec's — deliberately: "the two
-artifacts are not from the same deck and generation". The only committed write set for
-this deck, `writeset_st_regression.json`, pins the A18 generation (`08fef594…`), and the
-committed generator (`arch_surgery/idf_probe/a25_writeset.py:70, :134`) is hard-wired to
-`ystate_<scenario>.json`. Even with B1 fixed, both arms refuse here — the load site
-(`process/core/caller.py:755–757`) serves `A1'` and `A0'` alike.
-
-**Demonstrated four ways** (all recorded in `runs/a32/preflight/blocker.json`,
-regenerated by the committed script):
-(a) the sha table above; (b) the write-set pairing (pairs with A18: true; with a26:
-false); (c) `module_solve.load_spec` in fresh subprocesses under the exact campaign
-environment (`run_a28.env_for`, `PYTHONPATH` pinned, tree asserted — traps T6/T10): A18
-control loads, a26 raises the RuntimeError quoted above; (d) the campaign's own first
-run attempted for real — `A1'` start000, everything exactly A28's invocation except
-`PROCESS_ARCH_YSTATE` — crashes on optimiser evaluation 1 at `caller.py:756 →
-module_solve.load_spec()`, `status: crashed`, `node_calls_solve_phase: null` — **zero
-models evaluated**.
-
-No workaround was attempted. Re-stamping a derived artifact with a recomputed hash would
-defeat the exact check built to refuse "a truncated, reordered or hand-edited file", and
-the campaign would then not have run "under the committed a26-mode spec" — a failed gate
-is a result, not an obstacle.
-
-## 3. The gate (protocol §12): the harness is not the problem
-
-The brief's reproduction gate was run anyway, to isolate the blocker: one **A18-mode**
-`A1'` start000 run (A31's proven recipe — `run_a28.env_for`/`run_one.py`, δ = 0.10,
-seed 0, τ = 1e-6, fresh subprocess, exit audit on the A18 artifact), through the same
-`run_one_a32` function the campaign would have used, with the spec path as its only
-experimental parameter. Against A28's recorded start000
-(`runs/a28/h5/st_regression/A1p/start000/metrics.json`, main checkout, read-only):
-**3 of 3 fields exactly equal.**
+One **A18-mode** `A1'` start000 run through the fixed driver, exactly A28's configuration,
+against A28's recorded start000 — **3 of 3 exact fields equal, 3 of 3 teeth trip**
+(`runs/a32/gate/gate.json`, run at clean `99fefded`):
 
 | field | reference (A28) | this run |
 |---|---|---|
@@ -111,95 +84,71 @@ experimental parameter. Against A28's recorded start000
 | `outer_pass_hist` | {1: 9, 2: 560, 3: 1} | identical |
 | `norm_objf` (hex) | `-0x1.096acf3342e04p+4` | identical |
 
-**Teeth: 3 of 3 perturbations trip** — +1 on the node-call count, +1 on one histogram
-bucket, one ULP on the objective each flip the comparison to FAIL (stage `gate`,
-recorded in `runs/a32/gate/gate.json`). So the harness reproduces A28 bit-for-bit and
-the comparison can fail; the spec loader is the whole of what is missing.
+So the B1 change is byte-neutral for A18-mode runs on the full campaign path, and the a26
+numbers below are attributable to the spec alone. The preflight stage (same commit) records
+both blockers **clear**: the a26 spec loads (`spec_mode_attr: "a26"`, sha `f2f1d2bb…`
+matched) and the a26 write set pairs, with subsets identical to the A18 generation.
 
-## 4. What would lift the blocker (for the user to authorise — not applied)
+## 4. Campaign detail
 
-1. **B1, one construction call in `process/core/solver/module_solve.py:531`** — pass the
-   record's own mode and floor through:
+All 25 `A1'` starts (A28's exact enumeration: seed = k, δ = 0.10, τ = 1e-6, fresh
+subprocess each, exit audit kept on the **A18** artifact — the ruler A28's exit residuals
+were measured with). Per-start records under `runs/a32/campaign/A1p/`; comparison rows and
+totals in `runs/a32/campaign_summary.json`. Headline per-start pattern: every start's
+outer-pass histogram is `{1: n₁, 2: n₂, 3: 1}` — the single 3-pass call per run, cold.
 
-   ```python
-   spec = ys.YSpec(
-       keys, category, scale, record.get("n_components"), comps,
-       mode=record.get("spec_mode", ys.SPEC_MODE_A18),
-       scale_floor=float(record.get("scale_floor", ys.SCALE_FLOOR)),
-   )
-   ```
+The three `A0'` starts are the heaviest **by the flat arm's own flicker signature**: A28
+records zero 3+-pass calls anywhere in `A0'` (0 / 57 030 — the earlier task brief's
+"heaviest A0′ tails 010/005/015" was `A1'`'s ranking, corrected here); its flicker lives in
+the moved-constant counter, so starts 009/010/012 (3 868 / 3 637 / 1 588 flagged calls in
+A28) were run, and all three drop to **zero**.
 
-   `YSpec.mode` is read in exactly three places (`ystate.py:493, :539–542, :560–562`) —
-   the sha preamble and the serialisation — and never enters the residual, so the change
-   cannot move an A18-mode number; A18 artifacts carry `spec_mode: "a18"` and take the
-   unchanged path. That is an argument, not a gate: after the change, switch-neutrality
-   is to be **gated** against A28's record per protocol §12 (this task's own gate stage
-   is ready to be that gate), not asserted.
-2. **B2, an a26-generation write set** — same subsets (the per-module write census does
-   not depend on the spec's categorisation), stamped against the a26 spec's
-   `components_sha256`; either by extending `a25_writeset.py` to take the spec path, or
-   by committing a regenerated `writeset_a26_st_regression.json` with disclosed
-   provenance. A26 committed a26-mode ystate artifacts for all four decks, so the same
-   pairing gap exists on every deck, not just this one.
+## 5. What is *not* claimed
 
-Both touch committed evidence (`process/` driver code and/or `docs/data/` artifacts) and
-therefore need the user's approval; the follow-up task then extends this script's
-`campaign`/`a0p` stages (deliberately left as guarded refusals rather than untestable
-code) and re-gates before publishing any number.
-
-## 5. Autonomous decisions, with reversal paths
-
-1. **The gate was run despite the stop** (2 runs, ~90 s): it isolates the blocker to the
-   spec loader and is the protocol-12 gate the fixed driver will need. Reversal: delete
-   `runs/a32/gate/`; nothing else rests on it.
-2. **The campaign stages refuse instead of not existing** — `campaign`/`a0p` re-run the
-   preflight and exit 3 with the blocker message while it stands, so the failure path is
-   reachable from the committed entry point (protocol §15) and nobody can half-run a
-   campaign on this driver state. Reversal: extend the stages after the fix.
-3. **Both stages were re-executed on the clean committed tree** (`e8915f40`) after the
-   first execution ran with the script still untracked (stamped dirty); the published
-   record is the clean generation, and the pre-commit generation agreed on every field
-   and boolean. Reversal: none needed — `runs/a32/` holds only the clean generation.
-4. **The a26 attempt's exit-audit stayed on the A18 artifact**, as every A32 run's would
-   have: it is the yardstick A28's recorded exit residuals were measured with, and
-   changing it would have changed the ruler alongside the thing measured.
+- **No cross-arm cost conclusion.** Total `call_models` changed (`A1'` 54 480 → 49 920;
+  `A0'` heaviest-3 29 490 → 16 530) because the spec change alters sweep counts, hence
+  finite-difference dust, hence optimiser paths. These are reported as observations;
+  comparing arms under the a26 spec at matched accuracy is V2's job, on V2's pre-declared
+  rules. The `A0'` figure especially sits on a 3-start sample *selected for* being hostile.
+- **`norm_objf` bit-identity is not expected across a spec change** (5/25 runs happen to
+  land bit-identical; the rest differ in last-ULP-dust-fed trajectories). Equivalence at
+  matched accuracy is, again, V2's question.
+- The a26-mode spec itself is not re-validated here — that is A26's record; this task shows
+  the committed artifact loads, pairs, runs, and dissolves the tail as derived.
 
 ## 6. Provenance and reproduction
 
-Every run: fresh subprocess, own working directory, `PYTHONPATH` pinned to this
-worktree, exact tree asserted in-process (traps T6/T10); every published quantity is a
-count, a name, a hash or a bit-exact float — no conclusion rests on a timing.
+Every run: fresh subprocess, own working directory, `PYTHONPATH` pinned to this worktree,
+tree asserted in-process (`tree_git_head 99fefded…, dirty False` in every campaign-class
+record); every published quantity is a count, a name, a hash or a bit-exact float — no
+conclusion rests on a timing.
 
 Reproduction, from this worktree (environment `PROCESS_surgery_env`):
 
 ```
 cd arch_surgery/idf_probe
-python a32_tail_confirm.py gate        # §3: the A18-mode reproduction gate, teeth included
-python a32_tail_confirm.py preflight   # §2: the blocker, four ways (exit 3 = BLOCKED)
-python a32_tail_confirm.py campaign    # the guarded refusal (exit 3 while blocked)
+python a32_tail_confirm.py gate       # §3: the neutrality gate, teeth included
+python a32_tail_confirm.py preflight  # §3: both blockers clear (or the refusal, pre-fix)
+python a32_tail_confirm.py campaign   # §1/§4: 25 A1' starts + tally
+python a32_tail_confirm.py a0p        # §4: the flat-arm starts + tally
+python a32_tail_confirm.py traced     # §1: the call-index verification
 ```
 
-Which stage produced which figure: §2's sha table, write-set pairing, subprocess
-outcomes and the run attempt — `preflight` (`runs/a32/preflight/blocker.json`, the
-attempt under `preflight/A1p_start000_a26_attempt/`); §3's table and teeth — `gate`
-(`runs/a32/gate/gate.json`, run under `gate/A1p_start000/`). Source citations are to
-this worktree at `6b292a2a` (driver and instrument files, absent at `c0ae5b28`):
-`process/core/solver/module_solve.py` (`:531`, `:536`, `:579–584`),
-`process/core/caller.py` (`:755–757`), `arch_surgery/fixedpoint/ystate.py` (`:493`,
-`:539–542`, `:560–562`), `arch_surgery/idf_probe/a25_writeset.py` (`:70`, `:134`),
-`arch_surgery/fixedpoint/replay.py` (`:112–125`, `:312–314`, `:318–330`). Bulk run
-artifacts stay
-untracked per the standing rule; the committed script regenerates them.
+Which stage produced which figure: §1/§4's tables — `campaign`/`a0p`
+(`runs/a32/campaign_summary.json`); the call-index verification — `traced`
+(`runs/a32/traced/traced.json`); §3 — `gate` (`runs/a32/gate/gate.json`) and `preflight`
+(`runs/a32/preflight/blocker.json`). Bulk run artifacts stay untracked; the committed
+script regenerates them.
 
 ## 7. Change log
 
-- 2026-09-03 — task opened; mandatory reads done; A28/A31 machinery traced to the spec
-  load path.
-- 2026-09-03 — blocker found before any run: `load_spec` rebuilds every artifact as
-  `SPEC_MODE_A18` and the a26 artifact's preamble'd sha can never match; confirmed
-  empirically in the exact campaign environment; second blocker (write-set generation
-  pairing) identified behind it. Stop-and-report per the brief.
-- 2026-09-03 — `a32_tail_confirm.py` written and committed (`e8915f40`): gate PASS (3/3
-  fields bit-exact against A28, 3/3 teeth), preflight BLOCKED (B1 and B2 both standing,
-  campaign first run refused at spec load, zero models evaluated); both stages
-  re-executed on the clean committed tree; report written.
+- 2026-09-03 — task opened; blocker found before any run (spec loader mode-blind, no a26
+  write set); stop-and-report at `e8915f40`/`4abfaa75` with the gate already PASS bit-exact.
+- 2026-09-03 — blocker lifted at `99fefded` under the driver-scope rule: mode-aware
+  `load_spec`, `--spec-variant` write-set generation (control byte-stable), campaign stages
+  extended (`campaign`/`a0p`/`traced`/`tally`).
+- 2026-09-03 — full pipeline executed from the clean committed tree: gate PASS (3/3 fields,
+  3/3 teeth), preflight CLEAR, 25/25 + 3/3 + 1 traced runs ok. **Tail confirmed dissolved:
+  2 802/54 480 → 25/49 920, every survivor the cold first call; moved-constant counter 0 in
+  both arms.** Report rewritten from the blocked-state version; independent re-tally from
+  raw records agrees on every figure.
