@@ -217,6 +217,70 @@ def stage_gate() -> int:
     return 0 if all_pass else 1
 
 
+def stage_armgate() -> int:
+    """The combined-switch equivalence gate (post-merge integration check).
+
+    A2 runs trust mode AND the post-solve exclusion together — a pairing
+    neither A33 nor A34 gated alone.  A33 proved the exclusion behaviour-
+    neutral under the verified outer loop; this gate proves the same under
+    trust mode: per deck, one A2-config run WITH the post-solve artifact vs
+    one WITHOUT (both trust) must agree bit-for-bit on everything except
+    the suppressed nodes' own calls.  Teeth: each comparator fed a
+    perturbed reading must trip.
+    """
+    (cfg.RUNS / "_mplconfig").mkdir(parents=True, exist_ok=True)
+    vr.derive_lifted_decks(DECKS_DIR)
+    record: dict = {"gate": "A2 combined-switch equivalence: post-solve ON vs "
+                            "OFF under trust mode (per deck)"}
+    all_pass = True
+    for deck in cfg.DECKS:
+        pair = {}
+        for tag, with_ps in (("with", True), ("without", False)):
+            env_override = None if with_ps else {"PROCESS_ARCH_POST_SOLVE": None}
+            r = vr.run_job(deck, "A2",
+                           PB_RUNS / "armgate" / deck / tag,
+                           seed=0, delta=None, decks_dir=DECKS_DIR,
+                           node_census=False, drop_env=env_override)
+            pair[tag] = json.loads(
+                (Path(r["outdir"]) / "metrics.json").read_text())
+        a, b = pair["with"], pair["without"]
+        ta = a.get("module_solve_totals") or {}
+        tb = b.get("module_solve_totals") or {}
+        checks = {
+            "norm_objf_hex": ((a.get("exact") or {}).get("norm_objf")
+                              == (b.get("exact") or {}).get("norm_objf")),
+            "ifail": ((a.get("mfile") or {}).get("ifail")
+                      == (b.get("mfile") or {}).get("ifail")),
+            "n_solver_iterations": (a.get("n_solver_iterations")
+                                    == b.get("n_solver_iterations")),
+            "n_call_models": ta.get("n_call_models") == tb.get("n_call_models"),
+            "outer_pass_hist": (ta.get("outer_pass_hist")
+                                == tb.get("outer_pass_hist")),
+            "exit_audit_hex": ((a.get("exit_audit") or {}).get("residual_max_hex")
+                               == (b.get("exit_audit") or {}).get("residual_max_hex")),
+            "statuses_ok": (a.get("status") == "ok" and b.get("status") == "ok"),
+        }
+        teeth = {
+            "norm_objf_hex": (((a.get("exact") or {}).get("norm_objf") or "") + "0")
+            != (b.get("exact") or {}).get("norm_objf"),
+            "n_call_models": ((ta.get("n_call_models") or 0) + 1)
+            != tb.get("n_call_models"),
+        }
+        delta_calls = ((b.get("node_calls_solve_phase") or 0)
+                       - (a.get("node_calls_solve_phase") or 0))
+        ok = all(checks.values()) and all(teeth.values())
+        record[deck] = {"checks": checks, "teeth_tripped": teeth,
+                        "suppressed_node_calls": delta_calls,
+                        "verdict": "PASS" if ok else "FAIL"}
+        all_pass = all_pass and ok
+        print(f"  armgate {deck:24s} {'PASS' if ok else 'FAIL'} "
+              f"(suppressed calls: {delta_calls})")
+    (PB_RUNS / "armgate" / "armgate.json").write_text(
+        json.dumps(record, indent=2))
+    print(f"\nA2 combined-switch gate: {'PASS' if all_pass else 'FAIL'}")
+    return 0 if all_pass else 1
+
+
 # --------------------------------------------------------------------------
 # campaign and tally
 # --------------------------------------------------------------------------
@@ -234,6 +298,10 @@ def stage_campaign() -> int:
     if stage_gate() != 0:
         print("REFUSED: the driver-neutrality gate failed — that failure is "
               "the result; nothing runs on an ungated driver.")
+        return 1
+    if stage_armgate() != 0:
+        print("REFUSED: the A2 combined-switch equivalence gate failed — "
+              "that failure is the result.")
         return 1
     vr.derive_lifted_decks(DECKS_DIR)
     jobs = []
@@ -350,13 +418,15 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     default = "all" if cfg.EXECUTION_APPROVED else "smoke"
     ap.add_argument("stage", nargs="?", default=default,
-                    choices=["preflight", "gate", "smoke", "campaign",
-                             "tally", "all"])
+                    choices=["preflight", "gate", "armgate", "smoke",
+                             "campaign", "tally", "all"])
     args = ap.parse_args()
     if args.stage == "preflight":
         return stage_preflight()
     if args.stage == "gate":
         return stage_gate()
+    if args.stage == "armgate":
+        return stage_armgate()
     if args.stage == "smoke":
         return stage_smoke()
     if args.stage == "campaign":

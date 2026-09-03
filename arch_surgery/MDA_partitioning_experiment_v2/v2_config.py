@@ -56,28 +56,28 @@ PHASE_B_ARMS = ("R", "A0", "A1", "A2")
 #: with its task name while the entry is False — update when the task merges.
 INSTRUMENTATION = {
     "trust_mode": {          # outer loop off for per_module (Phase A BLOCKS, Phase B A2)
-        "available": False,
-        "task": "A34 (dispatched 2026-09-03)",
-        "env": "PROCESS_ARCH_OUTER (name fixed by the task)",
+        "available": True,   # merged 2026-09-03
+        "task": "A34 (merged 2026-09-03)",
+        "env": "PROCESS_ARCH_OUTER=trust",
     },
     "post_solve": {          # optimiser-irrelevant FF nodes out of the per-call path
-        "available": False,
-        "task": "A33 (dispatched 2026-09-03)",
+        "available": True,   # merged 2026-09-03 (4cf488f6)
+        "task": "A33 (merged 2026-09-03)",
         "env": "PROCESS_ARCH_POST_SOLVE",
     },
     "pulsed_a26_writesets": {  # a26-generation write sets for the pulsed decks
-        "available": False,     # st_regression's exists (A32); pulsed are A33's
-        "task": "A33 (dispatched 2026-09-03)",
+        "available": True,      # all three decks (A32 + A33, merged 2026-09-03)
+        "task": "A33 (merged 2026-09-03)",
         "env": None,
     },
     "pin": {                 # Phase A pulsed decks: pinned burn-time coupling
-        "available": False,
-        "task": "A34 (dispatched 2026-09-03)",
-        "env": "PROCESS_ARCH_PIN_BURN_TIME (name fixed by the task)",
+        "available": True,   # merged 2026-09-03
+        "task": "A34 (merged 2026-09-03)",
+        "env": "PROCESS_ARCH_PIN_BURN_TIME",
     },
     "single_mda_eval": {     # Phase A: one call_models at a perturbed state, no optimiser
-        "available": False,
-        "task": "A34 (dispatched 2026-09-03)",
+        "available": True,   # merged 2026-09-03: arch_surgery/idf_probe/v2_eval_one.py
+        "task": "A34 (merged 2026-09-03)",
         "env": None,
     },
 }

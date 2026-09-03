@@ -24,9 +24,14 @@ import v2_config as cfg
 sys.path.insert(0, str(cfg.IDF_PROBE))
 from run_a28 import _ARCH_VARS, PULSED as A28_PULSED  # noqa: E402
 
-#: One more switch than A28 knew about (A33's); cleared alongside the rest so
-#: an inherited value can never change what is being measured.
-_ALL_ARCH_VARS = tuple(_ARCH_VARS) + ("PROCESS_ARCH_POST_SOLVE",)
+#: Three more switches than A28 knew about (A33's and A34's); cleared
+#: alongside the rest so an inherited value can never change what is being
+#: measured.
+_ALL_ARCH_VARS = tuple(_ARCH_VARS) + (
+    "PROCESS_ARCH_POST_SOLVE",   # A33: post-solve exclusion artifact
+    "PROCESS_ARCH_OUTER",        # A34: trust mode (no outer loop)
+    "PROCESS_ARCH_PIN_BURN_TIME",  # A34: Phase A pin
+)
 
 
 def deck_for(deck: str, arm: str, decks_dir: Path) -> Path:
@@ -100,9 +105,12 @@ def env_for(deck: str, arm: str, *, a18_machinery_smoke: bool = False) -> dict:
         env["PROCESS_ARCH_HOIST"] = (
             "feedforward_lifted" if deck in cfg.PULSED else "feedforward"
         )
-        # Trust mode (no outer loop) and the post-solve set are A34/A33
-        # capabilities; the phase script refuses A2 while the ledger says so,
-        # and this function stays honest about what the arm WILL set:
+        # A2 is the designed architecture: trust mode (A34) + the post-solve
+        # exclusion (A33).  The phase script refuses the arm while either
+        # ledger entry is off, so reaching here with one missing is a bug,
+        # not a configuration.
+        if cfg.INSTRUMENTATION["trust_mode"]["available"]:
+            env["PROCESS_ARCH_OUTER"] = "trust"
         if cfg.INSTRUMENTATION["post_solve"]["available"]:
             env["PROCESS_ARCH_POST_SOLVE"] = str(cfg.postsolve_for(deck))
         return env
@@ -121,6 +129,7 @@ def run_job(
     node_census: bool = True,
     a18_machinery_smoke: bool = False,
     resume: bool = False,
+    drop_env: dict | None = None,
     timeout: int = 5400,
 ) -> dict:
     """One isolated PROCESS run.  Counts are exact and concurrency-invariant;
@@ -168,6 +177,14 @@ def run_job(
     if delta is not None:
         cmd += ["--perturb-delta", repr(delta), "--perturb-seed", str(seed)]
     env = env_for(deck, arm, a18_machinery_smoke=a18_machinery_smoke)
+    # drop_env: gate-stage overrides on top of the arm's composed
+    # environment (a value of None removes the variable) — used by the
+    # combined-switch equivalence gate to run an arm with one switch off.
+    for k, v in (drop_env or {}).items():
+        if v is None:
+            env.pop(k, None)
+        else:
+            env[k] = str(v)
     t0 = time.perf_counter()
     try:
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True,
