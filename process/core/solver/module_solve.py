@@ -100,6 +100,20 @@ Selection
     required, for the same reason, and cross-checked against the ystate
     artifact's ``components_sha256`` so the two cannot be from different
     generations of the same deck.
+``PROCESS_ARCH_PASS_TRACE``
+    **A31 (drift-diagnostic), observation only.**  Path of a JSONL file into
+    which every *joint-test* residual evaluation is appended: the outer test
+    of the block schedule, and — because the flat arm's single-block guard
+    makes its inner test *be* the joint test — the ``FLAT`` block's inner
+    residuals.  Per evaluation it records the pass index, the residual max
+    and argmax (with the moving element's before/after values as exact hex
+    floats), and, from pass 2 on, **every** component at or above ``tau``
+    with the same detail.  Pass-1 evaluations record the argmax and counts
+    only: pass 1 is the solve pass, where movement is expected, and a full
+    census there would be hundreds of components per optimiser evaluation
+    saying nothing the diagnostic asks.  Unset — the default — every hook is
+    a no-op and behaviour is byte-identical (gated, not asserted: protocol
+    §12).  The trace observes; it never touches a float the run computes.
 """
 
 from __future__ import annotations
@@ -122,10 +136,13 @@ __all__ = [
     "ITERATED",
     "MODULE_SOLVE_NAME",
     "OUTER_CAP",
+    "PASS_TRACE_PATH",
     "TAU",
+    "TRACE_ENABLED",
     "ModuleSolveFailure",
     "block_order",
     "iterated",
+    "trace_pass",
     "WRITESET_PATH",
     "YSTATE_PATH",
     "load_spec",
@@ -219,6 +236,172 @@ if ENABLED and not YSTATE_PATH:
         f"scales are per-deck, and silently taking another deck's scales "
         f"would change what 'converged' means with no symptom."
     )
+
+# --------------------------------------------------------------------------
+# A31 (drift-diagnostic): the per-pass joint-test trace.  Observation only.
+# --------------------------------------------------------------------------
+
+#: Where the trace lands, or ``None`` (the default) for no trace at all.
+PASS_TRACE_PATH: str | None = os.environ.get("PROCESS_ARCH_PASS_TRACE") or None
+
+#: True when a trace file is named.  Every call site in ``caller.py`` guards
+#: on this, so with the variable unset the hooks cost one module-attribute
+#: read per joint test and touch nothing else — and that neutrality is
+#: **gated** against A28's recorded counts, not asserted (protocol §12).
+TRACE_ENABLED: bool = PASS_TRACE_PATH is not None
+
+if TRACE_ENABLED and not ENABLED:
+    raise RuntimeError(
+        "PROCESS_ARCH_PASS_TRACE is set with PROCESS_ARCH_MODULE_SOLVE=off, "
+        "which has no joint test to trace.  A trace that silently records "
+        "nothing is how a diagnostic reports an absence it never measured."
+    )
+
+#: The pass index from which the full above-tau census is recorded.  Below
+#: it, only the argmax and the counts are kept: pass 1 is the solve pass,
+#: where movement is expected and a full census would bury the diagnostic.
+TRACE_FULL_FROM: int = int(
+    os.environ.get("PROCESS_ARCH_PASS_TRACE_FULL_FROM", "").strip() or "2"
+)
+
+#: Cap on fully-recorded components per evaluation — a disk guard, not a
+#: filter.  When it binds, the record says how many entries were dropped;
+#: the diagnostic population (pass >= 2 exceedances) is measured in units,
+#: not thousands, so a bound record is itself a finding.
+TRACE_MAX_ABOVE = 5000
+
+_TRACE_FILE = None
+
+
+def _trace_fh(spec):
+    """The trace file, opened once, with a self-describing header line."""
+    global _TRACE_FILE
+    if _TRACE_FILE is None:
+        _TRACE_FILE = open(PASS_TRACE_PATH, "a")  # noqa: SIM115 - held open
+        _TRACE_FILE.write(json.dumps({
+            "kind": "header",
+            "arm": MODULE_SOLVE_NAME,
+            "tau": TAU,
+            "inner_tau": INNER_TAU,
+            "full_from": TRACE_FULL_FROM,
+            "n_components": len(spec.keys),
+            "components_sha256": spec.components_sha256(),
+        }) + "\n")
+    return _TRACE_FILE
+
+
+def _trace_component(spec, i, a, b, scaled, tau):
+    """One component's movement, exactly: hex floats, argmax element.
+
+    ``a``/``b`` are the component's value in the previous and current
+    snapshot.  For an array the record names the element of maximum
+    absolute change and carries *its* before/after pair — the whole array
+    would bury the moving element under hundreds of quiet ones, and the
+    residual is a max, so the argmax element is the movement.
+
+    ``scaled`` is ``None`` for a component outside the scaled test — a
+    moved constant or a discrete mismatch, which fail by exact equality
+    and have no scale.  Their before/after pair is the whole record.
+    """
+    import numpy as np  # noqa: PLC0415 - trace path only
+
+    ys = _ystate_module()
+    rec: dict = {
+        "i": int(i),
+        "key": spec.name(i),
+        "category": spec.category[i],
+    }
+    if scaled is not None:
+        rec["scaled"] = float(scaled)
+        rec["scaled_hex"] = float(scaled).hex()
+        rec["scale"] = float(spec.scale[i])
+    try:
+        fa, fb = ys._float_view(a), ys._float_view(b)
+        if fa is None or fb is None or fa.shape != fb.shape:
+            rec["note"] = "not float-viewable in both snapshots, or reshaped"
+            rec["before_repr"] = repr(a)[:160]
+            rec["after_repr"] = repr(b)[:160]
+            return rec
+        d = np.abs(fb - fa)
+        # A NaN difference must surface as the argmax, not vanish under it.
+        d = np.where(np.isnan(d), np.inf, d)
+        j = int(np.argmax(d))
+        rec["n_elements"] = int(fa.size)
+        if fa.size > 1:
+            rec["elem"] = j
+            s = float(spec.scale[i])
+            if s > 0.0:
+                rec["n_elem_above"] = int(
+                    np.count_nonzero(d[np.isfinite(d)] / s >= tau)
+                )
+        va, vb = float(fa[j]), float(fb[j])
+        rec["before"] = va
+        rec["after"] = vb
+        rec["before_hex"] = va.hex()
+        rec["after_hex"] = vb.hex()
+    except Exception as exc:  # noqa: BLE001 - the trace must not kill the run
+        rec["error"] = f"{type(exc).__name__}: {exc}"
+    return rec
+
+
+def trace_pass(kind, call_idx, pass_idx, spec, y_prev, y_cur, res, tau):
+    """Append one joint-test evaluation to the trace.
+
+    ``y_prev``/``y_cur`` must be **full** snapshots (a subset=None residual),
+    indexable by the absolute component indices ``res`` carries — which is
+    what both call sites hold: the outer test reads the whole vector, and
+    the flat arm's single block has no subset in the write-set artifact.
+    Callers guard on :data:`TRACE_ENABLED`; this function assumes it.
+    """
+    fh = _trace_fh(spec)
+    scaled_by_idx = dict(zip(res.idx_c, res.scaled.tolist(), strict=True))
+    rec: dict = {
+        "kind": kind,
+        "call": int(call_idx),
+        "pass": int(pass_idx),
+        "max": res.max,
+        "max_hex": float(res.max).hex(),
+        "n_above": res.n_above(tau),
+        "n_discrete_mismatch": len(res.mismatch_discrete),
+        "n_constant_moved": len(res.moved_constant),
+        "n_nan_new": len(res.nan_new),
+    }
+    if res.argmax is not None:
+        rec["argmax"] = _trace_component(
+            spec, res.argmax, y_prev[res.argmax], y_cur[res.argmax],
+            scaled_by_idx[res.argmax], tau,
+        )
+    if pass_idx >= TRACE_FULL_FROM:
+        above = res.above(tau)
+        rec["above"] = [
+            _trace_component(spec, i, y_prev[i], y_cur[i],
+                             scaled_by_idx[i], tau)
+            for i in above[:TRACE_MAX_ABOVE]
+        ]
+        if len(above) > TRACE_MAX_ABOVE:
+            rec["above_truncated"] = len(above) - TRACE_MAX_ABOVE
+        if res.mismatch_discrete:
+            rec["discrete_mismatch"] = [
+                spec.name(i) for i in res.mismatch_discrete
+            ]
+            rec["discrete_mismatch_detail"] = [
+                _trace_component(spec, i, y_prev[i], y_cur[i], None, tau)
+                for i in res.mismatch_discrete[:TRACE_MAX_ABOVE]
+            ]
+        if res.moved_constant:
+            rec["moved_constant"] = [spec.name(i) for i in res.moved_constant]
+            # The exact-equality assertion has no tolerance, so *how far* a
+            # constant moved is the mechanism question — recorded as hex.
+            rec["moved_constant_detail"] = [
+                _trace_component(spec, i, y_prev[i], y_cur[i], None, tau)
+                for i in res.moved_constant[:TRACE_MAX_ABOVE]
+            ]
+        if res.nan_new:
+            rec["nan_new"] = [spec.name(i) for i in res.nan_new]
+    else:
+        rec["above_elided"] = True
+    fh.write(json.dumps(rec) + "\n")
+    fh.flush()
 
 # --------------------------------------------------------------------------
 # The block schedule

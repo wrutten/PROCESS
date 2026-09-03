@@ -535,3 +535,22 @@ statement-order classifier splitting self-coupled reads into same-sweep / last-s
 question (b)), which they note is the engine their I-44 diagnostic would need anyway. Their
 standing position mirrors ours: variable, `file:line` at the study commit, run evidence — or
 nothing. The per-deck export lane (their D77 inspection scenarios) remains available on request.
+
+**V14 follow-up 3 (2026-09-03) — RESOLVED by A31 (drift-diagnostic): neither a back edge nor a
+non-idempotent model.** The instrumented runs (start010 *and* start005, plus a flat-control
+cross-check; per-pass joint-test trace with before/after hex floats) show **no coupling-state
+component above τ on any recurring pass ≥ 2 record** — the largest τ-tested residual there is
+7.5e-08, argmax `superconducting_tfcoil.a_tf_plasma_case`, which is how that field earned its
+(correct but sub-τ) argmax billing. The recurring failures are the predicate's **no-tolerance
+constant assertion**: `pf_power.srcktpm` (written by `power.pfpwr`, `power.py:352/:411` at
+`c0ae5b28`; constant 1 106.688 kW over all 144 harvest points, category `constant` in the A18-mode
+ystate spec) flickers by exactly **1–2 ULPs** (max relative 4.11e-16) at D15's hostile states and
+fails exact equality until the coil chain reaches its bit-exact fixed point — 1 293 of 1 294 and
+960 of 961 recurring failing records on the two traced starts, fingerprint present in 25/25
+campaign starts. Consequences: the sharpened candidates ({ripple, stresscl, efc}) are not the
+carrier (nothing needed carrying); the 498-population stays unmeasured but is not implicated in
+this tail; V3/V14's FirstWall→Build refutation stands and suffices — the static census under the
+block schedule finds no other cross-block loop-carried variable pathway, and the dynamics agree.
+The committed SPEC_MODE_A26 artifact reclassifies `srcktpm` as continuous at scale 1 106.688,
+scoring the flicker at 4.1e-16 — the recurring tail dissolves under it by construction. Full
+record: [`A31_drift_diagnostic.md`](A31_drift_diagnostic.md) (archived to `deprecated/` at merge).
