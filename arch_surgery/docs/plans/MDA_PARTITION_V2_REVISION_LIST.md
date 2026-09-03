@@ -190,3 +190,28 @@ Standing note for the orchestrator: this is the second design simplification the
 push back on (the first: trust-mode "delete the pass" before the 3.2 % was explained). Check
 proposed simplifications against the recorded measurements (A22's censuses, the V-register)
 before adopting them into the plan.
+
+## R11 — the A→B decomposition argument (user, 2026-09-03), with its transfer conditions
+
+**The V2 argument structure:** total cost = (optimiser iterations × calls per iteration) ×
+(per-call MDA cost). Phase A measures the per-call factor **with the coupling pinned — which IS
+the lifted variant's per-call structure**, since the optimiser holds the lifted variable fixed
+within any call (A22's pin arm is the instrument). Phase B then verifies only the multiplier:
+iterations ≈ unchanged (A28 measured paired ratios of exactly 1.000/1.000/1.000 on two decks — the
+check can pass cleanly, and fails loudly where it fails), robustness not degraded, plus the
+deterministic +1/n gradient arithmetic. If the multiplier holds, Phase A's per-call saving
+transfers by multiplication; if it does not (the `low_aspect_ratio_DEMO` case), the transfer is
+declared broken and only end-to-end numbers are quoted for that deck.
+
+**Transfer conditions, each with its precedent:**
+1. **Call-mix weighting** — §4.1a's failure: the optimiser's calls are ~2n warm FD evaluations per
+   iteration (1–2 sweeps each); Phase A must weight per-call cost by that mix (replay recorded
+   optimiser state sequences), not by cold entries, or the fractional saving is inflated.
+2. **Pin-value insensitivity** — pin at ±δ around the consistent value and show the per-call cost
+   does not care (the lift mid-optimisation pins at inconsistent values).
+3. **The multiplier check is Phase B's whole job** — iterations and robustness at matched measured
+   accuracy; nothing else needs re-measuring there if 1–2 hold.
+
+**Phase A's role under this logic:** mechanism and attribution (per-node counts, weighting bounds,
+warmth scaling, the predicted Phase B number), cheap and optimiser-noise-free; Phase B confirms
+the multiplier and the prediction. A confirming Phase B is deliberately small.
