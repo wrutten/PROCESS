@@ -169,7 +169,17 @@ def env_for_phase_a(deck: str, arm: str, *, pin_hex: str | None = None) -> dict:
         env["PROCESS_ARCH_HOIST"] = (
             "feedforward_lifted" if deck in cfg.PULSED else "feedforward"
         )
-        env["PROCESS_ARCH_POST_SOLVE"] = str(cfg.postsolve_for(deck))
+        # Phase A's A1 runs the ORIGINAL deck (the pin owns the burn time;
+        # A34 refuses pin + lifted deck as two owners), so its active
+        # constraint set has no icc 93 and the post-solve artifact must be
+        # the nolift derivation — same node set, stamped for the base set
+        # (the lifted-stamp artifact is correctly refused at runtime; that
+        # refusal fired on the first launch attempt, 2026-09-03 evening).
+        if deck in cfg.PULSED:
+            env["PROCESS_ARCH_POST_SOLVE"] = str(
+                cfg.DATA / f"postsolve_nolift_{deck}.json")
+        else:
+            env["PROCESS_ARCH_POST_SOLVE"] = str(cfg.postsolve_for(deck))
         if deck in cfg.PULSED:
             env["PROCESS_ARCH_LIFT"] = "burn_time"
             if pin_hex is None:

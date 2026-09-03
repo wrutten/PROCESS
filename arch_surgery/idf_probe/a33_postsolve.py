@@ -628,9 +628,16 @@ def classify_site(site: dict, candidate: str, active_icc: list[int],
     return ("UNCLASSIFIED external read", True)
 
 
-def classify_scenario(scenario: str) -> dict:
+def classify_scenario(scenario: str, variant: str | None = None) -> dict:
+    """``variant='nolift'`` derives the artifact for the ORIGINAL deck's
+    constraint set (no icc 93): Phase A's A1 arm runs the original deck with
+    the pin instead of the lift (A34: pin + lifted deck would mean two owners
+    of the burn time), so its active set is the base one and the runtime
+    wrong-deck refusal demands an artifact stamped for exactly that.  The
+    derivation is unchanged except the seed set loses icc 93's reads -- which
+    can only shrink the consumed field set, never grow it."""
     iccs, minmax, switches = parse_deck(scenario)
-    lifted = scenario in PULSED
+    lifted = scenario in PULSED and variant != "nolift"
     icc_eff = sorted(iccs + ([93] if lifted else []))
     n_a28 = A28_N_CONSTRAINTS[scenario]
     a28_path = A28_H5 / scenario / "A1p" / "start000" / "metrics.json"
@@ -642,7 +649,12 @@ def classify_scenario(scenario: str) -> dict:
         "a28_recorded_n_constraints": a28["n_constraints"],
         "a28_expected_table": n_a28,
         "a28_i_figure_merit": a28["i_figure_merit"],
-        "match": (len(icc_eff) == n_a28 == a28["n_constraints"]
+        "variant": variant,
+        # A28 ran the LIFTED deck on pulsed scenarios; a nolift derivation
+        # must therefore reconcile at n_a28 - 1 on those decks.
+        "match": (len(icc_eff)
+                  + (1 if (variant == "nolift" and scenario in PULSED) else 0)
+                  == n_a28 == a28["n_constraints"]
                   and a28["i_figure_merit"] == minmax),
         "a28_source": str(a28_path),
     }
@@ -841,7 +853,10 @@ def classify_scenario(scenario: str) -> dict:
         "post_solve_nodes": art_nodes,
         "nodes_sha256": hashlib.sha256(payload).hexdigest(),
     }
-    out = DATA / f"postsolve_{scenario}.json"
+    if variant:
+        artifact["variant"] = variant
+    out = DATA / (f"postsolve_{variant}_{scenario}.json" if variant
+                  else f"postsolve_{scenario}.json")
     out.write_text(json.dumps(artifact, indent=2))
     print(f"{scenario:24s} minmax {minmax:>3d}  icc_eff {len(icc_eff):2d} "
           f"(A28 cross-check PASS)  seeds {len(seeds):3d} fields  "
@@ -849,12 +864,13 @@ def classify_scenario(scenario: str) -> dict:
     return artifact
 
 
-def stage_classify() -> int:
-    print("classify: deriving postsolve_<scenario>.json for", SCENARIOS)
+def stage_classify(variant: str | None = None) -> int:
+    print(f"classify: deriving postsolve artifacts (variant={variant}) for",
+          SCENARIOS)
     firstcut = {"costs", "water_use"}
     beyond = {}
     for s in SCENARIOS:
-        art = classify_scenario(s)
+        art = classify_scenario(s, variant=variant)
         extra = sorted(set(art["post_solve_nodes"]) - firstcut)
         missing = sorted(firstcut - set(art["post_solve_nodes"]))
         beyond[s] = {"beyond_first_cut": extra, "first_cut_missing": missing}
@@ -1461,6 +1477,9 @@ def main() -> int:
                                       "gate", "fullrun", "tally", "all"])
     ap.add_argument("--scenarios", nargs="*", default=None,
                     help="fullrun only: restrict the decks")
+    ap.add_argument("--variant", default=None, choices=["nolift"],
+                    help="classify only: derive for the ORIGINAL deck's "
+                         "constraint set (no icc 93) -- Phase A's pin arm")
     args = ap.parse_args()
     RUNS.mkdir(parents=True, exist_ok=True)
     (RUNS / "_mplconfig").mkdir(exist_ok=True)
@@ -1469,7 +1488,7 @@ def main() -> int:
               "the clean committed tree (metrics stamp tree_git_dirty).")
 
     if args.stage == "classify":
-        return stage_classify()
+        return stage_classify(variant=args.variant)
     if args.stage == "writesets":
         return stage_writesets()
     if args.stage == "validation":
