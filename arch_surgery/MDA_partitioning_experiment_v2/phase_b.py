@@ -148,6 +148,76 @@ def stage_smoke() -> int:
 
 
 # --------------------------------------------------------------------------
+# gate: driver neutrality at the V2 commit (plan §6)
+# --------------------------------------------------------------------------
+
+#: The three exact fields the gate compares — counts and a bit-comparison.
+GATE_FIELDS = ("node_calls_solve_phase", "n_model_calls", "norm_objf_hex")
+
+
+def _gate_extract(m: dict) -> dict:
+    return {
+        "node_calls_solve_phase": m.get("node_calls_solve_phase"),
+        "n_model_calls": m.get("n_model_calls"),
+        "norm_objf_hex": (m.get("exact") or {}).get("norm_objf"),
+    }
+
+
+def stage_gate() -> int:
+    """R start000 per deck must reproduce A28's recorded R start000
+    bit-for-bit on the current (V2) driver.
+
+    R sets no architecture switch, so its path must be untouched by every
+    driver change any V2 task merges — this is the strongest neutrality
+    statement available, and it uses A28's records directly (R reads no
+    ystate artifact, so the A18/a26 generation change cannot reach it).
+    Teeth: each field's comparator, fed a minimally perturbed value, must
+    trip (protocol §12 — a gate is shown able to fail before its zeros
+    mean anything).
+    """
+    a28 = cfg.TREE / "arch_surgery" / "idf_probe" / "runs" / "a28" / "h5"
+    (cfg.RUNS / "_mplconfig").mkdir(parents=True, exist_ok=True)
+    record: dict = {"gate": "V2 driver neutrality: R start000 vs A28 (protocol §12)"}
+    all_pass = True
+    for deck in cfg.DECKS:
+        ref_path = a28 / deck / "R" / "start000" / "metrics.json"
+        if not ref_path.exists():
+            record[deck] = {"verdict": "FAIL", "reason": f"no A28 reference at {ref_path}"}
+            all_pass = False
+            continue
+        r = vr.run_job(deck, "R", PB_RUNS / "gate" / deck,
+                       seed=0, delta=cfg.DELTA, decks_dir=DECKS_DIR,
+                       node_census=False)
+        ref = _gate_extract(json.loads(ref_path.read_text()))
+        got = _gate_extract(json.loads(
+            (Path(r["outdir"]) / "metrics.json").read_text()))
+        per_field = {f: {"ref": ref[f], "got": got[f],
+                         "match": ref[f] == got[f]} for f in GATE_FIELDS}
+        # teeth: a perturbed reading must trip each field's comparison
+        teeth = {
+            "node_calls_solve_phase": (
+                ((got["node_calls_solve_phase"] or 0) + 1)
+                != ref["node_calls_solve_phase"]),
+            "n_model_calls": (((got["n_model_calls"] or 0) + 1)
+                              != ref["n_model_calls"]),
+            "norm_objf_hex": (((got["norm_objf_hex"] or "") + "0")
+                              != ref["norm_objf_hex"]),
+        }
+        ok = (r["rc"] == 0 and all(v["match"] for v in per_field.values())
+              and all(teeth.values()))
+        record[deck] = {"reference": str(ref_path), "per_field": per_field,
+                        "teeth_tripped": teeth,
+                        "verdict": "PASS" if ok else "FAIL"}
+        all_pass = all_pass and ok
+        print(f"  gate {deck:24s} {'PASS' if ok else 'FAIL'}")
+    (PB_RUNS / "gate" / "gate.json").write_text(json.dumps(record, indent=2))
+    print(f"\nphase B driver-neutrality gate: "
+          f"{'PASS' if all_pass else 'FAIL'} "
+          f"(record: {PB_RUNS / 'gate' / 'gate.json'})")
+    return 0 if all_pass else 1
+
+
+# --------------------------------------------------------------------------
 # campaign and tally
 # --------------------------------------------------------------------------
 
@@ -161,6 +231,10 @@ def stage_campaign() -> int:
         print("REFUSED: instrumentation or artifacts missing — see the "
               "ledger above.")
         return 3
+    if stage_gate() != 0:
+        print("REFUSED: the driver-neutrality gate failed — that failure is "
+              "the result; nothing runs on an ungated driver.")
+        return 1
     vr.derive_lifted_decks(DECKS_DIR)
     jobs = []
     for deck in cfg.DECKS:
@@ -173,6 +247,7 @@ def stage_campaign() -> int:
                     deck=deck, arm=arm,
                     outdir=PB_RUNS / "campaign" / deck / arm / f"start{k:03d}",
                     seed=k, delta=cfg.DELTA, decks_dir=DECKS_DIR,
+                    resume=True,
                 ))
     print(f"campaign: {len(jobs)} runs, {cfg.WORKERS} workers")
     vr.run_pool(jobs)
@@ -182,7 +257,7 @@ def stage_campaign() -> int:
 def _extract(m: dict) -> dict:
     return {
         "status": m.get("status"),
-        "ifail": (m.get("values") or {}).get("ifail"),
+        "ifail": (m.get("mfile") or {}).get("ifail"),
         "norm_objf_hex": (m.get("exact") or {}).get("norm_objf"),
         "n_solver_iterations": m.get("n_solver_iterations"),
         "n_model_calls": m.get("n_model_calls"),
@@ -275,10 +350,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     default = "all" if cfg.EXECUTION_APPROVED else "smoke"
     ap.add_argument("stage", nargs="?", default=default,
-                    choices=["preflight", "smoke", "campaign", "tally", "all"])
+                    choices=["preflight", "gate", "smoke", "campaign",
+                             "tally", "all"])
     args = ap.parse_args()
     if args.stage == "preflight":
         return stage_preflight()
+    if args.stage == "gate":
+        return stage_gate()
     if args.stage == "smoke":
         return stage_smoke()
     if args.stage == "campaign":

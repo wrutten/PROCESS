@@ -120,10 +120,30 @@ def run_job(
     decks_dir: Path,
     node_census: bool = True,
     a18_machinery_smoke: bool = False,
+    resume: bool = False,
     timeout: int = 5400,
 ) -> dict:
     """One isolated PROCESS run.  Counts are exact and concurrency-invariant;
-    wall clock is stamped as progress information only (plan §2)."""
+    wall clock is stamped as progress information only (plan §2).
+
+    ``resume=True`` skips a run whose directory already holds a complete,
+    stamped record for the SAME (deck, arm, seed) — run_a28's --resume
+    semantics: an interrupted run is re-run; a directory alone is not taken
+    as evidence of a completed run.
+    """
+    mpath0 = outdir / "metrics.json"
+    if resume and mpath0.exists():
+        try:
+            prev = json.loads(mpath0.read_text())
+        except Exception:
+            prev = {}
+        if (prev.get("status") == "ok" and prev.get("v2_arm") == arm
+                and prev.get("v2_seed") == seed
+                and prev.get("v2_deck") == deck):
+            print(f"  {deck:24s} {arm:3s} seed={seed:<3d} resumed "
+                  f"(complete record kept)", flush=True)
+            return {"deck": deck, "arm": arm, "seed": seed, "rc": 0,
+                    "outdir": str(outdir), "resumed": True}
     if outdir.exists():
         shutil.rmtree(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
