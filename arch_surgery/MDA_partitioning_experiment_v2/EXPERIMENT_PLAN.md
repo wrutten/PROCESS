@@ -18,6 +18,15 @@
 > [`../docs/plans/MDA_PARTITION_V2_REVISION_LIST.md`](../docs/plans/MDA_PARTITION_V2_REVISION_LIST.md)
 > (R1–R11), A22/A28/A30/A31/A32, and the V-register. Execution begins only when the user
 > approves this document; any later deviation is a dated amendment here, never a silent change.
+>
+> **APPROVED FOR EXECUTION — 2026-09-03 (evening).** The user authorised autonomous
+> execution ("update the plan and update the experiment framework machinery... If you find
+> no further issues, you are cleared to press run on the full experiment execution. Run the
+> run_experiment.py script as main"), with review the following morning.
+> `v2_config.EXECUTION_APPROVED` flipped to True in this same commit. All gates green at
+> launch: driver neutrality (R×3 bit-exact vs A28), B3 combined-switch equivalence (×3),
+> Phase A entry-state + warm equivalence gates (A36). Run log:
+> `runs/experiment_main.log`.
 
 ## 1. Objective and claim structure
 
@@ -150,6 +159,15 @@ criterion (it is the pin, not an error). If the criterion fails, the fallback is
 the rationale for same-τ-first is R10: with no outer loop in either arm there is no overshoot
 mechanism, and error ≈ δ·ρ/(1−ρ) differences are expected to be τ-grade; that expectation is
 checked, not assumed.
+
+> **Amendment (2026-09-03, pre-campaign, from A36's machinery smoke):** at δ = 0.10 warm
+> entries the A1 one-pass delivered accuracy measured ≈ 0.24 scaled against A0's ≈ 5e-9
+> (N = 2, `st_regression`) — the cross-block transient at perturbation amplitude. The F = 10
+> similarity check is therefore expected to FAIL at N = 25; that failure is a result, and the
+> interpretation rule is fixed now: the dial-less one-pass arm's delivered accuracy is a
+> **reported capability difference** (R9) — each arm's accuracy is published at its cost, no
+> extrapolated matched read is fabricated, and the per-node count table plus the
+> weighting-invariance bracket remain the cost evidence. Nothing was tuned in response.
 
 **Metrics (counts only; acceptance never on a timing):**
 - **per-node model-evaluation counts** (primary; recorded for every run, enabling

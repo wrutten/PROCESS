@@ -19,7 +19,7 @@ RUNS = HERE / "runs"
 #: tests only and refuses every campaign stage (the plan is DRAFT: execution
 #: begins only when the user approves it — flip this in the same commit that
 #: records the approval in EXPERIMENT_PLAN.md's status header).
-EXECUTION_APPROVED = False
+EXECUTION_APPROVED = True
 
 #: Decks (D17).  st_regression is the k = 0 deck (nothing to lift or pin).
 DECKS = ("large_tokamak_nof", "low_aspect_ratio_DEMO", "st_regression")
