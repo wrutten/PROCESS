@@ -164,3 +164,29 @@ effect under EVERY per-node cost model, timing-free. A tight bracket proves the 
 representative; a wide one is reported with the extremal nodes named. Timings at most one
 contextual weighting inside the bracket. Evaluation points: the harvested design points, per deck,
 never pooled; audit at every point; drop census; all rules pre-declared.
+
+## R10a — correction to R10 (user pushback, 2026-09-03): feed-forward is only valid where k = 0
+
+**R10's "no nested arm, all decks" was wrong, and the user caught it.** Phase A's nested MDA was
+not defensive structure: without the lift — which requires an optimiser to own the lifted variable,
+and Phase A has none — **the outer loop is what converges the burn-time coupling** (`Pulse` writes
+late, M1 reads early). A22's numbers say so directly: pass-≥2 movement at **149/149 and 297/297**
+harvested points on the pulsed decks, all of it the burn time. (R10's "drift dormant at harvested
+states" is true only of `st_regression`; the orchestrator conflated the two phenomena.)
+
+Corrected Phase A V2 scope:
+- **`st_regression` (k = 0): the clean comparison.** Flat vs pure feed-forward, one shared τ,
+  **matched-tolerance comparison with a pre-declared a-posteriori similarity check on the audit**
+  (criterion fixed before the run — e.g. both audit residuals below the anchor accuracy or within
+  a stated factor). Envelope machinery is the fallback only if the audit refutes similarity. This
+  is the R3 simplification, adopted with its scope stated.
+- **Pulsed decks (k = 1): pure feed-forward is structurally invalid without the lift** — no
+  setting converges the burn time. Either compare flat vs **nested** there (the V1 question;
+  note its final pass still polishes, so partial overshoot and the accuracy-matching concern
+  return), or **defer those decks' feed-forward question to the optimiser round**, where the lift
+  exists. Deferral is the cleaner headline.
+
+Standing note for the orchestrator: this is the second design simplification the user had to
+push back on (the first: trust-mode "delete the pass" before the 3.2 % was explained). Check
+proposed simplifications against the recorded measurements (A22's censuses, the V-register)
+before adopting them into the plan.
