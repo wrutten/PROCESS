@@ -113,3 +113,29 @@ committed entry point from clean (§15).
 - The V2 headline question becomes: *what does the lifted, partitioned, trust-mode
   architecture cost or save against PROCESS's flat loop at matched measured accuracy, and
   what does it do to robustness?* — with the ~38 % receipt no longer charged to the variant.
+
+## R9 — the V2 comparison design (user question, 2026-09-03): one overarching MDA vs feed-forward block MDAs
+
+**The structural fact:** the feed-forward arm has **no dial controlling final accuracy** — delivered
+accuracy is what one chain pass produces. Matched tolerance is undefined, not merely unfair; the
+comparison basis is matched **measured** accuracy, full stop.
+
+**Tolerances:** one knob per arm, same ladder grid — flat arm's τ vs **one shared inner τ across
+all blocks**. Per-block tolerances only as a separately-labelled tuning study. Equal rung counts by
+construction (kills the envelope sampling bias at the source). Exit audit (uncharged, identical
+instrument) measures accuracy per rung; cost read off cost-vs-achieved curves; **no extrapolation**
+— an accuracy one arm cannot reach is a reported capability difference; the headline read at an
+externally anchored accuracy (what stock PROCESS delivers at its shipped predicate).
+
+**Arm lattice:** R (anchor) → A0 (flat, matched predicate: the stopping-rule step) → B1 (blocked
+with outer loop: the partitioning step, lift inseparable on pulsed decks and declared so) → B2
+(feed-forward, no outer loop: **the trust step, B1→B2 is the headline**). Grouping and order
+identical across B1/B2. B2's correctness lives outside the run: equivalence gate with teeth +
+per-run exit audit; on `st_regression` B2's validity is conditional on A31's verdict.
+
+**Performance:** net model evaluations in the solve phase at matched measured accuracy, per deck,
+never pooled; cost decomposed into **optimiser iterations × per-iteration loop work** with the
+paired iteration ratio reported (a ratio ≠ 1.000 flags search-path contamination — the
+`low_aspect_ratio_DEMO` lesson); paired multi-start robustness with drop census at matched
+measured accuracy; audits at a pre-declared sample of interior calls (first + accepted), since B2's
+risk is interior accuracy feeding gradients; timings as context only; every rule pre-declared.
