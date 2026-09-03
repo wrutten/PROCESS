@@ -43,6 +43,23 @@ ineffective rather than pretended perturbed.  A pinned burn time is applied
 AFTER the perturbation (Caller initialisation), so the pin owns the
 variable regardless of the stream -- recorded, not silent.
 
+Warm entry (A36)
+----------------
+``--entry-state <y_exit.json>`` writes a previous run's exact-hex exit
+snapshot into the data structure at initialisation, BEFORE the seeded
+perturbation, so the perturbation acts multiplicatively around the warm
+state (at a cold initialisation 767/799 continuous components are
+identically zero and a multiplicative stream cannot move them -- A34
+section 5; at a warm state they are non-zero).  The snapshot must have
+been taken against the SAME component spec as ``--perturb-spec``: the
+loader sha-checks and refuses a mismatch.  After writing, the state is
+read back and compared bit-for-bit against the snapshot
+(``entry_state.readback_bitexact``), and the exact entry state
+(post-restore, post-perturbation) is recorded to ``y_entry.json`` for the
+campaign's cross-arm pairing check.  ``--node-census`` records per-node
+evaluation counts for the measured single call (run_one's census pattern,
+the I-10 insurance), frozen before the audit.
+
 Isolation is mandatory, as everywhere: one run per process, own working
 directory, ``PYTHONPATH`` pinned to the tree under test and the EXACT tree
 asserted in-process (traps T6/T10).  Every quantity emitted is a count, a
@@ -53,7 +70,8 @@ Usage
     PYTHONPATH=<tree> python v2_eval_one.py \
         --scenario st_regression --input <deck> --outdir <dir> \
         --expect-tree <tree> --perturb-spec <ystate_a26_*.json> \
-        --exit-audit <ystate_*.json> [--delta 0.10 --seed 3]
+        --exit-audit <ystate_*.json> [--delta 0.10 --seed 3] \
+        [--entry-state <y_exit.json>] [--node-census]
 """
 
 from __future__ import annotations
@@ -165,6 +183,70 @@ def restore_snapshot(spec, rec):
         )
     st = rec["state"]
     return [restore_value(st[spec.name(i)]) for i in range(len(spec.keys))]
+
+
+def write_entry_state(spec, data, rec) -> dict:
+    """Write a snapshot's components into ``data`` at initialisation (A36).
+
+    The warm-entry design: a run launched with ``--entry-state`` starts
+    from a previous run's exact exit state.  :func:`restore_snapshot` has
+    already refused a snapshot whose component spec sha does not match the
+    run's spec.  Float arrays whose dtype and shape match the live value
+    are written **element-wise in place** (preserving object identity, the
+    way the perturbation multiplies in place); a component serialised as a
+    bare ``repr`` cannot be rebuilt and is skipped BY NAME, loudly.  After
+    writing, the whole state is read back and compared bit-for-bit against
+    the snapshot: ``readback_bitexact`` is the extension gate's in-process
+    evidence that the entry state IS the snapshot state.
+    """
+    y = restore_snapshot(spec, rec)
+    bound = spec.bind(data)
+    st = rec["state"]
+    n_scalar = n_inplace = n_replaced = 0
+    skipped_repr: list[str] = []
+    replaced: list[str] = []
+    for i, (ns, fld) in enumerate(bound):
+        name = spec.name(i)
+        if st[name]["k"] == "r":
+            skipped_repr.append(name)
+            continue
+        target = y[i]
+        if isinstance(target, np.ndarray):
+            cur = object.__getattribute__(ns, fld)
+            if (
+                isinstance(cur, np.ndarray)
+                and cur.shape == target.shape
+                and cur.dtype == target.dtype
+            ):
+                cur[...] = target
+                n_inplace += 1
+            else:
+                setattr(ns, fld, target)
+                n_replaced += 1
+                replaced.append(name)
+        else:
+            setattr(ns, fld, target)
+            n_scalar += 1
+    y_back = spec.read(bound)
+    skipped = set(skipped_repr)
+    mismatch = [
+        spec.name(i)
+        for i in range(len(y_back))
+        if spec.name(i) not in skipped
+        and snap_value(y_back[i]) != st[spec.name(i)]
+    ]
+    return {
+        "n_components": len(spec.keys),
+        "n_written_scalar": n_scalar,
+        "n_written_array_inplace": n_inplace,
+        "n_written_array_replaced": n_replaced,
+        "array_identity_replaced": replaced,
+        "n_skipped_repr": len(skipped_repr),
+        "skipped_repr": skipped_repr,
+        "readback_bitexact": not mismatch,
+        "n_readback_mismatch": len(mismatch),
+        "readback_mismatch_first": mismatch[:10],
+    }
 
 
 # --------------------------------------------------------------------------
@@ -288,6 +370,21 @@ def main() -> int:
                     help="start index; 0 leaves the deck point unperturbed "
                     "even when --delta is given (house convention)")
     ap.add_argument(
+        "--entry-state", default=None,
+        help="warm entry (A36): a y_exit.json snapshot from a previous "
+        "run, written into the data structure at initialisation BEFORE the "
+        "seeded perturbation, so the perturbation acts multiplicatively "
+        "around the warm state.  Must have been taken against the SAME "
+        "component spec as --perturb-spec (sha-checked; mismatch refused)",
+    )
+    ap.add_argument(
+        "--node-census", action="store_true",
+        help="record per-node evaluation counts for the measured single "
+        "call (frozen before the audit; the audit's own extra counts are "
+        "recorded separately) -- run_one's census pattern, the I-10 "
+        "insurance",
+    )
+    ap.add_argument(
         "--exit-audit", required=True,
         help="committed ystate artifact the exit snapshot and the uncharged "
         "exit audit are measured with (may differ from --perturb-spec; a "
@@ -318,6 +415,7 @@ def main() -> int:
         "exit_audit_spec": str(args.exit_audit),
         "delta": args.delta,
         "seed": args.seed,
+        "entry_state_arg": args.entry_state,
     }
 
     # ------------------------------------------------------------------
@@ -398,10 +496,45 @@ def main() -> int:
     result["i_figure_merit"] = int(nums.i_figure_merit)
 
     # ------------------------------------------------------------------
-    # 2. The coupling-state perturbation (or its recorded absence).
+    # 2. Warm entry (A36), then the coupling-state perturbation (or its
+    #    recorded absence).  The order is fixed: the snapshot state is
+    #    written FIRST, so a seeded perturbation acts multiplicatively
+    #    around the warm state.
     # ------------------------------------------------------------------
     pspec, pprov = _module_solve.load_spec(args.perturb_spec)
     result["perturb_spec_provenance"] = pprov
+
+    # Which spec components the design-vector injection owns at the head of
+    # every sweep (identically in every arm, since deck and x are shared).
+    # Recorded unconditionally (A36) so a gate that hand-perturbs a snapshot
+    # can avoid components x would silently reset.
+    try:
+        from process.core.solver.iteration_variables import (
+            ITERATION_VARIABLES,
+        )
+
+        itv_keys = set()
+        for i in range(n):
+            iv = ITERATION_VARIABLES[int(nums.ixc[i])]
+            itv_keys.add(f"{iv.module}.{iv.target_name or iv.name}")
+        spec_names = {pspec.name(i) for i in range(len(pspec.keys))}
+        result["spec_keys_owned_by_x"] = sorted(itv_keys & spec_names)
+    except Exception:
+        result["spec_keys_owned_by_x"] = None
+
+    result["entry_state"] = None
+    if args.entry_state:
+        snap_rec = json.loads(Path(args.entry_state).read_text())
+        # restore_snapshot (inside write_entry_state) refuses a snapshot
+        # whose component spec sha does not match the run's spec -- kept
+        # deliberately: a wrong snapshot fails loudly, never silently.
+        entry_census = write_entry_state(pspec, data, snap_rec)
+        result["entry_state"] = {
+            "path": str(Path(args.entry_state).resolve()),
+            "components_sha256": snap_rec["components_sha256"],
+            **entry_census,
+        }
+
     perturbed = bool(args.delta) and bool(args.seed)
     if perturbed:
         pert = apply_perturbation(pspec, data, args.delta, args.seed)
@@ -415,29 +548,59 @@ def main() -> int:
         # Purely informational: perturbed components the design-vector
         # injection overwrites at the head of every sweep (identically in
         # every arm, since deck and x are shared).
-        try:
-            from process.core.solver.iteration_variables import (
-                ITERATION_VARIABLES,
-            )
-
-            itv_keys = set()
-            for i in range(n):
-                iv = ITERATION_VARIABLES[int(nums.ixc[i])]
-                itv_keys.add(f"{iv.module}.{iv.target_name or iv.name}")
-            pert_keys = {r["key"] for r in pert["per_component"] if r["moved"]}
-            result["perturbation"]["perturbed_keys_reinjected_from_x"] = (
-                sorted(itv_keys & pert_keys)
-            )
-        except Exception:
-            result["perturbation"]["perturbed_keys_reinjected_from_x"] = None
+        owned = result.get("spec_keys_owned_by_x")
+        pert_keys = {r["key"] for r in pert["per_component"] if r["moved"]}
+        result["perturbation"]["perturbed_keys_reinjected_from_x"] = (
+            sorted(set(owned) & pert_keys) if owned is not None else None
+        )
     else:
         result["perturbation"] = {
             "applied": False,
             "why": (
-                "unperturbed deck point: --delta absent or --seed 0 "
-                "(house convention: start000 is the deck's own point)"
+                "unperturbed point: --delta absent or --seed 0 (house "
+                "convention: start000 is the unperturbed point -- the "
+                "deck's own, or the snapshot's when --entry-state is given)"
             ),
         }
+
+    # The exact coupling state this run is entered with (post-restore,
+    # post-perturbation, before any Caller exists): the record Phase A's
+    # cross-arm pairing check compares bit-for-bit (A36; the A34 799/799
+    # check, transposed from perturbation rows to the full entry state).
+    y_entry = pspec.read(pspec.bind(data))
+    (outdir / "y_entry.json").write_text(
+        json.dumps(snapshot_record(pspec, y_entry))
+    )
+    result["entry_state_recorded_to"] = "y_entry.json"
+
+    # ------------------------------------------------------------------
+    # 2b. Per-node census (A36; run_one's pattern, the I-10 insurance).
+    #     Counts a node only when NODE_CALLS moved, so suppressed
+    #     (post-solve) and deferred nodes are not miscounted.  Class-level,
+    #     so the audit's fresh Caller is censused too; the measured call's
+    #     census is FROZEN into the record before the audit runs.
+    # ------------------------------------------------------------------
+    result["node_census"] = None
+    _ncounts: dict = {}
+    _tailcounts: dict = {}
+    if args.node_census:
+        _orig_node = _caller.Caller._node
+
+        def _node_censused(self, name, run):
+            before = _caller.NODE_CALLS[0]
+            _orig_node(self, name, run)
+            if _caller.NODE_CALLS[0] != before:
+                _ncounts[name] = _ncounts.get(name, 0) + 1
+
+        _caller.Caller._node = _node_censused
+        _orig_tail = _caller.Caller._run_hoisted_tail
+
+        def _tail_censused(self, pending):
+            for nm, _r in pending:
+                _tailcounts[nm] = _tailcounts.get(nm, 0) + 1
+            return _orig_tail(self, pending)
+
+        _caller.Caller._run_hoisted_tail = _tail_censused
 
     # ------------------------------------------------------------------
     # 3. EXACTLY ONE call_models under the arm the environment selected.
@@ -478,6 +641,15 @@ def main() -> int:
     result["node_calls_single_eval"] = _caller.NODE_CALLS[0] - node_calls_before
     result["node_calls_counter_total"] = _caller.NODE_CALLS[0]
     result["n_model_calls_sweeps"] = int(nums.n_model_calls)
+    if args.node_census:
+        result["node_census"] = {
+            "counted": dict(_ncounts),
+            "flat_tail": dict(_tailcounts),
+            "note": (
+                "the measured single call only; frozen here, before the "
+                "uncharged exit audit runs"
+            ),
+        }
     _tot = dict(_caller.MODULE_SOLVE_TOTALS)
     _tot["moved_constants"] = sorted(_tot.get("moved_constants", ()))
     result["module_solve_totals"] = _tot
@@ -507,6 +679,57 @@ def main() -> int:
         result["pin_intact_at_exit"] = (
             float(data.times.t_plant_pulse_burn) == _pin
         )
+
+    # ------------------------------------------------------------------
+    # 4b. The lift residual (A36): the pinned/lifted component's
+    #     inconsistency at the exit state, measured by the SAME function
+    #     constraint 93 evaluates (``burn_time_residual`` -- a pure
+    #     function; nothing runs, nothing mutates).  Read here, BEFORE the
+    #     audit sweep mutates the state.  Reported separately and excluded
+    #     from Phase A's similarity statistic (plan section 3: it is the
+    #     pin, not an error).  Recorded for every arm: in a converged flat
+    #     arm it reads ~0; in a pinned arm it is the price of the pin.
+    # ------------------------------------------------------------------
+    result["lift_residual"] = None
+    if status == "ok":
+        try:
+            if int(data.pulse.i_pulsed_plant) == 1:
+                from process.models.pulse import burn_time_residual
+
+                raw = burn_time_residual(
+                    float(data.times.t_plant_pulse_burn),
+                    float(data.pf_coil.vs_cs_pf_total_burn),
+                    float(data.physics.v_plasma_loop_burn),
+                    float(data.times.t_plant_pulse_fusion_ramp),
+                )
+                comp = "times.t_plant_pulse_burn"
+                scale = None
+                for i in range(len(pspec.keys)):
+                    if pspec.name(i) == comp:
+                        scale = float(pspec.scale[i])
+                        break
+                result["lift_residual"] = {
+                    "component": comp,
+                    "raw_s": raw,
+                    "raw_hex": _hex(raw),
+                    "scale": scale,
+                    "scaled_abs": (abs(raw) / scale) if scale else None,
+                    "pinned": result["arch_pin_enabled"],
+                    "note": (
+                        "burn_time_residual (the function constraint 93 "
+                        "evaluates) at the exit state; excluded from the "
+                        "similarity statistic (plan section 3)"
+                    ),
+                }
+            else:
+                result["lift_residual"] = {
+                    "inactive": (
+                        "i_pulsed_plant != 1: Pulse writes no burn time "
+                        "(A25 section 2.3); nothing lifted or pinned here"
+                    ),
+                }
+        except Exception:
+            result["lift_residual"] = {"error": traceback.format_exc()}
 
     # ------------------------------------------------------------------
     # 5. Exit snapshot + the uncharged exit audit, then stop.  The audit is
@@ -543,6 +766,15 @@ def main() -> int:
                 "residual_max_hex": _hex(res.max),
                 "brief": res.brief(tau),
                 "audit_node_calls": _caller.NODE_CALLS[0] - n_before,
+                "node_census_audit_extra": (
+                    {
+                        k: v - (result["node_census"]["counted"].get(k, 0))
+                        for k, v in _ncounts.items()
+                        if v - (result["node_census"]["counted"].get(k, 0))
+                    }
+                    if args.node_census and result["node_census"]
+                    else None
+                ),
                 "charged_to_the_arm": False,
                 "note": (
                     "one further full sweep of the complete model set at the "
