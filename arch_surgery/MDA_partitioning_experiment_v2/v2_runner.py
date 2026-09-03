@@ -37,7 +37,7 @@ _ALL_ARCH_VARS = tuple(_ARCH_VARS) + (
 def deck_for(deck: str, arm: str, decks_dir: Path) -> Path:
     """A1/A2 on a pulsed deck take the derived lifted deck; everyone else the
     frozen scenario (D9: the frozen scenarios are never edited)."""
-    if arm in ("B1", "B2") and deck in cfg.PULSED:
+    if arm in ("B1", "B2", "B3") and deck in cfg.PULSED:
         return decks_dir / deck / f"{deck}_lifted.IN.DAT"
     return cfg.IDF_PROBE / "scenarios" / f"{deck}.IN.DAT"
 
@@ -97,7 +97,13 @@ def env_for(deck: str, arm: str, *, a18_machinery_smoke: bool = False) -> dict:
             env["PROCESS_ARCH_LIFT"] = "burn_time"
         return env
 
-    if arm == "B2":
+    if arm in ("B2", "B3"):
+        # B2 and B3 share everything -- resequenced per-module blocks, the
+        # lift on pulsed decks, the hoist, the post-solve exclusion -- and
+        # differ in exactly one switch: B3 sets trust mode (no outer loop),
+        # B2 keeps the verified outer loop (driver default).  The phase
+        # script refuses these arms while an instrument is missing, so
+        # reaching here with one unavailable is a bug, not a configuration.
         env["PROCESS_ARCH_SEQUENCE"] = "build_after_physics"
         env["PROCESS_ARCH_MODULE_SOLVE"] = "per_module"
         if deck in cfg.PULSED:
@@ -105,14 +111,10 @@ def env_for(deck: str, arm: str, *, a18_machinery_smoke: bool = False) -> dict:
         env["PROCESS_ARCH_HOIST"] = (
             "feedforward_lifted" if deck in cfg.PULSED else "feedforward"
         )
-        # B2 is the designed architecture: trust mode (A34) + the post-solve
-        # exclusion (A33).  The phase script refuses the arm while either
-        # ledger entry is off, so reaching here with one missing is a bug,
-        # not a configuration.
-        if cfg.INSTRUMENTATION["trust_mode"]["available"]:
-            env["PROCESS_ARCH_OUTER"] = "trust"
         if cfg.INSTRUMENTATION["post_solve"]["available"]:
             env["PROCESS_ARCH_POST_SOLVE"] = str(cfg.postsolve_for(deck))
+        if arm == "B3" and cfg.INSTRUMENTATION["trust_mode"]["available"]:
+            env["PROCESS_ARCH_OUTER"] = "trust"
         return env
 
     raise SystemExit(f"unknown arm {arm!r}")

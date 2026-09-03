@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """V2 Phase B — the optimisation comparison (EXPERIMENT_PLAN.md §4).
 
-Arms R / B0 / B1 / B2 across the three decks, N = 25 seed-paired starts, all
+Arms R / B0 / B1 / B2 / B3 across the three decks, N = 25 seed-paired starts, all
 on the a26-mode spec generation.  Stages (protocol §15: every published
 number regenerates from this committed entry point; failure paths are
 reachable from it):
@@ -20,7 +20,7 @@ reachable from it):
     are not for use).  B2 is reported as refused while trust-mode (A34) and
     the post-solve capability (A33) are missing.
 ``campaign``
-    The full 4-arm × 3-deck × 25-start campaign.  Refuses while
+    The full five-arm × 3-deck × 25-start campaign (~350 runs).  Refuses while
     ``EXECUTION_APPROVED`` is False, while any arm's instrumentation is
     missing, or while any deck's a26 write set is absent.
 ``tally``
@@ -65,8 +65,9 @@ def arm_status(deck: str, arm: str) -> tuple[bool, str]:
             led = cfg.INSTRUMENTATION["pulsed_a26_writesets"]
             return False, (f"missing {cfg.writeset_for(deck).name} — "
                            f"{led['task']}")
-    if arm == "B2":
-        for key in ("trust_mode", "post_solve"):
+    if arm in ("B2", "B3"):
+        needed = ("post_solve",) if arm == "B2" else ("trust_mode", "post_solve")
+        for key in needed:
             led = cfg.INSTRUMENTATION[key]
             if not led["available"]:
                 return False, f"{key} not built — {led['task']}"
@@ -220,24 +221,24 @@ def stage_gate() -> int:
 def stage_armgate() -> int:
     """The combined-switch equivalence gate (post-merge integration check).
 
-    B2 runs trust mode AND the post-solve exclusion together — a pairing
+    B3 runs trust mode AND the post-solve exclusion together — a pairing
     neither A33 nor A34 gated alone.  A33 proved the exclusion behaviour-
     neutral under the verified outer loop; this gate proves the same under
-    trust mode: per deck, one B2-config run WITH the post-solve artifact vs
+    trust mode: per deck, one B3-config run WITH the post-solve artifact vs
     one WITHOUT (both trust) must agree bit-for-bit on everything except
     the suppressed nodes' own calls.  Teeth: each comparator fed a
     perturbed reading must trip.
     """
     (cfg.RUNS / "_mplconfig").mkdir(parents=True, exist_ok=True)
     vr.derive_lifted_decks(DECKS_DIR)
-    record: dict = {"gate": "B2 combined-switch equivalence: post-solve ON vs "
+    record: dict = {"gate": "B3 combined-switch equivalence: post-solve ON vs "
                             "OFF under trust mode (per deck)"}
     all_pass = True
     for deck in cfg.DECKS:
         pair = {}
         for tag, with_ps in (("with", True), ("without", False)):
             env_override = None if with_ps else {"PROCESS_ARCH_POST_SOLVE": None}
-            r = vr.run_job(deck, "B2",
+            r = vr.run_job(deck, "B3",
                            PB_RUNS / "armgate" / deck / tag,
                            seed=0, delta=None, decks_dir=DECKS_DIR,
                            node_census=False, drop_env=env_override)
@@ -277,13 +278,51 @@ def stage_armgate() -> int:
               f"(suppressed calls: {delta_calls})")
     (PB_RUNS / "armgate" / "armgate.json").write_text(
         json.dumps(record, indent=2))
-    print(f"\nB2 combined-switch gate: {'PASS' if all_pass else 'FAIL'}")
+    print(f"\nB3 combined-switch gate: {'PASS' if all_pass else 'FAIL'}")
     return 0 if all_pass else 1
 
 
 # --------------------------------------------------------------------------
 # campaign and tally
 # --------------------------------------------------------------------------
+
+
+def stage_timing() -> int:
+    """Context-only timings (D17): SERIAL repetitions at the baseline start,
+    no node census, one arm-deck at a time.  Never an acceptance quantity —
+    published with median, range, repetition count and the disclaimer that
+    every run pays per-process JIT identically."""
+    reps = 3
+    vr.derive_lifted_decks(DECKS_DIR)
+    rows = {}
+    for deck in cfg.DECKS:
+        for arm in cfg.PHASE_B_ARMS:
+            ok, _ = arm_status(deck, arm)
+            if not ok:
+                continue
+            walls = []
+            for i in range(reps):
+                r = vr.run_job(deck, arm,
+                               PB_RUNS / "timing" / deck / arm / f"rep{i}",
+                               seed=0, delta=None, decks_dir=DECKS_DIR,
+                               node_census=False)
+                m = json.loads((Path(r["outdir"]) / "metrics.json").read_text())
+                if m.get("wall_s"):
+                    walls.append(m["wall_s"])
+            walls.sort()
+            rows[f"{deck}/{arm}"] = {
+                "reps_requested": reps, "walls_s": walls,
+                "median_s": walls[len(walls) // 2] if walls else None,
+                "range_s": [walls[0], walls[-1]] if walls else None,
+            }
+    record = {"note": ("context only, never evidence (D17/I-10): serial, "
+                       "baseline start, per-process JIT included identically "
+                       "in every run"), "rows": rows}
+    (PB_RUNS / "timing" / "timing.json").write_text(json.dumps(record, indent=2))
+    for k, v in rows.items():
+        print(f"  timing {k:30s} median {v['median_s']:8.1f}s "
+              f"range {v['range_s']}  (context, not a measurement)")
+    return 0
 
 
 def stage_campaign() -> int:
@@ -300,7 +339,7 @@ def stage_campaign() -> int:
               "the result; nothing runs on an ungated driver.")
         return 1
     if stage_armgate() != 0:
-        print("REFUSED: the B2 combined-switch equivalence gate failed — "
+        print("REFUSED: the B3 combined-switch equivalence gate failed — "
               "that failure is the result.")
         return 1
     vr.derive_lifted_decks(DECKS_DIR)
@@ -377,7 +416,7 @@ def stage_tally() -> int:
         # paired iteration ratios and objective pairs against A0
         base = deck_rows.get("B0")
         if base:
-            for arm in ("B1", "B2", "R"):
+            for arm in ("B1", "B2", "B3", "R"):
                 rows = deck_rows.get(arm)
                 if not rows:
                     continue
@@ -419,7 +458,7 @@ def main() -> int:
     default = "all" if cfg.EXECUTION_APPROVED else "smoke"
     ap.add_argument("stage", nargs="?", default=default,
                     choices=["preflight", "gate", "armgate", "smoke",
-                             "campaign", "tally", "all"])
+                             "campaign", "tally", "timing", "all"])
     args = ap.parse_args()
     if args.stage == "preflight":
         return stage_preflight()
@@ -433,6 +472,8 @@ def main() -> int:
         return stage_campaign()
     if args.stage == "tally":
         return stage_tally()
+    if args.stage == "timing":
+        return stage_timing()
     rc = stage_preflight()
     if rc != 0:
         print("\n'all' stops at preflight while instrumentation is missing.")

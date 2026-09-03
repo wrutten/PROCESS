@@ -1,7 +1,12 @@
 # MDA Partitioning Experiment V2 — Experiment Plan
 
-> **Document status (2026-09-03, revision 2).** **DRAFT for user review — not authorised for
-> execution.** Revision 2 folds in the user's first review round (all seven assessment points
+> **Document status (2026-09-03, revision 3).** Revision 3 (evening review round): the
+> **warm-entry Phase A design** (§3), the **five-arm Phase B lattice** R/B0/B1/B2/B3 with the
+> re-admitted partitioned-with-outer-loop arm B2 (§4, user decision after the trust-vs-verified
+> single-trajectory context — declared before any campaign run), per-deck expectations declared
+> (§4), campaign ≈ 350 optimisations, A35 (cold-entry runtime census) minted as a separate,
+> non-blocking investigation, A36 building the Phase A machinery. Approval status: see the
+> foot of this header. Revision 2 folded in the user's first review round (all seven assessment points
 > accepted; the post-solve hoist of optimiser-irrelevant feed-forward nodes added to the
 > intervention in both phases; parallelisation strategy declared; A32 merged).
 > **Arm naming (user, 2026-09-03):** Phase A arms are **A0** (flat) / **A1** (feed-forward
@@ -96,18 +101,41 @@ mode-aware (A32's B1 fix, gated bit-exact against A28's record, teeth shown).
 pinned) separates the partition-and-hoist effect from the coupling term; no per-factor claim
 is made from the pulsed decks' Phase A numbers.
 
-**Coupling handling.** On `st_regression` there is nothing to lift; BLOCKS is pure
-feed-forward. On the pulsed decks the burn-time coupling is live at MDA level (A22: pass-≥2
-movement at 149/149 and 297/297 harvested points — all of it the burn time), so BLOCKS runs
-with the coupling **pinned** (A22's pin-arm instrument). The ±10 % scan over coupling initial
-guesses doubles as the **pin-value insensitivity check** (R11 condition 2): per-call cost as a
-function of pin value is a published curve, not an assumption.
+**Entry states (warm-entry design; user decision 2026-09-03, evening).** Per deck, the
+**reference** is the converged flat state at the deck point, obtained by one A0-arm single
+evaluation from the cold deck entry (one `call_models` under `flat_state` is the full flat MDA
+solve); its cost is reported separately as the **once-per-run cold-start term**, never mixed
+into the per-call statistics. Campaign entries are **multiplicative ±δ perturbations of the
+reference snapshot** (seed-paired: bit-identical perturbed entries across arms, verified per
+deck), evaluated by one `call_models` under each arm. Rationale, with its licensing
+measurements: this is the regime Phase B's B3 actually visits — every call after the first is
+warm (A28: ~95 % two-pass structure; A32: exactly one cold call per run, verified by call
+index) — and it is the regime where feed-forwardness is dynamically verified (A22). A34
+measured the cold regime to be a different question: a one-pass chain from a cold entry sits
+1.46e-2 from the fixed point while the verified control repairs it in ~2 extra cross-block
+propagations — a transient whose carrier is task **A35's** separate, non-blocking
+investigation. At the warm reference the components are non-zero, so the multiplicative stream
+is well-posed (the 767/799-zeros problem was a cold-init artifact).
 
-**Equivalence gate (per deck, teeth per §12 of the protocol):** one BLOCKS run pinned **at the
-FLAT arm's converged coupling value** must reproduce the FLAT fixed point within the audit's
-resolution. This replaces the draft's "converged to the same point" check, which would fire on
-every pulsed run by construction (pinned ≠ converged is the design, not an error). The gate is
-shown able to fail before its pass is counted.
+**Coupling handling.** On `st_regression` there is nothing to lift; A1 is pure feed-forward.
+On the pulsed decks the burn-time coupling is live at MDA level (A22: pass-≥2 movement at
+149/149 and 297/297 harvested points — all of it the burn time), so A1 runs with the coupling
+**pinned** (A34's instrument), the pin value being **the perturbed burn-time component from
+the same seeded stream** — so the ±δ scan is exactly the **pin-value insensitivity check**
+(R11 condition 2) around the consistent value: per-call cost as a function of pin value is a
+published curve, not an assumption.
+
+**Equivalence gates (per deck, teeth per §12 of the protocol):**
+1. *Entry-state instrument gate:* an A0-arm evaluation launched from its **own** unperturbed
+   exit snapshot must audit ≈ 0 (the state is already the fixed point) — the loader shown
+   faithful before anything rests on it.
+2. *Warm equivalence gate:* one A1 run from the reference snapshot, unperturbed, pinned at
+   the reference's burn-time value, must reproduce the reference within the audit's
+   resolution (categorically clean AND cross-state max < τ). This supersedes A34's
+   cold-entry pin gate, whose FAIL-as-bound is recorded context about the cold transient,
+   not a Phase A defect. A warm-gate failure STOPS the Phase A campaign and is the result.
+Both replace the draft's "converged to the same point" check, which would fire on every
+pulsed run by construction (pinned ≠ converged is the design, not an error).
 
 **Accuracy rule (pre-declared).** Both arms run at the same τ (single knob each). The
 **uncharged** exit audit (a26-mode spec, identical instrument, outside the cost accounting)
@@ -127,8 +155,8 @@ checked, not assumed.
 - **per-node model-evaluation counts** (primary; recorded for every run, enabling
   weighting-invariance bounds later without re-running — the I-10 insurance);
 - per-block totals (M1/M2/M3/FF) and predicate-evaluation counts;
-- per-call cost binned by **entry distance** (from the entry census) — the warmth diagnostic
-  for §5's transfer argument; purely attributional, no correction applied anywhere;
+- the exact entry state of every run (snapshot + perturbation record), so the evaluated
+  regime is itself part of the record; the cold-start term reported beside, never mixed in;
 - failure taxonomy per start: crashed / refused / unconverged / infeasible-at-audit, with
   denominators (A30's lesson); failures count to robustness, completions to cost statistics.
 
@@ -140,38 +168,45 @@ charged; V2's arm does not carry that pass).
 
 ## 4. Phase B — optimisation comparison (the headline)
 
-**Arms: four.**
+**Arms: five.**
 
 | arm | architecture | isolates (vs previous) |
 |---|---|---|
 | R | PROCESS as shipped (its idempotence loop) | anchor |
 | B0 | proper flat fixed-point MDA, predicate-matched | stopping rule (R→B0) |
 | B1 | flat MDA + burn-time coupling lifted to optimiser (constraint 93) | the lift (B0→B1) |
-| B2 | partitioned block MDAs, feed-forward, lifted coupling, **no overarching MDA**, and the deck's post-solve set executed once per run at the accepted optimum instead of once per call | the partition + post-solve hoist (B1→B2) |
+| B2 | partitioned block MDAs **with the outer verification loop**, lifted coupling, post-solve set executed once per run | the partition (B1→B2) |
+| B3 | as B2 but **no outer loop** (trust mode): one chain pass per call | the outer-loop removal / trust step (B2→B3) |
 
-There is no "partitioned with outer loop" bridge arm: no-outer-loop is inherent to feed-forward
-partitioning, not a separable factor — partitioned-with-receipt is not a candidate
-architecture. **B0→B2 is the headline comparison; R→B2 is the user-facing figure; B0→B1 shows
-what the lift alone does.** On `st_regression` (k = 0) B1 degenerates to B0 and is skipped.
+The partitioned-with-outer-loop arm B2 was dropped in revision 1 as "never a candidate
+architecture" and **re-admitted by the user (2026-09-03, evening) before any campaign run**,
+on measured cause: the trust-vs-verified single-trajectory context (iterations 8→8 / 13→12 /
+10→20 across the decks) showed the outer pass may buy optimiser-consumed interior accuracy, so
+whether its per-call cost is repaid in iterations is now a declared question, answered by
+B2→B3 with everything else identical (same post-solve set, same inner τ). **B0→B3 is the
+headline comparison (the designed architecture); R→B3 the user-facing figure; B0→B1 the lift;
+B1→B2 the partition; B2→B3 the trust step.** On `st_regression` (k = 0) B1 degenerates to B0
+and is skipped.
 
 **Settings.** Optimiser settings default (comparability with reference). Same τ across arms,
 with the Phase-A similarity criterion re-applied at accepted optima.
 
-**Initial guesses (pre-declared rule).** One perturbation stream, seed-paired across all four
-arms: ±10 % (δ = 0.10) on all iteration-variable initial guesses. In B1/B2 the lifted
+**Initial guesses (pre-declared rule).** One perturbation stream, seed-paired across all five
+arms: ±10 % (δ = 0.10) on all iteration-variable initial guesses. In B1/B2/B3 the lifted
 variable's initial guess is **the same perturbed value the coupling would start from in
-R/A0** — the lift adds a variable, never a different starting state. (n vs n+1 iteration
+R/B0** — the lift adds a variable, never a different starting state. (n vs n+1 iteration
 variables is part of the intervention, including its finite-difference gradient cost.)
 
 **Checks, each testable and pre-declared (never on iteration variables — D6):**
 1. **Same optimum:** per-start paired |Δ norm_objf| plus the post-solve feasibility audit.
    The yardstick for a "harmless" difference is **measured inside the same campaign**: the
-   R→A0 paired |Δ norm_objf| spread — the stopping-rule change's own footprint — rather than
-   an assumed state-to-objective sensitivity. Acceptance: the B0→B1 and B0→B2 paired spreads
-   are not larger than the R→B0 spread by more than the declared factor (F, §3's). The full
-   paired distributions are published either way.
+   R→B0 paired |Δ norm_objf| spread — the stopping-rule change's own footprint — rather than
+   an assumed state-to-objective sensitivity. Acceptance: the B0→B1, B0→B2 and B0→B3 paired
+   spreads are not larger than the R→B0 spread by more than the declared factor (F, §3's).
+   The full paired distributions are published either way.
 2. **Iteration multiplier:** paired per-start ratio of optimiser iterations (and of function
-   evaluations), median and q1–q3 per deck. Acceptance: median paired iteration ratio
+   evaluations) for B0→B1, B0→B2 and B0→B3, median and q1–q3 per deck; B2→B3 reported beside
+   them (the trust step's own multiplier). Acceptance per arm: median paired iteration ratio
    ≤ 1.05. *Licensing measurement:* A28 measured paired ratios of exactly 1.000/1.000 on two
    decks **with the lift in place** — the bar is strict because it has been met under the
    same lift.
@@ -181,6 +216,15 @@ variables is part of the intervention, including its finite-difference gradient 
    infeasible-at-audit, denominators named), identical-success-set cost comparisons, and
    refusal attribution by arm (the D18 lesson: two-thirds of V1's refusal deficit was the
    predicate, not the architecture).
+
+**Declared per-deck expectations (hypotheses, written before the first campaign run):**
+B2 ≈ B0 in iterations everywhere (licensing: A28's 1.000/1.000 with the lift). B3 ≈ B2 in
+iterations on the pulsed decks and **may inflate on `st_regression`** (single-trajectory
+context: 10→20; mechanism hypothesis: one-pass interior states carry ~30×-per-pass more
+sub-τ dust into the finite differences via the cross-block transient — A35's subject).
+Post-solve suppression ≈ 8.3/8.4/11.3 % of solve-phase node calls (A33's measured
+baselines). Phase A per-call saving positive on all three decks. Each expectation can fail;
+a failure is a per-deck result.
 
 **Per-deck outcome rules, fixed now:** decks are never pooled. If check 2 fails on a deck, the
 A→B transfer is declared broken there and only end-to-end numbers are quoted for that deck

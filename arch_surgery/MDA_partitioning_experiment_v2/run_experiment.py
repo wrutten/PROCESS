@@ -59,7 +59,16 @@ def main() -> int:
     rc = phase_b.stage_campaign()
     if rc != 0:
         return rc
-    return phase_b.stage_tally()
+    rc = phase_b.stage_tally()
+    if rc != 0:
+        return rc
+    # Context-only timings run last and never fail the experiment: a timing
+    # problem is reported, not fatal (no acceptance quantity rests on it).
+    rc_t = phase_b.stage_timing()
+    if rc_t != 0:
+        print(f"timing stage returned {rc_t} — context only, experiment "
+              f"result stands")
+    return 0
 
 
 if __name__ == "__main__":

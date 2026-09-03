@@ -45,12 +45,13 @@ def writeset_for(deck: str) -> Path:
 def postsolve_for(deck: str) -> Path:
     return DATA / f"postsolve_{deck}.json"
 
-#: Phase B arms (plan §4), renamed B0/B1/B2 (user, 2026-09-03) so Phase A's
-#: arms can be A0/A1.  NOT the same objects as V1/A28's primed arms: A28's
-#: A0' ~ B0 and A1' ~ B1-with-outer-loop; V2's B2 has no outer loop at all.
+#: Phase B arms (plan §4).  B2 = partitioned WITH the outer loop (re-admitted
+#: by the user 2026-09-03 pre-campaign); B3 = partitioned trust (no outer
+#: loop) — the designed architecture and the headline.  V1/A28's primed arms
+#: are different objects (A0' ~ B0; A1' ~ B2 without post-solve).
 #: B1 keeps B0's upstream node order: B0 -> B1 must vary the lift and
 #: nothing else (the resequencing belongs to the partition step, B1 -> B2).
-PHASE_B_ARMS = ("R", "B0", "B1", "B2")
+PHASE_B_ARMS = ("R", "B0", "B1", "B2", "B3")
 
 #: Missing-instrumentation ledger.  A stage that needs an entry here refuses
 #: with its task name while the entry is False — update when the task merges.
