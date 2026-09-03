@@ -57,7 +57,11 @@ one-pass trust-mode (staleness fires once, at the cold first call — "verify th
 trust thereafter" captures it); on `st_regression` the verify pass is NOT vacuous and the V2
 options are keep-it, resolve mechanism (i)/(ii) first, or a declared audited accuracy
 concession. Confirming run (blocked on the heavy slot): one instrumented `st_regression`
-`start010` recording per-call, per-pass argmax components.
+`start010` recording per-call, per-pass argmax components — and it must record **which deck
+switches the moving chain needs**, because the sibling study's graph exports are built for the
+large-tokamak config while the ST deck runs the **resistive** TF model, so resistive-branch
+edges may be absent from the DSM by configuration rather than by error (DSM register V14
+addendum; their D77/I-44).
 
 ## Design items carried from the V1 lessons
 

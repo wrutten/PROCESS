@@ -450,3 +450,26 @@ and would need its own register category. Consequence either way: "the collapsed
 edge" does not imply "one outer pass suffices" at states far from self-consistency, and V2's
 trust-mode design must treat edge-liveness as state-dependent (see
 [`../plans/MDA_PARTITION_V2_REVISION_LIST.md`](../plans/MDA_PARTITION_V2_REVISION_LIST.md) R1a).
+
+**V14 addendum (2026-09-03, from the `PROCESS_code_analysis` orchestrator, after the query was
+withdrawn — volunteered, not owed).** Two pointers that reshape the diagnostic:
+1. **Their graph exports are deck-specific and `st_regression` is not one of the standing
+   configurations** (theirs are the large-tokamak and stellarator decks; `st_regression` is an
+   MFILE-level inspection scenario, their D77). Our own **V6** already records the same thing from
+   our side: the DSM's source config matches `large_tokamak_*` and differs from `st_regression` on
+   `i_single_null`, `i_plasma_current`, `i_beta_component`. Since the ST deck runs the **resistive**
+   TF model (`tfcoil/resistive.py` writes `a_tf_plasma_case`, our measured slow mode) while the
+   DSM's config runs the superconducting chain, edges specific to the resistive-TF branch may be
+   **absent-by-configuration, not by error** — "the collapsed DSM has no back edge here" partly
+   means "the DSM never executed this code path". Any future named read must state **which deck's
+   switches it needs**; they will check it against the pinned deck-independent *source* as well as
+   the export.
+2. **Mechanism (ii) — execution-history-dependent output at fixed inputs — is not hypothetical:
+   they hold measured members** in upstream PROCESS at their pin: a cross-sweep stale read (the
+   2015 cost model's turns count, read 8 lines before its only writer runs — consumed one optimiser
+   evaluation late); first-evaluation reads of fields defaulting to 0.0 that a later step writes
+   (first-wall coolant void); and an output-path mesh switch (100→500, never restored). Citations
+   in their M84 direct-cycle audit and M36 output-pass reports. Their DSM **deliberately does not
+   encode same-pass vs next-pass timing** (their I-44), so the caveat V14 states — no back edge
+   does not imply one pass suffices — is one they already hold as true for that timing class, and
+   `physics.py:387/:395` reads as a textbook member of it.
