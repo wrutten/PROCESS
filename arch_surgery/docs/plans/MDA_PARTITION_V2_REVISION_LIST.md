@@ -33,23 +33,31 @@ consequences:
    delivers slightly less accuracy on those calls, priced by the audit; benign;
 2. **state-dependent cross-block coupling** waking at states far from the harvest → trust-mode
    is structurally wrong on those calls.
-**Identified from artifacts (orchestrator, 2026-09-03), one confirming run pending.** The
-heavy tail is entirely `st_regression`, and the mechanism is (2) in a dormant form: a genuine
-**M2 → M1 back edge** — `physics` reads TF-coil-derived fields (`b_plasma_*_toroidal` via
-`tfcoil.ripple_b_tf_plasma_edge`, `build.r_tf_outboard_mid`) but is scheduled first, so at
-states far from self-consistency its pass-1 output is computed against stale coil values and
-pass 2 moves > τ, cascading through the coils block (`superconducting_tfcoil.a_tf_plasma_case`
-is the argmax slow mode, 22/28 ladder audits, in BOTH arms) into the ~100-field blanket/fwbs
-geometry census. At harvested states the edge carries nothing — which is why A2/A22 correctly
-measured zero cross-module movement there ("k = 1, confirmed at the harvest" meeting its
-predicted failure mode). The drift is transient (bit-exact 0 at every accepted optimum) and
-the outer loop resolves it in 1–5 extra passes on 3.2 % of calls. Consequences for R1:
-trust-mode's one-pass design is unsafe where this edge is live; the V2 options are (a) keep
-the verify pass on decks where it fires — on `st_regression` it is NOT vacuous — (b) treat
-the TF-field coupling as a second lift candidate (k = 2), or (c) price the staleness as a
-declared accuracy concession, audited per run. Confirming run (blocked on the heavy slot,
-A29): one instrumented `st_regression` `start010` recording per-call, per-pass argmax
-components and pass counts, to tie the 3+-pass calls to this edge beyond aggregates.
+**Localised from artifacts; mechanism narrowed to two candidates (orchestrator, 2026-09-03);
+one confirming run pending.** The recurring drift is **contained to `st_regression`**: 2 802 of
+54 480 A1′ calls (5.14 %) need a 3rd–7th outer pass there, against exactly **one call per run**
+on each pulsed deck (22/14 080 and 20/20 370 — the cold first call, maximal staleness, benign).
+The slow mode is the TF-coil chain: `superconducting_tfcoil.a_tf_plasma_case` (written at
+`tfcoil/resistive.py:320`; ST runs the resistive TF model) is the argmax exit residual on 22/28
+ladder audits **in both arms**, decaying ~30× per rung — a property of the coupling structure,
+not of blocking. The downstream cascade is ~147 fields across 17 modules; it is **transient**
+(bit-exact 0 at every accepted optimum) and dormant at the harvest, which is why A2/A22
+correctly measured zero cross-module movement there. **A first source scan eliminated the
+obvious explanations**: the `physics ← pf_coil.p_pf_electric_supplies_mw` read is in
+`outplas()` (output path, physics.py:2601 at `c0ae5b28`), `dr_fw_plasma_gap_*` is written by
+`plasma_geometry` itself, and `b_plasma_*_toroidal` is physics-internal (though
+physics.py:387/395 holds a one-sweep **stale read** of `b_plasma_inboard_toroidal` — an
+intra-module lag the inner loop resolves). Two candidates remain: **(i)** a computational
+cross-block read our grep missed — handed to `PROCESS_code_analysis`, whose pinned dependency
+instrument can enumerate readsets authoritatively (see the outgoing report of 2026-09-03);
+**(ii)** a **non-idempotent model** in the coils block — an internal solve whose output carries
+its own state between executions, so the block re-emits above-τ dust at hostile states: a class
+no DSM edge can represent. Consequences for R1: on the pulsed decks the evidence supports
+one-pass trust-mode (staleness fires once, at the cold first call — "verify the first call,
+trust thereafter" captures it); on `st_regression` the verify pass is NOT vacuous and the V2
+options are keep-it, resolve mechanism (i)/(ii) first, or a declared audited accuracy
+concession. Confirming run (blocked on the heavy slot): one instrumented `st_regression`
+`start010` recording per-call, per-pass argmax components.
 
 ## Design items carried from the V1 lessons
 
