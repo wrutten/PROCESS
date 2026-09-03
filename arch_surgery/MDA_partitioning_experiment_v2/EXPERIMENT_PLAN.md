@@ -1,6 +1,9 @@
 # MDA Partitioning Experiment V2 — Experiment Plan
 
-> **Document status (2026-09-03).** **DRAFT for user review — not authorised for execution.**
+> **Document status (2026-09-03, revision 2).** **DRAFT for user review — not authorised for
+> execution.** Revision 2 folds in the user's first review round (all seven assessment points
+> accepted; the post-solve hoist of optimiser-irrelevant feed-forward nodes added to the
+> intervention in both phases; parallelisation strategy declared; A32 merged).
 > Supersedes the user's `Provisional_experiment_plan.txt` (same directory) by incorporating the
 > design discussion of 2026-09-03; draws its licensing measurements from
 > [`../docs/plans/MDA_PARTITION_V2_REVISION_LIST.md`](../docs/plans/MDA_PARTITION_V2_REVISION_LIST.md)
@@ -13,11 +16,20 @@
 is one clean architectural change, with every physics and engineering model byte-identical to
 upstream at `c0ae5b28` (D2, D5):
 
-> **The intervention (one unit, not three):** partition the overarching MDA into three block
+> **The intervention (one unit, not four):** partition the overarching MDA into three block
 > MDAs run in feed-forward order; lift the single cross-block feedback (the burn-time coupling;
 > k = 1 on the pulsed decks, k = 0 on `st_regression`) to the optimiser with its consistency
 > constraint (constraint 93); feed-forward nodes execute once, outside any loop (hoisting is
-> definitional to the partition, not measured separately).
+> definitional to the partition, not measured separately); and feed-forward nodes whose outputs
+> the optimiser never consumes — no objective read, no active-constraint read, no reader inside
+> the solve — leave the per-call path entirely, executing **once per run at the accepted
+> optimum** (the post-solve hoist; user decision 2026-09-03). The per-deck post-solve set is a
+> committed artifact derived by crawling the collapsed DSM backwards from the deck's objective
+> and constraint readsets, confirmed in source and by the §6 bit-comparison gate — first-cut:
+> `costs` and `water_use` leave on all three decks (none of the three objectives reads a cost
+> output, and the two constraint equations touching `data.costs.*` read fields the costs node
+> does not write); `pulse` stays per-call on the pulsed decks (fom −14 reads
+> `times.t_plant_pulse_burn`, `objectives.py:81`, and icc 13 reads the burn time).
 
 **Claim decomposition (R11).** Total cost = optimiser iterations × calls per iteration ×
 per-call MDA cost. The experiment splits along that product:
@@ -33,11 +45,12 @@ per-call MDA cost. The experiment splits along that product:
   impact relative to Phase A's bound, the shrunken number is the honest result — no correction
   is applied or wanted.
 
-**Preconditions (both already closed):** the coupling-state spec generation is a26-mode
-everywhere (A31 found the A18-mode exact-equality-on-constants artifact; A32 confirmed
-end-to-end on `st_regression` A1′ that the recurring 3+-pass tail collapses 2,802/54,480 →
-25/49,920 — exactly one cold first call per run — and the moved-constant counter goes to 0);
-the driver's spec loader is mode-aware (A32's B1 fix, gated bit-exact against A28's record).
+**Preconditions (closed — A32 merged `637a6bb6`, 2026-09-03):** the coupling-state spec
+generation is a26-mode everywhere (A31 found the A18-mode exact-equality-on-constants
+artifact; A32 confirmed end-to-end on `st_regression` A1′ that the recurring 3+-pass tail
+collapses 2,802/54,480 → 25/49,920 — exactly one cold first call per run, verified by call
+index — and the moved-constant counter goes to 0 in both arms); the driver's spec loader is
+mode-aware (A32's B1 fix, gated bit-exact against A28's record, teeth shown).
 
 ## 2. Experimental variables and controls
 
@@ -56,6 +69,14 @@ the driver's spec loader is mode-aware (A32's B1 fix, gated bit-exact against A2
   A28's enumeration) unless the review changes it (Appendix B).
 - **Isolation:** every PROCESS run is a fresh subprocess in its own working directory, tree
   asserted in-process; first run discarded for any timing context (JIT).
+- **Execution and parallelism:** a fixed worker pool of **W = 3** concurrent runs
+  (memory-bound, not core-bound: measured per-run peak RSS 0.65 GB against 7 GB total RAM
+  on 16 cores). Every acceptance quantity is a count or bit-comparison and is
+  **concurrency-invariant**; the one contextual timing weighting comes from a small
+  **serial** repetition block run after the campaign, never from the parallel runs (each
+  record stamps loadavg and sequence position regardless — D17). The job list is
+  deterministic (deck × arm × start), jobs never retried — a crashed run is a taxonomy row,
+  not a rerun — and the tally reads only the on-disk records.
 
 ## 3. Phase A — per-call MDA cost (no optimiser)
 
@@ -63,8 +84,13 @@ the driver's spec loader is mode-aware (A32's B1 fix, gated bit-exact against A2
 
 | arm | architecture |
 |---|---|
-| FLAT | one MDA over all models; convergence predicate on the full coupling state at τ |
-| BLOCKS | three block MDAs in feed-forward order, one shared inner τ, **no outer loop**; feed-forward tail nodes execute once |
+| FLAT | one MDA over all models; convergence predicate on the full coupling state at τ. The post-solve-eligible nodes stay **inside** its loop — that is the flat architecture as shipped (measured: A28's `A0'` hoists nothing; `costs`/`pulse`/`water_use` run every sweep) |
+| BLOCKS | three block MDAs in feed-forward order, one shared inner τ, **no outer loop**; per-call feed-forward nodes execute once per call; **post-solve nodes do not run in the measured call at all** — they execute once at the end of the run (uncharged to the per-call cost, present for the audit) |
+
+**Attribution (declared).** The FLAT→BLOCKS delta measures **the intervention as one unit**
+(partition + pinned/lifted coupling + both hoists). Only `st_regression` (k = 0, nothing
+pinned) separates the partition-and-hoist effect from the coupling term; no per-factor claim
+is made from the pulsed decks' Phase A numbers.
 
 **Coupling handling.** On `st_regression` there is nothing to lift; BLOCKS is pure
 feed-forward. On the pulsed decks the burn-time coupling is live at MDA level (A22: pass-≥2
@@ -82,8 +108,10 @@ shown able to fail before its pass is counted.
 **Accuracy rule (pre-declared).** Both arms run at the same τ (single knob each). The
 **uncharged** exit audit (a26-mode spec, identical instrument, outside the cost accounting)
 measures delivered accuracy per run. Pre-declared similarity criterion: **per deck, the two
-arms' median audited max-scaled-residuals lie within a factor F = 10 of one another, and both
-below the anchor accuracy (what stock PROCESS delivers at its shipped predicate).** The lifted
+arms' audited max-scaled-residual distributions lie within a factor F = 10 of one another at
+BOTH the median and the p90 — the p50-degeneracy check (R7): a median may pass while a tail
+diverges — and both arms sit below the anchor accuracy (what stock PROCESS delivers at its
+shipped predicate). Full distributions are published either way.** The lifted
 coupling's inconsistency is reported separately as the **lift residual** and excluded from this
 criterion (it is the pin, not an error). If the criterion fails, the fallback is the matched
 **measured** accuracy machinery (A26 fix 1 / A28's envelope), both constructions published —
@@ -115,7 +143,7 @@ charged; V2's arm does not carry that pass).
 | R | PROCESS as shipped (its idempotence loop) | anchor |
 | A0 | proper flat fixed-point MDA, predicate-matched | stopping rule (R→A0) |
 | A1 | flat MDA + burn-time coupling lifted to optimiser (constraint 93) | the lift (A0→A1) |
-| A2 | partitioned block MDAs, feed-forward, lifted coupling, **no overarching MDA** | the partition (A1→A2) |
+| A2 | partitioned block MDAs, feed-forward, lifted coupling, **no overarching MDA**, and the deck's post-solve set executed once per run at the accepted optimum instead of once per call | the partition + post-solve hoist (A1→A2) |
 
 There is no "partitioned with outer loop" bridge arm: no-outer-loop is inherent to feed-forward
 partitioning, not a separable factor — partitioned-with-receipt is not a candidate
@@ -132,12 +160,17 @@ R/A0** — the lift adds a variable, never a different starting state. (n vs n+1
 variables is part of the intervention, including its finite-difference gradient cost.)
 
 **Checks, each testable and pre-declared (never on iteration variables — D6):**
-1. **Same optimum:** per-start paired |Δ norm_objf| plus the post-solve feasibility audit;
-   accepted as "same" when the difference is smaller than each arm's own audited
-   distance-to-fixed-point. The full paired distribution is published either way.
+1. **Same optimum:** per-start paired |Δ norm_objf| plus the post-solve feasibility audit.
+   The yardstick for a "harmless" difference is **measured inside the same campaign**: the
+   R→A0 paired |Δ norm_objf| spread — the stopping-rule change's own footprint — rather than
+   an assumed state-to-objective sensitivity. Acceptance: the A0→A1 and A0→A2 paired spreads
+   are not larger than the R→A0 spread by more than the declared factor (F, §3's). The full
+   paired distributions are published either way.
 2. **Iteration multiplier:** paired per-start ratio of optimiser iterations (and of function
    evaluations), median and q1–q3 per deck. Acceptance: median paired iteration ratio
-   ≤ 1.05 (A28 precedent: 1.000/1.000 on two decks — the bar is strict because it can be met).
+   ≤ 1.05. *Licensing measurement:* A28 measured paired ratios of exactly 1.000/1.000 on two
+   decks **with the lift in place** — the bar is strict because it has been met under the
+   same lift.
 3. **Lift actually closed:** constraint-93 residual at every accepted optimum, reported per
    start.
 4. **Robustness:** paired multi-start with the A30 taxonomy (crashed / refused / unconverged /
@@ -192,6 +225,17 @@ that — architecture changed performance measurably, physics untouched.
 3. **A2 trust-mode driver path** — partitioned `module_solve` without the outer verification
    loop; env-switched; the constraint-93 lift wiring exists (A25/A28). Driver scope only
    (`process/core/solver/`, `caller.py`).
+3a. **Post-solve hoist instrument (task A33)** — two pieces. *(i) The classification:* per
+   deck, a committed `postsolve_<scenario>.json` artifact from a backward crawl of the
+   collapsed DSM (sibling repo's export, read-only) seeded by the objective's and the active
+   constraints' read-variables (assembled per `icc` from `process/core/solver/constraints.py`
+   and per `minmax` from `objectives.py`), confirmed in source; V6 config-specificity checked
+   per deck. *(ii) The driver capability:* env-switched (`PROCESS_ARCH_POST_SOLVE`) exclusion
+   of the listed nodes from solve-phase `_call_models_once`, with one execution at the
+   accepted optimum before output; byte-neutral when unset (gated). *Correctness gate:* at
+   fixed x on sampled starts, the constraint vector and objective must be **bit-identical**
+   with and without the exclusion — per deck, teeth shown. First-cut classification and its
+   evidence: §1.
 4. **Per-node counts in campaign metrics** — enable the node census fields in every campaign
    run's `metrics.json` (machinery exists; currently off in campaign mode).
 5. **Entry-distance binning** — analysis-side only; the entry census is already recorded.
@@ -215,5 +259,8 @@ that — architecture changed performance measurably, physics untouched.
    pin-value insensitivity evidence, needed by §5), or `st_regression` + one pulsed deck?
 5. **Anchor accuracy:** measured from R at its shipped predicate per deck (recommended), or
    fixed numerically in advance?
-6. **A32 merge** precedes execution (its driver fix is what loads the a26 specs) — assess and
-   merge per protocol §5 first. Confirm.
+6. ~~A32 merge precedes execution~~ **Resolved 2026-09-03:** A32 assessed and merged
+   (`637a6bb6`) — tail confirmed dissolved, driver fix gated switch-neutral.
+7. **Post-solve hoist** is part of the intervention in both phases (user decision
+   2026-09-03); the classification artifact and driver capability are task A33's
+   deliverables and precede execution.
