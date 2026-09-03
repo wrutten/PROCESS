@@ -176,8 +176,13 @@ def _git_head() -> str | None:
 
 
 def _git_dirty() -> bool:
+    """Tracked-file dirtiness only (``-uno``): the artifacts this script is
+    in the middle of generating are necessarily untracked at generation time
+    and must not mark their own provenance dirty; a MODIFIED tracked file is
+    the hazard the stamp exists for."""
     out = subprocess.run(
-        ["git", "-C", str(TREE), "status", "--porcelain"],
+        ["git", "-C", str(TREE), "status", "--porcelain",
+         "--untracked-files=no"],
         capture_output=True, text=True, check=False,
     ).stdout
     return bool(out.strip())
