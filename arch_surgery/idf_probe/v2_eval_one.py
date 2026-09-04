@@ -522,10 +522,15 @@ def main() -> int:
               "PROCESS_ARCH_LIFT", "PROCESS_ARCH_MODULE_SOLVE",
               "PROCESS_ARCH_TAU", "PROCESS_ARCH_INNER_TAU",
               "PROCESS_ARCH_YSTATE", "PROCESS_ARCH_WRITESET",
-              "PROCESS_ARCH_OUTER", "PROCESS_ARCH_PIN_BURN_TIME"):
+              "PROCESS_ARCH_OUTER", "PROCESS_ARCH_PIN_BURN_TIME",
+              "PROCESS_ARCH_PRIME"):
         result[f"env_{k}"] = os.environ.get(k)
     result["arch_sequence_name"] = getattr(_caller, "SEQUENCE_NAME", None)
     result["arch_hoist_name"] = getattr(_caller, "HOIST_NAME", None)
+    # D19 (A40): which prime the imported tree resolved -- module attribute,
+    # never the environment echoed back; ``None`` on a tree that predates
+    # the variant point.  Additive fields only (A38's discipline).
+    result["arch_prime_name"] = getattr(_caller, "PRIME_NAME", None)
     result["arch_module_solve_name"] = getattr(
         _module_solve, "MODULE_SOLVE_NAME", None
     )
@@ -682,6 +687,12 @@ def main() -> int:
     # ------------------------------------------------------------------
     Caller = _caller.Caller  # noqa: N806
     node_calls_before = _caller.NODE_CALLS[0]
+    # D19 (A40): the prime's invocation counter, frozen around the measured
+    # call exactly as NODE_CALLS is (the uncharged exit audit's fresh Caller
+    # also primes, and must not be charged).  ``None`` cell on a tree that
+    # predates the variant point.
+    _prime_cell = getattr(_caller, "PRIME_CALLS", None)
+    prime_calls_before = _prime_cell[0] if _prime_cell is not None else None
     status = "ok"
     objf = conf = None
     the_caller = None
@@ -714,6 +725,14 @@ def main() -> int:
     # ------------------------------------------------------------------
     result["node_calls_single_eval"] = _caller.NODE_CALLS[0] - node_calls_before
     result["node_calls_counter_total"] = _caller.NODE_CALLS[0]
+    # D19 (A40): the prime's invocation count over the measured single call,
+    # frozen here, before the uncharged exit audit runs.  Stamped, never
+    # pooled into node calls (plan section 2: the prime is not a node).
+    # ``None`` on a tree that predates the variant point; 0 when off.
+    result["n_prime_calls"] = (
+        _prime_cell[0] - prime_calls_before
+        if _prime_cell is not None else None
+    )
     result["n_model_calls_sweeps"] = int(nums.n_model_calls)
     if args.node_census:
         result["node_census"] = {

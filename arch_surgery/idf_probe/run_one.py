@@ -420,6 +420,13 @@ def main() -> int:
     head = getattr(_caller, "SEQUENCE_HEAD", None)
     result["arch_sequence_head"] = list(head) if head is not None else None
 
+    # D19 (A40): which prime the imported tree resolved.  Read from the
+    # module, not the environment (the A3/A13/A24 pattern), so a tree that
+    # predates the variant point reports ``None`` rather than echoing the
+    # arm the driver asked for.  Additive fields only.
+    result["env_PROCESS_ARCH_PRIME"] = os.environ.get("PROCESS_ARCH_PRIME")
+    result["arch_prime_name"] = getattr(_caller, "PRIME_NAME", None)
+
     # ------------------------------------------------------------------
     # D15(a) multi-start: perturb the *initial design vector*, identically in
     # both arms.  The hook wraps ``load_scaled_bounds`` rather than
@@ -629,6 +636,11 @@ def main() -> int:
     # VP4 cost unit: individual model node calls, split at the solve/output
     # boundary.  Recorded on both arms.
     result["node_calls_total"] = getattr(_caller, "NODE_CALLS", [None])[0]
+    # D19 (A40): the prime's invocation count for the whole run -- stamped,
+    # never pooled into node calls (the prime is not a node and is not routed
+    # through ``Caller._node``).  ``None`` on a tree that predates the
+    # variant point; 0 whenever the prime is off.
+    result["n_prime_calls"] = getattr(_caller, "PRIME_CALLS", [None])[0]
     result["node_calls_solve_phase"] = getattr(
         _caller, "NODE_CALLS_AT_OUTPUT", [None]
     )[0]
