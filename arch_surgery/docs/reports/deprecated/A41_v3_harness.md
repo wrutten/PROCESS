@@ -1,6 +1,6 @@
 # A41 (v3-harness) — the V3 harness: a verbatim copy of V2's, then the V3 constructions; G4 and G7 pass with teeth, the verifier is given teeth of its own, and three defects in the delivered state are reported rather than repaired silently
 
-> **Document status** — **CURRENT · TASK REPORT of an OPEN task.** Written by task A41
+> **Document status** — **ARCHIVED · TASK REPORT of a MERGED task** (merged to `architecture_surgery` 2026-09-04, merge `e4096e84`, after the orchestrator's assessment; authoritative here — folder position records lifecycle, not validity, trap T3). Written by task A41
 > (v3-harness), 2026-09-04, on branch `A41-v3-harness` in worktree
 > `/home/wrutten/projects/PROCESS_surgery_worktrees/A41-v3-harness`, from the mint commit
 > `b7dbd2a9`. **Not merged**; the orchestrator assesses per protocol §5 and archives this
