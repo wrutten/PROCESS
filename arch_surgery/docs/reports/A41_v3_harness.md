@@ -390,3 +390,56 @@ each stage are in that directory beside the records.
   branch changes: the prime does not exist on a tree off `b7dbd2a9`, so the harness's refusals
   are correct here. §7 finding 4 rewritten to name **both** ledger flips owed at A41's merge
   (`prime` and `exit_forensics`) rather than only `exit_forensics`.
+
+## Orchestrator assessment (pre-merge, 2026-09-04)
+
+**Verified independently.** The verbatim-copy claim was re-checked by diffing all six files
+in `913b89f0` against `git show b7dbd2a9:…` — the V2 files **as they stood at this branch
+point**: **+4 provenance lines, 0 removals, on every one of the six**. (A first attempt
+compared against the V2 files as they stand *today* and appeared to show a 17-line
+divergence in `v3_report_analysis.py`; that is session `f1`'s later additive change to the
+V2 file, committed at `6f05f819` after this branch point, not a divergence in the copy.
+The check was wrong, not the copy.) The `--mode smoke --verify` pass reproduces 11/11 cells
+with 0 mismatches and 4/4 applied verifier teeth trip.
+
+**Findings adjudicated.**
+
+1. **check 1 diverged from the plan — the task was right to report it, and the plan wins.**
+   `EXPERIMENT_PLAN.md` §4.2 declares a **per-pair relative** statistic
+   r = |Δ `norm_objf`| / max(|objf|ₐ, |objf|ᵦ) with the plain 1e-6 relative floor (O3); the
+   harness computed an **absolute** delta against a floor scaled by an ensemble median of
+   |`norm_objf`|. These are different constructions, and normalising a per-pair statistic by
+   an ensemble median is precisely the class of ambiguity this project spent the day
+   correcting elsewhere. **Adjudicated for the plan** — it carries the pre-declared
+   acceptance rule and the user's O3 resolution is explicitly a *relative* tolerance.
+   Fixed in `10a2ff36`; the absolute delta is retained beside the relative one, published
+   but never accepted against. **This change is the orchestrator's, not the task agent's**,
+   and is verified two ways: the arithmetic on representative values (identical → r = 0;
+   1e-10 apart → passes; a real st attractor hop at 1.26e-2 → fails; and with V2's
+   machine-noise yardstick of 3.3e-15 the floor dominates the bound, which is exactly what
+   O3 exists to fix), and the harness's own verifier and teeth re-run clean afterwards.
+2. **check 2 owed the plan's iteration totals.** The `EXPERIMENT_PLAN` amendment requiring
+   summed iterations beside every median was committed *after* this branch point, so the
+   harness could not have carried it. Added (orchestrator, same commit series): arm sums,
+   sum ratio, per-arm iteration medians, the contributing seed list, and a
+   `sum_vs_median_directions_agree` flag. Validated against V2's real lad numbers — it
+   returns **False** for B0→B1 (median 0.833 against sum ratio 1.009, the case that
+   prompted the amendment) and **True** for B0→B3.
+3. **The missing `.gitignore` was a genuine defect, found and repaired by the task**: V3's
+   directory lacked V2's `runs/` ignore, so `git status --porcelain` was never clean and
+   **every V3 record stamped `tree_git_dirty: true`**. Repaired at `1e5eaf46` and all cited
+   gates re-run clean. This is exactly the provenance-hygiene failure the project's
+   clean-stamp discipline exists to catch, caught before any campaign number existed.
+4. **`--verify` could not fail, and the task gave it teeth.** It read only
+   `runs/*/campaign/**`, which cannot exist pre-approval, so it reported "0 cells checked,
+   0 mismatches" and exited 0 — a green light over an empty population (trap T11). The task
+   added `--mode smoke` and its own `--teeth`, and honestly reports the one Phase B tooth
+   as "not applied" rather than counting it as passing.
+5. **G4 had been implemented but never executed** at the interruption; the task executed it
+   and it PASSes in both directions with 7/7 and 3/3 binding checks.
+6. **The ledger owes two flips at merge, not one** (`prime` from A40, which merged while
+   this task ran, and `exit_forensics`), correctly left unflipped here — a ledger claiming
+   an instrument the branch lacks is the silent-wrong-arm failure the refusals prevent.
+   Recorded as owed to A42's preflight.
+
+**Merge approved.**
