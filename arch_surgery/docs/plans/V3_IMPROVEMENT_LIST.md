@@ -76,11 +76,37 @@
    failures 0 (R) … 1–3 (B0…B3) of the ~13 attributable seeds — which is the effect N must
    be sized to resolve. V3 either sizes N for a declared minimal detectable arm effect or
    declares robustness out of scope per deck.
-9. **Per-deck perturbation amplitude.** lad's feasible basin is narrow relative to
-   δ = 0.10 (13/25 starts unrecoverable in every arm — §5.1). V3 decides, per deck and
-   before the campaign: keep the shared δ (comparability across decks) or declare
-   basin-sized per-deck amplitudes (usable-pair yield); the V2 result quantifies the
-   trade-off.
+   **Design recommendation (orchestrator, 2026-09-04, from the V2 timing/taxonomy data;
+   scripted with v3's design work if promoted into a plan):** state the robustness claim
+   as an **equivalence bound** ("arm X adds ≤ E attributable failures vs B0, 95 %"), not
+   effect detection — then N follows from E by the discordant-pair arithmetic (≈ 3/N upper
+   bound at zero discordant events; ≈ 8/p usable seeds to *detect* a discordance rate p).
+   N = 50 full-lattice resolves only ≥ ~15 % effects (screening grade); the V2 hint
+   (1–3 of ~13 usable lad seeds) needs ~100–150 *usable* seeds. Efficient shape:
+   **two tiers** — the 5-arm lattice stays at N = 25 for cost/optimum; robustness runs the
+   headline pair **B0 vs B3 only**, N_drawn ≈ 300 on lad (≈ 140 usable after deck-invalid
+   exclusion → ~2 % bound) and ≈ 150 on nof/st — roughly 4–5 h at W = 3 (failed runs abort
+   early and cost little), one overnight with margin. Percent-level bounds would need
+   N ~ 10³ (the "orders of magnitude" regime); the question actually on the table (a
+   5–10 % effect) does not.
+   **Measured input to this design:** reconstructing the seed streams shows lad's
+   all-arms failures are NOT the large-|u| draws (converged and failing seeds' RMS|u|
+   distributions overlap almost completely; the smallest draw fails, larger ones
+   converge) — failure is direction-dominated. Consequently raw N is not the only lever:
+   item 7's exit forensics may identify the killing constraint family and let v3 raise
+   usable-seed yield by construction instead of brute force.
+9. **Per-deck perturbation amplitude, and interior-vs-shell sampling declared.** lad's
+   feasible basin is narrow relative to δ = 0.10 (13/25 starts unrecoverable in every arm —
+   §5.1). V3 decides, per deck and before the campaign: keep the shared δ (comparability)
+   or declare basin-sized per-deck amplitudes (usable-pair yield). Related declaration
+   (user question, 2026-09-04): the V2 stream samples the **interior** of the δ-ball
+   (per-component u uniform in [−1, 1), so per-seed displacement varies); the alternative
+   — fixed |u| = 1, sign-only random — samples the **shell**, which is strictly stronger
+   than every current draw (max observed RMS|u| = 0.66 of the shell's 1.0) and would fail
+   *more* often on narrow-basin decks, not less. The measured null above (failures are
+   direction-, not magnitude-driven) says the interior/shell choice is second-order for
+   failure statistics; either is fine **declared**, shell only in combination with a
+   smaller δ.
 
 ## Mechanism instrumentation
 
