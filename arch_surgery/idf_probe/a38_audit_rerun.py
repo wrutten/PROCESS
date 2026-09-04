@@ -128,11 +128,15 @@ def excluded_keys(deck: str) -> tuple[set, list]:
     intersected with the a26 spec's keys."""
     nodes = json.loads(cfg.postsolve_for(deck).read_text())["post_solve_nodes"]
     census = json.loads((cfg.DATA / "node_writesets.json").read_text())
-    wb = census["per_scenario"][deck]["writes_by_node"]
+    per = census["per_scenario"][deck]
+    wb = per["writes_by_node"]
+    known = set(per.get("node_module") or ()) | set(wb)
     keys = {c["key"] for c in spec_components(deck)}
     excl: set = set()
     for n in nodes:
-        excl |= set(wb.get(n, ()))
+        if n not in known:
+            raise RuntimeError(f"post-solve node {n!r} unknown to the {deck} write census")
+        excl |= set(wb.get(n, ()))   # a known node without an entry wrote nothing (V5)
     return excl & keys, nodes
 
 

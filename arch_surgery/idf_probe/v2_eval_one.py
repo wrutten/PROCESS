@@ -188,13 +188,21 @@ def _restricted_audit(artifact: str, scenario: str, tree: Path,
             f"restricted audit would be guessed, so it is refused"
         )
     wb = census[scenario]["writes_by_node"]
+    known = set(census[scenario].get("node_module") or ()) | set(wb)
     excl: set = set()
+    empty_writeset = []
     for n in nodes:
-        if n not in wb:
+        if n not in known:
             raise RuntimeError(
-                f"post-solve node {n!r} is absent from the {scenario} write "
+                f"post-solve node {n!r} is unknown to the {scenario} write "
                 f"census {census_path}; refusing to derive the excluded set"
             )
+        if n not in wb:
+            # A known node with no census entry wrote nothing on this deck
+            # (st_regression's ``pulse``: V5, zero writes) -- an empty
+            # contribution, recorded rather than refused.
+            empty_writeset.append(n)
+            continue
         excl |= set(wb[n])
     excl_keys = excl & set(keys)
     kept = [(k, v) for k, v in zip(keys, vals) if k not in excl_keys]
@@ -205,6 +213,7 @@ def _restricted_audit(artifact: str, scenario: str, tree: Path,
     return {
         "artifact": str(artifact),
         "post_solve_nodes": nodes,
+        "nodes_with_empty_writeset": empty_writeset,
         "census": str(census_path),
         "n_excluded": len(excl_keys),
         "n_kept": len(kept),
