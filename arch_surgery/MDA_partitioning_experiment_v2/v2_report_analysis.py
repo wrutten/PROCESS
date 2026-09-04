@@ -360,6 +360,24 @@ def phase_a() -> dict:
                           if rows[arm][k]["audit_max"] is not None)
             sim[arm] = {"n": len(vals), "median": median(vals),
                         "p90": p90(vals), "max": max(vals), "min": min(vals)}
+        # audit argmax ownership census — the A35 §6 item 2 reconciliation
+        # check: which node's writeset owns each A1 run's audit argmax.
+        # Components are keyed by data structure; the post-solve set's
+        # members surface as the costs/vacuum/water_use structures.
+        import collections
+        post_solve_prefixes = {"costs", "vacuum", "water_use"}
+        argmax_prefix = collections.Counter()
+        for k in ok:
+            m = jload(droot / "A1" / f"start{k:03d}" / "metrics.json")
+            am = ((m.get("exit_audit") or {}).get("brief") or {}).get("argmax")
+            key = am.get("key") if isinstance(am, dict) else am
+            if key:
+                argmax_prefix[key.split(".")[0]] += 1
+        d["a1_audit_argmax_by_prefix"] = dict(argmax_prefix)
+        d["a1_audit_argmax_post_solve_owned"] = sum(
+            v for p, v in argmax_prefix.items()
+            if p in post_solve_prefixes)
+
         med_ok = (sim["A0"]["median"] > 0
                   and sim["A1"]["median"] <= F * sim["A0"]["median"])
         p90_ok = (sim["A0"]["p90"] > 0
