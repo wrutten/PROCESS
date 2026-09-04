@@ -74,9 +74,13 @@
    displaces after call 1, making Phase A's regime deliberately more hostile than B3's
    in-optimisation regime. V3 either (a) keeps the hostile regime and carries V2's
    disclosure, or (b) adds a matched-regime variant (perturb only optimiser-reachable
-   state), both published. **[data gap — closed cheaply]** record each run's entry
-   displacement of the known-cut constants so carrier terms are computable without
-   re-tracing.
+   state), both published. **Add-on (corrected 2026-09-04 — this was wrongly labelled a
+   data gap):** each run's entry displacement of the known-cut constants is ALREADY
+   recorded — every Phase A `perturbation.json` carries per-component factor and
+   before/after hex for `build.dr_fw_inboard`, `build.dr_fw_outboard` and
+   `pf_power.vpfskv` (verified; the fact is session bf's catch). Making the tally read it
+   and compute the A35-predicted carrier term per run is a **tally-scope change**, no new
+   field, no harness change.
    *Status note (relayed 2026-09-04 from session process-surgery-bf; user decisions made
    there):* **option (a) is decided** — no harvested-entry redesign of Phase A, no
    cold-start row for both arms, the synthetic warm δ-stream stays (ground: closely
