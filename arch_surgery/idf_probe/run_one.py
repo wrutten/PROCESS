@@ -207,6 +207,16 @@ def main() -> int:
         "for the campaign -- it adds a Python frame per model call.",
     )
     ap.add_argument(
+        "--force-maxcal",
+        type=int,
+        default=None,
+        help="H3/G7 (V3 plan, task A41): cap the solver's iteration budget "
+        "(data.globals.maxcal) to force a deliberately unconverged exit.  "
+        "GATE RUNS ONLY (the G7 record-completeness gate); never a campaign "
+        "parameter.  Stamped into the record so a record carrying it can "
+        "never be mistaken for a measurement.",
+    )
+    ap.add_argument(
         "--entry-census",
         action="store_true",
         help="A28 / issue I-12: record net electric power at the state each "
@@ -601,6 +611,72 @@ def main() -> int:
 
         _caller.Caller.call_models = _call_models_audited
 
+    # ------------------------------------------------------------------
+    # H3 exit forensics (V3 plan section 6 H3, task A41; improvement items
+    # 2 and 7).  Recorded at EVERY exit: n_solver_iterations, ifail, the
+    # ladder stage, the constraint residual vector and the active set.
+    # Harness-side and additive, like the census hooks: a class-level wrap
+    # of every solver's solve() that reads state and appends to a list —
+    # it mutates nothing and is identical in every arm.  Without it, an
+    # unconverged or crashed exit carries none of these (the except branch
+    # below discards the SingleRun object), which V2's tally then dropped
+    # silently — the item-2 data gap.  Per-attempt records double as the
+    # ladder-stage evidence: the positional stage label is checked by the
+    # recorded epsfcn/hessian values beside it.
+    # ------------------------------------------------------------------
+    _h3: dict = {"attempts": [], "data": None}
+    _H3_LADDER = ("initial", "epsfcn_x10", "epsfcn_x0.1", "hessian_reset_b2")
+    try:
+        from process.core.solver import solver as _h3_solver_mod
+
+        def _h3_wrap_solve(cls):
+            orig = cls.solve
+
+            def _h3_solved(self):
+                nums = self.data.numerics
+                k = len(_h3["attempts"])
+                entry = {
+                    "attempt": k + 1,
+                    "ladder_stage_positional": (
+                        _H3_LADDER[k] if k < len(_H3_LADDER)
+                        else f"attempt_{k + 1}_beyond_known_ladder"
+                    ),
+                    "solver_class": type(self).__name__,
+                    "epsfcn_at_entry": float(nums.epsfcn),
+                    "hessian_b": (
+                        None if getattr(self, "b", None) is None
+                        else float(self.b)
+                    ),
+                }
+                _h3["data"] = self.data
+                try:
+                    info = orig(self)
+                except Exception as exc:  # recorded, then re-raised
+                    entry["raised"] = type(exc).__name__
+                    _h3["attempts"].append(entry)
+                    raise
+                entry["ifail"] = int(info)
+                try:
+                    entry["n_solver_iterations"] = int(
+                        nums.n_solver_iterations)
+                except Exception:
+                    entry["n_solver_iterations"] = None
+                conf = getattr(self, "conf", None)
+                entry["conf_hex"] = (
+                    None if conf is None else [float(v).hex() for v in conf]
+                )
+                _h3["attempts"].append(entry)
+                return info
+
+            cls.solve = _h3_solved
+
+        # VmconBounded inherits Vmcon.solve; FSolve overrides it.
+        _h3_wrap_solve(_h3_solver_mod.Vmcon)
+        _h3_wrap_solve(_h3_solver_mod.FSolve)
+        result["exit_forensics_hook"] = "installed"
+    except Exception:
+        result["exit_forensics_hook"] = traceback.format_exc()
+
     from process.main import SingleRun
 
     # I-8 diagnostic: CPU time beside wall clock.  If the CPU-time spread
@@ -608,8 +684,12 @@ def main() -> int:
     # variance is machine contention rather than the code.
     ru0 = resource.getrusage(resource.RUSAGE_SELF)
     t0 = time.perf_counter()
+    result["force_maxcal"] = args.force_maxcal
     try:
         sr = SingleRun(str(dst), solver="vmcon", update_obsolete=True)
+        if args.force_maxcal is not None:
+            # H3/G7 gate runs only: a deliberately unconverged exit.
+            sr.data.globals.maxcal = int(args.force_maxcal)
         sr.run()
         result["status"] = "ok"
     except Exception as exc:
@@ -930,6 +1010,82 @@ def main() -> int:
             ),
         }
         (outdir / "entry_census_series.json").write_text(json.dumps(_vals))
+
+    # ------------------------------------------------------------------
+    # H3 exit forensics, assembled (V3 plan section 6 H3, task A41).  The
+    # five fields at EVERY exit — for a crashed run they come from the
+    # attempt records the solve wrapper kept, since the except branch above
+    # discards the SingleRun object.  The active set is operationalized
+    # from the solver's own inequality convention (solver.py: negative
+    # normalized residual = violated; _ineq_cons_satisfied tests
+    # ie >= -force_vmcon_inequality_tolerance): an inequality constraint is
+    # in the active set when its exit residual is <= that tolerance
+    # (binding or violated); equalities are always enforced and reported as
+    # the equality block, not listed as active.  A run that never reached a
+    # solver attempt (crash before the solve) carries explicit nulls and a
+    # zero attempt count — the tally's completeness contract (G7) binds on
+    # runs with at least one attempt.
+    # ------------------------------------------------------------------
+    _h3_last = _h3["attempts"][-1] if _h3["attempts"] else None
+    _h3_forensics: dict = {
+        "recorded_at": "every exit (V3 plan section 6 H3; items 2 and 7)",
+        "n_attempts": len(_h3["attempts"]),
+        "attempts": _h3["attempts"],
+        "ladder_stage": (_h3_last or {}).get("ladder_stage_positional"),
+        "ifail": (_h3_last or {}).get("ifail"),
+        "n_solver_iterations": (_h3_last or {}).get("n_solver_iterations"),
+        "n_solver_iterations_summed_over_attempts": (
+            sum(a.get("n_solver_iterations") or 0 for a in _h3["attempts"])
+            if _h3["attempts"] else None
+        ),
+        "constraint_residual_vector": None,
+        "active_set": None,
+    }
+    try:
+        _h3_data = _h3["data"] if _h3["data"] is not None else (
+            sr.data if sr is not None else None)
+        _h3_conf = (
+            [float.fromhex(h) for h in _h3_last["conf_hex"]]
+            if _h3_last and _h3_last.get("conf_hex") else None
+        )
+        if _h3_data is not None and _h3_conf is not None:
+            _h3_nums = _h3_data.numerics
+            _h3_meq = int(_h3_nums.n_equality_constraints)
+            _h3_m = _h3_meq + int(_h3_nums.n_inequality_constraints)
+            _h3_icc = [int(v) for v in _h3_nums.icc[:_h3_m]]
+            _h3_forensics["constraint_residual_vector"] = {
+                "icc": _h3_icc,
+                "n_equality": _h3_meq,
+                "n_inequality": _h3_m - _h3_meq,
+                "conf": _h3_conf,
+                "conf_hex": [float(v).hex() for v in _h3_conf],
+                "what": ("the last solver attempt's normalized constraint "
+                         "residual vector (equality block first), exactly "
+                         "as the solver returned it"),
+            }
+            _h3_tol = float(_h3_nums.force_vmcon_inequality_tolerance)
+            _h3_ie = _h3_conf[_h3_meq:]
+            _h3_forensics["active_set"] = {
+                "definition": (
+                    "inequality constraints whose normalized exit residual "
+                    "is <= force_vmcon_inequality_tolerance (binding or "
+                    "violated; the solver's own convention: negative = "
+                    "violated).  Equalities are always enforced and are "
+                    "not listed."
+                ),
+                "tolerance": _h3_tol,
+                "binding_or_violated_icc": [
+                    _h3_icc[_h3_meq + j] for j, v in enumerate(_h3_ie)
+                    if v <= _h3_tol
+                ],
+                "violated_icc": [
+                    _h3_icc[_h3_meq + j] for j, v in enumerate(_h3_ie)
+                    if v < -_h3_tol
+                ],
+            }
+    except Exception:
+        _h3_forensics["assembly_error"] = traceback.format_exc()
+    result["exit_forensics"] = _h3_forensics
 
     probe_block = result.get("probe") or {}
     modules_block = probe_block.pop("modules", None) if isinstance(probe_block, dict) else None

@@ -825,6 +825,78 @@ def main() -> int:
             result["lift_residual"] = {"error": traceback.format_exc()}
 
     # ------------------------------------------------------------------
+    # 4c. H3 exit forensics (V3 plan section 6 H3, task A41; additive).
+    #     The same five-field block run_one.py records, present at EVERY
+    #     exit so the V3 tally's completeness contract (G7) reads one
+    #     shape from both runners.  There is NO optimiser in this process
+    #     (module docstring), so the solver-owned fields are explicit
+    #     nulls with the reason stated — present-but-null, never missing.
+    #     The constraint residual vector is the single call's conf, the
+    #     active set the same operationalization as run_one.py's (the
+    #     solver's own inequality convention and tolerance).
+    # ------------------------------------------------------------------
+    _h3_forensics: dict = {
+        "recorded_at": "every exit (V3 plan section 6 H3; items 2 and 7)",
+        "runner": "v2_eval_one: single MDA evaluation, no optimiser in "
+                  "this process — no VMCON, no retry ladder",
+        "n_attempts": 0,
+        "attempts": [],
+        "ladder_stage": None,
+        "ifail": None,
+        "n_solver_iterations": None,
+        "solver_fields_null_because": (
+            "no optimiser exists in a single-eval run; these fields are "
+            "structurally inapplicable, recorded as explicit nulls"
+        ),
+        "constraint_residual_vector": None,
+        "active_set": None,
+    }
+    try:
+        if conf is not None:
+            _h3_meq = int(nums.n_equality_constraints)
+            _h3_m = _h3_meq + int(nums.n_inequality_constraints)
+            _h3_icc = [int(v) for v in nums.icc[:_h3_m]]
+            _h3_conf = [float(v) for v in conf]
+            _h3_forensics["constraint_residual_vector"] = {
+                "icc": _h3_icc,
+                "n_equality": _h3_meq,
+                "n_inequality": _h3_m - _h3_meq,
+                "conf": _h3_conf,
+                "conf_hex": [float(v).hex() for v in _h3_conf],
+                "what": ("the single call_models' normalized constraint "
+                         "residual vector (equality block first)"),
+            }
+            _h3_tol = float(nums.force_vmcon_inequality_tolerance)
+            _h3_ie = _h3_conf[_h3_meq:]
+            _h3_forensics["active_set"] = {
+                "definition": (
+                    "inequality constraints whose normalized residual at "
+                    "this evaluation is <= "
+                    "force_vmcon_inequality_tolerance (binding or "
+                    "violated; the solver's own convention: negative = "
+                    "violated).  Equalities are always enforced and are "
+                    "not listed."
+                ),
+                "tolerance": _h3_tol,
+                "binding_or_violated_icc": [
+                    _h3_icc[_h3_meq + j] for j, v in enumerate(_h3_ie)
+                    if v <= _h3_tol
+                ],
+                "violated_icc": [
+                    _h3_icc[_h3_meq + j] for j, v in enumerate(_h3_ie)
+                    if v < -_h3_tol
+                ],
+            }
+        else:
+            _h3_forensics["vector_null_because"] = (
+                f"status {status!r}: the call returned no constraint "
+                f"vector; recorded, not papered over"
+            )
+    except Exception:
+        _h3_forensics["assembly_error"] = traceback.format_exc()
+    result["exit_forensics"] = _h3_forensics
+
+    # ------------------------------------------------------------------
     # 5. Exit snapshot + the uncharged exit audit, then stop.  The audit is
     #    the identical instrument every arm gets: a fresh Caller, nothing
     #    hoisted, no block filter, one further full sweep; its node calls
