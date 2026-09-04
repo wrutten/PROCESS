@@ -176,6 +176,11 @@ _ARCH_VARS = (
     "PROCESS_ARCH_PASS_TRACE",
     "PROCESS_ARCH_PASS_TRACE_FULL_FROM",
     "PROCESS_ARCH_POST_SOLVE",
+    # A40 / D19: the first-wall geometry prime.  Cleared here so every
+    # consumer of this list (v2_runner._ALL_ARCH_VARS, the a31..a38 task
+    # scripts, V2's phase scripts) builds prime-clean environments; an arm
+    # that means to prime sets it explicitly.
+    "PROCESS_ARCH_PRIME",
 )
 
 
