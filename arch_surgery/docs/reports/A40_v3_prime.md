@@ -512,3 +512,52 @@ script are what is committed.
   (3) the δ = 0.05 verified chain's pass-3 receipt is 4.46e-15, not exactly `0x0.0p+0`, so the
   "bit-clean receipt" statement was qualified (§6.3). No measured quantity changed. Report
   committed.
+
+## Orchestrator assessment (pre-merge, 2026-09-04)
+
+Independent recheck: [`arch_surgery/idf_probe/a40_recheck.py`](../../idf_probe/a40_recheck.py)
+(committed on this branch), recomputing from the raw records — and, for G1, re-parsing the
+baseline and changed **MFILEs directly** rather than trusting the gate's own comparison.
+**18 checks, ALL PASS.**
+
+- **Driver, from source** — the guard sits after the stellarator/IFE early returns and
+  before the sequence head; the prime is not routed through `Caller._node`; `PRIME_CALLS`
+  increments only where the prime executes; an unrecognised `PROCESS_ARCH_PRIME` raises;
+  unset ⇒ `off` ⇒ `False`.
+- **Provenance** — 37/37 `ok`, 37/37 `dirty=False`, 37/37 with `process_file` inside this
+  worktree and `tree_contains_base_commit`; heads 34 × `1f176950` + 3 × `0ede9b10`.
+- **Licence** — the G1 baseline's `process/` tree hash equals `b7dbd2a9:process` exactly,
+  so the baseline arm really is the pre-change tree; the changed arm differs.
+- **G1, recomputed from the MFILEs** — 11 142 / 11 080 / 11 065 float keys re-parsed
+  independently per deck, **0 hex mismatches, 0 key-set differences**. The recheck also
+  measured what the volatile-key exclusion hides: across all three decks the **only**
+  excluded difference is `(process_runtime)`, wall clock, which is never evidence here
+  (I-10). The gate's larger denominators (13 559 / 13 455 / 13 493) come from A3's
+  comparator keying on varnames with scan-column suffixes; both constructions agree on
+  zero.
+- **G2** — 840/840, 846/846, 827/827 bit-identical in both `flat_state` and `per_module`,
+  `n_differing = 0` and the expected component count met on every arm; teeth trip.
+- **G3** — verified outer passes 3 → 2 on both decks; trust in-run audit above τ
+  **244 → 0** (nof) and **124 → 0** (st); the prime-off arm reproduces A35 exactly.
+- **G3c** — the prime-on trust exits are exactly 0.0 with `n_above = 0` and empty
+  mover sets, while prime-off carries `tfcoil.m_tf_coil_superconductor` as argmax; A35's
+  six image closures recomputed from the recorded raw displacements (max relative
+  difference 2.9e-12); the two-coefficient solve redone independently from the three
+  entries reproduces (−21.07, +55.70) and the 1.57e-2 third-entry residual — four orders
+  worse than the direct images, which is what licenses "nonlinear but pair-driven" rather
+  than "linear image".
+- **Coverage** — `n_prime_calls == block_sweeps` in all 13 prime-on records, 0 in every
+  prime-off record.
+
+Two failures the recheck raised were **defects in the recheck, not in A40**, and are
+recorded because the fix is the finding: a naive MFILE parse flagged one mismatch per deck
+(`process_runtime` — A3's comparator excludes it by name, documented in its own docstring),
+and a wrong field name made G2 look unverified. Both corrected in the committed script.
+
+The four discrepancies this task raised against the orchestrator's own briefing were all
+correct and are adopted: the fourth `scaled_recompute_all_traced` entry checks nothing
+(real population 384 components over three prime-off runs — a T11-shaped aggregate avoided);
+the "unrecognised value raises" claim has no run artifact and is disclosed as a source-level
+property rather than cited as a gate; the direct images close over 3.8e-14 – 2.9e-12, not
+"at 1e-14"; and the δ = 0.05 verified chain's pass-3 receipt is 4.46e-15, not exactly zero.
+**Merge approved.**
