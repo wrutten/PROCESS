@@ -188,10 +188,18 @@ def phase_b() -> dict:
             pr = paired(a, b)
             ratios, dropped = [], []
             fev = []
+            # absolute iteration counts of each arm over exactly the pairs
+            # that contribute a ratio, so a sum/median published beside the
+            # ratio is over the same seed set. NOTE: the declared statistic
+            # is the median of the PER-PAIR ratios; the ratio of these two
+            # sums is a different construction and is published as such.
+            iters_a, iters_b = [], []
             for k, ra, rb in pr:
                 ia, ib = ra["iters"], rb["iters"]
                 if ia and ib:
                     ratios.append(ib / ia)
+                    iters_a.append(ia)
+                    iters_b.append(ib)
                 else:
                     dropped.append({"seed": k, f"{a}_iters": ia,
                                     f"{b}_iters": ib,
@@ -212,6 +220,15 @@ def phase_b() -> dict:
                                                <= cfg.ITER_RATIO_MAX),
                 "model_call_ratio_median": (median(fev) if fev else None),
                 "model_call_ratio_n": len(fev),
+                # absolute optimiser iterations over the ratio-contributing
+                # pairs (same seed set as the medians above)
+                "arm_a": a, "arm_b": b,
+                "iters_a_sum": (sum(iters_a) if iters_a else None),
+                "iters_b_sum": (sum(iters_b) if iters_b else None),
+                "iters_a_median": (median(iters_a) if iters_a else None),
+                "iters_b_median": (median(iters_b) if iters_b else None),
+                "iters_sum_ratio": ((sum(iters_b) / sum(iters_a))
+                                    if iters_a and sum(iters_a) else None),
             }
 
         # check 3 — constraint 93 "lift actually closed", split by
