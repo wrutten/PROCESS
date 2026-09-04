@@ -343,7 +343,7 @@ def restricted_teeth(deck: str, droot: Path, ref: dict) -> dict:
     owned = ref_m.get("spec_keys_owned_by_x") or []
     pin_hex = ref_m.get("t_plant_pulse_burn_hex") if deck in cfg.PULSED else None
     excl, _nodes = excluded_keys(deck)
-    scale = {c["key"]: c["scale"] for c in spec_components(deck)}
+    scale = {c["key"]: c.get("scale") for c in spec_components(deck)}  # discrete: no scale
 
     base = run_eval_job(deck, "A1", root / "A1_warm_restricted",
                         entry_state=snap_path, seed=0, pin_hex=pin_hex)
@@ -602,7 +602,7 @@ def _closure(deck: str, droot: Path, seeds) -> dict:
     """Per A1 run: the pair's recorded entry displacement (perturbation.json),
     A35's predicted raw image on the deck's top mover, and the measured raw
     movement of that component in the restricted audit."""
-    scale = {c["key"]: c["scale"] for c in spec_components(deck)}
+    scale = {c["key"]: c.get("scale") for c in spec_components(deck)}  # discrete: no scale
     top = CARRIER.get(deck)
     rows = {}
     rel = []
