@@ -641,6 +641,27 @@ MODULE_SOLVE_ENABLED: bool = module_solve.ENABLED
 #: changing no branch a result depends on.
 NODE_CALLS: list[int] = [0]
 
+#: Sweeps of ``_call_models_once`` executed inside ONE ``call_models`` — that
+#: is, per optimiser-driven evaluation — binned over the run.
+#:
+#: I-17: the A→B transfer over-predicts B3's saving on all three decks
+#: (nof +22.6 %, lad +6.0 %, st +41.8 %), and the standing hypothesis is that
+#: a Phase A evaluation is not the same object as an in-loop one — Phase A
+#: enters from a δ = 0.10 perturbed point and takes ≈ 5.5 sweeps, while a
+#: gradient-stencil evaluation enters from a point displaced by a tiny FD step
+#: and should sit near the two-sweep floor.  V2 could not test that: nothing
+#: recorded the in-loop sweep distribution.  This histogram is that
+#: measurement, and it is the same unit on both arms (sweeps of the dispatch
+#: body), so the flat and block schedules are directly comparable.
+#:
+#: Same discipline as :data:`NODE_CALLS` above: a plain integer increment,
+#: touching no float and changing no branch a result depends on.  The output
+#: path calls ``_call_models_once`` directly rather than through
+#: ``call_models``, so its sweeps are counted by neither — which is correct,
+#: since only optimiser-driven evaluations are the object here.
+SWEEPS_PER_EVAL_HIST: dict[str, int] = {}
+_SWEEP_CALLS: list[int] = [0]
+
 #: :data:`NODE_CALLS` at the moment the final-output path is entered.  The
 #: cost figure Phase B compares is the **solve** phase: everything before
 #: ``write_output_files``.  The output phase re-enters every model's ``run()``
@@ -1254,6 +1275,23 @@ class Caller:
         if _idf_probe.ENABLED:
             _idf_probe.call_models_begin()
 
+        # I-17 instrument: sweeps taken by THIS evaluation, binned on exit by
+        # every path (normal return, the VP4 early return, or a raise).
+        _sweeps_at_entry = _SWEEP_CALLS[0]
+        try:
+            return self._call_models_inner(xc, m)
+        finally:
+            _n = _SWEEP_CALLS[0] - _sweeps_at_entry
+            _k = str(_n)
+            SWEEPS_PER_EVAL_HIST[_k] = SWEEPS_PER_EVAL_HIST.get(_k, 0) + 1
+
+    def _call_models_inner(self, xc: np.ndarray, m: int) -> tuple[float, np.ndarray]:
+        """The body of :meth:`call_models`; see it for the contract.
+
+        Split out only so the I-17 sweep histogram can bin on every exit path
+        without wrapping the body in an indent-changing ``try``.  No behaviour
+        of its own.
+        """
         # VP2c: resolve (and on first use validate) the post-solve exclusion
         # set.  With the switch off ``_post_solve`` stays ``None`` and nothing
         # below this line differs.
@@ -1493,6 +1531,9 @@ class Caller:
         xc : np.array
             Array of optimisation parameters
         """
+        # I-17 instrument: one sweep of the dispatch body.  Integer only.
+        _SWEEP_CALLS[0] += 1
+
         if _idf_probe.ENABLED:
             _idf_probe.sweep(self.models, self.data)
 

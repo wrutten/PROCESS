@@ -724,6 +724,25 @@ def main() -> int:
     result["node_calls_solve_phase"] = getattr(
         _caller, "NODE_CALLS_AT_OUTPUT", [None]
     )[0]
+    # I-17: sweeps per optimiser-driven evaluation, binned.  The V2 campaign
+    # recorded no in-loop sweep distribution, so the hypothesis behind the
+    # A->B transfer's over-prediction (a Phase A evaluation is not the same
+    # object as an in-loop one) was untestable from its records.  Same unit on
+    # both arms.  ``None`` on a tree predating the instrument.
+    _hist = getattr(_caller, "SWEEPS_PER_EVAL_HIST", None)
+    if _hist is not None:
+        _h = {k: _hist[k] for k in sorted(_hist, key=int)}
+        _n_eval = sum(_h.values())
+        _n_sweep = sum(int(k) * v for k, v in _h.items())
+        result["sweeps_per_eval"] = {
+            "hist": _h,
+            "n_evaluations": _n_eval,
+            "n_sweeps": _n_sweep,
+            "mean": (_n_sweep / _n_eval) if _n_eval else None,
+            "what": ("sweeps of Caller._call_models_once per call_models "
+                     "(one optimiser-driven evaluation); the output path is "
+                     "excluded because it does not go through call_models"),
+        }
     _tot = getattr(_caller, "MODULE_SOLVE_TOTALS", None)
     if _tot is not None:
         _tot = dict(_tot)
