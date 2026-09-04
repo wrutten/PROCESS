@@ -68,6 +68,55 @@ SEQUENCE_HEAD: tuple[str, ...] = _SEQUENCE_HEADS[SEQUENCE_NAME]
 
 
 # --------------------------------------------------------------------------
+# VP6 (D19, task A40) -- the first-wall geometry prime.
+#
+# A35 named the one cut edge that carries a displaced entry into a one-pass
+# exit on the study decks: ``FirstWall`` (block M3) computes
+# ``build.dr_fw_inboard`` / ``dr_fw_outboard`` -- a run-constant of two pure
+# deck inputs (``fw.py:347-352`` at the base commit) -- and ``Build``
+# (block M2, earlier in the executed schedule) reads the *previous* pass's
+# values.  Under an iterating driver the lag costs at most one sweep; under
+# a one-pass schedule it transmits exactly the entry displacement of the
+# pair, once, with A35's measured linear coefficients.
+#
+# The prime executes that one method at the head of every sweep, so ``Build``
+# reads this pass's value.  It is a driver choice about *when* an existing
+# model method runs -- the same family as the VP1 reorder but finer-grained
+# (a method, not a node); nothing under ``process/models/`` changes, and
+# ``FirstWall``'s own execution is untouched (the prime *duplicates* a
+# run-constant of two floating-point operations, identical bits each time).
+#
+# ``off`` is the default and is upstream behaviour exactly: the guard in
+# ``_call_models_once`` is one module-level boolean read per sweep and the
+# counter never moves (gate G1: byte identity with the switch unset).
+#
+# The call is deliberately NOT routed through :meth:`Caller._node`: it is
+# not a node, it must add no counted node call, and every count comparison
+# must stay commensurable with V2.  It is **stamped, not counted** -- the
+# runners record :data:`PRIME_CALLS` as ``n_prime_calls`` in every run's
+# metrics, published as a footnote beside the node-call tables and never
+# pooled into them (V3 plan section 2; trap T11 -- no silent work).
+_PRIME: dict[str, bool] = {"off": False, "fw_geometry": True}
+
+PRIME_NAME: str = os.environ.get("PROCESS_ARCH_PRIME", "").strip() or "off"
+
+if PRIME_NAME not in _PRIME:
+    raise RuntimeError(
+        f"PROCESS_ARCH_PRIME={PRIME_NAME!r} is not a recognised prime "
+        f"setting; expected one of {tuple(_PRIME)} (or unset for "
+        f"{'off'!r})."
+    )
+
+#: True when the first-wall geometry pair is primed at the sweep head.
+PRIME_FW_GEOMETRY: bool = _PRIME[PRIME_NAME]
+
+#: Invocation counter the runners read (the NODE_CALLS pattern: a one-cell
+#: list, so a reader holds the live cell and not a stale int).  Incremented
+#: only when the prime actually executes; stays 0 with the switch off.
+PRIME_CALLS: list[int] = [0]
+
+
+# --------------------------------------------------------------------------
 # VP2 (framework hook F7b) -- the feed-forward tail runs once, after the
 # fixed point, instead of on every sweep.
 #
@@ -1467,6 +1516,20 @@ class Caller:
         if self.data.ife.ife != 0:
             self.models.ife.run()
             return
+
+        # VP6 (D19, task A40): prime the first-wall geometry pair at the
+        # head of the sweep, so Build (which the schedule runs before
+        # FirstWall) reads this pass's value instead of the previous
+        # pass's.  Not a node, not routed through _node, not counted in
+        # NODE_CALLS -- stamped via PRIME_CALLS (see the module-level
+        # comment).  Because it sits here, it is on every path that walks
+        # the model sequence: the flat loop, every VP4 block sweep
+        # (Caller._sweep_block runs blocks through this method), the
+        # output phase and the exit audit (harmless, idempotent -- the
+        # write is the same run-constant every time).
+        if PRIME_FW_GEOMETRY:
+            PRIME_CALLS[0] += 1
+            self.models.fw.set_fw_geometry()
 
         # Tokamak calls
         # Plasma geometry model, machine build model (radial build) and
