@@ -234,7 +234,13 @@ neither changes a verdict.
 back edge `FirstWall → build.dr_fw_inboard/outboard → Build`, transmitting exactly the
 entry displacement, once, under any one-pass schedule (register V15: "value-frozen ≠
 displacement-inert"). For **this experiment's numbers** the expected impact is bounded and
-mostly already visible: in Phase A, the carrier contributes only the ~5.4e-4-scaled
+mostly already visible. A regime disclosure first (surfaced by the parallel methodology
+assessment, verified here): Phase A's multiplicative δ-stream displaces two classes of
+state that **no optimiser-driven call displaces after call 1** — run-constants (the
+`dr_fw` pair; `vpfskv`) and post-solve-owned outputs — so the warm δ-regime is
+deliberately more hostile than any state B3 visits inside an optimisation, and the 75/75
+census and the carrier term are the two symptoms of exactly that mismatch. In Phase A, the
+carrier contributes only the ~5.4e-4-scaled
 displacement image inside A1's audits — the measured 0.18–2.44 medians are 75/75
 post-solve-owned accounting (§4), so removing the carrier would *not* rescue the F = 10
 check; a similarity audit restricted to in-loop-writeset components would isolate the true
