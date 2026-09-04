@@ -44,7 +44,7 @@ drivers is corroborated by execution**. The chain is read from source.
 | F1 | Tolerance inversion: the optimizer's convergence test is 4 orders tighter than its gradient accuracy | Measured + Estimated | **High** |
 | F2 | Finite differences are taken across an iterative solver; solver noise dominates truncation error by ~10⁴ | Estimated | **High** |
 | F3 | The MDA converges the objective and constraints, not the coupling variables | Measured | **High** |
-| F4 | The code documents that model ordering changes results — which contradicts the convergence claim | Measured | **High** |
+| F4 | The code documents that model ordering changes results — which contradicts the convergence claim | Measured (comment); **inference REFUTED by measurement 2026-09-04** — see §F4's correction | **Structural half: High. Convergence inference: retracted** |
 | F5 | `epsfcn = 1e-3` is ~14× below the noise-optimal step; the retry ladder accidentally corrects it | Estimated | Medium |
 | F6 | `FD_Gradients` is not architecture — it is the pyvmcon callback signature leaking upward | Judgement | Medium |
 | F7 | `SolverHandler` is a restart controller, not a solver; it re-runs the optimization up to 4× | Measured | Medium |
@@ -272,9 +272,47 @@ returns — the idempotence test passed for some other reason (most plausibly:
 the affected quantities are downstream of everything and do not feed back into
 f or c, so F3's proxy cannot see them).
 
-This is the single most direct piece of internal evidence that the MDA's
-convergence claim is weaker than it appears. It is also an **ordering constraint
-that no data dependency expresses** — the comment is the only record of it.
+> **CORRECTION, 2026-09-04 — the inference above does not survive measurement;
+> the structural half does.** The sibling study (`PROCESS_code_analysis`, M124)
+> measured this exact ordering change instead of reasoning from the comment.
+> PROCESS publishes per-commit reference MFILEs for its eight scenarios, and
+> there is a two-day window (#4146 → #4155) in which the *wrong* order was live,
+> so the comparison needs no run: on the commit pair whose only diff is the
+> two-call move, **5 of 8 decks are bit-identical**, the largest non-residual
+> mover is **0.00082 %**, and **`ifail` and `n_solver_iterations` are unchanged
+> on all eight decks**. Attribution is controlled (two null-control commit pairs
+> return 0 differences of ~160 000 numbers each). The mechanism is one field:
+> `Buildings.run` writes `buildings.a_plant_floor_effective`, which
+> `Power.plant_electric_production` reads — **a one-sweep lag on a feed-forward
+> edge, which fixed-point iteration is built to absorb**, not a cut cycle.
+> (`Vacuum`, which the comment names, writes nothing either method reads.)
+> So **the comment asserts a magnitude its own code does not produce**, and
+> "the iteration is not at a fixed point when it returns" is **withdrawn** as an
+> inference from this evidence. Rating for the inferential half: **retracted**.
+>
+> **Corroboration from our own instrument, at our base commit.**
+> `buildings.a_plant_floor_effective` is in the audited a26 coupling-state spec
+> on all three of our decks, so our exit audit would see it move. In A40's
+> trust-mode chains — a **one-pass** schedule, which by construction cannot
+> absorb a one-sweep lag — the exit audit with the prime on shows **0 components
+> above τ = 1e-6 and an empty residual-mover set** on `large_tokamak_nof`,
+> `st_regression` and `low_aspect_ratio_DEMO`. This edge therefore carries
+> nothing above τ at those entries in our architecture either. We cannot
+> separate "the executed order already satisfies the constraint" from "the
+> effect is sub-τ" without a dedicated run, and do not claim to.
+>
+> Two caveats kept in fairness: the sibling's measurement is at PROCESS's
+> published commits for its shipped scenarios, **not** at our study commit — map
+> before citing — and the comment sits at `caller.py:372` at `c0ae5b28`, not the
+> `:383-385` this section cites from the superseded `710a75c9` tree (A31 §7).
+
+**What stands, and is the durable claim:** this is an **ordering constraint that
+no data dependency expresses** — the comment is the only record of it, and it is
+unenforced. The sibling confirmed the unenforced part independently: neither PR
+that moved the calls touched a test, and the published regression tolerance is
+~244× too loose to catch a recurrence. Both are filed as defects owed against
+PROCESS on their side. What does *not* stand is using this comment as evidence
+about the MDA's convergence state.
 
 Note also that `power` runs at `caller.py:372` and again at `:387/:390`: one
 discipline occupying two non-contiguous slots in the sequence. In XDSM that is
@@ -407,8 +445,12 @@ All coupling is through the single mutable `DataStructure`. Four consequences:
 1. **The coupling graph is not declared.** It is recoverable only by static
    analysis — which is what this tool is. An xDSM of PROCESS cannot be drawn
    from PROCESS.
-2. **Disciplines cannot be reordered or parallelised** without changing results
-   (F4 is the proof).
+2. **Disciplines cannot be reordered or parallelised** without *first* discharging
+   ordering constraints that only comments record. *(Corrected 2026-09-04: F4 is
+   no longer cited as proof that reordering changes results — measurement shows
+   that particular reorder moves at most 0.00082 % and leaves iteration counts
+   unchanged. What F4 proves is that the constraint is undeclared and unenforced,
+   which is what makes reordering unsafe to attempt blind.)*
 3. **IDF is not expressible.** There are no named y_ij to promote to design
    variables and constrain.
 4. **Ordering constraints live in comments**, not in the dependency structure.
