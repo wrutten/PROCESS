@@ -667,6 +667,45 @@ def _closure(deck: str, droot: Path, seeds) -> dict:
             "per_run": rows}
 
 
+def _downstream_gain(deck: str, droot: Path, seeds, components) -> dict:
+    """For each component that sets the restricted maximum on this deck: the
+    per-seed ratio of its raw audit movement to the pair's mean entry
+    displacement |0.5 (din + dout)|, across the seeds.  A ratio constant
+    across seeds (spread near zero) says the component's movement is one
+    linear image of the pair's displacement with that gain; a wide spread
+    says other perturbed inputs contribute.  Offline, from the records."""
+    scale = {c["key"]: c.get("scale") for c in spec_components(deck)}
+    out = {}
+    for name in components:
+        ratios, rows = [], {}
+        for k in seeds:
+            d = droot / "A1" / f"start{k:03d}"
+            pc = {e["key"]: e for e in (_load(d / "perturbation.json").get("per_component") or [])}
+            if not all(p in pc for p in PAIR) or scale.get(name) is None:
+                continue
+            din = float.fromhex(pc[PAIR[0]]["elem_after_hex"]) - float.fromhex(pc[PAIR[0]]["elem_before_hex"])
+            dout = float.fromhex(pc[PAIR[1]]["elem_after_hex"]) - float.fromhex(pc[PAIR[1]]["elem_before_hex"])
+            mean_disp = abs(0.5 * (din + dout))
+            vec = _load(d / "audit_residual.json").get("scaled") or {}
+            if name not in vec or mean_disp == 0:
+                continue
+            raw = vec[name] * scale[name]
+            r = raw / mean_disp
+            ratios.append(r)
+            rows[str(k)] = {"din": din, "dout": dout, "raw_movement": raw, "gain": r,
+                            "dout_over_din": dout / din if din else None}
+        if ratios:
+            med = statistics.median(ratios)
+            out[name] = {"n": len(ratios), "gain_median": med, "gain_min": min(ratios),
+                         "gain_max": max(ratios),
+                         "gain_spread_rel": (max(ratios) - min(ratios)) / med if med else None,
+                         "per_seed": rows}
+    return {"what": ("per-seed gain of the restricted-argmax components' raw audit movement "
+                     "over the pair's mean entry displacement |0.5(din+dout)|; a constant "
+                     "gain across seeds is a linear image of the pair"),
+            "components": out}
+
+
 def _tally(root: Path, out_path: Path) -> int:
     camp = _load(root / "campaign.json")
     if not camp:
@@ -761,6 +800,11 @@ def _tally(root: Path, out_path: Path) -> int:
             "restricted_A1": {nm: sum(1 for k in paired if rows["A1"][str(k)].get("restricted_argmax") == nm)
                               for nm in sorted({rows["A1"][str(k)].get("restricted_argmax") for k in paired})}}
         d["closure"] = _closure(deck, droot, paired)
+        top_names = sorted(d["argmax_census"]["restricted_A1"],
+                           key=lambda nm: -d["argmax_census"]["restricted_A1"][nm])
+        extra = [CARRIER[deck][0]] if deck in CARRIER else ["build.dz_tf_upper_lower_midplane"]
+        d["downstream_gain"] = _downstream_gain(
+            deck, droot, paired, [n for n in top_names + extra if n])
         first = droot / "A1" / f"start{seeds[0]:03d}" / "audit_residual.json"
         d["parser_teeth"] = _parser_teeth(first)
         summary["per_deck"][deck] = d
