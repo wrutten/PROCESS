@@ -1,6 +1,9 @@
 # A40 (v3-prime) — the `PROCESS_ARCH_PRIME` variant point: four gates PASS with teeth, and A38's open lad term closes under the prime
 
-> **Document status** — **CURRENT · TASK REPORT, open.** Written by task A40 (v3-prime),
+> **Document status** — **ARCHIVED · TASK REPORT of a MERGED task** (merged to
+> `architecture_surgery` 2026-09-04, merge `9a6a9a61`, after the orchestrator's
+> assessment; authoritative here — folder position records lifecycle, not validity,
+> trap T3). Written by task A40 (v3-prime),
 > 2026-09-04, on branch `A40-v3-prime` (worktree
 > `/home/wrutten/projects/PROCESS_surgery_worktrees/A40-v3-prime`), branched from
 > `architecture_surgery` at `b7dbd2a9`; experiment base commit `c0ae5b28` (D2). Archived to
@@ -11,7 +14,7 @@
 |---|---|
 | **Task** | MASTER_TODO row **A40** = V3 plan §8 row T2, decision **D19**: implement the `PROCESS_ARCH_PRIME` variant point (VP6) in `process/core/caller.py` — **the only `process/` change in V3**, driver scope, D11 not triggered, no `process/models/` edit — with additive record stamping in the two runners and the switch added to every cleared-switch list; gate it with **G1** (prime-unset byte identity), **G2** (prime-on fixed-point map), **G3** (prime-on cold chain, nof + st) and **G3c** (the lad carrier census, A35's declared scope gap), each with teeth, from one committed script (protocol §15) |
 | **Verdict** | **All four gates PASS; every tooth tripped.** G1: with the switch unset the changed driver is byte-identical to the pre-change driver — 13 559 / 13 455 / 13 493 MFILE floats compared as exact hex, **0 mismatches, 0 differing lines** on all three decks. G2: from each deck's V2 reference exit snapshot, prime on vs off is bit-identical on **840/840, 846/846, 827/827** components in both a `flat_state` and a `per_module` call. G3: the verified cold chain drops from **3 outer passes to 2** on both traced decks, and the one-pass trust exit's in-run audit drops from **244 → 0** (nof) and **124 → 0** (st) components above τ, with the prime-off runs reproducing A35 exactly (nof's in-run max hex `0x1.de05b6285d3f4p-7` bit-for-bit). G3c: A35's two carrier images transfer to `low_aspect_ratio_DEMO` coefficient-exactly from a traced chain (rel. diff 3.8e-14 – 2.9e-12), and **A38's open term `tfcoil.m_tf_coil_superconductor` closes under the prime** — at both prime-on trust exits on lad the audit maximum is exactly `0x0.0p+0` with **0 components ≥ τ**. **The residual-mover set is empty on all three decks.** |
-| **Script** | [`arch_surgery/idf_probe/a40_prime_gates.py`](../../idf_probe/a40_prime_gates.py), committed at `0ede9b10` **before any published run**; one comparator defect (a string check, not a measurement) fixed at `f74bb2c4` after the gate failed on it — §7. Driver change: `process/core/caller.py` at `1f176950` |
+| **Script** | [`arch_surgery/idf_probe/a40_prime_gates.py`](../../../idf_probe/a40_prime_gates.py), committed at `0ede9b10` **before any published run**; one comparator defect (a string check, not a measurement) fixed at `f74bb2c4` after the gate failed on it — §7. Driver change: `process/core/caller.py` at `1f176950` |
 | **Runs** | **37 fresh-subprocess runs, 37/37 `status: ok`**, strictly serial (one PROCESS subprocess at a time): 6 full R optimisations (G1), 12 fixed-point single evaluations (G2), 10 cold-chain evaluations (G3), 9 evaluations (G3c). Stamps: 3 × `0ede9b10 dirty=False` (the G1 baseline side), 34 × `1f176950 dirty=False`; all 37 on branch `A40-v3-prime`, all with `tree_contains_base_commit=True`. No failure path was taken |
 | **Environment** | `PROCESS_surgery_env` (`/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python`); `PYTHONPATH` pinned to this worktree in every subprocess and `process.__file__` asserted to be the worktree's own (traps T6/T10 — all 37 records read `/home/wrutten/projects/PROCESS_surgery_worktrees/A40-v3-prime/process/__init__.py`); a26 ystate + write-set artifacts; τ = 1e-6; runs under `arch_surgery/idf_probe/runs/a40/` (untracked). Reads outside the worktree: V2's Phase A reference snapshots in the main checkout, read-only |
 | **Date** | 2026-09-04 |
@@ -515,7 +518,7 @@ script are what is committed.
 
 ## Orchestrator assessment (pre-merge, 2026-09-04)
 
-Independent recheck: [`arch_surgery/idf_probe/a40_recheck.py`](../../idf_probe/a40_recheck.py)
+Independent recheck: [`arch_surgery/idf_probe/a40_recheck.py`](../../../idf_probe/a40_recheck.py)
 (committed on this branch), recomputing from the raw records — and, for G1, re-parsing the
 baseline and changed **MFILEs directly** rather than trusting the gate's own comparison.
 **18 checks, ALL PASS.**
