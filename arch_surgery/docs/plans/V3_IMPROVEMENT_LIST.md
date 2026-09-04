@@ -43,10 +43,15 @@
    *Status note (relayed 2026-09-04 from session process-surgery-bf; user decisions made
    there, to be confirmed on execution):* elevated to **the load-bearing harness fix**,
    separate from any intervention change — the same campaign design re-run unchanged with
-   the corrected audit (a re-run is required: V2's Phase A records carry only the audit
-   brief, not the per-component residual vector or an exit snapshot, so the restricted
-   statistic cannot be recomputed offline). Expected outcome, pre-declared there: F still
-   fails, on the carrier term alone.
+   the corrected audit. A re-run is the right route, for the following reason (corrected
+   2026-09-04 — an earlier revision of this note wrongly said no exit snapshot exists):
+   `y_exit.json` IS present in all 162 Phase A run directories, but the per-component
+   residual vector and post-audit-sweep state are not, so recomputing each audit means
+   restoring `y_exit` in a fresh subprocess and taking one flat sweep — one JIT-dominated
+   subprocess per record under the isolation rule, about the cost of the re-run itself
+   (~1 h at W = 3) — and the re-run is cleaner under §15: the corrected audit then lives
+   in the same record as the run that produced it. Expected outcome, pre-declared there:
+   F still fails, on the carrier term alone.
 5. **Carrier-class controls** *(A35; known-cut set)*. Either exclude the known-cut
    constants (`build.dr_fw_inboard/outboard`, `pf_power.vpfskv`) from the perturbation
    stream, or run a control arm with them held at their run-constants — pre-declared
