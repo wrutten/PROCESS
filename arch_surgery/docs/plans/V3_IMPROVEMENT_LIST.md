@@ -64,10 +64,18 @@
    are early and paired (538–554 calls, `sqsumsq` 0.15–0.64), not enough to say *which*
    constraints are violated or where the ladder gave up. V3 records the constraint-residual
    vector, active set and ladder stage at every unconverged/crashed exit.
-8. **Robustness-powered design for arm attribution.** V2's N = 25 cannot resolve 1–3-seed
-   crash-count differences (lad: 2 → 4 → 5 across arms). V3 either sizes N for a declared
-   minimal detectable robustness effect, or declares robustness out of scope per deck; the
-   V2 hint is recorded, neither claimed nor dismissed.
+8. **Robustness-powered design for arm attribution, with seed-driven failures separated
+   out** *(user directive, 2026-09-04: "robustness comparison statistics should separate
+   out these seed-driven failures. If all arms fail, it should be excluded from the failure
+   rates per arm, as we presume the models are simply invalid for the seed")*. V3's
+   declared robustness statistic: a seed that fails in **every** arm (crash or unconverged)
+   is a **deck-invalid seed** — excluded from the per-arm failure rates and reported as its
+   own count; per-arm rates are computed over the remaining seeds only, so they carry
+   arm-attributable failures alone. Under this statistic V2's lad numbers become: 12
+   deck-invalid seeds (9 unconverged + crashes common to all arms), per-arm attributable
+   failures 0 (R) … 1–3 (B0…B3) of the ~13 attributable seeds — which is the effect N must
+   be sized to resolve. V3 either sizes N for a declared minimal detectable arm effect or
+   declares robustness out of scope per deck.
 9. **Per-deck perturbation amplitude.** lad's feasible basin is narrow relative to
    δ = 0.10 (13/25 starts unrecoverable in every arm — §5.1). V3 decides, per deck and
    before the campaign: keep the shared δ (comparability across decks) or declare
@@ -81,10 +89,18 @@
     (B2→B3 = 1.33) — both plausibly live in the finite-difference gradients. **[data
     gap]** V3 instruments FD-stencil audits (per-gradient-point exit residuals, stencil
     condition) so iteration multipliers can be attributed rather than only localised.
-11. **Per-block wall-clock context timers.** **[data gap]** V2 has per-block call counts
-    but no per-block timing, so §5.5's structure table has no wall-clock counterpart.
-    V3 adds per-block timers inside `module_solve` — context only, never acceptance
-    (I-10 stands).
+11. **Per-block wall-clock context, two constructions** *(user, 2026-09-04)*. **[data
+    gap]** V2 has per-block call counts but no per-block timing, so §5.5's structure table
+    has no wall-clock counterpart. Two routes, both context-only (I-10 stands):
+    (a) **reconstruction** — measure per-node unit wall-clock once per deck (one profiled
+    run), then per-block time ≈ Σ_node (recorded calls × unit time). Cheap, applies
+    retroactively to V2's recorded counts; caveats to publish with it: unit times assumed
+    state-independent (A19 §5.2 licenses this approximately), and driver overhead
+    (module_solve machinery, predicate evaluations) is outside node time — the st B3
+    wall-vs-counts gap shows that overhead is not negligible, so the reconstruction
+    estimates *model* time, not run time. (b) **direct per-block timers** inside
+    `module_solve` — captures overhead too, needs instrumentation. V3 does (a) at minimum;
+    (b) if the overhead split itself becomes a question.
 12. **Per-block cost split as a tally output.** V2 computed the §5.5 per-block table at
     analysis time from per-run censuses; V3 makes it a first-class tally artifact
     (the data already exists per run — no new instrumentation, just tally scope).

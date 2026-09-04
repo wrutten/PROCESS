@@ -210,13 +210,14 @@ coincide with the converged-only construction; the analysis names every dropped 
   burn-time lift (same flat architecture, one added optimiser variable + explicit
   constraint 93): on lad's converged seeds that alone buys the 17 % iteration reduction,
   and B2 (which keeps the lift) inherits it exactly (0.833, same pairs). The nof pairs show
-  1.000 for the same lift — so this is a lad-specific interaction: on the deck whose
-  burn-time coupling is hardest (the deck is also the one whose basin is narrowest, §5.1),
-  giving VMCON the coupling as an explicit degree of freedom with its own constraint row
-  helps it converge; solving the same coupling as an inner fixed point does not. The trust
-  step then gives most of it back (B2→B3 = 1.33). A gradient-quality mechanism is plausible
-  (the lifted variable makes one stiff feedback explicit to the QP) but is not measured
-  here — v3 item.
+  1.000 for the same lift — so this is a lad-specific interaction: on this deck, and not on
+  nof, giving VMCON the coupling as an explicit degree of freedom with its own constraint
+  row helps it converge where solving the same coupling as an inner fixed point does not.
+  The trust step then gives most of it back (B2→B3 = 1.33). *Why lad specifically responds
+  is not measured*: no per-deck stiffness/contraction measurement of the burn-time coupling
+  exists in these records, so "the coupling is stiffer on lad" is a hypothesis consistent
+  with — not demonstrated by — these numbers; the gradient-quality instrumentation that
+  could attribute it is a v3 item.
 - **The declared st expectation ("B3 may inflate, context 10→20") is REFUTED:** median
   1.000, q1–q3 [0.85, 1.18]. The single-trajectory context was not representative.
 - "B3 ≈ B2 on the pulsed decks" is confirmed on nof (B2→B3 = 1.000) and refuted on lad
