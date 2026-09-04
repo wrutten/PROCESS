@@ -29,14 +29,21 @@ particular:
 ``--verify`` additionally compares the recomputation against the committed
 tallies (``runs/phase_a/tally.json``, ``runs/phase_b/tally.json``) cell by
 cell and exits nonzero on any mismatch — the report cites numbers only
-after this passes.
+after this passes.  ``--mode smoke`` points the same recomputation and the
+same comparison at the machinery-smoke records
+(``runs/phase_*/smoke/``), which is how the verifier is exercised before
+the campaign exists: with no records it checks ZERO cells and exits 0, and
+a check that cannot fail is not a check (protocol §12).  Smoke numbers are
+machinery, never measurements.
 
-Output: ``runs/report_analysis.json`` + a printed summary.  Counts and hex
-floats only; wall clock appears nowhere.
+Output: ``runs/report_analysis.json`` (``runs/report_analysis_smoke.json``
+in smoke mode) + a printed summary.  Counts and hex floats only; wall clock
+appears nowhere.
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import statistics
@@ -50,6 +57,28 @@ import v3_config as cfg  # noqa: E402
 PA = HERE / "runs" / "phase_a"
 PB = HERE / "runs" / "phase_b"
 F = cfg.SIMILARITY_FACTOR_F
+
+
+def roots_for(mode: str) -> dict:
+    """Where a run mode's per-run records and its committed tally live.
+
+    ``campaign`` (default) is the real thing: A42's records under
+    ``runs/phase_*/campaign/`` against the tallies the phase scripts write
+    beside them.  ``smoke`` points the SAME recomputation at the machinery
+    smokes, so ``--verify`` is exercisable before the campaign exists —
+    without it the verifier checks zero cells and exits 0, which is a pass
+    that cannot fail (protocol §12).  Smoke numbers are machinery, never
+    measurements; the smoke run writes its own output file.
+    """
+    if mode == "smoke":
+        return {"pa_records": PA / "smoke",
+                "pa_tally": PA / "smoke" / "tally.json",
+                "pb_records": PB / "smoke",
+                "pb_tally": PB / "smoke" / "tally.json",
+                "out": HERE / "runs" / "report_analysis_smoke.json"}
+    return {"pa_records": PA / "campaign", "pa_tally": PA / "tally.json",
+            "pb_records": PB / "campaign", "pb_tally": PB / "tally.json",
+            "out": HERE / "runs" / "report_analysis.json"}
 
 FORENSICS_FIELDS = ("n_solver_iterations", "ifail", "ladder_stage",
                     "constraint_residual_vector", "active_set")
@@ -100,9 +129,9 @@ def excluded_keys(deck: str) -> set:
 # ── Phase A ──────────────────────────────────────────────────────────────
 
 
-def phase_a() -> dict:
+def phase_a(camp_root: Path | None = None) -> dict:
     out: dict = {}
-    camp_root = PA / "campaign"
+    camp_root = camp_root or (PA / "campaign")
     campf = camp_root / "campaign.json"
     if not campf.exists():
         return out
@@ -236,9 +265,9 @@ def phase_a() -> dict:
 # ── Phase B ──────────────────────────────────────────────────────────────
 
 
-def phase_b() -> dict:
+def phase_b(root: Path | None = None) -> dict:
     out: dict = {}
-    root = PB / "campaign"
+    root = root or (PB / "campaign")
     if not root.exists():
         return out
     for deck in cfg.DECKS:
@@ -464,14 +493,20 @@ def _match(label: str, a, b, mismatches: list) -> None:
         mismatches.append(f"{label}: analysis {a!r} vs tally {b!r}")
 
 
-def verify(result: dict) -> int:
+def verify(result: dict, roots: dict | None = None) -> int:
     """Compare the independent recomputation against the committed tallies
     cell by cell.  Exit nonzero on any mismatch (the report cites numbers
-    only after this passes)."""
+    only after this passes).
+
+    A run with no records checks zero cells; that is REPORTED as such and
+    is not a pass — the caller decides whether zero cells is acceptable
+    (before the campaign it is not: see ``roots_for``).
+    """
+    roots = roots or roots_for("campaign")
     mismatches: list[str] = []
     checked = 0
 
-    pa_tally_p = PA / "tally.json"
+    pa_tally_p = roots["pa_tally"]
     if pa_tally_p.exists() and result["phase_a"]:
         t = jload(pa_tally_p)
         for deck, d in result["phase_a"].items():
@@ -504,7 +539,7 @@ def verify(result: dict) -> int:
     elif result["phase_a"]:
         mismatches.append("phase A tally.json missing")
 
-    pb_tally_p = PB / "tally.json"
+    pb_tally_p = roots["pb_tally"]
     if pb_tally_p.exists() and result["phase_b"]:
         t = jload(pb_tally_p)
         for deck, d in result["phase_b"].items():
@@ -557,7 +592,113 @@ def verify(result: dict) -> int:
           f"{len(mismatches)} mismatches")
     for msg in mismatches:
         print(f"  MISMATCH {msg}")
+    if checked == 0:
+        print("  NOTE: zero cells checked — there are no records under "
+              f"{roots['pa_records']} / {roots['pb_records']}.  This is "
+              "not a verification; --mode smoke exercises the same "
+              "recomputation against the machinery smokes.")
     return 1 if mismatches else 0
+
+
+def teeth(result: dict, roots: dict) -> int:
+    """The verifier's own teeth (protocol §12): a recomputation that
+    DISAGREES with the committed tally must be refused.
+
+    Each tooth doctors ONE cell of the recomputed result — never the
+    records, never the tally on disk — and requires :func:`verify` to
+    return nonzero and to name that cell.  A tooth that does not trip is
+    reported as a FAIL, not silently passed over.
+    """
+    baseline = verify(result, roots)
+    rows: list[dict] = []
+
+    def tooth(name: str, mutate) -> None:
+        doctored = copy.deepcopy(result)
+        if not mutate(doctored):
+            rows.append({"tooth": name, "applied": False,
+                         "why": "no such cell in these records",
+                         "trips": None})
+            return
+        rc = verify(doctored, roots)
+        rows.append({"tooth": name, "applied": True, "trips": rc != 0})
+
+    def _first_deck(r: dict, phase: str):
+        return next(iter(r[phase].values())) if r.get(phase) else None
+
+    def bump_paired_ok(r: dict) -> bool:
+        d = _first_deck(r, "phase_a")
+        if d is None:
+            return False
+        d["n_paired_ok"] += 1
+        return True
+
+    def scale_restricted_median(r: dict) -> bool:
+        d = _first_deck(r, "phase_a")
+        if d is None:
+            return False
+        dist = d["audit_similarity"]["restricted"]["distributions"]
+        arm = next((a for a, v in dist.items() if v["median"]), None)
+        if arm is None:
+            return False
+        dist[arm]["median"] = dist[arm]["median"] * 1.5
+        return True
+
+    def bump_count_ratio(r: dict) -> bool:
+        d = _first_deck(r, "phase_a")
+        if d is None or not d["count_ratios"]:
+            return False
+        pair = next(iter(d["count_ratios"]))
+        cur = d["count_ratios"][pair]["unweighted_count_ratio"]
+        if cur is None:
+            return False
+        d["count_ratios"][pair]["unweighted_count_ratio"] = cur + 1e-12
+        return True
+
+    def flag_restricted_mismatch(r: dict) -> bool:
+        d = _first_deck(r, "phase_a")
+        if d is None:
+            return False
+        d["restricted_recompute_mismatches"] = ["A1u/start001"]
+        return True
+
+    def bump_iter_median(r: dict) -> bool:
+        d = _first_deck(r, "phase_b")
+        if d is None or not d.get("check2_iters"):
+            return False
+        name = next(iter(d["check2_iters"]))
+        cur = d["check2_iters"][name]["median"]
+        if cur is None:
+            return False
+        d["check2_iters"][name]["median"] = cur * 1.5
+        return True
+
+    tooth("phase_a n_paired_ok +1", bump_paired_ok)
+    tooth("phase_a restricted median x1.5", scale_restricted_median)
+    tooth("phase_a unweighted count ratio +1e-12", bump_count_ratio)
+    tooth("phase_a restricted-recompute mismatch injected",
+          flag_restricted_mismatch)
+    tooth("phase_b check-2 median x1.5", bump_iter_median)
+
+    applied = [r for r in rows if r["applied"]]
+    tripped = [r for r in applied if r["trips"]]
+    verdict = ("PASS" if baseline == 0 and applied and
+               len(tripped) == len(applied) else "FAIL")
+    print("\n--teeth: the verifier's own teeth "
+          f"({len(tripped)}/{len(applied)} applied teeth trip; "
+          f"baseline rc={baseline}) — {verdict}")
+    for r in rows:
+        state = ("trips" if r["trips"] else
+                 ("DOES NOT TRIP" if r["applied"] else
+                  f"not applied ({r['why']})"))
+        print(f"    {r['tooth']:52s} {state}")
+    rec = {"mode": result.get("mode"), "baseline_verify_rc": baseline,
+           "teeth": rows, "verdict": verdict,
+           "what": ("each tooth doctors one recomputed cell and requires "
+                    "--verify to refuse it; the records and the on-disk "
+                    "tallies are never modified")}
+    (roots["out"].parent / (roots["out"].stem + "_teeth.json")).write_text(
+        json.dumps(rec, indent=1))
+    return 0 if verdict == "PASS" else 1
 
 
 def main() -> int:
@@ -565,9 +706,22 @@ def main() -> int:
     ap.add_argument("--verify", action="store_true",
                     help="compare the recomputation against the committed "
                          "tallies and exit nonzero on any mismatch")
+    ap.add_argument("--teeth", action="store_true",
+                    help="run --verify, then the verifier's own teeth: "
+                         "doctored recomputations that must each be "
+                         "refused (protocol §12)")
+    ap.add_argument("--mode", choices=("campaign", "smoke"),
+                    default="campaign",
+                    help="which records to recompute from: 'campaign' (the "
+                         "default, A42's) or 'smoke' (the machinery smokes, "
+                         "so --verify is exercisable before the campaign "
+                         "exists; smoke numbers are never measurements)")
     args = ap.parse_args()
 
-    result = {"phase_a": phase_a(), "phase_b": phase_b(),
+    roots = roots_for(args.mode)
+    result = {"mode": args.mode,
+              "phase_a": phase_a(roots["pa_records"]),
+              "phase_b": phase_b(roots["pb_records"]),
               "declared": {"F": F, "iter_ratio_max": cfg.ITER_RATIO_MAX,
                            "tau": cfg.TAU, "delta": cfg.DELTA,
                            "n_starts": cfg.N_STARTS,
@@ -575,10 +729,10 @@ def main() -> int:
                            "cluster_gap_floor_factor":
                                cfg.CLUSTER_GAP_FLOOR_FACTOR,
                            "median_construction": cfg.MEDIAN_CONSTRUCTION}}
-    out = HERE / "runs" / "report_analysis.json"
+    out = roots["out"]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=1))
-    print(f"written: {out}\n")
+    print(f"written: {out}  (mode: {args.mode})\n")
 
     for deck, d in result["phase_a"].items():
         sim = d["audit_similarity"]
@@ -603,8 +757,10 @@ def main() -> int:
                   f"{e['median_statistics_diagnostic']}) "
                   f"bound_met={e['bound_1p05_met']}")
 
+    if args.teeth:
+        return teeth(result, roots)
     if args.verify:
-        return verify(result)
+        return verify(result, roots)
     return 0
 
 

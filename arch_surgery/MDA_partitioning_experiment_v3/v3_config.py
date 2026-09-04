@@ -137,9 +137,17 @@ INSTRUMENTATION = {
         "task": "A40 (v3-prime, dispatched 2026-09-04)",
         "env": "PROCESS_ARCH_PRIME",
     },
-    "exit_forensics": {      # H3: n_solver_iterations / ifail / ladder stage /
-        "available": False,  # constraint residual vector / active set at every
-        "task": "A41 (v3-harness)",  # exit; flipped when G7 passes with teeth
+    # H3: n_solver_iterations / ifail / ladder stage / constraint residual
+    # vector / active set at EVERY exit.  Built and gated by A41: G7 PASSED
+    # with teeth on 2026-09-04 (5 field teeth + 1 block tooth, each refused
+    # and naming its field; record runs/phase_b/g7gate/gate.json).  Left
+    # False here because the ledger's convention is that an entry flips when
+    # its task MERGES (every True entry above is stamped "(merged DATE)")
+    # and A41 does not merge itself — the flip, with the merge date, is a
+    # one-line orchestrator action at A41's merge.
+    "exit_forensics": {
+        "available": False,
+        "task": "A41 (v3-harness) — G7 PASS 2026-09-04, flip at merge",
         "env": None,
     },
 }
