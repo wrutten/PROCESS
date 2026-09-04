@@ -86,12 +86,20 @@ PAIR = ("build.dr_fw_inboard", "build.dr_fw_outboard")
 KNOWN_CUT = PAIR + ("pf_power.vpfskv",)
 #: A35's coefficient-exact closure: deck -> (top mover, raw image of the
 #: pair's displacement).  lad has no traced coefficient (A35 scope gap).
+_MEAN = lambda din, dout: 0.5 * (din + dout)  # noqa: E731
+_OUT = lambda din, dout: -dout  # noqa: E731
 CARRIER = {
-    "large_tokamak_nof": ("build.dz_tf_upper_lower_midplane",
-                          lambda din, dout: 0.5 * (din + dout)),
-    "st_regression": ("build.dr_shld_vv_gap_outboard",
-                      lambda din, dout: -dout),
+    # A35-traced (coefficient-exact at the pin): nof's top mover, st's top mover.
+    "large_tokamak_nof": {"build.dz_tf_upper_lower_midplane": _MEAN,
+                          "build.dr_shld_vv_gap_outboard": _OUT},
+    "st_regression": {"build.dr_shld_vv_gap_outboard": _OUT},
+    # NOT traced by A35 (its declared scope gap): the same build.py branches
+    # (single-null z_tf_top; ripple branch) are exercised on this deck, so
+    # nof's coefficients are tested here as a hypothesis, from the records.
+    "low_aspect_ratio_DEMO": {"build.dz_tf_upper_lower_midplane": _MEAN,
+                              "build.dr_shld_vv_gap_outboard": _OUT},
 }
+CARRIER_TRACED = {"large_tokamak_nof", "st_regression"}
 TEETH_FACTOR = pa.TEETH_FACTOR
 
 
@@ -623,9 +631,10 @@ def _closure(deck: str, droot: Path, seeds) -> dict:
     A35's predicted raw image on the deck's top mover, and the measured raw
     movement of that component in the restricted audit."""
     scale = {c["key"]: c.get("scale") for c in spec_components(deck)}  # discrete: no scale
-    top = CARRIER.get(deck)
+    preds = CARRIER.get(deck) or {}
     rows = {}
-    rel = []
+    rel_by = {nm: [] for nm in preds}
+    n_closed_argmax = 0
     for k in seeds:
         d = droot / "A1" / f"start{k:03d}"
         pert = _load(d / "perturbation.json").get("per_component") or []
@@ -637,33 +646,36 @@ def _closure(deck: str, droot: Path, seeds) -> dict:
                 b, a = float.fromhex(e["elem_before_hex"]), float.fromhex(e["elem_after_hex"])
                 disp[key] = {"before_hex": e["elem_before_hex"], "after_hex": e["elem_after_hex"],
                              "delta_raw": a - b, "factor": e.get("factor")}
-        row = {"known_cut_entry_displacement": disp}
+        row = {"known_cut_entry_displacement": disp, "images": {}}
         vec = _load(d / "audit_residual.json").get("scaled") or {}
-        if top and all(p in disp for p in PAIR):
-            name, f = top
+        if all(p in disp for p in PAIR):
             din, dout = disp[PAIR[0]]["delta_raw"], disp[PAIR[1]]["delta_raw"]
-            pred = abs(f(din, dout))
-            meas = vec.get(name, 0.0) * scale[name]
-            r = abs(meas - pred) / pred if pred else None
-            row.update({"top_mover": name, "predicted_raw": pred, "measured_raw": meas,
-                        "predicted_scaled": pred / scale[name], "measured_scaled": vec.get(name),
-                        "rel_diff": r})
-            if r is not None:
-                rel.append(r)
+            for name, f in preds.items():
+                if scale.get(name) is None or name not in vec:
+                    continue
+                pred = abs(f(din, dout))
+                meas = vec[name] * scale[name]
+                r = abs(meas - pred) / pred if pred else None
+                row["images"][name] = {"predicted_raw": pred, "measured_raw": meas,
+                                       "predicted_scaled": pred / scale[name],
+                                       "measured_scaled": vec[name], "rel_diff": r}
+                if r is not None:
+                    rel_by[name].append(r)
         m = _metrics(d)
         res = (m.get("exit_audit") or {}).get("restricted") or {}
         row["restricted_argmax"] = res.get("argmax")
         row["restricted_max"] = res.get("max")
-        row["restricted_argmax_is_top_mover"] = (top is not None and res.get("argmax") == top[0])
+        row["restricted_argmax_is_closed_image"] = res.get("argmax") in preds
+        n_closed_argmax += bool(row["restricted_argmax_is_closed_image"])
         rows[str(k)] = row
-    return {"what": ("A35 coefficient closure per run: predicted raw image of the pair's "
-                     "entry displacement vs the top mover's measured raw movement in the "
-                     "restricted audit (lad: no traced coefficient, displacement only)"),
-            "top_mover": top[0] if top else None,
-            "rel_diff_median": statistics.median(rel) if rel else None,
-            "rel_diff_max": max(rel) if rel else None,
-            "n_runs_restricted_argmax_is_top_mover": sum(
-                1 for r in rows.values() if r.get("restricted_argmax_is_top_mover")),
+    return {"what": ("A35 coefficient closure per run: for every closed image of the pair "
+                     "on this deck, the predicted raw movement from the pair's recorded entry "
+                     "displacement vs the component's measured raw movement in the audit; "
+                     "and whether the restricted argmax is one of those images"),
+            "traced_by_A35": deck in CARRIER_TRACED,
+            "images": {nm: {"n": len(v), "rel_diff_median": statistics.median(v) if v else None,
+                            "rel_diff_max": max(v) if v else None} for nm, v in rel_by.items()},
+            "n_runs_restricted_argmax_is_closed_image": n_closed_argmax,
             "per_run": rows}
 
 
@@ -685,24 +697,33 @@ def _downstream_gain(deck: str, droot: Path, seeds, components) -> dict:
                 continue
             din = float.fromhex(pc[PAIR[0]]["elem_after_hex"]) - float.fromhex(pc[PAIR[0]]["elem_before_hex"])
             dout = float.fromhex(pc[PAIR[1]]["elem_after_hex"]) - float.fromhex(pc[PAIR[1]]["elem_before_hex"])
-            mean_disp = abs(0.5 * (din + dout))
             vec = _load(d / "audit_residual.json").get("scaled") or {}
-            if name not in vec or mean_disp == 0:
+            if name not in vec:
                 continue
             raw = vec[name] * scale[name]
-            r = raw / mean_disp
-            ratios.append(r)
-            rows[str(k)] = {"din": din, "dout": dout, "raw_movement": raw, "gain": r,
+            denoms = {"mean": abs(0.5 * (din + dout)), "din": abs(din), "dout": abs(dout)}
+            rows[str(k)] = {"din": din, "dout": dout, "raw_movement": raw,
+                            "gain": {dn: (raw / dv if dv else None) for dn, dv in denoms.items()},
                             "dout_over_din": dout / din if din else None}
+            ratios.append(rows[str(k)]["gain"])
         if ratios:
-            med = statistics.median(ratios)
-            out[name] = {"n": len(ratios), "gain_median": med, "gain_min": min(ratios),
-                         "gain_max": max(ratios),
-                         "gain_spread_rel": (max(ratios) - min(ratios)) / med if med else None,
+            summ = {}
+            for dn in ("mean", "din", "dout"):
+                g = [r[dn] for r in ratios if r.get(dn) is not None]
+                med = statistics.median(g) if g else None
+                summ[dn] = {"gain_median": med, "gain_min": min(g) if g else None,
+                            "gain_max": max(g) if g else None,
+                            "gain_spread_rel": ((max(g) - min(g)) / med) if (g and med) else None}
+            best = min((dn for dn in summ if summ[dn]["gain_spread_rel"] is not None),
+                       key=lambda dn: summ[dn]["gain_spread_rel"], default=None)
+            out[name] = {"n": len(ratios), "by_denominator": summ, "best_denominator": best,
+                         "best_gain_spread_rel": summ[best]["gain_spread_rel"] if best else None,
                          "per_seed": rows}
-    return {"what": ("per-seed gain of the restricted-argmax components' raw audit movement "
-                     "over the pair's mean entry displacement |0.5(din+dout)|; a constant "
-                     "gain across seeds is a linear image of the pair"),
+    return {"what": ("per-seed gain of each restricted-argmax component's raw audit movement "
+                     "over three candidate displacements of the pair -- the mean "
+                     "|0.5(din+dout)|, |din| alone, |dout| alone; the denominator with the "
+                     "smallest spread across seeds names the dependence, and a spread near "
+                     "zero is a linear image with that gain"),
             "components": out}
 
 
@@ -802,7 +823,7 @@ def _tally(root: Path, out_path: Path) -> int:
         d["closure"] = _closure(deck, droot, paired)
         top_names = sorted(d["argmax_census"]["restricted_A1"],
                            key=lambda nm: -d["argmax_census"]["restricted_A1"][nm])
-        extra = [CARRIER[deck][0]] if deck in CARRIER else ["build.dz_tf_upper_lower_midplane"]
+        extra = list((CARRIER.get(deck) or {}).keys())
         d["downstream_gain"] = _downstream_gain(
             deck, droot, paired, [n for n in top_names + extra if n])
         first = droot / "A1" / f"start{seeds[0]:03d}" / "audit_residual.json"
@@ -816,7 +837,8 @@ def _tally(root: Path, out_path: Path) -> int:
             f"ratio {d['unweighted_count_ratio_A1_over_A0']:.4f} "
             f"whole A0 {whole['A0']['median']:.3g}/{whole['A0']['p90']:.3g} A1 {whole['A1']['median']:.3g}/{whole['A1']['p90']:.3g} "
             f"restricted A0 {restr['A0']['median']:.3g}/{restr['A0']['p90']:.3g} A1 {restr['A1']['median']:.3g}/{restr['A1']['p90']:.3g} "
-            f"similar {d['restricted_audit']['similar']} closure rel {d['closure']['rel_diff_median']}")
+            f"similar {d['restricted_audit']['similar']} closed-argmax "
+            f"{d['closure']['n_runs_restricted_argmax_is_closed_image']}/{len(paired)}")
     out_path.write_text(json.dumps(summary, indent=2))
     print(f"\nA38 tally -> {out_path}")
     for ln in lines:
