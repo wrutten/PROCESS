@@ -217,10 +217,13 @@ start from in R/B0.
    rate per arm pair reported, R→B0's hop rate as comparator.
 2. **Iteration multiplier.** Paired ratio over both-converged pairs (declared), median
    ≤ 1.05 for B0→B1, B0→B2, B0→B3; B2→B3 and B0→R beside. **Pre-declared lad prediction
-   the prime makes testable at zero cost:** B2→B3 on lad stays ≈ 1.33 within the dust floor
-   (A28-vs-A32: median 1.000, pairs 0.59–1.81), because the carrier is inert after call 1.
-   If it falls to ≈ 1.0, the first-call deficit *was* the mechanism on lad and A35's
-   inertness reasoning is refuted there; both outcomes are results.
+   the prime makes testable at zero cost:** B2→B3 on lad stays elevated at ≈ 1.33–1.40
+   (the two committed median constructions over V2's 10 pairs disagree in that one cell —
+   V2 report §5.3 correction note, 2026-09-04; **V3 declares nearest-rank as its single
+   median construction for every Phase B check**, under which the anchor is 1.40) within
+   the dust floor, because the carrier is inert after call 1. If it falls to ≈ 1.0, the
+   first-call deficit *was* the mechanism on lad and A35's inertness reasoning is refuted
+   there; both outcomes are results.
 3. **Lift closed.** Constraint-93 residual at every accepted optimum, per start.
 4. **Robustness reporting and cost.** The A30 taxonomy computed in the tally with
    denominators; the **deck-invalid-seed statistic** (a seed failing in every arm is

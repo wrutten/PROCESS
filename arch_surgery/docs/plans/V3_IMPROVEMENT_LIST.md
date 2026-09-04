@@ -148,7 +148,8 @@
 
 10. **Gradient-quality diagnostics for the iteration multipliers.** The two unexplained
     iteration effects — lad's lift *gain* (B0→B1 = 0.83) and lad's trust *loss*
-    (B2→B3 = 1.33) — both plausibly live in the finite-difference gradients. **[data
+    (B2→B3 = 1.33 / 1.40 by median construction — V2 report §5.3 correction note,
+    2026-09-04) — both plausibly live in the finite-difference gradients. **[data
     gap]** V3 instruments FD-stencil audits (per-gradient-point exit residuals, stencil
     condition) so iteration multipliers can be attributed rather than only localised.
 11. **Per-block wall-clock context, two constructions** *(user, 2026-09-04)*. **[data

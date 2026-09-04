@@ -189,8 +189,19 @@ reported beside the three declared comparisons, outside the acceptance rule.*
 | deck | B0→B1 | B0→B2 | B0→B3 | B2→B3 (beside) | B0→R |
 |---|---|---|---|---|---|
 | nof (22 pairs) | **1.000 ✓** | **1.000 ✓** | **1.000 ✓** | 1.000 | 1.000 |
-| lad (11 pairs) | **0.833 ✓** | **0.833 ✓** | **1.273 ✗** | 1.33 | 1.000 |
+| lad (11 pairs) | **0.833 ✓** | **0.833 ✓** | **1.273 ✗** | 1.33 / 1.40 † | 1.000 |
 | st (24 pairs) | — | **1.000 ✓** | **1.000 ✓** | 1.000 | 1.000 |
+
+*† Correction (2026-09-04, from an independent read of the records): the lad B2→B3 cell has
+an even pair count (10) whose two middle ratios differ (1.267, 1.400), so the two median
+constructions the committed analysis publishes disagree there and only there —
+`statistics.median` (mean of the two middles) gives **1.33**, the tally's nearest-rank
+(upper-middle) convention gives **1.40**. The report originally printed 1.33 without naming
+its construction. Both now shown; every other cell is identical under both constructions,
+and no verdict involves this cell (B2→B3 sits outside the acceptance rule). Pair counts
+vary by column (lad B2→B3: 10; lad B0→R: 12); exact counts per pair are in
+`report_analysis.json` (`check2_iters`). V3 pre-declares a single construction
+(nearest-rank) so a cited median is always reproducible to the digit.*
 
 The tally's pair counts (silently dropping pairs with no recorded iterations) turn out to be
 exactly the converged pairs — iterations are recorded only at `ifail = 1` — so its medians
@@ -213,7 +224,7 @@ coincide with the converged-only construction; the analysis names every dropped 
   1.000 for the same lift — so this is a lad-specific interaction: on this deck, and not on
   nof, giving VMCON the coupling as an explicit degree of freedom with its own constraint
   row helps it converge where solving the same coupling as an inner fixed point does not.
-  The trust step then gives most of it back (B2→B3 = 1.33). *Why lad specifically responds
+  The trust step then gives most of it back (B2→B3 = 1.33 / 1.40, † in §5.3). *Why lad specifically responds
   is not measured*: no per-deck stiffness/contraction measurement of the burn-time coupling
   exists in these records, so "the coupling is stiffer on lad" is a hypothesis consistent
   with — not demonstrated by — these numbers; the gradient-quality instrumentation that
@@ -221,7 +232,7 @@ coincide with the converged-only construction; the analysis names every dropped 
 - **The declared st expectation ("B3 may inflate, context 10→20") is REFUTED:** median
   1.000, q1–q3 [0.85, 1.18]. The single-trajectory context was not representative.
 - "B3 ≈ B2 on the pulsed decks" is confirmed on nof (B2→B3 = 1.000) and refuted on lad
-  (1.33).
+  (1.33 / 1.40, † in §5.3).
 
 ### 5.4 Lift closed (check 3) and post-solve suppression
 
@@ -340,7 +351,7 @@ check cannot pass for any arm that changes *anything* — on nof the "failure" c
 1e-10-grade agreement. The declared rule was applied as written and reported as FAIL; a
 future revision should declare a floor for the yardstick before the campaign, not after.
 (2) The lad B0→B3 iteration failure is a genuine adverse result for the trust step on that
-deck (B2→B3 = 1.33 isolates it to the outer-loop removal, not the partition), and the
+deck (B2→B3 = 1.33 / 1.40 isolates it to the outer-loop removal, not the partition), and the
 declared clause quarantines lad's transfer argument accordingly. Note lad's fragility
 baseline: only 12/25 seeds converge in *any* arm, including stock. **To pre-empt a
 misreading: this report does not conclude that the architecture costs robustness.** The
