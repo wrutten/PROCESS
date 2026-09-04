@@ -328,3 +328,59 @@ reconciliation (§6 item 2) is a hypothesis for the V2 tally, not a result of th
 
 **Assessment verdict: the named carrier, its KNOWN-CUT label, and every number checked stand.
 Approved for merge.**
+
+---
+
+## 10. The coding pattern, in plain terms (user-requested addendum, 2026-09-04)
+
+The pattern is an ordinary-looking pair of lines in two different models:
+
+```python
+# process/models/fw.py — FirstWall, which the schedule runs LATE (block M3)
+def set_fw_geometry(self):
+    self.data.build.dr_fw_inboard = (
+        2 * self.data.fwbs.radius_fw_channel + 2 * self.data.fwbs.dr_fw_wall)
+    self.data.build.dr_fw_outboard = self.data.build.dr_fw_inboard
+```
+
+```python
+# process/models/build.py — Build, which the schedule runs EARLY (block M2)
+z_tf_top = ( ... + 0.5 * (dr_fw_inboard + dr_fw_outboard) + ... )
+```
+
+`Build` needs the first-wall thicknesses to lay out the machine (the TF-coil top
+clearance, the shield gaps). But in the execution order, `Build` runs **before**
+`FirstWall` has computed them this pass. So on every pass, `Build` consumes
+whatever the pair happened to hold when the pass started — the value from the
+*previous* pass, or, on the very first pass, whatever the entry state carried
+(the cold initialisation `0.0`, or a perturbed snapshot value). `FirstWall` then
+overwrites the pair *after* `Build` has already used the old value. In data-flow
+terms this is a **read-before-write across an iteration boundary**: an edge that
+points backward in the schedule, so its data always arrives one pass late.
+
+**Why nobody is normally hurt by it.** Two protections hide the pattern
+completely in ordinary use:
+
+1. **The value is a constant.** The thicknesses are computed from two deck
+   inputs no model ever changes, so the "fresh" value is the same number
+   (0.018 m) on every pass. From pass 2 of any run onward, the stale read and
+   the fresh value are bit-identical — the lag exists but carries zero
+   difference. This is why every liveness census (V3, V7, A22, the warm gates)
+   correctly measured the edge as dead: at every state they probed, old = new.
+2. **The iterating driver repairs it.** The flat MDA loop re-runs `Build` on
+   the next pass with the corrected value, and keeps sweeping until nothing
+   moves. The lag costs at most one extra sweep and leaves no trace in the
+   converged answer.
+
+**Why it bites exactly here.** V2's trust arms run the schedule **once**, from
+an entry state that is deliberately **displaced** (a cold start, or a ±δ
+perturbation). On that single pass, `Build` consumes the displaced thicknesses;
+`FirstWall` restores the constants a moment later — too late, and nothing ever
+re-runs `Build`. The machine build therefore exits with an error that is
+*exactly* the entry displacement of the pair, mapped through the source
+coefficients: at the cold entry the pair is off by the full 0.018 m, and
+`dz_tf_upper_lower_midplane` exits wrong by exactly 0.5·(0.018+0.018) =
+0.018 m. Both protections are disabled at once — the entry is displaced (so
+old ≠ new, once) and there is no second pass (so nothing repairs it). One
+stale read of a constant, harmless for years under an iterating driver, becomes
+the entire cross-block transient the moment the driver stops iterating.
