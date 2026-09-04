@@ -695,6 +695,10 @@ def _two_coefficient_fit(rows: dict) -> dict:
     y = np.array([p[2] for p in pts])
     M = np.column_stack([din * din, 2.0 * din * dout, dout * dout])
     (A, B, C), *_ = np.linalg.lstsq(M, y * y, rcond=None)
+    # A true zero coefficient rounds to a tiny negative square; clamp it.
+    tol = 1e-9 * max(abs(A), abs(C), 1e-300)
+    A = 0.0 if -tol < A < 0 else A
+    C = 0.0 if -tol < C < 0 else C
     if A < 0 or C < 0:
         return {"fitted": False, "why": "negative squared coefficient", "A": A, "B": B, "C": C}
     a = math.sqrt(A)
