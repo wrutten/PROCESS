@@ -21,6 +21,20 @@ independently. This register exists so the next one is not rediscovered a fourth
 an entry here — the edge, the evidence, which artifact is wrong, and the consequence — at the time
 it is found, not at write-up.
 
+**Convention amendment (2026-09-04 — "dead needs two qualifiers"; user agreed 2026-09-04;
+recorded by task A39 (v3-plan), deliverable D-b of the V3 development plan §6).** A liveness
+verdict entered in this register must state **both qualifiers, explicitly**:
+
+- **value-liveness** — does the value change between sweeps at the measured states; and
+- **displacement-liveness** — does the edge transmit a displaced entry value under a schedule
+  that never revisits the reader.
+
+"Value-frozen ≠ displacement-inert" (V15): an edge dead by value is still a δ-proportional
+one-shot error injector for any one-pass/trust schedule entered off the fixed point, so
+"dead" without its qualifier misled the V2 Phase A design. Entries written before this date
+(V1–V14) predate the convention and are **not rewritten** — read their "dead" as
+value-liveness only; V15 records the measured case that motivated the amendment.
+
 ## Findings
 
 | # | Edge / claim | Evidence | Verdict | Consequence |
