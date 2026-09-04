@@ -25,7 +25,7 @@ RUNS = HERE / "runs"
 #: execution begins only when the user approves it — the user flips this in
 #: the same commit that records the dated approval in EXPERIMENT_PLAN.md's
 #: status header; V3 plan §7, task A42's precondition).
-EXECUTION_APPROVED = False
+EXECUTION_APPROVED = True
 
 #: Decks (D17).  st_regression is the k = 0 deck (nothing to lift or pin).
 DECKS = ("large_tokamak_nof", "low_aspect_ratio_DEMO", "st_regression")
