@@ -40,6 +40,13 @@
    similarity statistic excludes post-solve-owned components (published beside the
    whole-state audit, both declared); expected residual: the carrier-class terms (~1e5 ×
    A0's level at δ = 0.10 — pre-declared, from the parallel assessment).
+   *Status note (relayed 2026-09-04 from session process-surgery-bf; user decisions made
+   there, to be confirmed on execution):* elevated to **the load-bearing harness fix**,
+   separate from any intervention change — the same campaign design re-run unchanged with
+   the corrected audit (a re-run is required: V2's Phase A records carry only the audit
+   brief, not the per-component residual vector or an exit snapshot, so the restricted
+   statistic cannot be recomputed offline). Expected outcome, pre-declared there: F still
+   fails, on the carrier term alone.
 5. **Carrier-class controls** *(A35; known-cut set)*. Either exclude the known-cut
    constants (`build.dr_fw_inboard/outboard`, `pf_power.vpfskv`) from the perturbation
    stream, or run a control arm with them held at their run-constants — pre-declared
@@ -48,6 +55,13 @@
    (A source fix — seeding the pair at initialisation — is a separate, D11-gated user
    decision, with its own attainable-gates list from the 2026-09-04 assessment; a fix would
    make this control moot.)
+   *Status note (relayed 2026-09-04 from session process-surgery-bf):* seed approval is
+   **still open with the user**; if approved, its counterfactual runs on the
+   corrected-audit campaign of item 4, in that order. The user has also agreed there to a
+   **"dead needs two qualifiers" register-convention amendment** (a liveness verdict must
+   state both value-liveness and displacement-liveness, per V15) — not yet written into
+   `DSM_VALIDATION.md`'s conventions; whichever session executes it should confirm with
+   the user first.
 6. **Perturbation-regime alignment disclosed and optionally matched.** V2's multiplicative
    δ-stream displaces run-constants and post-solve outputs — state no optimiser-driven call
    displaces after call 1, making Phase A's regime deliberately more hostile than B3's
@@ -56,6 +70,10 @@
    state), both published. **[data gap — closed cheaply]** record each run's entry
    displacement of the known-cut constants so carrier terms are computable without
    re-tracing.
+   *Status note (relayed 2026-09-04 from session process-surgery-bf; user decisions made
+   there):* **option (a) is decided** — no harvested-entry redesign of Phase A, no
+   cold-start row for both arms, the synthetic warm δ-stream stays (ground: closely
+   related to Phase B). The disclosure carries; option (b) is off the table.
 
 ## Robustness and hard decks
 
