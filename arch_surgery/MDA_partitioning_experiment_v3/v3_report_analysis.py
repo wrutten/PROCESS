@@ -1,75 +1,73 @@
 #!/usr/bin/env python
-"""V2 experiment report analysis — the analysis-time checks the tally defers,
-plus an independent recomputation of every tally quantity from the raw
-per-run records (protocol §15: the experiment report's published numbers come
-from this committed script).
+"""V3 experiment report analysis — an independent recomputation of every
+tally quantity from the raw per-run records (protocol §15: the experiment
+report's published numbers come from a committed script), plus ``--verify``.
 
-Verbatim copy (task A41, first commit) of
+Copied verbatim (task A41, first commit 913b89f0) from
 arch_surgery/MDA_partitioning_experiment_v2/v2_report_analysis.py at commit
-b7dbd2a9; content otherwise unchanged.
+b7dbd2a9, then rewritten for the V3 constructions (T-a … T-e, checks 1,
+1a, 2, 3, 4) by task A41.
 
 Reads ONLY on-disk campaign records
-(``runs/phase_a/campaign/**/metrics.json``, ``runs/phase_b/campaign/**/
-metrics.json``) and the committed configuration.  It does not re-run
-anything, and it deliberately does not import the tally code: shared
-definitions are restated here so a tally bug cannot vouch for itself.
+(``runs/phase_a/campaign/**``, ``runs/phase_b/campaign/**``) and the
+committed configuration and data artifacts.  It does not re-run anything,
+and it deliberately does not import the tally code: every shared
+definition is RESTATED here so a tally bug cannot vouch for itself.  In
+particular:
 
-    PROCESS_surgery_env python arch_surgery/MDA_partitioning_experiment_v2/v2_report_analysis.py
+* the restricted audit's excluded set is re-derived independently
+  (post-solve nodes -> run-time write census -> spec keys, never a
+  prefix), and each run's restricted maximum is recomputed from the raw
+  per-component vector (``audit_residual.json``) rather than read from the
+  runner's own ``exit_audit.restricted`` — the two must agree bit-for-bit;
+* every Phase B check statistic uses the DECLARED nearest-rank median
+  (upper-middle, sorted[n // 2]; orchestrator correction 0a8f5af2), with
+  statistics.median printed beside as a diagnostic;
+* the O3 floor, the check-1a clustering and the deck-invalid-seed
+  statistic are restated from their declarations in v3_config.
 
-Computes, per deck:
-
-Phase B (plan §4):
-  check 1  paired |Δ norm_objf| (exact hex floats) for R→B0 (the measured
-           yardstick), B0→B1, B0→B2, B0→B3, and B2→B3 beside; median and
-           nearest-rank p90; acceptance median AND p90 ≤ F × R→B0's.
-  check 2  paired iteration ratios recomputed two ways — the tally's
-           operationalization (drop pairs missing n_solver_iterations;
-           upper-median) and statistics.median over the same pairs — PLUS
-           the paired model-call (function-evaluation) ratio over ALL
-           both-ok pairs, which loses no pair to a missing field.  Every
-           dropped pair is named with its reason (trap T11).
-  check 3  constraint-93 residual at every accepted optimum of the lifted
-           arms (pulsed decks).
-  check 4  taxonomy per arm (status, and ifail among ok) with denominator
-           25; identical-success-set cost sums (seeds where every arm of
-           the deck is ok) for solve-phase node calls and model calls.
-  extra    post-solve suppression share for B2/B3 against A33's declared
-           baselines; provenance census (tree_git_head, dirty) over all
-           records.
-
-Phase A (plan §3): independent recomputation from the RAW per-run records
-(not the tally's own per_run copies): count ratio A1/A0, per-node bracket,
-audit similarity distributions with the F = 10 verdict at median and p90
-(nearest-rank), pairing, cold-start terms, lift-residual medians,
-provenance census.  Printed beside the tally's values with MATCH flags.
+``--verify`` additionally compares the recomputation against the committed
+tallies (``runs/phase_a/tally.json``, ``runs/phase_b/tally.json``) cell by
+cell and exits nonzero on any mismatch — the report cites numbers only
+after this passes.
 
 Output: ``runs/report_analysis.json`` + a printed summary.  Counts and hex
 floats only; wall clock appears nowhere.
 """
 from __future__ import annotations
 
+import argparse
 import json
+import math
+import statistics
 import sys
 from pathlib import Path
-from statistics import median
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import v2_config as cfg  # noqa: E402
+import v3_config as cfg  # noqa: E402
 
 PA = HERE / "runs" / "phase_a"
 PB = HERE / "runs" / "phase_b"
 F = cfg.SIMILARITY_FACTOR_F
+
+FORENSICS_FIELDS = ("n_solver_iterations", "ifail", "ladder_stage",
+                    "constraint_residual_vector", "active_set")
 
 
 def jload(p: Path):
     return json.load(open(p))
 
 
+def rank_median(vals):
+    """DECLARED (restated): nearest-rank upper-middle, sorted[n // 2]."""
+    s = sorted(vals)
+    return s[len(s) // 2] if s else None
+
+
 def p90(vals):
-    """Nearest-rank p90 — element ceil(0.9 n) of the sorted list (the
-    tally's declared definition, restated)."""
-    import math
+    """Nearest-rank p90 (restated): element ceil(0.9 n) of the sorted
+    list."""
     s = sorted(vals)
     return s[math.ceil(0.9 * len(s)) - 1] if s else None
 
@@ -78,14 +76,175 @@ def hexf(h):
     return float.fromhex(h) if isinstance(h, str) else None
 
 
+def excluded_keys(deck: str) -> set:
+    """T-a's excluded set, re-derived independently: post-solve NODES ->
+    written fields (committed run-time census) -> intersected with the a26
+    spec keys.  Never a prefix (st's ``pulse`` writes nothing there)."""
+    nodes = json.loads(cfg.postsolve_for(deck).read_text())[
+        "post_solve_nodes"]
+    census = json.loads((cfg.DATA / "node_writesets.json").read_text())[
+        "per_scenario"][deck]
+    wb = census["writes_by_node"]
+    known = set(census.get("node_module") or ()) | set(wb)
+    keys = {c["key"] for c in json.loads(
+        cfg.ystate_for(deck).read_text())["components"]}
+    excl: set = set()
+    for n in nodes:
+        if n not in known:
+            raise RuntimeError(f"post-solve node {n!r} unknown to the "
+                               f"{deck} write census")
+        excl |= set(wb.get(n, ()))
+    return excl & keys
+
+
+# ── Phase A ──────────────────────────────────────────────────────────────
+
+
+def phase_a() -> dict:
+    out: dict = {}
+    camp_root = PA / "campaign"
+    campf = camp_root / "campaign.json"
+    if not campf.exists():
+        return out
+    camp = jload(campf)
+    arms = tuple(camp["arms"])
+    seeds = camp["seeds"]
+    for deck in camp["decks"]:
+        droot = camp_root / deck
+        if not droot.exists():
+            continue
+        excl = excluded_keys(deck)
+        d: dict = {"arms": list(arms)}
+        rows: dict[str, dict[int, dict]] = {a: {} for a in arms}
+        heads = set()
+        restricted_mismatch = []
+        for arm in arms:
+            for k in seeds:
+                sd = droot / arm / f"start{k:03d}"
+                mp = sd / "metrics.json"
+                if not mp.exists():
+                    rows[arm][k] = {"status": "missing"}
+                    continue
+                m = jload(mp)
+                aud = m.get("exit_audit") or {}
+                rec_res = (aud.get("restricted") or {})
+                # recompute the restricted max from the raw vector
+                vecp = sd / "audit_residual.json"
+                r_max = r_arg = None
+                if vecp.exists():
+                    scaled = jload(vecp).get("scaled") or {}
+                    kept = {nm: v for nm, v in scaled.items()
+                            if nm not in excl}
+                    if kept:
+                        r_arg = max(kept, key=kept.get)
+                        r_max = kept[r_arg]
+                if (rec_res.get("max") is not None and r_max is not None
+                        and float(rec_res["max"]).hex()
+                        != float(r_max).hex()):
+                    restricted_mismatch.append(f"{arm}/start{k:03d}")
+                census = ((m.get("node_census") or {}).get("counted") or {})
+                rows[arm][k] = {
+                    "status": m.get("status"),
+                    "node_calls": m.get("node_calls_single_eval"),
+                    "audit_max": aud.get("residual_max"),
+                    "restricted_max_recomputed": r_max,
+                    "restricted_argmax_recomputed": r_arg,
+                    "census": census,
+                    "has_forensics": "exit_forensics" in m,
+                    "head": m.get("tree_git_head"),
+                    "dirty": m.get("tree_git_dirty"),
+                }
+                heads.add((m.get("tree_git_head"), m.get("tree_git_dirty")))
+        d["provenance_stamps"] = sorted(
+            f"{h} dirty={dr}" for h, dr in heads)
+        d["restricted_recompute_mismatches"] = restricted_mismatch
+        d["n_excluded_keys_rederived"] = len(excl)
+
+        ok = [k for k in seeds
+              if all(rows[a][k].get("status") == "ok" for a in arms)]
+        d["n_paired_ok"] = len(ok)
+        d["forensics_missing_ok_records"] = [
+            f"{a}/start{k:03d}" for a in arms for k in ok
+            if not rows[a][k].get("has_forensics")]
+
+        tot = {a: sum(rows[a][k]["node_calls"] or 0 for k in ok)
+               for a in arms}
+        d["node_calls_total_paired_ok"] = tot
+        d["count_ratios"] = {}
+        node_sums: dict[str, dict[str, int]] = {}
+        for a in arms:
+            for k in ok:
+                for n, c in (rows[a][k]["census"] or {}).items():
+                    node_sums.setdefault(n, {x: 0 for x in arms})
+                    node_sums[n][a] += c
+        for base, var in [("A0", a) for a in arms if a != "A0"] + (
+                [("A1u", "A1")] if {"A1u", "A1"} <= set(arms) else []):
+            ratios = [v[var] / v[base] for v in node_sums.values()
+                      if v.get(base)]
+            d["count_ratios"][f"{base}->{var}"] = {
+                "unweighted_count_ratio": (tot[var] / tot[base]
+                                           if tot.get(base) else None),
+                "weighting_invariance_bracket": (
+                    [min(ratios), max(ratios)] if ratios else None),
+            }
+
+        # T-a similarity, both statistics, per pair against A0
+        sim: dict = {}
+        for stat, field in (("whole_state", "audit_max"),
+                            ("restricted", "restricted_max_recomputed")):
+            dists = {}
+            for a in arms:
+                vals = sorted(rows[a][k][field] for k in ok
+                              if rows[a][k].get(field) is not None)
+                dists[a] = {"n": len(vals),
+                            "median": (statistics.median(vals)
+                                       if vals else None),
+                            "p90": p90(vals)}
+            entry: dict = {"distributions": dists}
+            for a in [x for x in arms if x != "A0"]:
+                m0, m1 = dists["A0"]["median"], dists[a]["median"]
+                q0, q1 = dists["A0"]["p90"], dists[a]["p90"]
+
+                def within(x, y):
+                    if x is None or y is None:
+                        return None
+                    if x == 0 and y == 0:
+                        return True
+                    if x == 0 or y == 0:
+                        return False
+                    return max(x, y) / min(x, y) <= F
+                entry[f"A0/{a}"] = {
+                    "median_within_F": within(m0, m1),
+                    "p90_within_F": within(q0, q1),
+                    "similar": bool(within(m0, m1) and within(q0, q1)),
+                }
+            sim[stat] = entry
+        d["audit_similarity"] = sim
+
+        # restricted argmax census (recomputed), per block arm
+        d["argmax_census_restricted"] = {
+            a: {nm: sum(1 for k in ok
+                        if rows[a][k].get("restricted_argmax_recomputed")
+                        == nm)
+                for nm in sorted({rows[a][k].get(
+                    "restricted_argmax_recomputed") for k in ok} - {None})}
+            for a in arms if a != "A0"}
+        out[deck] = d
+    return out
+
+
 # ── Phase B ──────────────────────────────────────────────────────────────
+
 
 def phase_b() -> dict:
     out: dict = {}
+    root = PB / "campaign"
+    if not root.exists():
+        return out
     for deck in cfg.DECKS:
         rows: dict[str, list] = {}
         for arm in cfg.PHASE_B_ARMS:
-            arm_dir = PB / "campaign" / deck / arm
+            arm_dir = root / deck / arm
             if not arm_dir.exists():
                 continue
             per = []
@@ -95,6 +254,7 @@ def phase_b() -> dict:
                     per.append({"status": "missing"})
                     continue
                 m = jload(p)
+                fx = m.get("exit_forensics") or {}
                 per.append({
                     "status": m.get("status"),
                     "ifail": (m.get("mfile") or {}).get("ifail"),
@@ -102,398 +262,349 @@ def phase_b() -> dict:
                     "model_calls": m.get("n_model_calls"),
                     "node_solve": m.get("node_calls_solve_phase"),
                     "objf_hex": (m.get("exact") or {}).get("norm_objf"),
-                    "sqsumsq": (m.get("values") or {}).get("sqsumsq"),
                     "c93": m.get("constraint_93"),
-                    "ps": m.get("post_solve_totals"),
+                    "forensics_ok": all(
+                        fx.get(f) is not None for f in FORENSICS_FIELDS)
+                    and (fx.get("n_attempts") or 0) >= 1,
+                    "ladder_stage": fx.get("ladder_stage"),
                     "head": m.get("tree_git_head"),
                     "dirty": m.get("tree_git_dirty"),
                 })
             rows[arm] = per
         if not rows:
             continue
-        d: dict = {"taxonomy": {}, "provenance": {}}
-
-        heads = sorted({(r.get("head"), r.get("dirty")) for per in rows.values()
-                        for r in per if r.get("head")})
-        d["provenance"]["stamps"] = [f"{h} dirty={dr}" for h, dr in heads]
-
-        for arm, per in rows.items():
-            tax: dict = {}
-            for r in per:
-                tax[str(r["status"])] = tax.get(str(r["status"]), 0) + 1
-            ok = [r for r in per if r["status"] == "ok"]
-            d["taxonomy"][arm] = {
-                "denominator": len(per), "by_status": tax,
-                "ok_with_ifail_1": sum(1 for r in ok if r.get("ifail") == 1.0),
-                "ok_with_other_ifail": sorted({r.get("ifail") for r in ok
-                                               if r.get("ifail") != 1.0}),
-            }
-
-        base = rows.get("B0")
+        arms = [a for a in cfg.PHASE_B_ARMS if a in rows]
+        d: dict = {}
+        heads = sorted({(r.get("head"), r.get("dirty"))
+                        for per in rows.values() for r in per
+                        if r.get("head")})
+        d["provenance_stamps"] = [f"{h} dirty={dr}" for h, dr in heads]
 
         def conv(r):
-            """An ACCEPTED optimum: run ok AND the optimiser converged.
-            ifail = 1 is VMCON's success code; ifail = 5 runs carry status
-            'ok' (the process completed) but no optimum — the A30 taxonomy's
-            'unconverged' class, split out rather than silently pooled."""
-            return r["status"] == "ok" and r.get("ifail") == 1.0
+            return r.get("status") == "ok" and r.get("ifail") == 1.0
 
-        def paired(arm_a, arm_b, converged_only=False):
-            """Both-ok (optionally both-converged) pairs (seed, a, b)."""
-            keep = conv if converged_only else (
-                lambda r: r["status"] == "ok")
-            return [(k, ra, rb) for k, (ra, rb)
-                    in enumerate(zip(rows[arm_a], rows[arm_b]))
-                    if keep(ra) and keep(rb)]
+        # T-b: taxonomy, forensics completeness, deck-invalid seeds
+        d["forensics_incomplete_ok_records"] = [
+            f"{a}/start{k:03d}" for a in arms
+            for k, r in enumerate(rows[a])
+            if r.get("status") == "ok" and not r.get("forensics_ok")]
+        invalid = [k for k in range(cfg.N_STARTS)
+                   if not any(conv(rows[a][k]) for a in arms)]
+        d["deck_invalid_seeds"] = {"seeds": invalid, "n": len(invalid)}
+        valid = [k for k in range(cfg.N_STARTS) if k not in invalid]
+        d["taxonomy"] = {}
+        for a in arms:
+            tax: dict = {}
+            for r in rows[a]:
+                tax[str(r.get("status"))] = tax.get(str(r.get("status")),
+                                                    0) + 1
+            d["taxonomy"][a] = {
+                "denominator": cfg.N_STARTS,
+                "by_status": tax,
+                "n_converged": sum(1 for r in rows[a] if conv(r)),
+                "n_not_converged_excl_deck_invalid": (
+                    len(valid) - sum(1 for k in valid if conv(rows[a][k]))),
+                "denominator_excl_deck_invalid": len(valid),
+            }
 
-        # check 1 — |Δ norm_objf| spreads, R→B0 the yardstick.  The plan's
-        # check is at ACCEPTED optima, so the primary construction pairs
-        # converged runs only; the all-ok construction is published beside
-        # it (an unconverged exit is not an optimum, but hiding it would
-        # shrink a denominator silently — trap T11).
-        d["check1_objf"] = {}
-        for variant, conv_only in (("converged_only", True), ("all_ok", False)):
-            spreads = {}
-            for name, (a, b) in {"R->B0": ("R", "B0"), "B0->B1": ("B0", "B1"),
-                                 "B0->B2": ("B0", "B2"), "B0->B3": ("B0", "B3"),
-                                 "B2->B3": ("B2", "B3")}.items():
-                if a not in rows or b not in rows:
-                    continue
-                deltas, listed = [], []
-                for k, ra, rb in paired(a, b, converged_only=conv_only):
+        # T-c / check 1: spreads with yardstick and O3 floor
+        pair_defs = {"R->B0": ("R", "B0"), "B0->B1": ("B0", "B1"),
+                     "B0->B2": ("B0", "B2"), "B0->B3": ("B0", "B3"),
+                     "B2->B3": ("B2", "B3")}
+        spreads: dict = {}
+        for name, (a, b) in pair_defs.items():
+            if a not in rows or b not in rows:
+                continue
+            deltas, base_abs = [], []
+            for k in range(cfg.N_STARTS):
+                ra, rb = rows[a][k], rows[b][k]
+                if conv(ra) and conv(rb):
                     fa, fb = hexf(ra["objf_hex"]), hexf(rb["objf_hex"])
                     if fa is not None and fb is not None:
                         deltas.append(abs(fb - fa))
-                        if abs(fb - fa) > 1e-6:
-                            listed.append({"seed": k, "delta": abs(fb - fa),
-                                           "ifail": [ra.get("ifail"),
-                                                     rb.get("ifail")]})
-                if deltas:
-                    spreads[name] = {
-                        "n": len(deltas), "median": median(deltas),
-                        "p90": p90(deltas), "max": max(deltas),
-                        "pairs_above_1e-6": listed,
-                        "values_published": sorted(deltas)}
-            yard = spreads.get("R->B0")
-            for name, s in spreads.items():
-                if yard and name.startswith("B0->"):
-                    s["accept_median"] = s["median"] <= F * yard["median"]
-                    s["accept_p90"] = s["p90"] <= F * yard["p90"]
-                    s["accepted"] = s["accept_median"] and s["accept_p90"]
-            d["check1_objf"][variant] = spreads
+                        base_abs.append(abs(fa))
+            floor_abs = (cfg.OBJF_FLOOR_REL * rank_median(base_abs)
+                         if base_abs else None)
+            spreads[name] = {"n": len(deltas),
+                             "median": rank_median(deltas),
+                             "median_statistics_diagnostic": (
+                                 statistics.median(deltas)
+                                 if deltas else None),
+                             "p90": p90(deltas),
+                             "max": max(deltas) if deltas else None,
+                             "floor_abs": floor_abs}
+        yard = spreads.get("R->B0")
+        for name, e in spreads.items():
+            if yard and name.startswith("B0->") and e["median"] is not None \
+                    and yard["median"] is not None:
+                bound_med = max(F * yard["median"], e["floor_abs"] or 0.0)
+                bound_p90 = max(F * (yard["p90"] or 0.0),
+                                e["floor_abs"] or 0.0)
+                e["accept_median"] = e["median"] <= bound_med
+                e["accept_p90"] = (e["p90"] is not None
+                                   and e["p90"] <= bound_p90)
+                e["accepted"] = bool(e["accept_median"] and e["accept_p90"])
+        d["check1_objf"] = spreads
 
-        # check 2 — iteration ratios, three operationalizations
-        d["check2_iters"] = {}
-        for name, (a, b) in {"B0->B1": ("B0", "B1"), "B0->B2": ("B0", "B2"),
-                             "B0->B3": ("B0", "B3"), "B0->R": ("B0", "R"),
+        # check 1a: clustering + hop rates (declaration restated)
+        accepted = [(a, k, hexf(rows[a][k]["objf_hex"]))
+                    for a in arms for k in range(cfg.N_STARTS)
+                    if conv(rows[a][k])
+                    and hexf(rows[a][k]["objf_hex"]) is not None]
+        gap = cfg.CLUSTER_GAP_FLOOR_FACTOR * cfg.OBJF_FLOOR_REL
+        order = sorted(range(len(accepted)), key=lambda i: accepted[i][2])
+        groups: list[list[int]] = []
+        for i in order:
+            if groups:
+                prev = accepted[groups[-1][-1]][2]
+                cur = accepted[i][2]
+                denom = max(abs(prev), abs(cur))
+                if denom and abs(cur - prev) / denom > gap:
+                    groups.append([i])
+                    continue
+                groups[-1].append(i)
+            else:
+                groups.append([i])
+        cluster_of = {(accepted[i][0], accepted[i][1]): ci
+                      for ci, g in enumerate(groups) for i in g}
+        hops = {}
+        for name, (a, b) in pair_defs.items():
+            if a not in rows or b not in rows:
+                continue
+            both = [k for k in range(cfg.N_STARTS)
+                    if (a, k) in cluster_of and (b, k) in cluster_of]
+            hops[name] = {
+                "n_pairs": len(both),
+                "n_hops": sum(1 for k in both
+                              if cluster_of[(a, k)] != cluster_of[(b, k)])}
+        d["check1a"] = {"n_clusters": len(groups),
+                        "cluster_sizes": [len(g) for g in groups],
+                        "hop_rates_per_pair": hops}
+
+        # check 2: iteration multiplier, declared nearest-rank median
+        iters: dict = {}
+        for name, (a, b) in {"B0->B1": ("B0", "B1"),
+                             "B0->B2": ("B0", "B2"),
+                             "B0->B3": ("B0", "B3"),
+                             "B0->R": ("B0", "R"),
                              "B2->B3": ("B2", "B3")}.items():
             if a not in rows or b not in rows:
                 continue
-            pr = paired(a, b)
-            ratios, dropped = [], []
-            fev = []
-            for k, ra, rb in pr:
+            ratios, fev, dropped = [], [], []
+            for k in range(cfg.N_STARTS):
+                ra, rb = rows[a][k], rows[b][k]
+                if not (conv(ra) and conv(rb)):
+                    continue
                 ia, ib = ra["iters"], rb["iters"]
                 if ia and ib:
                     ratios.append(ib / ia)
                 else:
                     dropped.append({"seed": k, f"{a}_iters": ia,
-                                    f"{b}_iters": ib,
-                                    f"{a}_ifail": ra.get("ifail"),
-                                    f"{b}_ifail": rb.get("ifail")})
+                                    f"{b}_iters": ib})
                 ma, mb = ra["model_calls"], rb["model_calls"]
                 if ma and mb:
                     fev.append(mb / ma)
-            ratios.sort()
-            d["check2_iters"][name] = {
-                "n_both_ok": len(pr), "n_iter_pairs": len(ratios),
-                "dropped_pairs": dropped,
-                "median_tally_style": (ratios[len(ratios) // 2]
-                                       if ratios else None),
-                "median_statistics": median(ratios) if ratios else None,
-                "bound_1p05_met_tally_style": (bool(ratios) and
-                                               ratios[len(ratios) // 2]
-                                               <= cfg.ITER_RATIO_MAX),
-                "model_call_ratio_median": (median(fev) if fev else None),
-                "model_call_ratio_n": len(fev),
+            iters[name] = {
+                "n_iter_pairs": len(ratios),
+                "dropped": dropped,
+                "median": rank_median(ratios),
+                "median_statistics_diagnostic": (
+                    statistics.median(ratios) if ratios else None),
+                "bound_1p05_met": (rank_median(ratios) is not None
+                                   and rank_median(ratios)
+                                   <= cfg.ITER_RATIO_MAX),
+                "model_call_ratio_median": rank_median(fev),
             }
+        d["check2_iters"] = iters
 
-        # check 3 — constraint 93 "lift actually closed", split by
-        # convergence: the declared check is at ACCEPTED optima; residuals
-        # at unconverged exits are reported beside (they are large by
-        # definition — the equality was never enforced to completion).
-        d["check3_c93"] = {}
-        for arm in ("B1", "B2", "B3"):
-            if arm not in rows:
+        # check 3: c93 at accepted optima
+        c93: dict = {}
+        for a in ("B1", "B2", "B3"):
+            if a not in rows:
                 continue
-            entry: dict = {}
-            for variant, keep in (("accepted", conv),
-                                  ("unconverged_ok",
-                                   lambda r: r["status"] == "ok"
-                                   and r.get("ifail") != 1.0)):
-                per_start = []
-                for k, r in enumerate(rows[arm]):
-                    if keep(r) and r.get("c93"):
-                        per_start.append({
-                            "seed": k,
-                            "residual_s": r["c93"].get("residual_s"),
-                            "relative": r["c93"].get(
-                                "residual_relative_to_burn_time"),
-                        })
-                res = [abs(x["residual_s"]) for x in per_start
-                       if x["residual_s"] is not None]
-                entry[variant] = {
-                    "n": len(per_start),
-                    "abs_residual_s_median": median(res) if res else None,
-                    "abs_residual_s_max": max(res) if res else None,
-                    "per_start": per_start,
-                }
-            d["check3_c93"][arm] = entry
+            res = sorted(abs(r["c93"]["residual_s"])
+                         for r in rows[a]
+                         if conv(r) and r.get("c93")
+                         and r["c93"].get("residual_s") is not None)
+            c93[a] = {"n": len(res),
+                      "abs_residual_s_median": rank_median(res),
+                      "abs_residual_s_max": res[-1] if res else None}
+        d["check3_c93"] = c93
 
-        # check 4 — identical-success-set cost sums, both constructions:
-        # all-ok (completions count to cost statistics — A30) and
-        # all-converged (unconverged runs stop at the iteration cap, which
-        # truncates cost on both sides of a pair; published beside).
-        arms = [a for a in cfg.PHASE_B_ARMS if a in rows]
-        d["check4_cost_sums"] = {}
-        for variant, keep in (("identical_ok_set",
-                               lambda r: r["status"] == "ok"),
-                              ("identical_converged_set", conv)):
+        # check 4: identical-set cost sums
+        cost: dict = {}
+        for variant, keep in (
+                ("identical_ok_set",
+                 lambda r: r.get("status") == "ok"),
+                ("identical_converged_set", conv)):
             common = [k for k in range(cfg.N_STARTS)
                       if all(keep(rows[a][k]) for a in arms)]
-            sums: dict = {"n_seeds": len(common), "seeds": common}
-            per_arm: dict = {}
+            per_arm = {}
             for a in arms:
                 ns = sum(rows[a][k]["node_solve"] or 0 for k in common)
-                mc = sum(rows[a][k]["model_calls"] or 0 for k in common)
-                per_arm[a] = {"node_calls_solve_phase": ns,
-                              "model_calls": mc}
+                per_arm[a] = {"node_calls_solve_phase": ns}
             b0 = per_arm.get("B0")
             for a in arms:
                 if b0 and b0["node_calls_solve_phase"]:
                     per_arm[a]["node_ratio_vs_B0"] = (
                         per_arm[a]["node_calls_solve_phase"]
                         / b0["node_calls_solve_phase"])
-            sums["per_arm"] = per_arm
-            d["check4_cost_sums"][variant] = sums
-
-        # per-block node-call split over the identical-ok-set: block
-        # membership from the deck's own B3 (fallback B2) executed
-        # schedule, post-solve set from the same record; the lifted
-        # `pulse` node executes in-loop outside any block and is assigned
-        # to PULSE; anything else unmapped is named, not pooled.
-        block_map: dict[str, str] = {}
-        ps_nodes: set = set()
-        for arm in ("B3", "B2"):
-            for k in range(cfg.N_STARTS):
-                p = (PB / "campaign" / deck / arm / f"start{k:03d}"
-                     / "metrics.json")
-                if not p.exists():
-                    continue
-                m = jload(p)
-                sched = m.get("arch_block_schedule")
-                if sched:
-                    for bname, nodes, _ in sched:
-                        for n in nodes:
-                            block_map[n] = bname
-                    ps_nodes = set((m.get("post_solve_totals") or {})
-                                   .get("nodes") or [])
-                    break
-            if block_map:
-                break
-        block_map.setdefault("pulse", "PULSE")
-        common_ok = [k for k in range(cfg.N_STARTS)
-                     if all(rows[a][k]["status"] == "ok" for a in arms)]
-        per_block: dict = {}
-        for a in arms:
-            agg: dict[str, int] = {}
-            for k in common_ok:
-                p = (PB / "campaign" / deck / a / f"start{k:03d}"
-                     / "metrics.json")
-                m = jload(p)
-                census = ((m.get("node_census") or {})
-                          .get("per_node_counted_through_Caller_node") or {})
-                for n, c in census.items():
-                    blk = ("post_solve" if n in ps_nodes
-                           else block_map.get(n, f"UNMAPPED:{n}"))
-                    agg[blk] = agg.get(blk, 0) + c
-            agg["TOTAL"] = sum(agg.values())
-            per_block[a] = agg
-        d["per_block_node_calls_identical_ok_set"] = {
-            "n_seeds": len(common_ok), "block_map_source": "B3/B2 record",
-            "per_arm": per_block}
-
-        # post-solve suppression share (B2/B3), vs A33 baselines
-        d["post_solve_share"] = {}
-        for arm in ("B2", "B3"):
-            if arm not in rows:
-                continue
-            sup = sum((r["ps"] or {}).get("n_call_sites_suppressed", 0)
-                      for r in rows[arm] if r["status"] == "ok")
-            executed = sum(r["node_solve"] or 0 for r in rows[arm]
-                           if r["status"] == "ok")
-            if executed:
-                d["post_solve_share"][arm] = {
-                    "suppressed_call_sites": sup,
-                    "executed_solve_phase_calls": executed,
-                    "share_of_wouldbe_calls":
-                        sup / (sup + executed),
-                }
+            cost[variant] = {"n_seeds": len(common), "per_arm": per_arm}
+        d["check4_cost_sums"] = cost
         out[deck] = d
     return out
 
 
-# ── Phase A ──────────────────────────────────────────────────────────────
+# ── verify ───────────────────────────────────────────────────────────────
 
-def phase_a() -> dict:
-    out: dict = {}
-    for deck in cfg.DECKS:
-        droot = PA / "campaign" / deck
-        if not droot.exists():
-            continue
-        d: dict = {}
-        rows: dict[str, dict[int, dict]] = {"A0": {}, "A1": {}}
-        heads = set()
-        for arm in ("A0", "A1"):
-            for sd in sorted((droot / arm).glob("start*")):
-                m = jload(sd / "metrics.json")
-                k = int(sd.name.replace("start", ""))
-                aud = (m.get("exit_audit") or {})
-                census = ((m.get("node_census") or {}).get("counted")
-                          or ((m.get("module_solve_totals") or {})
-                              .get("per_node") or {}))
-                rows[arm][k] = {
-                    "status": m.get("status"),
-                    "node_calls": m.get("node_calls_single_eval",
-                                        m.get("node_calls_solve_phase")),
-                    "audit_max": aud.get("residual_max"),
-                    "audit_max_hex": aud.get("residual_max_hex"),
-                    "census": census,
-                    "head": m.get("tree_git_head"),
-                    "dirty": m.get("tree_git_dirty"),
-                }
-                heads.add((m.get("tree_git_head"), m.get("tree_git_dirty")))
-        d["provenance_stamps"] = sorted(f"{h} dirty={dr}" for h, dr in heads)
 
-        seeds = sorted(set(rows["A0"]) & set(rows["A1"]))
-        ok = [k for k in seeds if rows["A0"][k]["status"] == "ok"
-              and rows["A1"][k]["status"] == "ok"]
-        d["n_paired_ok"] = len(ok)
+def _match(label: str, a, b, mismatches: list) -> None:
+    same = a == b
+    if not same:
+        mismatches.append(f"{label}: analysis {a!r} vs tally {b!r}")
 
-        tot = {arm: sum(rows[arm][k]["node_calls"] or 0 for k in ok)
-               for arm in ("A0", "A1")}
-        d["node_calls_total_paired_ok"] = tot
-        d["unweighted_count_ratio_A1_over_A0"] = (
-            tot["A1"] / tot["A0"] if tot["A0"] else None)
 
-        # per-node bracket from raw censuses
-        node_sums: dict[str, dict[str, int]] = {}
-        for arm in ("A0", "A1"):
-            for k in ok:
-                for n, c in (rows[arm][k]["census"] or {}).items():
-                    node_sums.setdefault(n, {"A0": 0, "A1": 0})
-                    node_sums[n][arm] += c
-        ratios = {n: (v["A1"] / v["A0"]) for n, v in node_sums.items()
-                  if v["A0"]}
-        d["weighting_invariance_bracket"] = ([min(ratios.values()),
-                                              max(ratios.values())]
-                                             if ratios else None)
-        d["per_node_ratio_extremes"] = {
-            "min": sorted(ratios, key=ratios.get)[:3],
-            "max": sorted(ratios, key=ratios.get, reverse=True)[:3],
-        }
+def verify(result: dict) -> int:
+    """Compare the independent recomputation against the committed tallies
+    cell by cell.  Exit nonzero on any mismatch (the report cites numbers
+    only after this passes)."""
+    mismatches: list[str] = []
+    checked = 0
 
-        # audit similarity + F verdict
-        sim: dict = {}
-        for arm in ("A0", "A1"):
-            vals = sorted(rows[arm][k]["audit_max"] for k in ok
-                          if rows[arm][k]["audit_max"] is not None)
-            sim[arm] = {"n": len(vals), "median": median(vals),
-                        "p90": p90(vals), "max": max(vals), "min": min(vals)}
-        # audit argmax ownership census — the A35 §6 item 2 reconciliation
-        # check: which node's writeset owns each A1 run's audit argmax.
-        # Components are keyed by data structure; the post-solve set's
-        # members surface as the costs/vacuum/water_use structures.
-        import collections
-        post_solve_prefixes = {"costs", "vacuum", "water_use"}
-        argmax_prefix = collections.Counter()
-        for k in ok:
-            m = jload(droot / "A1" / f"start{k:03d}" / "metrics.json")
-            am = ((m.get("exit_audit") or {}).get("brief") or {}).get("argmax")
-            key = am.get("key") if isinstance(am, dict) else am
-            if key:
-                argmax_prefix[key.split(".")[0]] += 1
-        d["a1_audit_argmax_by_prefix"] = dict(argmax_prefix)
-        d["a1_audit_argmax_post_solve_owned"] = sum(
-            v for p, v in argmax_prefix.items()
-            if p in post_solve_prefixes)
+    pa_tally_p = PA / "tally.json"
+    if pa_tally_p.exists() and result["phase_a"]:
+        t = jload(pa_tally_p)
+        for deck, d in result["phase_a"].items():
+            td = (t.get("per_deck") or {}).get(deck) or {}
+            _match(f"A/{deck}/n_paired_ok", d["n_paired_ok"],
+                   td.get("n_paired_ok"), mismatches)
+            checked += 1
+            for pair, e in d["count_ratios"].items():
+                te = (td.get("count_ratios") or {}).get(pair) or {}
+                _match(f"A/{deck}/count_ratio[{pair}]",
+                       e["unweighted_count_ratio"],
+                       te.get("unweighted_count_ratio"), mismatches)
+                checked += 1
+            for stat in ("whole_state", "restricted"):
+                for a, dist in d["audit_similarity"][stat][
+                        "distributions"].items():
+                    tdist = (((td.get("audit_similarity") or {}).get(stat)
+                              or {}).get("distributions") or {}).get(a) or {}
+                    _match(f"A/{deck}/{stat}/{a}/median",
+                           dist["median"], tdist.get("median"), mismatches)
+                    _match(f"A/{deck}/{stat}/{a}/p90",
+                           dist["p90"], tdist.get("p90"), mismatches)
+                    checked += 2
+            if d["restricted_recompute_mismatches"]:
+                mismatches.append(
+                    f"A/{deck}: recomputed restricted max differs from the "
+                    f"runner's on "
+                    f"{len(d['restricted_recompute_mismatches'])} runs")
+            checked += 1
+    elif result["phase_a"]:
+        mismatches.append("phase A tally.json missing")
 
-        med_ok = (sim["A0"]["median"] > 0
-                  and sim["A1"]["median"] <= F * sim["A0"]["median"])
-        p90_ok = (sim["A0"]["p90"] > 0
-                  and sim["A1"]["p90"] <= F * sim["A0"]["p90"])
-        sim["similarity_within_F"] = bool(med_ok and p90_ok)
-        sim["note"] = ("A0 median/p90 of 0 makes any nonzero A1 value an "
-                       "infinite factor — counted as NOT within F"
-                       if (sim["A0"]["median"] == 0 or sim["A0"]["p90"] == 0)
-                       else "")
-        d["audit_similarity"] = sim
-        out[deck] = d
-    return out
+    pb_tally_p = PB / "tally.json"
+    if pb_tally_p.exists() and result["phase_b"]:
+        t = jload(pb_tally_p)
+        for deck, d in result["phase_b"].items():
+            td = t.get(deck) or {}
+            _match(f"B/{deck}/deck_invalid_seeds",
+                   d["deck_invalid_seeds"]["seeds"],
+                   (td.get("deck_invalid_seeds") or {}).get("seeds"),
+                   mismatches)
+            checked += 1
+            for name, e in d["check1_objf"].items():
+                te = (td.get("check1_objf_pairs") or {}).get(name) or {}
+                _match(f"B/{deck}/check1[{name}]/median", e["median"],
+                       te.get("median"), mismatches)
+                _match(f"B/{deck}/check1[{name}]/p90", e["p90"],
+                       te.get("p90"), mismatches)
+                _match(f"B/{deck}/check1[{name}]/accepted",
+                       e.get("accepted"), te.get("accepted"), mismatches)
+                checked += 3
+            for name, e in d["check2_iters"].items():
+                te = (td.get("check2_iteration_multiplier") or {}).get(
+                    name) or {}
+                _match(f"B/{deck}/check2[{name}]/median", e["median"],
+                       te.get("median"), mismatches)
+                _match(f"B/{deck}/check2[{name}]/bound",
+                       e["bound_1p05_met"], te.get("bound_1p05_met"),
+                       mismatches)
+                checked += 2
+            _match(f"B/{deck}/check1a/n_clusters",
+                   d["check1a"]["n_clusters"],
+                   (td.get("check1a_clusters") or {}).get("n_clusters"),
+                   mismatches)
+            checked += 1
+            for name, e in d["check1a"]["hop_rates_per_pair"].items():
+                te = ((td.get("check1a_clusters") or {})
+                      .get("hop_rates_per_pair") or {}).get(name) or {}
+                _match(f"B/{deck}/hop[{name}]",
+                       (e["n_pairs"], e["n_hops"]),
+                       (te.get("n_pairs"), te.get("n_hops")), mismatches)
+                checked += 1
+            if d["forensics_incomplete_ok_records"]:
+                mismatches.append(
+                    f"B/{deck}: "
+                    f"{len(d['forensics_incomplete_ok_records'])} ok "
+                    f"records fail the G7 completeness contract")
+            checked += 1
+    elif result["phase_b"]:
+        mismatches.append("phase B tally.json missing")
+
+    print(f"\n--verify: {checked} cells checked, "
+          f"{len(mismatches)} mismatches")
+    for msg in mismatches:
+        print(f"  MISMATCH {msg}")
+    return 1 if mismatches else 0
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--verify", action="store_true",
+                    help="compare the recomputation against the committed "
+                         "tallies and exit nonzero on any mismatch")
+    args = ap.parse_args()
+
     result = {"phase_a": phase_a(), "phase_b": phase_b(),
               "declared": {"F": F, "iter_ratio_max": cfg.ITER_RATIO_MAX,
                            "tau": cfg.TAU, "delta": cfg.DELTA,
-                           "n_starts": cfg.N_STARTS}}
+                           "n_starts": cfg.N_STARTS,
+                           "objf_floor_rel": cfg.OBJF_FLOOR_REL,
+                           "cluster_gap_floor_factor":
+                               cfg.CLUSTER_GAP_FLOOR_FACTOR,
+                           "median_construction": cfg.MEDIAN_CONSTRUCTION}}
     out = HERE / "runs" / "report_analysis.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=1))
     print(f"written: {out}\n")
 
-    # console digest
     for deck, d in result["phase_a"].items():
-        s = d["audit_similarity"]
-        print(f"[A] {deck}: paired_ok={d['n_paired_ok']} "
-              f"ratio={d['unweighted_count_ratio_A1_over_A0']:.4f} "
-              f"bracket={d['weighting_invariance_bracket']} "
-              f"A0 med/p90={s['A0']['median']:.3g}/{s['A0']['p90']:.3g} "
-              f"A1 med/p90={s['A1']['median']:.3g}/{s['A1']['p90']:.3g} "
-              f"withinF={s['similarity_within_F']} "
+        sim = d["audit_similarity"]
+        line = " ".join(
+            f"{a}:med={v['median'] if v['median'] is None else format(v['median'], '.3g')}"
+            for a, v in sim["restricted"]["distributions"].items())
+        print(f"[A] {deck}: paired_ok={d['n_paired_ok']} restricted {line} "
+              f"recompute_mismatches="
+              f"{len(d['restricted_recompute_mismatches'])} "
               f"stamps={d['provenance_stamps']}")
     for deck, d in result["phase_b"].items():
-        print(f"[B] {deck}: stamps={d['provenance']['stamps']}")
-        print(f"    taxonomy: " + " ".join(
-            f"{a}[ok={t['by_status'].get('ok', 0)}/conv="
-            f"{t['ok_with_ifail_1']}]"
-            for a, t in d["taxonomy"].items()))
-        for variant, spreads in d["check1_objf"].items():
-            for name, e in spreads.items():
-                acc = e.get("accepted", "-")
-                print(f"    objf[{variant[:4]}] {name:7s} n={e['n']:2d} "
-                      f"med={e['median']:.3g} p90={e['p90']:.3g} "
-                      f"max={e['max']:.3g} accept={acc}")
+        print(f"[B] {deck}: invalid_seeds={d['deck_invalid_seeds']['n']} "
+              f"stamps={d['provenance_stamps']}")
+        for name, e in d["check1_objf"].items():
+            print(f"    objf {name:7s} n={e['n']:2d} med={e['median']} "
+                  f"p90={e['p90']} floor={e['floor_abs']} "
+                  f"accept={e.get('accepted', '-')}")
         for name, e in d["check2_iters"].items():
-            print(f"    iter {name:7s} n_ok={e['n_both_ok']:2d} "
-                  f"n_pairs={e['n_iter_pairs']:2d} "
-                  f"med={e['median_statistics']} "
-                  f"(tally-style {e['median_tally_style']}) "
-                  f"dropped={len(e['dropped_pairs'])}")
-        for arm, e in d["check3_c93"].items():
-            a = e["accepted"]
-            print(f"    c93  {arm}: accepted n={a['n']} "
-                  f"med={a['abs_residual_s_median']} "
-                  f"max={a['abs_residual_s_max']}   "
-                  f"unconverged n={e['unconverged_ok']['n']} "
-                  f"max={e['unconverged_ok']['abs_residual_s_max']}")
-        for variant, cs in d["check4_cost_sums"].items():
-            line = " ".join(f"{a}:{v['node_calls_solve_phase']}"
-                            f"({v.get('node_ratio_vs_B0', 0):.3f})"
-                            for a, v in cs["per_arm"].items())
-            print(f"    cost[{variant}] n={cs['n_seeds']}: {line}")
-        for arm, e in d["post_solve_share"].items():
-            print(f"    ps   {arm}: suppressed={e['suppressed_call_sites']} "
-                  f"share={e['share_of_wouldbe_calls']:.4f}")
+            print(f"    iter {name:7s} n={e['n_iter_pairs']:2d} "
+                  f"med(nearest-rank)={e['median']} "
+                  f"(statistics.median diagnostic "
+                  f"{e['median_statistics_diagnostic']}) "
+                  f"bound_met={e['bound_1p05_met']}")
+
+    if args.verify:
+        return verify(result)
     return 0
 
 
