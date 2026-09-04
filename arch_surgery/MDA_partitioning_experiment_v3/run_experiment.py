@@ -30,7 +30,52 @@ import phase_a  # noqa: E402
 import phase_b  # noqa: E402
 
 
+def _assert_interpreter() -> None:
+    """Refuse before any subprocess if this interpreter cannot run PROCESS.
+
+    Every campaign subprocess is launched with ``sys.executable``, so the
+    interpreter that starts this file decides the interpreter for all ~500 of
+    them.  Started under the wrong one, the FIRST run dies with
+    ``PackageNotFoundError: No package metadata was found for process`` and
+    every later one would too.  That happened on 2026-09-04's launch (the
+    system python3.10 instead of ``PROCESS_surgery_env``'s 3.12), and the
+    campaign reported it as "the A0 reference did not converge" — a machinery
+    failure wearing a physics result's clothes.
+
+    CLAUDE.md's rule for failure paths: fail with a message naming the fix.
+    """
+    import subprocess
+    probe = (
+        "import process, sys; "
+        "sys.stdout.write(process.__file__)"
+    )
+    r = subprocess.run([sys.executable, "-c", probe],
+                       capture_output=True, text=True)
+    good = r.returncode == 0 and str(cfg.TREE) in (r.stdout or "")
+    if good:
+        return
+    print("=" * 68)
+    print("REFUSING TO START — this interpreter cannot run PROCESS.")
+    print("=" * 68)
+    print(f"  interpreter : {sys.executable}")
+    print(f"  version     : {sys.version.split()[0]}")
+    why = (r.stderr or "").strip().splitlines()
+    print(f"  error       : {why[-1] if why else (r.stdout or 'unknown')}")
+    print(f"  needs       : process imported from {cfg.TREE}")
+    print()
+    print("  Every campaign subprocess inherits this interpreter, so starting")
+    print("  here would fail ~500 runs identically.  Run it with the project")
+    print("  environment instead (CLAUDE.md, Environments):")
+    print()
+    print("    /home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python \\")
+    print(f"        {Path(__file__).resolve()}")
+    print()
+    print("  In VSCode: pick the PROCESS_surgery_env interpreter, then Run.")
+    raise SystemExit(2)
+
+
 def main() -> int:
+    _assert_interpreter()
     print("=" * 68)
     print("MDA partitioning experiment V3 — plan: EXPERIMENT_PLAN.md")
     print(f"execution approved: {cfg.EXECUTION_APPROVED}")

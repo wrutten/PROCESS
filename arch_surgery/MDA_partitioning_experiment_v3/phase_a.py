@@ -940,9 +940,31 @@ def deck_campaign(deck: str, droot: Path, seeds, arms,
         **_stamp(ref_m),
     }
     if ref_run["rc"] != 0 or ref_m.get("status") != "ok":
+        # Distinguish MACHINERY from PHYSICS before calling it a result.  A
+        # crashed subprocess (no metrics written at all) is a broken harness,
+        # not a deck that failed to converge, and reporting it as the latter
+        # invites a wrong conclusion.  2026-09-04: the launch under the wrong
+        # interpreter produced exactly this — status "no_metrics" after 0.2 s,
+        # reported as "did not converge".
+        _status = ref_m.get("status")
+        if _status in ("no_metrics", "timeout"):
+            _err = ""
+            _elog = Path(ref_run["outdir"]) / "stderr.log"
+            if _elog.exists():
+                _lines = [ln for ln in _elog.read_text().splitlines() if ln.strip()]
+                _err = _lines[-1] if _lines else ""
+            rec["refused"] = (
+                f"MACHINERY FAILURE, not a physics result: the A0 reference "
+                f"subprocess did not complete (status {_status!r}, rc "
+                f"{ref_run['rc']}) and wrote no metrics. This is a broken run, "
+                f"not a deck that failed to converge — fix it and re-run; do "
+                f"not report it as a result. Last stderr line: {_err!r}")
+            rec["failure_class"] = "machinery"
+            return rec, False
         rec["refused"] = ("the A0 reference did not converge at the deck "
                           "point: no warm snapshot exists — that failure "
                           "is a result")
+        rec["failure_class"] = "physics"
         return rec, False
     snap_path = Path(ref_run["outdir"]) / "y_exit.json"
     if not snap_path.exists():
