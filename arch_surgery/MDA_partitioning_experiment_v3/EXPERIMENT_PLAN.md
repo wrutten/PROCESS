@@ -366,6 +366,39 @@ multiplier). If Phase B's realised saving lands below Phase A's bound, Phase B's
 stands as the deployment result and Phase A's as the mechanism and upper bound; no
 correction is applied in either direction.
 
+**Amendment, 2026-09-04 (pre-campaign, I-17): the transfer is an UPPER BOUND, not a
+prediction, and V3 says so before it runs.** Measured on V2's own records, the transfer
+**over-predicts the saving on all three decks**: nof 0.522 × 1.000 = 0.522 predicted
+against 0.640 measured (**+22.6 %**), lad 0.568 × 1.273 = 0.723 against 0.766
+(**+6.0 %**), st 0.502 × 1.000 = 0.502 against 0.711 (**+41.8 %**). The sign is uniform
+across every construction (identical-ok and identical-converged cost sets, both iteration
+constructions), so it is systematic. Note what this does to V2's declared failure
+condition: the transfer was declared broken on **lad only**, on iteration-multiplier
+grounds — yet lad is where it is most nearly right, and **st, which passes every gate at
+an iteration ratio of exactly 1.000, is the worst deck**. *The declared condition does not
+select the decks where the transfer fails.* Consequences, binding on this campaign:
+(i) **no V3 number is derived through the transfer** — every end-to-end figure is the
+measured node-call ratio, as in V2; (ii) the per-call ratio is reported as the mechanism
+and an upper bound, never as an expected end-to-end gain; (iii) the per-deck
+over-prediction is republished beside V3's own end-to-end numbers.
+
+**Hypothesis under test in this campaign, pre-declared (not a mechanism).** A Phase A
+evaluation may not be the same object as an in-loop one: Phase A enters from a δ = 0.10
+perturbed point and takes ≈ 5.5 sweeps (5.53 / 5.00 / 5.84 by deck), while a
+gradient-stencil evaluation enters from a point displaced by a tiny finite-difference step
+and should sit nearer the two-sweep floor; if the partition's per-call saving is
+proportionally smaller on a short evaluation, the transfer over-predicts exactly as
+observed. **V2 could not test this — nothing recorded the in-loop sweep distribution.**
+V3 records it: `sweeps_per_eval` (histogram, mean, and totals) in every run record, the
+same unit on both arms, from the driver instrument committed at `0c4ce5c8` (neutrality
+13 493 MFILE hex floats vs the pre-instrument tree, 0 mismatches; the block arm's binned
+total equals the driver's own `block_sweeps` counter exactly). **Pre-declared reading:**
+if in-loop evaluations are systematically shorter than Phase A's and the block arm's
+per-sweep advantage shrinks with evaluation length, the hypothesis is supported; if the
+distributions are comparable and the gap persists, it is refuted and the cause is
+elsewhere. Both outcomes are results. This is a *reporting* question, not an acceptance
+one: no gate depends on it.
+
 ## 6. Gates, each with teeth (protocol §12), run before any campaign number is cited
 
 Carried from the development plan §5, verbatim in criteria and teeth. Where component
