@@ -379,9 +379,13 @@ def restricted_teeth(deck: str, droot: Path, ref: dict) -> dict:
     }
 
     # (b) an in-loop component: prefer the reference audit's own argmax
+    # The reference audit's own argmax is preferred as A36 does, but ONLY
+    # if it is an in-loop component: on large_tokamak_nof that argmax is
+    # costs.coecap, a post-solve-owned field, and doctoring it would test
+    # the wrong thing (found by the tooth itself failing on that deck).
     ref_argmax = ((ref_m.get("exit_audit") or {}).get("brief") or {}).get("argmax")
     kept = [c["key"] for c in spec_components(deck) if c["key"] not in excl]
-    cand_il = ([ref_argmax] if ref_argmax else []) + kept
+    cand_il = [c for c in ([ref_argmax] if ref_argmax else []) + kept if c not in excl]
     doc_il = _doctor(snap, deck, owned, cand_il, root / "doctored_inloop.json")
     il = run_eval_job(deck, "A1", root / "A1_doctored_inloop",
                       entry_state=root / "doctored_inloop.json", seed=0,
@@ -389,12 +393,26 @@ def restricted_teeth(deck: str, droot: Path, ref: dict) -> dict:
     im = _metrics(il["outdir"])
     i_aud = im.get("exit_audit") or {}
     i_res = i_aud.get("restricted") or {}
+    # OR semantics, as A36's entry-gate tooth (V2 launch fix 2): a doctored
+    # in-loop component forces the owning block's inner solve to re-converge
+    # it, which costs at least one extra block sweep; the re-converged exit
+    # may differ from the baseline only in its last bits, or -- at a
+    # bit-exact fixed point -- not at all.  The tooth binds on "the
+    # restricted audit moved OR the measured call did more work".
+    b_sw = (bm.get("module_solve_stats") or {}).get("block_sweeps")
+    i_sw = (im.get("module_solve_stats") or {}).get("block_sweeps")
     il_checks = {
         "run_ok": im.get("status") == "ok",
         "doctored_component_is_in_loop": doc_il["component"] not in excl,
         "whole_state_max_moved": i_aud.get("residual_max_hex") != b_aud.get("residual_max_hex"),
         "restricted_max_moved": i_res.get("max_hex") != b_res.get("max_hex"),
+        "more_block_sweeps_than_baseline": (
+            isinstance(b_sw, int) and isinstance(i_sw, int) and i_sw > b_sw),
     }
+    il_checks["restricted_moved_or_more_work"] = bool(
+        il_checks["restricted_max_moved"] or il_checks["more_block_sweeps_than_baseline"])
+    il_binding = {k: il_checks[k] for k in (
+        "run_ok", "doctored_component_is_in_loop", "restricted_moved_or_more_work")}
     record = {
         "gate": ("A38 restricted-audit teeth: the restricted statistic must be "
                  "blind to a post-solve-owned displacement and sighted to an "
@@ -410,7 +428,9 @@ def restricted_teeth(deck: str, droot: Path, ref: dict) -> dict:
                             "whole_max_hex": i_aud.get("residual_max_hex"),
                             "restricted": i_res, "checks": il_checks, **_stamp(im)},
     }
-    record["verdict"] = "PASS" if all(ps_checks.values()) and all(il_checks.values()) else "FAIL"
+    record["inloop_doctored"]["binding_checks"] = il_binding
+    record["inloop_doctored"]["block_sweeps"] = {"baseline": b_sw, "doctored": i_sw}
+    record["verdict"] = "PASS" if all(ps_checks.values()) and all(il_binding.values()) else "FAIL"
     (root / "gate.json").write_text(json.dumps(record, indent=2))
     print(f"  restricted teeth {deck}: {record['verdict']} "
           f"(post-solve doctored {comp}: whole {p_aud.get('residual_max_hex')} vs base "
