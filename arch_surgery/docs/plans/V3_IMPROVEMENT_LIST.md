@@ -60,9 +60,11 @@
    (A source fix — seeding the pair at initialisation — is a separate, D11-gated user
    decision, with its own attainable-gates list from the 2026-09-04 assessment; a fix would
    make this control moot.)
-   *Status note (relayed 2026-09-04 from session process-surgery-bf):* seed approval is
-   **still open with the user**; if approved, its counterfactual runs on the
-   corrected-audit campaign of item 4, in that order. The user has also agreed there to a
+   *Status note (relayed 2026-09-04 from session process-surgery-bf):* **superseded same
+   day — the user has instructed (via the same session) that the FirstWall→Build seed is
+   folded into the V3 intervention**, with the V3 development plan (authored there,
+   committed here after user review) detailing the fix shape and gates; the counterfactual
+   ordering (seed evaluated against the corrected-audit campaign of item 4) stands. The user has also agreed there to a
    **"dead needs two qualifiers" register-convention amendment** (a liveness verdict must
    state both value-liveness and displacement-liveness, per V15) — not yet written into
    `DSM_VALIDATION.md`'s conventions; whichever session executes it should confirm with
