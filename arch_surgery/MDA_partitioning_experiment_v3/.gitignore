@@ -1,0 +1,7 @@
+# Bulk run artifacts stay untracked (V3 plan §7, CLAUDE.md); summaries and
+# verdicts are committed in the task and experiment reports.  The same one
+# line as arch_surgery/MDA_partitioning_experiment_v2/.gitignore — without
+# it `git status --porcelain` is never empty while runs/ exists, so every
+# record this directory produces stamps `tree_git_dirty: true` and the
+# clean-tree stamp the plan asks for cannot be reached.
+runs/
