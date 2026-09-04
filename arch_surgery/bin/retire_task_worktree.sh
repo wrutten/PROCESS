@@ -25,7 +25,14 @@ git merge-base --is-ancestor "$BRANCH" HEAD 2>/dev/null || {
   echo "Merge it first, or delete it deliberately with git worktree remove." >&2; exit 1; }
 
 moved=0
-for d in "$SRC"/arch_surgery/idf_probe/runs*/ ; do
+# EVERY untracked runs/ directory anywhere under arch_surgery/, not just the
+# probe's.  I-16 (2026-09-04): this loop used to scan only
+# arch_surgery/idf_probe/runs*/, so when A41 put its gate records under
+# arch_surgery/MDA_partitioning_experiment_v3/runs/ the forced removal below
+# destroyed them -- the same loss I-14/I-15 record, recurring through a
+# coverage gap in the very script written to prevent it.  A run directory is
+# defined by its NAME, wherever it sits.
+while IFS= read -r d; do
   [ -d "$d" ] || continue
   for e in "$d"*; do
     [ -e "$e" ] || continue
@@ -44,9 +51,23 @@ for d in "$SRC"/arch_surgery/idf_probe/runs*/ ; do
     # them would shadow the shared recording they point at.
     if [ -L "$e" ]; then echo "  skip (symlink): $name" >&2; continue; fi
     mkdir -p "$DEST_RUNS"; mv "$e" "$target" && moved=$((moved+1))
+    echo "  moved: ${d#"$SRC"/}${name} -> ${target#"$DEST_RUNS"/}" >&2
   done
-done
+done < <(find "$SRC/arch_surgery" -type d -name 'runs' -o -type d -name 'runs_*' \
+         | sort)
 echo "relocated ${moved} artifact entries into ${DEST_RUNS}" >&2
+
+# Last line of defence: refuse to destroy anything still unrelocated.  The
+# forced removal below deletes untracked files, so a run artifact the loop
+# did not see is gone for good (I-14, I-15, I-16).
+leftover=$(find "$SRC/arch_surgery" -type d \( -name 'runs' -o -name 'runs_*' \) \
+           -exec sh -c '[ -n "$(ls -A "$1" 2>/dev/null)" ] && echo "$1"' _ {} \; )
+if [ -n "$leftover" ]; then
+  echo "REFUSING to remove ${SRC}: these run directories are still populated:" >&2
+  echo "$leftover" >&2
+  echo "Relocate them by hand, then re-run.  Nothing has been deleted." >&2
+  exit 1
+fi
 
 git worktree remove --force "$SRC"
 git worktree prune 2>/dev/null || true

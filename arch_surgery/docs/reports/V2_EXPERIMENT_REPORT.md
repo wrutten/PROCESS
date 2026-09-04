@@ -181,7 +181,8 @@ substantive per-deck reading, from the full distributions:
 
 ### 5.3 Iteration multiplier (check 2, bound ≤ 1.05 on the median paired ratio)
 
-*Caption: per deck, the median over converged seed-pairs of the paired ratio of optimiser
+*Caption: per deck, the median over **both-ok** seed-pairs (see the pairing correction below
+— this equals the converged set on nof and lad, but not on st) of the paired ratio of optimiser
 (VMCON) iterations, arm-b over arm-a (dimensionless; 1.0 = same iteration count; pair counts
 in the row label). ✓/✗ against the declared bound: median ≤ 1.05. B2→B3 and B0→R are
 reported beside the three declared comparisons, outside the acceptance rule.*
@@ -208,10 +209,23 @@ vary by column (lad B2→B3: 10; lad B0→R: 12); exact counts per pair are in
 `report_analysis.json` (`check2_iters`). V3 pre-declares a single construction
 (nearest-rank) so a cited median is always reproducible to the digit.*
 
-The tally's pair counts (silently dropping pairs with no recorded iterations) turn out to be
-exactly the converged pairs — iterations are recorded only at `ifail = 1` — so its medians
-coincide with the converged-only construction; the analysis names every dropped pair
-(all paired `ifail = 5`, plus st seed 17).
+**Pairing, corrected 2026-09-04.** Check 2 pairs on **status `ok`**, not on `ifail`, and
+drops only pairs with no recorded iteration count. The earlier claim here — that this
+"turns out to be exactly the converged pairs, since iterations are recorded only at
+`ifail = 1`" — is **false on `st_regression`**: an `ifail = 5` run *can* record a nonzero
+iteration count, and **st seed 10 is such a case** (B0 ends `ifail = 5` after 44 iterations
+while B3 converges in 73), so every st check-2 row is over 24 both-ok pairs, one of which
+has an unconverged baseline. It holds on nof and lad only, whose unconverged runs abort with
+0 recorded iterations — which is why it looked general. **No median moves and no verdict
+changes** (all four st comparisons read median 1.000 under both constructions; nof and lad
+are identical under both). What *does* change is every absolute or summed quantity on st,
+and one of them reverses direction: summed iterations B0→B3 are 612 vs 625 (ratio 1.021)
+on the both-ok set against 568 vs 552 (ratio 0.972) converged-only; B0→B2 reads 0.975
+against 0.891, and B0→R 0.956 against 0.924. The committed analysis now emits
+`check2_iters_converged_only` beside `check2_iters`, each carrying a `pair_construction`
+field so the set is named rather than inferred (mirroring what `645411da` did for checks
+1/3/4). Found by an independent read of the records (session `f1`), confirmed here from the
+campaign `metrics.json` records. The analysis names every dropped pair.
 
 - **The lad failure fires the declared per-deck clause:** the A→B transfer is broken on
   `low_aspect_ratio_DEMO`; only end-to-end numbers are quoted there (§5.5). "Transfer

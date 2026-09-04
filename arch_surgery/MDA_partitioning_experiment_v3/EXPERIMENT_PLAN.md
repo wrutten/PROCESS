@@ -313,6 +313,17 @@ columns.
    **both-converged pairs (the declared pairing** — V2's tally reached this construction
    only by a silent drop that happened to coincide with it; V3 declares it, and H3's
    records make the unconverged-exit iteration counts available beside).
+   **Amendment, 2026-09-04 (pre-campaign): "both-ok" is not "both-converged", and the
+   tally must test `ifail`, not merely the presence of an iteration count.** A second
+   independent read of V2's records found that an `ifail = 5` run *can* record a nonzero
+   iteration count — st seed 10 ends `ifail = 5` after 44 iterations — so V2's st check-2
+   rows are over 24 both-*ok* pairs including one unconverged baseline, and its summed
+   B0→B3 iterations reverse direction between the two constructions (1.021 both-ok
+   against 0.972 converged-only; V2 report §5.3 pairing correction). V3 therefore
+   **computes both constructions and names each in a `pair_construction` field**, accepts
+   on the declared both-converged one, and publishes the both-ok one beside. `_conv()`
+   tests `status == ok` **and** MFILE `ifail == 1`; a pair kept on the presence of an
+   iteration count alone is a defect, not a construction.
    **Acceptance: median ≤ 1.05 for B0→B1, B0→B2, B0→B3; the median only** (per-start
    counts are dust-sensitive by ±80 %; extremes are published, never judged). B2→B3 and
    B0→R are reported beside, outside the acceptance rule.

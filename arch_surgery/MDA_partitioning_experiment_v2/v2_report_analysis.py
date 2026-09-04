@@ -178,14 +178,24 @@ def phase_b() -> dict:
                     s["accepted"] = s["accept_median"] and s["accept_p90"]
             d["check1_objf"][variant] = spreads
 
-        # check 2 — iteration ratios, three operationalizations
+        # check 2 — iteration ratios, three operationalizations.
+        # Two pair constructions are emitted, as for checks 1/3/4: the
+        # historical both-ok set, and a converged-only set. They are NOT
+        # always the same. An ifail = 5 run can still record a nonzero
+        # iteration count (st seed 10: B0 ifail = 5 with 44 iterations),
+        # so the both-ok set can carry a pair whose baseline never reached
+        # an accepted optimum. Medians happen to agree on this campaign;
+        # the absolute sums do not.
         d["check2_iters"] = {}
-        for name, (a, b) in {"B0->B1": ("B0", "B1"), "B0->B2": ("B0", "B2"),
-                             "B0->B3": ("B0", "B3"), "B0->R": ("B0", "R"),
-                             "B2->B3": ("B2", "B3")}.items():
+        d["check2_iters_converged_only"] = {}
+        for variant, conv_only in (("check2_iters", False),
+                                   ("check2_iters_converged_only", True)):
+          for name, (a, b) in {"B0->B1": ("B0", "B1"), "B0->B2": ("B0", "B2"),
+                               "B0->B3": ("B0", "B3"), "B0->R": ("B0", "R"),
+                               "B2->B3": ("B2", "B3")}.items():
             if a not in rows or b not in rows:
                 continue
-            pr = paired(a, b)
+            pr = paired(a, b, converged_only=conv_only)
             ratios, dropped = [], []
             fev = []
             # absolute iteration counts of each arm over exactly the pairs
@@ -209,8 +219,10 @@ def phase_b() -> dict:
                 if ma and mb:
                     fev.append(mb / ma)
             ratios.sort()
-            d["check2_iters"][name] = {
+            d[variant][name] = {
                 "n_both_ok": len(pr), "n_iter_pairs": len(ratios),
+                "pair_construction": ("converged_only" if conv_only
+                                      else "both_ok"),
                 "dropped_pairs": dropped,
                 "median_tally_style": (ratios[len(ratios) // 2]
                                        if ratios else None),

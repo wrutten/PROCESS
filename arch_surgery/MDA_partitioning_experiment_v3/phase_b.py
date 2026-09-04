@@ -806,6 +806,15 @@ def stage_tally() -> int:
             if a not in deck_rows or b not in deck_rows:
                 continue
             ratios, fev, dropped = [], [], []
+            # EXPERIMENT_PLAN.md §4.2 check-2 amendment (2026-09-04): the
+            # both-OK construction is computed and published beside the
+            # declared both-CONVERGED one, because they are not the same set.
+            # An ifail = 5 run can record a nonzero iteration count (V2's st
+            # seed 10: ifail 5 after 44 iterations), and on st the summed
+            # B0->B3 ratio reverses between the two (1.021 vs 0.972).  _conv()
+            # tests status AND ifail == 1; keeping a pair merely because an
+            # iteration count exists is the defect this guards against.
+            bo_a, bo_b, bo_ratios = [], [], []
             # EXPERIMENT_PLAN.md §4.2 amendment (2026-09-04): absolute
             # iterations over exactly the ratio-contributing pairs, because a
             # median of per-pair ratios and the ratio of the sums can point in
@@ -818,6 +827,14 @@ def stage_tally() -> int:
             iters_a, iters_b, contributing = [], [], []
             for k in range(cfg.N_STARTS):
                 ra, rb = deck_rows[a][k], deck_rows[b][k]
+                # both-OK construction, published beside (never accepted on)
+                if (ra.get("status") == "ok" and rb.get("status") == "ok"):
+                    oa, ob = (ra.get("n_solver_iterations"),
+                              rb.get("n_solver_iterations"))
+                    if oa and ob:
+                        bo_a.append(oa)
+                        bo_b.append(ob)
+                        bo_ratios.append(ob / oa)
                 if not (_conv(ra) and _conv(rb)):
                     continue
                 ia, ib = ra.get("n_solver_iterations"), rb.get(
@@ -862,6 +879,18 @@ def stage_tally() -> int:
                 "iters_sum_ratio": ((sum(iters_b) / sum(iters_a))
                                     if iters_a and sum(iters_a) else None),
                 "contributing_seeds": contributing,
+                "pair_construction": "both-converged (status ok AND ifail==1)",
+                "both_ok_beside": {
+                    "pair_construction": "both-ok (status ok; ifail NOT "
+                                         "required — may include unconverged "
+                                         "sides that still recorded iterations)",
+                    "n_pairs": len(bo_ratios),
+                    "median": rank_median(sorted(bo_ratios)),
+                    "iters_a_sum": (sum(bo_a) if bo_a else None),
+                    "iters_b_sum": (sum(bo_b) if bo_b else None),
+                    "iters_sum_ratio": ((sum(bo_b) / sum(bo_a))
+                                        if bo_a and sum(bo_a) else None),
+                },
                 "sum_vs_median_directions_agree": (
                     None if not iters_a or not sum(iters_a) or med is None
                     else ((sum(iters_b) / sum(iters_a) - 1.0) * (med - 1.0)
