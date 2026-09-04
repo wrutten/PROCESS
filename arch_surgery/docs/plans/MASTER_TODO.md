@@ -122,6 +122,11 @@
 14. **Standing rules**: the sandbox is never overridden (report blockers and ask); never push
    without per-push approval; never modify a sibling clone; the base commit and the models
    are frozen. See [`../../../CLAUDE.md`](../../../CLAUDE.md).
+16. **Every table carries a concise caption** (user, 2026-09-04): units, and the semantics of
+   the entries — what a row is, what a column is, what population the numbers summarise, and
+   which construction produced them (e.g. "converged pairs only", "identical-ok-set sums").
+   A table whose meaning requires reading the surrounding prose to decode is incomplete.
+   Binding on every report from the V2 experiment report onward.
 
 **Work-item terminology** (one word, one meaning):
 

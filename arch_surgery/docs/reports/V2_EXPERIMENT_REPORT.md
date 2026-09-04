@@ -73,6 +73,14 @@ All gates carried teeth (a deliberately broken input must fail), and all passed:
 
 ## 4. Phase A results (per-call cost; counts only)
 
+*Caption: one row per deck; all quantities over the 25 paired-ok seeds. "Cold-start term" =
+model-node calls / flat sweeps of the once-per-run A0 reference convergence at the cold deck
+point (dimensionless counts). "A1/A0 call ratio" = summed single-eval model-node calls of A1
+over A0 (the parenthesis gives the two sums). "Bracket" = [min, max] of the per-node A1/A0
+count ratios — any positive per-node cost weighting lands inside it. "Audit" columns =
+median / nearest-rank-p90 over seeds of each run's uncharged exit-audit max scaled residual
+(dimensionless, per-component |Δ|/scale, the a26 ruler).*
+
 | deck | cold-start term (calls / sweeps) | A1/A0 call ratio (paired-ok N=25) | bracket [min, max] per-node ratio | A0 audit med / p90 | A1 audit med / p90 |
 |---|---|---|---|---|---|
 | `large_tokamak_nof` | 126 / 6 | **0.522** (2898→1512) | [0.0, 0.935] | 6.3e-10 / 8.0e-9 | 2.44 / 9.86 |
@@ -104,6 +112,11 @@ All gates carried teeth (a deliberately broken input must fail), and all passed:
 
 ### 5.1 Robustness / taxonomy (check 4, denominators of 25)
 
+*Caption: per deck and arm, counts out of the 25 requested starts: runs with `status: ok`
+(the subprocess completed and produced records) / runs **converged** (`ifail = 1`, an
+accepted optimum) / runs crashed (no usable record). ok − conv = completions where VMCON
+stopped without convergence (`ifail = 5`).*
+
 | deck | R | B0 | B1 | B2 | B3 |
 |---|---|---|---|---|---|
 | nof | 22 ok / **22 conv** / 3 crash | 22 / 22 / 3 | 22 / 22 / 3 | 22 / 22 / 3 | 22 / 22 / 3 |
@@ -117,11 +130,29 @@ seeds are unconverged in every arm, B0 included): deck/seed hardness, not archit
 Crash attribution likewise shows no arm effect (nof: the same 3 seeds crash in all five
 arms; lad: 2 seeds crash everywhere, B1/B2/B3 add 4-vs-2 on two further seeds).
 
+**Why lad fails so often — what the records show.** Its unconverged runs all die *early and
+the same way*: 538–554 model calls (converged runs spend 2 810–31 216), `sqsumsq` stuck at
+0.15–0.64 (converged exits: ≤ 1e-13), on the same seeds in every arm including stock R. So
+these are not iteration-cap timeouts but early aborts: the ±10 % perturbed start lands
+outside the region from which VMCON's restart ladder can restore feasibility at all, and it
+gives up after a few hundred evaluations with the constraints grossly violated. The deck's
+feasible basin is simply narrow relative to δ = 0.10 — roughly half the perturbed starts
+fall outside it for *every* architecture. (Whether a smaller, basin-sized δ or per-deck
+amplitudes is the right design response is a v3 question; deeper attribution — which
+constraints are violated at the aborts — needs exit-state forensics the current records do
+not carry, also a v3 item.)
+
 ### 5.2 Same optimum (check 1) — paired |Δ norm_objf| at accepted optima
 
 The declared yardstick is measured inside the campaign: the R→B0 spread, with acceptance at
 median AND p90 ≤ F × yardstick (F = 10). Converged-only pairs (the plan's "accepted
 optima"); the all-ok construction is published beside it in `report_analysis.json`.
+
+*Caption: per deck, the distribution of |Δ norm_objf| (dimensionless — the normalised figure
+of merit, O(1) to O(17) on these decks) over seed-paired runs where BOTH sides converged
+(`ifail = 1`); median / nearest-rank p90 / max over those pairs (n in the row label).
+Acceptance (declared): a B0→Bx column's median AND p90 must be ≤ F = 10 × the R→B0 column's.
+Bold marks the entries discussed in the text.*
 
 | deck | R→B0 (yardstick) med / p90 / max | B0→B1 | B0→B2 | B0→B3 | B2→B3 |
 |---|---|---|---|---|---|
@@ -141,10 +172,19 @@ substantive per-deck reading, from the full distributions:
   footprint of the trust step on this deck.
 - **st:** medians are τ-grade (B0→B2 at 2.2e-12), but 2–3 of 23 seeds hop to a different
   attractor under *any* change — including the stopping rule itself (R→B0: seeds 12 at 0.22
-  and 24 at 0.022). Deck-native multi-modality, not an architecture defect; B2→B3 agree with
-  each other at p90 4.2e-9.
+  and 24 at 0.022). **These are not unconverged runs slipping through**: every side of every
+  hop pair has `ifail = 1` and `sqsumsq ≤ 2e-11` — genuinely accepted, feasible optima. The
+  deck supports at least four distinct nearby optima, all observed at accepted exits:
+  `norm_objf` = −16.8089 (the common one), −16.8309, −16.5966, −16.5886. Seed 24 alone lands
+  on three of them across the four arms (R −16.8309, B0/B3 −16.8089, B2 −16.5966). Deck-native
+  multi-modality, not an architecture defect; B2→B3 agree with each other at p90 4.2e-9.
 
 ### 5.3 Iteration multiplier (check 2, bound ≤ 1.05 on the median paired ratio)
+
+*Caption: per deck, the median over converged seed-pairs of the paired ratio of optimiser
+(VMCON) iterations, arm-b over arm-a (dimensionless; 1.0 = same iteration count; pair counts
+in the row label). ✓/✗ against the declared bound: median ≤ 1.05. B2→B3 and B0→R are
+reported beside the three declared comparisons, outside the acceptance rule.*
 
 | deck | B0→B1 | B0→B2 | B0→B3 | B2→B3 (beside) | B0→R |
 |---|---|---|---|---|---|
@@ -158,7 +198,25 @@ coincide with the converged-only construction; the analysis names every dropped 
 (all paired `ifail = 5`, plus st seed 17).
 
 - **The lad failure fires the declared per-deck clause:** the A→B transfer is broken on
-  `low_aspect_ratio_DEMO`; only end-to-end numbers are quoted there (§5.5).
+  `low_aspect_ratio_DEMO`; only end-to-end numbers are quoted there (§5.5). "Transfer
+  broken" means specifically: the experiment's argument structure multiplies Phase A's
+  per-call saving by an unchanged iteration count to claim an end-to-end saving (plan §5).
+  That multiplication is only valid where the iteration multiplier is ~1; at 1.27 the
+  per-call figure no longer predicts the total, so on lad we do not *derive* the saving —
+  we quote the measured end-to-end totals directly, which happen to still favour the
+  partition (§5.5).
+- **Why lad is also the deck where iterations FALL (B0→B1/B2 = 0.833):** current data
+  localises it precisely but does not explain it mechanistically. B0→B1 isolates the
+  burn-time lift (same flat architecture, one added optimiser variable + explicit
+  constraint 93): on lad's converged seeds that alone buys the 17 % iteration reduction,
+  and B2 (which keeps the lift) inherits it exactly (0.833, same pairs). The nof pairs show
+  1.000 for the same lift — so this is a lad-specific interaction: on the deck whose
+  burn-time coupling is hardest (the deck is also the one whose basin is narrowest, §5.1),
+  giving VMCON the coupling as an explicit degree of freedom with its own constraint row
+  helps it converge; solving the same coupling as an inner fixed point does not. The trust
+  step then gives most of it back (B2→B3 = 1.33). A gradient-quality mechanism is plausible
+  (the lifted variable makes one stiff feedback explicit to the QP) but is not measured
+  here — v3 item.
 - **The declared st expectation ("B3 may inflate, context 10→20") is REFUTED:** median
   1.000, q1–q3 [0.85, 1.18]. The single-trajectory context was not representative.
 - "B3 ≈ B2 on the pulsed decks" is confirmed on nof (B2→B3 = 1.000) and refuted on lad
@@ -171,12 +229,24 @@ Constraint-93 residual at **accepted optima**: nof max 1.6e-3 s, lad max 6.6e-5 
 residuals (up to 6135 s) exist only at lad's unconverged exits, which are not optima; they
 are published beside, not pooled. st: nothing lifted (k = 0), field absent as designed.
 
-Post-solve suppression share of would-be solve-phase calls (B2): **8.34 % / 8.35 % /
-11.44 %** against A33's declared baselines 8.3 / 8.4 / 11.3 — confirmed to the precision the
-baselines carry. B3: 9.40 / 9.39 / 11.78 % (higher share purely because the trust arm
-executes fewer in-loop calls).
+**Post-solve suppression, spelled out.** A33 identified, per deck, the model nodes whose
+outputs never reach the objective or any active constraint — pure "reporting" models
+(`costs`, `vacuum`, `water_use`; plus `pulse` on st). The flat arms execute these on **every**
+`call_models` even though the optimiser can never see their output; B2/B3 remove them from
+the per-call loop and execute them **once per run** at the accepted optimum, before output.
+The "suppression share" quantifies what that removal saves: of all the node calls the solve
+phase *would have made* without the hoist (executed calls + suppressed call sites), the
+fraction that was suppressed. Measured on B2: **8.34 % / 8.35 % / 11.44 %**, against A33's
+baseline predictions 8.3 / 8.4 / 11.3 % from its static census — confirmed to the precision
+the baselines carry. B3 shows 9.40 / 9.39 / 11.78 %: the *same* suppressed nodes, a higher
+share only because the trust arm executes fewer in-loop calls (a smaller denominator).
 
 ### 5.5 Cost (check 4): identical-success-set node-call sums (solve phase)
+
+*Caption: per deck, each arm's summed solve-phase model-node calls over the identical
+success set (the seeds where every arm of that deck is ok / converged — n in the row label),
+expressed as a ratio to B0 (B0's absolute call count in parentheses; dimensionless counts,
+exact and bit-reproducible). Lower = cheaper.*
 
 | deck (n seeds) | R | B0 | B1 | B2 | B3 |
 |---|---|---|---|---|---|
@@ -189,15 +259,69 @@ calls for the campaign — on lad *despite* the 1.27 iteration multiplier (the p
 outweighs the extra iterations; B2, whose iterations are 0.83×, is the cheapest lad arm at
 0.65). On st the stock driver R costs 15–18 % *more* node calls than the flat control B0.
 
-## 6. Timing (context only — never evidence; 3 serial reps, first run discarded)
+**Per-block split of the same sums** (user-requested; computed by the analysis script from
+each run's per-node census, mapped through the deck's executed block schedule):
 
-Median wall-clock per run (ranges in the log): nof R 16.4 s, B0 25.7 s, B1 24.7 s, B2
-39.5 s, B3 28.6 s; lad R 31.5, B0 49.7, B1 40.3, B2 65.9, B3 40.3; st R 15.0, B0 28.3, B2
-38.1, B3 48.6. Two context observations: the new driver carries instrumentation overhead
-over stock (R vs B0) that counts do not see; and on st, B3's *wall clock* exceeds B0's while
-its node calls are 0.68× — per-call machinery overhead of the block solver. Both are why
-acceptance rests on counts (I-10); the timing block completed after the tallies, stamped
-clean.
+*Caption: summed model-node calls over the identical-ok-set (n as in the table above), split
+by owning block: M1 = plasma physics (physics, plasma_geom); M2 = build + coils; M3 =
+in-vessel components, power and plant engineering; PULSE = the lifted `pulse` node (executes
+in-loop, outside any iterating block; absent on st, k = 0); post-solve = the hoisted
+reporting nodes (`costs`, `vacuum`, `water_use`; + `pulse` on st) — per-call in R/B0/B1,
+once-per-run in B2/B3. TOTAL is the census total; it exceeds §5.5's solve-phase totals by
+~0.1 % (the once-per-run and exit-audit calls the census also counts). Dimensionless counts.*
+
+| deck / arm | M1 | M2 | M3 | PULSE | post-solve | TOTAL |
+|---|---|---|---|---|---|---|
+| **nof** R | 87 042 | 130 563 | 522 252 | 43 521 | 130 563 | 913 941 |
+| B0 | 89 212 | 133 818 | 535 272 | 44 606 | 133 818 | 936 726 |
+| B1 | 89 896 | 134 844 | 539 376 | 44 948 | 134 844 | 943 908 |
+| B2 | 89 116 | 158 493 | 575 484 | 14 146 | 264 | 837 503 |
+| B3 | 61 212 | 116 463 | 407 520 | 14 146 | 264 | 599 605 |
+| **lad** R | 169 314 | 253 971 | 1 015 884 | 84 657 | 253 971 | 1 777 797 |
+| B0 | 164 858 | 247 287 | 989 148 | 82 429 | 247 287 | 1 731 009 |
+| B1 | 118 398 | 177 597 | 710 388 | 59 199 | 177 597 | 1 243 179 |
+| B2 | 116 836 | 207 801 | 778 932 | 18 705 | 228 | 1 122 502 |
+| B3 | 129 692 | 247 218 | 905 412 | 30 297 | 228 | 1 312 847 |
+| **st** R | 350 386 | 525 579 | 2 102 316 | — | 700 772 | 3 679 053 |
+| B0 | 303 424 | 455 136 | 1 820 544 | — | 606 848 | 3 185 952 |
+| B2 | 327 668 | 506 274 | 1 986 360 | — | 400 | 2 820 702 |
+| B3 | 246 780 | 390 645 | 1 514 316 | — | 408 | 2 152 149 |
+
+Three structural reads: (1) the post-solve column is where the hoist lives — six-figure
+per-call cost in every flat arm collapsing to a few hundred once-per-run calls in B2/B3;
+(2) on nof, trust (B2→B3) cuts every iterating block by ~30 % (M1 89k→61k, M3 575k→408k) at
+identical optimiser iterations — the outer verification passes were the cost; (3) on lad,
+B3's M2/M3 *grow* back over B2 (208k→247k, 779k→905k) — the extra optimiser iterations
+(§5.3) spend their calls in the engineering blocks, eating most of the trust saving.
+
+## 6. Timing (context only — never evidence)
+
+*Caption: wall-clock seconds per full optimisation run at the baseline start, median
+[min – max] over 3 serial repetitions, each a fresh process with numba JIT included
+identically in every rep (so JIT is a constant offset, not a discard); machine otherwise
+idle. From `runs/phase_b/timing/timing.json` (the committed timing stage). Context only —
+no acceptance quantity rests on any entry (I-10).*
+
+| deck / arm | R | B0 | B1 | B2 | B3 |
+|---|---|---|---|---|---|
+| nof | 16.4 [15.9–17.3] | 25.7 [25.3–27.5] | 24.7 [23.9–26.4] | 39.5 [39.1–42.0] | 28.6 [26.7–32.3] |
+| lad | 31.5 [31.5–32.9] | 49.7 [49.3–50.6] | 40.3 [39.4–40.8] | 65.9 [64.5–66.7] | 40.3 [40.2–42.0] |
+| st | 15.0 [14.9–15.1] | 28.3 [26.3–30.5] | — | 38.1 [35.9–38.5] | 48.6 [48.0–49.8] |
+
+**Uncertainty:** with n = 3 the ranges are the honest uncertainty statement — they span
+~1 % (st R) to ~20 % (nof B3, 26.7–32.3 s), so differences below ~10 % between cells are
+unresolved at this repetition count; the wall-clock *ordering* R < B0 and B2 > B3 (nof) is
+outside the ranges and stable. **A per-block wall-clock split does not exist in the
+records** — no per-block timers were instrumented (counts were the declared acceptance
+quantity) — so the per-block table of §5.5 has no timing counterpart; added to the v3
+method list as a context-only instrument.
+
+Two context observations: the new driver carries instrumentation overhead over stock (R vs
+B0) that counts do not see; and on st, B3's *wall clock* exceeds B0's while its node calls
+are 0.68× — per-call machinery overhead of the block solver (three `module_solve`
+invocations per call replacing one flat sweep loop, at st's small per-node cost). Both are
+why acceptance rests on counts (I-10); the timing block completed after the tallies,
+stamped clean.
 
 ## 7. Critical assessment
 
@@ -217,7 +341,13 @@ future revision should declare a floor for the yardstick before the campaign, no
 (2) The lad B0→B3 iteration failure is a genuine adverse result for the trust step on that
 deck (B2→B3 = 1.33 isolates it to the outer-loop removal, not the partition), and the
 declared clause quarantines lad's transfer argument accordingly. Note lad's fragility
-baseline: only 12/25 seeds converge in *any* arm, including stock. (3) The Phase A
+baseline: only 12/25 seeds converge in *any* arm, including stock. **To pre-empt a
+misreading: this report does not conclude that the architecture costs robustness.** The
+mass of lad's failures (13/25 unconverged-or-crashed) is seed-paired across every arm
+including R — deck hardness under δ = 0.10, not an arm effect. What the data does carry is
+a small unresolved hint: crash counts rise 2 (R) → 4 (B0) → 5 (B1/B2/B3) on lad, a 1–3-seed
+effect that N = 25 cannot distinguish from noise; it is recorded for v3's
+robustness-powered design, neither claimed nor dismissed. (3) The Phase A
 similarity failure was pre-declared with its interpretation fixed before the campaign (R9);
 §4 shows it decomposes into the suppression accounting artifact (75/75 argmaxes) plus the
 bounded carrier term.
