@@ -127,39 +127,56 @@ def phase_b() -> dict:
 
         base = rows.get("B0")
 
-        def paired(arm_a, arm_b):
-            """Both-ok pairs (seed, row_a, row_b)."""
+        def conv(r):
+            """An ACCEPTED optimum: run ok AND the optimiser converged.
+            ifail = 1 is VMCON's success code; ifail = 5 runs carry status
+            'ok' (the process completed) but no optimum — the A30 taxonomy's
+            'unconverged' class, split out rather than silently pooled."""
+            return r["status"] == "ok" and r.get("ifail") == 1.0
+
+        def paired(arm_a, arm_b, converged_only=False):
+            """Both-ok (optionally both-converged) pairs (seed, a, b)."""
+            keep = conv if converged_only else (
+                lambda r: r["status"] == "ok")
             return [(k, ra, rb) for k, (ra, rb)
                     in enumerate(zip(rows[arm_a], rows[arm_b]))
-                    if ra["status"] == "ok" and rb["status"] == "ok"]
+                    if keep(ra) and keep(rb)]
 
-        # check 1 — |Δ norm_objf| spreads, R→B0 the yardstick
+        # check 1 — |Δ norm_objf| spreads, R→B0 the yardstick.  The plan's
+        # check is at ACCEPTED optima, so the primary construction pairs
+        # converged runs only; the all-ok construction is published beside
+        # it (an unconverged exit is not an optimum, but hiding it would
+        # shrink a denominator silently — trap T11).
         d["check1_objf"] = {}
-        spreads = {}
-        for name, (a, b) in {"R->B0": ("R", "B0"), "B0->B1": ("B0", "B1"),
-                             "B0->B2": ("B0", "B2"), "B0->B3": ("B0", "B3"),
-                             "B2->B3": ("B2", "B3")}.items():
-            if a not in rows or b not in rows:
-                continue
-            deltas = []
-            for k, ra, rb in paired(a, b):
-                fa, fb = hexf(ra["objf_hex"]), hexf(rb["objf_hex"])
-                if fa is not None and fb is not None:
-                    deltas.append(abs(fb - fa))
-            if deltas:
-                spreads[name] = {"n": len(deltas), "median": median(deltas),
-                                 "p90": p90(deltas),
-                                 "max": max(deltas), "values": sorted(deltas)}
-        yard = spreads.get("R->B0")
-        for name, s in spreads.items():
-            entry = dict(s)
-            del entry["values"]
-            entry["values_published"] = s["values"]
-            if yard and name.startswith("B0->"):
-                entry["accept_median"] = s["median"] <= F * yard["median"]
-                entry["accept_p90"] = s["p90"] <= F * yard["p90"]
-                entry["accepted"] = entry["accept_median"] and entry["accept_p90"]
-            d["check1_objf"][name] = entry
+        for variant, conv_only in (("converged_only", True), ("all_ok", False)):
+            spreads = {}
+            for name, (a, b) in {"R->B0": ("R", "B0"), "B0->B1": ("B0", "B1"),
+                                 "B0->B2": ("B0", "B2"), "B0->B3": ("B0", "B3"),
+                                 "B2->B3": ("B2", "B3")}.items():
+                if a not in rows or b not in rows:
+                    continue
+                deltas, listed = [], []
+                for k, ra, rb in paired(a, b, converged_only=conv_only):
+                    fa, fb = hexf(ra["objf_hex"]), hexf(rb["objf_hex"])
+                    if fa is not None and fb is not None:
+                        deltas.append(abs(fb - fa))
+                        if abs(fb - fa) > 1e-6:
+                            listed.append({"seed": k, "delta": abs(fb - fa),
+                                           "ifail": [ra.get("ifail"),
+                                                     rb.get("ifail")]})
+                if deltas:
+                    spreads[name] = {
+                        "n": len(deltas), "median": median(deltas),
+                        "p90": p90(deltas), "max": max(deltas),
+                        "pairs_above_1e-6": listed,
+                        "values_published": sorted(deltas)}
+            yard = spreads.get("R->B0")
+            for name, s in spreads.items():
+                if yard and name.startswith("B0->"):
+                    s["accept_median"] = s["median"] <= F * yard["median"]
+                    s["accept_p90"] = s["p90"] <= F * yard["p90"]
+                    s["accepted"] = s["accept_median"] and s["accept_p90"]
+            d["check1_objf"][variant] = spreads
 
         # check 2 — iteration ratios, three operationalizations
         d["check2_iters"] = {}
@@ -197,47 +214,64 @@ def phase_b() -> dict:
                 "model_call_ratio_n": len(fev),
             }
 
-        # check 3 — constraint 93 at accepted optima (lifted arms)
+        # check 3 — constraint 93 "lift actually closed", split by
+        # convergence: the declared check is at ACCEPTED optima; residuals
+        # at unconverged exits are reported beside (they are large by
+        # definition — the equality was never enforced to completion).
         d["check3_c93"] = {}
         for arm in ("B1", "B2", "B3"):
             if arm not in rows:
                 continue
-            per_start = []
-            for k, r in enumerate(rows[arm]):
-                if r["status"] == "ok" and r.get("c93"):
-                    per_start.append({
-                        "seed": k,
-                        "residual_s": r["c93"].get("residual_s"),
-                        "relative": r["c93"].get(
-                            "residual_relative_to_burn_time"),
-                    })
-            if per_start:
+            entry: dict = {}
+            for variant, keep in (("accepted", conv),
+                                  ("unconverged_ok",
+                                   lambda r: r["status"] == "ok"
+                                   and r.get("ifail") != 1.0)):
+                per_start = []
+                for k, r in enumerate(rows[arm]):
+                    if keep(r) and r.get("c93"):
+                        per_start.append({
+                            "seed": k,
+                            "residual_s": r["c93"].get("residual_s"),
+                            "relative": r["c93"].get(
+                                "residual_relative_to_burn_time"),
+                        })
                 res = [abs(x["residual_s"]) for x in per_start
                        if x["residual_s"] is not None]
-                d["check3_c93"][arm] = {
+                entry[variant] = {
                     "n": len(per_start),
                     "abs_residual_s_median": median(res) if res else None,
                     "abs_residual_s_max": max(res) if res else None,
                     "per_start": per_start,
                 }
+            d["check3_c93"][arm] = entry
 
-        # check 4 — identical-success-set cost sums
+        # check 4 — identical-success-set cost sums, both constructions:
+        # all-ok (completions count to cost statistics — A30) and
+        # all-converged (unconverged runs stop at the iteration cap, which
+        # truncates cost on both sides of a pair; published beside).
         arms = [a for a in cfg.PHASE_B_ARMS if a in rows]
-        common = [k for k in range(cfg.N_STARTS)
-                  if all(rows[a][k]["status"] == "ok" for a in arms)]
-        d["check4_common_seeds"] = {"seeds": common, "n": len(common)}
-        sums: dict = {}
-        for a in arms:
-            ns = sum(rows[a][k]["node_solve"] or 0 for k in common)
-            mc = sum(rows[a][k]["model_calls"] or 0 for k in common)
-            sums[a] = {"node_calls_solve_phase": ns, "model_calls": mc}
-        b0 = sums.get("B0")
-        for a in arms:
-            if b0 and b0["node_calls_solve_phase"]:
-                sums[a]["node_ratio_vs_B0"] = (
-                    sums[a]["node_calls_solve_phase"]
-                    / b0["node_calls_solve_phase"])
-        d["check4_cost_sums_identical_success_set"] = sums
+        d["check4_cost_sums"] = {}
+        for variant, keep in (("identical_ok_set",
+                               lambda r: r["status"] == "ok"),
+                              ("identical_converged_set", conv)):
+            common = [k for k in range(cfg.N_STARTS)
+                      if all(keep(rows[a][k]) for a in arms)]
+            sums: dict = {"n_seeds": len(common), "seeds": common}
+            per_arm: dict = {}
+            for a in arms:
+                ns = sum(rows[a][k]["node_solve"] or 0 for k in common)
+                mc = sum(rows[a][k]["model_calls"] or 0 for k in common)
+                per_arm[a] = {"node_calls_solve_phase": ns,
+                              "model_calls": mc}
+            b0 = per_arm.get("B0")
+            for a in arms:
+                if b0 and b0["node_calls_solve_phase"]:
+                    per_arm[a]["node_ratio_vs_B0"] = (
+                        per_arm[a]["node_calls_solve_phase"]
+                        / b0["node_calls_solve_phase"])
+            sums["per_arm"] = per_arm
+            d["check4_cost_sums"][variant] = sums
 
         # post-solve suppression share (B2/B3), vs A33 baselines
         d["post_solve_share"] = {}
@@ -361,27 +395,34 @@ def main() -> int:
               f"stamps={d['provenance_stamps']}")
     for deck, d in result["phase_b"].items():
         print(f"[B] {deck}: stamps={d['provenance']['stamps']}")
-        for name, e in d["check1_objf"].items():
-            acc = e.get("accepted", "-")
-            print(f"    objf {name:7s} n={e['n']:2d} med={e['median']:.3g} "
-                  f"p90={e['p90']:.3g} max={e['max']:.3g} accept={acc}")
+        print(f"    taxonomy: " + " ".join(
+            f"{a}[ok={t['by_status'].get('ok', 0)}/conv="
+            f"{t['ok_with_ifail_1']}]"
+            for a, t in d["taxonomy"].items()))
+        for variant, spreads in d["check1_objf"].items():
+            for name, e in spreads.items():
+                acc = e.get("accepted", "-")
+                print(f"    objf[{variant[:4]}] {name:7s} n={e['n']:2d} "
+                      f"med={e['median']:.3g} p90={e['p90']:.3g} "
+                      f"max={e['max']:.3g} accept={acc}")
         for name, e in d["check2_iters"].items():
             print(f"    iter {name:7s} n_ok={e['n_both_ok']:2d} "
                   f"n_pairs={e['n_iter_pairs']:2d} "
                   f"med={e['median_statistics']} "
                   f"(tally-style {e['median_tally_style']}) "
-                  f"fev_med={e['model_call_ratio_median']} "
                   f"dropped={len(e['dropped_pairs'])}")
         for arm, e in d["check3_c93"].items():
-            print(f"    c93  {arm}: n={e['n']} "
-                  f"med|res|={e['abs_residual_s_median']:.3g}s "
-                  f"max={e['abs_residual_s_max']:.3g}s")
-        cs = d["check4_cost_sums_identical_success_set"]
-        common = d["check4_common_seeds"]["n"]
-        line = " ".join(f"{a}:{v['node_calls_solve_phase']}"
-                        f"({v.get('node_ratio_vs_B0', 0):.3f})"
-                        for a, v in cs.items())
-        print(f"    cost (common n={common}): {line}")
+            a = e["accepted"]
+            print(f"    c93  {arm}: accepted n={a['n']} "
+                  f"med={a['abs_residual_s_median']} "
+                  f"max={a['abs_residual_s_max']}   "
+                  f"unconverged n={e['unconverged_ok']['n']} "
+                  f"max={e['unconverged_ok']['abs_residual_s_max']}")
+        for variant, cs in d["check4_cost_sums"].items():
+            line = " ".join(f"{a}:{v['node_calls_solve_phase']}"
+                            f"({v.get('node_ratio_vs_B0', 0):.3f})"
+                            for a, v in cs["per_arm"].items())
+            print(f"    cost[{variant}] n={cs['n_seeds']}: {line}")
         for arm, e in d["post_solve_share"].items():
             print(f"    ps   {arm}: suppressed={e['suppressed_call_sites']} "
                   f"share={e['share_of_wouldbe_calls']:.4f}")
