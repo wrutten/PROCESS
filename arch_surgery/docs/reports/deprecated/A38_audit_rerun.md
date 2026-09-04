@@ -1,17 +1,18 @@
 # A38 (audit-rerun) — V2's Phase A re-run under the corrected similarity audit: the check still fails, on the carrier alone; the correction is measured, gated with teeth, and the re-run reproduces V2 bit for bit
 
-> **Document status** — **CURRENT · TASK REPORT, open.** Written by task A38 (audit-rerun),
-> 2026-09-04, on branch `A38-audit-rerun`, branched from `architecture_surgery` at `a4446bed`
-> (the mint commit), experiment base commit `c0ae5b28`. **No file under `process/` was
-> touched.** Archived to `deprecated/` when the task merges and authoritative there (trap T3).
-> Nothing is pushed.
+> **Document status** — **ARCHIVED · TASK REPORT of a MERGED task.** Written by task A38
+> (audit-rerun), 2026-09-04, on branch `A38-audit-rerun` from the mint commit `a4446bed`;
+> merged to `architecture_surgery` 2026-09-04 (merge `e9e7e965`) after the orchestrator's
+> §9 assessment. Experiment base commit `c0ae5b28`; no file under `process/` touched.
+> Folder position records lifecycle, not validity (trap T3): this is the authoritative
+> record of A38. Nothing is pushed.
 
 | | |
 |---|---|
 | **Task** | V3 improvement-list item 4 / V3 plan §3.1 arm A1u, §4.1, gate G4: re-run V2's Phase A design unchanged under a similarity audit restricted to the components the solve phase actually writes, since V2's whole-state audit charged the block arm for δ-perturbed outputs of post-solve nodes it never executes (75 of 75 V2 audit maxima). V2's records held no per-component residual vector, so this is a re-run, not a re-tally |
 | **Verdict** | **The corrected similarity criterion (F = 10 at median and p90) still FAILS on all three decks, by five to six orders of magnitude, on the carrier term alone** — exactly the pre-declared expectation. The block arm's restricted deficit is a few times 1e-4 scaled against the flat arm's 1e-9 or exact zero. On `large_tokamak_nof` the restricted maximum is one of A35's two closed images of the first-wall pair in **25 of 25** runs; on `st_regression` 17 of 25 are A35's image and the other 8 are a second linear image of the pair, gain 47.0 on the inboard displacement, constant across seeds to 2e-11; on `low_aspect_ratio_DEMO`, the deck A35 never traced, both A35 images hold at the same coefficients to 1e-11 in 25 of 25 runs, but the restricted maximum in 21 of 25 is the TF-coil superconductor mass, **which is not one linear image of the pair** (two-coefficient fit residual median 7 %, max 92 %) — the one open term this task leaves |
 | **Reproduction of V2** | **150 of 150** seed runs bit-identical to V2's records (node calls, sweeps, block sweeps, outer passes, objective hex, whole-state audit hex, and the full 840 / 846 / 827-component exit state); the whole-state audit distributions reproduce V2's tally values bit for bit; the count ratios reproduce **0.5217 / 0.5680 / 0.5016** exactly |
-| **Script** | [`arch_surgery/idf_probe/a38_audit_rerun.py`](../../idf_probe/a38_audit_rerun.py) — stages `preflight` / `smoke` / `campaign` / `tally` / `all`; committed at `4ea93408` before any run, campaign executed at `9fcedc92`, tally-only refinements through `ca736947`. The additive runner change is in [`arch_surgery/idf_probe/v2_eval_one.py`](../../idf_probe/v2_eval_one.py) (`--audit-exclude-postsolve`; `audit_residual.json` written beside every record) |
+| **Script** | [`arch_surgery/idf_probe/a38_audit_rerun.py`](../../../idf_probe/a38_audit_rerun.py) — stages `preflight` / `smoke` / `campaign` / `tally` / `all`; committed at `4ea93408` before any run, campaign executed at `9fcedc92`, tally-only refinements through `ca736947`. The additive runner change is in [`arch_surgery/idf_probe/v2_eval_one.py`](../../../idf_probe/v2_eval_one.py) (`--audit-exclude-postsolve`; `audit_residual.json` written beside every record) |
 | **Runs** | **171 fresh-subprocess single-MDA-evaluation runs, 171 of 171 `status: ok`**, 57 per deck (1 reference, 2 entry-gate, 1 warm-gate, 3 restricted-teeth, 50 seed runs), W = 3, every record stamped `9fcedc92 dirty=False x171`. Plus 11 smoke runs on `st_regression` (machinery only) and two aborted campaign attempts whose runs are discarded and cited nowhere (§6) |
 | **Environment** | `PROCESS_surgery_env`; `PYTHONPATH` pinned to this worktree per subprocess; exact tree asserted in-process (traps T6 / T10); a26 artifacts; τ = 1e-6; δ = 0.10; runs under `arch_surgery/idf_probe/runs/a38/` untracked; V2's records read read-only from the main checkout |
 | **Date** | 2026-09-04 |
@@ -168,7 +169,7 @@ Which stage produced which figure: §1 — `runs/a38/preflight.json`; §2 — `r
 ## 9. Orchestrator assessment (pre-merge, 2026-09-04)
 
 Independent recheck by the orchestrating session:
-[`arch_surgery/idf_probe/a38_recheck.py`](../../idf_probe/a38_recheck.py) (committed on this
+[`arch_surgery/idf_probe/a38_recheck.py`](../../../idf_probe/a38_recheck.py) (committed on this
 branch), recomputing every published number from the raw records — never from `tally.json`,
 which is itself under test wherever both exist. **27 checks, ALL PASS**:
 
