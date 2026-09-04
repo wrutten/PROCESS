@@ -252,3 +252,78 @@ the numbers it publishes.
   amended and analyzer extended (`dacf0e92`); known-cut enumeration and carrier closure run.
 - 2026-09-04 — all 19 runs complete (19/19 ok, no failure path taken); carrier named
   KNOWN-CUT with coefficient-exact closure; report written.
+
+---
+
+## 9. Orchestrator's critical assessment (2026-09-04, pre-merge)
+
+Independent recomputation of the report's headline numbers from A35's **raw** artifacts —
+per-pass traces, exact-hex snapshots, in-run metrics — deliberately not through
+`a35_cold_census.py`'s analyzer (`summary.json` is consulted only for the owner-block tally,
+whose inputs the raw traces corroborate by name). Script:
+[`arch_surgery/idf_probe/a35_recheck.py`](../../idf_probe/a35_recheck.py), committed with this
+section; result **ALL CHECKS PASS**. Assessed by the orchestrating session; user-directed
+("Critically assess A35's result thoroughly. Recheck numbers if necessary").
+
+**Confirmed at the bit level (recomputed, not re-read):**
+
+1. Frozen st export sha `582b4a5f…` — exact match.
+2. Verified-chain pass structure, both decks: nof 659 / **181, `0x1.de05b6285d0b6p-7`, argmax
+   `build.dz_tf_upper_lower_midplane`** / 0 at `8.3e-16`; st pass-2 82 movers, argmax
+   `build.dr_shld_vv_gap_outboard`.
+3. **Coefficient closure, all six deck×entry rows**, predictions re-derived from the source
+   (the 0.5·(Δin+Δout) and −Δout coefficients read directly off `build.py:826-842` /
+   `build.py:1940-1947`, writer form off `fw.py:347-352` — independently read before this
+   assessment): measured = predicted at rel. diffs 3.8e-14 … 7.4e-8, identical to §2 item 5's
+   table to the printed digit.
+4. δ-scaling ratios recomputed from raw before/after hexes: nof median 1.9987 (n = 153,
+   q1–q3 [1.9952, 2.0003]); st median 2.0000 (n = 59). State-carried, confirmed.
+5. Restart end-of-chain vs verified exit: **755/755 (nof) and 746/746 (st) scalar-float
+   components bit-identical** (the report's 840/827 counts are the full component sets
+   including non-float kinds; every float agrees, none differs).
+6. Owner-block tallies: nof cold 88 M2 + 93 M3, st cold 5 M2 + 77 M3, **zero M1/PULSE movers**.
+7. Trust-vs-FLAT, nof: the analyzer's snapshot-pair max reproduces **exactly**
+   (`0x1.de05b6285d0b6p-7`, argmax `dz_tf_upper_lower_midplane`).
+
+**One precision finding (does not touch the verdict).** "Trust one-pass exit vs FLAT" has two
+full-set operationalizations in the artifacts: the analyzer's snapshot pair (T1 exit vs this
+task's flat-reference exit: max `0x1.de05b6285d0b6p-7`, **243** ≥ τ — the numbers §2 item 1 and
+G4 quote) and the in-run `exit_audit` against the a26 ystate spec's recorded values (max
+`0x1.de05b6285d3f4p-7`, **244** ≥ τ). The two agree to 11 significant digits on the max and
+differ by one near-τ component; st likewise (`…effb134b` vs `…f0afff76`, 124 both ways). The
+report cites the snapshot-pair consistently; the ±1 is reference-lineage noise at the τ
+boundary and no conclusion is sensitive to it. (A scalar-float-only recomputation with the
+spec ruler gives 207/120 — an expected undercount of the same comparison, documented in the
+recheck script so nobody mistakes the subset for a discrepancy.)
+
+**Independent corroborations beyond A35's own evidence chain:**
+
+- **The register pre-recorded the edge.** `DSM_VALIDATION.md` **V3** is exactly this pair —
+  "FirstWall (M3, row 41) → Build (M2, row 5) — structurally present … value never changes
+  between sweeps … DSM correct, but the edge is dead in this deck. If a future model computes
+  `radius_fw_channel` or `dr_fw_wall`, this edge goes live" — and **V4** is `pf_power.vpfskv`.
+  The KNOWN-CUT label is therefore grounded twice over: the edge is in the sibling's export
+  AND in this project's own committed validation register, with the go-live caveat already
+  written. A35's contribution is the missing qualifier ("dead" = value-frozen ≠
+  displacement-inert) and the coefficient-exact demonstration that this edge carries the
+  displaced-entry transient.
+- **The grounding figure shows the edge.** The native-ordered collapsed tokamak DSM the
+  intervention was grounded in (`xDSM_paper/figures/paper_collapsed_tokamak.html`; V3's row
+  numbers) draws FirstWall → Build below the diagonal, alongside `CICCSuperconductingTFCoil →
+  Build` (intra-M2 under the executed partition, healed by M2's own iteration) and the
+  Pulse-family marks. Nothing was invisible; the mark was classified dead-by-value, correctly
+  for the property then checked.
+- **V14 lineage kept distinct.** A31 dissolved V14's *recurring* tail as the `srcktpm` scoring
+  artifact, and the register's earlier refutation of FirstWall→Build as *that* phenomenon's
+  carrier stands. A35's phenomenon — the one-shot displaced-entry transient — is a different
+  object, and V3's edge is its demonstrated carrier. Both register conclusions survive; the
+  two phenomena must not be conflated when citing this report.
+
+**Scope limits endorsed** (§7 declares them; restated as the merge's caveats): third deck
+`low_aspect_ratio_DEMO` not run; one seed per δ per deck; the tokamak-side known-cut set rests
+on register entries V2–V5 plus the dynamic zero-M1/PULSE-mover evidence rather than a tokamak
+static-export enumeration (the st export enumeration is complete); the ~0.24 Phase A audit
+reconciliation (§6 item 2) is a hypothesis for the V2 tally, not a result of this task.
+
+**Assessment verdict: the named carrier, its KNOWN-CUT label, and every number checked stand.
+Approved for merge.**
