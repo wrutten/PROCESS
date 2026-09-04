@@ -149,3 +149,23 @@ development plan.
   declaration; lad anchor 1.40) and folded into the plan before its first commit.
 - 2026-09-04 — deliverable 1 committed (`29f642a1`); D-a committed (`04f31e7d`); D-b
   committed (`7ac105f0`); this report written.
+
+## Orchestrator assessment (pre-merge, 2026-09-04)
+
+Docs task — reviewed against the development plan, the V2 report and the records; no
+numeric recheck applies. All four deliverables verified present and correctly scoped; key
+declarations spot-checked in `EXPERIMENT_PLAN.md`: the **NOT YET APPROVED** header with the
+same-commit `EXECUTION_APPROVED` flip rule; the nearest-rank median pre-declaration with
+its 1.33/1.40 provenance (the mid-task correction folded in before the plan's first
+commit, as instructed); floor = 1e-6 relative (O3); prime in A1/B2/B3 only (O4/D19);
+G0–G7 verbatim with G3c owning A38's open lad term; the A38-reuse clause at `9fcedc92`
+licensed by G1. Findings adjudicated: (1) the dev plan's unlabelled G2 counts — confirmed
+(trunk line 246, "(827 / 840 / 846)" against the document's nof/lad/st order) and fixed on
+trunk with a dated edit at merge; (2) the ≈ 1.33 supersession was already applied on trunk
+at `0a8f5af2`, which post-dates this branch point — no action, correctly reported rather
+than silently repaired; (3) the per-pair relative denominator (max of the two
+`|norm_objf|`) is a sound symmetric construction, endorsed, and stays flagged for the
+user's approval read exactly as the agent placed it; (4) the `build.py:836` read /
+`:840` write role distinction matches A35's record. D-a's staging under
+`docs/reports/outgoing/` with the handoff reserved to the orchestrator is the correct
+pattern under the never-write-siblings rule. **Merge approved.**
