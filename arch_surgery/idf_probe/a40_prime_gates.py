@@ -780,9 +780,16 @@ def stage_g3() -> int:
                 teeth["trust_off_inrun_max_hex"] == A35_INRUN_MAX_HEX_NOF)
             teeth["a35_inrun_max_hex"] = A35_INRUN_MAX_HEX_NOF
         else:
-            teeth["max_hex_tail_reproduced"] = (
-                (teeth["trust_off_inrun_max_hex"] or "").endswith(
-                    A35_INRUN_MAX_HEX_TAIL_ST))
+            # A35 section 9 prints st's in-run max only by its MANTISSA tail
+            # ("...f0afff76"); a hex literal carries a "p<exp>" suffix after
+            # the mantissa, so the tail is checked on the mantissa, not on
+            # the full literal.  (First revision of this check applied
+            # endswith to the full literal and failed on its own defect;
+            # fixed with the measured value unchanged -- see the report's
+            # change log.)
+            mantissa = (teeth["trust_off_inrun_max_hex"] or "").split("p")[0]
+            teeth["max_hex_tail_reproduced"] = mantissa.endswith(
+                A35_INRUN_MAX_HEX_TAIL_ST)
             teeth["a35_inrun_max_hex_printed_tail"] = (
                 A35_INRUN_MAX_HEX_TAIL_ST)
         row["teeth_a35_reproduction"] = teeth
