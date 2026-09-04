@@ -806,6 +806,16 @@ def stage_tally() -> int:
             if a not in deck_rows or b not in deck_rows:
                 continue
             ratios, fev, dropped = [], [], []
+            # EXPERIMENT_PLAN.md §4.2 amendment (2026-09-04): absolute
+            # iterations over exactly the ratio-contributing pairs, because a
+            # median of per-pair ratios and the ratio of the sums can point in
+            # OPPOSITE directions -- V2's lad B0->B1 reads 0.833 as a median
+            # and 1.009 as a sum ratio (228 vs 230 iterations), since two
+            # seeds blow up and repay what eight save.  Acceptance stays on
+            # the median; the sums are published so "typical seed" is never
+            # read as "total work".  Contributing seeds are named so a total
+            # is never carried across arm pairs with different pair sets.
+            iters_a, iters_b, contributing = [], [], []
             for k in range(cfg.N_STARTS):
                 ra, rb = deck_rows[a][k], deck_rows[b][k]
                 if not (_conv(ra) and _conv(rb)):
@@ -814,6 +824,9 @@ def stage_tally() -> int:
                     "n_solver_iterations")
                 if ia and ib:
                     ratios.append(ib / ia)
+                    iters_a.append(ia)
+                    iters_b.append(ib)
+                    contributing.append(k)
                 else:
                     dropped.append({"seed": k, f"{a}_iters": ia,
                                     f"{b}_iters": ib})
@@ -839,6 +852,20 @@ def stage_tally() -> int:
                                    and med <= cfg.ITER_RATIO_MAX),
                 "model_call_ratio_median": rank_median(fev),
                 "model_call_ratio_n": len(fev),
+                # absolute iterations over the ratio-contributing pairs only
+                "arm_a": a,
+                "arm_b": b,
+                "iters_a_sum": (sum(iters_a) if iters_a else None),
+                "iters_b_sum": (sum(iters_b) if iters_b else None),
+                "iters_a_median": rank_median(sorted(iters_a)),
+                "iters_b_median": rank_median(sorted(iters_b)),
+                "iters_sum_ratio": ((sum(iters_b) / sum(iters_a))
+                                    if iters_a and sum(iters_a) else None),
+                "contributing_seeds": contributing,
+                "sum_vs_median_directions_agree": (
+                    None if not iters_a or not sum(iters_a) or med is None
+                    else ((sum(iters_b) / sum(iters_a) - 1.0) * (med - 1.0)
+                          >= 0.0)),
             }
         deck_summary["check2_iteration_multiplier"] = iter_pairs
 
