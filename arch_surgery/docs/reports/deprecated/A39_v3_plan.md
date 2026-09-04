@@ -1,6 +1,8 @@
 # A39 (v3-plan) — the V3 experiment plan written with every acceptance rule pre-declared; the M117 defect note drafted; the register's two-qualifier liveness convention recorded
 
-> **Document status** — **CURRENT · TASK REPORT of an OPEN task.** Written 2026-09-04 by
+> **Document status** — **ARCHIVED · TASK REPORT of a MERGED task** (merged to
+> `architecture_surgery` 2026-09-04 after the orchestrator's assessment; authoritative
+> here — folder position records lifecycle, not validity, trap T3). Written 2026-09-04 by
 > task A39 (v3-plan) on branch `A39-v3-plan` (worktree
 > `PROCESS_surgery_worktrees/A39-v3-plan`, branched from `architecture_surgery` at
 > `b7dbd2a9`). Archived to `deprecated/` at merge; folder position records lifecycle, not
@@ -10,7 +12,7 @@
 
 | | |
 |---|---|
-| **Task** | V3 development plan §8 row T1: write `arch_surgery/MDA_partitioning_experiment_v3/EXPERIMENT_PLAN.md` from [`V3_DEVELOPMENT_PLAN.md`](../plans/V3_DEVELOPMENT_PLAN.md) (§0 fully resolved), restating every selection with its pre-declared acceptance rule, on V2's structural template; plus D-a (draft the prime's defect note for the sibling's owed M117 row) and D-b (the `DSM_VALIDATION.md` two-qualifier liveness convention amendment) |
+| **Task** | V3 development plan §8 row T1: write `arch_surgery/MDA_partitioning_experiment_v3/EXPERIMENT_PLAN.md` from [`V3_DEVELOPMENT_PLAN.md`](../../plans/V3_DEVELOPMENT_PLAN.md) (§0 fully resolved), restating every selection with its pre-declared acceptance rule, on V2's structural template; plus D-a (draft the prime's defect note for the sibling's owed M117 row) and D-b (the `DSM_VALIDATION.md` two-qualifier liveness convention amendment) |
 | **Deliverables** | All three delivered, in three commits (§1). The plan carries the **NOT YET APPROVED** header — the campaign task A42 stays blocked until the user's dated execution approval, recorded as a dated edit in the plan with `EXECUTION_APPROVED` flipped in the same commit |
 | **Mid-task correction** | Folded in before the plan's first commit (orchestrator, trunk `0a8f5af2`, which landed after this worktree's branch point): the **nearest-rank (upper-middle) median is pre-declared as the single construction for every Phase B check**, and the lad B2→B3 prediction anchor is ≈ 1.40 under that construction (1.33 under mean-of-middles — the only cell where the two disagree, over the same 10 pairs) |
 | **Findings** | Four inconsistencies/ambiguities in or around the development plan, reported in §3, none silently repaired; all source line citations for the defect note verified with `git show` at `c0ae5b28` (§4) |
