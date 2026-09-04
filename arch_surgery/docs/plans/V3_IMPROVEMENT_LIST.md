@@ -64,7 +64,14 @@
    are early and paired (538–554 calls, `sqsumsq` 0.15–0.64), not enough to say *which*
    constraints are violated or where the ladder gave up. V3 records the constraint-residual
    vector, active set and ladder stage at every unconverged/crashed exit.
-8. **Robustness-powered design for arm attribution, with seed-driven failures separated
+8. **[DEFERRED — user decision 2026-09-04: "I want to defer the robustness test. I'm not
+   sure I need/want to make claims about it."]** The powered robustness campaign (the
+   two-tier B0-vs-B3 design and its N sizing below) is **not** part of v3 unless the user
+   re-opens it; the design arithmetic is kept here so re-opening costs nothing. What
+   survives independently of the deferral: the **reporting statistic** (deck-invalid-seed
+   separation, next paragraph) applies to whatever taxonomy v3 publishes, and V2's stance
+   stands — the 1–3-seed hint is recorded, neither claimed nor dismissed.
+   **Robustness-powered design for arm attribution, with seed-driven failures separated
    out** *(user directive, 2026-09-04: "robustness comparison statistics should separate
    out these seed-driven failures. If all arms fail, it should be excluded from the failure
    rates per arm, as we presume the models are simply invalid for the seed")*. V3's
