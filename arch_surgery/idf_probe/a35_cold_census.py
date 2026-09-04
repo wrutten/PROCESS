@@ -255,7 +255,8 @@ def _ref_metrics(scn: str) -> dict:
     return m
 
 
-def _pin_hex(scn: str, *, displaced_seed: int | None = None) -> str | None:
+def _pin_hex(scn: str, *, displaced_seed: int | None = None,
+             delta: float = DELTA) -> str | None:
     """The pin value: the flat-converged burn time (cold), or that value
     times the displaced component's own stream factor (warm displaced) --
     bit-identical to what the in-run perturbation computes."""
@@ -263,7 +264,7 @@ def _pin_hex(scn: str, *, displaced_seed: int | None = None) -> str | None:
         return None
     burn = float.fromhex(_ref_metrics(scn)["t_plant_pulse_burn_hex"])
     if displaced_seed is not None:
-        burn = burn * perturb_factor(displaced_seed, PIN_COMPONENT, DELTA)
+        burn = burn * perturb_factor(displaced_seed, PIN_COMPONENT, delta)
     return float(burn).hex()
 
 
@@ -480,6 +481,19 @@ def stage_trace() -> int:
                 continue
             break
         rc = rc or (0 if st in ("ok", "unconverged") else 1)
+        # plan section 2a (user-directed, 2026-09-04): the delta-scaling
+        # sub-discriminator's third displacement point -- delta = 0.05,
+        # same seed, same stream (state-carried staleness scales ~2x
+        # between the warm runs; seed-type staleness does not scale).
+        print(f"trace: {scn} verified warm-displaced delta=0.05 "
+              f"seed={SEED}", flush=True)
+        r = run_eval(scn, "A1p", trace_dir(scn, f"warm_d05_seed{SEED}"),
+                     entry_state=ref_snap, delta=0.05, seed=SEED,
+                     pin_hex=_pin_hex(scn, displaced_seed=SEED,
+                                      delta=0.05),
+                     trace=True)
+        rc = rc or (0 if r["metrics"].get("status") in ("ok", "unconverged")
+                    else 1)
     return rc
 
 
@@ -957,8 +971,9 @@ def stage_analyze() -> int:
         deck_rec["restart_chain_length"] = len(y_chain)
 
         # traced verified runs
-        for entry in ["cold"] + [f"warm_seed{s}" for s in (SEED,
-                                                           FALLBACK_SEED)]:
+        for entry in (["cold"] + [f"warm_seed{s}" for s in (SEED,
+                                                            FALLBACK_SEED)]
+                      + [f"warm_d05_seed{SEED}"]):
             d = trace_dir(scn, entry)
             if not (d / "pass_trace.jsonl").exists():
                 continue
@@ -999,6 +1014,41 @@ def stage_analyze() -> int:
         except Exception as exc:  # noqa: BLE001 - reported, not fatal
             deck_rec["g4_cross_residuals"] = {"error": repr(exc)}
 
+        # plan section 2a: the lagged-edge census verdict and the
+        # delta-scaling sub-discriminator (state-carried vs seed-type)
+        scaled_at_2: dict[str, dict[str, float]] = defaultdict(dict)
+        for entry in ("cold", f"warm_seed{SEED}", f"warm_seed{FALLBACK_SEED}",
+                      f"warm_d05_seed{SEED}"):
+            a = deck_rec.get(entry)
+            if not a:
+                continue
+            for r in a["movers_by_pass"].get("2", []):
+                if r.get("scaled") is not None:
+                    scaled_at_2[r["key"]][entry] = r["scaled"]
+        d10, d05 = f"warm_seed{SEED}", f"warm_d05_seed{SEED}"
+        ratios = []
+        rows = []
+        for key, by in sorted(scaled_at_2.items()):
+            row = {"key": key, **{e: by.get(e) for e in
+                                  ("cold", d10, d05)}}
+            if by.get(d10) and by.get(d05):
+                row["ratio_d10_over_d05"] = by[d10] / by[d05]
+                ratios.append(row["ratio_d10_over_d05"])
+            rows.append(row)
+        ratios.sort()
+        deck_rec["delta_scaling_pass2"] = {
+            "per_component": rows,
+            "n_with_both_warm_points": len(ratios),
+            "ratio_d10_over_d05_median": (
+                ratios[len(ratios) // 2] if ratios else None),
+            "ratio_d10_over_d05_q1_q3": (
+                [ratios[len(ratios) // 4],
+                 ratios[(3 * len(ratios)) // 4]] if ratios else None),
+            "expectation": ("~2 for state-carried staleness (linear "
+                            "regime); ~1 for a hard-coded-seed "
+                            "first-evaluation error (plan section 2a)"),
+        }
+
         # flat symmetry controls
         block2 = set()
         if "cold" in deck_rec:
@@ -1025,7 +1075,8 @@ def stage_analyze() -> int:
     for scn, dr in summary["decks"].items():
         print(f"=== {scn} ===")
         for entry in ("cold",) + tuple(
-                f"warm_seed{s}" for s in (SEED, FALLBACK_SEED)):
+                f"warm_seed{s}" for s in (SEED, FALLBACK_SEED)) + (
+                f"warm_d05_seed{SEED}",):
             if entry not in dr:
                 continue
             a = dr[entry]
@@ -1058,6 +1109,12 @@ def stage_analyze() -> int:
             print(f"  G3 known mover ({KNOWN_MOVER}): "
                   f"{dr['g3_known_mover_present']}")
         print(f"  G4: { {k: v.get('max_hex') if isinstance(v, dict) else v for k, v in (dr.get('g4_cross_residuals') or {}).items()} }")
+        ds = dr.get("delta_scaling_pass2") or {}
+        if ds.get("n_with_both_warm_points"):
+            print(f"  delta-scaling: median d10/d05 ratio "
+                  f"{ds['ratio_d10_over_d05_median']:.3f} over "
+                  f"{ds['n_with_both_warm_points']} movers "
+                  f"(q1-q3 {ds['ratio_d10_over_d05_q1_q3']})")
         for k in ("flat_symmetry_cold", "flat_symmetry_warm"):
             f = dr.get(k) or {}
             if "overlap_n" in f:

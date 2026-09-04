@@ -45,6 +45,66 @@ Evidence in hand (all artifact-derived, cited by task and run record):
 | **(c)** | **Schedule/DAG order mismatch** — a forward edge crossed backward by the block schedule | The named carrier edge is **forward in the DSM's own topological order** (writer earlier than reader in the export's `supermodel_execution_order`), but the A1′ schedule assigns the writer's node to a **later block** than the reader's. Statically checkable once an edge is named; additionally a full schedule audit (every variable-level cross-block writer→reader pair whose reader block precedes its writer block under `BLOCK_ORDER`) is run on the `st_regression` export unconditionally |
 | **(d)** | **A non-idempotent model** — output differs on re-execution with bit-identical inputs; no data channel at all, invisible to any static analysis | The chained-restart identity (§4, S3) **fails**: a fresh process re-entered at the recorded end-of-pass-1 state does not reproduce the in-process pass 2 bit-for-bit on some component(s) — after the tail confounder is excluded (§4, S3 caveat). Or: a mover whose writer's reconstructed coupling-visible inputs are bit-identical between passes while its output moved. Named to the model by the dynamic writer census |
 
+### 2a. User-directed addition (2026-09-04, relayed before execution completed): the lagged-edge sub-hypothesis of candidate (c), and its census
+
+**Source pattern:** the sibling study's M119 contested-write audit
+(`PROCESS_code_analysis/docs/reports/deprecated/M119_contested_write_audit.md`, read-only; the
+file carries no `> Document status` header — their archive convention differs from ours — and is
+read as delivered). Its issue #2: `divertor.a_div_surface_total` is seeded 50 m² by
+`Stellarator.st_fwbs` (first evaluation only) and computed by `st_div`; on the solve path
+`st_fwbs` (order 174) runs **before** `st_div` (175), so `st_fwbs` consumes the divertor area
+**one evaluation late** — a *lagged edge*: a reader scheduled at-or-before its writer within one
+pass, consuming the previous pass's (or the entry state's) value. The pattern class fits every
+measured signature of our transient: identical to the current value at a fixed point (↔ the
+bit-clean warm gates), error equal to the entry displacement away from it (↔ the δ-scaled
+transient), refreshed once per additional full pass (↔ the ~30×/pass repair), self-healing
+inside a block's own inner iterations but **never refreshed across blocks under one-pass trust
+mode** (↔ the cross-block asymmetry).
+
+**Candidate (c) therefore splits, and both halves are pre-declared:**
+
+- **(c-order)** — §2's original reading: a forward DSM edge crossed backward by the *block
+  assignment* (writer's block after reader's block).
+- **(c-lag)** — the M119 pattern at our granularity: a **cross-block iteration-carried
+  dependency** — a reader block earlier in `BLOCK_ORDER` than the writer block of a value it
+  consumes, so each outer pass hands it the previous pass's value. Invisible to an
+  ordering-blind DSM by construction (the sibling's I-44: same-pass vs next-pass timing is
+  deliberately not encoded). Note (c-lag) and (b) can name the same edge: (c-lag) is the
+  *timing* statement (the edge is live but consumed one pass late), (b) the *liveness*
+  statement (dead at fixed points). The report names both aspects where both hold.
+
+**The lagged-edge census (first-class measurement, not a footnote).** On the traced verified
+chains, enumerate every above-τ pass-2 mover whose earliest-block writer's reconstructed input
+change is confined to **later-block components' pass-1 movement** (§5's view rule): each such
+mover is a demonstrated *consumer of a value written later in the pass by another block* — the
+dynamic lagged-edge census at block granularity. Reader evidence (§5 step 5) then names the
+individual edges. The census's real target is siblings of the M119 pattern **whose consumers do
+reach the residuals/objective** — M119 audited only the 22 contested-write (two-writer) entries,
+so absence there is not absence of single-writer lagged edges.
+
+**Sub-discriminator, pre-declared: state-carried vs seed-type staleness.**
+
+- *State-carried* (the reader consumes the perturbed entry value): pass-2 mover magnitude scales
+  with entry displacement. Measured on three displacement points — cold (initialisation
+  distance), δ = 0.10 warm, and **one added traced run per deck at δ = 0.05 (seed 1)** —
+  expectation: warm-δ ratio ≈ 2 between δ = 0.10 and δ = 0.05 in the linear regime, and ≈ 0 at
+  the fixed point (A36's warm gates, cited).
+- *Seed-type* (M119's hard-coded 50 m²): a first-evaluation error **independent of δ** — ratio
+  ≈ 1 between the two warm runs at matched pass. Any seed-type candidate must additionally be
+  reconciled with the bit-clean warm gates by checking **which** of the two let it hide: the
+  seeded variable is inside the restored ystate (the warm entry supplies the computed value), or
+  its consumers never reach the audit's readset — checked against the a26 spec's key set, never
+  assumed.
+
+**The specific M119 instance is out of scope on our decks, demonstrated rather than assumed:**
+`st_regression` is a *spherical-tokamak* deck, not a stellarator — neither of our decks sets
+`istell` (unset → 0; register V6 records `istell` identical across all five decks), the traced
+runs' node censuses contain **no stellarator-family node** (21 nodes each), and the block
+schedule refuses `istell != 0` outright (`caller.py` `_call_models_by_module`, the
+tokamak-only guard). Its inertness claim therefore needs no re-verification here — the code path
+does not execute — and what transfers is the **pattern**, which the census above measures in
+this tree at `c0ae5b28`.
+
 Pre-declared fifth possibility, for honesty rather than symmetry — **(e) inner-dust echo**: a
 pass-2 mover could in principle be the pass-boundary echo of sub-τ intra-block dust (inner solves
 stop at inner-τ = 1e-6, not at 0). Quantitative bound stated in advance: this mechanism cannot
@@ -195,12 +255,16 @@ with different settings.
    needed) → survives → **(d), named to the model** by writer census, with the mismatching
    components and hexes; does not survive (mismatch fully explained by tail writes feeding
    back) → that tail feedback **is itself a named backward edge** → 3 with the edge in hand.
-3. **Earliest-block attribution (§5).** Candidate carrier components named at b_min. For each,
-   reader evidence:
+3. **Earliest-block attribution (§5).** Candidate carrier components named at b_min. First the
+   **lagged-edge census verdict** (§2a): movers whose reconstructed input change is confined to
+   later-block pass-1 movement are demonstrated cross-block iteration-carried consumers —
+   **(c-lag)** at block granularity — and the δ-scaling sub-discriminator (cold vs δ = 0.10 vs
+   δ = 0.05 vs the cited zero-point) splits state-carried from seed-type staleness per §2a.
+   Then, per candidate, reader evidence:
    - read present in the frozen export (st) / recorded DSM cells (nof) → **(b)** if the DSM's
      own order also puts the writer after the reader (a genuine back edge, dead near fixed
-     points — confirm liveness pattern in source: branch or V3-pattern value); **(c)** if the
-     DSM's topological order puts the writer BEFORE the reader and only our block assignment
+     points — confirm liveness pattern in source: branch or V3-pattern value); **(c-order)** if
+     the DSM's topological order puts the writer BEFORE the reader and only our block assignment
      reverses them (a forward edge crossed backward by the schedule);
    - read absent from the export/cells but confirmed in source on the `run()` path → **(a)**,
      with the file:line and the reason static analysis missed it if identifiable (aliasing,
