@@ -164,6 +164,60 @@ def restore_value(rec):
     return rec["v"]  # "r": the repr string; exact-equality comparable
 
 
+def _restricted_audit(artifact: str, scenario: str, tree: Path,
+                      keys: list, vals: list, tau: float):
+    """A38 (audit-rerun): the audit maximum over the in-loop write set.
+
+    Membership is derived, never listed.  The post-solve artifact names
+    NODES (the deck's committed classification -- the same file the driver
+    validates); the committed run-time write census maps each node to the
+    fields it writes for this scenario; the intersection with the audit
+    spec's tested keys is the excluded set.  A prefix rule is deliberately
+    not used: on ``st_regression`` the node list contains ``pulse``, which
+    writes nothing there, and a prefix would either miss it or over-match.
+    Returns ``(record, excluded_keys)``; the whole-state statistic is left
+    exactly as it was.
+    """
+    art = json.loads(Path(artifact).read_text())
+    nodes = list(art["post_solve_nodes"])
+    census_path = tree / "arch_surgery" / "docs" / "data" / "node_writesets.json"
+    census = json.loads(census_path.read_text())["per_scenario"]
+    if scenario not in census:
+        raise RuntimeError(
+            f"{census_path} carries no write census for {scenario!r}; the "
+            f"restricted audit would be guessed, so it is refused"
+        )
+    wb = census[scenario]["writes_by_node"]
+    excl: set = set()
+    for n in nodes:
+        if n not in wb:
+            raise RuntimeError(
+                f"post-solve node {n!r} is absent from the {scenario} write "
+                f"census {census_path}; refusing to derive the excluded set"
+            )
+        excl |= set(wb[n])
+    excl_keys = excl & set(keys)
+    kept = [(k, v) for k, v in zip(keys, vals) if k not in excl_keys]
+    if kept:
+        k_max, v_max = max(kept, key=lambda kv: kv[1])
+    else:
+        k_max, v_max = None, 0.0
+    return {
+        "artifact": str(artifact),
+        "post_solve_nodes": nodes,
+        "census": str(census_path),
+        "n_excluded": len(excl_keys),
+        "n_kept": len(kept),
+        "excluded_sha256": hashlib.sha256(
+            "\n".join(sorted(excl_keys)).encode()).hexdigest(),
+        "max": v_max,
+        "max_hex": _hex(v_max),
+        "argmax": k_max,
+        "n_above": sum(1 for _, v in kept if v >= tau),
+        "tau": tau,
+    }, excl_keys
+
+
 def snapshot_record(spec, y):
     """The full exit state, keyed by component name, exactly."""
     return {
@@ -391,6 +445,16 @@ def main() -> int:
         "machinery gate against an A18-era record uses the A18 artifact "
         "here and says so)",
     )
+    ap.add_argument(
+        "--audit-exclude-postsolve", default=None,
+        help="A38 (audit-rerun): the deck's committed post-solve artifact "
+        "(postsolve_<deck>.json).  When given, the exit audit ALSO reports a "
+        "RESTRICTED statistic over the components not written by that "
+        "artifact's nodes -- node -> fields through the committed run-time "
+        "write census (node_writesets.json), intersected with the audit "
+        "spec's keys: the in-loop write set.  The whole-state statistic is "
+        "computed exactly as before; this is additive",
+    )
     args = ap.parse_args()
 
     outdir = Path(args.outdir).resolve()
@@ -413,6 +477,7 @@ def main() -> int:
         "pythonpath": os.environ.get("PYTHONPATH"),
         "perturb_spec": str(args.perturb_spec),
         "exit_audit_spec": str(args.exit_audit),
+        "audit_exclude_postsolve": args.audit_exclude_postsolve,
         "delta": args.delta,
         "seed": args.seed,
         "entry_state_arg": args.entry_state,
@@ -757,6 +822,33 @@ def main() -> int:
             y1 = aspec.read(abound)
             res = aspec.residual(y0, y1)
             tau = getattr(_module_solve, "TAU", 1e-6)
+            # A38 (audit-rerun): the per-component scaled residual vector is
+            # ALWAYS written beside the record, so a differently restricted
+            # statistic can be recomputed offline next time.  V2's records
+            # held only max / argmax / count, which is why the corrected
+            # statistic needed a re-run rather than a re-tally.
+            vec_keys = [aspec.name(int(i)) for i in res.idx_c]
+            vec_vals = [float(v) for v in res.scaled]
+            audit_vec = {
+                "components_sha256": aprov.get("components_sha256"),
+                "n_components": aprov.get("n_components"),
+                "n_continuous_tested": len(vec_keys),
+                "tau": tau,
+                "scaled": dict(zip(vec_keys, vec_vals)),
+                "scaled_hex": {k: _hex(v) for k, v in zip(vec_keys, vec_vals)},
+                "discrete_mismatch": [
+                    aspec.name(i) for i in res.mismatch_discrete],
+                "moved_constant": [aspec.name(i) for i in res.moved_constant],
+                "nan_new": [aspec.name(i) for i in res.nan_new],
+            }
+            restricted = None
+            if args.audit_exclude_postsolve:
+                restricted, excl_keys = _restricted_audit(
+                    args.audit_exclude_postsolve, args.scenario,
+                    Path(result["tree"]), vec_keys, vec_vals, tau,
+                )
+                audit_vec["excluded_keys"] = sorted(excl_keys)
+            (outdir / "audit_residual.json").write_text(json.dumps(audit_vec))
             result["exit_audit"] = {
                 "ystate": str(args.exit_audit),
                 "components_sha256": aprov.get("components_sha256"),
@@ -765,6 +857,8 @@ def main() -> int:
                 "residual_max": res.max,
                 "residual_max_hex": _hex(res.max),
                 "brief": res.brief(tau),
+                "residual_vector_written_to": "audit_residual.json",
+                "restricted": restricted,
                 "audit_node_calls": _caller.NODE_CALLS[0] - n_before,
                 "node_census_audit_extra": (
                     {
