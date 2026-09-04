@@ -271,9 +271,9 @@ def phase_a() -> dict:
         rows: dict[str, dict[int, dict]] = {"A0": {}, "A1": {}}
         heads = set()
         for arm in ("A0", "A1"):
-            for sd in sorted((droot / arm).glob("seed*")):
+            for sd in sorted((droot / arm).glob("start*")):
                 m = jload(sd / "metrics.json")
-                k = int(sd.name.replace("seed", ""))
+                k = int(sd.name.replace("start", ""))
                 aud = (m.get("exit_audit") or {})
                 census = ((m.get("node_census") or {}).get("counted")
                           or ((m.get("module_solve_totals") or {})
