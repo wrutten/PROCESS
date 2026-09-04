@@ -137,8 +137,8 @@ INSTRUMENTATION = {
         "env": None,
     },
     "prime": {               # D19: PROCESS_ARCH_PRIME variant point (caller.py)
-        "available": False,  # owned by task A40 (v3-prime); flipped at its merge
-        "task": "A40 (v3-prime, dispatched 2026-09-04)",
+        "available": True,   # merged 2026-09-04 (9a6a9a61); G1/G2/G3/G3c PASS
+        "task": "A40 (merged 2026-09-04)",
         "env": "PROCESS_ARCH_PRIME",
     },
     # H3: n_solver_iterations / ifail / ladder stage / constraint residual
@@ -150,8 +150,8 @@ INSTRUMENTATION = {
     # and A41 does not merge itself — the flip, with the merge date, is a
     # one-line orchestrator action at A41's merge.
     "exit_forensics": {
-        "available": False,
-        "task": "A41 (v3-harness) — G7 PASS 2026-09-04, flip at merge",
+        "available": True,   # merged 2026-09-04 (e4096e84); G7 PASS with teeth
+        "task": "A41 (merged 2026-09-04)",
         "env": None,
     },
 }
