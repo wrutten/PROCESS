@@ -272,6 +272,23 @@ construction reads 1.33 and the nearest-rank construction reads 1.40 — the onl
 the two disagree (V2 report §5.3, dated note; trunk commit `0a8f5af2`). Every median below
 is the nearest-rank one.
 
+**Amendment, 2026-09-04 (pre-campaign, pre-approval) — totals are published beside every
+iteration median.** A second independent read of V2's records found that lad's B0→B1
+iteration median (0.833, "a 17 % reduction") **reverses on summed iterations**: over the
+same 11 pairs, B0 = 228 against B1 = 230, a sum ratio of 1.009, because two seeds blow up
+(11 → 36, 11 → 65) and repay what the other eight save (V2 report §5.3 correction; the
+absolute counts are emitted by the committed analysis at `6f05f819`). A median of ratios
+answers "what happens to a typical seed"; it does not answer "what does the campaign cost".
+V3 therefore **publishes, for every arm pair and deck: the declared nearest-rank median of
+per-pair ratios, both arms' summed iterations over exactly the ratio-contributing pairs,
+and their sum ratio**, with the pair count and the contributing seed set named. **The
+acceptance rule is unchanged** — it remains the median, declared in §2 — but a median and a
+sum ratio that disagree in *direction* must both appear, and the report must say which
+question each answers. Corollary, also declared: a B0 column is only comparable within one
+arm pair, because converged pair sets differ between pairs (on V2's lad, B0 totals 228
+against B1 and 205 against B3 — different seed sets); totals are never carried across
+columns.
+
 1. **Same optimum.** Per deck, paired |Δ `norm_objf`| at accepted optima (`ifail = 1` on
    both sides — the declared pairing), expressed **relative** per pair:
    r = |Δ `norm_objf`| / max(|`norm_objf`|ₐ, |`norm_objf`|ᵦ) (the per-pair denominator is

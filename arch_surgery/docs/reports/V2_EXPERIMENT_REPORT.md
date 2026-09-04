@@ -189,8 +189,13 @@ reported beside the three declared comparisons, outside the acceptance rule.*
 | deck | B0→B1 | B0→B2 | B0→B3 | B2→B3 (beside) | B0→R |
 |---|---|---|---|---|---|
 | nof (22 pairs) | **1.000 ✓** | **1.000 ✓** | **1.000 ✓** | 1.000 | 1.000 |
-| lad (11 pairs) | **0.833 ✓** | **0.833 ✓** | **1.273 ✗** | 1.33 / 1.40 † | 1.000 |
+| lad (11 pairs) | **0.833 ✓** ‡ | **0.833 ✓** ‡ | **1.273 ✗** | 1.33 / 1.40 † | 1.000 |
 | st (24 pairs) | — | **1.000 ✓** | **1.000 ✓** | 1.000 | 1.000 |
+
+*‡ The lad B0→B1 and B0→B2 cells are medians of per-pair ratios that **reverse on summed
+iterations** (228 → 230, sum ratio 1.009): the lift helps the typical lad seed and not lad's
+total work. Full correction in §5.3's prose below; the B0→B3 cell is unaffected (sums
+205 → 261 = 1.2732, median 1.2727).*
 
 *† Correction (2026-09-04, from an independent read of the records): the lad B2→B3 cell has
 an even pair count (10) whose two middle ratios differ (1.267, 1.400), so the two median
@@ -217,9 +222,29 @@ coincide with the converged-only construction; the analysis names every dropped 
   we quote the measured end-to-end totals directly, which happen to still favour the
   partition (§5.5).
 - **Why lad is also the deck where iterations FALL (B0→B1/B2 = 0.833):** current data
-  localises it precisely but does not explain it mechanistically. B0→B1 isolates the
+  localises it precisely but does not explain it mechanistically.
+
+  > **Correction (2026-09-04): the 17 % is a typical-seed statement and it reverses on
+  > total work.** The declared statistic is the median of per-pair ratios, and it is
+  > 0.833 as reported — but over the same 11 lad pairs the *summed* iterations are
+  > **B0 = 228 against B1 = 230, a sum ratio of 1.009**. Eight of eleven seeds improve;
+  > two blow up (`start005` 11 → 36, `start011` 11 → 65) and pay the rest back. Sorted
+  > per-pair ratios: 0.25, 0.618, 0.625, 0.80, 0.812, **0.833**, 0.90, 0.938, 1.077,
+  > 3.273, 5.909. So the lift makes the median lad seed cheaper and total lad work
+  > slightly dearer, and any end-to-end claim must use the totals. The B0→B3 cell is
+  > *not* affected (sums 205 → 261, ratio 1.2732, against median 1.2727). Note the two
+  > comparisons cannot share a B0 column: their converged pair sets differ by one seed
+  > (B1's set has `start006`, B3's has `start010`), so B0 totals 228 in the first and
+  > 205 in the second. Found by an independent read of the records (session `f1`),
+  > confirmed here from the campaign `metrics.json` records; the absolute counts are now
+  > emitted by the committed analysis (`iters_a_sum`, `iters_b_sum`, `iters_sum_ratio`,
+  > commit `6f05f819`). The acceptance verdicts are unchanged — the declared rule is on
+  > the median — but the *interpretation* below is narrowed accordingly.
+
+  B0→B1 isolates the
   burn-time lift (same flat architecture, one added optimiser variable + explicit
-  constraint 93): on lad's converged seeds that alone buys the 17 % iteration reduction,
+  constraint 93): on lad's converged seeds that alone buys the 17 % iteration reduction
+  **for the median seed (not in total — see the correction above)**,
   and B2 (which keeps the lift) inherits it exactly (0.833, same pairs). The nof pairs show
   1.000 for the same lift — so this is a lad-specific interaction: on this deck, and not on
   nof, giving VMCON the coupling as an explicit degree of freedom with its own constraint
