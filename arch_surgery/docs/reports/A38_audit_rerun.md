@@ -162,3 +162,49 @@ Which stage produced which figure: §1 — `runs/a38/preflight.json`; §2 — `r
   171 / 171 ok, all gates PASS, 150 / 150 identical to V2.
 - 2026-09-04 — tally-only refinements: gain analysis, closure over every image, two-coefficient
   fit (`cd4d1845`, `e2e399a7`, `f5c81f90`, `ca736947`); report written.
+- 2026-09-04 — orchestrator pre-merge assessment appended (§9) with the committed recheck
+  script `a38_recheck.py`; merge approved.
+
+## 9. Orchestrator assessment (pre-merge, 2026-09-04)
+
+Independent recheck by the orchestrating session:
+[`arch_surgery/idf_probe/a38_recheck.py`](../../idf_probe/a38_recheck.py) (committed on this
+branch), recomputing every published number from the raw records — never from `tally.json`,
+which is itself under test wherever both exist. **27 checks, ALL PASS**:
+
+- **Provenance** — 171/171 records at `9fcedc92` `dirty=False`, all `status: ok`.
+- **Identity vs V2** — recomputed directly from both record sets, per run: counts, sweeps,
+  objective hex, whole-state audit hex, and full `y_exit` state dict equality: **150/150**.
+- **Membership re-derived** — post-solve artifact → write census → spec, independently:
+  spec-level exclusions 124/125/125, tested 122/123/123 equal to every sampled record's
+  `excluded_keys`, kept 696/701/682, the known-cut trio kept on all decks. One label nuance
+  recorded: the audit's tested population (818 on nof) includes
+  `current_drive.eta_cd_dimensionless_hcd_primary`, whose spec `category` is not
+  `continuous`; the §1 table's kept counts are over the audit's own tested population.
+- **§3 distributions** — restricted maxima recomputed from the per-record scaled vectors
+  minus the re-derived exclusion set; medians, nearest-rank p90 and ranges reproduce every
+  cell, including `low_aspect_ratio_DEMO`'s A0 = 25 exact zeros.
+- **§4 census and closure** — argmax counts reproduce (16+9 / 21+4 / 17+8); the five
+  A35-image closures reproduce at the report's printed precision (worst max 6.1e-7 on nof's
+  `dr_shld_vv_gap_outboard`, as stated); the st gain reproduces at median 46.998226 with
+  **relative** spread 2.3e-11 — the §4 "spread 2e-11" is the relative spread (absolute
+  1.1e-9); the lad two-coefficient fit was re-derived with an independent pure-Python
+  normal-equations implementation (not numpy): (a, b) = (17.4, 15.3), residual median 0.067,
+  max 0.92 — confirming **not one linear image**.
+- **Count ratios** — 0.5217 / 0.5680 / 0.5016 recomputed from the metrics.
+- **Gates** — verdict PASS on all nine gate records, with the tooth semantics verified from
+  the records themselves: post-solve doctoring moves the whole-state maximum while the
+  restricted maximum and argmax stay bit-identical; in-loop doctoring trips
+  restricted-moved-or-more-work on every deck.
+- **Licence** — `git rev-parse` tree hashes for `process/`, `arch_surgery/fixedpoint/` and
+  `arch_surgery/docs/data/` identical at this branch's HEAD, `ba69c05d` and `6d9ff4b9`.
+
+Assessment of the claims as stated: the pre-declared expectation is confirmed; the "on the
+carrier alone" clause holds fully on `large_tokamak_nof` and `st_regression` (25/25 linear
+images of the pair on each, st's second image correctly labelled measured-not-derived) and
+**partially on `low_aspect_ratio_DEMO`**, where the report correctly leaves the TF-coil
+superconductor mass as the open term for G3c rather than stretching the clause. The post hoc
+analyses (§6 item 5) are declared as post hoc with reversal paths, and none of §3's
+pre-declared numbers depends on them. The two aborted campaign attempts are disclosed and
+cited nowhere, per §15's failure-path discipline. **Merge approved.**
+
