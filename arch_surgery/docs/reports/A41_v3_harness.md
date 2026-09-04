@@ -316,12 +316,28 @@ settled before A42 cites a check-1 number — the plan is the later and more spe
 so the expected resolution is that `phase_b.py` adopts the per-pair relative form and
 `v3_config.OBJF_FLOOR_REL`'s docstring is corrected with it.
 
-**4 — the `exit_forensics` ledger entry (left as delivered, deliberately).** The instrument
-is built and G7 passes with teeth, so its declared flip condition is met. It is left `False`
-because the ledger's own convention is that an entry flips when its task **merges** — every
-`True` entry is stamped `(merged DATE)` — and A41 does not merge itself. The entry's comment
-now records the G7 result and the pending action; the flip is a one-line orchestrator step at
-merge. Until it happens, Phase B preflight reports NOT READY for a gap that no longer exists.
+**4 — the `INSTRUMENTATION` ledger needs two flips at merge, not one.** `exit_forensics` is
+left `False` although its declared flip condition is met (the instrument is built and G7
+passes with teeth), because the ledger's own convention is that an entry flips when its task
+**merges** — every `True` entry is stamped `(merged DATE)` — and A41 does not merge itself.
+The entry's comment now records the G7 result and the pending action.
+
+The second flip is `prime`. **A40 (v3-prime) merged to `architecture_surgery` while this task
+was running** (`1f176950` … `fa5cec0e`, 2026-09-04), so the `PROCESS_ARCH_PRIME` variant point
+now exists on trunk. It does **not** exist on this branch, which is off `b7dbd2a9`, and the
+harness is therefore correct as it stands: arm `A1` and arms `B2`/`B3` refuse by name on this
+branch because on **this** tree the switch would indeed be silently ignored. At merge both
+entries flip:
+
+```python
+"prime":           {"available": True, "task": "A40 (merged 2026-09-04)", ...}
+"exit_forensics":  {"available": True, "task": "A41 (merged <date>)",     ...}
+```
+
+Until they do, Phase A and Phase B preflight both report NOT READY for gaps that will not
+exist on the merged tree. Neither flip is made here: a ledger entry that claims an instrument
+this branch does not contain would be exactly the silent-wrong-arm failure the refusals are
+built to prevent.
 
 **5 — `EXPERIMENT_PLAN.md` is absent from this branch,** for the same branch-point reason: it
 is A39's deliverable, merged to trunk after `b7dbd2a9`. `v3_config.py` and
@@ -369,3 +385,8 @@ each stage are in that directory beside the records.
   (`1e5eaf46`), and all cited gates re-run on the clean tree so their records carry an honest
   stamp. Three findings reported in §7, one of them (check 1's construction) left for
   orchestrator adjudication rather than repaired. Not merged; nothing pushed.
+- 2026-09-04 (same resumption, later) — **A40 (v3-prime) observed merged to
+  `architecture_surgery`** (`1f176950` … `fa5cec0e`) while this task was open. Nothing on this
+  branch changes: the prime does not exist on a tree off `b7dbd2a9`, so the harness's refusals
+  are correct here. §7 finding 4 rewritten to name **both** ledger flips owed at A41's merge
+  (`prime` and `exit_forensics`) rather than only `exit_forensics`.
