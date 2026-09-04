@@ -554,3 +554,32 @@ block schedule finds no other cross-block loop-carried variable pathway, and the
 The committed SPEC_MODE_A26 artifact reclassifies `srcktpm` as continuous at scale 1 106.688,
 scoring the flicker at 4.1e-16 — the recurring tail dissolves under it by construction. Full
 record: [`A31_drift_diagnostic.md`](A31_drift_diagnostic.md) (archived to `deprecated/` at merge).
+
+## V15 — V3's edge is the demonstrated carrier of the one-shot displaced-entry transient: "value-frozen" is not "displacement-inert" (A35, merged 2026-09-04)
+
+A35 (cold-census; `deprecated/A35_cold_census.md`, orchestrator recheck in its §9) names V3's
+edge — `FirstWall (M3) → build.dr_fw_inboard / dr_fw_outboard → Build (M2)` — as the carrier of
+the displacement-scaled cross-block transient (A34's cold pin gate 1.459e-2; V2 Phase A's
+one-pass deficits at δ-perturbed warm entries), with coefficient-exact closure on both traced
+decks (0.5·(Δin+Δout) into `dz_tf_upper_lower_midplane`, −Δout into `dr_shld_vv_gap_outboard`;
+rel. diffs 3.8e-14 … 7.4e-8), δ-linearity (pass-2 mover ratio ≈ 2.00 between δ = 0.10 and
+0.05, identically 0 at fixed-point entries), and candidates (a) missing edge, (c-order)
+schedule inversion and (d) non-idempotency excluded by measurement.
+
+**Nothing earlier is overturned.** V3 stands — the value never changes between sweeps; the
+writer emits a run-constant of two pure inputs. V14 follow-up 2's refutation stands — this
+edge cannot carry the **recurring** tail, being frozen after the first evaluation. A31's
+dissolution of that tail (`srcktpm` scoring artifact; 4.1e-16 under SPEC_MODE_A26) stands.
+The hinge is the clause the refutation itself carved out: *"its appearance in A28's moved
+census is a first-call initialization artifact, **once per run**."* That once-per-run term IS
+the transient: frozen-after-first-evaluation implies both "cannot recur" (the refutation) and
+"transmits exactly the entry displacement, once" (the carrier). V2 Phase A's design — a single
+one-pass eval from a displaced entry, no outer loop — turns the once-per-run term into the
+entire measurement, and the trust arms keep it because they never run the second pass that
+repairs it.
+
+**Register consequence:** liveness entries here answer "does the value move at the measured
+states". A one-pass/trust design must additionally ask "is the read displaced at entry" — a
+back edge dead by value is a δ-proportional one-shot error injector for any schedule that
+never revisits the reader. Owner: the orchestrating session (A35's §6 item 4 executed at
+merge).

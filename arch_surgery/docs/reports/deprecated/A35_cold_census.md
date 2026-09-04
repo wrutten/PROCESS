@@ -1,18 +1,19 @@
 # A35 (cold-census) — the carrier of the displacement-scaled cross-block transient is NAMED: the known-cut, fixed-point-dead edge `FirstWall (M3) → build.dr_fw_inboard / dr_fw_outboard → Build (M2)`
 
-> **Document status** — **CURRENT · TASK REPORT, open.** Written by task A35 (cold-census),
-> 2026-09-04, on branch `A35-cold-census`, branched from `architecture_surgery` at `ba69c05d`,
-> experiment base commit `c0ae5b28` (every `process/` file untouched by this task; the file:line
-> citations below are at the base commit — `git log` shows both cited model files last changed by
-> `c0ae5b28` itself). Archived to `deprecated/` when the task merges and authoritative there
-> (trap T3). Nothing here is merged; nothing is pushed.
+> **Document status** — **ARCHIVED · TASK REPORT, merged 2026-09-04 (merge `b20b6112`) and
+> authoritative here** (trap T3: folder position records lifecycle, not validity). Written by
+> task A35 (cold-census), 2026-09-04, on branch `A35-cold-census`, branched from
+> `architecture_surgery` at `ba69c05d`, experiment base commit `c0ae5b28` (every `process/`
+> file untouched by this task; the file:line citations below are at the base commit — `git log`
+> shows both cited model files last changed by `c0ae5b28` itself). Orchestrator's critical
+> assessment: §9 (independent recheck ALL PASS). Register entry: V15. Nothing is pushed.
 
 | | |
 |---|---|
 | **Task** | Name the CARRIER of the displacement-scaled cross-block transient: the mechanism by which a one-pass feed-forward block chain's exit differs from the flat MDA's fixed point when the validated DSM says inter-block edges are forward-only (A34 pin_gate: 1.459e-2, 243/840 ≥ τ from a cold entry; V2 Phase A: one-pass audits ~0.2 at δ = 0.10 warm entries; bit-clean at the fixed point) |
 | **Verdict** | **The carrier is one edge, named with coefficient-exact evidence: `fw` (FirstWall, block M3) writes `build.dr_fw_inboard` / `build.dr_fw_outboard`; `build` (block M2) reads them.** Primary label per the plan-§2b partition: **KNOWN-CUT** — the edge is present in the dependency analysis's export, is backward under the executed schedule, and is therefore an edge trust mode *deliberately* cuts; **no artifact is wrong anywhere**. Liveness annotation: **state-dependent, value-carried** — the computed value is a constant function of two pure inputs (V3), so the edge is bit-dead at every fixed point (where all prior dynamic validation ran) and transmits **exactly the entry displacement, once**, at any displaced entry. Candidates (a) missing edge, (c-order) schedule/DAG inversion and (d) non-idempotent model are each excluded by measurement below |
-| **Plan** | [`arch_surgery/docs/plans/A35_INVESTIGATION_PLAN.md`](../plans/A35_INVESTIGATION_PLAN.md), committed at `4275e450` **before execution**, with two dated user-directed amendments (`a2d1bfbb`: the (c-lag)/M119 lagged-edge sub-hypothesis, its census and the δ-scaling sub-discriminator; `dacf0e92`: the frozen-set correction, the three-orderings note, the KNOWN-CUT-first dichotomy and the five-label partition) |
-| **Script** | [`arch_surgery/idf_probe/a35_cold_census.py`](../../idf_probe/a35_cold_census.py) — stages `refs` / `gates` / `trace` / `restarts` / `flatctl` / `analyze`; committed at `fa63f57d` before any published number; extended at `a2d1bfbb` / `dacf0e92` before the numbers those extensions publish |
+| **Plan** | [`arch_surgery/docs/plans/A35_INVESTIGATION_PLAN.md`](../../plans/A35_INVESTIGATION_PLAN.md), committed at `4275e450` **before execution**, with two dated user-directed amendments (`a2d1bfbb`: the (c-lag)/M119 lagged-edge sub-hypothesis, its census and the δ-scaling sub-discriminator; `dacf0e92`: the frozen-set correction, the three-orderings note, the KNOWN-CUT-first dichotomy and the five-label partition) |
+| **Script** | [`arch_surgery/idf_probe/a35_cold_census.py`](../../../idf_probe/a35_cold_census.py) — stages `refs` / `gates` / `trace` / `restarts` / `flatctl` / `analyze`; committed at `fa63f57d` before any published number; extended at `a2d1bfbb` / `dacf0e92` before the numbers those extensions publish |
 | **Runs** | **19 fresh-subprocess single-MDA-eval runs, 19/19 `status: ok`** (2 refs, 4 gate runs incl. the deliberately doctored snapshot, 7 traced verified chains, 6 chained trust restarts, 2 flat controls), strictly serial — at most ONE PROCESS subprocess existed at any time (the V2 campaign owns the machine's workers). No crash, no timeout, no seed fallback used; every pre-declared failure path stayed empty |
 | **Environment** | `PROCESS_surgery_env`; `PYTHONPATH` pinned to this worktree per subprocess; exact tree asserted in-process (traps T6/T10); a26-generation ystate + writeset artifacts everywhere; τ = 1e-6 = inner τ; runs under `arch_surgery/idf_probe/runs/a35/` untracked |
 | **Date** | 2026-09-04 |
@@ -21,7 +22,7 @@
 
 ## 1. The named carrier, with file:line at `c0ae5b28`
 
-**Writer** — `FW.set_fw_geometry`, [`process/models/fw.py:347-352`](../../../process/models/fw.py),
+**Writer** — `FW.set_fw_geometry`, [`process/models/fw.py:347-352`](../../../../process/models/fw.py),
 called from `FW.run` at `fw.py:110` (run path; the dynamic write census independently records
 `fw` as the only runtime writer of both fields on both decks):
 
@@ -261,7 +262,7 @@ Independent recomputation of the report's headline numbers from A35's **raw** ar
 per-pass traces, exact-hex snapshots, in-run metrics — deliberately not through
 `a35_cold_census.py`'s analyzer (`summary.json` is consulted only for the owner-block tally,
 whose inputs the raw traces corroborate by name). Script:
-[`arch_surgery/idf_probe/a35_recheck.py`](../../idf_probe/a35_recheck.py), committed with this
+[`arch_surgery/idf_probe/a35_recheck.py`](../../../idf_probe/a35_recheck.py), committed with this
 section; result **ALL CHECKS PASS**. Assessed by the orchestrating session; user-directed
 ("Critically assess A35's result thoroughly. Recheck numbers if necessary").
 
