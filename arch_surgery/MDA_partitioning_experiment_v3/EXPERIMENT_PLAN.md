@@ -1,9 +1,18 @@
 # MDA Partitioning Experiment V3 — Experiment Plan
 
-> **Document status** — **NOT YET APPROVED — awaiting the user's dated execution approval.**
-> The campaign task A42 (v3-campaign) is blocked on that approval; when the user approves,
-> the approval is recorded here as a dated edit and `v3_config.EXECUTION_APPROVED` flips to
-> `True` in the same commit (§Appendix A). Until then no campaign stage runs.
+> **Document status** — **APPROVED FOR EXECUTION — 2026-09-04, by the user.**
+> The user approved this plan and flipped `v3_config.EXECUTION_APPROVED` to `True` in their
+> own commit `a164c6cd` ("V3 experiment approved", 2026-09-04 15:23). This header is the
+> paired record of that approval, written by the orchestrating session immediately after and
+> transcribing the user's decision — it does not itself grant anything. Campaign task A42
+> (v3-campaign) is unblocked.
+>
+> **Amendments made before execution, all dated in place:** §4.2 check 1's per-pair relative
+> statistic and the nearest-rank median construction; §4.2 check 2's summed-iteration
+> publication and the both-ok/both-converged pairing rule; §5's transfer amendment (I-17 —
+> the transfer is an upper bound, not a prediction, with the measured per-deck
+> over-prediction published and the `sweeps_per_eval` hypothesis pre-declared). Every later
+> change is a dated amendment, never a silent edit.
 >
 > Written 2026-09-04 by task A39 (v3-plan) from
 > [`../docs/plans/V3_DEVELOPMENT_PLAN.md`](../docs/plans/V3_DEVELOPMENT_PLAN.md) (the
