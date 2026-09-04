@@ -679,6 +679,35 @@ def _closure(deck: str, droot: Path, seeds) -> dict:
             "per_run": rows}
 
 
+def _two_coefficient_fit(rows: dict) -> dict:
+    """Is the component's unsigned raw movement y one linear image
+    |a din + b dout| of the pair's two displacements?  The audit records
+    |y| only, so the fit is done on y^2 = A din^2 + 2B din dout + C dout^2,
+    linear in (A, B, C) = (a^2, ab, b^2), by least squares over the seeds;
+    consistency B^2 = AC and the max relative residual of |a din + b dout|
+    against y are reported.  A residual at round-off says the component is
+    exactly one linear image of the pair with those two coefficients."""
+    import numpy as np
+    pts = [(r["din"], r["dout"], r["raw_movement"]) for r in rows.values()]
+    if len(pts) < 4:
+        return {"fitted": False, "why": "fewer than 4 seeds"}
+    din = np.array([p[0] for p in pts]); dout = np.array([p[1] for p in pts])
+    y = np.array([p[2] for p in pts])
+    M = np.column_stack([din * din, 2.0 * din * dout, dout * dout])
+    (A, B, C), *_ = np.linalg.lstsq(M, y * y, rcond=None)
+    if A < 0 or C < 0:
+        return {"fitted": False, "why": "negative squared coefficient", "A": A, "B": B, "C": C}
+    a = math.sqrt(A)
+    b = math.copysign(math.sqrt(C), B) if C > 0 else 0.0
+    pred = np.abs(a * din + b * dout)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel = np.abs(pred - y) / y
+    return {"fitted": True, "a_din": a, "b_dout": b,
+            "consistency_B2_over_AC": (B * B / (A * C)) if A > 0 and C > 0 else None,
+            "max_rel_residual": float(np.nanmax(rel)),
+            "median_rel_residual": float(np.nanmedian(rel)), "n": len(pts)}
+
+
 def _downstream_gain(deck: str, droot: Path, seeds, components) -> dict:
     """For each component that sets the restricted maximum on this deck: the
     per-seed ratio of its raw audit movement to the pair's mean entry
@@ -718,6 +747,7 @@ def _downstream_gain(deck: str, droot: Path, seeds, components) -> dict:
                        key=lambda dn: summ[dn]["gain_spread_rel"], default=None)
             out[name] = {"n": len(ratios), "by_denominator": summ, "best_denominator": best,
                          "best_gain_spread_rel": summ[best]["gain_spread_rel"] if best else None,
+                         "two_coefficient_fit": _two_coefficient_fit(rows),
                          "per_seed": rows}
     return {"what": ("per-seed gain of each restricted-argmax component's raw audit movement "
                      "over three candidate displacements of the pair -- the mean "
