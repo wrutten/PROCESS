@@ -273,6 +273,52 @@ def phase_b() -> dict:
             sums["per_arm"] = per_arm
             d["check4_cost_sums"][variant] = sums
 
+        # per-block node-call split over the identical-ok-set: block
+        # membership from the deck's own B3 (fallback B2) executed
+        # schedule, post-solve set from the same record; the lifted
+        # `pulse` node executes in-loop outside any block and is assigned
+        # to PULSE; anything else unmapped is named, not pooled.
+        block_map: dict[str, str] = {}
+        ps_nodes: set = set()
+        for arm in ("B3", "B2"):
+            for k in range(cfg.N_STARTS):
+                p = (PB / "campaign" / deck / arm / f"start{k:03d}"
+                     / "metrics.json")
+                if not p.exists():
+                    continue
+                m = jload(p)
+                sched = m.get("arch_block_schedule")
+                if sched:
+                    for bname, nodes, _ in sched:
+                        for n in nodes:
+                            block_map[n] = bname
+                    ps_nodes = set((m.get("post_solve_totals") or {})
+                                   .get("nodes") or [])
+                    break
+            if block_map:
+                break
+        block_map.setdefault("pulse", "PULSE")
+        common_ok = [k for k in range(cfg.N_STARTS)
+                     if all(rows[a][k]["status"] == "ok" for a in arms)]
+        per_block: dict = {}
+        for a in arms:
+            agg: dict[str, int] = {}
+            for k in common_ok:
+                p = (PB / "campaign" / deck / a / f"start{k:03d}"
+                     / "metrics.json")
+                m = jload(p)
+                census = ((m.get("node_census") or {})
+                          .get("per_node_counted_through_Caller_node") or {})
+                for n, c in census.items():
+                    blk = ("post_solve" if n in ps_nodes
+                           else block_map.get(n, f"UNMAPPED:{n}"))
+                    agg[blk] = agg.get(blk, 0) + c
+            agg["TOTAL"] = sum(agg.values())
+            per_block[a] = agg
+        d["per_block_node_calls_identical_ok_set"] = {
+            "n_seeds": len(common_ok), "block_map_source": "B3/B2 record",
+            "per_arm": per_block}
+
         # post-solve suppression share (B2/B3), vs A33 baselines
         d["post_solve_share"] = {}
         for arm in ("B2", "B3"):
