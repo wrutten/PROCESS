@@ -580,12 +580,15 @@ def stage_tally() -> int:
             "accepted_optimum": "status ok AND MFILE ifail == 1",
             "pairing": "both-converged pairs (declared primary; both-ok "
                        "published beside)",
+            "check1_statistic": ("per-pair relative |d norm_objf| / "
+                                 "max(|objf_a|, |objf_b|); the absolute "
+                                 "delta is published beside, never accepted "
+                                 "against"),
             "objf_floor": (f"{cfg.OBJF_FLOOR_REL:g} relative on norm_objf "
-                           f"(O3), applied as floor_rel x the nearest-rank "
-                           f"median |norm_objf| of the pair's base arm over "
-                           f"the compared pairs"),
+                           f"(O3), applied directly to the per-pair relative "
+                           f"statistic"),
             "acceptance": "spread <= max(F x yardstick, floor); yardstick "
-                          "= the R->B0 spread",
+                          "= the R->B0 relative spread",
             "cluster_gap": (f"relative gap > "
                             f"{cfg.CLUSTER_GAP_FLOOR_FACTOR:g} x "
                             f"{cfg.OBJF_FLOOR_REL:g} between adjacent "
@@ -682,7 +685,7 @@ def stage_tally() -> int:
         for name, (a, b) in pair_defs.items():
             if a not in deck_rows or b not in deck_rows:
                 continue
-            deltas, base_absobjf, dropped = [], [], []
+            deltas, absolute_deltas, base_absobjf, dropped = [], [], [], []
             for k in range(cfg.N_STARTS):
                 ra, rb = deck_rows[a][k], deck_rows[b][k]
                 if not (_conv(ra) and _conv(rb)):
@@ -696,13 +699,26 @@ def stage_tally() -> int:
                 if fa is None or fb is None:
                     dropped.append({"seed": k, "why": "no norm_objf hex"})
                     continue
-                deltas.append(abs(fb - fa))
+                # EXPERIMENT_PLAN.md §4.2 check 1: the accepted statistic is
+                # the PER-PAIR RELATIVE difference, denominator the larger
+                # magnitude of the two sides (the same form check 1a already
+                # uses for its cluster gaps).  An absolute delta compared
+                # against an ensemble-median-scaled floor is a DIFFERENT
+                # construction: it is not per-pair, and O3's floor is
+                # declared relative.  Orchestrator adjudication 2026-09-04 on
+                # A41's reported divergence -- the plan is authoritative, and
+                # the absolute delta stays published beside, never accepted
+                # against.
+                denom = max(abs(fa), abs(fb))
+                deltas.append(abs(fb - fa) / denom if denom else 0.0)
+                absolute_deltas.append(abs(fb - fa))
                 base_absobjf.append(abs(fa))
             deltas.sort()
+            absolute_deltas.sort()
             base_absobjf.sort()
-            floor_abs = (cfg.OBJF_FLOOR_REL * rank_median(base_absobjf)
-                         if base_absobjf else None)
             objf_pairs[name] = {
+                "statistic": ("per-pair relative: |d norm_objf| / "
+                              "max(|objf_a|, |objf_b|)"),
                 "n_pairs": len(deltas),
                 "n_dropped": len(dropped),
                 "dropped_pairs": dropped,
@@ -712,7 +728,13 @@ def stage_tally() -> int:
                 "p90": p90(deltas),
                 "max": deltas[-1] if deltas else None,
                 "values_published": deltas,
-                "floor_abs": floor_abs,
+                "floor_rel": cfg.OBJF_FLOOR_REL,
+                # published beside; never the acceptance statistic
+                "absolute_median": rank_median(absolute_deltas),
+                "absolute_p90": p90(absolute_deltas),
+                "absolute_max": (absolute_deltas[-1] if absolute_deltas
+                                 else None),
+                "base_arm_abs_objf_median": rank_median(base_absobjf),
             }
         yard = objf_pairs.get("R->B0")
         for name, e in objf_pairs.items():
@@ -721,10 +743,12 @@ def stage_tally() -> int:
             if e["median"] is None or yard["median"] is None:
                 e["accepted"] = None
                 continue
+            # both sides relative now, and the floor is the plain declared
+            # relative tolerance (O3): spread <= max(F x yardstick, 1e-6)
             bound_med = max(cfg.SIMILARITY_FACTOR_F * yard["median"],
-                            e["floor_abs"] or 0.0)
+                            cfg.OBJF_FLOOR_REL)
             bound_p90 = max(cfg.SIMILARITY_FACTOR_F * (yard["p90"] or 0.0),
-                            e["floor_abs"] or 0.0)
+                            cfg.OBJF_FLOOR_REL)
             e["accept_median"] = e["median"] <= bound_med
             e["accept_p90"] = (e["p90"] is not None
                                and e["p90"] <= bound_p90)

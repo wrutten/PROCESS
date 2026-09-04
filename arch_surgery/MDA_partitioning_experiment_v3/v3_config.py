@@ -47,9 +47,13 @@ ITER_RATIO_MAX = 1.05        # median paired optimiser-iteration ratio bound
 #: 1e-6 RELATIVE on norm_objf — the tolerance the correctness gate has used
 #: since A25 (provenance: PROCESS's own check_agreement rtol, not a choice
 #: made here).  Acceptance: spread <= max(F x yardstick, floor), where the
-#: yardstick is the measured R->B0 spread and the floor is applied as
-#: OBJF_FLOOR_REL x the nearest-rank median |norm_objf| of the pair's base
-#: arm over the compared pairs (operationalization declared in the tally).
+#: yardstick is the measured R->B0 spread.  Check 1's statistic is the
+#: PER-PAIR RELATIVE difference |d norm_objf| / max(|objf_a|, |objf_b|)
+#: (EXPERIMENT_PLAN.md s4.2 check 1), so this floor is that plain relative
+#: tolerance -- no ensemble rescaling.  (Corrected 2026-09-04: the harness
+#: first applied it as OBJF_FLOOR_REL x median |norm_objf| against an
+#: ABSOLUTE delta, a different construction; A41 reported the divergence,
+#: the orchestrator adjudicated for the plan.)
 OBJF_FLOOR_REL = 1e-6
 
 #: Check 1a (multi-attractor decks): accepted optima are clustered by
