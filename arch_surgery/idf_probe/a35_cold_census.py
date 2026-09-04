@@ -758,6 +758,151 @@ def st_static_maps() -> dict | None:
     return a31._load_static_maps()
 
 
+#: The recorded cross-module feedback cells of the tokamak-config DSM, from
+#: the committed register (DSM_VALIDATION.md V2-V5 under the V6 config
+#: match) -- the export authority for large_tokamak_nof without reading any
+#: sibling export live (trap T9).
+NOF_REGISTER_CUT_CELLS = [
+    {"variable": "build.dr_fw_inboard", "writer": "fw",
+     "writer_block": "M3", "reader": "build", "reader_block": "M2",
+     "register": "V3"},
+    {"variable": "build.dr_fw_outboard", "writer": "fw",
+     "writer_block": "M3", "reader": "build", "reader_block": "M2",
+     "register": "V3"},
+    {"variable": "pf_power.vpfskv", "writer": "power",
+     "writer_block": "M3", "reader": "pulse", "reader_block": "PULSE",
+     "register": "V4"},
+    {"variable": "times.t_plant_pulse_burn", "writer": "pulse",
+     "writer_block": "PULSE", "reader": "M1 (early readers)",
+     "reader_block": "M1", "register": "V10c",
+     "note": "held bit-constant by the pin in every A35 chain "
+             "(pin_intact True); cannot carry the measured transient"},
+]
+
+ITERATED_BLOCKS = frozenset({"M1", "M2", "M3"})
+
+
+def known_cut_census(scn: str, metrics: dict,
+                     static_maps: dict | None) -> dict:
+    """Plan section 2b: the KNOWN-CUT set -- every backward edge of the
+    EXECUTED schedule computable from the export's data_interface edges:
+    cross-block backward pairs, plus intra-block backward pairs inside
+    non-iterating blocks (which trust mode also never refreshes).
+
+    Intra-block native order comes from the export's supermodel execution
+    order (a31's node map); exact for the non-iterated blocks, whose node
+    order build_after_physics does not touch (only ``build``, in iterated
+    M2, is resequenced).
+    """
+    if static_maps is None:
+        return {
+            "export": "absent for this deck",
+            "authority": "committed register cells (V2-V5 under V6)",
+            "cross_block_cut_cells": (
+                NOF_REGISTER_CUT_CELLS if scn == "large_tokamak_nof"
+                else []),
+        }
+    import a31_drift_probe as a31
+    node_order = {name: lo for lo, _hi, name in a31.SUPERMODEL_ORDER_TO_NODE}
+    joins = Joins(scn, metrics)
+    nb = joins.node_block
+    cross, intra = [], []
+    for var, wrs in static_maps["writers"].items():
+        rds = static_maps["readers"].get(var, [])
+        for w in wrs:
+            wb = nb.get(w)
+            if wb not in BLOCK_INDEX:
+                continue
+            for r in rds:
+                rb = nb.get(r)
+                if rb not in BLOCK_INDEX or r == w:
+                    continue
+                if BLOCK_INDEX[rb] < BLOCK_INDEX[wb]:
+                    cross.append({"variable": var, "writer": w,
+                                  "writer_block": wb, "reader": r,
+                                  "reader_block": rb})
+                elif (rb == wb and rb not in ITERATED_BLOCKS
+                      and node_order.get(r, 10**6)
+                      < node_order.get(w, -1)):
+                    intra.append({"variable": var, "writer": w,
+                                  "writer_block": wb, "reader": r,
+                                  "reader_block": rb})
+    return {
+        "export_sha256": static_maps["export_sha256"],
+        "n_cross_block_backward": len(cross),
+        "n_intra_noniterated_backward": len(intra),
+        "cross_block_cut_edges": cross,
+        "intra_noniterated_cut_edges": intra,
+    }
+
+
+#: The named carrier pair (the attribution step's product; hard-coded here
+#: so the closure test is reproducible from this committed script).
+CARRIER_PAIR = ("build.dr_fw_inboard", "build.dr_fw_outboard")
+TOP_MOVER = {"large_tokamak_nof": "build.dz_tf_upper_lower_midplane",
+             "st_regression": "build.dr_shld_vv_gap_outboard"}
+#: The top mover's linear coefficient on the carrier pair, from source at
+#: the study commit: dz_tf_upper_lower_midplane carries
+#: 0.5*(dr_fw_inboard + dr_fw_outboard) via z_tf_top (build.py:836,840);
+#: dr_shld_vv_gap_outboard carries -dr_fw_outboard via
+#: r_shld_outboard_outer (build.py:1885-1888, 1940).
+TOP_MOVER_PREDICTION = {
+    "large_tokamak_nof": lambda d_in, d_out: 0.5 * (d_in + d_out),
+    "st_regression": lambda d_in, d_out: d_out,
+}
+
+
+def carrier_closure(scn: str, deck_rec: dict) -> dict:
+    """The quantitative closure of the named carrier: per entry, the
+    carrier pair's pass-1 raw movement must reproduce the top pass-2
+    mover's raw movement through the source coefficient, and no pass-2
+    mover may be owned by a block earlier than M2."""
+    out = {}
+    for entry, a in deck_rec.items():
+        if not isinstance(a, dict) or "movers_by_pass" not in a:
+            continue
+        # per-pass raw deltas from the analysed mover rows
+        def _raw(row):
+            return abs(float.fromhex(row["after_hex"])
+                       - float.fromhex(row["before_hex"]))
+        run_dir = Path(a["run_dir"])
+        recs = load_trace(run_dir / "pass_trace.jsonl")
+        outer = _passes(recs, "outer")
+        p1 = {mv["key"]: mv for mv in trace_movers(outer.get(1) or {})}
+        p2rows = a["movers_by_pass"].get("2", [])
+        tally: dict[str, int] = {}
+        early = []
+        for r in p2rows:
+            tally[r["owner_block"] or "?"] = tally.get(
+                r["owner_block"] or "?", 0) + 1
+            if r["owner_block"] in ("M1", "PULSE"):
+                early.append(r["key"])
+        d_in = _raw(p1[CARRIER_PAIR[0]]) if CARRIER_PAIR[0] in p1 else None
+        d_out = _raw(p1[CARRIER_PAIR[1]]) if CARRIER_PAIR[1] in p1 else None
+        top = next((r for r in p2rows if r["key"] == TOP_MOVER[scn]), None)
+        rec = {
+            "pass1_raw_delta_dr_fw_inboard": d_in,
+            "pass1_raw_delta_dr_fw_outboard": d_out,
+            "pass2_movers_by_owner_block": tally,
+            "pass2_movers_owned_by_M1_or_PULSE": early,
+            "top_mover": TOP_MOVER[scn],
+        }
+        if top is not None and d_in is not None and d_out is not None:
+            predicted = TOP_MOVER_PREDICTION[scn](d_in, d_out)
+            measured = _raw(top)
+            rec.update({
+                "top_mover_pass2_raw_delta": measured,
+                "predicted_from_carrier_pair": predicted,
+                "predicted_hex": float(predicted).hex(),
+                "measured_hex": float(measured).hex(),
+                "abs_difference": abs(measured - predicted),
+                "rel_difference": (abs(measured - predicted) / measured
+                                   if measured else None),
+            })
+        out[entry] = rec
+    return out
+
+
 # --------------------------------------------------------------------------
 # stage: analyze
 # --------------------------------------------------------------------------
@@ -1049,6 +1194,24 @@ def stage_analyze() -> int:
                             "first-evaluation error (plan section 2a)"),
         }
 
+        # plan section 2b: the KNOWN-CUT enumeration and the named-carrier
+        # closure (numbers published from this committed script, never
+        # from an ad-hoc shell)
+        if "cold" in deck_rec:
+            m_cold = json.loads(
+                (trace_dir(scn, "cold") / "metrics.json").read_text())
+            deck_rec["known_cut_census"] = known_cut_census(
+                scn, m_cold,
+                static_maps if scn == "st_regression" else None)
+            deck_rec["carrier_closure"] = carrier_closure(scn, deck_rec)
+            kc = deck_rec["known_cut_census"]
+            cut_vars = {e["variable"] for e in
+                        (kc.get("cross_block_cut_edges")
+                         or kc.get("cross_block_cut_cells") or [])}
+            deck_rec["carrier_primary_label"] = (
+                "KNOWN-CUT" if set(CARRIER_PAIR) <= cut_vars
+                else "NOT-IN-CUT-SET (pipeline implicated; see plan 2b)")
+
         # flat symmetry controls
         block2 = set()
         if "cold" in deck_rec:
@@ -1115,6 +1278,27 @@ def stage_analyze() -> int:
                   f"{ds['ratio_d10_over_d05_median']:.3f} over "
                   f"{ds['n_with_both_warm_points']} movers "
                   f"(q1-q3 {ds['ratio_d10_over_d05_q1_q3']})")
+        kc = dr.get("known_cut_census") or {}
+        if "n_cross_block_backward" in kc:
+            print(f"  known cuts: {kc['n_cross_block_backward']} "
+                  f"cross-block backward edges, "
+                  f"{kc['n_intra_noniterated_backward']} intra-non-"
+                  f"iterated backward edges (export "
+                  f"{kc['export_sha256'][:12]})")
+        elif kc:
+            print(f"  known cuts (register authority): "
+                  f"{len(kc.get('cross_block_cut_cells') or [])} recorded "
+                  f"cells")
+        if "carrier_primary_label" in dr:
+            print(f"  carrier primary label: {dr['carrier_primary_label']}")
+        for entry, cc in (dr.get("carrier_closure") or {}).items():
+            if "rel_difference" in cc:
+                print(f"  closure {entry}: top {cc['top_mover']} measured "
+                      f"{cc['top_mover_pass2_raw_delta']:.6e} predicted "
+                      f"{cc['predicted_from_carrier_pair']:.6e} "
+                      f"(rel diff {cc['rel_difference']:.2e}); "
+                      f"M1/PULSE-owned pass-2 movers: "
+                      f"{cc['pass2_movers_owned_by_M1_or_PULSE'] or 'none'}")
         for k in ("flat_symmetry_cold", "flat_symmetry_warm"):
             f = dr.get(k) or {}
             if "overlap_n" in f:

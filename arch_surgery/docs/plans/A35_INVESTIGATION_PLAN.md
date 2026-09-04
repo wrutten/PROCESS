@@ -105,6 +105,46 @@ tokamak-only guard). Its inertness claim therefore needs no re-verification here
 does not execute — and what transfers is the **pattern**, which the census above measures in
 this tree at `c0ae5b28`.
 
+### 2b. User-directed refinement + correction (2026-09-04, second relay): the frozen-edge set, the three orderings, and the KNOWN-CUT-first dichotomy
+
+**Correction to §2a:** "intra-block lags self-heal inside a block's own inner iterations" holds
+only for blocks the schedule **iterates** (M1/M2/M3). `PULSE` and `FF` execute once per pass, so
+a read-before-write pair *inside* them is not refreshed under trust mode either. **The frozen
+set is: every backward edge of the EXECUTED schedule not spanned by an iterating loop** —
+cross-block backward edges AND intra-block backward edges inside non-iterating blocks. The
+census enumerates both.
+
+**Three orderings are in play; a feedback classification is a property of (edge, ordering):**
+(1) the sibling instrument's native process line (static DFS source order; its `data_interface`
+projected edges are writer→reader with **no within-pass ordering semantics** — a lagged read and
+a fresh read produce the identical edge); (2) any sequenced/optimized DSM view (sequencing
+minimizes below-diagonal marks, so an acyclic read-before-write pair is displayed writer-first —
+the sequenced view *hides* the lag pattern by construction); (3) the **executed schedule**
+(`build_after_physics` at module granularity, PROCESS-native intra-module order) — the only
+ordering that determines runtime lag. Every classification below is stated against ordering (3),
+with (1) as the edge-existence authority.
+
+**Primary dichotomy, now at the top of the decision tree — KNOWN-CUT vs UNKNOWN edge.** Trust
+mode deliberately cuts every backward edge of the executed schedule. The backward edges
+**computable from the analysis's exports** (`data_interface` × executed order) are **known
+cuts**: a carrier in that set means *no artifact is wrong anywhere* — the transient is the
+priced cost of the trust bet, and the finding is "known cut edge X, magnitude underestimated".
+The census enumerates this set explicitly (static, cheap: the frozen `st_regression` export ×
+the run's own schedule; for `large_tokamak_nof`, the committed register's recorded cross-module
+cells — V2–V5 under the V6 config-match — serve as the export authority, never a live sibling
+read, trap T9). Only a carrier **not** in the known-cut set implicates the pipeline, and the
+runtime census then discriminates the defect layer directly: a traced read absent from the
+access records = **missing edge** (capture layer: undecidable branches, aliasing, dynamic
+access); a recorded edge whose traced runtime position contradicts the static line =
+**misplaced edge** (ordering projection error).
+
+**The full label partition, pre-declared** — every above-τ carrier edge gets exactly one
+primary label: **KNOWN-CUT / MISSING-EDGE / MISPLACED-EDGE / STATE-DEPENDENT (edge only live at
+displaced states, absent from the cut enumeration) / NON-IDEMPOTENT (no data edge at all)** —
+with liveness class (fixed-point-dead vs always-live; state-carried vs seed-type per §2a)
+recorded as an annotation beside the primary label, since a known-cut edge can *also* be
+fixed-point-dead, which is exactly what would have made its cut look free.
+
 Pre-declared fifth possibility, for honesty rather than symmetry — **(e) inner-dust echo**: a
 pass-2 mover could in principle be the pass-boundary echo of sub-τ intra-block dust (inner solves
 stop at inner-τ = 1e-6, not at 0). Quantitative bound stated in advance: this mechanism cannot
@@ -260,7 +300,12 @@ with different settings.
    later-block pass-1 movement are demonstrated cross-block iteration-carried consumers —
    **(c-lag)** at block granularity — and the δ-scaling sub-discriminator (cold vs δ = 0.10 vs
    δ = 0.05 vs the cited zero-point) splits state-carried from seed-type staleness per §2a.
-   Then, per candidate, reader evidence:
+   **Then the §2b primary dichotomy before any defect hunt:** is the named edge in the
+   enumerated KNOWN-CUT set (export `data_interface` × executed schedule)? YES → primary label
+   **KNOWN-CUT**, no artifact wrong anywhere; the finding is the edge's underestimated
+   displaced-state magnitude, with its liveness class annotated. NO → the pipeline is
+   implicated; per-candidate reader evidence assigns MISSING-EDGE / MISPLACED-EDGE /
+   STATE-DEPENDENT / NON-IDEMPOTENT:
    - read present in the frozen export (st) / recorded DSM cells (nof) → **(b)** if the DSM's
      own order also puts the writer after the reader (a genuine back edge, dead near fixed
      points — confirm liveness pattern in source: branch or V3-pattern value); **(c-order)** if
