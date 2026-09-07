@@ -551,10 +551,69 @@ named here per trap T11. Both are **counts**, never costs.*
 The prime's contract holds exactly: **one prime call per dispatch sweep**, to four decimal
 places, in every block arm on every deck.
 
-**Per-block attribution** (identical-ok set, `large_tokamak_nof`, 22 seeds): M1 89 212 →
-61 210, M2 133 818 → 116 436, M3 535 272 → 407 520, PULSE 44 606 → 14 146 (B0 → B3), and the
-post-solve set collapses from **133 818 → 264**. The post-solve hoist is where the largest
-single fractional saving sits; M3 is where the largest absolute one sits.
+#### 5.5.1 Per-block breakdown, including the feedforward set
+
+Added 2026-09-07 at the user's request.
+
+*Caption: node calls per block, summed over each deck's identical-**ok** seed set (22 / 20 /
+25). Block membership is read from the deck's **own executed** B3/B2 schedule and the
+post-solve set from the same record; unmapped nodes would be named, never pooled (none
+occurred). **Denominator note (trap T11):** this table sums `node_calls_total` — solve **plus**
+the output pass — because it is built from the per-node census, whereas §5.5's table sums
+`node_calls_solve_phase`. The two differ by the output pass, 63 (R) to 66 (B3) node calls per
+run; the solve-phase total is given in the last row for reconciliation. The output pass runs
+identically in every arm and is excluded from every acceptance comparison symmetrically.*
+
+| block | R | B0 | B1 | B2 | B3 | **B3/B0** |
+|---|---|---|---|---|---|---|
+| **`large_tokamak_nof`** (22 seeds) | | | | | | |
+| M1 `plasma_geom`, `physics` | 87 042 | 89 212 | 89 896 | 89 072 | 61 210 | 0.686 |
+| M2 `build`, `cicc_sctfcoil`, `pfcoil` | 130 563 | 133 818 | 134 844 | 158 229 | 116 436 | 0.870 |
+| M3 (the bulk) | 522 252 | 535 272 | 539 376 | 574 692 | 407 520 | 0.761 |
+| PULSE | 43 521 | 44 606 | 44 948 | 14 146 | 14 146 | 0.317 |
+| **post-solve (feedforward set)** | 130 563 | 133 818 | 134 844 | **264** | **264** | **0.002** |
+| TOTAL (`node_calls_total`) | 913 941 | 936 726 | 943 908 | 836 403 | 599 576 | 0.640 |
+| *reconciliation:* solve phase (§5.5) | 912 555 | 935 340 | 942 522 | 834 951 | 598 124 | 0.639 |
+| **`low_aspect_ratio_DEMO`** (20 seeds) | | | | | | |
+| M1 | 187 826 | 182 728 | 129 314 | 127 584 | 87 336 | 0.478 |
+| M2 | 281 739 | 274 092 | 193 971 | 226 716 | 166 344 | 0.607 |
+| M3 | 1 126 956 | 1 096 368 | 775 884 | 850 272 | 608 784 | 0.555 |
+| PULSE | 93 913 | 91 364 | 64 657 | 20 430 | 20 430 | 0.224 |
+| **post-solve (feedforward set)** | 281 739 | 274 092 | 193 971 | **240** | **240** | **0.001** |
+| TOTAL (`node_calls_total`) | 1 972 173 | 1 918 644 | 1 357 797 | 1 225 242 | 883 134 | 0.460 |
+| **`st_regression`** (25 seeds) | | | | | | |
+| M1 | 350 386 | 303 424 | — | 321 478 | 215 628 | 0.711 |
+| M2 | 525 579 | 455 136 | — | 500 460 | 338 322 | 0.743 |
+| M3 | 2 102 316 | 1 820 544 | — | 1 955 676 | 1 304 100 | 0.716 |
+| **post-solve (feedforward set)** | 700 772 | 606 848 | — | **400** | **412** | **0.001** |
+| TOTAL (`node_calls_total`) | 3 679 053 | 3 185 952 | — | 2 778 014 | 1 858 462 | 0.583 |
+
+**The feedforward set is where the intervention is most extreme, and least interesting.** The
+post-solve nodes (`costs`, `water_use`, `vacuum`, and `pulse` on st) collapse by a factor of
+**500 to 1500** — from running every sweep to running about four times per optimisation. That
+is nearly the whole of the headline saving in fractional terms and none of it in difficulty:
+these nodes feed nothing the optimiser reads, so hoisting them is bookkeeping, not
+architecture. **M3 is where the largest absolute saving sits** (127 752 node calls on nof, 487 584
+on lad, 516 444 on st) and where the partition is actually doing work.
+
+**Two structural facts the block rows expose:**
+
+- **B2 costs *more* than B0 in every model block** on nof (M1 89 072 vs 89 212 is flat, but M2
+  158 229 vs 133 818 and M3 574 692 vs 535 272 are up 18 % and 7 %) and only comes out ahead
+  on the total because the post-solve collapse pays for it. The verification loop's second
+  pass is genuinely re-running model work. B3 removes it and every block drops.
+- **PULSE behaves oppositely on the pulsed decks and on st.** On nof and lad it is a real
+  block that the lift and hoist shrink to 0.32 / 0.22 of B0. On st there is no PULSE row at
+  all — `pulse` is in the post-solve set there — **yet the schedule still sweeps an empty PULSE
+  block 570 times per run** (§5.6). Those sweeps execute nothing and so appear nowhere in this
+  table; they are invisible to every cost statistic in this report, which is exactly why they
+  went unnoticed (issue I-20).
+
+**The `FF` block is absent from every row deliberately.** It exists in all three decks'
+schedules and executes nothing in any arm: its only member, `objective_constraints`, carries
+`in_call_models_once: false`, so the block is swept and no model runs. Like st's PULSE, it
+costs block-loop iterations and zero node calls. Both belong to the per-sweep overhead
+discussed in §7, not to the node accounting here.
 
 ### 5.6 Reading the three decks together: they do not optimise the same thing
 
