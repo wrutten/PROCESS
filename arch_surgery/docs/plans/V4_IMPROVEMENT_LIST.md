@@ -230,6 +230,38 @@ The plan's pre-declared within-cluster construction was added to `v3_report_anal
 not. `--verify` cannot compare a cell that exists on only one side. Add it to the tally so both
 sites agree.
 
+### 6a. Two instrument weaknesses found while settling `vacuum`'s liveness *(2026-09-07)*
+
+Both surfaced by an independent read-only investigation of whether `vacuum` is feed-forward
+on the three experiment decks (it is — see report §4.5). Neither bites in V3; both are real.
+
+**(a) `a33_postsolve.py` classifies read sites by file prefix, not by class.**
+`CANDIDATE_FILES` maps `"vacuum"` to the prefix `process/models/vacuum`, but that file holds
+**two** classes: `Vacuum` (the post-solve candidate, lines 18–733) and `VacuumVessel`
+(lines 736–994), and `vacuum_vessel` is a live, needed M3 node. A read of a `vacuum.*` output
+inside `VacuumVessel` would be silently classified "internal to candidate `vacuum`" and marked
+dead — a wrong exclusion with no warning. Verified harmless here: zero reads of any of the six
+`vacuum` output fields occur in lines 736–994. Fix: classify by the enclosing class, not the
+file. **[data gap]** The classifier's strongest claim rests on an AST scan plus a DSM crawl; a
+committed **runtime read census** (`PROCESS_IDF_PROBE=modules`, closed at the
+`_call_models_once` boundary) would convert it to a direct observation. The investigation ran
+one ad hoc and it agreed exactly; under protocol §15 it cannot be cited until it is a committed
+stage — a natural `a33_postsolve.py readcensus` subcommand emitting `readcensus_<deck>.json`.
+
+**(b) Phase A records do not carry their post-solve provenance.** In every Phase A run record
+`post_solve_totals` is null and `PROCESS_ARCH_POST_SOLVE` is absent from the recorded `env_*`
+list, even though `phase_a.py` sets it (to the *nolift* artifact). So a Phase A per-block table
+cannot literally be "read from the run's own record" the way a Phase B one can; its grouping
+came from the committed artifact. The content is independently confirmed (`node_census.counted`
+shows `vacuum`/`costs`/`water_use` at 0 in the block arms while M3's other nodes run 3 each),
+but the recording gap is in `run_one.py` and should be closed so Phase A and Phase B records
+carry the same provenance fields.
+
+**(c) G4's teeth never doctor a `vacuum.*` component.** They doctor `costs.blkcst`, which
+demonstrates the exclusion *mechanism* in both directions but does not independently certify
+`vacuum`'s *membership* — that rests on A33's derivation (and now on the read census in (a)).
+A V4 G4 should doctor one component from each excluded namespace.
+
 ### 7. Re-run G1 / G2 / G3 / G3c at the campaign commit *(report §3)*
 
 Those four gates bound A40's `process/` tree (`f117a854`); the campaign ran at `8e3723d2`. The

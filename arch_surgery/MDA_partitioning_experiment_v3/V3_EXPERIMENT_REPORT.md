@@ -238,96 +238,130 @@ full flat MDA convergence at that deck's cold entry, A0 arm.
 reported separately per deck as `burn_time_residual` at exit; inactive on `st_regression`
 (k = 0 — nothing lifted or pinned).
 
-### 4.5 Per-block breakdown (Phase A), including the feedforward set
+### 4.5 Per-module breakdown (Phase A), aligned to the collapsed DSM
 
-Added 2026-09-07 at the user's request, as the per-call counterpart to §5.5.1.
+Rewritten 2026-09-07 at the user's request: the decomposition now matches the **rows of the
+collapsed DSM** (decision D8, `arch_surgery/docs/data/dsm_node_map.json`), and **the per-module
+ratios are the headline, not the total** — for a reason given below that is stronger than
+taste.
 
-#### Block scope — which model nodes each block contains
+#### Module scope
 
-Read from each run's own `arch_block_schedule` and `post_solve_totals.nodes`, so this is the
-**executed** partition, not a design intent.
+*Caption: the D8 modules, their DSM row counts, and which model nodes execute in each on the
+three decks. The static map holds 26 model nodes; **21 execute on any one deck** — the TF-coil
+family (`aluminium_tf_coil`, `copper_tf_coil`, `croco_sctfcoil`, `resistive_tf_coil`,
+`sctfcoil`, `tfcoil`, `cicc_sctfcoil`) contributes exactly one member per deck by conductor
+choice, and `dcll` is an alternative blanket model to `ccfe_hcpb`. `vacuum` is listed with the
+feed-forward set — see the reconciliation below the table.*
 
-*Caption: the static block map holds 26 nodes; **21 execute on any one deck.** The gap is
-mutual exclusivity, not omission: the TF-coil family (`aluminium_tf_coil`, `copper_tf_coil`,
-`croco_sctfcoil`, `resistive_tf_coil`, `sctfcoil`, `tfcoil`, `cicc_sctfcoil`) contributes
-exactly one member per deck by conductor choice, and `dcll` is an alternative blanket model to
-`ccfe_hcpb`. Membership is identical across all three decks except where marked.*
-
-| block | iterated | mapped | executing | nodes (executing) |
+| DSM module | DSM rows | iterated | executing | nodes |
 |---|---|---|---|---|
-| **M1** | yes | 2 | 2 | `plasma_geom`, `physics` |
-| **M2** | yes | 9 | 3 | `build`, `pfcoil`, **+ one TF model**: `cicc_sctfcoil` (nof, lad) / `croco_sctfcoil` (st) |
-| **M3** | yes | 14 | 12 | `divertor`, `fw`, `shield`, `vacuum_vessel`, `ccfe_hcpb`, `cryostat`, `structure`, `power`, `power.acpow`, `power.plant_electric_production`, `availability`, `buildings` |
-| **PULSE** | **no** | 1 | 1 on nof, lad · **0 on st** | `pulse` — on st it is in the post-solve set instead, yet the block is still swept (§5.6, I-20) |
-| **FF** | **no** | 0 | **0 on every deck** | its only member, `objective_constraints`, carries `in_call_models_once: false` — the block is swept and no model runs |
-| **post-solve** (feedforward) | n/a | — | 3 on nof, lad · **4 on st** | `costs`, `water_use`, `vacuum` — **plus `pulse` on st** |
+| **M1** Physics | 24 (rows 4, 6–28) | yes | 2 | `plasma_geom`, `physics` |
+| **M2** Coils | 10 (rows 5, 29–37) | yes | 3 | `build`, `pfcoil`, + one TF model: `cicc_sctfcoil` (nof, lad) / `croco_sctfcoil` (st) |
+| **M3** Plant, live | 12 (rows 40–51), of which one is `vacuum`'s | yes | 12 | `divertor`, `fw`, `shield`, `vacuum_vessel`, `ccfe_hcpb`, `cryostat`, `structure`, `power`, `power.acpow`, `power.plant_electric_production`, `availability`, `buildings` |
+| **PULSE** | 1 (row 39) | no | 1 on nof, lad · 0 on st | `pulse` — on st it is post-solve, yet the block is still swept (§5.6, I-20) |
+| **FF** feed-forward tail | 5 (row 38, 52–55) | no | 2 | `costs`, `water_use` |
+| **`vacuum`** — measured feed-forward | 1 (inside M3's range) | — | 1 | `vacuum` |
 
-Three things to read off it:
+**Reconciling `vacuum`: the static map and the measured liveness are both right, about
+different things.** The DSM map places `vacuum`'s row in M3 — a *topological* assignment
+from the collapsed call graph; `in_loop` there is a property of the module, and no node entry
+in that file carries any liveness field. A33's post-solve derivation, a *runtime liveness*
+classification, places `vacuum` in the feed-forward set. There is no contradiction: a node can
+sit in an iterated block's rows and still have no live consumer. Whether it does was settled
+independently on 2026-09-07 by a read-only investigation with its own runtime read census
+(`PROCESS_IDF_PROBE=modules`, closed at the `_call_models_once` boundary, 2029 / 4286 / 1891
+sweeps by deck): **the only node that reads any of `vacuum`'s five written fields is
+`costs`, itself post-solve; `objective_constraints` reads none; `availability`'s reads are on
+`i_plant_availability` = 2/3 branches and all three decks set 0.** The census's numbers are
+ad hoc and are not cited here (protocol §15); the committed evidence is A33's per-field
+`external_source_read_sites` in `postsolve_<deck>.json`, which the census reproduced exactly.
+**`vacuum` is feed-forward on all three decks, and its status is joint with `costs`** — on a
+cost-objective deck (`i_figure_merit` 6 or 7) `costs` stays live and `vacuum` would follow.
+That case is not among the three scenarios.
 
-- **`vacuum` is mapped to M3 but counted under post-solve**, on every deck. The aggregation
-  rule is `post_solve` first, block map second, so a node in both appears once, in post-solve.
-  That is why M3 shows 12 executing nodes rather than 13.
-- **M2 is the smallest iterated block (3 nodes) and the one the partition helps least**
-  (§4.5's ratio column: 0.935 / 0.976 / 1.000). **M3 is the largest (12 nodes)** and carries
-  the largest absolute saving. The partition's benefit tracks block size, which is what a
-  block-Jacobi scheme should do.
-- **Two of the five blocks execute nothing.** `FF` on every deck, and `PULSE` on st. Both are
-  still visited by the block loop — 789 and 570 sweeps per run respectively — and neither
-  appears in any node-call table, because they contribute zero node calls. They are pure
-  per-sweep overhead (§7, I-20).
+#### Per-module ratios — the headline
 
-The same scope applies to §5.5.1's Phase B table.
+*Caption: node calls per DSM module, summed over each deck's 25 ok runs, A0 and A1 (A1u is
+identical to A1 in every cell: the prime changes what `Build` reads, not how often anything
+runs). **The ratio column is the result.** Within one module both arms execute the same node
+set, so each module's ratio is a pure sweep ratio and does not depend on whether one counts
+model calls or DSM rows. The total, being a weighted average of these, does — see the last two
+rows.*
 
-*Caption: node calls per block, summed over the 25 ok runs of each deck (so divide by 25 for
-the per-evaluation figure). Block membership from a block arm's executed schedule; post-solve
-set from the deck's committed artifact. **A1u and A1 are identical in every block on every
-deck** — the prime changes what `Build` reads, not how often anything runs — so the ratio
-column is A1/A0 and applies to A1u equally.*
+| module | nof A0 → A1 | ratio | lad A0 → A1 | ratio | st A0 → A1 | ratio |
+|---|---|---|---|---|---|---|
+| M1 | 276 → 200 | **0.725** | 250 → 200 | **0.800** | 292 → 200 | **0.685** |
+| M2 | 414 → 387 | **0.935** | 375 → 366 | **0.976** | 438 → 438 | **1.000** |
+| M3 live | 1656 → 900 | **0.543** | 1500 → 900 | **0.600** | 1752 → 900 | **0.514** |
+| PULSE | 138 → 25 | 0.181 | 125 → 25 | 0.200 | 146 → 0 | 0.000 |
+| FF | 276 → 0 | 0.000 | 250 → 0 | 0.000 | 292 → 0 | 0.000 |
+| `vacuum` | 138 → 0 | 0.000 | 125 → 0 | 0.000 | 146 → 0 | 0.000 |
+| *total, node-weighted* | 2898 → 1512 | *0.522* | 2625 → 1491 | *0.568* | 3066 → 1538 | *0.502* |
+| *total, DSM-row-weighted* | 7176 → 4615 | *0.643* | 6500 → 4545 | *0.699* | 7592 → 4760 | *0.627* |
 
-| block (nodes) | A0 | A1u | A1 | **A1/A0** |
-|---|---|---|---|---|
-| **`large_tokamak_nof`** | | | | |
-| M1 (2 nodes) | 276 | 200 | 200 | 0.725 |
-| M2 (3 nodes) | 414 | 387 | 387 | **0.935** |
-| M3 (12 nodes) | 1656 | 900 | 900 | 0.543 |
-| PULSE (1 node) | 138 | 25 | 25 | 0.181 |
-| **post-solve (3 nodes, feedforward)** | 414 | 0 | 0 | **0.000** |
-| TOTAL | 2898 | 1512 | 1512 | **0.522** |
-| **`low_aspect_ratio_DEMO`** | | | | |
-| M1 | 250 | 200 | 200 | 0.800 |
-| M2 | 375 | 366 | 366 | **0.976** |
-| M3 | 1500 | 900 | 900 | 0.600 |
-| PULSE | 125 | 25 | 25 | 0.200 |
-| **post-solve (feedforward)** | 375 | 0 | 0 | **0.000** |
-| TOTAL | 2625 | 1491 | 1491 | **0.568** |
-| **`st_regression`** | | | | |
-| M1 | 292 | 200 | 200 | 0.685 |
-| M2 | 438 | 438 | 438 | **1.000** |
-| M3 | 1752 | 900 | 900 | 0.514 |
-| **post-solve (4 nodes incl. `pulse`, feedforward)** | 584 | 0 | 0 | **0.000** |
-| TOTAL | 3066 | 1538 | 1538 | **0.502** |
+**Why the total is demoted: it is unit-dependent by thirteen points, and the per-module ratios
+are not.** M1 is 2 model calls but 24 DSM rows; M3 is 12–13 model calls and 12 rows. M1 saves
+least (0.725 / 0.800 / 0.685) and M3 saves most (0.543 / 0.600 / 0.514). Counting model calls
+weights the total toward M3; counting DSM rows weights it toward M1. So the same campaign reads
+**0.522 or 0.643 on nof** depending on the unit — and neither is more correct, because the
+unit is a modelling choice. Both sit inside the pre-published weighting-invariance bracket
+`[0, 0.935]` (which is this table's minimum and maximum ratio), so the bracket did its job;
+but the *point estimate* the report led with was not unit-free. The per-module ratios are.
+(Row-weighted totals use the DSM-literal grouping with `vacuum` counted in M3's 12 rows, since
+per-node row numbers are not available here — trap T9; moving that single row shifts the total
+by about one point.)
 
-**This table is where §4's weighting-invariance bracket comes from.** The bracket is literally
-the minimum and maximum of the ratio column: `[0, 0.935]` on nof, `[0, 0.976]` on lad,
-`[0, 1.000]` on st — the 0 is the post-solve row, the upper end is M2. Because any
-cost-weighted aggregate is a weighted average of these per-node ratios, **no weighting of the
-models can put A1's per-call cost above 0.935 / 0.976 / 1.000 of A0's.** That is the bound the
-cost claim rests on, and it needs no timing.
+**What the modules say, and Phase B agrees (§5.5.1):** M2 barely benefits — the partition saves
+that block nothing at all on st; M3 carries the largest absolute saving (756 / 600 / 852 node
+calls per 25 runs) and is where the partition does real work; the feed-forward set goes to
+zero. Per evaluation, A0 executes 21 nodes over 5.0–5.8 sweeps; A1 executes them over 4 (M1),
+≈ 5.2 (M2), 3 (M3) and 1 (PULSE) block sweeps.
 
-**The blocks decompose the same way Phase B's do, and say the same thing.** M2 barely
-benefits (0.935 / 0.976 / **exactly 1.000** on st — the partition saves that block nothing at
-all), M3 carries the largest absolute saving (756 / 600 / 852 node calls per 25 runs), and the
-feedforward set goes to zero. Per evaluation, A0 executes 21 nodes over 5.0–5.8 sweeps; A1
-executes the same 21 nodes over 4 (M1), ~5.2 (M2), 3 (M3) and 1 (PULSE) block sweeps.
+**Provenance of the grouping (a recording gap, named).** The Phase B tables read block
+membership and the post-solve set from each run's own record. Phase A's records cannot supply
+the second: `post_solve_totals` is null and `PROCESS_ARCH_POST_SOLVE` is absent from the
+recorded environment in every Phase A run, although `phase_a.py` does set it. The grouping
+above therefore comes from the committed artifact `postsolve_nolift_<deck>.json`, and its
+content is confirmed by `node_census.counted`: in A1u and A1, `vacuum`, `costs` and
+`water_use` are at **0** calls while M3's other twelve nodes run 3 each. The gap is in
+`run_one.py` and is on the V4 list.
 
-**One denominator caveat on the post-solve row (trap T11).** Phase A's 0 is *not* the claim
-that the intervention removes these nodes: it is that they execute **zero times inside the
-measured evaluation**. Their once-per-run execution at the end of the solve is never reached,
-because Phase A halts at the exit audit. Phase B, which does reach it, records them at ~12
-node calls per run (264 over 22 seeds) against B0's ~6083 — so amortised over a real
-optimisation the block-arm cost is ≈ 0.02 node calls per evaluation, and 0 is right to two
-decimal places. The approximation is sound; it is stated because the row would otherwise read
-as an elimination.
+**Two denominators to keep straight (trap T11).** The feed-forward rows' 0 is *not* the claim
+that the intervention removes those nodes: they execute zero times *inside the measured
+evaluation*, because Phase A halts at the exit audit before the once-per-run post-solve
+execution. Phase B, which reaches it, records them at ~4 executions per run against B0's
+~2000; amortised, the block-arm cost is ≈ 0.02 per evaluation and 0 is right to two decimals.
+
+#### What the exclusion set is load-bearing for
+
+The restricted headline (§4) excludes **124 / 125 / 125** components of the coupling state
+(122 / 123 / 123 continuous, 2 discrete), in five namespaces: `costs` (109–110),
+`water_use` (8), `vacuum` (5), and one field each written by `costs` into other namespaces —
+`fwbs.life_blkt` and `physics.wtgpd`. §8 item 6 says the headline rests entirely on that set
+being right. This table says by how much.
+
+*Caption: p90 across 25 runs of the per-run maximum scaled residual, restricted set against
+each excluded namespace, from every run's own `audit_residual.json`. In the block arms every
+excluded namespace is nonzero in **25/25 runs** on every deck. A0's excluded set is at
+machine noise or exactly zero.*
+
+| deck | arm | restricted (headline) | `costs` | `water_use` | `vacuum` | `fwbs` | `physics` |
+|---|---|---|---|---|---|---|---|
+| nof | A0 | 2.96e-9 | 7.96e-9 | 2.86e-16 | 1.15e-12 | 0 | 0 |
+| | A1 | **1.67e-8** | 9.86 | 0.099 | **0.068** | 0.135 | 0.053 |
+| lad | A0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| | A1 | **0** | 0.288 | 0.129 | **0.097** | 0.084 | 0.085 |
+| st | A0 | 2.02e-8 | 1.58e-9 | 1.36e-11 | 8.91e-11 | 0 | 0 |
+| | A1 | **2.02e-8** | 0.334 | 0.319 | **0.091** | 0.037 | 0.197 |
+
+**Had `vacuum` been wrongly excluded, the restricted headline would read 0.068 / 0.097 / 0.091
+instead of 1.7e-8 / 0 / 2.0e-8** — six to seven orders — and would exceed A1u's own values
+(1.1e-3 / 2.2e-3 / 1.6e-3), destroying the A1u-fails / A1-passes discrimination on every deck.
+The membership of every one of these five namespaces is therefore load-bearing, not
+cosmetic; `vacuum`'s is now confirmed by an independent read census, and the other four rest on
+A33's derivation and G4's teeth (which doctor a `costs` component, not one from each
+namespace — V4 list, item 6a).
 
 ## 5. Phase B results — the declared checks, per deck, never pooled
 
@@ -642,69 +676,83 @@ named here per trap T11. Both are **counts**, never costs.*
 The prime's contract holds exactly: **one prime call per dispatch sweep**, to four decimal
 places, in every block arm on every deck.
 
-#### 5.5.1 Per-block breakdown, including the feedforward set
+#### 5.5.1 Per-module breakdown, aligned to the collapsed DSM
 
-Added 2026-09-07 at the user's request.
+Rewritten 2026-09-07; module scope and the `vacuum` reconciliation are in §4.5.
 
-*Caption: node calls per block, summed over each deck's identical-**ok** seed set (22 / 20 /
-25). Block membership is read from the deck's **own executed** B3/B2 schedule and the
-post-solve set from the same record; unmapped nodes would be named, never pooled (none
-occurred). **Denominator note (trap T11):** this table sums `node_calls_total` — solve **plus**
-the output pass — because it is built from the per-node census, whereas §5.5's table sums
-`node_calls_solve_phase`. The two differ by the output pass, 63 (R) to 66 (B3) node calls per
-run; the solve-phase total is given in the last row for reconciliation. The output pass runs
-identically in every arm and is excluded from every acceptance comparison symmetrically.*
+*Caption: node calls per DSM module over each deck's identical-**ok** seed set (22 / 20 / 25).
+**The per-module ratio columns are the result** (unit-invariant, §4.5); totals are shown under
+both weightings. Denominator note (trap T11): this table is built from the per-node census and
+so sums `node_calls_total` (solve **plus** the output pass, 63–66 node calls per run); §5.5's
+table sums `node_calls_solve_phase`. The output pass runs identically in every arm.*
 
-| block | R | B0 | B1 | B2 | B3 | **B3/B0** |
-|---|---|---|---|---|---|---|
-| **`large_tokamak_nof`** (22 seeds) | | | | | | |
-| M1 `plasma_geom`, `physics` | 87 042 | 89 212 | 89 896 | 89 072 | 61 210 | 0.686 |
-| M2 `build`, `cicc_sctfcoil`, `pfcoil` | 130 563 | 133 818 | 134 844 | 158 229 | 116 436 | 0.870 |
-| M3 (the bulk) | 522 252 | 535 272 | 539 376 | 574 692 | 407 520 | 0.761 |
-| PULSE | 43 521 | 44 606 | 44 948 | 14 146 | 14 146 | 0.317 |
-| **post-solve (feedforward set)** | 130 563 | 133 818 | 134 844 | **264** | **264** | **0.002** |
-| TOTAL (`node_calls_total`) | 913 941 | 936 726 | 943 908 | 836 403 | 599 576 | 0.640 |
-| *reconciliation:* solve phase (§5.5) | 912 555 | 935 340 | 942 522 | 834 951 | 598 124 | 0.639 |
-| **`low_aspect_ratio_DEMO`** (20 seeds) | | | | | | |
-| M1 | 187 826 | 182 728 | 129 314 | 127 584 | 87 336 | 0.478 |
-| M2 | 281 739 | 274 092 | 193 971 | 226 716 | 166 344 | 0.607 |
-| M3 | 1 126 956 | 1 096 368 | 775 884 | 850 272 | 608 784 | 0.555 |
-| PULSE | 93 913 | 91 364 | 64 657 | 20 430 | 20 430 | 0.224 |
-| **post-solve (feedforward set)** | 281 739 | 274 092 | 193 971 | **240** | **240** | **0.001** |
-| TOTAL (`node_calls_total`) | 1 972 173 | 1 918 644 | 1 357 797 | 1 225 242 | 883 134 | 0.460 |
-| **`st_regression`** (25 seeds) | | | | | | |
-| M1 | 350 386 | 303 424 | — | 321 478 | 215 628 | 0.711 |
-| M2 | 525 579 | 455 136 | — | 500 460 | 338 322 | 0.743 |
-| M3 | 2 102 316 | 1 820 544 | — | 1 955 676 | 1 304 100 | 0.716 |
-| **post-solve (feedforward set)** | 700 772 | 606 848 | — | **400** | **412** | **0.001** |
-| TOTAL (`node_calls_total`) | 3 679 053 | 3 185 952 | — | 2 778 014 | 1 858 462 | 0.583 |
+**`large_tokamak_nof`** (22 seeds)
 
-**The feedforward set is where the intervention is most extreme, and least interesting.** The
-post-solve nodes (`costs`, `water_use`, `vacuum`, and `pulse` on st) collapse by a factor of
-**500 to 1500** — from running every sweep to running about four times per optimisation. That
-is nearly the whole of the headline saving in fractional terms and none of it in difficulty:
-these nodes feed nothing the optimiser reads, so hoisting them is bookkeeping, not
-architecture. **M3 is where the largest absolute saving sits** (127 752 node calls on nof, 487 584
-on lad, 516 444 on st) and where the partition is actually doing work.
+| module | R | B0 | B1 | B2 | B3 | R/B0 | B2/B0 | **B3/B0** |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 87 042 | 89 212 | 89 896 | 89 072 | 61 210 | 0.976 | 0.998 | **0.686** |
+| M2 | 130 563 | 133 818 | 134 844 | 158 229 | 116 436 | 0.976 | **1.182** | **0.870** |
+| M3 live | 522 252 | 535 272 | 539 376 | 574 692 | 407 520 | 0.976 | 1.074 | **0.761** |
+| PULSE | 43 521 | 44 606 | 44 948 | 14 146 | 14 146 | 0.976 | 0.317 | 0.317 |
+| FF | 87 042 | 89 212 | 89 896 | 176 | 176 | 0.976 | 0.002 | 0.002 |
+| `vacuum` | 43 521 | 44 606 | 44 948 | 88 | 88 | 0.976 | 0.002 | 0.002 |
+| *total, node-weighted* | 913 941 | 936 726 | 943 908 | 836 403 | 599 576 | 0.976 | 0.893 | *0.640* |
+| *total, DSM-row-weighted* | | | | | | 0.976 | 0.923 | *0.653* |
 
-**Two structural facts the block rows expose:**
+**`low_aspect_ratio_DEMO`** (20 seeds)
 
-- **B2 costs *more* than B0 in every model block** on nof (M1 89 072 vs 89 212 is flat, but M2
-  158 229 vs 133 818 and M3 574 692 vs 535 272 are up 18 % and 7 %) and only comes out ahead
-  on the total because the post-solve collapse pays for it. The verification loop's second
-  pass is genuinely re-running model work. B3 removes it and every block drops.
-- **PULSE behaves oppositely on the pulsed decks and on st.** On nof and lad it is a real
-  block that the lift and hoist shrink to 0.32 / 0.22 of B0. On st there is no PULSE row at
-  all — `pulse` is in the post-solve set there — **yet the schedule still sweeps an empty PULSE
-  block 570 times per run** (§5.6). Those sweeps execute nothing and so appear nowhere in this
-  table; they are invisible to every cost statistic in this report, which is exactly why they
-  went unnoticed (issue I-20).
+| module | R | B0 | B1 | B2 | B3 | R/B0 | B1/B0 | B2/B0 | **B3/B0** |
+|---|---|---|---|---|---|---|---|---|---|
+| M1 | 187 826 | 182 728 | 129 314 | 127 584 | 87 336 | 1.028 | 0.708 | 0.698 | **0.478** |
+| M2 | 281 739 | 274 092 | 193 971 | 226 716 | 166 344 | 1.028 | 0.708 | 0.827 | **0.607** |
+| M3 live | 1 126 956 | 1 096 368 | 775 884 | 850 272 | 608 784 | 1.028 | 0.708 | 0.776 | **0.555** |
+| PULSE | 93 913 | 91 364 | 64 657 | 20 430 | 20 430 | 1.028 | 0.708 | 0.224 | 0.224 |
+| FF | 187 826 | 182 728 | 129 314 | 160 | 160 | 1.028 | 0.708 | 0.001 | 0.001 |
+| `vacuum` | 93 913 | 91 364 | 64 657 | 80 | 80 | 1.028 | 0.708 | 0.001 | 0.001 |
+| *total, node-weighted* | 1 972 173 | 1 918 644 | 1 357 797 | 1 225 242 | 883 134 | 1.028 | 0.708 | 0.639 | *0.460* |
+| *total, DSM-row-weighted* | | | | | | 1.028 | 0.708 | 0.651 | *0.460* |
 
-**The `FF` block is absent from every row deliberately.** It exists in all three decks'
-schedules and executes nothing in any arm: its only member, `objective_constraints`, carries
-`in_call_models_once: false`, so the block is swept and no model runs. Like st's PULSE, it
-costs block-loop iterations and zero node calls. Both belong to the per-sweep overhead
-discussed in §7, not to the node accounting here.
+**`st_regression`** (25 seeds; no B1, no PULSE execution)
+
+| module | R | B0 | B2 | B3 | R/B0 | B2/B0 | **B3/B0** |
+|---|---|---|---|---|---|---|---|
+| M1 | 350 386 | 303 424 | 321 478 | 215 628 | 1.155 | **1.060** | **0.711** |
+| M2 | 525 579 | 455 136 | 500 460 | 338 322 | 1.155 | **1.100** | **0.743** |
+| M3 live | 2 102 316 | 1 820 544 | 1 955 676 | 1 304 100 | 1.155 | 1.074 | **0.716** |
+| FF | 350 386 | 303 424 | 200 | 206 | 1.155 | 0.001 | 0.001 |
+| `vacuum` | 175 193 | 151 712 | 100 | 103 | 1.155 | 0.001 | 0.001 |
+| `pulse` (post-solve on st) | 175 193 | 151 712 | 100 | 103 | 1.155 | 0.001 | 0.001 |
+| *total, node-weighted* | 3 679 053 | 3 185 952 | 2 778 014 | 1 858 462 | 1.155 | 0.872 | *0.583* |
+| *total, DSM-row-weighted* | | | | | 1.155 | 0.929 | *0.624* |
+
+**Read the per-module columns; the totals are for reconciliation only.** Three things they
+show that no total can:
+
+- **B2 does not reduce model work at all — it increases it.** On nof B2 costs **18 % more in
+  M2** and 7 % more in M3 than B0; on st it is worse in **every** live module (1.060 / 1.100 /
+  1.074). Its total comes out below B0 only because FF and PULSE collapse. The verification
+  loop's second pass is genuinely re-running the blocks. B3 removes it and every live module
+  drops: 0.686 / 0.870 / 0.761 (nof), 0.478 / 0.607 / 0.555 (lad), 0.711 / 0.743 / 0.716 (st).
+- **Flat arms have uniform ratios across modules; partitioned arms do not.** R is 0.976 /
+  1.028 / 1.155 in *every* module; B1 on lad is 0.708 in every module. A flat sweep changes
+  every node's count by one factor. That uniformity is a free consistency check on the block
+  accounting, and it holds to three decimals.
+- **The feed-forward set is where the intervention is most extreme and least interesting.**
+  `costs`, `water_use` and `vacuum` (and `pulse` on st) fall by a factor of 500–1500 — from
+  every sweep to about four executions per optimisation. That is most of the headline saving in
+  fractional terms and none of it in difficulty: nothing live reads them, so hoisting them is
+  bookkeeping. **M3 is where the partition does real work** — 127 752 / 487 584 / 516 444 node
+  calls saved — and M2, the smallest live module, is where it does least.
+
+The unit dependence of the total is smaller here than in Phase A (nof 0.640 → 0.653, lad
+unchanged, st 0.583 → 0.624) because the block sweep counts are more balanced across modules
+inside an optimisation than at a δ = 0.10 warm entry; but on st it is still four points.
+
+**Two of the five DSM blocks execute nothing and appear in no row.** `FF`'s DSM rows are
+swept in every arm but its only member with `in_call_models_once: false` never runs; st's
+`PULSE` block is swept 570 times per run after its member left for post-solve. Both are pure
+per-sweep overhead (§7, I-20) and are invisible to every node-call statistic in this report —
+which is exactly why they went unnoticed.
 
 ### 5.6 Reading the three decks together: they do not optimise the same thing
 
@@ -955,9 +1003,12 @@ noise — but three repetitions of one serial block is not a performance study e
    restricted statistic is the declared one.** A1u and A1 whole-state residuals are
    essentially identical (nof 2.4353 vs 2.4353; lad 0.1816 both; st 0.2575 both) against A0's
    6.3e-10 / 0 / 5.4e-9. The prime does nothing for whole-state, because the movement lives
-   entirely in `costs.*` and `water_use.*` — the post-solve accounting tail, evaluated once
-   per run by design rather than every sweep, and excluded from the restricted set by
-   declaration. This is the designed signature of the post-solve lift and not a defect; G4's
+   entirely in the post-solve tail — **`costs.*`, `water_use.*` and `vacuum.*`, plus
+   `fwbs.life_blkt` and `physics.wtgpd`, which `costs` writes** — evaluated once per run by
+   design rather than every sweep, and excluded from the restricted set by declaration.
+   *(Corrected 2026-09-07: an earlier draft named only `costs.*` and `water_use.*`; the
+   excluded set is five namespaces, every one nonzero in 25/25 block-arm runs on every deck,
+   `vacuum.*` at p90 0.068 / 0.097 / 0.091 — §4.5's stakes table.)* This is the designed signature of the post-solve lift and not a defect; G4's
    teeth show the exclusion behaves in both directions. But it means **the headline Phase A
    result rests entirely on the correctness of A38's exclusion set.** If that set is wrong,
    the headline is wrong. It is gated, not proven.
