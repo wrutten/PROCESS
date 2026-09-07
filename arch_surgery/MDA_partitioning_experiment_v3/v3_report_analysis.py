@@ -980,6 +980,151 @@ def teeth(result: dict, roots: dict) -> int:
     return 0 if verdict == "PASS" else 1
 
 
+def dsm_blocks(pa_records: Path | None, pb_records: Path | None) -> dict:
+    """Node-call counts decomposed by **collapsed-DSM module**, not by the
+    intervention's own block/post-solve grouping (user request, 2026-09-07).
+
+    The two groupings differ and the difference is not cosmetic: the tally's
+    ``per_block_*`` tables assign a node to ``post_solve`` FIRST and to its
+    block second, so ``vacuum`` (DSM module **M3**) and ``costs`` /
+    ``water_use`` (DSM module **FF**) are pooled into one "post_solve" row
+    that spans three different DSM modules.  Aligning to the DSM lets a block
+    row be read against the collapsed DSM's own rows.
+
+    Row counts come from the committed ``dsm_node_map.json`` (decision D8):
+    M1 24, M2 10, M3 12, PULSE 1, FF 5 — 52 executed in a sweep, of 56 total
+    (rows 1/2/3/56 are drivers: COOR_SingleRun, VMCON, MDA_Idempotence,
+    MDA_Output).
+
+    **Why the per-block ratio is the fair comparison, and the total is not.**
+    Within one block both arms execute the same node set, so that block's
+    ratio is a pure *sweep* ratio and is INVARIANT to the unit — counting
+    model calls or DSM rows gives the same number.  The TOTAL is a
+    node-weighted average of those ratios and is therefore unit-DEPENDENT:
+    re-weighting by DSM rows moves it, because M1 is 2 model calls but 24 DSM
+    rows.  Both weightings are computed here so the size of that dependence
+    is published rather than assumed away.
+    """
+    nm_p = cfg.DATA / "dsm_node_map.json"
+    if not nm_p.exists():
+        return {}
+    nm = jload(nm_p)
+    mod = {n: v.get("module") for n, v in (nm.get("nodes") or {}).items()
+           if v.get("kind") == "model_call"}
+    rows = (nm.get("units") or {}).get("dsm_rows") or {}
+    order = ("M1", "M2", "M3", "PULSE", "FF")
+
+    def _agg(census: dict) -> dict:
+        out: dict[str, int] = {}
+        for n, c in census.items():
+            out.setdefault(mod.get(n, f"UNMAPPED:{n}"), 0)
+            out[mod.get(n, f"UNMAPPED:{n}")] += c
+        return out
+
+    def _weighted(per_mod: dict, per_mod_nodes: dict) -> float | None:
+        """Total re-expressed in DSM row-executions: for each module,
+        (node calls / executing nodes) * dsm rows."""
+        tot = 0.0
+        for m, c in per_mod.items():
+            nn = per_mod_nodes.get(m)
+            r = rows.get(m)
+            if not nn or not r:
+                return None
+            tot += (c / nn) * r
+        return tot
+
+    out: dict = {"row_counts": {m: rows.get(m) for m in order},
+                 "note": ("counts grouped by collapsed-DSM module (D8), NOT "
+                          "by the intervention's post-solve grouping; "
+                          "vacuum is M3 and costs/water_use are FF"),
+                 "phase_a": {}, "phase_b": {}}
+
+    # ---- Phase A ----------------------------------------------------------
+    if pa_records and (pa_records / "campaign.json").exists():
+        camp = jload(pa_records / "campaign.json")
+        for deck in camp["decks"]:
+            per_arm, per_arm_nodes = {}, {}
+            for arm in camp["arms"]:
+                agg, nodes = {}, {}
+                for k in camp["seeds"]:
+                    mp = pa_records / deck / arm / f"start{k:03d}" / "metrics.json"
+                    if not mp.exists():
+                        continue
+                    m = jload(mp)
+                    if m.get("status") != "ok":
+                        continue
+                    cen = ((m.get("node_census") or {}).get("counted")
+                           or (m.get("node_census") or {})
+                           .get("per_node_counted_through_Caller_node") or {})
+                    for n, c in cen.items():
+                        mm = mod.get(n, f"UNMAPPED:{n}")
+                        agg[mm] = agg.get(mm, 0) + c
+                        nodes.setdefault(mm, set()).add(n)
+                if agg:
+                    per_arm[arm] = agg
+                    per_arm_nodes[arm] = {m_: len(v) for m_, v in nodes.items()}
+            if per_arm:
+                out["phase_a"][deck] = _finish(per_arm, per_arm_nodes, order,
+                                               rows, "A0", _weighted)
+
+    # ---- Phase B ----------------------------------------------------------
+    if pb_records and pb_records.exists():
+        for deck in cfg.DECKS:
+            arms = [a for a in cfg.PHASE_B_ARMS
+                    if (pb_records / deck / a).exists()]
+            if not arms:
+                continue
+            ok = [k for k in range(cfg.N_STARTS)
+                  if all((pb_records / deck / a / f"start{k:03d}"
+                          / "metrics.json").exists()
+                         and jload(pb_records / deck / a / f"start{k:03d}"
+                                   / "metrics.json").get("status") == "ok"
+                         for a in arms)]
+            per_arm, per_arm_nodes = {}, {}
+            for arm in arms:
+                agg, nodes = {}, {}
+                for k in ok:
+                    m = jload(pb_records / deck / arm / f"start{k:03d}"
+                              / "metrics.json")
+                    cen = ((m.get("node_census") or {})
+                           .get("per_node_counted_through_Caller_node") or {})
+                    for n, c in cen.items():
+                        mm = mod.get(n, f"UNMAPPED:{n}")
+                        agg[mm] = agg.get(mm, 0) + c
+                        nodes.setdefault(mm, set()).add(n)
+                per_arm[arm] = agg
+                per_arm_nodes[arm] = {m_: len(v) for m_, v in nodes.items()}
+            d = _finish(per_arm, per_arm_nodes, order, rows, "B0", _weighted)
+            d["n_seeds"] = len(ok)
+            d["seeds"] = ok
+            out["phase_b"][deck] = d
+    return out
+
+
+def _finish(per_arm, per_arm_nodes, order, rows, base, weighted):
+    """Ratios against *base*, per module, plus both total weightings."""
+    d: dict = {"per_arm": per_arm, "executing_nodes": per_arm_nodes,
+               "ratios_vs_" + base: {}, "totals": {}}
+    b = per_arm.get(base) or {}
+    for arm, agg in per_arm.items():
+        d["ratios_vs_" + base][arm] = {
+            m: ((agg.get(m, 0) / b[m]) if b.get(m) else None)
+            for m in order if m in b or m in agg}
+        node_tot = sum(agg.values())
+        row_tot = weighted(agg, per_arm_nodes.get(arm) or {})
+        d["totals"][arm] = {
+            "node_calls": node_tot,
+            "row_executions": row_tot,
+            "node_weighted_ratio": (node_tot / sum(b.values())
+                                    if b else None),
+            "row_weighted_ratio": (
+                (row_tot / weighted(b, per_arm_nodes.get(base) or {}))
+                if b and row_tot is not None
+                and weighted(b, per_arm_nodes.get(base) or {}) else None),
+        }
+    return d
+
+
 def transfer(pa: dict, pb: dict, roots: dict) -> dict:
     """I-17: Phase A's per-call ratio against Phase B's realised end-to-end
     ratio (EXPERIMENT_PLAN §5, amended pre-campaign).
@@ -1072,6 +1217,8 @@ def main() -> int:
               "phase_a": pa_res,
               "phase_b": pb_res,
               "i17_transfer": transfer(pa_res, pb_res, roots),
+              "dsm_blocks": dsm_blocks(roots["pa_records"],
+                                       roots["pb_records"]),
               "declared": {"F": F, "iter_ratio_max": cfg.ITER_RATIO_MAX,
                            "tau": cfg.TAU, "delta": cfg.DELTA,
                            "n_starts": cfg.N_STARTS,
