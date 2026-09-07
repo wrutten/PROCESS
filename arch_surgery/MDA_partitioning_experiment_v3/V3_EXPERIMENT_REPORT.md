@@ -242,6 +242,42 @@ reported separately per deck as `burn_time_residual` at exit; inactive on `st_re
 
 Added 2026-09-07 at the user's request, as the per-call counterpart to §5.5.1.
 
+#### Block scope — which model nodes each block contains
+
+Read from each run's own `arch_block_schedule` and `post_solve_totals.nodes`, so this is the
+**executed** partition, not a design intent.
+
+*Caption: the static block map holds 26 nodes; **21 execute on any one deck.** The gap is
+mutual exclusivity, not omission: the TF-coil family (`aluminium_tf_coil`, `copper_tf_coil`,
+`croco_sctfcoil`, `resistive_tf_coil`, `sctfcoil`, `tfcoil`, `cicc_sctfcoil`) contributes
+exactly one member per deck by conductor choice, and `dcll` is an alternative blanket model to
+`ccfe_hcpb`. Membership is identical across all three decks except where marked.*
+
+| block | iterated | mapped | executing | nodes (executing) |
+|---|---|---|---|---|
+| **M1** | yes | 2 | 2 | `plasma_geom`, `physics` |
+| **M2** | yes | 9 | 3 | `build`, `pfcoil`, **+ one TF model**: `cicc_sctfcoil` (nof, lad) / `croco_sctfcoil` (st) |
+| **M3** | yes | 14 | 12 | `divertor`, `fw`, `shield`, `vacuum_vessel`, `ccfe_hcpb`, `cryostat`, `structure`, `power`, `power.acpow`, `power.plant_electric_production`, `availability`, `buildings` |
+| **PULSE** | **no** | 1 | 1 on nof, lad · **0 on st** | `pulse` — on st it is in the post-solve set instead, yet the block is still swept (§5.6, I-20) |
+| **FF** | **no** | 0 | **0 on every deck** | its only member, `objective_constraints`, carries `in_call_models_once: false` — the block is swept and no model runs |
+| **post-solve** (feedforward) | n/a | — | 3 on nof, lad · **4 on st** | `costs`, `water_use`, `vacuum` — **plus `pulse` on st** |
+
+Three things to read off it:
+
+- **`vacuum` is mapped to M3 but counted under post-solve**, on every deck. The aggregation
+  rule is `post_solve` first, block map second, so a node in both appears once, in post-solve.
+  That is why M3 shows 12 executing nodes rather than 13.
+- **M2 is the smallest iterated block (3 nodes) and the one the partition helps least**
+  (§4.5's ratio column: 0.935 / 0.976 / 1.000). **M3 is the largest (12 nodes)** and carries
+  the largest absolute saving. The partition's benefit tracks block size, which is what a
+  block-Jacobi scheme should do.
+- **Two of the five blocks execute nothing.** `FF` on every deck, and `PULSE` on st. Both are
+  still visited by the block loop — 789 and 570 sweeps per run respectively — and neither
+  appears in any node-call table, because they contribute zero node calls. They are pure
+  per-sweep overhead (§7, I-20).
+
+The same scope applies to §5.5.1's Phase B table.
+
 *Caption: node calls per block, summed over the 25 ok runs of each deck (so divide by 25 for
 the per-evaluation figure). Block membership from a block arm's executed schedule; post-solve
 set from the deck's committed artifact. **A1u and A1 are identical in every block on every
