@@ -1,4 +1,4 @@
-# V3 experiment report — the prime: closing the FirstWall→Build carrier, and what the partitioned architecture costs and buys on three decks
+# V3 experiment report — the prime: closing the FirstWall→Build carrier, and what the partitioned architecture costs and buys on three configs
 
 > **Document status** — **CURRENT · EXPERIMENT REPORT.** Written 2026-09-07 by the
 > orchestrating session after the approved full execution of
@@ -12,10 +12,10 @@
 | | |
 |---|---|
 | **Task** | Execute the V3 experiment end-to-end: Phase A (per-call MDA cost and audit similarity; A0 flat / A1u unprimed / A1 primed, warm entries, N = 25, δ = 0.10) and Phase B (optimisation: R / B0 / B1 / B2 / B3, seed-paired N = 25), from the one-button `run_experiment.py` entry point |
-| **Headline** | **The prime works.** Phase A's headline check (similarity within F = 10 at median and p90, restricted audit) **FAILS for A1u as pre-declared and PASSES for A1 on all three decks**: A1/A0 restricted medians 0.76 / exact-zeros / 1.00 against A1u/A0's 1.3e6 / ∞ / 2.2e5. On `low_aspect_ratio_DEMO` the result beats the plan's own expectation — A38's open term `tfcoil.m_tf_coil_superconductor` **closed** rather than needing naming. Cost of the prime in node calls: **A1u→A1 ratio exactly 1.0000, bracket [1.0, 1.0]**. **Phase B end-to-end** node calls B3/B0 over the identical-converged set: **0.639 / 0.450 / 0.533** (tok / lad / st). **Iteration bound (≤ 1.05 on the median) PASSES on every deck and every accepted pair.** **Same optimum (check 1): PASS on tok; FAIL on lad; FAIL on st all-pairs but passes within-cluster.** Check 1 measures **optimality, not location** — separately diagnosed (§5.2.2), tok and st agree on the optimum's *value* to 11 and 13 digits while landing at design points differing by up to 44 % and 100 %; the flat baseline does the same to itself under a stopping-rule change alone. A **pre-declared prediction was refuted**: lad's B2→B3 iteration multiplier, predicted to stay at ≈ 1.40, measured **1.00** |
+| **Headline** | **The prime works.** Phase A's headline check (similarity within F = 10 at median and p90, restricted audit) **FAILS for A1u as pre-declared and PASSES for A1 on all three configs**: A1/A0 restricted medians 0.76 / exact-zeros / 1.00 against A1u/A0's 1.3e6 / ∞ / 2.2e5. On `low_aspect_ratio_DEMO` the result beats the plan's own expectation — A38's open term `tfcoil.m_tf_coil_superconductor` **closed** rather than needing naming. Cost of the prime in node calls: **A1u→A1 ratio exactly 1.0000, bracket [1.0, 1.0]**. **Phase B end-to-end** node calls B3/B0 over the identical-converged set: **0.639 / 0.450 / 0.533** (tok / lad / st). **Iteration bound (≤ 1.05 on the median) PASSES on every config and every accepted pair.** **Same optimum (check 1): PASS on tok; FAIL on lad; FAIL on st all-pairs but passes within-cluster.** Check 1 measures **optimality, not location** — separately diagnosed (§5.2.2), tok and st agree on the optimum's *value* to 11 and 13 digits while landing at design points differing by up to 44 % and 100 %; the flat baseline does the same to itself under a stopping-rule change alone. A **pre-declared prediction was refuted**: lad's B2→B3 iteration multiplier, predicted to stay at ≈ 1.40, measured **1.00** |
 | **Two defects found in the checking machinery, before any number was published** | **I-18** — the independent recomputation still implemented the *superseded* check-1 construction; `--verify` failed 26 of 144 cells and `--teeth` reported `baseline rc=1`. **I-19** — the plan's pre-declared within-cluster construction was implemented in *neither* script. Both fixed and committed before the numbers below; verdicts unchanged by I-18 |
 | **Scripts** | `run_experiment.py` (F5 entry), `phase_a.py`, `phase_b.py`, `v3_runner.py`, `v3_config.py` — campaign + tally at `362c0b47`; `v3_report_analysis.py` — the independent recomputation and `--verify` / `--teeth`, at `3a0bb8b1` |
-| **Runs** | Phase A: 249 metrics records (225 campaign = 3 decks × 3 arms × 25 seeds, **225/225 ok**, plus references and gates). Phase B: 350 optimisation runs (5 arms × 25 × 2 pulsed decks + 4 arms × 25 on st) + G0 / G5 / G7 gates + smoke. Serial context-timing block: 3 reps × 14 deck/arm cells |
+| **Runs** | Phase A: 249 metrics records (225 campaign = 3 configs × 3 arms × 25 seeds, **225/225 ok**, plus references and gates). Phase B: 350 optimisation runs (5 arms × 25 × 2 pulsed configs + 4 arms × 25 on st) + G0 / G5 / G7 gates + smoke. Serial context-timing block: 3 reps × 14 config/arm cells |
 | **Environment** | `PROCESS_surgery_env`; fresh subprocess and own working directory per run; `process.__file__` asserted in-process; W = 3 workers; every record stamps tree, commit and dirty flag |
 | **Date** | 2026-09-07 (campaign 2026-09-04) |
 
@@ -28,20 +28,23 @@ Every one of the 599 metrics records carries `tree_git_head = 362c0b47…`, `dir
 `python = …/PROCESS_surgery_env/bin/python` and
 `process_file = /home/wrutten/projects/PROCESS_surgery/process/__init__.py`.
 
-**Deck abbreviations**, used in the tables throughout: **`tok`** = `large_tokamak_nof`,
+**Config abbreviations**, used in the tables throughout: **`tok`** = `large_tokamak_nof`,
 **`lad`** = `low_aspect_ratio_DEMO`, **`st`** = `st_regression`. They are display labels; the
-deck identifiers in the records and scripts are unchanged.
+config identifiers in the records and scripts are unchanged. **"Config" is this report's term
+for what the records, scripts and JSON keys call a `deck`** (`deck_invalid_seeds`,
+`postsolve_<deck>.json`, `cfg.DECKS`); the rename is display-only, made 2026-09-07 at the
+user's request.
 
 **The A38-reuse clause (§3.3) — which path was taken.** The plan permitted reusing A38's
 already-measured A1u records if gate G1 held at the V3 driver commit. **It was not used.**
-A1u was re-run in full at `362c0b47`, 25 seeds × 3 decks, alongside A0 and A1. This is the
+A1u was re-run in full at `362c0b47`, 25 seeds × 3 configs, alongside A0 and A1. This is the
 stronger of the two paths: all three arms are seed-paired at one commit, and the pairing
 check confirms it — **25/25 seeds bit-identical entry state across all three arms on every
-deck**.
+config**.
 
 **One launch failure, fixed before the campaign, not during it.** The first launch attempt
 died on the A0 reference in 0.2 s and the harness reported it as *"the A0 reference did not
-converge at the deck point — that failure is a result"*. It was nothing of the kind: the
+converge at the config point — that failure is a result"*. It was nothing of the kind: the
 entry point had been started under the system `python3.10`, and `import process` raised
 `PackageNotFoundError`. Two defects, both fixed at `362c0b47` **before any campaign run**:
 the entry point now subprocess-probes `sys.executable` and refuses up front naming the exact
@@ -60,7 +63,7 @@ floor, rather than the plan's per-pair relative statistic against a plain 1e-6 r
 floor). My adjudication `10a2ff36` fixed `phase_b.py`. It did **not** fix
 `v3_report_analysis.py`, which by design restates every definition independently so that a
 tally bug cannot vouch for itself. So the two implementations disagreed, and `--verify`
-failed **26 of 144 cells** — every one a check-1 median or p90, on all three decks — with
+failed **26 of 144 cells** — every one a check-1 median or p90, on all three configs — with
 `--teeth` reporting `baseline rc=1`, meaning no tooth demonstrated anything.
 
 This was a defect in the *checker*, not in the campaign. Corrected at `7108cf33` by restating
@@ -71,12 +74,12 @@ implementations of one definition.
 **The correction moves statistic values but not one verdict.** `verify()` compares the
 `accepted` flag throughout and reported **zero acceptance mismatches even while failing**:
 
-*Caption: check-1 acceptance under both constructions, per deck and arm pair. The superseded
+*Caption: check-1 acceptance under both constructions, per config and arm pair. The superseded
 construction is the absolute Δ against a median-scaled floor; the declared one is the
 per-pair relative statistic against the plain 1e-6 floor. Verdicts are identical; only the
 published numbers move.*
 
-| deck | pair | superseded | declared |
+| config | pair | superseded | declared |
 |---|---|---|---|
 | `large_tokamak_nof` | B0→B1 / B0→B2 / B0→B3 | True / True / True | True / True / True |
 | `low_aspect_ratio_DEMO` | B0→B1 / B0→B2 / B0→B3 | False / False / False | False / False / False |
@@ -87,7 +90,7 @@ check 1a ends: *"Within-cluster agreement (check 1's statistics over same-cluste
 published beside the all-pairs construction."* Neither `phase_b.py` nor
 `v3_report_analysis.py` implemented it. It is a declared *reporting* rule with no acceptance
 threshold, so it was added at `fc96e75e`, published beside, and never accepted against.
-It changes how two of three decks read (§5.2).
+It changes how two of three configs read (§5.2).
 
 **After both fixes:** `--verify` 144 cells, **0 mismatches**, `baseline rc=0`, **5/5 teeth
 trip**.
@@ -100,14 +103,14 @@ at task A40's commits (see the caveat below). No campaign number is cited before
 
 | gate | binds | verdict | teeth |
 |---|---|---|---|
-| **G0** V3 driver neutrality | every arm | **PASS** ×3 decks — R at `362c0b47` reproduces V2's recorded R start000 **bit-exactly** on `node_calls_solve_phase`, `n_model_calls` and `norm_objf` hex | +1 on each count, 1 ULP on each hex — all tripped |
+| **G0** V3 driver neutrality | every arm | **PASS** ×3 configs — R at `362c0b47` reproduces V2's recorded R start000 **bit-exactly** on `node_calls_solve_phase`, `n_model_calls` and `norm_objf` hex | +1 on each count, 1 ULP on each hex — all tripped |
 | **G1** prime off, byte identity | R, B0, B1 | **PASS** (A40) | 1-ULP change caught |
 | **G2** prime on, fixed-point map | the Phase B inertness disclosure | **PASS** (A40) | doctored snapshot component trips |
 | **G3** prime on, cold chain | "no cut edge carries anything" | **PASS** (A40) | prime-off run reproduces A35's 3 passes and 244/124 |
 | **G3c** lad carrier census | A38's open term | **PASS** (A40) — prime on ⇒ lad trust exit exactly `0x0.0p+0`, empty mover set | as G3 |
-| **G4** audit restriction | the corrected similarity statistic | **PASS** ×3 decks (`restricted_teeth`) — a doctored post-solve component (`costs.blkcst`) trips whole-state and **not** restricted; a doctored in-loop component (`blanket.deg_blkt_inboard_poloidal_plasma`) trips both | both directions shown |
-| **G5** B3 combined-switch equivalence | B3 | **PASS** ×3 decks — 7/7 checks incl. `norm_objf_hex`, `ifail`, `n_solver_iterations`, `outer_pass_hist`, `exit_audit_hex`; suppressed node calls 2910 / 4717 / 3100 | `norm_objf_hex` and `n_call_models` teeth both tripped |
-| **G6** Phase A entry-state and warm equivalence | Phase A | **PASS** ×3 decks (`entry_gate`, `warm_gate_A1u`, `warm_gate_A1`) | as V2 |
+| **G4** audit restriction | the corrected similarity statistic | **PASS** ×3 configs (`restricted_teeth`) — a doctored post-solve component (`costs.blkcst`) trips whole-state and **not** restricted; a doctored in-loop component (`blanket.deg_blkt_inboard_poloidal_plasma`) trips both | both directions shown |
+| **G5** B3 combined-switch equivalence | B3 | **PASS** ×3 configs — 7/7 checks incl. `norm_objf_hex`, `ifail`, `n_solver_iterations`, `outer_pass_hist`, `exit_audit_hex`; suppressed node calls 2910 / 4717 / 3100 | `norm_objf_hex` and `n_call_models` teeth both tripped |
+| **G6** Phase A entry-state and warm equivalence | Phase A | **PASS** ×3 configs (`entry_gate`, `warm_gate_A1u`, `warm_gate_A1`) | as V2 |
 | **G7** record completeness | the declared pairing and failure forensics | **PASS** — a forced-unconverged run (`ifail=2`, ladder `epsfcn_x0.1`) carries all five fields | 5/5 field teeth refused, each naming its field |
 
 **Caveat, stated plainly: G1/G2/G3/G3c bind a `process/` tree that is not the one the
@@ -126,14 +129,14 @@ bit-exactly. I judge the gap closed, and record it here so a reader can disagree
 **Check 1 (the headline Phase A check): similarity within F = 10 at both median and p90, on
 the restricted audit.**
 
-*Caption: restricted-audit max-scaled-residual distributions, per deck, one column per arm,
-over 25 seeds each (`n_paired_ok = 25/25`, all decks). The acceptance ratio is the arm's
+*Caption: restricted-audit max-scaled-residual distributions, per config, one column per arm,
+over 25 seeds each (`n_paired_ok = 25/25`, all configs). The acceptance ratio is the arm's
 statistic over A0's; the rule is within F = 10 at median **and** p90. "Restricted" excludes
-components owned by the deck's post-solve node set, membership derived nodes → write census →
+components owned by the config's post-solve node set, membership derived nodes → write census →
 spec keys (A38's construction, gated by G4). The whole-state statistic is published beside in
 §8.*
 
-| deck | A0 (control) | A1u (no prime) | A1 (prime) | A1u/A0 med, p90 | A1/A0 med, p90 | verdict |
+| config | A0 (control) | A1u (no prime) | A1 (prime) | A1u/A0 med, p90 | A1/A0 med, p90 | verdict |
 |---|---|---|---|---|---|---|
 | `large_tokamak_nof` | 5.04e-10 / 2.96e-9 | 6.36e-4 / 1.14e-3 | 3.83e-10 / 1.67e-8 | 1.3e6, 3.9e5 → **FAIL** | 0.76, 5.64 → **PASS** |  |
 | `low_aspect_ratio_DEMO` | 0 / 0 | 9.81e-4 / 2.19e-3 | **0 / 0** | ∞ → **FAIL** | both exactly 0 → **PASS** | trivially-similar clause |
@@ -142,7 +145,7 @@ spec keys (A38's construction, gated by G4). The whole-state statistic is publis
 Both pre-declared expectations are met, and one is beaten:
 
 - **A1u fails on the carrier alone**, exactly as §3.3 predicted from A38's measurement.
-- **A1 passes on all three decks.** On st, A1's distribution is *bit-identical* to A0's.
+- **A1 passes on all three configs.** On st, A1's distribution is *bit-identical* to A0's.
 - On lad the plan expected "the naming case" — the pair's images vanish and whatever
   `tfcoil.m_tf_coil_superconductor` carries beyond them survives and is named. **It did not
   survive.** lad reads exact zeros under the prime, so A38's open term **closed**. This is
@@ -152,11 +155,11 @@ Both pre-declared expectations are met, and one is beaten:
 **Cost of the prime (check 3).** The pre-declared expectation was "A1u/A1 counts equal to
 within one M2 inner sweep". Measured: **equal exactly.**
 
-*Caption: Phase A per-call cost, per deck. Node calls are summed over the 25 paired-ok seeds.
+*Caption: Phase A per-call cost, per config. Node calls are summed over the 25 paired-ok seeds.
 The unweighted count ratio and its weighting-invariance bracket are the declared cost
 statistics (the I-10 insurance: counts, never timings).*
 
-| deck | A0 node calls | A1u | A1 | A0→A1u ratio | A0→A1 ratio | A1u→A1 ratio | bracket (A0→A1) |
+| config | A0 node calls | A1u | A1 | A0→A1u ratio | A0→A1 ratio | A1u→A1 ratio | bracket (A0→A1) |
 |---|---|---|---|---|---|---|---|
 | `large_tokamak_nof` | 2898 | 1512 | 1512 | 0.5217 | 0.5217 | **1.0000** | [0, 0.935] |
 | `low_aspect_ratio_DEMO` | 2625 | 1491 | 1491 | 0.5680 | 0.5680 | **1.0000** | [0, 0.976] |
@@ -172,7 +175,7 @@ therefore be named. In Phase A, A1 executes **13 (tok) / 15 (st) prime calls** a
 `set_fw_geometry()` against one average model node — which is a timing, and no conclusion
 here rests on one.
 
-**Failure taxonomy.** 25/25 `ok` in every arm on every deck, denominators of 25.
+**Failure taxonomy.** 25/25 `ok` in every arm on every config, denominators of 25.
 `exit_forensics_complete: True` throughout.
 
 **Carrier closure (check 2).** A1u's recorded entry displacement of the `dr_fw` pair predicts
@@ -184,18 +187,18 @@ the measured restricted-audit maximum to a relative difference of median 1.8e-12
 Added 2026-09-07 at the user's request. §4's tables give medians and p90s; this is the full
 picture, including the denominators and the failure count.
 
-**Failure rate: zero.** 225 campaign runs (3 decks × 3 arms × 25 seeds), **225/225 `ok`**,
-denominators of 25 per arm per deck, `exit_forensics_complete: True` throughout. No run
+**Failure rate: zero.** 225 campaign runs (3 configs × 3 arms × 25 seeds), **225/225 `ok`**,
+denominators of 25 per arm per config, `exit_forensics_complete: True` throughout. No run
 crashed, refused, timed out or was dropped, so every Phase A statistic below is over the full
 declared sample with no seed selection of any kind. Phase A is the clean half of this campaign;
 every failure discussed in this report is Phase B's.
 
-*Caption: full restricted-audit distributions per deck and arm, over 25 ok runs each —
+*Caption: full restricted-audit distributions per config and arm, over 25 ok runs each —
 minimum, median and maximum of the max-scaled residual, then the count of components exceeding
 τ = 1e-6 (summed over the 25 runs, and the worst single run). Sweeps and node calls per single
 evaluation are given as ranges. Dimensionless; a26 ruler.*
 
-| deck | arm | min | median | max | Σ components > τ | worst run | sweeps | node calls |
+| config | arm | min | median | max | Σ components > τ | worst run | sweeps | node calls |
 |---|---|---|---|---|---|---|---|---|
 | `large_tokamak_nof` | A0 | 0 | 5.04e-10 | 4.35e-9 | **0** | 0 | 5–6 | 105–126 |
 | | A1u | 3.10e-4 | 6.36e-4 | 1.27e-3 | **3906** | 167 | 13–14 | 60–63 |
@@ -209,37 +212,37 @@ evaluation are given as ranges. Dimensionless; a26 ruler.*
 
 Three things the medians in §4 do not show:
 
-**1. The distributions do not overlap at all.** On every deck, **A1u's minimum exceeds A0's
+**1. The distributions do not overlap at all.** On every config, **A1u's minimum exceeds A0's
 maximum** — by five orders on tok (3.10e-4 against 4.35e-9), four on st (4.55e-4 against
-2.88e-8), and unboundedly on lad (3.92e-4 against exactly 0). There is no seed, on any deck,
+2.88e-8), and unboundedly on lad (3.92e-4 against exactly 0). There is no seed, on any config,
 where the unprimed block arm resembles the flat control. The F = 10 verdict is not a close
 call decided by a summary statistic; the two populations are entirely disjoint.
 
-**2. A1 reproduces A0 exactly on two decks, not merely closely.** On lad both arms read
+**2. A1 reproduces A0 exactly on two configs, not merely closely.** On lad both arms read
 **0 at min, median and max** across all 25 runs. On st the two distributions are
 **bit-identical at all three order statistics** (1.63e-9 / 5.37e-9 / 2.88e-8). Only tok shows
 any difference, and there A1's median is *below* A0's (3.83e-10 against 5.04e-10) with a
 slightly longer tail (1.87e-8 against 4.35e-9).
 
 **3. The count statistic is cleaner than the magnitude.** `Σ components > τ` is an integer and
-needs no ruler: **A0 and A1 leave zero components unconverged in every run of every deck**,
+needs no ruler: **A0 and A1 leave zero components unconverged in every run of every config**,
 while A1u leaves up to 167 in a single run. That is the result stated without reference to any
 scale — the prime does not merely shrink the residual, it removes every above-tolerance
 component.
 
-**Audit population.** Each deck's coupling-state spec holds 840 (tok) / 846 (lad) / 827 (st)
-components. Of these, **22 on every deck are discrete** and are tested by exact equality rather
+**Audit population.** Each config's coupling-state spec holds 840 (tok) / 846 (lad) / 827 (st)
+components. Of these, **22 on every config are discrete** and are tested by exact equality rather
 than the scaled residual (`n_discrete_mismatch = 0` throughout); the remaining 818 / 824 / 805
 carry the scaled test, and the restricted construction keeps **696 / 701 / 682** of them,
-excluding **122 / 123 / 123** as owned by the deck's post-solve node set. The exclusion is
+excluding **122 / 123 / 123** as owned by the config's post-solve node set. The exclusion is
 gated in both directions by G4.
 
 **Cold-start term** (reported beside, never pooled into the per-call statistics): 126 node
 calls over 6 sweeps (tok), 105 over 5 (lad), 147 over 7 (st) — the once-per-run cost of the
-full flat MDA convergence at that deck's cold entry, A0 arm.
+full flat MDA convergence at that config's cold entry, A0 arm.
 
 **Lift residual** (excluded from the similarity statistic by declaration, §4.4 of the plan):
-reported separately per deck as `burn_time_residual` at exit; inactive on `st_regression`
+reported separately per config as `burn_time_residual` at exit; inactive on `st_regression`
 (k = 0 — nothing lifted or pinned).
 
 ### 4.5 Per-module breakdown (Phase A), aligned to the collapsed DSM
@@ -253,9 +256,9 @@ found to hide both the denominator and the run-to-run spread.
 #### Module scope
 
 *Caption: the D8 modules, their DSM row counts, and which model nodes execute in each on the
-three decks. The static map holds 26 model nodes; **21 execute on any one deck** — the TF-coil
+three configs. The static map holds 26 model nodes; **21 execute on any one config** — the TF-coil
 family (`aluminium_tf_coil`, `copper_tf_coil`, `croco_sctfcoil`, `resistive_tf_coil`,
-`sctfcoil`, `tfcoil`, `cicc_sctfcoil`) contributes exactly one member per deck by conductor
+`sctfcoil`, `tfcoil`, `cicc_sctfcoil`) contributes exactly one member per config by conductor
 choice, and `dcll` is an alternative blanket model to `ccfe_hcpb`. `vacuum` is listed with the
 feed-forward set — see the reconciliation below the table.*
 
@@ -276,19 +279,19 @@ classification, places `vacuum` in the feed-forward set. There is no contradicti
 sit in an iterated block's rows and still have no live consumer. Whether it does was settled
 independently on 2026-09-07 by a read-only investigation with its own runtime read census
 (`PROCESS_IDF_PROBE=modules`, closed at the `_call_models_once` boundary, 2029 / 4286 / 1891
-sweeps by deck): **the only node that reads any of `vacuum`'s five written fields is
+sweeps by config): **the only node that reads any of `vacuum`'s five written fields is
 `costs`, itself post-solve; `objective_constraints` reads none; `availability`'s reads are on
-`i_plant_availability` = 2/3 branches and all three decks set 0.** The census's numbers are
+`i_plant_availability` = 2/3 branches and all three configs set 0.** The census's numbers are
 ad hoc and are not cited here (protocol §15); the committed evidence is A33's per-field
 `external_source_read_sites` in `postsolve_<deck>.json`, which the census reproduced exactly.
-**`vacuum` is feed-forward on all three decks, and its status is joint with `costs`** — on a
-cost-objective deck (`i_figure_merit` 6 or 7) `costs` stays live and `vacuum` would follow.
+**`vacuum` is feed-forward on all three configs, and its status is joint with `costs`** — on a
+cost-objective config (`i_figure_merit` 6 or 7) `costs` stays live and `vacuum` would follow.
 That case is not among the three scenarios.
 
 #### Per-module ratios — the headline
 
 *Caption: **module sweeps per run** — the number of times each DSM module was executed in one
-evaluation, as the mean over each deck's 25 ok runs with its **seed bracket** [min, max]; a bare
+evaluation, as the mean over each config's 25 ok runs with its **seed bracket** [min, max]; a bare
 integer means all 25 runs agreed exactly. A1u is identical to A1 in every cell, seed by seed
 (the prime changes what `Build` reads, not how often anything runs). `models` is the module's
 DSM row count — the models the collapsed DSM resolves inside it — so **total calls =
@@ -363,8 +366,8 @@ have (0.643 / 0.699 / 0.627). The earlier point estimate was the `v = 0` case, p
 alongside a `vacuum` row reading 0.000 — the bracket removes that inconsistency rather than
 restating it. **No per-module ratio is affected.** A second limit is stated and not resolved:
 the map asserts 52 rows execute in a sweep while only 21 of 26 model nodes execute on any one
-deck (TF family switch-selected, `dcll` unused), so the 52-row weight includes rows owned by
-nodes that do not run on that deck; bounding that needs the per-node attribution T9 blocks.
+config (TF family switch-selected, `dcll` unused), so the 52-row weight includes rows owned by
+nodes that do not run on that config; bounding that needs the per-node attribution T9 blocks.
 **What the modules say, and Phase B agrees (§5.5.1):** M2 barely benefits — the partition saves
 that module nothing at all on st, where it runs the same 5.84 sweeps in both arms; M3 carries
 the largest absolute saving — **2.52 / 2.00 / 2.84 fewer sweeps per evaluation**, across the
@@ -397,10 +400,10 @@ being right. This table says by how much.
 
 *Caption: p90 across 25 runs of the per-run maximum scaled residual, restricted set against
 each excluded namespace, from every run's own `audit_residual.json`. In the block arms every
-excluded namespace is nonzero in **25/25 runs** on every deck. A0's excluded set is at
+excluded namespace is nonzero in **25/25 runs** on every config. A0's excluded set is at
 machine noise or exactly zero.*
 
-| deck | arm | restricted (headline) | `costs` | `water_use` | `vacuum` | `fwbs` | `physics` |
+| config | arm | restricted (headline) | `costs` | `water_use` | `vacuum` | `fwbs` | `physics` |
 |---|---|---|---|---|---|---|---|
 | tok | A0 | 2.96e-9 | 7.96e-9 | 2.86e-16 | 1.15e-12 | 0 | 0 |
 | | A1 | **1.67e-8** | 9.86 | 0.099 | **0.068** | 0.135 | 0.053 |
@@ -411,21 +414,21 @@ machine noise or exactly zero.*
 
 **Had `vacuum` been wrongly excluded, the restricted headline would read 0.068 / 0.097 / 0.091
 instead of 1.7e-8 / 0 / 2.0e-8** — six to seven orders — and would exceed A1u's own values
-(1.1e-3 / 2.2e-3 / 1.6e-3), destroying the A1u-fails / A1-passes discrimination on every deck.
+(1.1e-3 / 2.2e-3 / 1.6e-3), destroying the A1u-fails / A1-passes discrimination on every config.
 The membership of every one of these five namespaces is therefore load-bearing, not
 cosmetic; `vacuum`'s is now confirmed by an independent read census, and the other four rest on
 A33's derivation and G4's teeth (which doctor a `costs` component, not one from each
 namespace — V4 list, item 6a).
 
-## 5. Phase B results — the declared checks, per deck, never pooled
+## 5. Phase B results — the declared checks, per config, never pooled
 
 ### 5.1 Robustness and taxonomy (denominators of 25)
 
 *Caption: per-arm outcome census, one row per arm. `deck_invalid_seeds` are seeds that fail
-in **every** arm — a property of the deck point, excluded from the per-arm failure rate by
-declaration so that a deck's own bad starts are not charged to an architecture.*
+in **every** arm — a property of the config point, excluded from the per-arm failure rate by
+declaration so that a config's own bad starts are not charged to an architecture.*
 
-| deck | invalid seeds | arm | ok | converged (`ifail=1`) | not-converged among ok |
+| config | invalid seeds | arm | ok | converged (`ifail=1`) | not-converged among ok |
 |---|---|---|---|---|---|
 | `large_tokamak_nof` | 3 (5, 20, 21) | R / B0 / B1 / B2 / B3 | 22 each | 22 each | **0 in every arm** |
 | `low_aspect_ratio_DEMO` | 13 | R | 23 | 12 | 0 |
@@ -436,7 +439,7 @@ declaration so that a deck's own bad starts are not charged to an architecture.*
 | | | B2 | 25 | 24 | 0 |
 | | | B3 | 25 | 23 | 1 |
 
-`low_aspect_ratio_DEMO` remains the hostile deck: **13 of 25 starts are invalid in every
+`low_aspect_ratio_DEMO` remains the hostile config: **13 of 25 starts are invalid in every
 arm**, and lad's B2→B3 verdict rests on **11 both-converged pairs** — published with that
 denominator, as O2 required.
 
@@ -444,7 +447,7 @@ denominator, as O2 required.
 
 **Read this before the table.** Check 1 compares `|Δ norm_objf|`: *how good* the optimum an
 arm reached is. It does **not** compare *where* the arm landed. The two questions are
-different, they are answered by different quantities, and on two of three decks they give
+different, they are answered by different quantities, and on two of three configs they give
 opposite impressions:
 
 - **Optimality agreement** — do the arms find equally good optima? This is check 1, it is the
@@ -465,7 +468,7 @@ and p90, nearest-rank throughout. Acceptance at **both** quantiles against
 are plan §4.2 check 1a's pre-declared companion construction (I-19), published beside and
 never accepted against; `n_hops` is how many pairs it excludes.*
 
-| deck | pair | all-pairs med | all-pairs p90 | **verdict** | hops | within-cluster med | within-cluster p90 | would accept |
+| config | pair | all-pairs med | all-pairs p90 | **verdict** | hops | within-cluster med | within-cluster p90 | would accept |
 |---|---|---|---|---|---|---|---|---|
 | `large_tokamak_nof` | R→B0 (yardstick) | 2.08e-15 | 6.89e-13 | — | 0 | 2.08e-15 | 6.89e-13 | — |
 | | B0→B1 / B2 / B3 | 2.82e-11 | 4.57e-11 | **PASS** | 0 | 2.82e-11 | 4.57e-11 | True |
@@ -481,10 +484,10 @@ never accepted against; `n_hops` is how many pairs it excludes.*
 **The two failures are not the same kind of failure, and the within-cluster construction is
 what separates them.**
 
-- **st's failure is attractor hopping, not disagreement.** st is a 4-cluster deck. B0→B2
+- **st's failure is attractor hopping, not disagreement.** st is a 4-cluster config. B0→B2
   hops on 4 of 23 pairs; removing them takes the p90 from 1.26e-2 to **1.89e-10**, and it
   would pass. Decisively: **the R→B0 yardstick itself hops on 2 of 23 pairs** — and R→B0 is
-  nothing but a change of *stopping rule*. Hopping is a property of this deck, not of the
+  nothing but a change of *stopping rule*. Hopping is a property of this config, not of the
   partition. The plan anticipated exactly this ("V2 measured the stopping-rule change itself
   hopping on st — a hop is a counted event, not an outlier").
 - **lad's failure survives the hop removal and is real.** Only 1 pair is a hop; the
@@ -506,11 +509,11 @@ moves lad's objective.** The lift does.
 the per-variable relative difference |Δx| / max(|x_a|, |x_b|) on the unscaled vector, with
 the argmax variable named. Variables are matched **by name**, never by index: the lift adds
 `t_plant_pulse_burn`, so B1/B2/B3 carry one more iteration variable than B0 on the pulsed
-decks; the unshared variable is named, never compared. **This is a diagnostic. D6 forbids
+configs; the unshared variable is named, never compared. **This is a diagnostic. D6 forbids
 gating on it, and nothing in this report's verdicts rests on it.** The objective columns are
 check 1's, repeated for direct comparison.*
 
-| deck | pair | objf med | objf p90 | check-1 verdict | **point med** | **point p90** | **point max** | shared / extra vars |
+| config | pair | objf med | objf p90 | check-1 verdict | **point med** | **point p90** | **point max** | shared / extra vars |
 |---|---|---|---|---|---|---|---|---|
 | `large_tokamak_nof` | R→B0 | 2.08e-15 | 6.89e-13 | — | 7.17e-7 | 2.55e-6 | 1.63e-4 | 20 / — |
 | | B0→B1 / B2 / B3 | 2.82e-11 | 4.57e-11 | **PASS** | **4.56e-2** | **1.87e-1** | **4.41e-1** | 20 / `t_plant_pulse_burn` |
@@ -534,16 +537,16 @@ check 1's, repeated for direct comparison.*
   differ by 100 %** in `dr_shld_inboard` (argmax on 14 of 22 pairs) or `dr_tf_nose_case`
   (6 of 22). The optimum's *value* is reproduced to thirteen digits; its *location* is not
   pinned by the problem at all in those directions.
-- **The deck that FAILS check 1 has the tightest point agreement of the three.** lad's
+- **The config that FAILS check 1 has the tightest point agreement of the three.** lad's
   objective disagrees by 4.1e-7 while its design point agrees to 5.4e-6 — the reverse of the
-  other two decks. Whatever the lift does to lad, it is not relocating the design.
+  other two configs. Whatever the lift does to lad, it is not relocating the design.
 
 **Two attributions this makes cleanly, both of which matter for the headline:**
 
 1. **The partition and the trust step are point-preserving.** B2→B3 point differences are
-   1.2e-9 / 7.9e-12 / 8.7e-6 — at or near the noise on every deck. The architecture change
+   1.2e-9 / 7.9e-12 / 8.7e-6 — at or near the noise on every config. The architecture change
    this experiment is *about* does not move the design.
-2. **On the pulsed decks the relocation enters at B0→B1, the lift** — the same rung that
+2. **On the pulsed configs the relocation enters at B0→B1, the lift** — the same rung that
    moves lad's objective. This is coherent rather than surprising: the lift *adds an
    iteration variable* (`t_plant_pulse_burn`) and a constraint, enlarging the search space,
    so the optimiser can reach an equally good point somewhere else in it. It is a change of
@@ -551,7 +554,7 @@ check 1's, repeated for direct comparison.*
 
 **And the control settles whether any of this indicts the architecture.** On st, **R→B0 — a
 change of stopping rule and nothing else — moves the point by p90 0.17 and max 1.00**, as
-much as any architectural rung does. Non-identification is a property of the deck and its
+much as any architectural rung does. Non-identification is a property of the config and its
 constraint set, not of the partition. This is precisely why D6 forbids gating on iteration
 variables, and this campaign is the measurement that justifies that rule rather than merely
 asserting it.
@@ -560,7 +563,7 @@ asserting it.
 on location agreement. But a reader who takes "same optimum (check 1): PASS" to mean "the
 architectures produce the same machine" would be wrong on tok and badly wrong on st. The
 honest statement is: **the architectures reach optima of the same quality; on two of three
-decks they do so at materially different design points, and the flat baseline does the same
+configs they do so at materially different design points, and the flat baseline does the same
 thing to itself when only its stopping rule changes.**
 
 ### 5.3 Iteration multiplier (check 2, bound ≤ 1.05 on the median paired ratio)
@@ -590,9 +593,9 @@ references differ (B0 averages 23.91 iterations to R's 22.05), so st's B3/R mean
 not the check-2 quantity and is not compared to the 1.05 bound; the check-2 B0→B3 median on
 st is 1.000 (Appendix A).
 
-**The iteration bound passes on every deck and every accepted pair** (Appendix A, `bound met`).
+**The iteration bound passes on every config and every accepted pair** (Appendix A, `bound met`).
 This is a change from V2, where lad's B0→B3 median of 1.27 failed the bound and fired the
-plan's per-deck clause.
+plan's per-config clause.
 
 Three things must be said beside that pass:
 
@@ -605,7 +608,7 @@ and B3 (trust), both primed, over both-converged pairs; objective bit-identity b
 column is the same comparison with the prime OFF on both sides, recomputed from V2's records.
 Iteration counts are integers, so "identical" here is exact, not "within noise".*
 
-| deck | pairs | iterations identical | objf bit-identical | V2, prime off |
+| config | pairs | iterations identical | objf bit-identical | V2, prime off |
 |---|---|---|---|---|
 | `large_tokamak_nof` | 22 | **22/22** | 20/22 | — |
 | `low_aspect_ratio_DEMO` | 11 | **11/11** | 0/11 | nearest-rank 1.40; sums 209 → 247 over 10 pairs |
@@ -623,12 +626,12 @@ environments (verified by diffing `env_for`), this separates cleanly:
 - **The prime is decisive in B3**, which has no outer loop and without it carried the
   first-call error into the optimisation at an erratic cost.
 - **Under the prime, removing the outer verification loop costs exactly nothing on both
-  pulsed decks.** Its only remaining job there was repairing the deficit the prime prevents.
+  pulsed configs.** Its only remaining job there was repairing the deficit the prime prevents.
 
-**Not on `st_regression`**, the k = 0 deck: 7 of 23 seeds differ, B3 worse on 6 (38→59,
-47→61, 37→72, 33→47) — the 501 → 587 sum in Appendix A's B2→B3 row. On the deck with nothing lifted
-or pinned, the outer loop still does work the prime does not account for. **Hypothesis,
-untested:** on the pulsed decks the pin removes the burn-time coupling and the prime removes
+**Not on `st_regression`**, the k = 0 config: 7 of 23 seeds differ, B3 worse on 6 (38→59,
+47→61, 37→72, 33→47) — the 501 → 587 sum in Appendix A's B2→B3 row. On the config with
+nothing lifted or pinned, the outer loop still does work the prime does not account for. **Hypothesis,
+untested:** on the pulsed configs the pin removes the burn-time coupling and the prime removes
 the first-wall carrier, together leaving nothing to verify; st has no pin, so another
 coupling still needs it. Which coupling is not identified here, and st's 2 hops on B2→B3 mean
 some of those 7 differences may be attractor selection rather than repair work.
@@ -654,8 +657,8 @@ different questions: the median answers *what happens to a typical seed*, the su
 reproduce to the digit at a different commit is itself a determinism check.
 
 **(iii) st's B2→B3 hides a 17 % iteration increase behind a median of 1.000** (Appendix A).
-Over its own 23 contributing pairs the trust step takes 501 → **587** iterations. The median is blind to
-it because the increase is concentrated in a few seeds. B2→B3 is outside the acceptance rule
+Over its own 23 contributing pairs the trust step takes 501 → **587** iterations. The median
+is blind to it because the increase is concentrated in a few seeds. B2→B3 is outside the acceptance rule
 by declaration, so this changes no verdict — but a reader told only "median 1.000" would be
 misled, which is exactly why the amendment requiring summed iterations exists.
 
@@ -663,9 +666,9 @@ misled, which is exactly why the amendment requiring summed iterations exists.
 
 *Caption: `burn_time_residual` (constraint 93's own function) at exit, over accepted seeds,
 per lifted arm. This is the pin's inconsistency: how far the lifted variable sits from the
-value the coupling would have produced. `st_regression` is a k = 0 deck — nothing to lift.*
+value the coupling would have produced. `st_regression` is a k = 0 config — nothing to lift.*
 
-| deck | arm | n accepted | median abs residual (s) | max (s) |
+| config | arm | n accepted | median abs residual (s) | max (s) |
 |---|---|---|---|---|
 | `large_tokamak_nof` | B1 / B2 / B3 | 22 | 1.659e-5 | 1.600e-3 |
 | `low_aspect_ratio_DEMO` | B1 / B2 / B3 | 11 | 5.480e-6 | 4.756e-5 |
@@ -685,7 +688,7 @@ B0. `model_calls` is the number of dispatch sweeps, not node executions — the 
 design in the block arms. Node calls are the declared cost statistic; timings appear in §7
 and are never evidence.*
 
-| deck | set | n | R | B0 | B1 | B2 | B3 | **B3/B0** |
+| config | set | n | R | B0 | B1 | B2 | B3 | **B3/B0** |
 |---|---|---|---|---|---|---|---|---|
 | `large_tokamak_nof` | ok = converged | 22 | 912 555 | 935 340 | 942 522 | 834 951 | 598 124 | **0.639** |
 | `low_aspect_ratio_DEMO` | ok | 20 | 1 970 913 | 1 917 384 | 1 356 537 | 1 223 922 | 881 814 | **0.460** |
@@ -694,24 +697,24 @@ and are never evidence.*
 | | converged | 22 | 2 791 089 | 2 332 155 | — | 1 979 117 | 1 243 161 | **0.533** |
 
 **The partitioned, trust-stepped, primed architecture executes 36–55 % fewer model-node
-evaluations than the flat baseline, on every deck and under both set constructions.** These are
+evaluations than the flat baseline, on every config and under both set constructions.** These are
 sums over the seed set, so the claim is about **total work over the campaign**, and at that
 level the sign is uniform with a margin far larger than anything in the noise. **It is not
 uniform per run**: §5.5.1 resolves the same quantity run by run and finds B3 executing more
 than B0 on 2 of 20 lad runs, 1 of 25 st runs, and — in module M2 alone — 1 of 22 tok runs. The
-deck-level ratio is not a statement about every start.
+config-level ratio is not a statement about every start.
 
 **Against PROCESS as shipped, which is a different and often larger number.** B0 is not R:
 they differ by the stopping rule alone, and that is not free — R→B0 measures 0.976 / 1.028 /
-1.155 by deck. So "cheaper than the predicate-matched flat baseline" and "cheaper than the
+1.155 by config. So "cheaper than the predicate-matched flat baseline" and "cheaper than the
 code as shipped" are different claims, and a deployment question wants the second.
 
-*Caption: B3's node-call ratio against both anchors, per deck and set. B3/B0 isolates the
+*Caption: B3's node-call ratio against both anchors, per config and set. B3/B0 isolates the
 architecture at a matched stopping rule and is the ladder's number; B3/R is the end-to-end
 change a user switching from shipped PROCESS would see, and conflates the architecture with
 the stopping-rule change. Both come from the same committed sums above.*
 
-| deck | set | n | R→B0 | **B3/B0** | **B3/R** |
+| config | set | n | R→B0 | **B3/B0** | **B3/R** |
 |---|---|---|---|---|---|
 | `large_tokamak_nof` | ok = converged | 22 | 0.976 | 0.639 | **0.655** |
 | `low_aspect_ratio_DEMO` | ok | 20 | 1.028 | 0.460 | **0.447** |
@@ -730,7 +733,7 @@ node calls fall while dispatch sweeps rise. `prime/sweep` verifies the prime's c
 `set_fw_geometry()` per sweep); `prime/node` is the cost D19 excludes from the ratios above,
 named here per trap T11. Both are **counts**, never costs.*
 
-| deck | arm | node calls | dispatch sweeps | prime calls | prime/sweep | prime/node |
+| config | arm | node calls | dispatch sweeps | prime calls | prime/sweep | prime/node |
 |---|---|---|---|---|---|---|
 | `large_tokamak_nof` | B0 | 935 340 | 44 606 | 0 | — | — |
 | | B2 | 834 951 | 159 140 | 159 118 | 0.9999 | 0.191 |
@@ -741,14 +744,14 @@ named here per trap T11. Both are **counts**, never costs.*
 | | B3 | 1 856 724 | 423 212 | 423 187 | 0.9999 | 0.228 |
 
 The prime's contract holds exactly: **one prime call per dispatch sweep**, to four decimal
-places, in every block arm on every deck.
+places, in every block arm on every config.
 
 #### 5.5.1 Per-module breakdown, aligned to the collapsed DSM
 
 Rewritten twice on 2026-09-07, in step with §4.5; module scope and the `vacuum`
 reconciliation are given there.
 
-*Caption: **module sweeps per run** over each deck's identical-**ok** seed set, as the mean with
+*Caption: **module sweeps per run** over each config's identical-**ok** seed set, as the mean with
 its **seed bracket** [min, max]; a bare integer means every run agreed exactly. These cells are
 already per run — an optimisation executes ~2 000 sweeps, against a warm entry evaluation's ~5.
 `models` is the module's DSM row count, so **total calls = Σ sweeps × models**. **The per-module
@@ -835,24 +838,24 @@ swept in every arm but its only member with `in_call_models_once: false` never r
 per-sweep overhead (§7, I-20) and are invisible to every node-call statistic in this report —
 which is exactly why they went unnoticed.
 
-### 5.6 Reading the three decks together: they do not optimise the same thing
+### 5.6 Reading the three configs together: they do not optimise the same thing
 
-Added 2026-09-07 at the user's request. Every cross-deck comparison above implicitly treats
-the decks as three samples of one experiment. They are not: **each optimises a different
-figure of merit**, and on one deck the objective *is* the quantity the ladder lifts.
+Added 2026-09-07 at the user's request. Every cross-config comparison above implicitly treats
+the configs as three samples of one experiment. They are not: **each optimises a different
+figure of merit**, and on one config the objective *is* the quantity the ladder lifts.
 
-*Caption: problem definition per deck, from each run's own record (`i_figure_merit`, `nvar`,
+*Caption: problem definition per config, from each run's own record (`i_figure_merit`, `nvar`,
 `n_constraints`) against the `FiguresOfMerit` enum in `process/data_structure/numerics.py:88`.
 A negative `i_figure_merit` means maximise.*
 
-| deck | `i_figure_merit` | objective | sense | vars | constraints (eq / ineq) | pulsed |
+| config | `i_figure_merit` | objective | sense | vars | constraints (eq / ineq) | pulsed |
 |---|---|---|---|---|---|---|
 | `large_tokamak_nof` | 1 | plasma major radius R₀ | minimise | 20 | 26 (3 / 23) | yes |
 | `low_aspect_ratio_DEMO` | −14 | **pulse length `t_plant_pulse_burn`** | maximise | 19 | 25 (4 / 21) | yes |
 | `st_regression` | −5 | fusion gain Q | maximise | 14 | 18 (3 / 15) | no (k = 0) |
 
 **The consequence that matters: on `low_aspect_ratio_DEMO`, the burn-time lift promotes the
-deck's own objective into the design vector.** Constraint 93 and iteration variable 178 are
+config's own objective into the design vector.** Constraint 93 and iteration variable 178 are
 `t_plant_pulse_burn` — which is exactly what lad maximises. So B0 computes the burn time
 through the MDA and reports it as the objective; B1/B2/B3 let the optimiser *choose* it and
 enforce consistency through c93. Those are not the same optimisation problem. On tok the same
@@ -875,7 +878,7 @@ B1 is strictly better than B0 on 6 and worse on 5, with magnitudes from 2.6e-11 
 So lad's failure is **not** "the architecture computes a different answer". It is "the lift
 changes which of ten densely-packed local optima the optimiser selects", in both directions.
 
-**A construction limit this exposes, which applies to every deck.** The clustering gap is
+**A construction limit this exposes, which applies to every config.** The clustering gap is
 `CLUSTER_GAP_FLOOR_FACTOR × OBJF_FLOOR_REL = 10 × 1e-6 = 1e-5`, while check 1's acceptance
 floor is `1e-6` — **the clusters are ten times coarser than the tolerance they are meant to
 help interpret.** Two runs in the same cluster may legitimately differ by up to ~1e-5, and
@@ -883,24 +886,24 @@ lad's widest cluster is 8.4e-6 across. So lad's within-cluster p90 of 1.26e-6 is
 consistent with "same cluster, different optimum inside it", and the within-cluster
 construction **cannot** separate "same optimum" from "different optimum less than 1e-5 away".
 Both constructions were pre-declared and neither is wrong; but a reader must not take
-within-cluster agreement as proof of a shared optimum. On a deck whose optima are denser than
+within-cluster agreement as proof of a shared optimum. On a config whose optima are denser than
 1e-5, check 1 as constructed has no resolution.
 
 **The flat-direction reading, and what the argmax census supports.** §5.2.2's location
-diagnostic names which variable differs most per pair. Set against each deck's objective:
+diagnostic names which variable differs most per pair. Set against each config's objective:
 
-| deck | objective | argmax of the point difference (B0→B3) | point median |
+| config | objective | argmax of the point difference (B0→B3) | point median |
 |---|---|---|---|
 | tok | minimise R₀ | `f_nd_alpha_thermal_electron` (12/22), `f_nd_impurity_electrons(13)` (5/22) | 4.6e-2 |
 | lad | maximise burn time | `j_cs_flat_top_end` (7/11), `dr_cs` (2), `f_j_cs_start_pulse_end_flat_top` (2) | 5.4e-6 |
 | st | maximise Q | `dr_shld_inboard` (14/22), `dr_tf_nose_case` (6/22) | 4.5e-6 (p90 0.21) |
 
 **Hypothesis (mine, not pre-declared):** the variables that differ most between arms are the
-ones each deck's objective is least sensitive to. Radial-build thicknesses barely move Q, and
+ones each config's objective is least sensitive to. Radial-build thicknesses barely move Q, and
 st's points differ by up to 100 % in exactly those. Composition fractions barely move R₀, and
 tok's differ by 4.6 % in exactly those. lad, whose objective is set by CS flux swing, differs
 most in the CS variables — but by only 5e-6, because its objective *does* depend on them
-tightly. This is consistent across all three decks and it is n = 3; it is a pattern to test,
+tightly. This is consistent across all three configs and it is n = 3; it is a pattern to test,
 not a finding.
 
 **The hoist set is DERIVED from the objective, not assumed — a methodological strength worth
@@ -908,19 +911,19 @@ naming.** `caller.py:_predicate_read_fields` does an AST walk for loaded `data.<
 names, **narrowed to the active figure of merit's own branch** of `objective_function`, and
 `resolved_hoist_tails` routes each hoisted node to the pre- or post-predicate slot according
 to whether the predicate layer reads something it writes. So the schedule adapts to the
-objective rather than presuming one. The three decks resolve differently, and correctly:
+objective rather than presuming one. The three configs resolve differently, and correctly:
 
 *Caption: resolved hoist tails and the resulting execution counts, B3 `start000`. "Block
 sweeps" is how often the block was visited; "node executions" is how often the model actually
 ran — they are different quantities, and their divergence on st is the point.*
 
-| deck | objective | `pulse` routed to | PULSE block sweeps | `pulse` node executions |
+| config | objective | `pulse` routed to | PULSE block sweeps | `pulse` node executions |
 |---|---|---|---|---|
 | tok | minimise R₀ | **pre-predicate** | 0 | **663** (once per evaluation) |
 | lad | maximise burn time | **pre-predicate** | 0 | 663-equivalent |
 | st | maximise Q | **post-solve** | **570** | **5** |
 
-On the pulsed decks the predicate layer reads what `pulse` writes, so it must run before the
+On the pulsed configs the predicate layer reads what `pulse` writes, so it must run before the
 predicate — it leaves the block but still executes once per evaluation. On st nothing in the
 predicate reads the burn time (Q does not depend on it, and k = 0), so `pulse` falls all the
 way through to post-solve and runs **5 times in the entire optimisation**.
@@ -935,8 +938,8 @@ moves; they are wasted block-loop iterations, and they are worth removing.
 PULSE block was the only live one. It is the only one that sweeps, and the only one that
 executes nothing. Caught by reading `node_census` against `inner_sweeps_by_block`.)*
 
-**What this does to the cross-deck comparisons.** The cost result (§5.5) is unaffected: node
-calls are counted per deck against that deck's own baseline. The correctness results are not
+**What this does to the cross-config comparisons.** The cost result (§5.5) is unaffected: node
+calls are counted per config against that config's own baseline. The correctness results are not
 comparable in the way a single table implies — tok's PASS, lad's FAIL and st's split verdict
 are three different questions about three different optimisation problems, and only st asks
 the partition-only question the experiment was designed around.
@@ -944,19 +947,19 @@ the partition-only question the experiment was designed around.
 ## 6. I-17: the Phase A → Phase B transfer, and what `sweeps_per_eval` says
 
 The plan amended §5 before the campaign to record that V2's A→B transfer **over-predicted
-B3's saving on all three decks** (+22.6 / +6.0 / +41.8 %), that the sign was uniform across
-every construction, and that V2's declared failure condition *did not select the decks where
+B3's saving on all three configs** (+22.6 / +6.0 / +41.8 %), that the sign was uniform across
+every construction, and that V2's declared failure condition *did not select the configs where
 the transfer failed*. It bound this campaign to three things: no V3 number derived through
 the transfer, the per-call ratio reported as a mechanism and an upper bound only, and the
-per-deck error republished beside V3's own numbers. All three are honoured — §5.5's figures
+per-config error republished beside V3's own numbers. All three are honoured — §5.5's figures
 are measured node-call ratios throughout.
 
-*Caption: Phase A's per-call prediction against Phase B's realised end-to-end ratio, per deck
+*Caption: Phase A's per-call prediction against Phase B's realised end-to-end ratio, per config
 and per cost-set construction. Over-prediction is (realised / predicted − 1); positive means
 Phase A promised more saving than the optimisation delivered. **No number elsewhere in this
 report is derived through this table.***
 
-| deck | Phase A A0→A1 | set | n | realised B0→B3 | over-prediction | V2's figure |
+| config | Phase A A0→A1 | set | n | realised B0→B3 | over-prediction | V2's figure |
 |---|---|---|---|---|---|---|
 | `large_tokamak_nof` | 0.5217 | ok = converged | 22 | 0.6395 | **+22.6 %** | +22.6 % |
 | `low_aspect_ratio_DEMO` | 0.5680 | ok | 20 | 0.4599 | **−19.0 %** | +6.0 % |
@@ -979,7 +982,7 @@ instrument (`SWEEPS_PER_EVAL_HIST`). Phase A means are over 25 δ-perturbed sing
 evaluations; Phase B means are over the whole campaign, with the binned total cross-checked
 against the summed evaluation count in every cell (**all True**).*
 
-| deck | Phase A A0 | Phase A A1 | Phase B B0 | Phase B B3 | A0/B0 | A1/B3 |
+| config | Phase A A0 | Phase A A1 | Phase B B0 | Phase B B3 | A0/B0 | A1/B3 |
 |---|---|---|---|---|---|---|
 | `large_tokamak_nof` | 5.52 | 13.16 | 3.29 | 8.33 | 1.68 | 1.58 |
 | `low_aspect_ratio_DEMO` | 5.00 | 12.88 | 3.35 | 8.35 | 1.49 | 1.54 |
@@ -987,7 +990,7 @@ against the summed evaluation count in every cell (**all True**).*
 
 **The first clause is confirmed; the hypothesis as an explanation is not.** In-loop
 evaluations *are* systematically shorter than Phase A's — by a factor of 1.5–1.7, on every
-deck. But they are shorter by **nearly the same factor in both arms**, so the effect very
+config. But they are shorter by **nearly the same factor in both arms**, so the effect very
 largely cancels in a *ratio*. Quantitatively, the residual sweep-length asymmetry
 (A0/B0 ÷ A1/B3) predicts an over-prediction of +6.1 % on tok, +4.8 % on st and −3.4 % on lad,
 against measured +22.6 %, +6.3 % and −20.7 %. It accounts for st almost exactly, about a
@@ -1013,7 +1016,7 @@ published because omitting them would misrepresent §5.5, not because they decid
 discarded for JIT. Node-call ratios from §5.5 (identical-converged where the two sets differ)
 are set beside for comparison.*
 
-| deck | arm | median (s) | range (s) | wall vs B0 | **node calls vs B0** |
+| config | arm | median (s) | range (s) | wall vs B0 | **node calls vs B0** |
 |---|---|---|---|---|---|
 | `large_tokamak_nof` | R | 14.05 | 13.97 – 14.10 | 0.626 | 0.976 |
 | | B0 | 22.44 | 22.35 – 22.61 | 1.000 | 1.000 |
@@ -1051,7 +1054,7 @@ noise — but three repetitions of one serial block is not a performance study e
 
 1. **The prime closes the FirstWall→Build carrier.** This is the strongest result here. Phase
    A's headline check fails for A1u by five to six orders and passes for A1 on all three
-   decks, with A1 bit-identical to the flat control on st and exactly zero on lad. It costs
+   configs, with A1 bit-identical to the flat control on st and exactly zero on lad. It costs
    zero additional model-node executions. The mechanism was predicted, implemented as a
    method-level hoist, gated four ways (G1/G2/G3/G3c), and then confirmed by a campaign that
    was specified before it ran.
@@ -1060,7 +1063,7 @@ noise — but three repetitions of one serial block is not a performance study e
    refuted on lad, by the plan's own stated criterion. An experiment that can only confirm
    itself is not measuring anything; this one could not.
 3. **The partitioned architecture executes 36–55 % fewer model-node evaluations**, uniformly
-   across decks and set constructions, while passing the iteration bound everywhere.
+   across configs and set constructions, while passing the iteration bound everywhere.
 
 **What it does not establish, and what argues against it.**
 
@@ -1077,7 +1080,7 @@ noise — but three repetitions of one serial block is not a performance study e
    optima of equal quality" and **does not** support "these architectures produce the same
    machine". No verdict here rests on location — D6 forbids gating on it — but no reader
    should infer location agreement from a check-1 PASS. The mitigating control is that st's
-   R→B0, a stopping-rule change alone, relocates the point just as much, so this is deck
+   R→B0, a stopping-rule change alone, relocates the point just as much, so this is config
    non-identification rather than an architectural defect. A design study using this
    architecture would still need to know it.
 6. **The whole-state audit tells a different story from the restricted one, and the
@@ -1088,24 +1091,24 @@ noise — but three repetitions of one serial block is not a performance study e
    `fwbs.life_blkt` and `physics.wtgpd`, which `costs` writes** — evaluated once per run by
    design rather than every sweep, and excluded from the restricted set by declaration.
    *(Corrected 2026-09-07: an earlier draft named only `costs.*` and `water_use.*`; the
-   excluded set is five namespaces, every one nonzero in 25/25 block-arm runs on every deck,
+   excluded set is five namespaces, every one nonzero in 25/25 block-arm runs on every config,
    `vacuum.*` at p90 0.068 / 0.097 / 0.091 — §4.5's stakes table.)* This is the designed signature of the post-solve lift and not a defect; G4's
    teeth show the exclusion behaves in both directions. But it means **the headline Phase A
    result rests entirely on the correctness of A38's exclusion set.** If that set is wrong,
    the headline is wrong. It is gated, not proven.
-6a. **The three decks optimise three different figures of merit, and the objective is
+6a. **The three configs optimise three different figures of merit, and the objective is
    perfectly confounded with the structural variable** (§5.6, added 2026-09-07). D17 selected
-   decks by architecture property — two pulsed (k = 1), one steady (k = 0) — and the
+   configs by architecture property — two pulsed (k = 1), one steady (k = 0) — and the
    objectives came attached to them. The result is that `st_regression` is *simultaneously*
-   the only k = 0 deck, the only deck the lift does not touch, the only deck whose objective
-   is fusion gain, and the only deck whose `pulse` node falls through to post-solve. **When st
+   the only k = 0 config, the only config the lift does not touch, the only config whose objective
+   is fusion gain, and the only config whose `pulse` node falls through to post-solve. **When st
    behaves differently from the other two, this design cannot say which of those caused it.**
-   That is not repairable by analysis; it needs more decks, or one deck run under two
+   That is not repairable by analysis; it needs more configs, or one config run under two
    objectives.
    Three concrete consequences: (i) **the ladder's rung labels are not comparable across
-   decks** — "B0→B1, the lift" means lifting a constraint-side quantity on tok, lifting *the
+   configs** — "B0→B1, the lift" means lifting a constraint-side quantity on tok, lifting *the
    objective itself* on lad, and nothing at all on st, so every sentence of the form "the lift
-   does X" is really three sentences; (ii) **the cross-deck spread in the cost result
+   does X" is really three sentences; (ii) **the cross-config spread in the cost result
    (0.639 / 0.450 / 0.533) must not be read as physics** — the three optimisation problems
    differ in objective, in variable count (20 / 19 / 14) and in constraint count (26 / 25 /
    18); (iii) **I-17 gains a candidate explanation on lad**: Phase A's A1 *pins* the burn time
@@ -1115,18 +1118,18 @@ noise — but three repetitions of one serial block is not a performance study e
    **Recorded evidence consistent with (iii), added 2026-09-07:** Phase A's own tally carries a
    `lift_residual_distribution` — `burn_time_residual` at each run's exit — whose median over
    the 25 seeds is **155 s** (tok) and **526 s** (lad) in both block arms, against **0** in the
-   flat arm A0. The pin holds both pulsed decks off consistency by construction (its value is
+   flat arm A0. The pin holds both pulsed configs off consistency by construction (its value is
    the reference burn time times the same 1 ± δ stream factor every other component receives),
-   so what differs between the decks is not the displacement but *what it displaces* — on lad,
+   so what differs between the configs is not the displacement but *what it displaces* — on lad,
    the objective. It supports (iii)'s mechanism without testing it: §5.4's figure is an
    accepted optimum's exit state, and per-iterate residuals are recorded nowhere.
    **What is not affected:** Phase A's headline (§4) runs a single evaluation with no
    optimiser and no objective in its statistic; and every cost, iteration and check-1 verdict
-   is computed within one deck against that deck's own baseline, where the objective is held
-   constant. The confound damages cross-deck *synthesis*, not any single deck's comparison.
+   is computed within one config against that config's own baseline, where the objective is held
+   constant. The confound damages cross-config *synthesis*, not any single config's comparison.
    **A design strength this exposed, in fairness:** the hoist split is *derived* from the
    active figure of merit by AST walk (`caller.py:_predicate_read_fields`), not assumed, and
-   demonstrably resolves three different splits across the three decks. Had it hard-coded one,
+   demonstrably resolves three different splits across the three configs. Had it hard-coded one,
    st would hoist `pulse` unnecessarily or lad would hand the optimiser a stale objective.
 7. **Two declared definitions reached only one of two implementations** (I-18, I-19). Both
    were caught, but only because the verifier restates definitions independently and because
@@ -1137,12 +1140,12 @@ noise — but three repetitions of one serial block is not a performance study e
    name the excluded quantity (0.19–0.23 prime calls per counted node call) rather than
    leaving the denominator silent, but the ratios in §5.5 would move if a prime call were
    charged as a node call, and nothing here says what it should be charged as.
-9. **Denominators are small where the deck is hostile.** lad's B2→B3 verdict rests on 11
+9. **Denominators are small where the config is hostile.** lad's B2→B3 verdict rests on 11
    both-converged pairs, and 13 of 25 seeds are invalid in every arm. O2 declined to extend
    N; that decision stands, and so does its consequence.
-10. **st's check-1 pass at B0→B3 and fail at B0→B2 differ by hop count on a 4-cluster deck**
+10. **st's check-1 pass at B0→B3 and fail at B0→B2 differ by hop count on a 4-cluster config**
     (1 hop vs 4). With a yardstick that itself hops twice, the check is operating close to
-    its resolution on this deck. Treating either verdict as a strong statement about the
+    its resolution on this config. Treating either verdict as a strong statement about the
     architecture would over-read it.
 
 **On the gates.** G1/G2/G3/G3c bound a `process/` tree one instrument-commit older than the
@@ -1153,7 +1156,7 @@ experiment re-runs those four gates at the campaign commit, and a future campaig
 ## 9. Scope honesty
 
 - **No robustness claim is made** (deferred by the plan; not a powered campaign).
-- **No per-factor attribution is made from the pulsed decks' Phase A numbers** — only
+- **No per-factor attribution is made from the pulsed configs' Phase A numbers** — only
   `st_regression` (k = 0) separates the partition-and-hoist effect from the coupling term.
 - **No timing is evidence** for any conclusion (§7).
 - **The prime's full-run neutrality is not claimed and was never a gate.** Bit-identity across
@@ -1189,9 +1192,9 @@ architecture is faster.
 
 ## Appendix A. Check 2, every pair: the pairwise iteration table
 
-*Moved verbatim from §5.3 on 2026-09-07 when that section was reformatted onto one seed set per
-config; nothing here was recomputed. Caption as originally published, with the column
-definitions the original omitted.*
+*Moved from §5.3 on 2026-09-07 when that section was reformatted onto one seed set per
+config; nothing here was recomputed, and only the `deck` → `config` header rename touched it.
+Caption as originally published, with the column definitions the original omitted.*
 
 *Caption: paired optimiser-iteration ratios over **both-converged** pairs (the declared
 pairing: `status == ok` AND MFILE `ifail == 1`). The declared acceptance is the nearest-rank
@@ -1213,7 +1216,7 @@ Source: `runs/phase_b/tally.json`, written by `phase_b.py`'s `check2_iteration_m
 (`arm_a`, `arm_b`, `iters_a_sum`, `iters_b_sum`, `contributing_seeds`); medians and bound
 flags re-verified by `v3_report_analysis.py --verify`.
 
-| deck | pair | n | median | sum a | sum b | sum ratio | agree | bound met |
+| config | pair | n | median | sum a | sum b | sum ratio | agree | bound met |
 |---|---|---|---|---|---|---|---|---|
 | `large_tokamak_nof` | B0→B1 / B2 / B3 | 22 | 1.000 | 172 | 171 | 0.994 | ✓ | **PASS** |
 | | B0→R | 22 | 1.000 | 172 | 172 | 1.000 | ✓ | beside |
