@@ -570,28 +570,28 @@ thing to itself when only its stopping rule changes.**
 
 *Caption: optimiser iterations (`n_solver_iterations`) per seed, over **one seed set per
 config** — the seeds where R, B0 and B3 **all** converged (`status == ok` AND MFILE
-`ifail == 1`). `R`, `B0`, `B3` are mean iterations per seed over that set. `B3/R mean` is the
+`ifail == 1`). `R`, `B0`, `B3` are mean iterations per seed over that set. `B3/B0 mean` is the
 ratio of those means, equal to the ratio of the sums over the same seeds — the campaign-cost
-statistic. `B3/R median` is the declared nearest-rank median of the per-seed ratios with its
-[min, max] seed bracket — the typical-seed statistic. `B3/R > 1` counts seeds where B3 took
-strictly more iterations than R. **This table is diagnostic.** The declared check-2
-acceptance is the median B0→B3 ratio against the 1.05 bound; it and every other pair, with
-their summed iterations, are in Appendix A. From `v3_report_analysis.py --tables` at
-`06cc80df`.*
+statistic. `B3/B0 median` is the declared nearest-rank median of the per-seed ratios with its
+[min, max] seed bracket — the typical-seed statistic, and **the check-2 acceptance quantity**:
+on all three configs this seed set is exactly check 2's B0→B3 pair set (every seed on which B0
+and B3 converged also converged on R; `equals_B0_B3_pair_set`), so the median column is the
+declared B0→B3 median and the 1.05 bound applies to it. `B3/B0 > 1` counts seeds where B3 took
+strictly more iterations than B0. Every other pair, with its summed iterations, is in
+Appendix A. From `v3_report_analysis.py --tables` at `488e59d1`.*
 
-| config | n | R | B0 | B3 | B3/R mean | B3/R median [min, max] | B3/R > 1 |
+| config | n | R | B0 | B3 | B3/B0 mean | B3/B0 median [min, max] | B3/B0 > 1 |
 |---|---|---|---|---|---|---|---|
 | `tok` | 22 | 7.82 | 7.82 | 7.77 | 0.994 | 1.000 [0.875, 1.143] | 2/22 |
 | `lad` | 11 | 20.73 | 20.73 | 20.91 | 1.009 | 0.833 [0.250, 5.909] | 3/11 |
-| `st` | 22 | 22.05 | 23.91 | 23.95 | 1.087 | 1.000 [0.566, 2.323] | 5/22 |
+| `st` | 22 | 22.05 | 23.91 | 23.95 | 1.002 | 1.000 [0.246, 1.857] | 6/22 |
 
 The single seed set is what lets one `n` apply to a whole row. It is smaller than some of
-Appendix A's pairwise sets: lad's B0→R pair there has 12 seeds and st's B0→R and B0→B2 have
-23, so this table drops lad seed 10 and st seed 5. On tok and lad, B0 and R have the same mean,
-so B3/R here reads as B3/B0 does in Appendix A — lad's 0.833 is the same median. On st the two
-references differ (B0 averages 23.91 iterations to R's 22.05), so st's B3/R mean of 1.087 is
-not the check-2 quantity and is not compared to the 1.05 bound; the check-2 B0→B3 median on
-st is 1.000 (Appendix A).
+Appendix A's pairwise sets — lad's B0→R pair there has 12 seeds and st's B0→R and B0→B2 have
+23, so this table drops lad seed 10 and st seed 5 — but it coincides with the B0→B3 pair set
+on every config, so nothing check 2 is accepted on is dropped. The R column is context: on
+tok and lad, B0 and R have the same mean iterations; on st, B0 averages 23.91 to R's 22.05,
+which is the stopping-rule change alone (§5.5).
 
 **The iteration bound passes on every config and every accepted pair** (Appendix A, `bound met`).
 This is a change from V2, where lad's B0→B3 median of 1.27 failed the bound and fired the
@@ -1177,10 +1177,10 @@ experiment re-runs those four gates at the campaign commit, and a future campaig
 |---|---|
 | **Base commit** | `c0ae5b28` (frozen; D2) |
 | **Campaign commit** | `362c0b47`, `dirty=False` on all 599 records |
-| **Analysis commit** | `06cc80df` (`v3_report_analysis.py`; §5.3's table is from this commit, which is additive over `2c4ba2e7` — three keys added, no pre-existing value changed, float-hex diff) |
+| **Analysis commit** | `488e59d1` (`v3_report_analysis.py`; §5.3's table is from this commit; it and its predecessor `06cc80df` were each diffed against the previous commit's output with no pre-existing value changed, float-hex) |
 | **Plan** | `EXPERIMENT_PLAN.md`, approved by the user at `a164c6cd` |
 | **Reproduce** | `/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python arch_surgery/MDA_partitioning_experiment_v3/run_experiment.py` |
-| **Re-verify without re-running** | `… python v3_report_analysis.py --teeth` → 144 cells, 0 mismatches, baseline rc=0, 6/6 teeth trip (at `06cc80df`; the sixth tooth is `module_sweeps`' within-group uniformity) |
+| **Re-verify without re-running** | `… python v3_report_analysis.py --teeth` → 144 cells, 0 mismatches, baseline rc=0, 6/6 teeth trip (at `488e59d1`; the sixth tooth is `module_sweeps`' within-group uniformity) |
 | **Raw records** | `arch_surgery/MDA_partitioning_experiment_v3/runs/` (untracked by policy); tallies and `report_analysis.json` are the committed summaries |
 
 **Open items handed on.** I-17 (transfer over-prediction — partially explained, cause still
