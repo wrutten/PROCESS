@@ -537,11 +537,37 @@ most in the CS variables — but by only 5e-6, because its objective *does* depe
 tightly. This is consistent across all three decks and it is n = 3; it is a pattern to test,
 not a finding.
 
-**One structural difference not visible in the cost tables.** `st_regression` is the only deck
-whose `PULSE` block is **live**: 1131 block sweeps in B2 and 570 in B3, exactly one per
-evaluation. On nof and lad the block is empty (`PULSE: 0`) because the lift and post-solve
-hoist removed `pulse` from the loop. So the deck labelled "the clean partition-only case"
-carries one more executing block than the two that get the lift.
+**The hoist set is DERIVED from the objective, not assumed — a methodological strength worth
+naming.** `caller.py:_predicate_read_fields` does an AST walk for loaded `data.<ns>.<field>`
+names, **narrowed to the active figure of merit's own branch** of `objective_function`, and
+`resolved_hoist_tails` routes each hoisted node to the pre- or post-predicate slot according
+to whether the predicate layer reads something it writes. So the schedule adapts to the
+objective rather than presuming one. The three decks resolve differently, and correctly:
+
+*Caption: resolved hoist tails and the resulting execution counts, B3 `start000`. "Block
+sweeps" is how often the block was visited; "node executions" is how often the model actually
+ran — they are different quantities, and their divergence on st is the point.*
+
+| deck | objective | `pulse` routed to | PULSE block sweeps | `pulse` node executions |
+|---|---|---|---|---|
+| nof | minimise R₀ | **pre-predicate** | 0 | **663** (once per evaluation) |
+| lad | maximise burn time | **pre-predicate** | 0 | 663-equivalent |
+| st | maximise Q | **post-solve** | **570** | **5** |
+
+On the pulsed decks the predicate layer reads what `pulse` writes, so it must run before the
+predicate — it leaves the block but still executes once per evaluation. On st nothing in the
+predicate reads the burn time (Q does not depend on it, and k = 0), so `pulse` falls all the
+way through to post-solve and runs **5 times in the entire optimisation**.
+
+**Which exposes a small real defect: st's PULSE block sweeps 570 times executing nothing.**
+The block survives in the schedule after its only member has been hoisted out of it, so those
+are no-op visits — the DSM register's V12 trap (`in_call_models_once: false`) in live form.
+They cost no model evaluations, which is why no cost table shows them and why no result here
+moves; they are wasted block-loop iterations, and they are worth removing.
+
+*(Correction, 2026-09-07: an earlier draft of this section stated the inverse — that st's
+PULSE block was the only live one. It is the only one that sweeps, and the only one that
+executes nothing. Caught by reading `node_census` against `inner_sweeps_by_block`.)*
 
 **What this does to the cross-deck comparisons.** The cost result (§5.5) is unaffected: node
 calls are counted per deck against that deck's own baseline. The correctness results are not
