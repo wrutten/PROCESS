@@ -724,6 +724,33 @@ noise — but three repetitions of one serial block is not a performance study e
    teeth show the exclusion behaves in both directions. But it means **the headline Phase A
    result rests entirely on the correctness of A38's exclusion set.** If that set is wrong,
    the headline is wrong. It is gated, not proven.
+6a. **The three decks optimise three different figures of merit, and the objective is
+   perfectly confounded with the structural variable** (§5.6, added 2026-09-07). D17 selected
+   decks by architecture property — two pulsed (k = 1), one steady (k = 0) — and the
+   objectives came attached to them. The result is that `st_regression` is *simultaneously*
+   the only k = 0 deck, the only deck the lift does not touch, the only deck whose objective
+   is fusion gain, and the only deck whose `pulse` node falls through to post-solve. **When st
+   behaves differently from the other two, this design cannot say which of those caused it.**
+   That is not repairable by analysis; it needs more decks, or one deck run under two
+   objectives.
+   Three concrete consequences: (i) **the ladder's rung labels are not comparable across
+   decks** — "B0→B1, the lift" means lifting a constraint-side quantity on nof, lifting *the
+   objective itself* on lad, and nothing at all on st, so every sentence of the form "the lift
+   does X" is really three sentences; (ii) **the cross-deck spread in the cost result
+   (0.639 / 0.450 / 0.533) must not be read as physics** — the three optimisation problems
+   differ in objective, in variable count (20 / 19 / 14) and in constraint count (26 / 25 /
+   18); (iii) **I-17 gains a candidate explanation on lad**: Phase A's A1 *pins* the burn time
+   to a constant while Phase B's B3 *lifts* it into the optimiser, and on lad that quantity is
+   the objective — so the two phases differ far more on lad than on nof or st, and lad is
+   exactly where the transfer error reverses sign. Hypothesis, untested.
+   **What is not affected:** Phase A's headline (§4) runs a single evaluation with no
+   optimiser and no objective in its statistic; and every cost, iteration and check-1 verdict
+   is computed within one deck against that deck's own baseline, where the objective is held
+   constant. The confound damages cross-deck *synthesis*, not any single deck's comparison.
+   **A design strength this exposed, in fairness:** the hoist split is *derived* from the
+   active figure of merit by AST walk (`caller.py:_predicate_read_fields`), not assumed, and
+   demonstrably resolves three different splits across the three decks. Had it hard-coded one,
+   st would hoist `pulse` unnecessarily or lad would hand the optimiser a stale objective.
 7. **Two declared definitions reached only one of two implementations** (I-18, I-19). Both
    were caught, but only because the verifier restates definitions independently and because
    the plan was read line-by-line against the records afterwards. I-18 was *my* adjudication
