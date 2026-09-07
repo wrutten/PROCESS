@@ -853,6 +853,74 @@ def teeth(result: dict, roots: dict) -> int:
     return 0 if verdict == "PASS" else 1
 
 
+def transfer(pa: dict, pb: dict, roots: dict) -> dict:
+    """I-17: Phase A's per-call ratio against Phase B's realised end-to-end
+    ratio (EXPERIMENT_PLAN §5, amended pre-campaign).
+
+    The plan is explicit that **no V3 number is derived through the
+    transfer** — every end-to-end figure is the measured node-call ratio.
+    This function exists only to republish the over- or under-prediction
+    beside V3's own numbers, as §5 requires, and to carry the sweeps_per_eval
+    comparison that V2 could not make.
+
+    Phase A's A0->A1 unweighted count ratio is the per-call prediction;
+    Phase B's B0->B3 node-call ratio over the identical-CONVERGED set is the
+    realised figure.  Both come from the committed tallies this same script
+    verifies cell by cell.
+    """
+    out: dict = {}
+    pa_tally_p, pb_tally_p = roots["pa_tally"], roots["pb_tally"]
+    if not (pa_tally_p.exists() and pb_tally_p.exists()):
+        return out
+    ta, tb = jload(pa_tally_p), jload(pb_tally_p)
+    for deck in cfg.DECKS:
+        tda = (ta.get("per_deck") or {}).get(deck) or {}
+        tdb = tb.get(deck) or {}
+        cr = (tda.get("count_ratios") or {}).get("A0->A1") or {}
+        pred = cr.get("unweighted_count_ratio")
+        row: dict = {"phase_a_per_call_ratio_A0_to_A1": pred}
+        for setname in ("identical_ok_set", "identical_converged_set"):
+            per = (((tdb.get("check4_cost_sums") or {}).get(setname) or {})
+                   .get("per_arm") or {})
+            b0 = (per.get("B0") or {}).get("node_calls_solve_phase")
+            b3 = (per.get("B3") or {}).get("node_calls_solve_phase")
+            realised = (b3 / b0) if (b0 and b3) else None
+            row[setname] = {
+                "n_seeds": (((tdb.get("check4_cost_sums") or {})
+                             .get(setname) or {}).get("n_seeds")),
+                "realised_B0_to_B3_node_ratio": realised,
+                "over_prediction_fraction": (
+                    (realised / pred - 1.0)
+                    if (realised is not None and pred) else None),
+            }
+        # sweeps per evaluation: Phase A's evaluation against an in-loop one,
+        # same unit.  Phase A's sweep count is per arm in its own tally.
+        swa = {}
+        for arm in ("A0", "A1u", "A1"):
+            vals = [v.get("sweeps")
+                    for v in ((tda.get("per_run") or {}).get(arm) or {}).values()
+                    if v.get("status") == "ok" and v.get("sweeps")]
+            if vals:
+                swa[arm] = {"n": len(vals), "mean": sum(vals) / len(vals),
+                            "min": min(vals), "max": max(vals)}
+        spe = (pb.get(deck) or {}).get("i17_sweeps_per_eval") or {}
+        row["sweeps_per_eval"] = {
+            "phase_a": swa,
+            "phase_b_mean": {a: e["mean_sweeps_per_eval"]
+                             for a, e in spe.items()},
+            "phase_a_over_phase_b_flat": (
+                (swa["A0"]["mean"] / spe["B0"]["mean_sweeps_per_eval"])
+                if ("A0" in swa and "B0" in spe
+                    and spe["B0"]["mean_sweeps_per_eval"]) else None),
+            "phase_a_over_phase_b_block": (
+                (swa["A1"]["mean"] / spe["B3"]["mean_sweeps_per_eval"])
+                if ("A1" in swa and "B3" in spe
+                    and spe["B3"]["mean_sweeps_per_eval"]) else None),
+        }
+        out[deck] = row
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--verify", action="store_true",
@@ -871,9 +939,12 @@ def main() -> int:
     args = ap.parse_args()
 
     roots = roots_for(args.mode)
+    pa_res = phase_a(roots["pa_records"])
+    pb_res = phase_b(roots["pb_records"])
     result = {"mode": args.mode,
-              "phase_a": phase_a(roots["pa_records"]),
-              "phase_b": phase_b(roots["pb_records"]),
+              "phase_a": pa_res,
+              "phase_b": pb_res,
+              "i17_transfer": transfer(pa_res, pb_res, roots),
               "declared": {"F": F, "iter_ratio_max": cfg.ITER_RATIO_MAX,
                            "tau": cfg.TAU, "delta": cfg.DELTA,
                            "n_starts": cfg.N_STARTS,
