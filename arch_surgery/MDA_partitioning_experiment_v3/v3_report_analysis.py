@@ -1145,6 +1145,67 @@ def _finish(per_arm, per_arm_nodes, order, rows, base, weighted):
     return d
 
 
+def exclusion_stakes(pa_records: Path | None) -> dict:
+    """What the Phase A headline WOULD read if the restricted audit's
+    exclusion set were wrong -- per excluded namespace, from each run's own
+    ``audit_residual.json`` (user question 2026-09-07, settled by an
+    independent runtime read census: ``vacuum`` is feed-forward on all three
+    decks, its only reader being ``costs``, itself post-solve).
+
+    The point is not that these components move -- they are excluded
+    precisely because nothing live reads them, so their movement is the
+    designed signature of the post-solve hoist.  The point is HOW MUCH they
+    move: it quantifies what the exclusion set is load-bearing for.  If any
+    of these were wrongly excluded, the restricted headline would read the
+    number below instead of ~1e-8.
+    """
+    out: dict = {}
+    if not pa_records or not (pa_records / "campaign.json").exists():
+        return out
+    camp = jload(pa_records / "campaign.json")
+    for deck in camp["decks"]:
+        excl = excluded_keys(deck)
+        ns = sorted({k.split(".", 1)[0] for k in excl})
+        d: dict = {"n_excluded": len(excl),
+                   "excluded_namespaces": {n: sum(1 for k in excl
+                                                  if k.startswith(n + "."))
+                                           for n in ns},
+                   "per_arm": {}}
+        for arm in camp["arms"]:
+            per_ns_max: dict[str, list] = {n: [] for n in ns}
+            all_excl_max: list = []
+            restricted_max: list = []
+            for k in camp["seeds"]:
+                ap = pa_records / deck / arm / f"start{k:03d}" / "audit_residual.json"
+                if not ap.exists():
+                    continue
+                a = jload(ap)
+                sc = a.get("scaled") or {}
+                for n in ns:
+                    vals = [v for key, v in sc.items()
+                            if key.startswith(n + ".") and key in excl
+                            and isinstance(v, (int, float))]
+                    per_ns_max[n].append(max(vals) if vals else 0.0)
+                ev = [v for key, v in sc.items() if key in excl
+                      and isinstance(v, (int, float))]
+                all_excl_max.append(max(ev) if ev else 0.0)
+                kv = [v for key, v in sc.items() if key not in excl
+                      and isinstance(v, (int, float))]
+                restricted_max.append(max(kv) if kv else 0.0)
+            d["per_arm"][arm] = {
+                "n_runs": len(all_excl_max),
+                "restricted_p90": p90(sorted(restricted_max)),
+                "excluded_all_p90": p90(sorted(all_excl_max)),
+                "excluded_by_namespace_p90": {
+                    n: p90(sorted(v)) for n, v in per_ns_max.items() if v},
+                "excluded_by_namespace_n_nonzero_runs": {
+                    n: sum(1 for x in v if x > 0)
+                    for n, v in per_ns_max.items() if v},
+            }
+        out[deck] = d
+    return out
+
+
 def transfer(pa: dict, pb: dict, roots: dict) -> dict:
     """I-17: Phase A's per-call ratio against Phase B's realised end-to-end
     ratio (EXPERIMENT_PLAN §5, amended pre-campaign).
@@ -1239,6 +1300,7 @@ def main() -> int:
               "i17_transfer": transfer(pa_res, pb_res, roots),
               "dsm_blocks": dsm_blocks(roots["pa_records"],
                                        roots["pb_records"]),
+              "exclusion_stakes": exclusion_stakes(roots["pa_records"]),
               "declared": {"F": F, "iter_ratio_max": cfg.ITER_RATIO_MAX,
                            "tau": cfg.TAU, "delta": cfg.DELTA,
                            "n_starts": cfg.N_STARTS,
