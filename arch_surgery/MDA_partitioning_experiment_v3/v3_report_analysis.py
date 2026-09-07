@@ -344,34 +344,55 @@ def phase_b(root: Path | None = None) -> dict:
         for name, (a, b) in pair_defs.items():
             if a not in rows or b not in rows:
                 continue
-            deltas, base_abs = [], []
+            # EXPERIMENT_PLAN.md §4.2 check 1, restated from the plan text
+            # (commit 29f642a1, pre-campaign): the accepted statistic is the
+            # PER-PAIR RELATIVE difference
+            #     r = |d norm_objf| / max(|objf_a|, |objf_b|)
+            # accepted against  r_q <= max(F x yardstick_q, floor)  with the
+            # PLAIN declared relative floor 1e-6 (O3, option A).  Until
+            # orchestrator commit A42 this function recomputed an ABSOLUTE
+            # delta against an ensemble-median-scaled floor -- the superseded
+            # construction A41 reported and adjudication 10a2ff36 removed
+            # from phase_b.py but not from here (I-18).  The absolute delta is
+            # published beside, never accepted against.
+            deltas, absolute_deltas, base_abs = [], [], []
             for k in range(cfg.N_STARTS):
                 ra, rb = rows[a][k], rows[b][k]
                 if conv(ra) and conv(rb):
                     fa, fb = hexf(ra["objf_hex"]), hexf(rb["objf_hex"])
                     if fa is not None and fb is not None:
-                        deltas.append(abs(fb - fa))
+                        denom = max(abs(fa), abs(fb))
+                        deltas.append(abs(fb - fa) / denom if denom else 0.0)
+                        absolute_deltas.append(abs(fb - fa))
                         base_abs.append(abs(fa))
-            floor_abs = (cfg.OBJF_FLOOR_REL * rank_median(base_abs)
-                         if base_abs else None)
             spreads[name] = {"n": len(deltas),
+                             "statistic": ("per-pair relative: "
+                                           "|d norm_objf| / "
+                                           "max(|objf_a|, |objf_b|)"),
                              "median": rank_median(deltas),
                              "median_statistics_diagnostic": (
                                  statistics.median(deltas)
                                  if deltas else None),
                              "p90": p90(deltas),
                              "max": max(deltas) if deltas else None,
-                             "floor_abs": floor_abs}
+                             "floor_rel": cfg.OBJF_FLOOR_REL,
+                             # beside; never the acceptance statistic
+                             "absolute_median": rank_median(absolute_deltas),
+                             "absolute_p90": p90(absolute_deltas),
+                             "absolute_max": (max(absolute_deltas)
+                                              if absolute_deltas else None),
+                             "base_arm_abs_objf_median": rank_median(base_abs)}
         yard = spreads.get("R->B0")
         for name, e in spreads.items():
             if yard and name.startswith("B0->") and e["median"] is not None \
                     and yard["median"] is not None:
-                bound_med = max(F * yard["median"], e["floor_abs"] or 0.0)
+                bound_med = max(F * yard["median"], cfg.OBJF_FLOOR_REL)
                 bound_p90 = max(F * (yard["p90"] or 0.0),
-                                e["floor_abs"] or 0.0)
+                                cfg.OBJF_FLOOR_REL)
                 e["accept_median"] = e["median"] <= bound_med
                 e["accept_p90"] = (e["p90"] is not None
                                    and e["p90"] <= bound_p90)
+                e["bounds"] = {"median": bound_med, "p90": bound_p90}
                 e["accepted"] = bool(e["accept_median"] and e["accept_p90"])
         d["check1_objf"] = spreads
 
@@ -748,7 +769,7 @@ def main() -> int:
               f"stamps={d['provenance_stamps']}")
         for name, e in d["check1_objf"].items():
             print(f"    objf {name:7s} n={e['n']:2d} med={e['median']} "
-                  f"p90={e['p90']} floor={e['floor_abs']} "
+                  f"p90={e['p90']} floor_rel={e['floor_rel']} "
                   f"accept={e.get('accepted', '-')}")
         for name, e in d["check2_iters"].items():
             print(f"    iter {name:7s} n={e['n_iter_pairs']:2d} "
