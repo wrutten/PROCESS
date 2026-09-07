@@ -238,6 +238,61 @@ full flat MDA convergence at that deck's cold entry, A0 arm.
 reported separately per deck as `burn_time_residual` at exit; inactive on `st_regression`
 (k = 0 — nothing lifted or pinned).
 
+### 4.5 Per-block breakdown (Phase A), including the feedforward set
+
+Added 2026-09-07 at the user's request, as the per-call counterpart to §5.5.1.
+
+*Caption: node calls per block, summed over the 25 ok runs of each deck (so divide by 25 for
+the per-evaluation figure). Block membership from a block arm's executed schedule; post-solve
+set from the deck's committed artifact. **A1u and A1 are identical in every block on every
+deck** — the prime changes what `Build` reads, not how often anything runs — so the ratio
+column is A1/A0 and applies to A1u equally.*
+
+| block (nodes) | A0 | A1u | A1 | **A1/A0** |
+|---|---|---|---|---|
+| **`large_tokamak_nof`** | | | | |
+| M1 (2 nodes) | 276 | 200 | 200 | 0.725 |
+| M2 (3 nodes) | 414 | 387 | 387 | **0.935** |
+| M3 (12 nodes) | 1656 | 900 | 900 | 0.543 |
+| PULSE (1 node) | 138 | 25 | 25 | 0.181 |
+| **post-solve (3 nodes, feedforward)** | 414 | 0 | 0 | **0.000** |
+| TOTAL | 2898 | 1512 | 1512 | **0.522** |
+| **`low_aspect_ratio_DEMO`** | | | | |
+| M1 | 250 | 200 | 200 | 0.800 |
+| M2 | 375 | 366 | 366 | **0.976** |
+| M3 | 1500 | 900 | 900 | 0.600 |
+| PULSE | 125 | 25 | 25 | 0.200 |
+| **post-solve (feedforward)** | 375 | 0 | 0 | **0.000** |
+| TOTAL | 2625 | 1491 | 1491 | **0.568** |
+| **`st_regression`** | | | | |
+| M1 | 292 | 200 | 200 | 0.685 |
+| M2 | 438 | 438 | 438 | **1.000** |
+| M3 | 1752 | 900 | 900 | 0.514 |
+| **post-solve (4 nodes incl. `pulse`, feedforward)** | 584 | 0 | 0 | **0.000** |
+| TOTAL | 3066 | 1538 | 1538 | **0.502** |
+
+**This table is where §4's weighting-invariance bracket comes from.** The bracket is literally
+the minimum and maximum of the ratio column: `[0, 0.935]` on nof, `[0, 0.976]` on lad,
+`[0, 1.000]` on st — the 0 is the post-solve row, the upper end is M2. Because any
+cost-weighted aggregate is a weighted average of these per-node ratios, **no weighting of the
+models can put A1's per-call cost above 0.935 / 0.976 / 1.000 of A0's.** That is the bound the
+cost claim rests on, and it needs no timing.
+
+**The blocks decompose the same way Phase B's do, and say the same thing.** M2 barely
+benefits (0.935 / 0.976 / **exactly 1.000** on st — the partition saves that block nothing at
+all), M3 carries the largest absolute saving (756 / 600 / 852 node calls per 25 runs), and the
+feedforward set goes to zero. Per evaluation, A0 executes 21 nodes over 5.0–5.8 sweeps; A1
+executes the same 21 nodes over 4 (M1), ~5.2 (M2), 3 (M3) and 1 (PULSE) block sweeps.
+
+**One denominator caveat on the post-solve row (trap T11).** Phase A's 0 is *not* the claim
+that the intervention removes these nodes: it is that they execute **zero times inside the
+measured evaluation**. Their once-per-run execution at the end of the solve is never reached,
+because Phase A halts at the exit audit. Phase B, which does reach it, records them at ~12
+node calls per run (264 over 22 seeds) against B0's ~6083 — so amortised over a real
+optimisation the block-arm cost is ≈ 0.02 node calls per evaluation, and 0 is right to two
+decimal places. The approximation is sound; it is stated because the row would otherwise read
+as an elimination.
+
 ## 5. Phase B results — the declared checks, per deck, never pooled
 
 ### 5.1 Robustness and taxonomy (denominators of 25)
