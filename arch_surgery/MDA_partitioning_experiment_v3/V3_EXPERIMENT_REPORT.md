@@ -565,28 +565,34 @@ thing to itself when only its stopping rule changes.**
 
 ### 5.3 Iteration multiplier (check 2, bound ≤ 1.05 on the median paired ratio)
 
-*Caption: paired optimiser-iteration ratios over **both-converged** pairs (the declared
-pairing: `status == ok` AND MFILE `ifail == 1`). The declared acceptance is the nearest-rank
-median for B0→B1/B2/B3 only. Summed iterations over exactly the ratio-contributing pairs are
-published beside every median, per the pre-campaign amendment; `agree` is the declared
-direction flag. **Totals are never carried across columns** — the contributing seed set
-differs per pair.*
+*Caption: optimiser iterations (`n_solver_iterations`) per seed, over **one seed set per
+config** — the seeds where R, B0 and B3 **all** converged (`status == ok` AND MFILE
+`ifail == 1`). `R`, `B0`, `B3` are mean iterations per seed over that set. `B3/R mean` is the
+ratio of those means, equal to the ratio of the sums over the same seeds — the campaign-cost
+statistic. `B3/R median` is the declared nearest-rank median of the per-seed ratios with its
+[min, max] seed bracket — the typical-seed statistic. `B3/R > 1` counts seeds where B3 took
+strictly more iterations than R. **This table is diagnostic.** The declared check-2
+acceptance is the median B0→B3 ratio against the 1.05 bound; it and every other pair, with
+their summed iterations, are in Appendix A. From `v3_report_analysis.py --tables` at
+`06cc80df`.*
 
-| deck | pair | n | median | sum a | sum b | sum ratio | agree | bound met |
-|---|---|---|---|---|---|---|---|---|
-| `large_tokamak_nof` | B0→B1 / B2 / B3 | 22 | 1.000 | 172 | 171 | 0.994 | ✓ | **PASS** |
-| | B0→R | 22 | 1.000 | 172 | 172 | 1.000 | ✓ | beside |
-| | B2→B3 | 22 | 1.000 | 171 | 171 | 1.000 | ✓ | beside |
-| `low_aspect_ratio_DEMO` | B0→B1 / B2 / B3 | 11 | 0.833 | 228 | 230 | **1.009** | **✗** | **PASS** |
-| | B0→R | 12 | 1.000 | 239 | 239 | 1.000 | ✓ | beside |
-| | **B2→B3** | 11 | **1.000** | 230 | 230 | **1.000** | ✓ | beside |
-| `st_regression` | B0→B2 | 23 | 1.000 | 568 | 508 | 0.894 | ✓ | **PASS** |
-| | B0→B3 | 22 | 1.000 | 526 | 527 | 1.002 | ✓ | **PASS** |
-| | B0→R | 23 | 1.000 | 568 | 525 | 0.924 | ✓ | beside |
-| | **B2→B3** | 23 | **1.000** | 501 | **587** | **1.172** | ✓ | beside |
+| config | n | R | B0 | B3 | B3/R mean | B3/R median [min, max] | B3/R > 1 |
+|---|---|---|---|---|---|---|---|
+| `tok` | 22 | 7.82 | 7.82 | 7.77 | 0.994 | 1.000 [0.875, 1.143] | 2/22 |
+| `lad` | 11 | 20.73 | 20.73 | 20.91 | 1.009 | 0.833 [0.250, 5.909] | 3/11 |
+| `st` | 22 | 22.05 | 23.91 | 23.95 | 1.087 | 1.000 [0.566, 2.323] | 5/22 |
 
-**The iteration bound passes on every deck and every accepted pair.** This is a change from
-V2, where lad's B0→B3 median of 1.27 failed the bound and fired the plan's per-deck clause.
+The single seed set is what lets one `n` apply to a whole row. It is smaller than some of
+Appendix A's pairwise sets: lad's B0→R pair there has 12 seeds and st's B0→R and B0→B2 have
+23, so this table drops lad seed 10 and st seed 5. On tok and lad, B0 and R have the same mean,
+so B3/R here reads as B3/B0 does in Appendix A — lad's 0.833 is the same median. On st the two
+references differ (B0 averages 23.91 iterations to R's 22.05), so st's B3/R mean of 1.087 is
+not the check-2 quantity and is not compared to the 1.05 bound; the check-2 B0→B3 median on
+st is 1.000 (Appendix A).
+
+**The iteration bound passes on every deck and every accepted pair** (Appendix A, `bound met`).
+This is a change from V2, where lad's B0→B3 median of 1.27 failed the bound and fired the
+plan's per-deck clause.
 
 Three things must be said beside that pass:
 
@@ -620,7 +626,7 @@ environments (verified by diffing `env_for`), this separates cleanly:
   pulsed decks.** Its only remaining job there was repairing the deficit the prime prevents.
 
 **Not on `st_regression`**, the k = 0 deck: 7 of 23 seeds differ, B3 worse on 6 (38→59,
-47→61, 37→72, 33→47) — the 501 → 587 sum in the table above. On the deck with nothing lifted
+47→61, 37→72, 33→47) — the 501 → 587 sum in Appendix A's B2→B3 row. On the deck with nothing lifted
 or pinned, the outer loop still does work the prime does not account for. **Hypothesis,
 untested:** on the pulsed decks the pin removes the burn-time coupling and the prime removes
 the first-wall carrier, together leaving nothing to verify; st has no pin, so another
@@ -631,7 +637,8 @@ some of those 7 differences may be attractor selection rather than repair work.
 elevated at ≈ 1.40** under the nearest-rank construction, *"because the carrier is inert
 after call 1"*; and — naming the alternative in advance — *"if it instead falls to ≈ 1.0, the
 first-call deficit **was** the mechanism on lad and A35's inertness reasoning is refuted
-there."* **Measured: 1.000, on both the median and the sum (230 vs 230), over 11 pairs.**
+there."* **Measured: 1.000, on both the median and the sum (230 vs 230), over 11 pairs (Appendix A,
+B2→B3).**
 By the plan's own words, **A35's inertness reasoning is refuted on lad.** The prime — which
 is present on both sides of B2→B3 and therefore cannot be the difference between them — has
 removed the elevation that the unprimed V2 ladder showed. The first-call deficit was the
@@ -639,13 +646,15 @@ mechanism.
 
 **(ii) lad's median and sum still disagree in direction, and V2's finding reproduces
 exactly.** B0→B1's median of 0.833 ("a 17 % reduction per typical seed") sits against a sum
-ratio of **1.009** (228 → 230) — the direction flag fires, as designed. These answer
+ratio of **1.009** (228 → 230; Appendix A) — the direction flag fires, as designed. The same
+disagreement is the lad row of the table above: mean ratio 1.009, median 0.833, with a seed
+bracket of [0.250, 5.909] showing where the two seeds that repay the eight sit. These answer
 different questions: the median answers *what happens to a typical seed*, the sum answers
 *what does the campaign cost*. The campaign cost slightly more. That the V2 numbers
 reproduce to the digit at a different commit is itself a determinism check.
 
-**(iii) st's B2→B3 hides a 17 % iteration increase behind a median of 1.000.** Over its own
-23 contributing pairs the trust step takes 501 → **587** iterations. The median is blind to
+**(iii) st's B2→B3 hides a 17 % iteration increase behind a median of 1.000** (Appendix A).
+Over its own 23 contributing pairs the trust step takes 501 → **587** iterations. The median is blind to
 it because the increase is concentrated in a few seeds. B2→B3 is outside the acceptance rule
 by declaration, so this changes no verdict — but a reader told only "median 1.000" would be
 misled, which is exactly why the amendment requiring summed iterations exists.
@@ -1165,10 +1174,10 @@ experiment re-runs those four gates at the campaign commit, and a future campaig
 |---|---|
 | **Base commit** | `c0ae5b28` (frozen; D2) |
 | **Campaign commit** | `362c0b47`, `dirty=False` on all 599 records |
-| **Analysis commit** | `3a0bb8b1` (`v3_report_analysis.py`) |
+| **Analysis commit** | `06cc80df` (`v3_report_analysis.py`; §5.3's table is from this commit, which is additive over `2c4ba2e7` — three keys added, no pre-existing value changed, float-hex diff) |
 | **Plan** | `EXPERIMENT_PLAN.md`, approved by the user at `a164c6cd` |
 | **Reproduce** | `/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python arch_surgery/MDA_partitioning_experiment_v3/run_experiment.py` |
-| **Re-verify without re-running** | `… python v3_report_analysis.py --teeth` → 144 cells, 0 mismatches, baseline rc=0, 5/5 teeth trip |
+| **Re-verify without re-running** | `… python v3_report_analysis.py --teeth` → 144 cells, 0 mismatches, baseline rc=0, 6/6 teeth trip (at `06cc80df`; the sixth tooth is `module_sweeps`' within-group uniformity) |
 | **Raw records** | `arch_surgery/MDA_partitioning_experiment_v3/runs/` (untracked by policy); tallies and `report_analysis.json` are the committed summaries |
 
 **Open items handed on.** I-17 (transfer over-prediction — partially explained, cause still
@@ -1176,3 +1185,43 @@ elsewhere; on the user's list). I-19's within-cluster construction should be add
 `phase_b.py`'s tally as well as the analysis. The lift's role in lad's check-1 failure (§5.2)
 is unexamined. The wall-clock gap (§7) is the practical blocker for any claim that this
 architecture is faster.
+
+
+## Appendix A. Check 2, every pair: the pairwise iteration table
+
+*Moved verbatim from §5.3 on 2026-09-07 when that section was reformatted onto one seed set per
+config; nothing here was recomputed. Caption as originally published, with the column
+definitions the original omitted.*
+
+*Caption: paired optimiser-iteration ratios over **both-converged** pairs (the declared
+pairing: `status == ok` AND MFILE `ifail == 1`). The declared acceptance is the nearest-rank
+median for B0→B1/B2/B3 only. Summed iterations over exactly the ratio-contributing pairs are
+published beside every median, per the pre-campaign amendment; `agree` is the declared
+direction flag. **Totals are never carried across columns** — the contributing seed set
+differs per pair.*
+
+**Column definitions.** In a row for pair `a→b`, arm `a` is the left side of the arrow and
+`b` the right. `n` is the number of seeds converged on both arms; only those seeds contribute
+to the row. `median` is the nearest-rank median over those seeds of (iterations on `b`) /
+(iterations on `a`) — the declared acceptance quantity. `sum a` and `sum b` are the total
+optimiser iterations arm `a` and arm `b` spent across exactly those `n` seeds; `sum ratio` is
+`sum b / sum a`. `agree` is whether `median` and `sum ratio` sit on the same side of 1.0. The
+row `B0→B1 / B2 / B3` collapses three pairs that have identical seed sets and identical sums on
+that config. The same arm's `sum` differs between rows because the seed set does: on st, B0
+sums to 568 against B2 (a set containing seed 5 but not 10) and to 526 against B3 (neither).
+Source: `runs/phase_b/tally.json`, written by `phase_b.py`'s `check2_iteration_multiplier`
+(`arm_a`, `arm_b`, `iters_a_sum`, `iters_b_sum`, `contributing_seeds`); medians and bound
+flags re-verified by `v3_report_analysis.py --verify`.
+
+| deck | pair | n | median | sum a | sum b | sum ratio | agree | bound met |
+|---|---|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | B0→B1 / B2 / B3 | 22 | 1.000 | 172 | 171 | 0.994 | ✓ | **PASS** |
+| | B0→R | 22 | 1.000 | 172 | 172 | 1.000 | ✓ | beside |
+| | B2→B3 | 22 | 1.000 | 171 | 171 | 1.000 | ✓ | beside |
+| `low_aspect_ratio_DEMO` | B0→B1 / B2 / B3 | 11 | 0.833 | 228 | 230 | **1.009** | **✗** | **PASS** |
+| | B0→R | 12 | 1.000 | 239 | 239 | 1.000 | ✓ | beside |
+| | **B2→B3** | 11 | **1.000** | 230 | 230 | **1.000** | ✓ | beside |
+| `st_regression` | B0→B2 | 23 | 1.000 | 568 | 508 | 0.894 | ✓ | **PASS** |
+| | B0→B3 | 22 | 1.000 | 526 | 527 | 1.002 | ✓ | **PASS** |
+| | B0→R | 23 | 1.000 | 568 | 525 | 0.924 | ✓ | beside |
+| | **B2→B3** | 23 | **1.000** | 501 | **587** | **1.172** | ✓ | beside |
