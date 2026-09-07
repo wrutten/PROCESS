@@ -298,6 +298,8 @@ def phase_b(root: Path | None = None) -> dict:
                     "ladder_stage": fx.get("ladder_stage"),
                     "head": m.get("tree_git_head"),
                     "dirty": m.get("tree_git_dirty"),
+                    "prime_calls": m.get("n_prime_calls"),
+                    "spe": m.get("sweeps_per_eval"),
                 })
             rows[arm] = per
         if not rows:
@@ -427,9 +429,138 @@ def phase_b(root: Path | None = None) -> dict:
                 "n_pairs": len(both),
                 "n_hops": sum(1 for k in both
                               if cluster_of[(a, k)] != cluster_of[(b, k)])}
+        # EXPERIMENT_PLAN.md §4.2 check 1a, final sentence: "Within-cluster
+        # agreement (check 1's statistics over same-cluster pairs) is
+        # published beside the all-pairs construction."  Neither phase_b.py's
+        # tally nor this recomputation implemented it before A42 (I-19) --
+        # the same class of plan-vs-harness gap as I-18.  It is a declared
+        # REPORTING rule with no acceptance threshold, so it is published
+        # beside and never accepted against; check 1's verdict stays on the
+        # all-pairs construction declared above.
+        within = {}
+        for name, (a, b) in pair_defs.items():
+            if a not in rows or b not in rows:
+                continue
+            wd, wabs = [], []
+            n_excluded = 0
+            for k in range(cfg.N_STARTS):
+                if (a, k) not in cluster_of or (b, k) not in cluster_of:
+                    continue
+                if cluster_of[(a, k)] != cluster_of[(b, k)]:
+                    n_excluded += 1
+                    continue
+                fa = hexf(rows[a][k]["objf_hex"])
+                fb = hexf(rows[b][k]["objf_hex"])
+                denom = max(abs(fa), abs(fb))
+                wd.append(abs(fb - fa) / denom if denom else 0.0)
+                wabs.append(abs(fb - fa))
+            within[name] = {"n": len(wd),
+                            "n_excluded_as_hops": n_excluded,
+                            "median": rank_median(wd),
+                            "p90": p90(wd),
+                            "max": max(wd) if wd else None,
+                            "absolute_median": rank_median(wabs)}
+        # the same acceptance arithmetic, applied to the within-cluster
+        # statistic, for comparison only -- NOT check 1's verdict
+        wyard = within.get("R->B0")
+        for name, e in within.items():
+            if wyard and name.startswith("B0->") and e["median"] is not None \
+                    and wyard["median"] is not None:
+                e["would_accept"] = bool(
+                    e["median"] <= max(F * wyard["median"],
+                                       cfg.OBJF_FLOOR_REL)
+                    and e["p90"] is not None
+                    and e["p90"] <= max(F * (wyard["p90"] or 0.0),
+                                        cfg.OBJF_FLOOR_REL))
+        # ------------------------------------------------------------------
+        # I-17 instrumentation (EXPERIMENT_PLAN §5 amendment, pre-declared
+        # before the campaign with BOTH outcomes named as results).
+        #
+        # The hypothesis: Phase A over-predicts B3's saving because a Phase A
+        # evaluation is a HARDER object than an in-loop one -- the delta-stream
+        # displaces run-constants and post-solve-owned outputs that no
+        # optimiser-driven call after call 1 displaces (plan §3.2's regime
+        # disclosure), so it needs more sweeps to converge.  sweeps_per_eval
+        # measures sweeps per call_models in the SAME unit on both arms.
+        # ------------------------------------------------------------------
+        spe: dict = {}
+        for arm in cfg.PHASE_B_ARMS:
+            if arm not in rows:
+                continue
+            hist: dict[str, int] = {}
+            n_ev = n_sw = 0
+            n_runs = 0
+            for r in rows[arm]:
+                h = r.get("spe")
+                if not h or not h.get("hist"):
+                    continue
+                n_runs += 1
+                n_ev += h.get("n_evaluations") or 0
+                n_sw += h.get("n_sweeps") or 0
+                for k, v in h["hist"].items():
+                    hist[k] = hist.get(k, 0) + v
+            if not n_runs:
+                continue
+            # cross-check: the binned total must equal the summed evaluations
+            binned = sum(hist.values())
+            spe[arm] = {
+                "n_runs_contributing": n_runs,
+                "n_evaluations": n_ev,
+                "n_sweeps": n_sw,
+                "mean_sweeps_per_eval": (n_sw / n_ev) if n_ev else None,
+                "hist": dict(sorted(hist.items(), key=lambda kv: int(kv[0]))),
+                "binned_total_equals_n_evaluations": binned == n_ev,
+            }
+        d["i17_sweeps_per_eval"] = spe
+
+        # the prime's own call count, published because D19 keeps it OUT of
+        # node_calls by declaration (trap T11: a denominator that excludes a
+        # real cost must name it).  A prime call is ONE set_fw_geometry(),
+        # not a node; the ratio below is a count ratio, never a cost ratio,
+        # and no conclusion here rests on it.
+        prime: dict = {}
+        for arm in cfg.PHASE_B_ARMS:
+            if arm not in rows:
+                continue
+            ok = [r for r in rows[arm] if r.get("status") == "ok"]
+            pc = sum((r.get("prime_calls") or 0) for r in ok)
+            nc = sum((r.get("node_solve") or 0) for r in ok)
+            mc = sum((r.get("model_calls") or 0) for r in ok)
+            prime[arm] = {"n_ok": len(ok), "prime_calls": pc,
+                          "node_calls": nc, "model_calls": mc,
+                          "prime_calls_per_model_call": (pc / mc) if mc else None,
+                          "prime_calls_over_node_calls": (pc / nc) if nc else None}
+        d["prime_call_census"] = prime
+
+        # B1->B2 diagnostic (NOT a declared pair): needed only to attribute
+        # lad's check-1 failure, where B0->B1, B0->B2 and B0->B3 all report
+        # the same statistic.  Post-hoc, published as a diagnostic.
+        if "B1" in rows and "B2" in rows:
+            dd = []
+            for k in range(cfg.N_STARTS):
+                ra, rb = rows["B1"][k], rows["B2"][k]
+                if conv(ra) and conv(rb):
+                    fa, fb = hexf(ra["objf_hex"]), hexf(rb["objf_hex"])
+                    if fa is not None and fb is not None:
+                        den = max(abs(fa), abs(fb))
+                        dd.append(abs(fb - fa) / den if den else 0.0)
+            d["diagnostic_B1_to_B2"] = {
+                "what": ("post-hoc, not a declared pair: per-pair relative "
+                         "|d objf| between B1 and B2, to attribute which "
+                         "ladder rung introduces a check-1 disagreement"),
+                "n": len(dd), "median": rank_median(dd), "p90": p90(dd),
+                "max": max(dd) if dd else None}
+
         d["check1a"] = {"n_clusters": len(groups),
                         "cluster_sizes": [len(g) for g in groups],
-                        "hop_rates_per_pair": hops}
+                        "hop_rates_per_pair": hops,
+                        "within_cluster_check1": within,
+                        "within_cluster_note": (
+                            "plan §4.2 check 1a: published beside the "
+                            "all-pairs construction, never accepted "
+                            "against; 'would_accept' is the same arithmetic "
+                            "applied to same-cluster pairs, for comparison "
+                            "only")}
 
         # check 2: iteration multiplier, declared nearest-rank median
         iters: dict = {}
