@@ -1043,9 +1043,9 @@ def dsm_blocks(pa_records: Path | None, pb_records: Path | None) -> dict:
     if pa_records and (pa_records / "campaign.json").exists():
         camp = jload(pa_records / "campaign.json")
         for deck in camp["decks"]:
-            per_arm, per_arm_nodes = {}, {}
+            per_arm, per_arm_nodes, per_arm_split = {}, {}, {}
             for arm in camp["arms"]:
-                agg, nodes = {}, {}
+                agg, nodes, split = {}, {}, {}
                 for k in camp["seeds"]:
                     mp = pa_records / deck / arm / f"start{k:03d}" / "metrics.json"
                     if not mp.exists():
@@ -1060,12 +1060,17 @@ def dsm_blocks(pa_records: Path | None, pb_records: Path | None) -> dict:
                         mm = mod.get(n, f"UNMAPPED:{n}")
                         agg[mm] = agg.get(mm, 0) + c
                         nodes.setdefault(mm, set()).add(n)
+                        if n in _SPLIT_NODES:
+                            split[n] = split.get(n, 0) + c
                 if agg:
                     per_arm[arm] = agg
                     per_arm_nodes[arm] = {m_: len(v) for m_, v in nodes.items()}
+                    per_arm_split[arm] = dict(split)
             if per_arm:
-                out["phase_a"][deck] = _finish(per_arm, per_arm_nodes, order,
-                                               rows, "A0", _weighted)
+                d = _finish(per_arm, per_arm_nodes, order, rows, "A0",
+                            _weighted)
+                d["per_node_split"] = per_arm_split
+                out["phase_a"][deck] = d
 
     # ---- Phase B ----------------------------------------------------------
     if pb_records and pb_records.exists():
@@ -1080,9 +1085,9 @@ def dsm_blocks(pa_records: Path | None, pb_records: Path | None) -> dict:
                          and jload(pb_records / deck / a / f"start{k:03d}"
                                    / "metrics.json").get("status") == "ok"
                          for a in arms)]
-            per_arm, per_arm_nodes = {}, {}
+            per_arm, per_arm_nodes, per_arm_split = {}, {}, {}
             for arm in arms:
-                agg, nodes = {}, {}
+                agg, nodes, split = {}, {}, {}
                 for k in ok:
                     m = jload(pb_records / deck / arm / f"start{k:03d}"
                               / "metrics.json")
@@ -1092,13 +1097,28 @@ def dsm_blocks(pa_records: Path | None, pb_records: Path | None) -> dict:
                         mm = mod.get(n, f"UNMAPPED:{n}")
                         agg[mm] = agg.get(mm, 0) + c
                         nodes.setdefault(mm, set()).add(n)
+                        if n in _SPLIT_NODES:
+                            split[n] = split.get(n, 0) + c
                 per_arm[arm] = agg
                 per_arm_nodes[arm] = {m_: len(v) for m_, v in nodes.items()}
+                per_arm_split[arm] = dict(split)
             d = _finish(per_arm, per_arm_nodes, order, rows, "B0", _weighted)
+            d["per_node_split"] = per_arm_split
             d["n_seeds"] = len(ok)
             d["seeds"] = ok
             out["phase_b"][deck] = d
     return out
+
+
+#: Nodes where the STATIC DSM module assignment and the MEASURED liveness
+#: derivation disagree, or where the split matters to read a table.  ``vacuum``
+#: is DSM module **M3** (rows 40-51, "Plant") but A33's backward crawl puts it
+#: in the post-solve set: its 5 census writes have exactly one external read
+#: site, inside ``costs`` -- itself a post-solve peer.  So the DSM's
+#: feed-forward tail (``costs``, ``water_use``) and the measured feed-forward
+#: set (``costs``, ``water_use``, ``vacuum``, +``pulse`` on st) differ by
+#: ``vacuum``.  Both groupings are published; neither is silently preferred.
+_SPLIT_NODES = ("vacuum", "costs", "water_use", "pulse")
 
 
 def _finish(per_arm, per_arm_nodes, order, rows, base, weighted):
