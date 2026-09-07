@@ -11,6 +11,45 @@
 
 ## Arm lattice
 
+### 0. The prime is part of the partitioning intervention, not a separate question *(user decision, 2026-09-07)*
+
+**Decided, not a candidate.** From V4 onward the prime is **a component of the partitioning
+intervention**, not a separately-attributed variant point. The V3 question — *does the prime
+close the FirstWall→Build carrier?* — is **closed**, and `A1u` (its prime-free counterfactual)
+is **retired from the arm lattice.**
+
+**What closed it.** Two independent measurements, either of which would have sufficed:
+
+- **Phase A (report §4, §4.4):** A1u and A0 are **entirely disjoint populations** on all three
+  decks — A1u's minimum restricted residual exceeds A0's maximum by four to five orders, or
+  unboundedly on lad where A0 reads exact zeros. On the integer statistic, A0 and A1 leave
+  **zero components above τ in every run of every deck** while A1u leaves up to 167 in a single
+  run. A1 reproduces A0 bit-identically on lad and st.
+- **Gate G3 (cold chain, st):** trust mode with the prime **off** leaves **124 components above
+  τ** (max residual 1.79e-2); with the prime **on**, **0** (max 3.28e-9). The blocks are true
+  feedforward only when primed.
+
+**And it costs nothing to include.** `A1u→A1` node-call ratio is exactly **1.0000**, bracket
+`[1.0, 1.0]`, and §4.5's per-block table shows A1u and A1 **identical in every block on every
+deck**. The prime changes what `Build` reads, not how often anything runs. Its own cost is
+`n_prime_calls` — one `set_fw_geometry()` per sweep — which stays published beside every ratio
+that excludes it (D19 keeps it out of `node_calls` by declaration; trap T11 requires it be
+named).
+
+**Consequences for V4.** The arm lattice loses one Phase A arm (75 runs: 3 decks × 25 seeds).
+D19 stands as the record of the variant point and `PROCESS_ARCH_PRIME` remains an env switch
+for gating, but **no V4 result attributes anything to the prime separately** — it is inside
+"the partitioning intervention" wherever that phrase appears. Phase B already worked this way
+(O5 declined prime-free twins); this makes Phase A consistent with it.
+
+**What is *not* claimed.** That the prime is sufficient on its own, or that it is the only
+thing the outer loop was repairing. On `st_regression` the trust step still differs from the
+verified loop on 7 of 23 seeds (report §5.3) — primed blocks reach the flat fixed point
+(G3: 0 above τ) but at 3.28e-9 against the verified loop's 1.12e-10, and that sub-tolerance gap
+still moves the optimiser's path on a four-attractor deck. **Both arms are "converged"; they
+are not the same point.** That remains open and is not what item 0 closes.
+
+
 ### 1. A Phase A reference arm, and a naming split: `AR` / `BR` *(user, 2026-09-07)*
 
 **The change.** Rename V3's Phase B `R` to **`BR`**, and add a Phase A counterpart **`AR`**:
@@ -22,8 +61,9 @@ four rungs Phase B already has:
 |---|---|---|---|
 | reference | **`AR`** *(new)* | `BR` *(renamed from `R`)* | PROCESS as shipped |
 | flat, predicate-matched | `A0` | `B0` | **the stopping rule** |
-| block arm, unprimed | `A1u` | — | the partition |
-| block arm, primed | `A1` | `B3` | the prime |
+| partitioned (prime included) | `A1` | `B3` | **the partitioning intervention** |
+
+*(`A1u` is retired — see item 0.)*
 
 **Why V3 had no Phase A reference, and why that reasoning does not survive contact with the
 instrument.** R was excluded because the two arms stop on different criteria over different
