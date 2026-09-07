@@ -743,6 +743,14 @@ noise — but three repetitions of one serial block is not a performance study e
    to a constant while Phase B's B3 *lifts* it into the optimiser, and on lad that quantity is
    the objective — so the two phases differ far more on lad than on nof or st, and lad is
    exactly where the transfer error reverses sign. Hypothesis, untested.
+   **Recorded evidence consistent with (iii), added 2026-09-07:** Phase A's own tally carries a
+   `lift_residual_distribution` — `burn_time_residual` at each run's exit — whose median over
+   the 25 seeds is **155 s** (nof) and **526 s** (lad) in both block arms, against **0** in the
+   flat arm A0. The pin holds both pulsed decks off consistency by construction (its value is
+   the reference burn time times the same 1 ± δ stream factor every other component receives),
+   so what differs between the decks is not the displacement but *what it displaces* — on lad,
+   the objective. It supports (iii)'s mechanism without testing it: §5.4's figure is an
+   accepted optimum's exit state, and per-iterate residuals are recorded nowhere.
    **What is not affected:** Phase A's headline (§4) runs a single evaluation with no
    optimiser and no objective in its statistic; and every cost, iteration and check-1 verdict
    is computed within one deck against that deck's own baseline, where the objective is held
