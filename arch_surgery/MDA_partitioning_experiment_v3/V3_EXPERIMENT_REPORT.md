@@ -175,6 +175,69 @@ here rests on one.
 the measured restricted-audit maximum to a relative difference of median 1.8e-12 (nof),
 8.4e-13 (lad), 8.9e-8 (st) over 25 runs each — the carrier is closed and quantitative.
 
+### 4.4 Phase A statistics and failure rates
+
+Added 2026-09-07 at the user's request. §4's tables give medians and p90s; this is the full
+picture, including the denominators and the failure count.
+
+**Failure rate: zero.** 225 campaign runs (3 decks × 3 arms × 25 seeds), **225/225 `ok`**,
+denominators of 25 per arm per deck, `exit_forensics_complete: True` throughout. No run
+crashed, refused, timed out or was dropped, so every Phase A statistic below is over the full
+declared sample with no seed selection of any kind. Phase A is the clean half of this campaign;
+every failure discussed in this report is Phase B's.
+
+*Caption: full restricted-audit distributions per deck and arm, over 25 ok runs each —
+minimum, median and maximum of the max-scaled residual, then the count of components exceeding
+τ = 1e-6 (summed over the 25 runs, and the worst single run). Sweeps and node calls per single
+evaluation are given as ranges. Dimensionless; a26 ruler.*
+
+| deck | arm | min | median | max | Σ components > τ | worst run | sweeps | node calls |
+|---|---|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | A0 | 0 | 5.04e-10 | 4.35e-9 | **0** | 0 | 5–6 | 105–126 |
+| | A1u | 3.10e-4 | 6.36e-4 | 1.27e-3 | **3906** | 167 | 13–14 | 60–63 |
+| | A1 | 0 | 3.83e-10 | 1.87e-8 | **0** | 0 | 13–14 | 60–63 |
+| `low_aspect_ratio_DEMO` | A0 | 0 | 0 | 0 | **0** | 0 | 5 | 105 |
+| | A1u | 3.92e-4 | 9.81e-4 | 3.08e-3 | **3881** | 167 | 12–13 | 57–60 |
+| | A1 | 0 | 0 | 0 | **0** | 0 | 12–13 | 57–60 |
+| `st_regression` | A0 | 1.63e-9 | 5.37e-9 | 2.88e-8 | **0** | 0 | 5–6 | 105–126 |
+| | A1u | 4.55e-4 | 1.15e-3 | 1.77e-3 | **1525** | 66 | 14–15 | 59–62 |
+| | A1 | 1.63e-9 | 5.37e-9 | 2.88e-8 | **0** | 0 | 14–15 | 59–62 |
+
+Three things the medians in §4 do not show:
+
+**1. The distributions do not overlap at all.** On every deck, **A1u's minimum exceeds A0's
+maximum** — by five orders on nof (3.10e-4 against 4.35e-9), four on st (4.55e-4 against
+2.88e-8), and unboundedly on lad (3.92e-4 against exactly 0). There is no seed, on any deck,
+where the unprimed block arm resembles the flat control. The F = 10 verdict is not a close
+call decided by a summary statistic; the two populations are entirely disjoint.
+
+**2. A1 reproduces A0 exactly on two decks, not merely closely.** On lad both arms read
+**0 at min, median and max** across all 25 runs. On st the two distributions are
+**bit-identical at all three order statistics** (1.63e-9 / 5.37e-9 / 2.88e-8). Only nof shows
+any difference, and there A1's median is *below* A0's (3.83e-10 against 5.04e-10) with a
+slightly longer tail (1.87e-8 against 4.35e-9).
+
+**3. The count statistic is cleaner than the magnitude.** `Σ components > τ` is an integer and
+needs no ruler: **A0 and A1 leave zero components unconverged in every run of every deck**,
+while A1u leaves up to 167 in a single run. That is the result stated without reference to any
+scale — the prime does not merely shrink the residual, it removes every above-tolerance
+component.
+
+**Audit population.** Each deck's coupling-state spec holds 840 (nof) / 846 (lad) / 827 (st)
+components. Of these, **22 on every deck are discrete** and are tested by exact equality rather
+than the scaled residual (`n_discrete_mismatch = 0` throughout); the remaining 818 / 824 / 805
+carry the scaled test, and the restricted construction keeps **696 / 701 / 682** of them,
+excluding **122 / 123 / 123** as owned by the deck's post-solve node set. The exclusion is
+gated in both directions by G4.
+
+**Cold-start term** (reported beside, never pooled into the per-call statistics): 126 node
+calls over 6 sweeps (nof), 105 over 5 (lad), 147 over 7 (st) — the once-per-run cost of the
+full flat MDA convergence at that deck's cold entry, A0 arm.
+
+**Lift residual** (excluded from the similarity statistic by declaration, §4.4 of the plan):
+reported separately per deck as `burn_time_residual` at exit; inactive on `st_regression`
+(k = 0 — nothing lifted or pinned).
+
 ## 5. Phase B results — the declared checks, per deck, never pooled
 
 ### 5.1 Robustness and taxonomy (denominators of 25)
