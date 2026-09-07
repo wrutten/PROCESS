@@ -348,7 +348,44 @@ V2, where lad's B0→B3 median of 1.27 failed the bound and fired the plan's per
 
 Three things must be said beside that pass:
 
-**(i) A pre-declared prediction was refuted.** The plan declared: lad's **B2→B3 stays
+**(i) A pre-declared prediction was refuted, and the sharp form of the result is stronger
+than the median it was declared on.** The plan asked for a *median*; the records support an
+exact, per-seed statement.
+
+*Caption: per-seed identity of optimiser iteration counts between B2 (verified outer loop)
+and B3 (trust), both primed, over both-converged pairs; objective bit-identity beside. The V2
+column is the same comparison with the prime OFF on both sides, recomputed from V2's records.
+Iteration counts are integers, so "identical" here is exact, not "within noise".*
+
+| deck | pairs | iterations identical | objf bit-identical | V2, prime off |
+|---|---|---|---|---|
+| `large_tokamak_nof` | 22 | **22/22** | 20/22 | — |
+| `low_aspect_ratio_DEMO` | 11 | **11/11** | 0/11 | nearest-rank 1.40; sums 209 → 247 over 10 pairs |
+| `st_regression` | 23 | 16/23 | 0/23 | — |
+
+On lad the per-seed vectors are *literally the same list* — B2 and B3 both run
+[13, 15, 36, 21, 14, 65, 10, 18, 16, 12, 10]. And V3's B2 reproduces **V2's B2 seed for seed**
+on the 10 shared seeds, while V2's B3 was a different vector entirely
+([12, 19, 15, 12, 14, 14, 78, 39, 24, 20] — 78 iterations where B2 took 18). Since
+`PROCESS_ARCH_PRIME` is the only run-affecting difference between V2's and V3's B2/B3
+environments (verified by diffing `env_for`), this separates cleanly:
+
+- **The prime is inert in B2**, which has the outer verification loop and therefore already
+  repaired the stale first-call read by re-sweeping.
+- **The prime is decisive in B3**, which has no outer loop and without it carried the
+  first-call error into the optimisation at an erratic cost.
+- **Under the prime, removing the outer verification loop costs exactly nothing on both
+  pulsed decks.** Its only remaining job there was repairing the deficit the prime prevents.
+
+**Not on `st_regression`**, the k = 0 deck: 7 of 23 seeds differ, B3 worse on 6 (38→59,
+47→61, 37→72, 33→47) — the 501 → 587 sum in the table above. On the deck with nothing lifted
+or pinned, the outer loop still does work the prime does not account for. **Hypothesis,
+untested:** on the pulsed decks the pin removes the burn-time coupling and the prime removes
+the first-wall carrier, together leaving nothing to verify; st has no pin, so another
+coupling still needs it. Which coupling is not identified here, and st's 2 hops on B2→B3 mean
+some of those 7 differences may be attractor selection rather than repair work.
+
+**The original pre-declared statement.** The plan declared: lad's **B2→B3 stays
 elevated at ≈ 1.40** under the nearest-rank construction, *"because the carrier is inert
 after call 1"*; and — naming the alternative in advance — *"if it instead falls to ≈ 1.0, the
 first-call deficit **was** the mechanism on lad and A35's inertness reasoning is refuted
