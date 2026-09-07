@@ -162,6 +162,88 @@ amplitude.
 Cost is small: Phase A is 225 single-evaluation runs against Phase B's 350 optimisations, so a
 second δ roughly doubles the cheap phase and leaves the expensive one untouched.
 
+### 1b. `MDA_Output` is not part of the architecture: keep it in B0, drop it from B1 / B2 / B3 *(user decision, 2026-09-07)*
+
+**Decided, not a candidate.** From V4 onward the intervention arms **do not run `MDA_Output`**.
+`R` and `B0` keep it — `R` is PROCESS as shipped and `B0` is the predicate-matched flat
+baseline, so both run PROCESS's own output path unchanged. **A proper architecture does not
+need a second convergence loop at output time**: its solve phase hands over a state it has
+already verified (every block at `inner_tau`, the joint predicate on B2, the uncharged exit
+audit on all of them), and re-solving that state with a different loop before writing it out
+is a property of the incumbent, not of the intervention.
+
+**What `MDA_Output` is.** `Caller.call_models_and_write_output()`
+(`process/core/caller.py:1402`), reached from `write_output_files` in every arm. It loops up
+to ten times: one **flat** `_call_models_once` sweep of every node, then `finalise` writes an
+MFILE, and successive MFILEs are compared float by float at `rtol = 1e-6`. It never enters
+`call_models`, so **the block schedule, the hoist and the post-solve exclusion do not apply to
+it** — in B2 and B3 it is a flat sweep over the full node set, exactly as in B0 (the comment at
+lines 1839–1842 says so). `finalise` additionally re-enters every model's `run()` from its
+`output()` (trap T7), and those re-entries pass through no counter.
+
+**What it did in V3, read from every ok run's record** (an inspection over the campaign
+records on 2026-09-07 — `node_calls_total − node_calls_solve_phase`, less the post-solve
+nodes, over the 21 executing nodes; under protocol §15 these are not citable until a committed
+stage reproduces them, which is the first task below):
+
+- **Two flat sweeps per run, in every arm, on every config** — the loop's minimum: one to
+  write the first MFILE, one to confirm it. Symmetric across R / B0 / B1 / B2 / B3.
+- **Three B3 runs on `st_regression` needed a third pass** (seeds 0, 14, 23; all `ifail = 1`).
+  The state the block solve handed over was not MFILE-idempotent at `rtol = 1e-6` after two
+  flat passes. No R, B0, B1 or B2 run did this on any config. It is the only asymmetry, and it
+  is in the one place where the block arm's fixed point is re-tested by the flat loop.
+- The census behind report §5.5.1 therefore carries **three** extra sweeps per module row per
+  run (two `MDA_Output`, one exit audit), plus the once-per-run post-solve execution in B2/B3
+  — not the "exactly one sweep" its denominator note states. Still symmetric, still ≈ 0.1 % of
+  a run's ≈ 2 000 solve sweeps; no ratio moves. The sentence is wrong and should be corrected.
+
+**Why it matters more than its node count.** The Phase B exit audit is taken **after**
+`SingleRun.run()` returns (`run_one.py`, "A28 / A26 fix 1"), i.e. after `write_output_files`
+has already put the block arm's exit state through `MDA_Output`'s two flat sweeps and the
+post-solve sweep. **What the Phase B audit measures on B2 / B3 is the residual of a state the
+flat loop has already relaxed twice, not the block arm's own exit state.** Check 1's
+`norm_objf` is read from the MFILE `MDA_Output` writes, so the same applies to it. Phase A's
+audit does not have this problem (`v2_eval_one.py` audits the single call directly). On the
+three st runs above the relaxation was large enough to show in the MFILE at `1e-6`; on every
+other run it was below that, which bounds the effect but does not remove it. Removing
+`MDA_Output` from the intervention arms makes the Phase B audit read the state the
+architecture actually produced — which is what "compare at matched achieved accuracy" was
+always supposed to mean — and it is the exit audit, not `MDA_Output`, that then carries the
+acceptance for the block arms' output state.
+
+**What the V4 plan has to settle, in order.**
+
+1. **Commit the count first.** A `--tables` cell in `v3_report_analysis.py` (or a `phase_b.py`
+   tally field, so `--verify` can compare it): `MDA_Output` sweeps per run by arm and config,
+   with the three-pass runs named. Then correct §5.5.1's denominator sentence from the
+   committed number and record the audit-position finding in §8.
+2. **Define the replacement output path for B1 / B2 / B3.** The natural reading: skip the
+   idempotence loop and call `finalise` once on the accepted state (the `output()` re-entries of
+   trap T7 remain — those are how PROCESS writes files, not a solve). Driver-side, in
+   `write_output_files`, env-switched, and byte-identical to upstream with the switch unset
+   (switch-neutrality is a gate). A driver change, so it needs the user's approval before
+   merging (D11 applies to models; this is `caller.py`, but the same review rule).
+3. **Declare the new difference in the lattice.** Every ordered pair of arms must declare what
+   differs (report §5.5, enforced at run time). `B0 → B1` would now differ in the lift *and*
+   the output path unless the removal is given its own rung or declared alongside; the plan
+   must choose, and item 1's `AR` / `BR` reference arms need the same declaration.
+4. **Move the exit audit, or record where it sits.** With `MDA_Output` gone from the block arms
+   the post-run audit reads the right state on them; on `B0` it still reads a post-`MDA_Output`
+   state. Either audit every arm at the entry to `write_output_files` (A28's
+   `--exit-audit-at-call` mechanism already exists for a call-indexed variant) or publish the
+   audit position per arm beside the residuals. What must not happen is a residual table whose
+   arms were audited at different points without saying so.
+5. **The three st runs are a result to keep, not a defect to remove.** They are the only V3
+   evidence that a primed, trust-stepped block solve can hand over a state the flat loop still
+   moves at `1e-6`; `MDA_Output` found them by accident. V4 should look for the same thing on
+   purpose — the exit audit at the accepted point, per run, with the count of components above
+   τ — since after this change nothing else will.
+
+**What is *not* claimed.** That `MDA_Output` costs anything the headline can see — two flat
+sweeps against ≈ 2 000 is noise — or that removing it changes any V3 ratio. The claim is about
+what the intervention *is*: an architecture that certifies its own output state does not get
+to borrow the incumbent's second loop to do it, and V3's block arms did.
+
 ## Schedule and driver defects
 
 ### 2. Empty blocks are still swept *(I-20a)*
@@ -220,6 +302,107 @@ widest cluster is 8.4e-6 across. So on any deck whose optima are denser than 1e-
 within-cluster construction **cannot** separate "same optimum" from "different optimum less
 than 1e-5 away", and lad's within-cluster p90 of 1.26e-6 is fully consistent with the latter.
 V4 should either decouple the two constants or declare the resolution limit explicitly.
+
+### 5a. A conventional convergence predicate: trial first, adopt if it passes *(user, 2026-09-07)*
+
+**The change.** Replace the coupling-state predicate's frozen denominator with the textbook one.
+Today ([`ystate.py`](../../fixedpoint/ystate.py), `_residual_aligned`) a continuous component
+passes when `max|dy_i| / s_i < τ`, with `s_i` the median magnitude over the config's harvest
+(149 / 297 / 144 design points on nof / lad / st), frozen in `ystate_a26_<config>.json`, and `s_i = 1.0` where no
+magnitude was ever observed. The conventional form — Dennis & Schnabel's scaled step test, which
+MINPACK's `diag`, KINSOL's scaling vectors and OpenMDAO's output `ref` all reduce to — keeps the
+measured scale as the **floor** and adds the **current value**:
+
+    max_i |dy_i| / max(|y_i|, s_i) < τ
+
+with `|y_i|` read from the post-sweep iterate and, for an array component, its `max|elements|`
+exactly as `_char_mag` measures the scale, so only the denominator changes. Two properties follow
+by construction and are what make the trial cheap to interpret: **(i)** wherever `|y_i| ≤ s_i` the
+test is **bit-identical** to today's; **(ii)** the new test is never tighter than the old one, so
+no count can go up. Everything else stays — the max-norm, exact equality on discrete components,
+the `inf` score for a field no model has written yet (A25's lesson), the `NONFINITE` pattern test,
+and the recorded floor.
+
+**What is *not* proposed, and why.** Not a 2-norm over the 800-odd components (OpenMDAO's
+`NonlinearBlockGS` default): the experiment plan requires convergence *on every coupling
+variable*, the exit audit's integer statistic is "components above τ", and a norm that averages
+would declare convergence with named components still moving — that changes what "converged"
+means, not how it is measured. Not relative-to-initial-residual (PETSc's `rtol‖r₀‖`): in a
+per-call MDA `r₀` is set by the entry displacement, so the tolerance would depend on δ, the
+confound §3.3 exists to remove. Not `np.allclose`'s hidden `atol = 1e-8`: the floor here stays
+explicit, per component, and in the artifact (A27 already filed upstream's hidden constant as a
+defect). This is the smallest change that makes the predicate conventional; it is not the most
+conventional predicate available.
+
+**Why it matters here, from the record.** I-12 is the measured case: `costs.coe` at 6.6e21
+against `s_i = 1 251` made the old test ~10¹⁸ times tighter than intended and iterated seven of
+st's 144 design points to bit-identity, and the amended I-12 records that upstream's
+current-value test at the same point is *looser* than ours by 5.3e18. In V3 the post-solve hoist
+took `costs` out of the loop, so that exact mechanism no longer fires in the driver arms — but the
+convention is unchanged and the components remain in the audit. An ad hoc read of the committed
+a26 artifacts (**not citable** until a committed stage re-derives it, protocol §15) puts the
+harvest's spread within about 3× of the scale for 90 % of components on every config, with a
+short list spanning more than 10×:
+
+| config | components spanning > 10× over the harvest | the largest, as max / scale |
+|---|---|---|
+| nof | 2 | `power.e_plant_net_electric_pulse_{mj,kwh}`, 1.3 |
+| lad | 2 | `tfcoil.m_tf_coil_superconductor`, **70** |
+| st | 9 | `costs.{coe,coecap,coefuelt}`, 10¹⁶–10¹⁸; `power.e_plant_net_electric_pulse_{mj,kwh}`, 50; `heat_transport.p_plant_electric_net_mw`, 13; `physics.nd_plasma_electron_max_array`, 10 |
+
+The lad entry is not incidental. `tfcoil.m_tf_coil_superconductor` is the argmax of lad's
+restricted A1 residual in 21 of 25 A38 runs and the one similarity term no linear image of the
+carrier explains (A38; V3 G3c). Under the frozen denominator a value 70× the harvest median is
+scored 70× harsher than a current-value test would score it. **Whether that argmax is a scaling
+artefact is a hypothesis the trial answers directly**, and either answer is a result.
+
+**The trial, pre-declared.** One implementation, in `ystate.py`, selected by a spec-level mode
+(`predicate: frozen | mixed`) recorded in every artifact and every run record, default
+**`frozen`** so every V2/V3 record reproduces. The driver
+([`module_solve.py`](../../../process/core/solver/module_solve.py)) and the replay engine both
+import the predicate from there, so both consume the change with no second implementation (the
+D14(c) rule). A pass is **decisive** when some component is at or above τ on the frozen
+denominator and below it on the mixed one — the only way the two modes can disagree. Then:
+
+1. **Neutrality gate.** Default mode reproduces V3's Phase A records bit-for-bit — node calls,
+   objective hex, audit hex, exit state — the A38 construction, a bit-comparison not a tolerance.
+2. **The identity with teeth.** Under `mixed`, every run with no decisive pass is bit-identical
+   to `frozen` in counts and exit state. This holds by construction; a run where it does not is a
+   defect in the implementation, not a finding.
+3. **The binding set, named.** Per config and arm: the decisive passes, the components that made
+   them decisive, `|y_i| / s_i` there, and whether that component was the pass-holding argmax
+   under `frozen`. Plus a doctored-component tooth in G4's shape: a component set to `100 s_i`
+   with `dy = 50 τ s_i` fails `frozen` and passes `mixed`; the same `dy` at `y = s_i` fails both.
+4. **The measurement.** Phase A (A0, A1; 25 seeds; three configs; δ = 0.10) under both modes:
+   per-arm sweep and node-call counts, the A1/A0 ratio with its seed bracket, and the exit audit
+   **on both rulers** — frozen for comparability with V2 / V3 / A38, mixed because an audit on a
+   ruler other than the predicate's is a comparison at unmatched accuracy (§3.3). Phase B (B0, B3)
+   only if Phase A shows a decisive pass on an in-loop component.
+
+**Acceptance for adoption.** Gates 1–3 pass, *and* the measurement lands in one of two places,
+both of which adopt: **(a) neutral** — no decisive pass anywhere, or only on components that
+never held a pass, and every ratio moves by less than its seed bracket — the conventional
+predicate is adopted as the easier-to-defend equivalent; **(b) non-neutral** on a named set — it
+is adopted **and** the V3 ratios that moved are re-stated as metric-dependent, with the size of
+the move and the components responsible. The only outcome that blocks adoption is a gate
+failure, which is a result about the implementation and is reported as such. Adoption means:
+`mixed` becomes V4's default predicate *and* its audit ruler; `frozen` stays selectable for
+cross-study comparison; V3's published numbers are not retro-edited.
+
+**Cost.** Phase A under one extra mode is 150 single-evaluation runs (A1u retired, item 0) plus
+gates — the same order as item 1a's second amplitude. The `ystate.py` change is one denominator
+in two branches plus a mode field. A26's replay ladder (`run_a26.py`) can be re-run under
+`mixed` for a cheap first look before Phase A is spent, and at `hoist = 0` it exercises the I-12
+population directly, since there `costs` is still inside the loop.
+
+**Two traps it sets.** *(i)* `components_sha256` covers keys, categories, scales, and — for a
+non-A18 mode — the spec mode and floor in a preamble, but not the predicate form. A `mixed` run
+whose record does not name the mode is indistinguishable from a `frozen` one after the fact; the
+predicate mode must enter that preamble the way `SPEC_MODE_A26` and the floor did (A26 AD5), so a
+mismatched pairing is refused rather than silent. *(ii)* The mixed ruler reads *lower* than the
+frozen one wherever the term binds, by construction. A V4 table that shows only the mixed audit
+beside V3's frozen one would report an accuracy gain that is a change of ruler. Both columns, or
+neither.
 
 ## Machinery owed
 
