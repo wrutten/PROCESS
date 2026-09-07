@@ -469,6 +469,86 @@ places, in every block arm on every deck.
 post-solve set collapses from **133 818 → 264**. The post-solve hoist is where the largest
 single fractional saving sits; M3 is where the largest absolute one sits.
 
+### 5.6 Reading the three decks together: they do not optimise the same thing
+
+Added 2026-09-07 at the user's request. Every cross-deck comparison above implicitly treats
+the decks as three samples of one experiment. They are not: **each optimises a different
+figure of merit**, and on one deck the objective *is* the quantity the ladder lifts.
+
+*Caption: problem definition per deck, from each run's own record (`i_figure_merit`, `nvar`,
+`n_constraints`) against the `FiguresOfMerit` enum in `process/data_structure/numerics.py:88`.
+A negative `i_figure_merit` means maximise.*
+
+| deck | `i_figure_merit` | objective | sense | vars | constraints (eq / ineq) | pulsed |
+|---|---|---|---|---|---|---|
+| `large_tokamak_nof` | 1 | plasma major radius R₀ | minimise | 20 | 26 (3 / 23) | yes |
+| `low_aspect_ratio_DEMO` | −14 | **pulse length `t_plant_pulse_burn`** | maximise | 19 | 25 (4 / 21) | yes |
+| `st_regression` | −5 | fusion gain Q | maximise | 14 | 18 (3 / 15) | no (k = 0) |
+
+**The consequence that matters: on `low_aspect_ratio_DEMO`, the burn-time lift promotes the
+deck's own objective into the design vector.** Constraint 93 and iteration variable 178 are
+`t_plant_pulse_burn` — which is exactly what lad maximises. So B0 computes the burn time
+through the MDA and reports it as the objective; B1/B2/B3 let the optimiser *choose* it and
+enforce consistency through c93. Those are not the same optimisation problem. On nof the same
+switch is a pure architectural change (burn time is a constraint-side quantity, not the
+objective); on st the switch is absent entirely.
+
+**This is why B0 is the odd arm out on lad, and why B1 = B2 = B3 there.** §5.2 localised lad's
+check-1 failure to B0→B1 by measurement; the objective table says why that rung and no other.
+
+**But the lift does not bias lad's objective — it re-selects among nearby optima.** Per seed,
+B1 is strictly better than B0 on 6 and worse on 5, with magnitudes from 2.6e-11 to 1.3e-4:
+
+| seed | B0 | B1 | B1 − B0 |
+|---|---|---|---|
+| 1 | −0.405823482872 | −0.405951259711 | **−1.278e-4** (better; the one cluster hop) |
+| 13 | −0.406240740695 | −0.406239868231 | +8.725e-7 (worse) |
+| 11 | −0.406296108371 | −0.406295596151 | +5.122e-7 (worse) |
+| 5 | −0.405947838712 | −0.405947838738 | −2.606e-11 (better) |
+
+So lad's failure is **not** "the architecture computes a different answer". It is "the lift
+changes which of ten densely-packed local optima the optimiser selects", in both directions.
+
+**A construction limit this exposes, which applies to every deck.** The clustering gap is
+`CLUSTER_GAP_FLOOR_FACTOR × OBJF_FLOOR_REL = 10 × 1e-6 = 1e-5`, while check 1's acceptance
+floor is `1e-6` — **the clusters are ten times coarser than the tolerance they are meant to
+help interpret.** Two runs in the same cluster may legitimately differ by up to ~1e-5, and
+lad's widest cluster is 8.4e-6 across. So lad's within-cluster p90 of 1.26e-6 is entirely
+consistent with "same cluster, different optimum inside it", and the within-cluster
+construction **cannot** separate "same optimum" from "different optimum less than 1e-5 away".
+Both constructions were pre-declared and neither is wrong; but a reader must not take
+within-cluster agreement as proof of a shared optimum. On a deck whose optima are denser than
+1e-5, check 1 as constructed has no resolution.
+
+**The flat-direction reading, and what the argmax census supports.** §5.2.2's location
+diagnostic names which variable differs most per pair. Set against each deck's objective:
+
+| deck | objective | argmax of the point difference (B0→B3) | point median |
+|---|---|---|---|
+| nof | minimise R₀ | `f_nd_alpha_thermal_electron` (12/22), `f_nd_impurity_electrons(13)` (5/22) | 4.6e-2 |
+| lad | maximise burn time | `j_cs_flat_top_end` (7/11), `dr_cs` (2), `f_j_cs_start_pulse_end_flat_top` (2) | 5.4e-6 |
+| st | maximise Q | `dr_shld_inboard` (14/22), `dr_tf_nose_case` (6/22) | 4.5e-6 (p90 0.21) |
+
+**Hypothesis (mine, not pre-declared):** the variables that differ most between arms are the
+ones each deck's objective is least sensitive to. Radial-build thicknesses barely move Q, and
+st's points differ by up to 100 % in exactly those. Composition fractions barely move R₀, and
+nof's differ by 4.6 % in exactly those. lad, whose objective is set by CS flux swing, differs
+most in the CS variables — but by only 5e-6, because its objective *does* depend on them
+tightly. This is consistent across all three decks and it is n = 3; it is a pattern to test,
+not a finding.
+
+**One structural difference not visible in the cost tables.** `st_regression` is the only deck
+whose `PULSE` block is **live**: 1131 block sweeps in B2 and 570 in B3, exactly one per
+evaluation. On nof and lad the block is empty (`PULSE: 0`) because the lift and post-solve
+hoist removed `pulse` from the loop. So the deck labelled "the clean partition-only case"
+carries one more executing block than the two that get the lift.
+
+**What this does to the cross-deck comparisons.** The cost result (§5.5) is unaffected: node
+calls are counted per deck against that deck's own baseline. The correctness results are not
+comparable in the way a single table implies — nof's PASS, lad's FAIL and st's split verdict
+are three different questions about three different optimisation problems, and only st asks
+the partition-only question the experiment was designed around.
+
 ## 6. I-17: the Phase A → Phase B transfer, and what `sweeps_per_eval` says
 
 The plan amended §5 before the campaign to record that V2's A→B transfer **over-predicted
