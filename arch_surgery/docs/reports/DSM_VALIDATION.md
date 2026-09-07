@@ -5,8 +5,11 @@
 > across tasks and is a deliverable back to the dependency-analysis study.
 
 **Base commit:** `c0ae5b28` · **DSM pin:** `PROCESS_at_36ac820e` (descends from `c0ae5b28`, so the
-coordinate systems match) · **Instrument:** `PROCESS_code_analysis/dependency_analysis`, run in
-`ESL_env`, pinned at `ANALYSIS_PIN_NAME` in `dependency_analysis/core/inputs/config.py`.
+coordinate systems match) · **Instrument:** `PROCESS_code_analysis/src/PROCESS_DSM`, run in
+`ESL_env`, pinned at `ANALYSIS_PIN_NAME` in `src/PROCESS_DSM/inputs/config.py`.
+*(Path corrected 2026-09-07: the sibling restructured and `dependency_analysis/` no longer
+exists. Older `dependency_analysis/...` paths below are left as written — they record where
+those artifacts were read at the time, and rewriting them would falsify the provenance.)*
 
 ## Why this document exists
 

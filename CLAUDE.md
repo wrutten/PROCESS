@@ -107,6 +107,8 @@ in `arch_surgery/`.
   `process.__file__` and aborts if it is not under `PROCESS_surgery`. Keep that check even though
   the environment is now correct.
 - The dependency-analysis instrument lives in the sibling repo
-  `PROCESS_code_analysis/dependency_analysis`, runs in `ESL_env`, and is pinned at
-  `ANALYSIS_PIN_NAME` in `dependency_analysis/core/inputs/config.py` — read it; never copy a
-  hash into a document.
+  `PROCESS_code_analysis/src/PROCESS_DSM`, runs in `ESL_env`, and is pinned at
+  `ANALYSIS_PIN_NAME` in `src/PROCESS_DSM/inputs/config.py` — read it; never copy a
+  hash into a document. *(Path corrected 2026-09-07: the sibling restructured and
+  `dependency_analysis/` no longer exists. `arch_surgery/idf_probe/a33_postsolve.py` already
+  used the correct path; this document and `DSM_VALIDATION.md`'s header were stale.)*
