@@ -446,6 +446,30 @@ and are never evidence.*
 evaluations than the flat baseline, on every deck and under both set constructions.** The
 sign is uniform and the margin is large relative to anything in the noise.
 
+**Against PROCESS as shipped, which is a different and often larger number.** B0 is not R:
+they differ by the stopping rule alone, and that is not free — R→B0 measures 0.976 / 1.028 /
+1.155 by deck. So "cheaper than the predicate-matched flat baseline" and "cheaper than the
+code as shipped" are different claims, and a deployment question wants the second.
+
+*Caption: B3's node-call ratio against both anchors, per deck and set. B3/B0 isolates the
+architecture at a matched stopping rule and is the ladder's number; B3/R is the end-to-end
+change a user switching from shipped PROCESS would see, and conflates the architecture with
+the stopping-rule change. Both come from the same committed sums above.*
+
+| deck | set | n | R→B0 | **B3/B0** | **B3/R** |
+|---|---|---|---|---|---|
+| `large_tokamak_nof` | ok = converged | 22 | 0.976 | 0.639 | **0.655** |
+| `low_aspect_ratio_DEMO` | ok | 20 | 1.028 | 0.460 | **0.447** |
+| | converged | 11 | 1.030 | 0.450 | **0.437** |
+| `st_regression` | ok | 25 | 1.155 | 0.583 | **0.505** |
+| | converged | 22 | 1.197 | 0.533 | **0.445** |
+
+On `st_regression` the two anchors differ by 9 percentage points: the predicate-matched
+baseline is already 15–20 % cheaper than shipped PROCESS there, so measuring against B0
+**understates** what a user would gain. On `large_tokamak_nof` it goes the other way by 1.6
+points. Neither ratio is more correct; they answer different questions, and the report's
+headline uses B0 because that is the anchor the ladder decomposes against.
+
 *Caption: sweeps and prime calls per arm over the ok set — the accounting that explains how
 node calls fall while dispatch sweeps rise. `prime/sweep` verifies the prime's contract (one
 `set_fw_geometry()` per sweep); `prime/node` is the cost D19 excludes from the ratios above,

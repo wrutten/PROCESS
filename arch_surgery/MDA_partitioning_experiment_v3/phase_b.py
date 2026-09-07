@@ -935,11 +935,23 @@ def stage_tally() -> int:
                 per_arm[a] = {"node_calls_solve_phase": ns,
                               "model_calls": mc}
             b0 = per_arm.get("B0")
+            ranch = per_arm.get("R")
             for a in arms:
                 if b0 and b0["node_calls_solve_phase"]:
                     per_arm[a]["node_ratio_vs_B0"] = (
                         per_arm[a]["node_calls_solve_phase"]
                         / b0["node_calls_solve_phase"])
+                # vs the SHIPPED code, not the predicate-matched baseline.
+                # B0 differs from R by the stopping rule alone, and that is
+                # not free (R->B0 measures 0.98 / 1.03 / 1.15 by deck), so
+                # "cheaper than B0" and "cheaper than PROCESS as shipped"
+                # are different numbers and a deployment question wants the
+                # second.  Published beside; the ladder's decomposition
+                # remains the B0-anchored one.
+                if ranch and ranch["node_calls_solve_phase"]:
+                    per_arm[a]["node_ratio_vs_R"] = (
+                        per_arm[a]["node_calls_solve_phase"]
+                        / ranch["node_calls_solve_phase"])
             cost[variant] = {"n_seeds": len(common), "seeds": common,
                              "per_arm": per_arm}
         deck_summary["check4_cost_sums"] = cost
