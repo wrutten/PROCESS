@@ -725,6 +725,54 @@ def phase_b(root: Path | None = None) -> dict:
             }
         d["check2_iters"] = iters
 
+        # §5.3 R-referenced iteration table (user request, 2026-09-07).
+        # ONE seed set per deck -- seeds where R, B0 AND B3 all converged --
+        # so a single n applies to every cell of a row.  The pairwise sets
+        # in check 2 differ per pair (lad's B0->R has 12 seeds, its B0->B3
+        # 11), which is why that table could never carry a total across
+        # columns.  Cells are MEAN optimiser iterations per seed.  B3/R is
+        # published twice because the two answer different questions and
+        # can disagree in direction (lad): the ratio of means (== ratio of
+        # sums over the same seeds; campaign cost) and the DECLARED
+        # nearest-rank median of per-seed ratios with its [min, max] seed
+        # bracket (typical seed), beside the count of seeds where B3 took
+        # strictly more iterations than R.  Diagnostic beside check 2, never
+        # an acceptance: the declared check-2 pair is B0->B3 and its bound
+        # is on the median in ``check2_iters`` above.
+        vs_r: dict = {}
+        r_arms = ("R", "B0", "B3")
+        if all(a in rows for a in r_arms):
+            seeds = [k for k in range(cfg.N_STARTS)
+                     if all(conv(rows[a][k]) and rows[a][k]["iters"]
+                            for a in r_arms)]
+            n = len(seeds)
+            its = {a: [rows[a][k]["iters"] for k in seeds] for a in r_arms}
+            per_seed = [its["B3"][i] / its["R"][i] for i in range(n)]
+            vs_r = {
+                "seed_construction": ("seeds where R, B0 and B3 ALL "
+                                      "converged (status ok AND ifail == 1) "
+                                      "and recorded iterations; one set per "
+                                      "deck"),
+                "n": n,
+                "seeds": seeds,
+                "mean_iters_per_seed": {a: (sum(its[a]) / n if n else None)
+                                        for a in r_arms},
+                "sum_iters": {a: sum(its[a]) for a in r_arms},
+                "seed_bracket": {a: ([min(its[a]), max(its[a])] if n
+                                     else None) for a in r_arms},
+                "B3_over_R": {
+                    "ratio_of_means": ((sum(its["B3"]) / sum(its["R"]))
+                                       if n and sum(its["R"]) else None),
+                    "per_seed_median": rank_median(per_seed),
+                    "per_seed_min": min(per_seed) if per_seed else None,
+                    "per_seed_max": max(per_seed) if per_seed else None,
+                    "n_B3_worse_than_R": sum(1 for r in per_seed
+                                             if r > 1.0),
+                    "median_construction": cfg.MEDIAN_CONSTRUCTION,
+                },
+            }
+        d["check2_iters_vs_R"] = vs_r
+
         # check 3: c93 at accepted optima
         c93: dict = {}
         for a in ("B1", "B2", "B3"):
@@ -1519,8 +1567,25 @@ def _spread(r: dict, n: int) -> tuple:
 
 
 def print_tables(res: dict) -> None:
-    """Emit the report's §4.5 and §5.5.1 tables as markdown, so the published
-    tables are literally this script's output (protocol §15)."""
+    """Emit the report's §5.3, §4.5 and §5.5.1 tables as markdown, so the
+    published tables are literally this script's output (protocol §15)."""
+    print("\n===== §5.3 Phase B: optimiser iterations per seed, "
+          "R-referenced =====\n")
+    print("| config | n | R | B0 | B3 | B3/R mean | B3/R median [min, max] "
+          "| B3/R > 1 |")
+    print("|---" * 8 + "|")
+    for deck, d in (res.get("phase_b") or {}).items():
+        e = d.get("check2_iters_vs_R") or {}
+        n = e.get("n")
+        if not n:
+            continue
+        m, r = e["mean_iters_per_seed"], e["B3_over_R"]
+        print(f"| `{DECK_ABBR.get(deck, deck)}` | {n} | {m['R']:.2f} "
+              f"| {m['B0']:.2f} | {m['B3']:.2f} | {r['ratio_of_means']:.3f} "
+              f"| {r['per_seed_median']:.3f} [{r['per_seed_min']:.3f}, "
+              f"{r['per_seed_max']:.3f}] | {r['n_B3_worse_than_R']}/{n} |")
+    print()
+
     ms = res.get("module_sweeps") or {}
     order = ("M1", "M2", "M3 live", "vacuum", "PULSE", "FF")
     print("\n===== §4.5 Phase A: module sweeps per run =====\n")
@@ -1579,7 +1644,7 @@ def main() -> int:
                          "doctored recomputations that must each be "
                          "refused (protocol §12)")
     ap.add_argument("--tables", action="store_true",
-                    help="print the report's §4.5 / §5.5.1 markdown tables "
+                    help="print the report's §5.3 / §4.5 / §5.5.1 markdown tables "
                          "from the recomputation and exit")
     ap.add_argument("--mode", choices=("campaign", "smoke"),
                     default="campaign",
