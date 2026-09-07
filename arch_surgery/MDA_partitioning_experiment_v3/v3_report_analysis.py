@@ -300,6 +300,8 @@ def phase_b(root: Path | None = None) -> dict:
                     "dirty": m.get("tree_git_dirty"),
                     "prime_calls": m.get("n_prime_calls"),
                     "spe": m.get("sweeps_per_eval"),
+                    "xcs": (m.get("exact") or {}).get("xcs"),
+                    "itvar_names": m.get("itvar_names"),
                 })
             rows[arm] = per
         if not rows:
@@ -472,6 +474,95 @@ def phase_b(root: Path | None = None) -> dict:
                     and e["p90"] is not None
                     and e["p90"] <= max(F * (wyard["p90"] or 0.0),
                                         cfg.OBJF_FLOOR_REL))
+        # ------------------------------------------------------------------
+        # OPTIMALITY vs LOCATION.  Check 1 compares |d norm_objf| -- how good
+        # the optimum is.  It says nothing about WHERE the arms landed: two
+        # arms can agree on the objective to 1e-15 and sit at materially
+        # different design points, because a flat or non-identified direction
+        # costs nothing in the objective.  D6 forbids GATING on iteration
+        # variables for exactly that reason ("some are not identified by the
+        # problem and differ at an unchanged optimum"), so this is a
+        # DIAGNOSTIC, published beside, never an acceptance -- and it is the
+        # only thing in this report that speaks to point agreement.
+        #
+        # Statistic: over the same both-converged pairs check 1 uses, the max
+        # over iteration variables of the per-variable relative difference
+        # |dx| / max(|x_a|, |x_b|), on the UNSCALED vector (xcs), plus the
+        # argmax variable's name.  Reported beside the pair's objective
+        # difference and its cluster verdict, so "same objective" and "same
+        # point" can be read apart.
+        # ------------------------------------------------------------------
+        point = {}
+        for name, (a, b) in pair_defs.items():
+            if a not in rows or b not in rows:
+                continue
+            per_pair = []
+            for k in range(cfg.N_STARTS):
+                ra, rb = rows[a][k], rows[b][k]
+                if not (conv(ra) and conv(rb)):
+                    continue
+                xa, xb = ra.get("xcs"), rb.get("xcs")
+                na = ra.get("itvar_names") or []
+                nb = rb.get("itvar_names") or []
+                if not xa or not xb or not na or not nb:
+                    continue
+                # Match by NAME, never by index: the lift ADDS an iteration
+                # variable, so B1/B2/B3 carry one more than B0 and a
+                # positional zip would either crash or silently compare
+                # different variables.  Variables present on only one side
+                # are counted and named, never compared.
+                ma = {n: hexf(h) for n, h in zip(na, xa)}
+                mb = {n: hexf(h) for n, h in zip(nb, xb)}
+                shared = [n for n in na if n in mb]
+                only_a = [n for n in na if n not in mb]
+                only_b = [n for n in nb if n not in ma]
+                worst, worst_name = 0.0, None
+                for n_ in shared:
+                    va, vb = ma[n_], mb[n_]
+                    if va is None or vb is None:
+                        continue
+                    den = max(abs(va), abs(vb))
+                    r = (abs(vb - va) / den) if den else 0.0
+                    if r > worst:
+                        worst, worst_name = r, n_
+                fa, fb = hexf(ra["objf_hex"]), hexf(rb["objf_hex"])
+                den = max(abs(fa), abs(fb))
+                per_pair.append({
+                    "seed": k,
+                    "max_rel_point_diff": worst,
+                    "argmax_itvar": worst_name,
+                    "n_shared_itvars": len(shared),
+                    "itvars_only_in_a": only_a,
+                    "itvars_only_in_b": only_b,
+                    "rel_objf_diff": (abs(fb - fa) / den) if den else 0.0,
+                    "same_objf_cluster": (
+                        cluster_of.get((a, k)) == cluster_of.get((b, k))
+                        if ((a, k) in cluster_of and (b, k) in cluster_of)
+                        else None),
+                })
+            vals = sorted(e["max_rel_point_diff"] for e in per_pair)
+            same = [e for e in per_pair if e["same_objf_cluster"]]
+            same_v = sorted(e["max_rel_point_diff"] for e in same)
+            point[name] = {
+                "what": ("DIAGNOSTIC, never an acceptance (D6): max over "
+                         "iteration variables of |dx| / max(|x_a|,|x_b|) on "
+                         "the unscaled vector, per both-converged pair"),
+                "n": len(vals),
+                "median": rank_median(vals),
+                "p90": p90(vals),
+                "max": vals[-1] if vals else None,
+                "n_same_objf_cluster": len(same),
+                "median_within_objf_cluster": rank_median(same_v),
+                "p90_within_objf_cluster": p90(same_v),
+                "max_within_objf_cluster": same_v[-1] if same_v else None,
+                "argmax_itvar_census": {
+                    n: sum(1 for e in per_pair if e["argmax_itvar"] == n)
+                    for n in sorted({e["argmax_itvar"] for e in per_pair
+                                     if e["argmax_itvar"]})},
+                "per_pair": per_pair,
+            }
+        d["diagnostic_point_agreement"] = point
+
         # ------------------------------------------------------------------
         # I-17 instrumentation (EXPERIMENT_PLAN §5 amendment, pre-declared
         # before the campaign with BOTH outcomes named as results).
