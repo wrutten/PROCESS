@@ -404,6 +404,73 @@ frozen one wherever the term binds, by construction. A V4 table that shows only 
 beside V3's frozen one would report an accuracy gain that is a change of ruler. Both columns, or
 neither.
 
+### 5b. One convergence filter and one format for every Phase B cost table *(user question, 2026-09-07; **the approach to implement requires the user's review and approval**)*
+
+**The problem.** V3's Phase B statistics filter seeds five different ways (census of
+2026-09-07, from `v3_report_analysis.py`, not from the captions): the correctness checks (1, 2,
+3, the location diagnostic) admit only **both-converged pairs**, a set per pair; §5.5's
+node-call sums are published on **two** sets, identical-ok and identical-converged, with the
+headline on converged; §5.5.1's per-module sweeps run on **identical-ok only**; §5.5's
+prime-call table and §6's sweeps-per-evaluation sum **each arm's own ok runs**, unpaired; §7's
+timing is unfiltered. So on lad §5.5.1 runs on 20 seeds while the headline above it runs on 11,
+the prime table's node-call column disagrees with §5.5's for the same arm (lad B0: 1 976 331
+against 1 917 384) and its caption does not say why, and §5.5 publishes sums whose magnitudes
+carry the row's n while §5.5.1 and §5.3 publish per-run means. None of this is wrong in
+isolation; together it means "the cost result" has no single denominator.
+
+**What the two constructions actually differ by** (read from the campaign records on
+2026-09-07 while answering the question; **not yet from a committed script** — the script that
+implements this item re-derives every number here before any is published):
+
+- **On every config the set where *every* arm converged equals the set where B0 and B3 both
+  converged: 22 / 11 / 22.** A single converged set per config therefore costs check 2 and
+  check 4 nothing, and is the set §5.3 already uses.
+- **lad's 9 ok-but-unconverged seeds fail with `ifail = 5` in every arm**, at roughly 11 k
+  node calls (B3 ≈ 7 k) against ≈ 165 k for a converged run. They are config-invalid seeds:
+  uniform, cheap failures carrying no information about the architecture. The identical-ok
+  construction puts those 9 failed runs into a 20-run set; the pooled ratio barely notices
+  (0.460 against 0.450, report §5.5) but the per-run median moves from ≈ 0.52 to ≈ 0.62, because
+  nearly half the "runs" are the cost of failing.
+- **st's 3 are three different things.** Seed 17 fails cheaply in every arm. Seed 5 is a
+  **B3-only** failure that cost ≈ 2.7 × B0's converged run. Seed 10 is a **B0-only** failure
+  that cost ≈ 5.2 × B3's converged run. The two constructions differ (0.583 ok against 0.533
+  converged) because of two asymmetric failures pointing opposite ways — and the converged set
+  drops both silently.
+
+**Candidate approach — for review, nothing decided.**
+
+1. **One seed set per config, pre-declared: the seeds on which every arm converged**
+   (`status == ok` AND MFILE `ifail == 1`). It is what the correctness checks already use, it
+   equals the B0→B3 pair set on V3's data, and it makes every Phase B table — checks 1–4,
+   §5.3, §5.5, §5.5.1, §6 — share one n per config.
+2. **Failures accounted on the page, not dropped.** A per-config table of the seeds outside
+   that set: which arm failed, its `ifail`, its node calls, and the other arms' node calls on
+   the same seed. This is what the converged set hides, and it replaces the identical-ok
+   construction as the sensitivity; the ok-set pooled ratio is published once beside it, not
+   in every table.
+3. **One format**, the one §5.3 now uses: absolute cells as per-run means with the seed
+   bracket; the ratio against B0 as the pooled value (sum/sum, campaign cost), the per-run
+   median with [min, max] (typical run), and the count of runs where the arm is worse. Sums
+   retire, so no magnitude carries its row's n.
+4. **One reference and one denominator.** B0 is the reference everywhere, B3/R published once
+   (§5.5's second table) on the same set. Prime calls become a column of the same table on the
+   same set, which satisfies trap T11 in-table and retires the per-arm-ok side table. The
+   solve-phase node count is the denominator throughout; §5.5.1's output-pass sweep is
+   subtracted or stated in every caption that uses the per-node census.
+5. **Declare it.** V3's plan computed both constructions and accepted on neither (check 4 has
+   no acceptance rule). V4's plan names the set and the failure table before the campaign.
+
+**The fairness caveat to weigh.** Converged-only is the fairer *cost* statistic — a run that
+produced no accepted answer did not pay the cost of the architecture doing its job, and on lad
+the alternative is a set that is 45 % failures. But converged-only can flatter an arm that
+fails on expensive seeds, and st seed 5 is exactly that for B3. Item 2 is what keeps item 1
+honest: without the failure table, item 1 alone is tidier than today, not fairer.
+
+**Can be applied to V3's data.** Everything above is analysis-only on records that exist; it
+could be published beside V3's tables as a re-presentation, with the additivity check of
+protocol §15. That is not done and is not proposed here without the user's decision on the
+approach.
+
 ## Machinery owed
 
 ### 6. I-19's other half
