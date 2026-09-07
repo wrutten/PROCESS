@@ -475,6 +475,42 @@ def phase_b(root: Path | None = None) -> dict:
                     and e["p90"] <= max(F * (wyard["p90"] or 0.0),
                                         cfg.OBJF_FLOOR_REL))
         # ------------------------------------------------------------------
+        # B2 vs B3 under the prime: is the trust step FREE?
+        #
+        # B2 keeps the outer verification loop; B3 removes it.  Both carry the
+        # prime (O4).  If the outer loop's only remaining job was repairing
+        # the first-call deficit the prime now prevents, removing it should
+        # change nothing -- and "nothing" is testable exactly, per seed, on
+        # integer iteration counts.  This is the sharp form of the plan's
+        # pre-declared lad B2->B3 question, which asked only for a median.
+        # ------------------------------------------------------------------
+        if "B2" in rows and "B3" in rows:
+            same_it, diff_it, same_objf = 0, [], 0
+            for k in range(cfg.N_STARTS):
+                ra, rb = rows["B2"][k], rows["B3"][k]
+                if not (conv(ra) and conv(rb)):
+                    continue
+                ia, ib = ra.get("iters"), rb.get("iters")
+                if ia == ib:
+                    same_it += 1
+                else:
+                    diff_it.append({"seed": k, "B2": ia, "B3": ib})
+                if ra.get("objf_hex") == rb.get("objf_hex"):
+                    same_objf += 1
+            n = same_it + len(diff_it)
+            d["b2_b3_trust_step_identity"] = {
+                "what": ("per-seed identity of optimiser iteration counts "
+                         "between B2 (verified outer loop) and B3 (trust), "
+                         "both primed, over both-converged pairs; and "
+                         "bit-identity of the objective beside it"),
+                "n_pairs": n,
+                "n_iterations_identical": same_it,
+                "n_objf_bit_identical": same_objf,
+                "differing_pairs": diff_it,
+                "all_identical": (n > 0 and not diff_it),
+            }
+
+        # ------------------------------------------------------------------
         # OPTIMALITY vs LOCATION.  Check 1 compares |d norm_objf| -- how good
         # the optimum is.  It says nothing about WHERE the arms landed: two
         # arms can agree on the objective to 1e-15 and sit at materially
