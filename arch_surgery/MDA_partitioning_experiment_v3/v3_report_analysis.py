@@ -958,6 +958,26 @@ def teeth(result: dict, roots: dict) -> int:
           flag_restricted_mismatch)
     tooth("phase_b check-2 median x1.5", bump_iter_median)
 
+    # A tooth for module_sweeps' within-group uniformity premise, which
+    # --verify cannot reach: it is a refusal inside the recomputation, not a
+    # cell compared against a tally.  Doctor one node of a group so its
+    # members disagree, and require _sweeps to refuse rather than average.
+    def uniformity_tooth() -> bool:
+        mod = {"physics": "M1", "plasma_geom": "M1"}
+        good = {"physics": 3, "plasma_geom": 3}
+        try:
+            _sweeps(good, mod, "tooth/baseline")
+        except SystemExit:
+            return False          # the undoctored case must NOT refuse
+        try:
+            _sweeps({"physics": 3, "plasma_geom": 4}, mod, "tooth/doctored")
+        except SystemExit:
+            return True
+        return False
+
+    rows.append({"tooth": "module_sweeps within-group uniformity",
+                 "applied": True, "trips": uniformity_tooth()})
+
     applied = [r for r in rows if r["applied"]]
     tripped = [r for r in applied if r["trips"]]
     verdict = ("PASS" if baseline == 0 and applied and
@@ -1145,6 +1165,195 @@ def _finish(per_arm, per_arm_nodes, order, rows, base, weighted):
     return d
 
 
+#: DSM row counts per module (D8, ``dsm_node_map.json``): the number of
+#: *models* the collapsed DSM resolves inside each module.  ``M3`` holds 12
+#: rows; ``vacuum`` is one of its nodes but per-node row attribution is NOT
+#: available in this repository (trap T9 forbids reading the dependency
+#: analysis repo's exports live, and only ``build``/``fw``/``power``/``pulse``
+#: carry a pinned row).  So ``vacuum``'s share of M3's 12 rows is an
+#: assumption, and the total is published as a BRACKET over v in {0, 1}
+#: rather than as a point: v = 0 counts ``vacuum`` with M3 (it then inherits
+#: M3's sweep count, which the measured liveness says it does not have),
+#: v = 1 gives it a row of its own.  Every per-module ratio is unaffected.
+_VACUUM_ROW_CASES = (0, 1)
+
+
+def _module_group(node: str, mod: dict) -> str | None:
+    """Model node -> table row group.  ``vacuum`` is split out of M3 because
+    the intervention hoists it while M3's other members keep iterating: the
+    two have different call counts in every block arm, and a group whose
+    members differ is not a sweep."""
+    if node == "vacuum":
+        return "vacuum"
+    m = mod.get(node)
+    return "M3 live" if m == "M3" else m
+
+
+def _sweeps(census: dict, mod: dict, where: str) -> dict:
+    """Per-node census -> {group: sweeps for that group}.
+
+    REFUSES if any group's members disagree.  This is the premise the whole
+    table rests on: within a group every model is executed the same number of
+    times, so the cell is a *sweep count* and its ratio is invariant to
+    whether one counts model calls or DSM rows.  Measured to hold in 100 % of
+    V3 records; if it ever stops holding the sweep unit is invalid and this
+    must fail loudly rather than average over the difference.
+    """
+    byg: dict[str, dict] = {}
+    for n, c in census.items():
+        g = _module_group(n, mod)
+        if g is None:
+            raise SystemExit(f"REFUSED: {where}: node {n!r} is in no DSM "
+                             f"module; unmapped nodes are named, never pooled")
+        byg.setdefault(g, {})[n] = c
+    out = {}
+    for g, dd in byg.items():
+        vals = set(dd.values())
+        if len(vals) != 1:
+            raise SystemExit(
+                f"REFUSED: {where}: group {g} is not uniform: {dd}. "
+                f"The sweep unit assumes every model in a group runs the "
+                f"same number of times; it does not here, so no cell of "
+                f"this table is meaningful.")
+        out[g] = vals.pop()
+    return out
+
+
+def _ratio_stats(num: list, den: list) -> dict:
+    """Pooled ratio (sum/sum, the total-work statistic) beside the per-run
+    distribution.  The two answer different questions and can disagree
+    sharply when the per-run cost is heavy-tailed, so both are published."""
+    if not den or not sum(den):
+        return {"pooled": None, "per_seed_median": None, "per_seed_min": None,
+                "per_seed_max": None, "n_worse_than_base": None, "n": len(den)}
+    rs = sorted(n / d for n, d in zip(num, den) if d)
+    return {"pooled": sum(num) / sum(den),
+            "per_seed_median": statistics.median(rs),
+            "per_seed_min": rs[0], "per_seed_max": rs[-1],
+            "n_worse_than_base": sum(1 for r in rs if r > 1.0),
+            "n": len(rs)}
+
+
+def module_sweeps(pa_records: Path | None, pb_records: Path | None) -> dict:
+    """Per-module **sweeps per run** with a seed bracket, and the total as a
+    model-weighted average (user request, 2026-09-07).
+
+    Three changes from ``dsm_blocks``, which this supersedes as the report's
+    §4.5 / §5.5.1 source:
+
+    1. **Cells are per run, not summed over the seed set.**  The sums hid two
+       different denominators (Phase A 25; Phase B 22 / 20 / 25 for
+       identical-ok, 22 / 11 / 22 for identical-converged) and invited
+       cross-reading rows that are not comparable in magnitude.
+    2. **Cells are sweeps, not node calls.**  Within a group every model runs
+       the same number of times (refused above if not), so the cell is the
+       number of times that group was executed, and ``total calls =
+       sum over groups of sweeps x models``.  A group's ratio is then
+       unit-invariant; only the total depends on the unit.
+    3. **Each cell carries its seed bracket, and each ratio its per-run
+       distribution** including the count of runs where the arm is WORSE than
+       the baseline.  A pooled ratio can be well below 1 while individual
+       runs are above it, and on two of three decks it is.
+    """
+    nm_p = cfg.DATA / "dsm_node_map.json"
+    if not nm_p.exists():
+        return {}
+    nm = jload(nm_p)
+    mod = {n: v.get("module") for n, v in (nm.get("nodes") or {}).items()
+           if v.get("kind") == "model_call"}
+    m_rows = {m: (v.get("n_dsm_rows") or 0)
+              for m, v in (nm.get("modules") or {}).items()}
+    order = ("M1", "M2", "M3 live", "vacuum", "PULSE", "FF")
+
+    def models_per_group(v: int) -> dict:
+        return {"M1": m_rows.get("M1", 0), "M2": m_rows.get("M2", 0),
+                "M3 live": m_rows.get("M3", 0) - v, "vacuum": v,
+                "PULSE": m_rows.get("PULSE", 0), "FF": m_rows.get("FF", 0)}
+
+    def build(records: Path, deck: str, arms: list, seeds: list,
+              base: str, census_key: str) -> dict:
+        per: dict = {}
+        for arm in arms:
+            acc = {g: [] for g in order}
+            for k in seeds:
+                mp = records / deck / arm / f"start{k:03d}" / "metrics.json"
+                m = jload(mp)
+                cen = ((m.get("node_census") or {}).get(census_key) or {})
+                sw = _sweeps(cen, mod, f"{deck}/{arm}/start{k:03d}")
+                for g in order:
+                    acc[g].append(sw.get(g, 0))
+            per[arm] = acc
+        d: dict = {"n_seeds": len(seeds), "seeds": list(seeds),
+                   "models_per_group": {f"v={v}": models_per_group(v)
+                                        for v in _VACUUM_ROW_CASES},
+                   "base": base, "per_arm": {}, "totals": {}}
+        for arm in arms:
+            cells = {}
+            for g in order:
+                vals = per[arm][g]
+                cells[g] = {
+                    "sweeps_per_run_mean": statistics.mean(vals),
+                    "sweeps_per_run_min": min(vals),
+                    "sweeps_per_run_max": max(vals),
+                    "sweeps_sum": sum(vals),
+                    "ratio_vs_base": _ratio_stats(vals, per[base][g]),
+                }
+            d["per_arm"][arm] = cells
+            tot = {}
+            for v in _VACUUM_ROW_CASES:
+                mg = models_per_group(v)
+                mine = [sum(per[arm][g][i] * mg[g] for g in order)
+                        for i in range(len(seeds))]
+                theirs = [sum(per[base][g][i] * mg[g] for g in order)
+                          for i in range(len(seeds))]
+                tot[f"v={v}"] = {
+                    "total_calls_per_run_mean": statistics.mean(mine),
+                    "total_calls_per_run_min": min(mine),
+                    "total_calls_per_run_max": max(mine),
+                    "ratio_vs_base": _ratio_stats(mine, theirs)}
+            d["totals"][arm] = tot
+        return d
+
+    out: dict = {"note": ("per-module SWEEPS PER RUN; a group's ratio is "
+                          "unit-invariant, the total is not; the total is "
+                          "bracketed over vacuum's unknown DSM row count "
+                          "(trap T9)"),
+                 "vacuum_row_cases": list(_VACUUM_ROW_CASES),
+                 "phase_a": {}, "phase_b": {}}
+
+    if pa_records and (pa_records / "campaign.json").exists():
+        camp = jload(pa_records / "campaign.json")
+        for deck in camp["decks"]:
+            seeds = [k for k in camp["seeds"]
+                     if all((pa_records / deck / a / f"start{k:03d}"
+                             / "metrics.json").exists()
+                            and jload(pa_records / deck / a / f"start{k:03d}"
+                                      / "metrics.json").get("status") == "ok"
+                            for a in camp["arms"])]
+            if seeds:
+                out["phase_a"][deck] = build(
+                    pa_records, deck, list(camp["arms"]), seeds, "A0",
+                    "counted")
+
+    if pb_records and pb_records.exists():
+        for deck in cfg.DECKS:
+            arms = [a for a in cfg.PHASE_B_ARMS
+                    if (pb_records / deck / a).exists()]
+            if not arms:
+                continue
+            ok = [k for k in range(cfg.N_STARTS)
+                  if all((pb_records / deck / a / f"start{k:03d}"
+                          / "metrics.json").exists()
+                         and jload(pb_records / deck / a / f"start{k:03d}"
+                                   / "metrics.json").get("status") == "ok"
+                         for a in arms)]
+            if ok:
+                out["phase_b"][deck] = build(
+                    pb_records, deck, arms, ok, "B0",
+                    "per_node_counted_through_Caller_node")
+    return out
+
+
 def exclusion_stakes(pa_records: Path | None) -> dict:
     """What the Phase A headline WOULD read if the restricted audit's
     exclusion set were wrong -- per excluded namespace, from each run's own
@@ -1274,6 +1483,92 @@ def transfer(pa: dict, pb: dict, roots: dict) -> dict:
     return out
 
 
+#: Deck abbreviations used in the report's tables (user request 2026-09-07:
+#: ``nof`` -> ``tok``).  The deck IDENTIFIERS are unchanged everywhere else --
+#: this is a display label only.
+DECK_ABBR = {"large_tokamak_nof": "tok",
+             "low_aspect_ratio_DEMO": "lad",
+             "st_regression": "st"}
+
+
+def _cell(c: dict) -> str:
+    """A sweeps-per-run cell: mean, plus its seed bracket when the runs are
+    not all identical.  A bare integer means every run agreed exactly."""
+    m, lo, hi = (c["sweeps_per_run_mean"], c["sweeps_per_run_min"],
+                 c["sweeps_per_run_max"])
+    if float(m).is_integer() or m >= 100:
+        s = f"{m:.0f}"
+    else:
+        s = f"{m:.2f}".rstrip("0")
+    return s if lo == hi else f"{s} [{lo},{hi}]"
+
+
+def _rat(r: dict, bold: bool = False) -> str:
+    if r.get("pooled") is None:
+        return "—"
+    s = f"{r['pooled']:.3f}"
+    return f"**{s}**" if bold else s
+
+
+def _spread(r: dict, n: int) -> tuple:
+    if r.get("pooled") is None:
+        return "—", "—"
+    return (f"{r['per_seed_median']:.3f} "
+            f"[{r['per_seed_min']:.3f}, {r['per_seed_max']:.3f}]",
+            f"{r['n_worse_than_base']}/{n}")
+
+
+def print_tables(res: dict) -> None:
+    """Emit the report's §4.5 and §5.5.1 tables as markdown, so the published
+    tables are literally this script's output (protocol §15)."""
+    ms = res.get("module_sweeps") or {}
+    order = ("M1", "M2", "M3 live", "vacuum", "PULSE", "FF")
+    print("\n===== §4.5 Phase A: module sweeps per run =====\n")
+    for deck, d in (ms.get("phase_a") or {}).items():
+        arms = list(d["per_arm"])
+        mg = d["models_per_group"]["v=1"]
+        print(f"**`{DECK_ABBR.get(deck, deck)}`** (n = {d['n_seeds']})\n")
+        print("| module | models | " + " | ".join(arms) + " | A1/A0 |")
+        print("|---" * (len(arms) + 3) + "|")
+        for g in order:
+            cells = [_cell(d["per_arm"][a][g]) for a in arms]
+            r = _rat(d["per_arm"]["A1"][g]["ratio_vs_base"], True)
+            print(f"| {g} | {mg[g]} | " + " | ".join(cells) + f" | {r} |")
+        tt = {a: d["totals"][a] for a in arms}
+        cells = [f"{tt[a]['v=1']['total_calls_per_run_mean']:.1f}"
+                 for a in arms]
+        lo = tt["A1"]["v=1"]["ratio_vs_base"]["pooled"]
+        hi = tt["A1"]["v=0"]["ratio_vs_base"]["pooled"]
+        print(f"| **total calls** | {sum(mg.values())} | " + " | ".join(cells)
+              + f" | **[{min(lo, hi):.3f}, {max(lo, hi):.3f}]** |")
+        print()
+    print("\n===== §5.5.1 Phase B: module sweeps per run =====\n")
+    for deck, d in (ms.get("phase_b") or {}).items():
+        arms = list(d["per_arm"])
+        mg = d["models_per_group"]["v=1"]
+        n = d["n_seeds"]
+        print(f"**`{DECK_ABBR.get(deck, deck)}`** (n = {n})\n")
+        print("| module | models | " + " | ".join(arms)
+              + " | B3/B0 | per-run med [min, max] | runs B3 > B0 |")
+        print("|---" * (len(arms) + 5) + "|")
+        for g in order:
+            cells = [_cell(d["per_arm"][a][g]) for a in arms]
+            r = d["per_arm"]["B3"][g]["ratio_vs_base"]
+            sp, worse = _spread(r, n)
+            print(f"| {g} | {mg[g]} | " + " | ".join(cells)
+                  + f" | {_rat(r, True)} | {sp} | {worse} |")
+        tt = {a: d["totals"][a] for a in arms}
+        cells = [f"{tt[a]['v=1']['total_calls_per_run_mean']:.0f}"
+                 for a in arms]
+        r1 = tt["B3"]["v=1"]["ratio_vs_base"]
+        r0 = tt["B3"]["v=0"]["ratio_vs_base"]
+        sp, worse = _spread(r1, n)
+        lo, hi = sorted((r1["pooled"], r0["pooled"]))
+        print(f"| **total calls** | {sum(mg.values())} | " + " | ".join(cells)
+              + f" | **[{lo:.3f}, {hi:.3f}]** | {sp} | {worse} |")
+        print()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--verify", action="store_true",
@@ -1283,6 +1578,9 @@ def main() -> int:
                     help="run --verify, then the verifier's own teeth: "
                          "doctored recomputations that must each be "
                          "refused (protocol §12)")
+    ap.add_argument("--tables", action="store_true",
+                    help="print the report's §4.5 / §5.5.1 markdown tables "
+                         "from the recomputation and exit")
     ap.add_argument("--mode", choices=("campaign", "smoke"),
                     default="campaign",
                     help="which records to recompute from: 'campaign' (the "
@@ -1300,6 +1598,8 @@ def main() -> int:
               "i17_transfer": transfer(pa_res, pb_res, roots),
               "dsm_blocks": dsm_blocks(roots["pa_records"],
                                        roots["pb_records"]),
+              "module_sweeps": module_sweeps(roots["pa_records"],
+                                             roots["pb_records"]),
               "exclusion_stakes": exclusion_stakes(roots["pa_records"]),
               "declared": {"F": F, "iter_ratio_max": cfg.ITER_RATIO_MAX,
                            "tau": cfg.TAU, "delta": cfg.DELTA,
@@ -1312,6 +1612,10 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=1))
     print(f"written: {out}  (mode: {args.mode})\n")
+
+    if args.tables:
+        print_tables(result)
+        return 0
 
     for deck, d in result["phase_a"].items():
         sim = d["audit_similarity"]
