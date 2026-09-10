@@ -145,18 +145,28 @@ def seed_directory(seed: int) -> str:
 def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]:
     """The environment this job runs under, and what it asked for.
 
-    ``allow_pending`` is the **only** way a run happens without a switch its arm
-    declares, and it is neither silent nor general:
+    Two things may make a run differ from what the matrix says, and neither is
+    silent.
+
+    ``allow_pending`` is the only way a run happens **without** a switch its arm
+    declares, and it is for a switch **no tree implements yet**:
 
     * the terms allowed must be exactly the terms this tree cannot implement —
       allowing a term the tree *does* implement, or failing to allow one it
       does not, is a refusal either way;
     * the allowed terms are written into the record, so a run made under the
       allowance says so;
-    * campaign runs never pass it.  The only caller is the reproduction gate,
-      which runs two arms the way the previous revision ran them because that
-      is what "reproduce the previous revision" means, and the switch they now
-      declare did not exist then.
+    * campaign runs never pass it.  No arm of the matrix currently needs it;
+      the switch still waiting on its driver change is the convergence
+      predicate's mode, which only the trial composes.
+
+    ``reproduction_overrides`` is the only way a run happens with a switch set
+    to something **other** than what its arm composes, and it is for a switch
+    the tree *does* implement.  The reproduction gate reproduces the previous
+    revision, and that revision wrote two arms' output files through upstream's
+    output-time loop because the switch that turns it off did not exist yet.
+    See :func:`_apply_reproduction_overrides` for the four things that refuse
+    one; a campaign run carrying one is the first of them.
     """
     arm = arms_mod.ARMS[job.arm]
     terms = arm.terms(

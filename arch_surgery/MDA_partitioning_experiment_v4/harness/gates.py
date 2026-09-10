@@ -1332,6 +1332,262 @@ def _output_path_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
 
 
 # --------------------------------------------------------------------------
+# the output path, measured -- not a gate
+# --------------------------------------------------------------------------
+#
+# Two quantities the experiment plan asks for by name, published as
+# measurements with their populations and never as acceptance criteria.
+#
+# **What the output-time loop costs.**  Section 3.3 of the plan commits the
+# sweep count of that loop, per run, by arm and configuration.  It is read from
+# the driver's own counter on the reproduction gate's runs -- the only set of
+# runs in which every arm, including the two whose matrix cell turns the loop
+# off, executes it (that gate runs them with it on, because the records it
+# reproduces were made that way).
+#
+# **What the accepted state's residual is, at the declared position.**  The
+# same section says the one signal the output-time loop found by accident in
+# the previous revision -- a handed-over state that was not output-idempotent
+# -- is to be "looked for on purpose": the exit audit at the accepted point,
+# per run, with the count of components above the tolerance.  That count is
+# read from the gate's own runs at the declared position.
+#
+# It is published **twice**, and the reason is not caution.  The audit sweep
+# runs every node, including the ones an arm defers to once per run; measured
+# from the handed-over state -- which is *before* those nodes have run -- their
+# own outputs necessarily move, and a whole-state count on such an arm would
+# report that as non-convergence.  The restricted count excludes exactly the
+# components those nodes write, derived here from the same two committed
+# artifacts the audit's own restricted statistic derives from: the per-run
+# deferral artifact names the nodes, the run-time write census says what each
+# writes on this configuration.  One excluded set per configuration, from the
+# committed input file's artifact, so that the count is on the same ruler in
+# every arm of that configuration.
+#
+# (The restricted count is computed here, from the run's own committed residual
+# vector, rather than carried in the record: wiring it into the optimisation
+# record belongs with gate G4, which is task A52 (harness-gates)'s.  Both
+# constructions are stated in the table's caption.)
+
+
+def _residual_vector(directory: Path, *, key: str) -> dict[str, Any]:
+    path = Path(directory) / "audit_residual.json"
+    if not path.exists():
+        raise GateError(
+            f"no residual vector for {key}: {path} is not there.  A count of "
+            f"components above the tolerance with no vector behind it is a "
+            f"number over an unstated population (trap T11)."
+        )
+    return json.loads(path.read_text())
+
+
+def excluded_by_the_per_run_nodes(campaign: Campaign, config) -> tuple[set[str], dict]:
+    """Components the per-run deferrable nodes write on this configuration.
+
+    One set per configuration, from the **committed** input file's artifact, so
+    that every arm of that configuration is restricted by the same set — which
+    is the whole point of a restricted statistic.  The derivation is the audit's
+    own: the artifact names nodes, the census maps each node to what it writes.
+    """
+    artifact = config.per_run_artifact(lifted_input_file=False)
+    nodes = list(json.loads(Path(artifact).read_text())["post_solve_nodes"])
+    census = json.loads(
+        (Path(campaign.data_dir) / "node_writesets.json").read_text()
+    )["per_scenario"]
+    if config.name not in census:
+        raise GateError(
+            f"no write census for {config.name}; the excluded set would be "
+            f"guessed, so it is refused"
+        )
+    writes = census[config.name]["writes_by_node"]
+    owned: set[str] = set()
+    for node in nodes:
+        owned |= set(writes.get(node, ()))
+    return owned, {
+        "artifact": str(artifact),
+        "per_run_nodes": nodes,
+        "census": str(Path(campaign.data_dir) / "node_writesets.json"),
+        "n_fields_named": len(owned),
+    }
+
+
+def output_path_measurements(campaign: Campaign) -> dict[str, Any]:
+    """The two measurements, over the run sets each is defined on."""
+    reproduction_root = Path(campaign.runs_dir) / "gates" / "reproduction" / "runs"
+    sweeps: list[dict[str, Any]] = []
+    for run in reference_mod.reference_set(campaign):
+        if run.phase != "B":
+            continue
+        key = f"{run.arm}/{run.configuration}/seed{run.seed:03d}"
+        directory = (
+            reproduction_root
+            / run.configuration
+            / run.arm
+            / pool_mod.seed_directory(run.seed)
+        )
+        record = _read_record(directory, side="the reproduction gate", key=key)
+        total = record.get("node_calls_total")
+        solve = record.get("node_calls_solve_phase")
+        sweeps.append(
+            {
+                "arm": run.arm,
+                "configuration": run.configuration,
+                "seed": run.seed,
+                "output_path": record.get("output_path"),
+                "output_loop_sweeps": record.get("output_loop_sweeps"),
+                "output_path_entries": record.get("output_path_entries"),
+                "reproduction_overrides": record.get("reproduction_overrides"),
+                "node_calls_solve_phase": solve,
+                "node_calls_total": total,
+                "node_calls_after_the_solve": (
+                    None if total is None or solve is None else total - solve
+                ),
+            }
+        )
+
+    above: list[dict[str, Any]] = []
+    excluded_by_config: dict[str, dict] = {}
+    for config in campaign.configurations:
+        owned, derivation = excluded_by_the_per_run_nodes(campaign, config)
+        excluded_by_config[config.name] = derivation
+        for arm in arms_mod.active_arms(config, "B"):
+            if arms_mod.ARMS[arm].output_loop != "none":
+                continue
+            key = f"{arm}/{config.name}"
+            directory = output_path_root(campaign) / "runs" / config.name / arm
+            record = _read_record(directory, side="G9", key=key)
+            vector = _residual_vector(directory, key=key)
+            tau = float(vector["tau"])
+            scaled = vector["scaled"]
+            kept = {k: v for k, v in scaled.items() if k not in owned}
+            above.append(
+                {
+                    "arm": arm,
+                    "configuration": config.name,
+                    "audit_position": record.get("audit_position"),
+                    "tau": tau,
+                    "residual_max_hex": (record.get("exit_audit") or {}).get(
+                        "residual_max_hex"
+                    ),
+                    "n_tested_whole_state": len(scaled),
+                    "n_above_tau_whole_state": sum(
+                        1 for v in scaled.values() if v >= tau
+                    ),
+                    "n_tested_restricted": len(kept),
+                    "n_above_tau_restricted": sum(
+                        1 for v in kept.values() if v >= tau
+                    ),
+                    "n_excluded_as_per_run_owned": len(scaled) - len(kept),
+                    "residual_max_restricted": max(kept.values()) if kept else 0.0,
+                    "residual_max_restricted_hex": float(
+                        max(kept.values()) if kept else 0.0
+                    ).hex(),
+                    "residual_argmax_restricted": (
+                        max(kept, key=kept.get) if kept else None
+                    ),
+                    "above_tau_restricted": sorted(
+                        k for k, v in kept.items() if v >= tau
+                    )[:20],
+                }
+            )
+    return {
+        "output_time_loop_sweeps": {
+            "population": (
+                f"{len(sweeps)} optimisation run(s) of the reproduction gate = "
+                f"its whole optimisation-phase reference set.  Every one runs "
+                f"upstream's output-time loop: the two arms whose matrix cell "
+                f"turns it off carry the gate's recorded override, because the "
+                f"records they reproduce were made before the switch existed"
+            ),
+            "rows": sweeps,
+        },
+        "above_tau_at_the_declared_position": {
+            "population": (
+                f"{len(above)} run(s) at seed 0 = the arms whose matrix cell "
+                f"turns the output-time loop off, on every configuration where "
+                f"they are active, from gate G9's own runs; the audit is taken "
+                f"at the entry to the output path in every one"
+            ),
+            "excluded_set_per_configuration": excluded_by_config,
+            "rows": above,
+        },
+        "generated": _dt.datetime.now().isoformat(timespec="seconds"),
+        "tree_git_head": _git_head(),
+    }
+
+
+def print_measurements(block: Mapping[str, Any]) -> None:
+    """The two tables, with their captions, as the report prints them."""
+    sweeps = block["output_time_loop_sweeps"]
+    print()
+    print(
+        "*Caption: one row per optimisation run of the reproduction gate.  "
+        '"Sweeps" is how many times upstream\'s output-time loop evaluated the '
+        "whole model set before writing the output files, read from the "
+        'driver\'s own counter; "entries" is how many times the output path '
+        'was entered (one per scan point).  "After the solve" is model node '
+        "calls made after the solve-phase counter was frozen: the per-run "
+        "deferred nodes where an arm has them, plus the output-time loop's own "
+        "sweeps.  Counts, not timings.  Population: "
+        + sweeps["population"]
+        + ".*"
+    )
+    print()
+    print("| arm | configuration | seed | path | sweeps | entries | solve-phase node calls | node calls after the solve |")
+    print("|---|---|---:|---|---:|---:|---:|---:|")
+    for row in sweeps["rows"]:
+        print(
+            f"| `{row['arm']}` | `{row['configuration']}` | {row['seed']} | "
+            f"`{row['output_path']}` | {row['output_loop_sweeps']} | "
+            f"{row['output_path_entries']} | {row['node_calls_solve_phase']} | "
+            f"{row['node_calls_after_the_solve']} |"
+        )
+    above = block["above_tau_at_the_declared_position"]
+    print()
+    print(
+        "*Caption: one row per run of gate G9 on an arm whose matrix cell "
+        "turns the output-time loop off.  The exit audit is one further sweep "
+        "of the whole model set from the state the solve handed over, and the "
+        "columns count how many coupling-state components moved by at least "
+        "the tolerance under it.  **Whole state** counts every tested "
+        "component; **restricted** excludes the components the per-run "
+        "deferrable nodes write, derived from the committed per-run artifact "
+        "and the committed run-time write census, one set per configuration so "
+        "every arm is on the same ruler.  The two differ because the audit "
+        "sweep runs those nodes and the handed-over state is from before they "
+        "ran, so their own outputs move by construction — which is why the "
+        "whole-state maximum is not published here at all: on an arm that "
+        "defers, it is a per-run node's own output and says nothing about "
+        "convergence.  Population: "
+        + above["population"]
+        + ".*"
+    )
+    print()
+    print(
+        "| arm | configuration | tau | tested | above tau, whole state | "
+        "tested, restricted | above tau, restricted | restricted max | "
+        "restricted argmax |"
+    )
+    print("|---|---|---:|---:|---:|---:|---:|---:|---|")
+    for row in above["rows"]:
+        print(
+            f"| `{row['arm']}` | `{row['configuration']}` | {row['tau']:g} | "
+            f"{row['n_tested_whole_state']} | "
+            f"{row['n_above_tau_whole_state']} | {row['n_tested_restricted']} | "
+            f"{row['n_above_tau_restricted']} | "
+            f"{row['residual_max_restricted']:.3g} | "
+            f"`{row['residual_argmax_restricted']}` |"
+        )
+    print()
+    for name, derivation in above["excluded_set_per_configuration"].items():
+        print(
+            f"  {name}: per-run nodes {derivation['per_run_nodes']} write "
+            f"{derivation['n_fields_named']} field(s); artifact "
+            f"{Path(derivation['artifact']).name}"
+        )
+
+
+# --------------------------------------------------------------------------
 # the registry
 # --------------------------------------------------------------------------
 
@@ -1448,8 +1704,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "gate",
-        choices=("g0prime", "switch-neutrality", "output-path", "all"),
-        help="which gate to run; 'all' runs the gates that need no capture",
+        choices=(
+            "g0prime",
+            "switch-neutrality",
+            "output-path",
+            "output-path-measurements",
+            "all",
+        ),
+        help="which gate to run; 'all' runs the gates that need no capture.  "
+        "'output-path-measurements' is not a gate: it publishes the two "
+        "quantities the experiment plan asks for by name — what the "
+        "output-time loop costs, and where the accepted state sits against "
+        "the tolerance at the declared audit position",
     )
     parser.add_argument(
         "--capture",
@@ -1473,6 +1739,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     campaign = default_campaign()
     records_dir = Path(args.records) if args.records else Path(campaign.runs_dir) / GATES_SUBPATH
+
+    if args.gate == "output-path-measurements":
+        block = output_path_measurements(campaign)
+        out = records_dir / "output_path" / "measurements.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(block, indent=2, default=str) + "\n")
+        print_measurements(block)
+        print(f"\n  record: {out}")
+        return 0
 
     if args.gate == "output-path" and args.capture:
         manifest = capture_output_path(campaign, resume=args.resume)
