@@ -22,7 +22,11 @@ paragraph to ``SUMMARIES``.
 
 New in A46 (process-copy); it derives from no earlier file.  A48
 (harness-data) added the annotations and summaries for the copy's second round
-of edits.  Stdlib only, no PROCESS run, runs in seconds.
+of edits.  A56 (driver-renames) added the switch renames, restricted a hunk's
+annotation match to the hunk's **changed** lines (a context line carrying a
+marker used to be able to claim a hunk for a mechanism it does not serve), and
+grouped the annotations by mechanism so a claim names a switch rather than a
+file.  Stdlib only, no PROCESS run, runs in seconds.
 
 Usage
 -----
@@ -63,16 +67,112 @@ class Annotation:
 #: The annotation map.  A hunk in ``path`` whose text contains ``marker`` is
 #: claimed by ``serves``.  One line per mechanism; adding a driver change means
 #: adding a line here (and a paragraph to SUMMARIES below).
+#: What each mechanism is called in this view.  One entry per *thing the copy
+#: does differently*, so that a hunk's claim names a switch or a mechanism and
+#: not merely a file.
+_PATHS = "harness paths"
+_ARR_NODE = "switch PROCESS_ARCH_ARRANGEMENT_NODE (was …_SEQUENCE): arrangement at node granularity"
+_ARR_METHOD = "switch PROCESS_ARCH_ARRANGEMENT_METHOD (was …_PRIME): arrangement at method granularity"
+_DEFER_CALL = "switch PROCESS_ARCH_DEFER_PER_CALL (was …_HOIST): deferral at per-call frequency"
+_DEFER_RUN = "switch PROCESS_ARCH_DEFER_PER_RUN (was …_POST_SOLVE): deferral at per-run frequency"
+_MDA = "switch PROCESS_ARCH_MDA (was …_MODULE_SOLVE): the shape of the analysis loop"
+_ARTIFACTS = "switches PROCESS_ARCH_COUPLING_STATE / …_WRITE_SETS (were …_YSTATE / …_WRITESET)"
+_OWNER = "switch PROCESS_ARCH_BURN_TIME_OWNER (was …_LIFT plus …_PIN_BURN_TIME): who owns the burn time"
+_OUTER = "retired switch PROCESS_ARCH_OUTER: the block schedule runs once, so the repeated schedule is removed (D22)"
+_INNER = "retired switch PROCESS_ARCH_INNER_TAU: one tolerance for every converger (D23)"
+_REFUSAL = "the typed refusal ArchitectureRefusal, raised by every refusal of an architecture setting"
+_RETIRED = "the retired-name guard: a stale switch name raises instead of being ignored"
+_WORDS = "vocabulary only: the words of the terminology table in comments and messages (no behaviour)"
+
 ANNOTATIONS: list[Annotation] = [
+    # --- the copy's harness paths (A46, A48) -----------------------------
     Annotation("process/core/solver/module_solve.py", "YSTATE_MODULE_PATH", "harness path constant YSTATE_MODULE_PATH -> harness/ystate.py (D20, decision 2 option v)"),
     Annotation("process/core/caller.py", "NODE_WRITESET_PATH", "harness path constant NODE_WRITESET_PATH -> harness/data/ (D20, decision 3)"),
     Annotation("process/core/caller.py", "NODE_MAP_PATH", "harness path constant NODE_MAP_PATH -> harness/data/ (D20, decision 3)"),
     Annotation("process/core/caller.py", "its source, its sha256", "comment: the artifacts the two path constants name are committed here, and their provenance file says so"),
     Annotation("process/core/caller.py", "copied into ", "comment: the per-call refusal names the committed artifact and its provenance file instead of a generator script in the research tree"),
     Annotation("process/core/caller.py", "harness/data/defer_per_run", "comment: the per-run deferral artifact named by the file the copy reads"),
-    Annotation("process/core/caller.py", "PROCESS_ARCH_POST_SOLVE needs the committed per-node write", "existence check on the per-run deferral path, mirroring the per-call one (plan section 3.3); no behaviour change where the file exists"),
+    Annotation("process/core/caller.py", '/ "harness"', _PATHS),
     Annotation("process/core/solver/module_solve.py", "its source, its sha256", "comment: the predicate module the path constant names is committed here, and its provenance file says so"),
     Annotation("process/core/solver/module_solve.py", "harness/data/coupling_state_", "comment: the coupling-state artifact named by the file the copy reads"),
+    Annotation("process/core/solver/module_solve.py", "harness/data/write_sets_", "comment: the write-set artifact named by the file the copy reads"),
+    # --- A56: the switch renames -----------------------------------------
+    Annotation("process/core/caller.py", "ARRANGEMENT_NODE", _ARR_NODE),
+    Annotation("process/core/caller.py", "SEQUENCE", _ARR_NODE),
+    Annotation("process/core/caller.py", "ARRANGEMENT_METHOD", _ARR_METHOD),
+    Annotation("process/core/caller.py", "PRIME", _ARR_METHOD),
+    Annotation("process/core/caller.py", "prime", _ARR_METHOD),
+    Annotation("process/core/caller.py", "DEFER_PER_CALL", _DEFER_CALL),
+    Annotation("process/core/caller.py", "HOIST", _DEFER_CALL),
+    Annotation("process/core/caller.py", "hoist", _DEFER_CALL),
+    Annotation("process/core/caller.py", "defer", _DEFER_CALL),
+    Annotation("process/core/caller.py", "DEFER_PER_RUN", _DEFER_RUN),
+    Annotation("process/core/caller.py", "POST_SOLVE", _DEFER_RUN),
+    Annotation("process/core/caller.py", "post-solve", _DEFER_RUN),
+    Annotation("process/core/caller.py", "per-run", _DEFER_RUN),
+    Annotation("process/core/caller.py", "MDA", _MDA),
+    Annotation("process/core/caller.py", "MODULE_SOLVE", _MDA),
+    Annotation("process/core/caller.py", "module_solve.FLAT", _MDA),
+    Annotation("process/core/caller.py", "block schedule", _MDA),
+    Annotation("process/core/caller.py", "BURN_TIME_OWNER", _OWNER),
+    Annotation("process/core/caller.py", "BURN_TIME_CONSTANT", _OWNER),
+    Annotation("process/core/caller.py", "CONSTANT_OWNS_BURN_TIME", _OWNER),
+    Annotation("process/core/caller.py", "is_out_of_loop", _OWNER),
+    Annotation("process/core/caller.py", "burn time", _OWNER),
+    Annotation("process/core/caller.py", "pin", _OWNER),
+    Annotation("process/core/caller.py", "outer", _OUTER),
+    Annotation("process/core/caller.py", "OUTER", _OUTER),
+    Annotation("process/core/caller.py", "trust", _OUTER),
+    Annotation("process/core/caller.py", "schedule_passes", _OUTER),
+    Annotation("process/core/caller.py", "inner_tau", _INNER),
+    Annotation("process/core/caller.py", "INNER_TAU", _INNER),
+    Annotation("process/core/caller.py", "ArchitectureRefusal", _REFUSAL),
+    Annotation("process/core/caller.py", "deck", _WORDS),
+    Annotation("process/core/caller.py", "configuration", _WORDS),
+    Annotation("process/core/caller.py", "input file", _WORDS),
+    Annotation("process/core/caller.py", "V2", _WORDS),
+    # --- A56 in module_solve.py ------------------------------------------
+    Annotation("process/core/solver/module_solve.py", "MDA", _MDA),
+    Annotation("process/core/solver/module_solve.py", "MODULE_SOLVE", _MDA),
+    Annotation("process/core/solver/module_solve.py", "FLAT_STATE", _MDA),
+    Annotation("process/core/solver/module_solve.py", "flat_state", _MDA),
+    Annotation("process/core/solver/module_solve.py", "per_module", _MDA),
+    Annotation("process/core/solver/module_solve.py", "partitioned", _MDA),
+    Annotation("process/core/solver/module_solve.py", "COUPLING_STATE", _ARTIFACTS),
+    Annotation("process/core/solver/module_solve.py", "WRITE_SETS", _ARTIFACTS),
+    Annotation("process/core/solver/module_solve.py", "YSTATE_PATH", _ARTIFACTS),
+    Annotation("process/core/solver/module_solve.py", "WRITESET_PATH", _ARTIFACTS),
+    Annotation("process/core/solver/module_solve.py", "OUTER", _OUTER),
+    Annotation("process/core/solver/module_solve.py", "outer", _OUTER),
+    Annotation("process/core/solver/module_solve.py", "trust", _OUTER),
+    Annotation("process/core/solver/module_solve.py", "schedule", _OUTER),
+    Annotation("process/core/solver/module_solve.py", "INNER_TAU", _INNER),
+    Annotation("process/core/solver/module_solve.py", "inner_tau", _INNER),
+    Annotation("process/core/solver/module_solve.py", "inner", _INNER),
+    Annotation("process/core/solver/module_solve.py", "tolerance", _INNER),
+    Annotation("process/core/solver/module_solve.py", "ArchitectureRefusal", _REFUSAL),
+    Annotation("process/core/solver/module_solve.py", "deck", _WORDS),
+    Annotation("process/core/solver/module_solve.py", "configuration", _WORDS),
+    Annotation("process/core/solver/module_solve.py", "arrangement", _WORDS),
+    Annotation("process/core/solver/module_solve.py", "arm", _WORDS),
+    Annotation("process/core/solver/module_solve.py", "ystate artifact", _WORDS),
+    Annotation("process/core/solver/module_solve.py", "coupling-state", _WORDS),
+    # --- A56 in subsolve.py, constraints.py and the package __init__ -----
+    Annotation("process/core/solver/subsolve.py", "BURN_TIME_OWNER", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "BURN_TIME_CONSTANT", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "OUT_OF_LOOP", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "out of the loop", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "LIFT", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "PIN", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "pin", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "owner", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "constant", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "lift", _OWNER),
+    Annotation("process/core/solver/subsolve.py", "ArchitectureRefusal", _REFUSAL),
+    Annotation("process/core/solver/constraints.py", "PROCESS_ARCH_BURN_TIME_OWNER", _OWNER),
+    Annotation("process/core/solver/constraints.py", "PROCESS_ARCH_LIFT", _OWNER),
+    Annotation("process/core/solver/__init__.py", "ArchitectureRefusal", _REFUSAL),
+    Annotation("process/core/solver/__init__.py", "RETIRED_SWITCHES", _RETIRED),
 ]
 
 #: One paragraph per changed driver file, for a reader who will not read the
@@ -94,7 +194,64 @@ SUMMARIES: dict[str, str] = {
         "provenance file that records where it came from.  Nothing else "
         "changes: on every path where the file exists the code does exactly "
         "what it did, and the same code reads the same shape of file from a "
-        "different place."
+        "different place.  On top of that the four architecture switches this "
+        "file reads take the names the experiment settled on -- arrangement at "
+        "node and at method granularity, deferral at per-call and at per-run "
+        "frequency -- together with the module-level names a harness reads "
+        "them back through; every table, branch and derivation is the same "
+        "code under a different spelling.  One thing here is a removal rather "
+        "than a rename: the block schedule now runs exactly once, so the loop "
+        "over schedule passes, the joint residual evaluation that decided "
+        "whether to repeat it, that evaluation's trace hook and the pass-cap "
+        "refusal are gone.  Every arm this experiment runs already took the "
+        "single-pass path -- the measurement that removed the other one found "
+        "it firing zero times in 91 888 evaluations -- so nothing any arm does "
+        "changes, and the reproduction gate is what checks that claim rather "
+        "than restating it.  Finally, every refusal of an architecture setting "
+        "raises the typed refusal instead of a bare RuntimeError; upstream's "
+        "own ten-pass raise is deliberately left alone, because it is a "
+        "finding about the shipped code and not a setting being refused."
+    ),
+    "process/core/solver/__init__.py": (
+        "Two additions to a file that was one line of docstring.  The first is "
+        "ArchitectureRefusal, the exception every driver-side refusal of an "
+        "architecture setting now raises: a measurement harness has to tell a "
+        "refused run -- the guards working -- from a crashed one, and until "
+        "this class existed it did so by matching fragments of the sentences "
+        "the driver writes, which puts a reworded message in the wrong row of "
+        "the failure table.  The second is the list of switch names the rename "
+        "retired, each with the switch that replaced it, checked at the import "
+        "of this package.  That check is the load-bearing half of a rename: "
+        "before it, an unrecognised switch name was simply ignored, so a "
+        "script still setting an old name would produce a *successful* run of "
+        "a different arrangement under the right name, with no error anywhere. "
+        "It lives in the package's own __init__ because that is the earliest "
+        "point every route into the driver passes through."
+    ),
+    "process/core/solver/subsolve.py": (
+        "One switch replaces two.  Taking the burn time out of the model and "
+        "naming what holds it instead were two settings -- a list of lifted "
+        "sites, and a pinned value -- and they could be set inconsistently: "
+        "'a constant owns it, but the model still solves for it' had to be "
+        "refused explicitly, because the model would overwrite the constant on "
+        "the first sweep. PROCESS_ARCH_BURN_TIME_OWNER says who owns the "
+        "quantity in one value -- the loop (the default, and upstream's own "
+        "behaviour), the optimiser, or a named constant passed as a hex float "
+        "so a measured value survives the round trip exactly -- and the "
+        "inconsistent combination can no longer be written down, so its "
+        "refusal is gone with it. The seam itself does not change: the "
+        "residual is still the contract, the model's own solve is still the "
+        "default path, and the tripwire that catches an overwritten constant "
+        "still runs at the end of every sweep. The general list form is not "
+        "needed while exactly one quantity is ever taken out of the loop; the "
+        "module docstring records that a second one would need it back."
+    ),
+    "process/core/solver/constraints.py": (
+        "One docstring. The burn-time consistency constraint explains that it "
+        "is what determines the burn time when the model stops solving for it, "
+        "and it named the switch that used to say so. It names the switch that "
+        "says so now. Nothing the constraint computes changes, and the file "
+        "carries no other difference from the source commit."
     ),
     "process/core/solver/module_solve.py": (
         "One path constant is re-pointed and two comments name the copied "
@@ -105,7 +262,21 @@ SUMMARIES: dict[str, str] = {
         "ystate.py -- the same module, moved whole, its body byte-identical "
         "to its source and gated as such.  Same loader, same contract, "
         "different file.  The docstring's reference to the coupling-state "
-        "artifact follows the file the copy actually reads."
+        "artifact follows the file the copy actually reads.  On top of that, "
+        "the shape of the analysis loop takes its intended switch name and its "
+        "intended values -- flat and partitioned, with the variable unset "
+        "meaning upstream's own loop -- and the two committed artifacts a "
+        "block loop reads take theirs.  Two switches are retired outright.  "
+        "The one that chose between running the block schedule once and "
+        "repeating it is gone, because the schedule now runs once by "
+        "definition: the repeated form was measured triggering a further pass "
+        "zero times in 91 888 evaluations and the arm that used it was "
+        "removed.  So are its mode table, its two composition refusals and its "
+        "pass cap.  The other is the second, inner tolerance: there is one "
+        "tolerance for every converger in every arm, and comparisons are made "
+        "at matched achieved accuracy, which the exit audit records per run, "
+        "rather than at matched settings.  Every refusal in the file raises "
+        "the typed refusal."
     ),
 }
 
@@ -188,7 +359,15 @@ def parse(raw: str, src: Path, copy: Path) -> list[FileDiff]:
 
     def close_hunk() -> None:
         if current is not None and hunk is not None:
-            text = "\n".join(hunk["lines"])
+            # Only the **changed** lines are offered to the annotation map.  A
+            # context line that happens to contain a marker would otherwise let
+            # a hunk be claimed by a mechanism it does not serve, and a claim
+            # nobody can check is worse than an UNEXPLAINED nobody can miss.
+            text = "\n".join(
+                line
+                for line in hunk["lines"]
+                if line[:1] in "+-" and not line.startswith(("+++", "---"))
+            )
             claims = [
                 a.serves
                 for a in ANNOTATIONS
