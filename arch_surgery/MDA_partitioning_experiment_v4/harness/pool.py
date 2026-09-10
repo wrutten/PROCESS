@@ -65,8 +65,11 @@ DEFAULT_TIMEOUT_S = 5400
 #: width actually used is stamped into every stage record.
 WORKERS_VARIABLE = "HARNESS_WORKERS"
 
-#: The two child entry points, by phase.
-ENTRY_POINT = {"A": "evaluate.py", "B": "optimise.py"}
+#: The child entry points, by phase.  ``census`` is not a phase of the
+#: experiment: it is the stage that observes what the models write and read, and
+#: it runs here rather than beside here so that it gets the same isolation every
+#: other PROCESS run gets (task A51 (harness-artifacts) added it).
+ENTRY_POINT = {"A": "evaluate.py", "B": "optimise.py", "census": "census.py"}
 
 
 class PoolError(RuntimeError):
@@ -105,6 +108,10 @@ class Job:
     run_kind: str = "campaign"
     predicate_mode: str = "frozen"
     node_census: bool = True
+    #: For a ``census`` job only: which entry the census is taken at, and
+    #: whether the read half of the instrument is on.
+    census_entry: str = "evaluation"
+    census_read: bool = True
     force_maxcal: int | None = None
     timeout: int = DEFAULT_TIMEOUT_S
     #: Switch terms this tree does not implement that this job is allowed to
@@ -211,6 +218,22 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
     here = Path(__file__).resolve().parent
     entry = here / ENTRY_POINT[job.phase]
     input_path, input_kind = input_file_for(job, campaign)
+    if job.phase == "census":
+        command = [
+            sys.executable,
+            str(entry),
+            "--child",
+            "--tree", str(campaign.tree),
+            "--configuration", job.config.name,
+            "--arm", job.arm,
+            "--input", str(input_path),
+            "--outdir", str(job.outdir),
+            "--entry", job.census_entry,
+            "--run-kind", job.run_kind,
+        ]
+        if job.census_read:
+            command.append("--read-census")
+        return command
     command = [
         sys.executable,
         str(entry),
