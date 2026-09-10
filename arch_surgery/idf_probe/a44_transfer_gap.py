@@ -478,13 +478,27 @@ def stage_factorise() -> int:
         else:
             def pc(a, s):
                 return round(_problem_calls(F[a][s]))
+            retried_any = {a: [s for s in S03 if s in F[a] and F[a][s]["attempts"] > 1]
+                           for a in F}
+            clean = [s for s in S03 if all(s in F[a] and F[a][s]["attempts"] == 1
+                                           for a in ("B0", "B2", "B3") if a in F)]
             d["st_rung_split"] = {
                 "B0->B2_differ": [s for s in S03 if s in F["B2"] and pc("B0", s) != pc("B2", s)],
                 "B2->B3_differ": [s for s in S03 if s in F["B2"] and pc("B2", s) != pc("B3", s)],
                 "both_differ": [s for s in S03 if s in F["B2"] and pc("B0", s) != pc("B2", s) and pc("B2", s) != pc("B3", s)],
                 "B0->B3_differ": [s for s in S03 if pc("B0", s) != pc("B3", s)],
                 "B2_not_converged": [s for s in S03 if s not in conv.get("B2", set())],
-                "note": "problem-calls (C / 2(nvar+1)) compared per seed; "
+                "retried_seeds_by_arm": retried_any,
+                "retry_contaminated_seeds": sorted({s for v in retried_any.values() for s in v}),
+                "clean_seeds_no_retry_in_B0_B2_B3": clean,
+                "B0->B2_differ_clean": [s for s in clean if pc("B0", s) != pc("B2", s)],
+                "B2->B3_differ_clean": [s for s in clean if pc("B2", s) != pc("B3", s)],
+                "B0->B3_differ_clean": [s for s in clean if pc("B0", s) != pc("B3", s)],
+                "note": "problem-calls (C / 2(nvar+1), all attempts) compared per "
+                        "seed; on a retried seed the comparison charges that arm "
+                        "both attempts while check 2 credits the final attempt "
+                        "only (the lad finding on the other arm), so the split is "
+                        "published with and without retry-contaminated seeds; "
                         "A43 (st-trust-gap) owns the B2->B3 half",
             }
         rec["decks"][deck] = d
