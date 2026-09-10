@@ -722,3 +722,57 @@ disagrees would change, and how much else moves with it.*
 - **2026-09-10** — the whole chain re-run from a clean run directory at `2926449f`; every figure in
   §§3–7 is from that run, except §6.5, which is a separate invocation of the same stage at the same
   commit.
+
+---
+
+## 12. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `e1a74aaf` and the
+stages on the same branch. The chain was re-run by the orchestrator, not read off the report.*
+
+**Verified independently.** (1) `experiment_runner.py --artifacts all` re-run from a clean run
+directory on this branch: `check` PASS on every row (93 checks, 0 failed); `derive-inputs` PASS —
+both lifted input files byte-identical to the committed digests, `st_regression` recorded not
+applicable; `census` PASS — 22/22, 23/23, 21/21 node write sets identical, 862/868/843 fields with 0
+differences in either direction, 5/5 block subsets on each; `per-run` PASS — the class-level
+classifier reproduces every committed deferral set on all five (configuration, input file) pairs,
+same nodes, same order, same digest; **11 of 11 teeth tripped**. (2) Scope: nine files — the four
+stage modules, the runner's stages, `pool.py` (+27, a third child entry point), `predicate.py`
+(+13, the `harvest` key), the README's appended section and this report; nothing under the copy or
+the repository-root `process/`. (3) Composition with A56 (driver-renames), which merged while this
+task ran: the only file both branches changed is the README, in disjoint regions; no literal switch
+name appears in the four new modules; the one driver function called by name
+(`caller._predicate_read_fields`) survived the rename, and the renamed one
+(`_post_solve_nodes` → `_defer_per_run_nodes`) is mentioned only in a heritage docstring. The chain
+is re-run on the merged tree at the merge; the result is recorded in the queue row.
+
+**Endorsed.** The reachability layer as a source scan of the tree under test rather than a live read
+of the sibling's export (trap T9), with the three closure exclusions counted and named per run
+rather than applied quietly — and the necessity of the third established by the disagreement it
+removes. The read-census finding handled correctly: the cause (`numerics.i_figure_merit` read at the
+driver's own call site, written by no node) established before the check changed, both constructions
+published, the binding one restricted to fields a node writes, every excluded read named.
+`compare_with_driver` as the pattern for an inherited criterion — the harness's restatement agrees
+with the driver's own function 215/215 on all three configurations, measured in a child that asserted
+the tree. The lifted input file's third line measured by one `AR` evaluation and confirmed by the
+digest, which makes the derivation a reproduction and not a transcription. The `harvest` key fix in
+`predicate.py`: a one-word additive change in another task's file, flagged rather than folded in.
+
+**Limits I hold it to.** (a) The per-run classifier reproduces the committed sets from a different
+reachability source than the one that produced them; agreement is strong evidence, not identity of
+method, and the report says so (§6.5). (b) The read census is read from the instrument's state, not
+its summary; the one-line driver addition that would make it a stable interface is A58's, and until
+then the census depends on an internal of the probe module. (c) The dead-branch function list is a
+transcription re-checked against the source on every run; two of its eleven names do not exist at
+this commit and exclude nothing. (d) The `check` stage's count differs by two depending on whether
+the derivation has run (93 vs 95); the condition is stated.
+
+**Consequences drawn (orchestrator, today).** A58 (driver-predicate-counters) takes the one-line
+`reads_by_node` addition to `_idf_probe_modules.summary()` and `census.py` then reads the report,
+not the state. A52 (harness-gates) promotes `StageCheck` with `selfcheck.Check` into `Gate`/`Tooth`
+and takes G4's per-namespace set from `postsolve.derive` (`vacuum`, `water_use`, `costs`; `pulse` on
+`st_regression`). A55 (harness-smoke) uses `--census-entry evaluation` for the smoke pass.
+
+**Verdict.** Fit to merge; nothing returned. Every committed artifact the experiment reads is now
+validated by rebuilding what it claims about itself and reproduced by a derivation this repository
+can run.
