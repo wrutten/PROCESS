@@ -43,6 +43,7 @@ Usage
     python -m harness.gates switch-neutrality --capture after
     python -m harness.gates switch-neutrality --compare
     python -m harness.gates all            # every gate that needs no capture
+    python -m harness.gates predicate-counters   # a measurement, not a gate
 
 Exit status: 0 every gate passed with every tooth tripping, 1 otherwise.
 """
@@ -1855,6 +1856,297 @@ def print_measurements(block: Mapping[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------------
+# The per-sweep overhead, counted -- a measurement, not a gate
+# --------------------------------------------------------------------------
+#
+# EXPERIMENT_PLAN.md section 3.5, check 5, and improvement-list item 3.  The
+# partitioned arrangement runs far more sweeps of the model sequence than the
+# flat one while executing far fewer model nodes, and the previous revision
+# measured it no faster.  Something a sweep costs is therefore not proportional
+# to the nodes it runs, and the convergence test is the obvious suspect: a flat
+# loop compares the whole coupling state on every sweep while a block loop
+# compares only its own block's write set.
+#
+# Nothing here is evidence about speed.  These are counts, which reproduce bit
+# for bit; no conclusion in this experiment rests on a clock (issue I-10).  What
+# the counts settle is whether a non-node-proportional term of the hypothesised
+# *size* exists at all.
+#
+# The population is the reproduction gate's own runs, because they already
+# exist at this commit, they cover every arm the gate covers on all three
+# configurations, and they are made by the committed run path.  They are one
+# seed each -- seed 0 for most rows -- so no row here is a campaign statistic
+# and none is quoted as one.
+
+#: The order rows are printed in, so a reader can compare configurations down a
+#: column.  Arms follow the experiment plan's matrix order.
+MEASUREMENT_ARM_ORDER = arms_mod.MATRIX_ORDER
+
+
+def predicate_counter_rows(campaign: Campaign, root: Path | None = None) -> list[dict[str, Any]]:
+    """One row per run of the reproduction gate, with its counters.
+
+    Reads records; runs nothing.  A run directory with no record is a row that
+    says so, never a row silently dropped: a table over a population quietly
+    smaller than the one named is this project's trap T11.
+    """
+    from harness import reproduction as reproduction_mod  # noqa: PLC0415
+
+    base = Path(root or (Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH))
+    rows: list[dict[str, Any]] = []
+    for run in reference_mod.reference_set(campaign):
+        directory = (
+            base / "runs" / run.configuration / run.arm
+            / pool_mod.seed_directory(run.seed)
+        )
+        record = records_mod.read(directory)
+        rows.append(_counter_row(run.arm, run.configuration, run.seed, run.phase, record))
+    rows.sort(
+        key=lambda r: (
+            r["configuration"],
+            MEASUREMENT_ARM_ORDER.index(r["arm"])
+            if r["arm"] in MEASUREMENT_ARM_ORDER
+            else len(MEASUREMENT_ARM_ORDER),
+            r["seed"],
+        )
+    )
+    return rows
+
+
+def _counter_row(
+    arm: str, configuration: str, seed: int, phase: str, record: Mapping[str, Any]
+) -> dict[str, Any]:
+    """One run's counters, with the reconciliation of its sweep total."""
+    block_visits = record.get("block_visits") or {}
+    empty_visits = record.get("empty_block_visits") or {}
+    empty_sweeps = record.get("empty_block_sweeps") or {}
+    totals = record.get("module_solve_totals") or {}
+    evaluations = record.get("predicate_evaluations")
+    components = record.get("components_compared")
+    upstream_evaluations = record.get("upstream_predicate_evaluations")
+    upstream_components = record.get("upstream_components_compared")
+    counters = record.get("predicate_counters") or {}
+    coupling = counters.get("coupling_state_predicate") or {}
+    row: dict[str, Any] = {
+        "configuration": configuration,
+        "arm": arm,
+        "seed": seed,
+        "phase": phase,
+        "status": record.get("status"),
+        "stops_on": (
+            "coupling state"
+            if evaluations
+            else ("upstream's objective/constraint test" if upstream_evaluations else "—")
+        ),
+        "dispatch_sweeps": record.get("dispatch_sweeps"),
+        "block_sweeps": totals.get("block_sweeps"),
+        "output_loop_sweeps": record.get("output_loop_sweeps"),
+        "predicate_evaluations": evaluations,
+        "components_compared": components,
+        "mean_test_width": coupling.get("mean_test_width"),
+        "mean_test_width_by_block": coupling.get("mean_test_width_by_block") or {},
+        "evaluations_by_block": coupling.get("evaluations_by_block") or {},
+        "upstream_predicate_evaluations": upstream_evaluations,
+        "upstream_components_compared": upstream_components,
+        "upstream_mean_test_width": (
+            (counters.get("upstream_predicate") or {}).get("mean_test_width")
+        ),
+        "block_visits": dict(sorted(block_visits.items())) if block_visits else {},
+        "n_block_visits": sum(block_visits.values()) if block_visits else 0,
+        "empty_block_visits": dict(sorted(empty_visits.items())) if empty_visits else {},
+        "n_empty_block_visits": sum(empty_visits.values()) if empty_visits else 0,
+        "empty_block_sweeps": dict(sorted(empty_sweeps.items())) if empty_sweeps else {},
+        "n_empty_block_sweeps": sum(empty_sweeps.values()) if empty_sweeps else 0,
+        "node_calls_solve_phase": record.get("node_calls_solve_phase"),
+        "node_calls_single_eval": record.get("node_calls_single_eval"),
+        "n_call_models": totals.get("n_call_models"),
+    }
+    row["empty_share_of_block_visits"] = (
+        (row["n_empty_block_visits"] / row["n_block_visits"])
+        if row["n_block_visits"]
+        else None
+    )
+    row["reconciliation"] = _reconcile_sweeps(record, row)
+    return row
+
+
+def _reconcile_sweeps(record: Mapping[str, Any], row: Mapping[str, Any]) -> dict[str, Any]:
+    """Does the run's sweep total decompose into the parts that claim it?
+
+    The identity, for an arm that runs a block schedule::
+
+        dispatch_sweeps = block_sweeps + output_loop_sweeps + per_run_sweep
+
+    ``per_run_sweep`` is one sweep, spent in ``write_output_files`` running the
+    nodes deferred to once per run; it is 1 when that set is non-empty and 0
+    otherwise.  For an arm with no block schedule the first term is instead the
+    sweeps the analysis loop took, which the per-evaluation histogram sums.
+
+    A residual that is not 0 is reported, never absorbed: a sweep total nobody
+    can decompose is a total nobody can attribute.
+    """
+    total = row["dispatch_sweeps"]
+    if total is None:
+        return {"checked": False, "why": "the record carries no sweep total"}
+    per_run = record.get("post_solve_totals") or {}
+    per_run_sweep = 1 if (per_run.get("executed_once") or []) else 0
+    output = row["output_loop_sweeps"] or 0
+    if row["block_sweeps"]:
+        loop = row["block_sweeps"]
+        loop_is = "block_sweeps (the block schedule's own charged sweeps)"
+    else:
+        loop = ((record.get("sweeps_per_eval") or {}).get("n_sweeps")) or 0
+        loop_is = "sweeps_per_eval.n_sweeps (the analysis loop's own sweeps)"
+    residual = total - (loop + output + per_run_sweep)
+    return {
+        "checked": True,
+        "dispatch_sweeps": total,
+        "loop_sweeps": loop,
+        "loop_sweeps_is": loop_is,
+        "output_loop_sweeps": output,
+        "per_run_deferral_sweep": per_run_sweep,
+        "residual": residual,
+        "decomposes": residual == 0,
+        "why": (
+            "the exit audit's own sweep is not in this total: the counters are "
+            "read before the audit runs, so the measurement is not charged to "
+            "the thing it measures"
+        ),
+    }
+
+
+def predicate_counter_measurements(
+    campaign: Campaign, root: Path | None = None
+) -> dict[str, Any]:
+    """The per-sweep-overhead block the report publishes, with its population."""
+    rows = predicate_counter_rows(campaign, root=root)
+    finished = [r for r in rows if r["status"] == "ok"]
+    undecomposed = [
+        f"{r['arm']}/{r['configuration']}"
+        for r in finished
+        if r["reconciliation"].get("checked") and not r["reconciliation"]["decomposes"]
+    ]
+    empty_rows = [r for r in finished if r["n_empty_block_visits"]]
+    return {
+        "what": (
+            "what each arm's convergence test cost, in counts.  Two predicates "
+            "are reported and never pooled: an arm stops on exactly one of "
+            "them.  'mean test width' is components compared divided by "
+            "evaluations — the average number of components one test walked"
+        ),
+        "population": (
+            f"{len(rows)} run(s) of the reproduction gate at this commit, "
+            f"{len(finished)} of them finished; one seed per row (seed 0 "
+            f"except where the row says otherwise), so no figure here is a "
+            f"campaign statistic and none is quoted as one"
+        ),
+        "empty_visits_disclaimer": (
+            "empty block visits are INCLUDED in every visit and sweep count "
+            "here.  On st_regression the PULSE block is visited once per "
+            "evaluation of the model set with its member skipped at the call "
+            "site: a full sweep of the model sequence that executes no model.  "
+            "The user ruled that this stays and is disclaimed rather than "
+            "repaired (issue I-20a), because dropping the block would change "
+            "the node weights the comparison rests on.  A block the per-call "
+            "deferral has emptied of members is also an empty visit but costs "
+            "no sweep at all, which is why the two are counted separately"
+        ),
+        "timing_note": (
+            "no timing appears here and none is implied: these are counts, "
+            "which reproduce bit for bit"
+        ),
+        "n_rows": len(rows),
+        "n_finished": len(finished),
+        "rows": rows,
+        "sweep_decomposition": {
+            "identity": (
+                "dispatch_sweeps = loop sweeps + output-time loop sweeps + the "
+                "one sweep the per-run deferral spends at the output path"
+            ),
+            "n_checked": len([r for r in finished if r["reconciliation"].get("checked")]),
+            "n_that_do_not_decompose": len(undecomposed),
+            "which": undecomposed,
+        },
+        "empty_visits": {
+            "n_runs_with_any": len(empty_rows),
+            "by_run": [
+                {
+                    "configuration": r["configuration"],
+                    "arm": r["arm"],
+                    "visits": r["n_block_visits"],
+                    "empty_visits": r["n_empty_block_visits"],
+                    "empty_visits_that_cost_a_sweep": r["n_empty_block_sweeps"],
+                    "share_of_visits": r["empty_share_of_block_visits"],
+                    "by_block": r["empty_block_visits"],
+                    "sweeps_by_block": r["empty_block_sweeps"],
+                }
+                for r in empty_rows
+            ],
+        },
+    }
+
+
+def _n(value) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, float):
+        return f"{value:,.1f}"
+    return f"{value:,}"
+
+
+def print_predicate_counters(block: Mapping[str, Any]) -> None:
+    """The measurement, as the report prints it."""
+    print("\n=== the per-sweep overhead, counted (experiment plan §3.5 check 5)")
+    print(f"    {block['what']}")
+    print(f"    population : {block['population']}")
+    print(f"    empty visits: {block['empty_visits_disclaimer']}")
+    print()
+    head = (
+        f"    {'configuration':<22} {'arm':<4} {'stops on':<34} "
+        f"{'sweeps':>8} {'pred.ev':>8} {'comps':>12} {'width':>8} "
+        f"{'visits':>7} {'empty':>7} {'e.sweeps':>9}"
+    )
+    print(head)
+    print("    " + "-" * (len(head) - 4))
+    for row in block["rows"]:
+        if row["status"] != "ok":
+            print(
+                f"    {row['configuration']:<22} {row['arm']:<4} "
+                f"NO RECORD ({row['status']})"
+            )
+            continue
+        evaluations = row["predicate_evaluations"] or row["upstream_predicate_evaluations"]
+        components = row["components_compared"] or row["upstream_components_compared"]
+        width = row["mean_test_width"] or row["upstream_mean_test_width"]
+        print(
+            f"    {row['configuration']:<22} {row['arm']:<4} {row['stops_on']:<34} "
+            f"{_n(row['dispatch_sweeps']):>8} {_n(evaluations):>8} "
+            f"{_n(components):>12} {_n(width):>8} "
+            f"{_n(row['n_block_visits']):>7} {_n(row['n_empty_block_visits']):>7} "
+            f"{_n(row['n_empty_block_sweeps']):>9}"
+        )
+    print()
+    print("    per-block mean test width, partitioned arms only:")
+    for row in block["rows"]:
+        if not row["mean_test_width_by_block"]:
+            continue
+        widths = ", ".join(
+            f"{label} {width:.0f} ({row['evaluations_by_block'].get(label, 0):,} tests)"
+            for label, width in row["mean_test_width_by_block"].items()
+        )
+        print(f"      {row['configuration']:<22} {row['arm']:<4} {widths}")
+    print()
+    decomposition = block["sweep_decomposition"]
+    print(f"    sweep decomposition: {decomposition['identity']}")
+    print(
+        f"      {decomposition['n_checked']} run(s) checked, "
+        f"{decomposition['n_that_do_not_decompose']} that do not decompose"
+        + (f": {decomposition['which']}" if decomposition["which"] else "")
+    )
+    print(f"    {block['timing_note']}")
+
+
+# --------------------------------------------------------------------------
 # the registry
 # --------------------------------------------------------------------------
 
@@ -1977,14 +2269,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             "output-path",
             "output-path-contrast",
             "output-path-measurements",
+            "predicate-counters",
             "all",
         ),
         help="which gate to run; 'all' runs the gates that need no capture.  "
-        "'output-path-contrast' and 'output-path-measurements' are not "
-        "gates: they publish what the experiment plan asks for by name — what "
-        "the output-time loop moves in the output files, what it costs, and "
-        "where the accepted state sits against the tolerance at the declared "
-        "audit position",
+        "'output-path-contrast', 'output-path-measurements' and "
+        "'predicate-counters' are not gates: they publish what the experiment "
+        "plan asks for by name — what the output-time loop moves in the output "
+        "files, what it costs, where the accepted state sits against the "
+        "tolerance at the declared audit position, and (section 3.5 check 5) "
+        "what each arm's convergence test cost in evaluations and components "
+        "compared, with the empty block visits counted beside them",
     )
     parser.add_argument(
         "--capture",
@@ -2017,6 +2312,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  {row['configuration']:<22} {row['label']:<14} "
                   f"{row['status']} {row['override_env']}")
         print(f"  manifest: {manifest['manifest']}")
+        return 0
+
+    if args.gate == "predicate-counters":
+        block = predicate_counter_measurements(campaign)
+        out = records_dir / "predicate_counters" / "measurements.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(block, indent=2, default=str) + "\n")
+        print_predicate_counters(block)
+        print(f"\n  record: {out}")
         return 0
 
     if args.gate == "output-path-measurements":
