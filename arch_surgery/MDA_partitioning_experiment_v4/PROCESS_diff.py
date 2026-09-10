@@ -85,6 +85,10 @@ _RETIRED = "the retired-name guard: a stale switch name raises instead of being 
 _WORDS = "vocabulary only: the words of the terminology table in comments and messages (no behaviour)"
 _OUTPUT_LOOP = "switch PROCESS_ARCH_OUTPUT_LOOP: whether the accepted state is re-solved before it is written out"
 _SNAPSHOT = "the exit-audit snapshot hook: the coupling state captured at the declared audit position, so the residual can be computed after the run"
+_PREDICATE_COUNT = "DR4 counters: how often a convergence test was evaluated in the solve phase, and how many components each one walked"
+_BLOCK_VISITS = "DR4 counters: the block schedule's visits to each block, and the visits that executed no node (issue I-20a: counted and disclaimed, never repaired)"
+_SWEEP_COUNT = "DISPATCH_SWEEPS: the run's count of sweeps of the dispatch body, under a public name (was _SWEEP_CALLS)"
+_READS_BY_NODE = "the census instrument reports each node's read set by name, beside the write set it already reported"
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
@@ -185,6 +189,17 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/caller.py", "_take_exit_snapshot", _SNAPSHOT),
     Annotation("process/core/caller.py", "snapshot", _SNAPSHOT),
     Annotation("process/core/caller.py", "exit audit", _SNAPSHOT),
+    # --- A58: the predicate counters, the block visits, the sweep count ---
+    Annotation("process/core/caller.py", "DR4", _PREDICATE_COUNT),
+    Annotation("process/core/caller.py", "PREDICATE_EVALUATIONS", _PREDICATE_COUNT),
+    Annotation("process/core/caller.py", "COMPONENTS_COMPARED", _PREDICATE_COUNT),
+    Annotation("process/core/caller.py", "_objf_agrees", _PREDICATE_COUNT),
+    Annotation("process/core/caller.py", "convergence test", _PREDICATE_COUNT),
+    Annotation("process/core/caller.py", "BLOCK_VISITS", _BLOCK_VISITS),
+    Annotation("process/core/caller.py", "empty", _BLOCK_VISITS),
+    Annotation("process/core/caller.py", "DISPATCH_SWEEPS", _SWEEP_COUNT),
+    # --- A58: the census instrument's report (A51's handover) ------------
+    Annotation("process/core/_idf_probe_modules.py", "reads_by_node", _READS_BY_NODE),
 ]
 
 #: One paragraph per changed driver file, for a reader who will not read the
@@ -246,7 +261,51 @@ SUMMARIES: dict[str, str] = {
         "cannot simply be run there; the hook captures the state instead and "
         "the residual is computed after the run.  With nothing installed the "
         "hook is two 'is None' tests per run, and a hook that raises is "
-        "recorded rather than allowed to change the run's outcome."
+        "recorded rather than allowed to change the run's outcome.  "
+        "Finally, the file counts what its convergence tests cost.  The "
+        "intervention runs many more sweeps of the dispatch body than the "
+        "control while executing far fewer model nodes, and the earlier "
+        "revision found it no faster; that can only be true if a sweep costs "
+        "something not proportional to the nodes it runs, and the convergence "
+        "test is the prime suspect, because a flat block loop compares the "
+        "whole coupling state -- 827 to 846 components -- on every sweep while "
+        "a block loop compares only its own block's write set.  No conclusion "
+        "here may rest on a clock, so the question is asked in counts: how "
+        "many times a convergence test was evaluated, and how many components "
+        "each of those tests walked.  The two predicates are counted "
+        "separately rather than pooled, because an arm runs exactly one of "
+        "them and they are not the same test -- the coupling-state predicate "
+        "the flat and partitioned arrangements stop on, and upstream's own "
+        "idempotence test on the objective and the constraint vector, whose "
+        "width is counted exactly since the pair short-circuits.  Beside them "
+        "the schedule's visits to each block are counted, and the subset of "
+        "those visits that executed no node at all: on one configuration a "
+        "block survives in the schedule after its only member has left it, "
+        "and the user ruled that this stays and is disclaimed rather than "
+        "repaired, because dropping the block would change the node weights "
+        "the comparison rests on.  Every one of these is a plain integer "
+        "increment in the solve phase, touching no float and changing no "
+        "branch a result depends on; the output-time loop's own comparisons "
+        "are counted by neither, exactly as the per-evaluation sweep "
+        "histogram excludes them.  The per-run sweep counter loses its "
+        "leading underscore in the same change: it existed only to be "
+        "differenced across one evaluation, and the per-sweep-overhead "
+        "question needs the run total, which cannot be read from a name a "
+        "harness has to reach into the module's privates for."
+    ),
+    "process/core/_idf_probe_modules.py": (
+        "One line.  The census instrument attributes every data-structure read "
+        "and write to the model node that made it, and its summary reported "
+        "each node's *write* set by name but only the *count* of its reads.  "
+        "The names of the reads are what the deferral routing rule is derived "
+        "from, so the harness was reaching into the instrument's own "
+        "module-level dictionary to get them, from inside the same process -- "
+        "a caller coupled to an instrument's internals rather than to its "
+        "report.  The summary now carries reads_by_node beside writes_by_node, "
+        "built by the same expression from the same dictionary.  The whole "
+        "file is a no-op with PROCESS_IDF_PROBE unset, so this changes nothing "
+        "any measured run does; that the read sets are identical either way "
+        "was measured on all three configurations rather than assumed."
     ),
     "process/core/solver/__init__.py": (
         "Two additions to a file that was one line of docstring.  The first is "

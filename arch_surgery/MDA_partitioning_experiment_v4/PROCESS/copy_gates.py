@@ -387,6 +387,70 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             ),
             task="A57 (driver-output-path)",
         ),
+        PermittedEdit(
+            kind="counters",
+            name=(
+                "PREDICATE_EVALUATIONS / COMPONENTS_COMPARED / "
+                "BLOCK_VISITS / EMPTY_BLOCK_VISITS / "
+                "UPSTREAM_PREDICATE_EVALUATIONS / "
+                "UPSTREAM_COMPONENTS_COMPARED"
+            ),
+            description=(
+                "what the convergence test costs, counted rather than timed.  "
+                "The coupling-state predicate is counted per evaluation and "
+                "by the number of components each evaluation walked -- the "
+                "block's own write set, or the whole coupling state where the "
+                "block has none -- with both also kept per block label; the "
+                "schedule's visits to each block are counted, and the subset "
+                "of those that executed no node, which is issue I-20(a)'s "
+                "empty PULSE block, counted and disclaimed rather than "
+                "repaired (decision D21); and upstream's own stopping test on "
+                "the objective and the constraint vector is counted "
+                "separately, exactly, so the reference arms carry a measured "
+                "predicate cost rather than a zero.  Plain integer "
+                "increments: no float is touched and no branch a result "
+                "depends on changes, which gate G1 is what proves"
+            ),
+            task="A58 (driver-predicate-counters)",
+            was="nothing counted the convergence test",
+            now=(
+                "six counters, solve phase only; the output-time loop's own "
+                "check_agreement calls are counted by neither predicate"
+            ),
+        ),
+        PermittedEdit(
+            kind="rename",
+            name="DISPATCH_SWEEPS",
+            description=(
+                "the per-run count of sweeps of the dispatch body loses its "
+                "leading underscore.  It existed only to be differenced "
+                "across call_models for the per-evaluation histogram; the "
+                "per-sweep-overhead question needs the run total, and it "
+                "cannot be asked of a counter a harness has to reach into a "
+                "module's private names to read.  Same cell, same increment, "
+                "same value"
+            ),
+            task="A58 (driver-predicate-counters)",
+            was="_SWEEP_CALLS",
+            now="DISPATCH_SWEEPS",
+        ),
+    ],
+    "process/core/_idf_probe_modules.py": [
+        PermittedEdit(
+            kind="instrument report",
+            name="reads_by_node",
+            description=(
+                "the census instrument's summary reports each node's read "
+                "set by name, beside the write set it already reported.  It "
+                "reported the *count* of a node's reads and not the names, so "
+                "the harness had to reach into the instrument's module-level "
+                "state to get them; now it reads the report.  One line, the "
+                "same expression the writes half uses, in a probe that is a "
+                "no-op with PROCESS_IDF_PROBE unset"
+            ),
+            task="A58 (driver-predicate-counters); task A51 "
+            "(harness-artifacts)'s handover",
+        ),
     ],
 }
 
