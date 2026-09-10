@@ -86,7 +86,7 @@ Decomposed into the questions V4 answers, each with its own arm pair and accepta
 | **τ** | the convergence tolerance on `y`, per component, scaled: `max_i |Δy_i| / s_i < τ`, τ = 1e-6, `s_i` a measured scale (§3.6 says which) |
 | **flat MDA** | one loop over every in-loop node, stopping on `y` at τ (arms `A0`, `B0`) |
 | **partitioned MDA** | three block solves — M1 physics, M2 coils, M3 plant — each iterated to its own fixed point at τ, run in feed-forward order; the block membership comes from a validated dependency-structure matrix (DSM) of the code |
-| **outer loop** | after the block schedule, the joint test of `y` at τ; **verify** repeats the schedule if it fails, **trust** never runs it |
+| **block loop** | in the partitioned MDA, each block is iterated to its own fixed point at τ. V3 also offered a *joint test* over all blocks that repeated the whole schedule if anything still moved (its arm `B2`, and the words "outer"/"inner" loop); V4's partitioned arms run the schedule **once**, so there is one kind of loop and **one tolerance for every converger** (D23) |
 | **burn-time coupling** | the one cross-block feedback on pulsed configurations (`k = 1`): the `pulse` model computes `times.t_plant_pulse_burn`, which the physics block reads. `st_regression` is steady-state (`k = 0`): it has no such coupling |
 | **lift** | taking the burn time out of the loop; its **owner** becomes either a *constant* (Phase A: pinned at the entry value) or *the optimiser* (Phase B: iteration variable 178 with consistency constraint 93) |
 | **arrangement** | *when* things run: at node granularity (`build` after `physics`) and at method granularity (the **prime** — the run-constant first-wall geometry method executed at the head of every sweep so that `build` reads this pass's value) |
@@ -289,11 +289,12 @@ the outer loop in **trust** mode — one schedule pass, no verification. There a
 twins (item 0; V3 decision O5) and no verified-outer-loop twin (§3.2). **Their certificate of
 convergence is the block solves' inner tolerance plus the uncharged exit audit at the handover
 point** — there is no outer verification pass, so the inner tolerance is what sets the handover
-accuracy, and it is a declared setting (decision (g), §3.10): A43 (st-trust-gap) measured that
-`B3` at inner τ = 1e-8 reproduces the removed `B2` (inner τ = 1e-6, two passes) to every digit of
-achieved accuracy at a single evaluation, and that at inner τ = 1e-6 `B3` hands over a state ~30×
-looser below τ than `B2` did. The in-loop cost of the tighter setting is measured in V4, not
-assumed.
+accuracy, and it is **the same τ every converger uses (D23)**: the flat loop converges the whole coupling
+vector to τ, each block loop converges its block to τ, and there is no second tolerance. A43
+(st-trust-gap) measured the exchange rate should τ ever be tightened: at a single evaluation `B3`
+with block loops at 1e-8 reproduces the removed two-pass `B2` at 1e-6 to every digit of achieved
+accuracy, and at 1e-6 its handover is ~30× looser *below* τ — a sub-τ difference the exit audit
+records per run and the matched-accuracy rule (§3.6) governs. Not required for V4.
 
 **The lifted deck** differs from the frozen one in exactly three lines: the burn time becomes
 iteration variable 178; its consistency residual becomes equality constraint 93, inserted
@@ -441,8 +442,8 @@ headline unreadable. The failure table carries the retried seeds with each arm's
 2. **Iteration multiplier.** Paired ratio of optimiser iterations over the seed set;
    **acceptance: nearest-rank median ≤ 1.05** for `B0 → B1`, `B0 → B3`; summed
    iterations over the same pairs published beside every median with the sum ratio, since a
-   median and a sum can disagree in direction. *Amended 2026-09-10 (user directive relayed by
-   session `process-surgery-bd`; to be confirmed in the orchestrating session):* the iteration
+   median and a sum can disagree in direction. *Amended 2026-09-10 (user directive, relayed by
+   session `process-surgery-bd`, explained in the orchestrating session; stands unless vetoed):* the iteration
    count is published in **two constructions** — the **final attempt's** (V3's, kept for
    comparability) and **summed over every VMCON attempt, failed attempts included**
    (`n_solver_iterations_summed_over_attempts`, present in every V3 record and never read by V3's
@@ -451,7 +452,7 @@ headline unreadable. The failure table carries the retried seeds with each arm's
    beside the evaluation count over all attempts, which is the multiplier the transfer needs:
    iterations, even summed, miss the lift's stencil column and the line-search evaluations that
    vary at equal iteration count. **The acceptance statistic is declared as the summed-over-attempts
-   median** (pending the same confirmation; A43 (st-trust-gap) P2 — the same 23 st pairs read 1.17,
+   median** ( A43 (st-trust-gap) P2 — the same 23 st pairs read 1.17,
    0.91 and 1.07 under three constructions, and a check whose sign depends on an undeclared choice
    is not a check); the final-attempt median is published beside it for comparability with V3. `B1 → B3` and `B0 → BR` reported beside,
    outside the acceptance rule. **Pre-declared expectation:** on the pulsed configurations
@@ -544,10 +545,10 @@ where the ruling is applied.*
 | **(c)** | Phase B seed set and format | **accepted**: one every-arm-converged set, the failure table, one format, retries as an explicit term. §4 carries placeholder tables in that format for review before any run | §3.5, §4 |
 | **(d)** | driver changes | **accepted:** `MDA_Output` removed from the intervention arms (1b); switch renames (1d); predicate mode `frozen \| mixed` (5a), implemented cleanly. **Rejected:** empty-block / empty-node skipping (2) — left as is and disclaimed. Predicate-evaluation counters (3) — **accepted** (2026-09-10, after the explanation in §3.5 check 5). All changes are made in **V4's own copy of PROCESS** (D20), which owes V3 no backward compatibility | §3.3, §3.5, §3.8 |
 | **(e)** | `B2`'s fate | **removed** (user, 2026-09-10; D22). **A43 (st-trust-gap) answered D22's conditional: `B3` is not unreliable on st** — 0 components above τ at every inner tolerance, its single pass reaching `B2`'s two-pass state bit for bit once the blocks are solved exactly — so **`st_regression` stays** | §3.2, §3.3 |
-| **(g)** | inner tolerance of the intervention arms `A1` / `B3`, now that the verification pass is gone (A43 P1) | **recommendation: inner τ = 1e-8** — reproduces the removed `B2`'s achieved handover accuracy (1.12e-10) to every digit at a single evaluation; the in-loop cost is measured, never assumed. Alternatives: keep inner τ = τ = 1e-6 (V3's `B3`; ships the ~30× looser handover by default), or run P1's ladder {1e-8, 1e-10, 1e-12} as extra `B3` arms (~150 optimisations) to measure the exchange rate in-loop | §3.3, §3.10 — **open** |
+| **(g)** | the tolerance of the partitioned arms' block loops, now that `B2` is gone (A43 P1) | **ruled (user, 2026-09-10; D23): one tolerance, τ = 1e-6, for every MDA converger in every arm, both phases** — there is no separate "inner" tolerance to set. Tightening is not required: the exit audit records achieved accuracy per run and comparisons are at matched accuracy. A43's exchange rate (block loops at 1e-8 ≡ the removed `B2`) is recorded should τ ever be tightened — everywhere at once | §1.3, §3.3, §3.10 |
 | **(f)** | wait for A43/A44 before approving | **do not wait**; both land as dated amendments (A44's already has) | header |
 
-**All ruled (2026-09-10) except (g)**, which A43 (st-trust-gap)'s verdict opened the same day. The V3 report receives **no errata**: A44 (transfer-gap)'s retry finding
+**All ruled (2026-09-10)**, (g) last, after A43 (st-trust-gap)'s verdict opened it the same day. The V3 report receives **no errata**: A44 (transfer-gap)'s retry finding
 lives in its own report and is carried into V4's method (§3.5), not written back into V3. The
 PROCESS copy is taken at the current `architecture_surgery` tip, the commit recorded (§3.8 (i)).
 The §4 table format awaits the user's review.
@@ -643,14 +644,13 @@ approval except by dated amendment.*
 | N | 25 per configuration per arm, both phases | sample size | V3 (O2) |
 | Phase A entry regimes | **δ = 0.10** (acceptance) and the **stencil regime** (`x_i (1 ± epsfcn)`, representative) | entry displacement | D15; item 1a as amended by A44 (2026-09-10) |
 | δ (Phase B) | 0.10 | start displacement | D15 |
-| τ | 1e-6 | convergence, every arm | V2 |
+| τ | **1e-6 — the one tolerance of every MDA converger**: the flat loop and each block loop alike, every arm, both phases (D23) | convergence, and thereby the partitioned arms' handover accuracy | V2; user 2026-09-10; A43 (st-trust-gap) §6.1 gives the exchange rate should it ever be tightened |
 | predicate mode | `frozen` (default) and `mixed` (trial) | the denominator of the scaled step | item 5a |
 | F | 10 | similarity (A) and same-optimum (B) factor, median and p90 | V2 App. B |
 | floor | 1e-6 relative on `norm_objf` | same-optimum yardstick floor | V3 (O3) |
 | cluster gap | 10 × floor = 1e-5, with the resolution category declared | check 1a/1b | V3; item 5 |
 | iteration bound | median paired ratio ≤ 1.05 | check 2 | V2 App. B |
 | median | nearest-rank, upper-middle (`sorted[n // 2]`) | every Phase B check | V3 |
-| inner τ | **1e-8** recommended (decision (g) open); V3 used inner τ = τ | the block solves' tolerance — the trust arms' handover accuracy | A43 (st-trust-gap) §6.1: `B3`@1e-8 ≡ `B2`@1e-6 in achieved accuracy |
 | inner cap | 20 sweeps per block; a cap hit is a refusal | partitioned arms | V2 |
 | upstream cap | 10 passes (raises) → `unconverged-at-cap` | `AR`/`BR` | upstream; item 1 |
 | W | 3 | worker pool | V2 |
@@ -943,12 +943,13 @@ implementation plan's.*
 
 | file | role |
 |---|---|
-| `V4_EXPERIMENT_PLAN.md` | this document; every later change a dated amendment |
-| `V4_EXPERIMENT_REPORT.md` | the report, written from the committed analysis only |
+| `EXPERIMENT_PLAN.md` | this document (no version token in file names inside the versioned folder — user, 2026-09-10); every later change a dated amendment |
+| `EXPERIMENT_REPORT.md` | the report, written from the committed analysis only |
 | `experiment_runner.py` | one-button entry point; draft mode; refuses the campaign until approved |
 | `phase_a.py` | preflight / artifacts / reference / gates / campaign (`AR`, `A0`, `A0p`, `A1`; two amplitudes; predicate trial) / tally |
 | `phase_b.py` | preflight / gates / campaign (`BR`, `B0`, `B1`, `B2`, `B3`) / tally / timing context |
 | `PROCESS/` | V4's own copy of the PROCESS package (D20); every V4 driver change lives here; `models/` frozen at `c0ae5b28`, gated |
+| `PROCESS_diff.py` | shows every change the experiment made to PROCESS: a `git diff` of `PROCESS/process/` against the copy's source commit, grouped by file with a plain-language overview (user, 2026-09-10) |
 | `harness/` | the self-contained package (per the implementation plan); every verification gate is implemented here |
 | `runs/` | untracked bulk artifacts |
 
@@ -992,6 +993,11 @@ implementation plan's.*
   placeholder tables in the accepted format (one seed set, failure table, three-way ratios, retries as
   a term, captions and how-to-read notes) for the user's review before any run; the PROCESS copy
   described in §3.8 (i) and gated (GR, G0).
+- 2026-09-10 — user: the harness refactor is **approved** with three notes (no task numbers or
+  version tokens in file/method names, heritage in docstrings; a `PROCESS_diff.py` overview of every
+  change to PROCESS; a plain-language README with the terminology) — applied to the harness plan
+  §11 and to this file's name (`V4_EXPERIMENT_PLAN.md` → `EXPERIMENT_PLAN.md`). Decision (g) ruled
+  (D23: one tolerance for every converger, τ = 1e-6). Check 2's directive explained; stands.
 - 2026-09-10 — A43 (st-trust-gap) merged and absorbed: `st_regression` stays (D22's conditional
   answered *no*); the intervention arms' certificate stated (§3.3); decision (g) opened — the inner
   tolerance of `A1`/`B3`, recommended 1e-8 (§3.7, §3.10); check 2's acceptance construction declared

@@ -33,7 +33,7 @@ places; and a hand-maintained `INSTRUMENTATION` dict of booleans stands in for a
 what the driver can actually do — and is consulted on one side and not the other.
 
 **What is proposed.** `arch_surgery/MDA_partitioning_experiment_v4/` mirroring V2/V3 at the top
-(`V4_EXPERIMENT_PLAN.md`, the report, `experiment_runner.py`, `phase_a.py`, `phase_b.py`,
+(`EXPERIMENT_PLAN.md`, the report, `experiment_runner.py`, `phase_a.py`, `phase_b.py`,
 `analysis.py`, `runs/`) with everything else in a self-contained `harness/` package of 19 modules,
 built on four ideas: the V4 plan's §3.2 **switch matrix as data** (one arm composition, and the
 rung difference becomes a computed field diff); **capability measured, not declared** (a probe

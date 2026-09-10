@@ -1,6 +1,6 @@
 # V4 harness — implementation plan
 
-> **Document status** — **DRAFT · NOT APPROVED. PLAN ONLY, NO CODE WRITTEN.** Opened
+> **Document status** — **APPROVED FOR THE REBUILD — 2026-09-10, by the user, with three notes (§11).** Was: DRAFT · NOT APPROVED. PLAN ONLY, NO CODE WRITTEN. Opened
 > 2026-09-10 by task **A45 (v4-harness-plan)** on the user's instruction to rewrite the
 > experiment harness: *"self-contained in `MDA_partitioning_experiment_v4/harness`… a minimal
 > implementation of what we need for the V4 plan, with a clear code structure… retain the
@@ -15,7 +15,7 @@
 > written under the recommendation in each row.
 >
 > **The methodology is not this document's business.** It is
-> [`../MDA_partitioning_experiment_v4/V4_EXPERIMENT_PLAN.md`](../../MDA_partitioning_experiment_v4/V4_EXPERIMENT_PLAN.md)
+> [`../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md`](../../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md)
 > (the V4 experiment plan) and
 > [`V4_IMPROVEMENT_LIST.md`](V4_IMPROVEMENT_LIST.md) (the item list behind it). This plan says
 > how a harness implements them, and where the harness *forces* a methodological choice it says
@@ -424,7 +424,7 @@ resolved**, read back from the imported modules, and not what the harness asked 
 
 ```
 arch_surgery/MDA_partitioning_experiment_v4/
-├── V4_EXPERIMENT_PLAN.md       the methodology (not this task's)
+├── EXPERIMENT_PLAN.md       the methodology (not this task's)
 ├── V4_EXPERIMENT_REPORT.md     written from the committed analysis only
 ├── experiment_runner.py        THE BUTTON: no arguments, owns the whole chain
 ├── phase_a.py                  Phase A stages
@@ -1227,3 +1227,83 @@ of what looks like bulk is the instrument.
   **No errata to the V3 report** (user); this plan proposes none and never did.
   Status **DRAFT · NOT APPROVED**; still no code; **all decisions settled**, the rebuild's first
   task (H0) unblocked.
+
+---
+
+## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task
+
+*"With these comments, the refactor for v4 is approved."* The three notes below override any
+earlier name in this document; §11.4 maps the earlier names to their replacements.
+
+### 11.1 No task numbers and no version tokens in file or method names
+
+A file or function is named for **what it does**, never for the task that wrote it or the revision
+it belongs to. `a44_eval_one.py` becomes `evaluate.py`; `v3_reference.json` becomes
+`reproduction_reference.json`; record fields `v3_*`/`v4_*` become `campaign_*`; the plan and report
+inside the versioned folder are `EXPERIMENT_PLAN.md` and `EXPERIMENT_REPORT.md` — the folder
+`MDA_partitioning_experiment_v4/` carries the version. **Heritage lives in docstrings and
+metadata**: a module's docstring names the file it descends from and the commit ("derived from
+`arch_surgery/idf_probe/v2_eval_one.py` at `16a6e87e`; task A44 added the stencil-point entry"),
+and `PROCESS/PROVENANCE.json` names the copy's source commit. Task labels (`A<n> (keyword)`) appear
+in docstrings, change logs and reports — never in identifiers.
+
+### 11.2 Terminology: assessed, homogenised, simplified
+
+*Caption: one row per term the harness, the plan and the README use; the V3 words it replaces; the
+reason. `A47 (harness-skeleton)` owns this table in `harness/README.md` and the switch registry; the
+experiment plan's §1.3 follows it.*
+
+| V4 term | replaces | why |
+|---|---|---|
+| **configuration** (`Config`) | deck, scenario, config | one word for one input file; "deck" is PROCESS jargon a reader does not know |
+| **arm** | arm, variant, arrangement | kept — one column of the switch matrix |
+| **flat** / **partitioned** (switch values) | `flat_state` / `per_module` | say what the MDA is, not how V3 spelt it |
+| **block loop**; **one τ** | inner loop / outer loop; `INNER_TAU`; trust / verify | there is one kind of loop and one tolerance (D23); "trust/verify" named an arm V4 does not have |
+| **deferral `per_call` / `per_run`** | hoist / post-solve | item 1d; the name says the frequency |
+| **arrangement · node** / **arrangement · method** | `SEQUENCE=build_after_physics` / `PRIME=fw_geometry` | both are *when* something runs; the prime is a method-level reorder (matrix rows) |
+| **burn-time owner**: loop / constant / optimiser | lift, pin, `ixc 178`, constraint 93 | the matrix row; "lift" and "pin" survive only as the mechanism names in docstrings |
+| **reference arm** `AR` / `BR` | `R`, "PROCESS as shipped" | the phase in the name |
+| **seed** (both phases) | seed (A) / start (B) | one word; Phase B's `start000` is seed 0 |
+| **coupling state**, **coupling-state spec**, **write sets** | ystate, spec, writeset, harvest | plain nouns; "harvest" is the frozen ruler's origin and appears only in provenance |
+| **output-time loop** | `MDA_Output`, idempotence loop | says when it runs |
+| **stencil regime** / **δ regime** | E3/E3b, warm δ-stream | the two Phase A entry regimes by what displaces the state |
+| **teeth**, **tally**, **analysis** | — | kept, each defined in the README in one sentence |
+
+Switch names follow the terms: `PROCESS_ARCH_MDA = flat | partitioned`, `PROCESS_ARCH_TAU`,
+`PROCESS_ARCH_ARRANGEMENT_NODE`, `PROCESS_ARCH_ARRANGEMENT_METHOD`, `PROCESS_ARCH_DEFER_PER_CALL`,
+`PROCESS_ARCH_DEFER_PER_RUN`, `PROCESS_ARCH_BURN_TIME_OWNER = loop | constant:<hex> | optimiser`,
+`PROCESS_ARCH_OUTPUT_LOOP = upstream | none`, `PROCESS_ARCH_PREDICATE = frozen | mixed`. The
+retired V3 names raise if set (decision 1). `PROCESS_ARCH_OUTER` and `PROCESS_ARCH_INNER_TAU` are
+retired with `B2` and D23. `A47` finalises the list; a name the driver copy does not implement is
+refused by the capability probe, never ignored.
+
+### 11.3 `PROCESS_diff.py` — where the experiment changed PROCESS, in one view
+
+A top-level script beside `experiment_runner.py`. It reads `PROCESS/PROVENANCE.json` for the source
+commit, runs `git diff <source commit>:process/ -- PROCESS/process/` (against the commit, never a
+working tree), and prints an overview: per file, the lines added/removed and the switch or
+mechanism each hunk serves (from a small annotation map in the harness — every hunk must be
+claimed by a named switch or by "provenance/path constant", or the script flags it as unexplained);
+a one-paragraph summary per driver file; and a confirmation that `process/models/` shows **no
+diff** (gate G0′'s statement, restated for a reader). Options: `--full` for the raw diff,
+`--markdown` for a table the report can include. It runs in seconds, needs no PROCESS run, and is
+the reviewer's first stop before any driver-change merge.
+
+### 11.4 The README is in plain language
+
+`harness/README.md` explains, for a reader who has not followed the project: what the experiment
+measures and why the models are frozen; what one run does, end to end; every term of §11.2 in a
+sentence; how to run the button, the smoke and a single arm; how to add an arm or a configuration;
+where records go and what a record contains; what the gates prove and what "teeth" are. No D-, I- or
+A-numbers without their meaning beside them.
+
+### 11.5 The rebuild tasks, as minted
+
+*Caption: the proposed decomposition of §10 with the task labels the orchestrator minted on the
+user's approval; sequencing as §10. Driver changes follow the reproduction gate.*
+
+| plan task | minted as | scope |
+|---|---|---|
+| H0 | **A46 (process-copy)** | `PROCESS/process/` copied at the current tip, `PROVENANCE.json`, byte-identity gate against `git show`, the three path constants, `PROCESS_diff.py` |
+| H1 | **A47 (harness-skeleton)** | `config`, `switches`, `arms`, `provenance`, the runner shell with preflight, `README.md`, the terminology table; no PROCESS run |
+| H2–H8, DR1/2/4/5/7 | minted when their predecessors merge | as §10 |
