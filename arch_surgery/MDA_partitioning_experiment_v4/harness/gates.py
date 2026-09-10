@@ -70,6 +70,7 @@ from harness import input_files as input_files_mod  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
 from harness import records as records_mod  # noqa: E402
 from harness import reference as reference_mod  # noqa: E402
+from harness import switches as switches_mod  # noqa: E402
 from harness.config import Campaign, default_campaign  # noqa: E402
 
 #: Where a gate's verdict goes, under the campaign's runs directory.  Bulk run
@@ -1411,6 +1412,155 @@ def excluded_by_the_per_run_nodes(campaign: Campaign, config) -> tuple[set[str],
     }
 
 
+#: The two runs the contrast makes on each configuration: the reference arm,
+#: identical in everything, written out through each of the two output paths.
+CONTRAST_LABELS: dict[str, str | None] = {"with_loop": None, "without_loop": "none"}
+
+
+def contrast_root(campaign: Campaign) -> Path:
+    return output_path_root(campaign) / "contrast"
+
+
+def contrast_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    """The reference arm, run twice per configuration, once down each path.
+
+    Deliberately **not** a matrix composition: no arm of the experiment writes
+    upstream's own solve out through the one-call path.  That is the point —
+    holding the solve fixed and varying only the output path is the only way to
+    say what the output-time loop does to the numbers a reader of the output
+    file gets, and the arm whose numbers a reader actually gets is the reference
+    one.  It runs as a gate, never as a campaign record, and the environment
+    override is stamped in each record.
+    """
+    jobs: list[pool_mod.Job] = []
+    for config in campaign.configurations:
+        for label, value in CONTRAST_LABELS.items():
+            jobs.append(
+                pool_mod.Job(
+                    phase="B",
+                    arm="BR",
+                    config=config,
+                    seed=0,
+                    outdir=contrast_root(campaign) / config.name / label,
+                    regime="unperturbed",
+                    delta=campaign.delta,
+                    run_kind="gate",
+                    override_env=(
+                        {}
+                        if value is None
+                        else {switches_mod.REGISTRY["output_loop"].driver_name: value}
+                    ),
+                )
+            )
+    return jobs
+
+
+def capture_contrast(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
+    """Run the contrast's two runs per configuration.  Nothing is compared here."""
+    jobs = contrast_jobs(campaign)
+    results = pool_mod.run_all(jobs, campaign, resume=resume)
+    manifest = {
+        "captured": _dt.datetime.now().isoformat(timespec="seconds"),
+        "tree_git_head": _git_head(),
+        "n_runs": len(jobs),
+        "runs": [
+            {
+                "configuration": job.config.name,
+                "label": sorted(CONTRAST_LABELS)[i % len(CONTRAST_LABELS)],
+                "override_env": dict(job.override_env),
+                "outdir": str(job.outdir),
+                "status": (results[i] or {}).get("status")
+                if isinstance(results, list)
+                else None,
+            }
+            for i, job in enumerate(jobs)
+        ],
+    }
+    path = contrast_root(campaign) / "manifest.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2, default=str) + "\n")
+    manifest["manifest"] = str(path)
+    return manifest
+
+
+def contrast_rows(campaign: Campaign) -> list[dict[str, Any]]:
+    """What the output-time loop moves, per configuration, in the output file.
+
+    The solve is held fixed and is checked to be fixed: the accepted objective
+    and the solve-phase node count must be identical on the two sides, and a
+    row where they are not says so rather than attributing a solve difference
+    to the output path.  What is then counted is output-file lines differing,
+    with the same metadata keys excluded that gate G1 excludes -- date, time,
+    user, paths, version strings and PROCESS's own timing of itself.
+    """
+    rows: list[dict[str, Any]] = []
+    for config in campaign.configurations:
+        key = f"BR/{config.name}"
+        directory = {
+            label: contrast_root(campaign) / config.name / label
+            for label in CONTRAST_LABELS
+        }
+        record = {
+            label: _read_record(d, side=f"contrast:{label}", key=key)
+            for label, d in directory.items()
+        }
+        mfile = {}
+        for label, d in directory.items():
+            found = _mfile_for(d, config.name)
+            if found is None:
+                raise GateError(
+                    f"the contrast has no output file for {key} on the "
+                    f"{label!r} side ({d}); the line comparison would be over "
+                    f"nothing"
+                )
+            mfile[label] = found
+        lines = compare_mfiles(mfile["with_loop"], mfile["without_loop"])
+        solve_identical = (
+            record["with_loop"].get("node_calls_solve_phase")
+            == record["without_loop"].get("node_calls_solve_phase")
+            and (record["with_loop"].get("exact") or {}).get("norm_objf")
+            == (record["without_loop"].get("exact") or {}).get("norm_objf")
+        )
+        rows.append(
+            {
+                "configuration": config.name,
+                "arm": "BR",
+                "solve_identical": solve_identical,
+                "node_calls_solve_phase": record["with_loop"].get(
+                    "node_calls_solve_phase"
+                ),
+                "node_calls_total_with_loop": record["with_loop"].get(
+                    "node_calls_total"
+                ),
+                "node_calls_total_without_loop": record["without_loop"].get(
+                    "node_calls_total"
+                ),
+                "accepted_objf_hex": (record["with_loop"].get("exact") or {}).get(
+                    "norm_objf"
+                ),
+                "output_loop_sweeps_with_loop": record["with_loop"].get(
+                    "output_loop_sweeps"
+                ),
+                "output_loop_sweeps_without_loop": record["without_loop"].get(
+                    "output_loop_sweeps"
+                ),
+                "mfile_ifail_with_loop": (record["with_loop"].get("mfile") or {}).get(
+                    "ifail"
+                ),
+                "mfile_ifail_without_loop": (
+                    record["without_loop"].get("mfile") or {}
+                ).get("ifail"),
+                "n_lines_compared": lines["n_lines_compared"],
+                "n_lines_excluded": lines["n_lines_excluded"],
+                "n_lines_differing": lines["n_lines_differing"],
+                "differing_first": [
+                    row["before"].split()[0][:70] for row in lines["differing"][:12]
+                ],
+            }
+        )
+    return rows
+
+
 def output_path_measurements(campaign: Campaign) -> dict[str, Any]:
     """The two measurements, over the run sets each is defined on."""
     reproduction_root = Path(campaign.runs_dir) / "gates" / "reproduction" / "runs"
@@ -1490,7 +1640,20 @@ def output_path_measurements(campaign: Campaign) -> dict[str, Any]:
                     )[:20],
                 }
             )
+    contrast = contrast_rows(campaign)
     return {
+        "what_the_output_time_loop_moves": {
+            "population": (
+                f"{len(contrast) * 2} run(s) = the reference arm at seed 0 on "
+                f"each of {len(contrast)} configuration(s), written out once "
+                f"through each output path with everything else identical.  "
+                f"Not a matrix composition: no arm of the experiment writes "
+                f"upstream's own solve through the one-call path, and holding "
+                f"the solve fixed while varying only the output path is what "
+                f"isolates the loop's effect on the numbers a reader gets"
+            ),
+            "rows": contrast,
+        },
         "output_time_loop_sweeps": {
             "population": (
                 f"{len(sweeps)} optimisation run(s) of the reproduction gate = "
@@ -1517,7 +1680,44 @@ def output_path_measurements(campaign: Campaign) -> dict[str, Any]:
 
 
 def print_measurements(block: Mapping[str, Any]) -> None:
-    """The two tables, with their captions, as the report prints them."""
+    """The three tables, with their captions, as the report prints them."""
+    contrast = block["what_the_output_time_loop_moves"]
+    print()
+    print(
+        "*Caption: one row per configuration.  The reference arm is run at "
+        "seed 0 and written out twice — once through upstream's output-time "
+        "loop and once through the one-call path — with everything else "
+        "identical.  The solve is held fixed and checked to be fixed: "
+        '"solve identical" is the accepted objective hex and the solve-phase '
+        "node count agreeing on the two sides, and a row where they do not "
+        "agree is not a statement about the output path.  Lines differing are "
+        "lines of PROCESS's own output file, with the same metadata keys "
+        "excluded that the switch-neutrality gate excludes (date, time, user, "
+        "paths, version strings and PROCESS's own timing of itself).  Counts, "
+        "not timings.  Population: " + contrast["population"] + ".*"
+    )
+    print()
+    print(
+        "| configuration | solve identical | accepted objective (hex) | "
+        "solve-phase node calls | total node calls, loop on / off | sweeps, "
+        "on / off | output-file lines differing / compared |"
+    )
+    print("|---|---|---|---:|---:|---:|---:|")
+    for row in contrast["rows"]:
+        print(
+            f"| `{row['configuration']}` | "
+            f"{'yes' if row['solve_identical'] else '**NO**'} | "
+            f"`{row['accepted_objf_hex']}` | {row['node_calls_solve_phase']} | "
+            f"{row['node_calls_total_with_loop']} / "
+            f"{row['node_calls_total_without_loop']} | "
+            f"{row['output_loop_sweeps_with_loop']} / "
+            f"{row['output_loop_sweeps_without_loop']} | "
+            f"**{row['n_lines_differing']}** / {row['n_lines_compared']} |"
+        )
+    print()
+    for row in contrast["rows"]:
+        if row["differing_first"]:
+            print(f"  {row['configuration']}: {', '.join(row['differing_first'])}")
     sweeps = block["output_time_loop_sweeps"]
     print()
     print(
@@ -1708,14 +1908,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             "g0prime",
             "switch-neutrality",
             "output-path",
+            "output-path-contrast",
             "output-path-measurements",
             "all",
         ),
         help="which gate to run; 'all' runs the gates that need no capture.  "
-        "'output-path-measurements' is not a gate: it publishes the two "
-        "quantities the experiment plan asks for by name — what the "
-        "output-time loop costs, and where the accepted state sits against "
-        "the tolerance at the declared audit position",
+        "'output-path-contrast' and 'output-path-measurements' are not "
+        "gates: they publish what the experiment plan asks for by name — what "
+        "the output-time loop moves in the output files, what it costs, and "
+        "where the accepted state sits against the tolerance at the declared "
+        "audit position",
     )
     parser.add_argument(
         "--capture",
@@ -1739,6 +1941,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     campaign = default_campaign()
     records_dir = Path(args.records) if args.records else Path(campaign.runs_dir) / GATES_SUBPATH
+
+    if args.gate == "output-path-contrast":
+        manifest = capture_contrast(campaign, resume=args.resume)
+        print(f"captured {manifest['n_runs']} contrast run(s) at "
+              f"{manifest['tree_git_head']}")
+        for row in manifest["runs"]:
+            print(f"  {row['configuration']:<22} {row['label']:<14} "
+                  f"{row['status']} {row['override_env']}")
+        print(f"  manifest: {manifest['manifest']}")
+        return 0
 
     if args.gate == "output-path-measurements":
         block = output_path_measurements(campaign)
