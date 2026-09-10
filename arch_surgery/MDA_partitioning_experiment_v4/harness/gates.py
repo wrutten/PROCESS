@@ -2089,10 +2089,21 @@ def predicate_counter_measurements(
                 {
                     "configuration": r["configuration"],
                     "arm": r["arm"],
+                    "seed": r["seed"],
                     "visits": r["n_block_visits"],
                     "empty_visits": r["n_empty_block_visits"],
                     "empty_visits_that_cost_a_sweep": r["n_empty_block_sweeps"],
                     "share_of_visits": r["empty_share_of_block_visits"],
+                    # The share that is actually a cost.  A visit to a block
+                    # with no members costs nothing, so the visit share is not
+                    # a cost share and must never be quoted as one; this is,
+                    # and it is the figure the earlier finding was filed as.
+                    "block_sweeps": r["block_sweeps"],
+                    "share_of_block_sweeps": (
+                        (r["n_empty_block_sweeps"] / r["block_sweeps"])
+                        if r["block_sweeps"]
+                        else None
+                    ),
                     "by_block": r["empty_block_visits"],
                     "sweeps_by_block": r["empty_block_sweeps"],
                 }
@@ -2251,6 +2262,31 @@ def print_predicate_counters(block: Mapping[str, Any]) -> None:
             f"{pair['seed']:>4} {_r(pair['evaluations_ratio']):>9} "
             f"{_r(pair['width_ratio']):>9} {_r(pair['components_ratio']):>9} "
             f"{_r(pair['sweeps_ratio']):>9} {_r(pair['node_calls_ratio']):>9}"
+        )
+    print()
+    print("    empty block visits, and the share of them that is a cost:")
+    print(
+        "      a visit to a block with no members costs no sweep, so the visit "
+        "share is not a cost share; the sweep share is"
+    )
+    empty_head = (
+        f"      {'configuration':<22} {'arm':<4} {'seed':>4} {'visits':>7} "
+        f"{'empty':>7} {'% visits':>9} {'e.sweeps':>9} {'% sweeps':>9}  blocks"
+    )
+    print(empty_head)
+    print("      " + "-" * (len(empty_head) - 6))
+    for entry in block["empty_visits"]["by_run"]:
+        share_v = entry["share_of_visits"]
+        share_s = entry["share_of_block_sweeps"]
+        print(
+            f"      {entry['configuration']:<22} {entry['arm']:<4} "
+            f"{entry['seed']:>4} {_n(entry['visits']):>7} "
+            f"{_n(entry['empty_visits']):>7} "
+            f"{(f'{share_v * 100:.2f}' if share_v is not None else '—'):>9} "
+            f"{_n(entry['empty_visits_that_cost_a_sweep']):>9} "
+            f"{(f'{share_s * 100:.2f}' if share_s is not None else '—'):>9}  "
+            f"empty {sorted(entry['by_block'])}, costing a sweep "
+            f"{sorted(k for k, v in entry['sweeps_by_block'].items() if v)}"
         )
     print()
     decomposition = block["sweep_decomposition"]
