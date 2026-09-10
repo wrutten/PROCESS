@@ -87,7 +87,17 @@ def load_spec(path: Path | str) -> ystate.YSpec:
 
 
 def provenance_of(path: Path | str) -> dict[str, Any]:
-    """The artifact's own preamble, for the record.  Never its components."""
+    """The artifact's own preamble, for the record.  Never its components.
+
+    ``harvest`` is the key the committed artifacts actually carry for their
+    identity block; ``harvest_identity`` is the name this project's prose uses
+    for the same thing.  Both are listed, so the block reaches the record
+    whichever name it is under — without it, a record would name the artifact's
+    digest but not the measurement the artifact's scales came from.  *(One-word
+    addition by task A51 (harness-artifacts): only ``harvest_identity`` was
+    listed, and no committed artifact uses that key, so the block never reached
+    a record.)*
+    """
     record = json.loads(Path(path).read_text())
     return {
         key: record.get(key)
@@ -98,6 +108,7 @@ def provenance_of(path: Path | str) -> dict[str, Any]:
             "scale_floor",
             "n_components",
             "components_sha256",
+            "harvest",
             "harvest_identity",
             "predicate_mode",
         )
