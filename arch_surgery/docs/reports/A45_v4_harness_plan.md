@@ -39,9 +39,10 @@ built on four ideas: the V4 plan's §3.2 **switch matrix as data** (one arm comp
 rung difference becomes a computed field diff); **capability measured, not declared** (a probe
 child reports what the driver resolved, so an arm composing a switch the tree lacks refuses);
 **one child-side instrumentation module** shared by the two entry points; and **a reproduction
-gate that must show the rewrite did not move the measurement** — fifteen runs reproducing V3
-bit-exactly, with a `v3_compat` composition and six teeth including *"a missing reference must
-FAIL, not skip"*.
+gate that must show the rewrite did not move the measurement** — **twenty** runs reproducing V3
+bit-exactly (amended 2026-09-10), with a `v3_compat` composition and seven teeth including
+*"a missing reference must FAIL, not skip"*, plus a named statement of the two arms the gate
+cannot cover and what covers them instead (§7.5).
 
 Estimated ≈ 6 570 lines against the V3 stack's measured 8 828 (`wc -l`) — about 26 % smaller. The
 gain is self-containment and provability, not the line count; §4.6 of the plan prices what a
@@ -133,6 +134,24 @@ scoping choice rather than a methodological one. "Reversal" is what it costs to 
   read-only and uncommitted from the main checkout. Plan and this report written and committed.
   Status: awaiting the orchestrator's critical assessment (protocol §5) and the user's decisions
   (1)–(11).
+- **2026-09-10 — the orchestrator's critical assessment received (`cb7090fc`) and acted on.**
+  Four amendments made to
+  [`../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md`](../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md),
+  each dated in its Appendix A change log: **(A)** driver change **DR7**, per-attempt node-call
+  accounting — §3.2 row, `attempts[]` in the §4.4 record schema, the "retried seeds" and
+  "with / without retried seeds" constructions in §4.2's `stats.py`, an attempt-summation tooth in
+  §7.3, and DR7 in decision (10) and §10's task table with the note that it lands before H6;
+  **(B)** gate GR widened from fifteen to **twenty** runs — `B3 start001` on all three
+  configurations and `B1 start001` on the two pulsed ones, so the Phase B perturbation stream
+  (keyed on iteration-variable number) is exercised — and a new **§7.5** naming what GR cannot
+  cover (`A0p`, `AR`) and the two gates that do; **(C)** decision (2) and §5.3 gain **option (iv)**
+  (the predicate is driver code: split `ystate.py`, predicate and residual to
+  `process/core/solver/ystate.py`), with the orchestrator's recommendation of (iv) beside A45's
+  (i) and DR6 restated conditionally; **(D)** decision (4) gains the binding rule that
+  `artifacts --derive` never runs inside a campaign, since the a26 scales are part of the frozen
+  ruler. **Nothing was restructured and no other recommendation changed.** A45 accepts (iv) as the
+  better of the two predicate options and says so in the row; the user still decides. Still no
+  code; status **DRAFT · NOT APPROVED**; decisions (1)–(11) open.
 
 ---
 
