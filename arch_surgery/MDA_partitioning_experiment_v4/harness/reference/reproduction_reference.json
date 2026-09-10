@@ -1,0 +1,793 @@
+{
+  "format": "reproduction-reference-1",
+  "provenance": {
+    "what": "the compared fields of the previous revision's twenty reference runs, committed so that gate GR does not depend on untracked run records",
+    "gate": "GR (harness plan \u00a77): the rewritten harness, driving the experiment's own copy of PROCESS before any driver change, must reproduce these values bit for bit",
+    "written_by": "harness/reference.py (task A49 (harness-reference))",
+    "extracted_on": "2026-09-10",
+    "source_revision": {
+      "name": "MDA_partitioning_experiment_v3",
+      "campaign_commit": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "runs_root": "/home/wrutten/projects/PROCESS_surgery/arch_surgery/MDA_partitioning_experiment_v3/runs",
+      "why_absolute": "the records are untracked bulk and live only in the main checkout; naming the directory the numbers were read from is the point of recording it"
+    },
+    "population": "20 records = 14 optimisations + 6 evaluations, over the 3 configurations large_tokamak_nof, low_aspect_ratio_DEMO, st_regression; seed 0 is the unperturbed start and seed 1 the first perturbed one",
+    "configurations": [
+      "large_tokamak_nof",
+      "low_aspect_ratio_DEMO",
+      "st_regression"
+    ],
+    "absent_from_the_set": {
+      "B1/st_regression/seed001": "steady state (no burn-time coupling): B1 composes to B0; the previous revision did not run it"
+    },
+    "compared_fields": {
+      "B": [
+        "node_calls_solve_phase",
+        "node_calls_total",
+        "n_model_calls",
+        "n_prime_calls",
+        "exact.norm_objf",
+        "exit_audit.residual_max_hex",
+        "module_solve_totals.n_call_models",
+        "module_solve_totals.block_sweeps",
+        "module_solve_totals.outer_pass_hist",
+        "module_solve_totals.inner_sweeps_by_block",
+        "n_solver_iterations",
+        "mfile.ifail",
+        "exit_forensics.n_solver_iterations_summed_over_attempts",
+        "exit_forensics.n_attempts",
+        "exit_forensics.attempts[].n_solver_iterations"
+      ],
+      "A": [
+        "node_calls_single_eval",
+        "n_model_calls_sweeps",
+        "n_prime_calls",
+        "exact.objf",
+        "exit_audit.residual_max_hex",
+        "module_solve_totals.n_call_models",
+        "module_solve_totals.block_sweeps",
+        "module_solve_totals.outer_pass_hist",
+        "module_solve_totals.inner_sweeps_by_block",
+        "exit_forensics.n_attempts"
+      ]
+    },
+    "compared_fields_why": {
+      "node_calls_solve_phase": "model executions during the solve, the cost unit of every Phase B table; excludes the output-time and audit sweeps",
+      "node_calls_total": "model executions including the output-time and audit sweeps",
+      "n_model_calls": "call_models evaluations the optimiser asked for",
+      "n_prime_calls": "executions of the run-constant first-wall geometry method at the head of a sweep (the arrangement-by-method change); 0 where it is off",
+      "exact.norm_objf": "the normalised objective at the optimum, as a hex float",
+      "exact.objf": "the objective at the evaluation's exit, as a hex float; the evaluation phase's records spell it 'objf', the optimisation phase's 'norm_objf'",
+      "exit_audit.residual_max_hex": "the largest scaled coupling-state residual found by one further full sweep past termination, as a hex float; the accuracy ruler, taken identically in every arm",
+      "module_solve_totals.n_call_models": "call_models evaluations the block solver saw; 0 on the reference arm, which never enters it",
+      "module_solve_totals.block_sweeps": "sweeps summed over every block",
+      "module_solve_totals.outer_pass_hist": "how many times the block schedule was repeated per evaluation; one pass everywhere in V4, kept because it is what the removed repeated-schedule arm would have changed",
+      "module_solve_totals.inner_sweeps_by_block": "sweeps per block: the three blocks by name on a partitioned arm, the single block 'FLAT' on a flat arm, and nothing at all on the reference arm",
+      "n_solver_iterations": "the optimiser's iteration count on its final attempt",
+      "mfile.ifail": "the optimiser's exit code as PROCESS's own output file reports it",
+      "exit_forensics.n_solver_iterations_summed_over_attempts": "iterations summed over every optimiser attempt, failed attempts included: the second of check 2's two constructions",
+      "exit_forensics.n_attempts": "optimiser attempts; a retry is a robustness event and a cost, and the plan publishes the cost ratio with and without retried seeds.  0 in the evaluation phase, where no optimiser runs",
+      "exit_forensics.attempts[].n_solver_iterations": "iterations of each attempt in order, so the summed construction can be checked against its parts rather than trusted"
+    },
+    "compared_fields_beyond_the_plan": {
+      "exact.objf": "\u00a77.1 names exact.norm_objf, which no evaluation-phase record carries \u2014 that phase spells the same quantity 'objf'.  Without it the evaluation phase would reproduce on counts alone, with no bit-comparison of the objective at all",
+      "exit_forensics.n_attempts": "\u00a77.1 names it for the optimisation phase only.  Every evaluation-phase record carries it as 0, and comparing it states as a value what would otherwise be an assumption: that the evaluation entry point starts no optimiser"
+    },
+    "field_population": {
+      "B": {
+        "n_records": 14,
+        "n_fields": 15,
+        "carried_by": {
+          "node_calls_solve_phase": 14,
+          "node_calls_total": 14,
+          "n_model_calls": 14,
+          "n_prime_calls": 14,
+          "exact.norm_objf": 14,
+          "exit_audit.residual_max_hex": 14,
+          "module_solve_totals.n_call_models": 14,
+          "module_solve_totals.block_sweeps": 14,
+          "module_solve_totals.outer_pass_hist": 14,
+          "module_solve_totals.inner_sweeps_by_block": 14,
+          "n_solver_iterations": 14,
+          "mfile.ifail": 14,
+          "exit_forensics.n_solver_iterations_summed_over_attempts": 14,
+          "exit_forensics.n_attempts": 14,
+          "exit_forensics.attempts[].n_solver_iterations": 14
+        }
+      },
+      "A": {
+        "n_records": 6,
+        "n_fields": 10,
+        "carried_by": {
+          "node_calls_single_eval": 6,
+          "n_model_calls_sweeps": 6,
+          "n_prime_calls": 6,
+          "exact.objf": 6,
+          "exit_audit.residual_max_hex": 6,
+          "module_solve_totals.n_call_models": 6,
+          "module_solve_totals.block_sweeps": 6,
+          "module_solve_totals.outer_pass_hist": 6,
+          "module_solve_totals.inner_sweeps_by_block": 6,
+          "exit_forensics.n_attempts": 6
+        }
+      }
+    },
+    "block_solver_field_applicability": {
+      "BR": "the block solver is never entered on this arm (upstream's own loop runs instead), so module_solve_totals is present and empty: n_call_models = 0, no per-block histogram.  Compared as the value it has, not omitted",
+      "B0": "one block over every in-loop node, so the per-block histogram has the single entry 'FLAT'.  This is the flat arm's shape, not a missing partition",
+      "B3": "the partitioned arm: one entry per block in the schedule (M1, M2, PULSE, M3, FF)",
+      "A0": "one block over every in-loop node, so the per-block histogram has the single entry 'FLAT'.  This is the flat arm's shape, not a missing partition",
+      "A1": "the partitioned arm: one entry per block in the schedule (M1, M2, PULSE, M3, FF)",
+      "B1": "one block over every in-loop node, so the per-block histogram has the single entry 'FLAT'.  This is the flat arm's shape, not a missing partition"
+    },
+    "not_covered_by_this_reference": {
+      "AR": "the previous revision had no evaluation-phase reference arm.  Covered instead by a G1-shape check: one evaluation with every architecture switch cleared must reproduce the first call_models of BR at seed 0 on that call's node calls, sweeps and objective hex",
+      "A0p": "the previous revision never ran the flat arm with the burn time owned by a constant.  Covered instead by the warm-equivalence gate G6: pinned at the reference's converged burn time it must reproduce the reference fixed point, cross-state residual below the tolerance and the pinned component bit-identical"
+    },
+    "how_to_re_derive": "python harness/reference.py --extract --previous-runs <repo>/arch_surgery/MDA_partitioning_experiment_v3/runs; python harness/reference.py --verify re-derives it and requires byte-for-byte equality"
+  },
+  "entries": [
+    {
+      "arm": "BR",
+      "previous_arm": "R",
+      "configuration": "large_tokamak_nof",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, reference arm",
+      "source_path": "phase_b/campaign/large_tokamak_nof/R/start000/metrics.json",
+      "source_sha256": "be4275bf60e598032812ed9a6a418685a214fec97af702707ee5224753ccca49",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 42567,
+        "node_calls_total": 42609,
+        "n_model_calls": 2030,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "0x1.99999999b822dp+0",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 0,
+        "module_solve_totals.block_sweeps": 0,
+        "module_solve_totals.outer_pass_hist": {},
+        "module_solve_totals.inner_sweeps_by_block": {},
+        "n_solver_iterations": 8,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 8,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          8
+        ]
+      }
+    },
+    {
+      "arm": "BR",
+      "previous_arm": "R",
+      "configuration": "low_aspect_ratio_DEMO",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, reference arm",
+      "source_path": "phase_b/campaign/low_aspect_ratio_DEMO/R/start000/metrics.json",
+      "source_sha256": "4fa2eed2554ec7e578be2a5417853334383c4ae0a8dc0ee884204f12e71fe52d",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 89964,
+        "node_calls_total": 90006,
+        "n_model_calls": 4287,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "-0x1.a00c1e7544537p-2",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 0,
+        "module_solve_totals.block_sweeps": 0,
+        "module_solve_totals.outer_pass_hist": {},
+        "module_solve_totals.inner_sweeps_by_block": {},
+        "n_solver_iterations": 16,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 16,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          16
+        ]
+      }
+    },
+    {
+      "arm": "BR",
+      "previous_arm": "R",
+      "configuration": "st_regression",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, reference arm",
+      "source_path": "phase_b/campaign/st_regression/R/start000/metrics.json",
+      "source_sha256": "8021c4df695e9fe8e89295245a8ecf1d2f893f33fbd407c329cde80428a9b99f",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 39669,
+        "node_calls_total": 39711,
+        "n_model_calls": 1892,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "-0x1.096acf3342eefp+4",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 0,
+        "module_solve_totals.block_sweeps": 0,
+        "module_solve_totals.outer_pass_hist": {},
+        "module_solve_totals.inner_sweeps_by_block": {},
+        "n_solver_iterations": 10,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 10,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          10
+        ]
+      }
+    },
+    {
+      "arm": "B0",
+      "previous_arm": "B0",
+      "configuration": "large_tokamak_nof",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, flat control",
+      "source_path": "phase_b/campaign/large_tokamak_nof/B0/start000/metrics.json",
+      "source_sha256": "e047d0cadd2de785deb94cbdf476c77ba29dedd02a6a2f850115e78fe1edf26b",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 43449,
+        "node_calls_total": 43491,
+        "n_model_calls": 2072,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "0x1.99999999b822ap+0",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 630,
+        "module_solve_totals.block_sweeps": 2069,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 630
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 2069
+        },
+        "n_solver_iterations": 8,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 8,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          8
+        ]
+      }
+    },
+    {
+      "arm": "B0",
+      "previous_arm": "B0",
+      "configuration": "low_aspect_ratio_DEMO",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, flat control",
+      "source_path": "phase_b/campaign/low_aspect_ratio_DEMO/B0/start000/metrics.json",
+      "source_sha256": "55527b8b7cff9c41e57e2feb16bdb3c7c35453e570c2918f8714f7e51c5a34e6",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 86877,
+        "node_calls_total": 86919,
+        "n_model_calls": 4140,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "-0x1.a00c1e754455cp-2",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 1240,
+        "module_solve_totals.block_sweeps": 4137,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1240
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 4137
+        },
+        "n_solver_iterations": 16,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 16,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          16
+        ]
+      }
+    },
+    {
+      "arm": "B0",
+      "previous_arm": "B0",
+      "configuration": "st_regression",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, flat control",
+      "source_path": "phase_b/campaign/st_regression/B0/start000/metrics.json",
+      "source_sha256": "8042790bc631380d5cd54f037d6d00c5e27a715b7c8aea65b02162cafd869cd4",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 42756,
+        "node_calls_total": 42798,
+        "n_model_calls": 2039,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "-0x1.096acf3342e3cp+4",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 570,
+        "module_solve_totals.block_sweeps": 2036,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 570
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 2036
+        },
+        "n_solver_iterations": 10,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 10,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          10
+        ]
+      }
+    },
+    {
+      "arm": "B3",
+      "previous_arm": "B3",
+      "configuration": "large_tokamak_nof",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, partitioned arm",
+      "source_path": "phase_b/campaign/large_tokamak_nof/B3/start000/metrics.json",
+      "source_sha256": "62b11aff0c4a2ab47fdcbcc6d4e9dc2c6cfb4fb43fc0ce61e84915439c3ea07c",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 28055,
+        "node_calls_total": 28100,
+        "n_model_calls": 5503,
+        "n_prime_calls": 5502,
+        "exact.norm_objf": "0x1.9999999a4496cp+0",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 660,
+        "module_solve_totals.block_sweeps": 5499,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 660
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 1432,
+          "M2": 1817,
+          "PULSE": 0,
+          "M3": 1590,
+          "FF": 0
+        },
+        "n_solver_iterations": 8,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 8,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          8
+        ]
+      }
+    },
+    {
+      "arm": "B3",
+      "previous_arm": "B3",
+      "configuration": "low_aspect_ratio_DEMO",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, partitioned arm",
+      "source_path": "phase_b/campaign/low_aspect_ratio_DEMO/B3/start000/metrics.json",
+      "source_sha256": "aca74d8ba6238e39e3b12b3086acb1f14d178743ce18a056cc8d02fa73bba353",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 45496,
+        "node_calls_total": 45541,
+        "n_model_calls": 8766,
+        "n_prime_calls": 8765,
+        "exact.norm_objf": "-0x1.a00c0bc88c2c6p-2",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 1050,
+        "module_solve_totals.block_sweeps": 8762,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1050
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 2243,
+          "M2": 2852,
+          "PULSE": 0,
+          "M3": 2617,
+          "FF": 0
+        },
+        "n_solver_iterations": 13,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 13,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          13
+        ]
+      }
+    },
+    {
+      "arm": "B3",
+      "previous_arm": "B3",
+      "configuration": "st_regression",
+      "phase": "B",
+      "seed": 0,
+      "group": "optimisation, unperturbed seed, partitioned arm",
+      "source_path": "phase_b/campaign/st_regression/B3/start000/metrics.json",
+      "source_sha256": "02f29d1be91cc5174763954f1bf2f12640ed289f031b33305ec60aba99ef509a",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 23505,
+        "node_calls_total": 23572,
+        "n_model_calls": 5264,
+        "n_prime_calls": 5263,
+        "exact.norm_objf": "-0x1.096acf3342e55p+4",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 570,
+        "module_solve_totals.block_sweeps": 5259,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 570
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 1362,
+          "M2": 1367,
+          "PULSE": 570,
+          "M3": 1390,
+          "FF": 0
+        },
+        "n_solver_iterations": 10,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 10,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          10
+        ]
+      }
+    },
+    {
+      "arm": "A0",
+      "previous_arm": "A0",
+      "configuration": "large_tokamak_nof",
+      "phase": "A",
+      "seed": 1,
+      "group": "evaluation, first perturbed seed, flat control",
+      "source_path": "phase_a/campaign/large_tokamak_nof/A0/start001/metrics.json",
+      "source_sha256": "4770a57d21ed84e087252a4219404e7456f258357b132815f7e2b393e929e957",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_single_eval": 126,
+        "n_model_calls_sweeps": 6,
+        "n_prime_calls": 0,
+        "exact.objf": "0x1.999999999999ap+0",
+        "exit_audit.residual_max_hex": "0x1.5fe433222bb97p-29",
+        "module_solve_totals.n_call_models": 1,
+        "module_solve_totals.block_sweeps": 6,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 6
+        },
+        "exit_forensics.n_attempts": 0
+      }
+    },
+    {
+      "arm": "A0",
+      "previous_arm": "A0",
+      "configuration": "low_aspect_ratio_DEMO",
+      "phase": "A",
+      "seed": 1,
+      "group": "evaluation, first perturbed seed, flat control",
+      "source_path": "phase_a/campaign/low_aspect_ratio_DEMO/A0/start001/metrics.json",
+      "source_sha256": "10f33904a89b3684f15360dee6b8e8100b54c61b7993c781130b131cc0b8de3b",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_single_eval": 105,
+        "n_model_calls_sweeps": 5,
+        "n_prime_calls": 0,
+        "exact.objf": "-0x1.0022622fdbffdp-1",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 1,
+        "module_solve_totals.block_sweeps": 5,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 5
+        },
+        "exit_forensics.n_attempts": 0
+      }
+    },
+    {
+      "arm": "A0",
+      "previous_arm": "A0",
+      "configuration": "st_regression",
+      "phase": "A",
+      "seed": 1,
+      "group": "evaluation, first perturbed seed, flat control",
+      "source_path": "phase_a/campaign/st_regression/A0/start001/metrics.json",
+      "source_sha256": "cf4f579c2e6a2ad8e103f51d025cf77ac119e11d1ffbadc9054759b5d517bc39",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_single_eval": 126,
+        "n_model_calls_sweeps": 6,
+        "n_prime_calls": 0,
+        "exact.objf": "-0x1.4cc35295c7b00p+5",
+        "exit_audit.residual_max_hex": "0x1.9e44b1da8552dp-29",
+        "module_solve_totals.n_call_models": 1,
+        "module_solve_totals.block_sweeps": 6,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 6
+        },
+        "exit_forensics.n_attempts": 0
+      }
+    },
+    {
+      "arm": "A1",
+      "previous_arm": "A1",
+      "configuration": "large_tokamak_nof",
+      "phase": "A",
+      "seed": 1,
+      "group": "evaluation, first perturbed seed, partitioned arm",
+      "source_path": "phase_a/campaign/large_tokamak_nof/A1/start001/metrics.json",
+      "source_sha256": "2d8e6a827e2919ac140c304f46d2cd6c56d9bbbf306cca982f12022a35795b0b",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_single_eval": 60,
+        "n_model_calls_sweeps": 13,
+        "n_prime_calls": 13,
+        "exact.objf": "0x1.999999999999ap+0",
+        "exit_audit.residual_max_hex": "0x1.f5b2a3ea40bd7p-1",
+        "module_solve_totals.n_call_models": 1,
+        "module_solve_totals.block_sweeps": 13,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 4,
+          "M2": 5,
+          "PULSE": 0,
+          "M3": 3,
+          "FF": 0
+        },
+        "exit_forensics.n_attempts": 0
+      }
+    },
+    {
+      "arm": "A1",
+      "previous_arm": "A1",
+      "configuration": "low_aspect_ratio_DEMO",
+      "phase": "A",
+      "seed": 1,
+      "group": "evaluation, first perturbed seed, partitioned arm",
+      "source_path": "phase_a/campaign/low_aspect_ratio_DEMO/A1/start001/metrics.json",
+      "source_sha256": "fe97223022631f3f5774fd153f33a44ec91947d9e8799dd4339aa7e44cc79635",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_single_eval": 60,
+        "n_model_calls_sweeps": 13,
+        "n_prime_calls": 13,
+        "exact.objf": "-0x1.1b811d4d015dfp-1",
+        "exit_audit.residual_max_hex": "0x1.ad17b67239f49p-4",
+        "module_solve_totals.n_call_models": 1,
+        "module_solve_totals.block_sweeps": 13,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 4,
+          "M2": 5,
+          "PULSE": 0,
+          "M3": 3,
+          "FF": 0
+        },
+        "exit_forensics.n_attempts": 0
+      }
+    },
+    {
+      "arm": "A1",
+      "previous_arm": "A1",
+      "configuration": "st_regression",
+      "phase": "A",
+      "seed": 1,
+      "group": "evaluation, first perturbed seed, partitioned arm",
+      "source_path": "phase_a/campaign/st_regression/A1/start001/metrics.json",
+      "source_sha256": "9c9e758c6c8d89d7dd2a001450df719977cf36ea536e5ea1e72f0c1c1a0a7907",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_single_eval": 62,
+        "n_model_calls_sweeps": 15,
+        "n_prime_calls": 15,
+        "exact.objf": "-0x1.4cc35295c7b00p+5",
+        "exit_audit.residual_max_hex": "0x1.fabf584472547p-3",
+        "module_solve_totals.n_call_models": 1,
+        "module_solve_totals.block_sweeps": 15,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 4,
+          "M2": 6,
+          "PULSE": 1,
+          "M3": 3,
+          "FF": 0
+        },
+        "exit_forensics.n_attempts": 0
+      }
+    },
+    {
+      "arm": "B3",
+      "previous_arm": "B3",
+      "configuration": "large_tokamak_nof",
+      "phase": "B",
+      "seed": 1,
+      "group": "optimisation, first perturbed seed, partitioned arm",
+      "source_path": "phase_b/campaign/large_tokamak_nof/B3/start001/metrics.json",
+      "source_sha256": "d7b3722e373cfe2a46e75de91cfd39e45e17f4a395d8635b214786244d7eb9fd",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 28037,
+        "node_calls_total": 28082,
+        "n_model_calls": 5500,
+        "n_prime_calls": 5499,
+        "exact.norm_objf": "0x1.99999999bb397p+0",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 660,
+        "module_solve_totals.block_sweeps": 5496,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 660
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 1432,
+          "M2": 1815,
+          "PULSE": 0,
+          "M3": 1589,
+          "FF": 0
+        },
+        "n_solver_iterations": 8,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 8,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          8
+        ]
+      }
+    },
+    {
+      "arm": "B3",
+      "previous_arm": "B3",
+      "configuration": "low_aspect_ratio_DEMO",
+      "phase": "B",
+      "seed": 1,
+      "group": "optimisation, first perturbed seed, partitioned arm",
+      "source_path": "phase_b/campaign/low_aspect_ratio_DEMO/B3/start001/metrics.json",
+      "source_sha256": "c577db913942b85c5db5a8e9ef193844cb08f59136ec6948c35c8251d5027fc8",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 52834,
+        "node_calls_total": 52879,
+        "n_model_calls": 10186,
+        "n_prime_calls": 10185,
+        "exact.norm_objf": "-0x1.9fb1afe0ebcf7p-2",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 1218,
+        "module_solve_totals.block_sweeps": 10182,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1218
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 2609,
+          "M2": 3318,
+          "PULSE": 0,
+          "M3": 3037,
+          "FF": 0
+        },
+        "n_solver_iterations": 15,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 15,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          15
+        ]
+      }
+    },
+    {
+      "arm": "B3",
+      "previous_arm": "B3",
+      "configuration": "st_regression",
+      "phase": "B",
+      "seed": 1,
+      "group": "optimisation, first perturbed seed, partitioned arm",
+      "source_path": "phase_b/campaign/st_regression/B3/start001/metrics.json",
+      "source_sha256": "20533a5f88d31ed62afdb91ccc90842a5b947f313e81689525c09be54e44059e",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 134560,
+        "node_calls_total": 134606,
+        "n_model_calls": 31075,
+        "n_prime_calls": 31074,
+        "exact.norm_objf": "-0x1.0cf146c754521p+4",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 3510,
+        "module_solve_totals.block_sweeps": 31071,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 3510
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "M1": 7883,
+          "M2": 8358,
+          "PULSE": 3510,
+          "M3": 7810,
+          "FF": 0
+        },
+        "n_solver_iterations": 59,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 59,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          59
+        ]
+      }
+    },
+    {
+      "arm": "B1",
+      "previous_arm": "B1",
+      "configuration": "large_tokamak_nof",
+      "phase": "B",
+      "seed": 1,
+      "group": "optimisation, first perturbed seed, lifted design vector (pulsed configurations only)",
+      "source_path": "phase_b/campaign/large_tokamak_nof/B1/start001/metrics.json",
+      "source_sha256": "d6a46ab09bc9b898747e3278e3bf4bb8d8010b87a2fcc0e405df797298957d9c",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 44100,
+        "node_calls_total": 44142,
+        "n_model_calls": 2103,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "0x1.99999999bb397p+0",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 660,
+        "module_solve_totals.block_sweeps": 2100,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 660
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 2100
+        },
+        "n_solver_iterations": 8,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 8,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          8
+        ]
+      }
+    },
+    {
+      "arm": "B1",
+      "previous_arm": "B1",
+      "configuration": "low_aspect_ratio_DEMO",
+      "phase": "B",
+      "seed": 1,
+      "group": "optimisation, first perturbed seed, lifted design vector (pulsed configurations only)",
+      "source_path": "phase_b/campaign/low_aspect_ratio_DEMO/B1/start001/metrics.json",
+      "source_sha256": "910c4cfd415d5b94ca53a65221db1f633270a3d790a956712e2fe3a6f4af9165",
+      "tree_git_head": "362c0b47dffcbfb8747338134a82d11985761d46",
+      "fields": {
+        "node_calls_solve_phase": 81228,
+        "node_calls_total": 81270,
+        "n_model_calls": 3871,
+        "n_prime_calls": 0,
+        "exact.norm_objf": "-0x1.9fb1afe0ebcf7p-2",
+        "exit_audit.residual_max_hex": "0x0.0p+0",
+        "module_solve_totals.n_call_models": 1218,
+        "module_solve_totals.block_sweeps": 3868,
+        "module_solve_totals.outer_pass_hist": {
+          "1": 1218
+        },
+        "module_solve_totals.inner_sweeps_by_block": {
+          "FLAT": 3868
+        },
+        "n_solver_iterations": 15,
+        "mfile.ifail": 1.0,
+        "exit_forensics.n_solver_iterations_summed_over_attempts": 15,
+        "exit_forensics.n_attempts": 1,
+        "exit_forensics.attempts[].n_solver_iterations": [
+          15
+        ]
+      }
+    }
+  ]
+}
