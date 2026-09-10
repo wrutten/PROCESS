@@ -15,6 +15,12 @@ deliberate:
   (:meth:`Campaign.without_configuration`) and every population downstream
   re-derives from the list rather than being edited down by hand (trap T11).
 
+A word on vocabulary, because it is load-bearing here.  A **configuration** is
+one optimisation problem; its **input file** is the file that problem is read
+from, either the *committed* one (never edited) or its *lifted* derived copy.
+V3 called both "deck".  **"Frozen" is reserved** for the physics freeze and for
+the convergence predicate's mode, and names no file, field or matrix cell.
+
 The one module-level name is :data:`EXECUTION_APPROVED`.  It is the switch the
 user flips, in the same commit that records the dated approval in
 ``EXPERIMENT_PLAN.md``'s status header.
@@ -51,8 +57,8 @@ EXECUTION_APPROVED = False
 class Config:
     """One input file defining one optimisation problem.
 
-    "Configuration" is V4's word for what V3 called a *deck* (terminology,
-    README §3).  The deck is the *file*; the configuration is the *problem*.
+    The configuration is the *problem*; its **input file** is the file the
+    problem is read from (README §3).
     """
 
     #: Configuration name; also the frozen input file's stem.
@@ -63,27 +69,29 @@ class Config:
     figure_of_merit: int
     #: PROCESS's own description of that figure of merit.
     figure_of_merit_name: str
-    #: Iteration variables and constraints the frozen deck declares.  The
+    #: Iteration variables and constraints the committed input file declares.  The
     #: stencil regime's run count is 2 * (n_iteration_variables + 1) per arm,
     #: so this is read, never written into a table by hand.
     n_iteration_variables: int
     n_constraints: int
-    #: The frozen configuration file.  Never edited (D9: the committed
-    #: scenarios are the experiment's fixed input).
+    #: The committed input file.  Never edited (D9: the committed input files
+    #: are the experiment's fixed input).
     input_path: Path
     #: The committed coupling-state artifact: which fields make up ``y`` and
     #: the measured scale of each.  The driver reads it too.
     coupling_state_path: Path
     #: The committed per-node write sets used by the block solves.
     write_sets_path: Path
-    #: The per-run deferral set for a run of the *lifted* deck.
+    #: The per-run deferral set for a run of the **committed** input file —
+    #: the unmarked default.  Phase A's block arms run the committed input
+    #: file (a constant owns the burn time, and a constant plus the lifted
+    #: input file is two owners, which the driver refuses), so this is the one
+    #: they need.
     defer_per_run_path: Path
-    #: The per-run deferral set for a run of the *frozen* deck on a pulsed
-    #: configuration — the same node set, stamped for the base constraint set.
-    #: Phase A's block arms run the frozen deck (the pin owns the burn time,
-    #: and pin + lifted deck is two owners, which the driver refuses), so they
-    #: need this one.  On a steady-state configuration it is the same file.
-    defer_per_run_frozen_deck_path: Path
+    #: The same node set, stamped for a run of the **lifted** input file.  On
+    #: a steady-state configuration there is no lifted input file and this is
+    #: the same file as above.
+    defer_per_run_lifted_path: Path
     #: Components of the coupling state this configuration's artifact declares.
     n_coupling_components: int
     #: Arms inactive on this configuration, with the reason.  An arm listed
@@ -99,20 +107,20 @@ class Config:
             "coupling_state": self.coupling_state_path,
             "write_sets": self.write_sets_path,
             "defer_per_run": self.defer_per_run_path,
-            "defer_per_run_frozen_deck": self.defer_per_run_frozen_deck_path,
+            "defer_per_run_lifted": self.defer_per_run_lifted_path,
         }
 
-    def per_run_artifact(self, *, lifted_deck: bool) -> Path:
-        """The per-run deferral artifact stamped for the deck actually run.
+    def per_run_artifact(self, *, lifted_input_file: bool) -> Path:
+        """The per-run deferral artifact stamped for the input file actually run.
 
         One rule instead of V3's phase test: V3 chose ``postsolve_nolift_*``
         in ``phase_a`` and ``postsolve_*`` in ``v3_runner``, which is the same
         decision written twice.
         """
         return (
-            self.defer_per_run_path
-            if lifted_deck
-            else self.defer_per_run_frozen_deck_path
+            self.defer_per_run_lifted_path
+            if lifted_input_file
+            else self.defer_per_run_path
         )
 
 
@@ -147,12 +155,12 @@ class Campaign:
     tree: Path
     #: Directory holding the committed per-configuration artifacts.
     data_dir: Path
-    #: Directory holding the frozen configuration files (never edited, D9).
-    scenario_dir: Path
+    #: Directory holding the committed input files (never edited, D9).
+    input_dir: Path
     #: Untracked bulk output.
     runs_dir: Path
-    #: Derived (lifted) decks, produced by a committed stage.
-    derived_decks_dir: Path
+    #: Derived (lifted) input files, produced by a committed stage.
+    derived_input_dir: Path
 
     # --- what to run ----------------------------------------------------
     configurations: tuple[Config, ...]
@@ -194,6 +202,17 @@ class Campaign:
     predicate_mode_default: str = "frozen"
 
     # --- derived --------------------------------------------------------
+    @property
+    def is_experiment_copy(self) -> bool:
+        """Whether this campaign runs against the experiment's own copy.
+
+        Records are only ever made against the copy.  Pointing the campaign
+        at another tree is for preflight and the self-check; the runner
+        refuses every campaign stage in that case, so a measurement of a tree
+        nobody asked for cannot be produced by forgetting a flag.
+        """
+        return Path(self.tree).resolve() == (EXPERIMENT_DIR / "PROCESS").resolve()
+
     @property
     def pulsed(self) -> tuple[str, ...]:
         """Names of the pulsed configurations, derived, never listed."""
@@ -264,15 +283,52 @@ ARTIFACT_NAMES: dict[str, dict[str, str]] = {
         "coupling_state": "coupling_state_{name}.json",
         "write_sets": "write_sets_{name}.json",
         "defer_per_run": "defer_per_run_{name}.json",
-        "defer_per_run_frozen_deck": "defer_per_run_frozen_deck_{name}.json",
+        "defer_per_run_lifted": "defer_per_run_lifted_{name}.json",
+        "defer_per_run_steady_state": "defer_per_run_{name}.json",
     },
     "repository": {
         "coupling_state": "ystate_a26_{name}.json",
         "write_sets": "writeset_a26_{name}.json",
-        "defer_per_run": "postsolve_{name}.json",
-        "defer_per_run_frozen_deck": "postsolve_nolift_{name}.json",
+        "defer_per_run": "postsolve_nolift_{name}.json",
+        "defer_per_run_lifted": "postsolve_{name}.json",
+        "defer_per_run_steady_state": "postsolve_{name}.json",
     },
 }
+
+
+def artifact_file_names(
+    configuration: str, *, pulsed: bool, naming: str = "harness"
+) -> dict[str, str]:
+    """Role -> file name, for one configuration under one naming scheme.
+
+    A steady-state configuration has no lifted input file, so it has **one**
+    per-run deferral artifact and both roles resolve to it.  Which of the two
+    templates names that single file has to be stated rather than derived: the
+    two schemes mark opposite members of the pair — V3 marked the committed
+    input file's artifact (``postsolve_nolift_``) and left the lifted one
+    unmarked, and V4 marks the lifted one and leaves the committed one
+    unmarked, because the committed input file is what most arms run.
+    """
+    if naming not in ARTIFACT_NAMES:
+        raise KeyError(
+            f"{naming!r} is not a known artifact naming scheme; "
+            f"expected one of {tuple(ARTIFACT_NAMES)}"
+        )
+    names = ARTIFACT_NAMES[naming]
+    resolved = {
+        "coupling_state": names["coupling_state"].format(name=configuration),
+        "write_sets": names["write_sets"].format(name=configuration),
+    }
+    if pulsed:
+        resolved["defer_per_run"] = names["defer_per_run"].format(name=configuration)
+        resolved["defer_per_run_lifted"] = names["defer_per_run_lifted"].format(
+            name=configuration
+        )
+    else:
+        single = names["defer_per_run_steady_state"].format(name=configuration)
+        resolved["defer_per_run"] = single
+        resolved["defer_per_run_lifted"] = single
+    return resolved
 
 #: Artifacts whose file name a path constant in the copied driver fixes.
 DRIVER_FIXED_ARTIFACTS: dict[str, str] = {
@@ -291,22 +347,15 @@ _STEADY_STATE_SKIPS = {
 
 
 def default_configurations(
-    *, scenario_dir: Path, data_dir: Path, naming: str = "harness"
+    *, input_dir: Path, data_dir: Path, naming: str = "harness"
 ) -> tuple[Config, ...]:
     """The three declared configurations, in the order used in every table.
 
     Component counts and figure-of-merit codes are the artifacts' and the
-    decks' own; they are asserted against the files at preflight rather than
-    trusted from here.  *naming* selects which spelling of the artifact file
+    input files' own; they are asserted against the files at preflight rather
+    than trusted from here.  *naming* selects which spelling of the artifact file
     names to resolve — see :data:`ARTIFACT_NAMES`.
     """
-    if naming not in ARTIFACT_NAMES:
-        raise KeyError(
-            f"{naming!r} is not a known artifact naming scheme; "
-            f"expected one of {tuple(ARTIFACT_NAMES)}"
-        )
-    names = ARTIFACT_NAMES[naming]
-
     def make(
         name: str,
         *,
@@ -317,7 +366,7 @@ def default_configurations(
         ncon: int,
         n_components: int,
     ) -> Config:
-        per_run = data_dir / names["defer_per_run"].format(name=name)
+        files = artifact_file_names(name, pulsed=pulsed, naming=naming)
         return Config(
             name=name,
             pulsed=pulsed,
@@ -325,15 +374,11 @@ def default_configurations(
             figure_of_merit_name=fom_name,
             n_iteration_variables=nvar,
             n_constraints=ncon,
-            input_path=scenario_dir / f"{name}.IN.DAT",
-            coupling_state_path=data_dir / names["coupling_state"].format(name=name),
-            write_sets_path=data_dir / names["write_sets"].format(name=name),
-            defer_per_run_path=per_run,
-            defer_per_run_frozen_deck_path=(
-                data_dir / names["defer_per_run_frozen_deck"].format(name=name)
-                if pulsed
-                else per_run
-            ),
+            input_path=input_dir / f"{name}.IN.DAT",
+            coupling_state_path=data_dir / files["coupling_state"],
+            write_sets_path=data_dir / files["write_sets"],
+            defer_per_run_path=data_dir / files["defer_per_run"],
+            defer_per_run_lifted_path=data_dir / files["defer_per_run_lifted"],
             n_coupling_components=n_components,
             skips={} if pulsed else dict(_STEADY_STATE_SKIPS),
         )
@@ -378,18 +423,17 @@ def default_campaign() -> Campaign:
     until it exists the preflight reports the absence rather than falling back
     to another tree, which would measure code nobody asked for.
     """
-    tree = EXPERIMENT_DIR / "PROCESS"
     data_dir = HERE / "data"
     return Campaign(
-        tree=tree,
+        tree=EXPERIMENT_DIR / "PROCESS",
         data_dir=data_dir,
-        scenario_dir=REPO_ROOT / "arch_surgery" / "idf_probe" / "scenarios",
+        # The committed input files are copied into the experiment's own data
+        # directory too, so that a run reads nothing from outside this folder.
+        input_dir=data_dir,
         runs_dir=EXPERIMENT_DIR / "runs",
-        derived_decks_dir=EXPERIMENT_DIR / "runs" / "decks",
+        derived_input_dir=EXPERIMENT_DIR / "runs" / "input_files",
         configurations=default_configurations(
-            scenario_dir=REPO_ROOT / "arch_surgery" / "idf_probe" / "scenarios",
-            data_dir=data_dir,
-            naming="harness",
+            input_dir=data_dir, data_dir=data_dir, naming="harness"
         ),
     )
 
@@ -397,21 +441,20 @@ def default_campaign() -> Campaign:
 def repository_tree_campaign() -> Campaign:
     """The same campaign pointed at the repository's own tree and artifacts.
 
-    Used by the self-check while V4's copy of PROCESS does not exist yet, and
-    by anyone asking "does the harness still compose against the tree V3
-    measured?".  It is never the production target: the production target is
-    the copy, so that a driver change made for V4 cannot reach V2's or V3's
-    numbers.
+    For preflight and the self-check only: it answers "does the harness still
+    compose against the tree the earlier revisions measured?".  **No record is
+    ever made against it** — :attr:`Campaign.is_experiment_copy` is False, and
+    the runner refuses every campaign stage on that ground.
     """
     data_dir = REPO_ROOT / "arch_surgery" / "docs" / "data"
-    scenario_dir = REPO_ROOT / "arch_surgery" / "idf_probe" / "scenarios"
+    input_dir = REPO_ROOT / "arch_surgery" / "idf_probe" / "scenarios"
     return Campaign(
         tree=REPO_ROOT,
         data_dir=data_dir,
-        scenario_dir=scenario_dir,
+        input_dir=input_dir,
         runs_dir=EXPERIMENT_DIR / "runs",
-        derived_decks_dir=EXPERIMENT_DIR / "runs" / "decks",
+        derived_input_dir=EXPERIMENT_DIR / "runs" / "input_files",
         configurations=default_configurations(
-            scenario_dir=scenario_dir, data_dir=data_dir, naming="repository"
+            input_dir=input_dir, data_dir=data_dir, naming="repository"
         ),
     )

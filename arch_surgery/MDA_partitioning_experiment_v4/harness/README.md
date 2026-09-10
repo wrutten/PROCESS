@@ -82,12 +82,13 @@ wording, kept only so that documents written before the rename remain readable. 
 | **deferral `per_call`** | a node runs once per evaluation of the model set instead of once per sweep | hoist |
 | **deferral `per_run`** | a node runs once in total, at the accepted optimum | post-solve |
 | **burn-time owner** | who decides the burn time on a pulsed plant: the **loop** (a model solves for it), a **constant** (a fixed value, for the phase that has no optimiser), or the **optimiser** (it becomes a design variable with a consistency constraint) | lift, pin, `ixc 178`, constraint 93 |
-| **output-time loop** | upstream's second loop, which re-solves the accepted design until the output files stop changing before writing them | `MDA_Output`, idempotence loop |
+| **output-time loop** | upstream's second loop, which re-solves the accepted design until the output files stop changing before writing them. Only the optimisation phase reaches it; an evaluation-phase arm carries no switch for it at all | `MDA_Output`, idempotence loop |
 | **arm** | one column of the switch matrix: one complete setting of the driver | variant |
 | **reference arm** | PROCESS exactly as shipped, every switch unset. `AR` in the evaluation phase, `BR` in the optimisation phase | `R`, "PROCESS as shipped" |
 | **rung** | a pair of adjacent arms differing by one named thing, so that a difference in cost can be attributed to that thing | — · **added** |
-| **configuration** | one optimisation problem: which plant, which objective, which constraints | scenario · **changed** |
-| **deck** | the input *file* a configuration is read from. A configuration has two: the frozen one, never edited, and a derived **lifted** one that hands the burn time to the optimiser | — · **changed** |
+| **configuration** | one optimisation problem: which plant, which objective, which constraints, named by its input file's stem | deck, scenario |
+| **input file** | the file a configuration is read from. A configuration has two: the **committed** one, never edited, and a derived **lifted** copy that hands the burn time to the optimiser | deck · **changed** |
+| **frozen** | reserved for two things only: the physics freeze, and the convergence predicate's mode. It never describes an input file | — · **changed** |
 | **seed** | which displaced starting point a run uses. The same word in both phases; the same seed gives every arm a bit-identical starting point, so comparisons are paired | seed / start |
 | **δ regime** | Phase A entries displaced by 10 % from a converged state | warm δ-stream |
 | **stencil regime** | Phase A entries taken from the optimiser's own finite-difference steps, which is what the loop actually sees during an optimisation | — |
@@ -147,8 +148,8 @@ is a change to the driver, not to the harness.*
 |---|---|---|
 | which fields make up the coupling state, and the scale of each | `coupling_state_{name}.json` | `ystate_a26_{name}.json` |
 | which of those fields each block writes | `write_sets_{name}.json` | `writeset_a26_{name}.json` |
-| the nodes deferred to once per run, for a run of the lifted deck | `defer_per_run_{name}.json` | `postsolve_{name}.json` |
-| the same node set, stamped for a run of the frozen deck | `defer_per_run_frozen_deck_{name}.json` | `postsolve_nolift_{name}.json` |
+| the nodes deferred to once per run, for a run of the **committed** input file — the unmarked default | `defer_per_run_{name}.json` | `postsolve_nolift_{name}.json` |
+| the same node set, stamped for a run of the **lifted** input file | `defer_per_run_lifted_{name}.json` | `postsolve_{name}.json` |
 | what each node writes, measured | `node_writesets.json` | `node_writesets.json` |
 | which block each node belongs to | `dsm_node_map.json` | `dsm_node_map.json` |
 
@@ -161,8 +162,14 @@ twice.
 Because of that, the check that this revision composes the same environments as the last one
 compares **which artifact each switch is handed**, not which file name — so a rename compares
 equal and handing an arm the *wrong* artifact still compares unequal. There is a tooth for
-exactly that: giving the evaluation phase's block arm the lifted deck's artifact, when it runs the
-frozen deck, must be caught.
+exactly that: giving the evaluation phase's block arm the lifted input file's artifact, when it
+runs the committed one, must be caught.
+
+The two schemes mark **opposite** members of the per-run pair: the older one marked the committed
+input file's artifact (`postsolve_nolift_`) and left the lifted one plain, and this one marks the
+lifted artifact and leaves the committed one plain, because the committed input file is what most
+arms run. A steady-state configuration has no lifted input file, so it has one artifact and both
+names resolve to it.
 
 Two more rows need a word.
 
@@ -186,6 +193,13 @@ Everything runs under the project's own interpreter. Another environment on this
 *different* copy of PROCESS without any error at all, which is a silent wrong answer rather than a
 failure, so the harness refuses to start under an interpreter that cannot import the tree it is
 about to measure.
+
+**`--tree` is not a way to run the experiment somewhere else.** The default, and the only tree a
+record is ever made against, is the experiment's own copy of PROCESS in `../PROCESS/`.
+`--tree repository` points the preflight and the self-check at the repository's own tree, which is
+useful for asking "does the harness still compose the way it did?" — and every campaign stage
+refuses in that case, saying so, so a measurement of a tree nobody asked for cannot be produced by
+forgetting a flag.
 
 ```bash
 PY=/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
@@ -217,13 +231,13 @@ To inspect one arm without running anything:
 
 ```python
 import sys; sys.path.insert(0, "arch_surgery/MDA_partitioning_experiment_v4")
-from harness import ARMS, deck_for, env_for, repository_tree_campaign, rung
+from harness import ARMS, env_for, input_file_for, repository_tree_campaign, rung
 
 campaign = repository_tree_campaign()
 nof = campaign.configuration("large_tokamak_nof")
 
 rung("B0", "B3")                       # what separates the two arms, field by field
-deck_for("B3", nof, campaign=campaign) # which input file B3 reads
+input_file_for("B3", nof, campaign=campaign)  # which input file B3 reads
 env_for("A1", nof, seed=0, pin_hex=float(3600.0).hex(), campaign=campaign)
 ```
 
@@ -266,10 +280,11 @@ what I asked" from "the tree ignored me". Then set it from `Arm.terms()`.
 The harness plan's §11.2 fixed the vocabulary and gave this package the job of finalising it. Five
 changes and five additions were made; each is listed here so the plan can absorb them.
 
-1. **"configuration" and "deck" are both kept, for different things.** §11.2 replaced "deck" with
-   "configuration" outright. But a configuration has *two* input files — the frozen one and a
-   derived one that hands the burn time to the optimiser — so a word for the file is still needed.
-   A **configuration** is the problem; a **deck** is a file it can be read from.
+1. **"deck" is gone; the word for the file is "input file".** §11.2 replaced "deck" with
+   "configuration", and a configuration has *two* files — the **committed** one and its **lifted**
+   derived copy — so the file still needs a word, and it is the plain one. A **configuration** is
+   the problem; an **input file** is a file it is read from. **"Frozen" is reserved** for the
+   physics freeze and the predicate mode, and names no file, field or matrix cell.
 2. **"outer loop" is gone, but the switch that expresses it is still composed.** §11.2 lists
    `PROCESS_ARCH_OUTER` as retired. It is retired as something an *arm chooses*; the driver still
    needs it to be told to run the schedule once, so the registry supplies it whenever the
@@ -286,12 +301,12 @@ changes and five additions were made; each is listed here so the plan can absorb
    pending switch. Each is a thing the harness has to name in a refusal message.
 7. **The plan's matrix row "outer loop" is regenerated, not stored.** Four of the plan's eleven
    matrix rows — the stopping rule, the outer loop, whether the burn time is out of the loop, and
-   which deck is read — follow from the other rows. They are computed, and the whole table is
+   which input file is read — follow from the other rows. They are computed, and the whole table is
    regenerated and compared against the plan's, cell for cell, so the plan's table still prints
    exactly as written while an arm has one field per *choice* rather than one per row.
-8. **Two places where the plan disagrees with itself** are flagged rather than fixed here, because
-   the plan is not this package's to amend. Both are recorded in `RUNGS` and printed by the
-   runner. See §8.
+8. **Two places where the plan disagreed with itself were found here and have since been ruled**
+   (2026-09-10). See §8; the rulings are in the plan, and the code carries the reasons rather
+   than a flag.
 9. **Run directories should be named for the seed.** §11.2 makes "seed" the word in both phases,
    but the run-layout decision still writes `start001`. The task that builds the run path should
    use `seed001`.
@@ -334,17 +349,20 @@ runner tells a reader nothing, and a whole set of records was stamped that way o
 measured code was clean. A modified *tracked* file can change a measurement; an untracked one
 cannot. Both are recorded; only the first marks the tree dirty.
 
-**Two disagreements inside the plan, flagged by this package.**
+**Two disagreements inside the plan were found here, and both have been ruled** (2026-09-10).
 
 - The step from the flat control to the arm where the optimiser owns the burn time moves **two**
-  things, not one: ownership, and the output-time loop. The plan's matrix puts the output-time
-  loop's change at that step deliberately, so that the following step — the partitioning
-  intervention — matches its evaluation-phase twin exactly; but the sentence describing the step
-  names only ownership. The harness declares both, and the runner prints the note.
-- The matrix gives the partitioned evaluation arm `A1` the output-time loop, while the prose lists
-  the arms that keep it and leaves `A1` out. It makes no difference to any run — the evaluation
-  phase runs one evaluation and never writes output files — but the cell and the sentence should
-  be made to agree.
+  things, not one: ownership, and the output-time loop. **Ruling: the matrix stands and the
+  description was completed.** Putting the output-time loop's change on that step is deliberate —
+  it is the step already declared to differ in kind between the two phases, so the *headline*
+  step, the partitioning intervention, keeps a switch set identical to its evaluation-phase twin.
+  The harness declares both fields and carries that reason.
+- The matrix gave the partitioned evaluation-phase arm `A1` the output-time loop, while the prose
+  listing the arms that keep it left `A1` out. **Ruling: the evaluation-phase arms carry no switch
+  for it at all** — an evaluation never reaches the output path — so the row reads `n/a` for all
+  four of them, and the arms that keep the loop are the two optimisation-phase controls. One
+  consequence matters: `A1` is runnable now, and only `B1` and `B3` wait on the driver change that
+  supplies the switch.
 
 ---
 
@@ -358,7 +376,7 @@ times.
 
 A record of one run carries, at minimum:
 
-- **what was run**: configuration, arm, seed, entry regime, the deck's path, and the arm's whole
+- **what was run**: configuration, arm, seed, entry regime, the input file's path, and the arm's whole
   composed environment **as the driver resolved it** — read back from the imported modules, not
   as the harness asked;
 - **where it ran**: the interpreter, the exact tree, its commit and branch, whether that commit

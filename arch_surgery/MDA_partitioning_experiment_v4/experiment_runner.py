@@ -116,7 +116,7 @@ def stage_configurations(campaign: Campaign) -> tuple[int, dict[str, Any]]:
             "coupling_state": config.coupling_state_path,
             "write_sets": config.write_sets_path,
             "defer_per_run": config.defer_per_run_path,
-            "defer_per_run_frozen_deck": config.defer_per_run_frozen_deck_path,
+            "defer_per_run_lifted": config.defer_per_run_lifted_path,
             "node_write_sets": campaign.data_dir / "node_writesets.json",
             "node_map": campaign.data_dir / "dsm_node_map.json",
         }
@@ -228,6 +228,13 @@ def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
     """
     _rule("campaign")
     reasons = []
+    if not campaign.is_experiment_copy:
+        reasons.append(
+            f"the tree is not the experiment's copy ({campaign.tree}); records "
+            f"are only ever made against "
+            f"{Path(__file__).resolve().parent / 'PROCESS'}.  Pointing the "
+            f"campaign elsewhere is for preflight and the self-check"
+        )
     if not EXECUTION_APPROVED:
         reasons.append(
             "the plan's execution is not approved: the user flips "
@@ -274,8 +281,9 @@ def main(argv: list[str] | None = None) -> int:
         choices=("copy", "repository"),
         default="copy",
         help="which tree to run against: the experiment's own copy of "
-        "PROCESS (the default and the production target), or the "
-        "repository's, for checking the harness while the copy is being made",
+        "PROCESS (the default, and the only tree a record is ever made "
+        "against), or the repository's, which is for preflight and the "
+        "self-check only and refuses every campaign stage",
     )
     parser.add_argument(
         "--draft",

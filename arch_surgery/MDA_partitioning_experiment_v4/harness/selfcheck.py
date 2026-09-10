@@ -44,6 +44,8 @@ from harness.config import (  # noqa: E402
     ARTIFACT_NAMES,
     DRIVER_FIXED_ARTIFACTS,
     Campaign,
+    artifact_file_names,
+    default_campaign,
     repository_tree_campaign,
 )
 
@@ -148,13 +150,12 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
                 "feedforward_lifted" if pulsed else "feedforward"
             ),
         }
-        # Phase A's block arm runs the frozen deck, so its per-run artifact is
-        # the one stamped for the base constraint set; Phase B's runs the
-        # lifted deck and takes the other.
+        # Phase A's block arm runs the committed input file, so its per-run
+        # artifact is the one stamped for the base constraint set; Phase B's
+        # runs the lifted input file and takes the other.  A steady-state
+        # configuration has one artifact and both roles resolve to it.
         env["PROCESS_ARCH_POST_SOLVE"] = (
-            "<defer_per_run_frozen_deck>"
-            if (arm == "A1" and pulsed)
-            else "<defer_per_run>"
+            "<defer_per_run_lifted>" if (arm == "B3" and pulsed) else "<defer_per_run>"
         )
         if pulsed:
             env["PROCESS_ARCH_LIFT"] = "burn_time"
@@ -164,11 +165,21 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
     raise KeyError(arm)
 
 
-def _artifact_role(file_name: str, configuration: str) -> str | None:
+#: Role order for the reverse lookup.  A steady-state configuration has one
+#: per-run artifact that both roles name, and the unmarked role wins, so the
+#: two naming schemes agree on it even though they mark opposite members of
+#: the pair.
+_ROLE_ORDER = ("coupling_state", "write_sets", "defer_per_run", "defer_per_run_lifted")
+
+
+def _artifact_role(file_name: str, config) -> str | None:
     """Which artifact *file_name* is, under any naming scheme this repo uses."""
-    for scheme in ARTIFACT_NAMES.values():
-        for role, template in scheme.items():
-            if template.format(name=configuration) == file_name:
+    for naming in ARTIFACT_NAMES:
+        files = artifact_file_names(
+            config.name, pulsed=config.pulsed, naming=naming
+        )
+        for role in _ROLE_ORDER:
+            if files[role] == file_name:
                 return role
     for role, fixed in DRIVER_FIXED_ARTIFACTS.items():
         if fixed == file_name:
@@ -189,7 +200,7 @@ def _architecture_only(env: dict[str, str], config) -> dict[str, str]:
             continue
         value = env[name]
         if value.startswith("/"):
-            role = _artifact_role(Path(value).name, config.name)
+            role = _artifact_role(Path(value).name, config)
             value = f"<{role}>" if role else Path(value).name
         out[name] = value
     return out
@@ -387,13 +398,13 @@ def check_composition(campaign: Campaign) -> Check:
     pulsed = [c for c in campaign.configurations if c.pulsed]
     if pulsed:
         swapped = dict(_architecture_only(composed[("A1", pulsed[0].name)], pulsed[0]))
-        swapped["PROCESS_ARCH_POST_SOLVE"] = "<defer_per_run>"
+        swapped["PROCESS_ARCH_POST_SOLVE"] = "<defer_per_run_lifted>"
         check.tooth(
             "the wrong per-run artifact handed to an arm",
             swapped != _previous_environment("A1", pulsed[0], campaign),
-            "the evaluation phase's block arm runs the frozen deck, so it "
-            "takes the artifact stamped for the base constraint set; handing "
-            "it the lifted deck's artifact must not match",
+            "the evaluation phase's block arm runs the committed input file, "
+            "so it takes the artifact stamped for the base constraint set; "
+            "handing it the lifted input file's artifact must not match",
         )
 
     steady = [c for c in campaign.configurations if not c.pulsed]
@@ -462,8 +473,6 @@ def check_rungs() -> Check:
                 f"plan declares they "
                 f"{'do' if rung_row.same_in_both_phases else 'do not'}"
             )
-        if rung_row.note:
-            check.note(f"{rung_row.phase_b[0]} -> {rung_row.phase_b[1]}: {rung_row.note}")
 
     # No arm, rung or column may name the removed arm.
     check.n_compared += 1
@@ -754,6 +763,22 @@ def check_provenance(campaign: Campaign) -> Check:
         shutil.rmtree(scratch, ignore_errors=True)
 
     # The exact-tree assertion (trap T6) refuses a prefix match.
+    check.n_compared += 1
+    if repository_tree_campaign().is_experiment_copy:
+        check.fail(
+            "a campaign pointed at the repository's own tree reports itself "
+            "as the experiment's copy; records would be made against a tree "
+            "nobody asked for"
+        )
+    check.tooth(
+        "a campaign pointed at a tree that is not the experiment's copy",
+        (not repository_tree_campaign().is_experiment_copy)
+        and default_campaign().is_experiment_copy,
+        "the checking campaign must not pass for the production one; the "
+        "runner refuses every campaign stage on that ground, so a record "
+        "cannot be made against the wrong tree by forgetting a flag",
+    )
+
     caught = False
     try:
         prov.assert_tree(Path(campaign.tree).parent)
@@ -781,16 +806,19 @@ import v3_config as cfg
 import v3_runner
 import phase_a
 out = {}
-for deck in cfg.DECKS:
+for configuration in cfg.DECKS:
     for arm in ("R", "B0", "B1", "B3"):
-        out["B:%s:%s" % (arm, deck)] = {
-            k: v for k, v in v3_runner.env_for(deck, arm).items()
+        out["B:%s:%s" % (arm, configuration)] = {
+            k: v for k, v in v3_runner.env_for(configuration, arm).items()
             if k.startswith("PROCESS_ARCH") or k == "PROCESS_IDF_PROBE"
         }
     for arm in ("A0", "A1"):
-        pin = "0x1.34a0000000000p+10" if deck in cfg.PULSED else None
-        out["A:%s:%s" % (arm, deck)] = {
-            k: v for k, v in phase_a.env_for_phase_a(deck, arm, pin_hex=pin).items()
+        pin = "0x1.34a0000000000p+10" if configuration in cfg.PULSED else None
+        out["A:%s:%s" % (arm, configuration)] = {
+            k: v
+            for k, v in phase_a.env_for_phase_a(
+                configuration, arm, pin_hex=pin
+            ).items()
             if k.startswith("PROCESS_ARCH") or k == "PROCESS_IDF_PROBE"
         }
 print("@@X@@" + json.dumps(out) + "@@X@@")
@@ -931,8 +959,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", type=Path, help="write the records here")
     args = parser.parse_args(argv)
-
-    from harness.config import default_campaign
 
     campaign = (
         repository_tree_campaign() if args.tree == "repository" else default_campaign()

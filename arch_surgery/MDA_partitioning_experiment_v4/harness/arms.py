@@ -10,8 +10,8 @@ there is one composition, and the difference between two arms is a computed
 field difference rather than a sentence in a docstring.
 
 Three functions are public: :func:`env_for` builds an arm's environment from
-nothing, :func:`deck_for` says which input file it reads, and :func:`rung`
-says what changes between two arms.
+nothing, :func:`input_file_for` says which input file it reads, and
+:func:`rung` says what changes between two arms.
 """
 
 from __future__ import annotations
@@ -30,10 +30,9 @@ from .switches import SwitchError
 
 #: The matrix's independent rows, in the plan's order.  Four further rows of
 #: EXPERIMENT_PLAN.md §3.2 — the stopping rule, the number of schedule passes,
-#: whether the burn time is out of the loop, and which deck is read — are not
-#: listed here because they are not choices: each follows from a field below,
-#: and :data:`PLAN_MATRIX` is regenerated from these five plus the two
-#: remaining ones to prove it.
+#: whether the burn time is out of the loop, and which input file is read —
+#: are not listed here because they are not choices: each follows from a field
+#: below, and :data:`PLAN_MATRIX` is regenerated from these to prove it.
 MATRIX_FIELDS: tuple[str, ...] = (
     "mda",
     "arrangement_node",
@@ -66,9 +65,12 @@ class Arm:
     #: "optimiser".  On a steady-state configuration there is no burn-time
     #: coupling and the field has no effect.
     burn_time_owner: str
-    #: "upstream" | "none" — whether the run re-solves the accepted state
-    #: through upstream's output-time loop before writing its files.
-    output_loop: str
+    #: "upstream" | "none", or None where the row does not apply.  Whether the
+    #: run re-solves the accepted state through upstream's output-time loop
+    #: before writing its files.  A Phase A arm evaluates the model set once
+    #: and never reaches the output path, so it carries **no switch for this
+    #: at all** and the matrix row reads ``n/a`` for it.
+    output_loop: str | None
     #: Why this arm is in the experiment (one sentence, for the README and
     #: for a refusal message).
     role: str
@@ -92,9 +94,9 @@ class Arm:
         return self.burn_time_owner != "loop"
 
     @property
-    def deck(self) -> str:
-        """"frozen" or "lifted" — which input file the arm reads."""
-        return "lifted" if self.burn_time_owner == "optimiser" else "frozen"
+    def input_file(self) -> str:
+        """"committed" or "lifted" — which input file the arm reads."""
+        return "lifted" if self.burn_time_owner == "optimiser" else "committed"
 
     @property
     def is_reference(self) -> bool:
@@ -142,7 +144,9 @@ class Arm:
             )
         if self.defer_per_run:
             terms["defer_per_run"] = str(
-                config.per_run_artifact(lifted_deck=self.deck == "lifted")
+                config.per_run_artifact(
+                    lifted_input_file=self.input_file == "lifted"
+                )
             )
         if lifted_here:
             terms["burn_time_lift"] = "burn_time"
@@ -185,7 +189,7 @@ ARMS: dict[str, Arm] = {
         defer_per_call=False,
         defer_per_run=False,
         burn_time_owner="loop",
-        output_loop="upstream",
+        output_loop=None,  # Phase A never reaches the output path
         role=(
             "PROCESS as shipped, one evaluation: says where upstream's own "
             "stopping rule leaves the coupling state"
@@ -200,7 +204,7 @@ ARMS: dict[str, Arm] = {
         defer_per_call=False,
         defer_per_run=False,
         burn_time_owner="loop",
-        output_loop="upstream",
+        output_loop=None,  # Phase A never reaches the output path
         role=(
             "the flat control: one block over every in-loop node, stopped on "
             "the coupling state at the shared tolerance"
@@ -215,7 +219,7 @@ ARMS: dict[str, Arm] = {
         defer_per_call=False,
         defer_per_run=False,
         burn_time_owner="constant",
-        output_loop="upstream",
+        output_loop=None,  # Phase A never reaches the output path
         role=(
             "the flat control with the burn time owned by a constant: the "
             "ownership rung, with nothing else changed"
@@ -230,7 +234,7 @@ ARMS: dict[str, Arm] = {
         defer_per_call=True,
         defer_per_run=True,
         burn_time_owner="constant",
-        output_loop="upstream",
+        output_loop=None,  # Phase A never reaches the output path
         role="the partitioned architecture, one evaluation: Phase A's headline",
     ),
     "BR": Arm(
@@ -315,9 +319,9 @@ PLAN_MATRIX: dict[str, tuple[str, ...]] = {
     "burn time out of the loop": ("—", "—", "✓", "✓", "—", "—", "✓", "✓"),
     "burn-time owner": ("loop", "loop", "constant", "constant",
                         "loop", "loop", "optimiser", "optimiser"),
-    "deck": ("frozen", "frozen", "frozen", "frozen",
-             "frozen", "frozen", "lifted", "lifted"),
-    "output-time loop (MDA_Output)": ("upstream", "upstream", "upstream", "upstream",
+    "input file ⁺": ("committed", "committed", "committed", "committed",
+                     "committed", "committed", "lifted", "lifted"),
+    "output-time loop (MDA_Output)": ("n/a", "n/a", "n/a", "n/a",
                                       "upstream", "upstream", "none", "none"),
 }
 
@@ -345,10 +349,10 @@ def matrix_cell(arm: Arm, row: str) -> str:
         return tick[arm.burn_time_out_of_loop]
     if row == "burn-time owner":
         return arm.burn_time_owner
-    if row == "deck":
-        return arm.deck
+    if row == "input file ⁺":
+        return arm.input_file
     if row == "output-time loop (MDA_Output)":
-        return arm.output_loop
+        return "n/a" if arm.output_loop is None else arm.output_loop
     raise KeyError(f"{row!r} is not a row of the matrix")
 
 
@@ -409,21 +413,26 @@ RUNGS: tuple[Rung, ...] = (
         phase_b=("B0", "B1"),
         isolates=(
             "burn-time ownership — the loop vs a constant (Phase A) or the "
-            "optimiser (Phase B); the one rung where the phases differ in kind"
+            "optimiser (Phase B); the one rung where the phases differ in "
+            "kind — and, in Phase B only, the output-time loop "
+            "(upstream → none), placed on this rung deliberately: it is the "
+            "rung already declared to differ in kind between the phases, so "
+            "the headline rung B1 → B3 keeps a switch set identical to "
+            "A0p → A1"
         ),
         changes_a=("burn_time_owner",),
         changes_b=("burn_time_owner", "output_loop"),
         same_in_both_phases=False,
         role="Phase A: cost and audit at matched map; Phase B: checks 1–3",
         note=(
-            "The Phase B step moves a second field.  EXPERIMENT_PLAN.md "
-            "§3.2's matrix puts the output-time loop's change here — B1 and "
-            "B3 both run without it — so that the next rung is the "
-            "partitioning intervention alone and matches its Phase A twin "
-            "field for field.  The plan's own 'isolates' wording names only "
-            "ownership, which is why the second field is declared explicitly "
-            "here rather than discovered later.  Flagged by task A47 "
-            "(harness-skeleton) for the plan's next amendment."
+            "The output-time loop's change sits on this rung and in Phase B "
+            "only.  It is the rung already declared to differ in kind between "
+            "the phases, so putting it here leaves the headline rung "
+            "B1 → B3 with a switch set identical to its Phase A twin "
+            "A0p → A1, which is what lets a Phase A ratio be read against "
+            "its Phase B twin.  The output-time loop's sweeps are counted per "
+            "run and published as their own column, so neither rung's "
+            "attribution carries them silently."
         ),
     ),
     Rung(
@@ -461,8 +470,8 @@ def rung(a: Arm | str, b: Arm | str) -> dict[str, tuple[object, object]]:
 
     Only the matrix's independent rows are compared: the stopping rule, the
     number of schedule passes, whether the burn time is out of the loop and
-    which deck is read all follow from those, and reporting them again would
-    make a one-thing rung look like four.
+    which input file is read all follow from those, and reporting them again
+    would make a one-thing rung look like four.
     """
     arm_a = ARMS[a] if isinstance(a, str) else a
     arm_b = ARMS[b] if isinstance(b, str) else b
@@ -539,21 +548,21 @@ def env_for(
     return env
 
 
-def deck_for(
+def input_file_for(
     arm: Arm | str, config: Config, *, campaign: Campaign | None = None
 ) -> Path:
     """The input file this arm reads on this configuration.
 
-    The frozen configuration file, except where the optimiser owns the burn
-    time: that arm reads the derived lifted deck, which differs from the
-    frozen one in exactly three lines and is produced by a committed stage.
-    The frozen files are never edited (D9).
+    The configuration's committed input file, except where the optimiser owns
+    the burn time: that arm reads the lifted input file, a derived copy
+    differing in exactly three lines and produced by a committed stage.  The
+    committed input files are never edited (D9).
     """
     arm = ARMS[arm] if isinstance(arm, str) else arm
     campaign = campaign or default_campaign()
-    if arm.deck == "lifted" and config.pulsed:
+    if arm.input_file == "lifted" and config.pulsed:
         return (
-            campaign.derived_decks_dir / config.name / f"{config.name}_lifted.IN.DAT"
+            campaign.derived_input_dir / config.name / f"{config.name}_lifted.IN.DAT"
         )
     return config.input_path
 

@@ -286,9 +286,9 @@ REGISTRY: dict[str, Switch] = {
             "has no optimiser to own it.  Passed as a C99 hex float so a "
             "measured value survives the round trip exactly.  The driver "
             "refuses a pin without the lift (the model would overwrite it on "
-            "the first sweep) and refuses a deck that also names the burn "
-            "time as an optimiser variable (two owners is a refusal, not a "
-            "race)."
+            "the first sweep) and refuses an input file that also names the "
+            "burn time as an optimiser variable (two owners is a refusal, "
+            "not a race)."
         ),
     ),
     "schedule_passes": Switch(
