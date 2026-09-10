@@ -931,6 +931,34 @@ def stage_tally() -> int:
         d["delta_scan_ratios_0.1_0.01_0.001"] = scan
         d["delta_scan_monotone_increasing"] = (all(x is not None for x in scan)
                                                 and all(scan[i] < scan[i + 1] for i in range(len(scan) - 1)))
+        # The transfer, closed: stencil-regime per-call ratio x the
+        # evaluation multiplier (the lift's (nvar+1) factor x the measured
+        # problem-call factor) against the measured end-to-end ratio; E3 and
+        # E3b bracket the in-loop mixture of eps- and 2eps-sized steps.
+        closure = {}
+        g03 = f["rungs"]["B0->B3"]
+        variants = {"with_retried": g03}
+        ra = f.get("retry_accounting") or {}
+        if "B0->B3_without_retried" in ra:
+            variants["without_retried"] = ra["B0->B3_without_retried"]
+        for vname, g in variants.items():
+            row = {"R_measured": g["R"], "eps": g["eps"],
+                   "eps_nvar_factor": g["eps_nvar_factor"],
+                   "eps_problem_call_factor": g["eps_problem_call_factor"]}
+            for rg in ("V3_d0.1", "E3", "E3b"):
+                r = d["regimes"].get(rg, {}).get("ratio_A1_over_A0")
+                if r is not None:
+                    pred = r * g["eps"]
+                    row[rg] = {"rho_A": r, "predicted_B3_over_B0": pred,
+                               "measured_over_predicted_minus_1": g["R"] / pred - 1}
+            closure[vname] = row
+        if d["rho_inloop_B3_over_B1"] is not None:
+            closure["B1->B3_rung_eps_exactly_1"] = {
+                "in_loop_B3_over_B1": d["rho_inloop_B3_over_B1"],
+                **{rg: d["regimes"].get(rg, {}).get("ratio_A1_over_A0p") for rg in ("E3", "E3b")},
+                "E3_minus_inloop": (d["regimes"].get("E3", {}).get("ratio_A1_over_A0p") or 0) - d["rho_inloop_B3_over_B1"],
+                "E3b_minus_inloop": (d["regimes"].get("E3b", {}).get("ratio_A1_over_A0p") or 0) - d["rho_inloop_B3_over_B1"]}
+        d["closure"] = closure
         rec["decks"][deck] = d
     # Provenance of the probe's records: the runner and the process/ tree
     # must not have changed since the runner's commit, whatever commit each
@@ -989,6 +1017,7 @@ def stage_tally() -> int:
                                "rho_B_inloop": rec["decks"][dk]["rho_B_inloop_B3_over_B0"],
                                "rho_inloop_B3_over_B1": rec["decks"][dk]["rho_inloop_B3_over_B1"],
                                "delta_scan_ratios_0.1_0.01_0.001": rec["decks"][dk]["delta_scan_ratios_0.1_0.01_0.001"],
+                               "closure": rec["decks"][dk]["closure"],
                                "per_arm": {rg: {a: {k: rec["decks"][dk]["regimes"][rg][a][k]
                                                     for k in ("n_ok", "calls_per_eval", "sweeps_per_eval", "nodes_per_sweep", "block_sweeps_per_eval")}
                                                 for a in rec["decks"][dk]["regimes"][rg] if isinstance(rec["decks"][dk]["regimes"][rg][a], dict)}
@@ -1021,6 +1050,18 @@ def _tally_tables(rec: dict, fac: dict) -> str:
                  + (f"{ic['B1']:.2f} | " if "B1" in ic else "— | ")
                  + f"{ic['B3']:.2f} | {isw['B3']:.2f} | {blk} | **{d['rho_B_inloop_B3_over_B0']:.4f}** | "
                  + (f"**{d['rho_inloop_B3_over_B1']:.4f}** |" if d["rho_inloop_B3_over_B1"] else "— |"))
+    L.append("")
+    L.append("| config | set | R measured | eps | rho_A(0.10) x eps | error | rho_A(E3) x eps | error | rho_A(E3b) x eps | error |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|")
+    for deck in DECKS:
+        for vname, row in rec["decks"][deck]["closure"].items():
+            if "R_measured" not in row:
+                continue
+            cells = []
+            for rg in ("V3_d0.1", "E3", "E3b"):
+                c = row.get(rg)
+                cells.append(f"{c['predicted_B3_over_B0']:.4f} | {100 * c['measured_over_predicted_minus_1']:+.1f} %" if c else "— | —")
+            L.append(f"| {SHORT[deck]} | {vname} | {row['R_measured']:.4f} | {row['eps']:.4f} | " + " | ".join(cells) + " |")
     L.append("")
     for deck in DECKS:
         d = rec["decks"][deck]
