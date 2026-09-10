@@ -237,6 +237,8 @@ def stage_pairing(out: Path) -> dict:
             n_runs = 0
             n_failed = 0
             calls = 0
+            sweeps_tot = 0
+            by_block: dict = defaultdict(int)
             per_seed = {}
             for k in range(N_STARTS):
                 m = _campaign_metrics(deck, arm, k)
@@ -250,9 +252,16 @@ def stage_pairing(out: Path) -> dict:
                     agg[str(a)] = agg.get(str(a), 0) + b
                 n_failed += t.get("n_failed") or 0
                 calls += t.get("n_call_models") or 0
+                sweeps_tot += t.get("block_sweeps") or 0
+                for lab, v in (t.get("inner_sweeps_by_block") or {}).items():
+                    by_block[lab] += v
             census[arm] = {
                 "n_runs": n_runs,
                 "n_call_models_total": calls,
+                "block_sweeps_total": sweeps_tot,
+                "block_sweeps_per_call_models": (
+                    sweeps_tot / calls if calls else None),
+                "inner_sweeps_by_block_total": dict(sorted(by_block.items())),
                 "outer_pass_hist_total": dict(
                     sorted(agg.items(), key=lambda kv: int(kv[0]))),
                 "n_call_models_needing_pass_3_or_more": sum(
@@ -261,12 +270,36 @@ def stage_pairing(out: Path) -> dict:
                 "per_seed": per_seed,
             }
 
+        # --- clusters and hops, per seed --------------------------------
+        # V3's check 1a clusters accepted optima by norm_objf: a RELATIVE gap
+        # wider than CLUSTER_GAP_FLOOR_FACTOR x OBJF_FLOOR_REL between
+        # adjacent sorted values separates clusters.  v3_report_analysis
+        # publishes only the hop COUNT per pair, and this task needs to know
+        # WHICH seeds hopped -- so the construction is repeated here and then
+        # cross-checked against the imported analysis's own count.  A
+        # disagreement would mean the repeat is not the declared
+        # construction, and is reported rather than reconciled.
+        cluster_of, hop_seeds, hop_check = _clusters(deck, pb)
+
         res["per_deck"][deck] = {
             "taxonomy_denominator": N_STARTS,
+            "clusters_B2_B3": {
+                "construction": (
+                    "V3 check 1a, repeated here for per-seed detail: accepted "
+                    "optima (status ok AND ifail == 1) sorted by norm_objf; a "
+                    "relative gap > CLUSTER_GAP_FLOOR_FACTOR x OBJF_FLOOR_REL "
+                    "= 1e-5 between adjacent values opens a new cluster"),
+                "per_seed": cluster_of,
+                "hop_seeds_B2_to_B3": hop_seeds,
+                "cross_check_against_v3_report_analysis": hop_check,
+            },
             "n_converged": {a: (tax.get(a) or {}).get("n_converged")
                             for a in ("R", "B0", "B1", "B2", "B3")
                             if a in tax},
             "b2_b3_trust_step_identity": ident,
+            "sign_test_on_differing_pairs": _sign_test(
+                ident.get("differing_pairs") or []),
+            "retry_analysis": _retry_analysis(deck, ident),
             "outer_pass_census": census,
         }
 
@@ -288,6 +321,9 @@ def stage_pairing(out: Path) -> dict:
             suppressed = (ps.get("suppressed_by_node") or {}).get("pulse")
             nc = (m.get("node_census") or {}).get(
                 "per_node_counted_through_Caller_node") or {}
+            ncm = t.get("n_call_models")
+            sup = ps.get("suppressed_by_node") or {}
+            tail = m.get("arch_hoist_tail_resolved") or []
             i20.append({
                 "arm": arm, "seed": k,
                 "PULSE_block_visits": visits,
@@ -297,6 +333,17 @@ def stage_pairing(out: Path) -> dict:
                 "every_visit_executed_nothing": (
                     visits is not None and suppressed is not None
                     and sweeps == visits and suppressed >= visits),
+                # The feed-forward tail runs once per call_models, AFTER the
+                # outer loop has converged.  On st both its members are on
+                # the post-solve exclusion list, so that sweep executes
+                # nothing -- which is what makes the outer pass-2 residual
+                # exactly the difference between the two arms' handover
+                # states rather than a proxy for it.  Checked, not asserted.
+                "n_call_models": ncm,
+                "feedforward_tail": tail,
+                "tail_members_suppressed_once_per_call": (
+                    bool(tail) and ncm is not None
+                    and all(sup.get(n) == ncm for n in tail)),
             })
     res["i20_empty_block_visits"] = {
         "what": (
@@ -310,11 +357,353 @@ def stage_pairing(out: Path) -> dict:
         "n_runs": len(i20),
         "n_runs_where_every_visit_executed_nothing": sum(
             1 for r in i20 if r["every_visit_executed_nothing"]),
+        "n_runs_where_the_feedforward_tail_executed_nothing": sum(
+            1 for r in i20 if r["tail_members_suppressed_once_per_call"]),
         "per_run": i20,
     }
 
     jdump(res, out / "pairing.json")
     return res
+
+
+
+
+#: Where task A44 (transfer-gap) publishes its own factorisation of the same
+#: campaign records.  Read-only, untracked, and IN FLIGHT while that task is
+#: open: it is used as a cross-check on seed lists, never as a source of a
+#: number, and its sha256 and modification time are recorded so a later
+#: reader can tell which version was cross-checked.
+A44_FACTORISATION = Path(
+    "/home/wrutten/projects/PROCESS_surgery_worktrees/A44-transfer-gap"
+    "/arch_surgery/idf_probe/runs/a44/factorisation.json")
+
+
+def _attempts(deck: str, arm: str, seed: int) -> dict:
+    """One run's solver-attempt record (V3 H3 exit forensics, task A41).
+
+    ``n_solver_iterations`` in a run record is the FINAL attempt's count.
+    When the retry ladder fires -- VMCON exits ifail != 1 and the driver
+    retries with epsfcn x10, then x0.1, then a reset Hessian -- the failed
+    attempts' iterations are real work that the reported number does not
+    carry.  Two runs whose reported counts differ may therefore differ
+    because one of them retried, which is a different object from two clean
+    runs taking different numbers of steps.
+    """
+    m = _campaign_metrics(deck, arm, seed)
+    if m is None:
+        return {"status": "missing"}
+    fx = m.get("exit_forensics") or {}
+    return {
+        "status": m.get("status"),
+        "ifail": (m.get("mfile") or {}).get("ifail"),
+        "n_attempts": fx.get("n_attempts"),
+        "ladder_stage": fx.get("ladder_stage"),
+        "iterations_final_attempt": fx.get("n_solver_iterations"),
+        "iterations_summed_over_attempts": fx.get(
+            "n_solver_iterations_summed_over_attempts"),
+        "attempts": [
+            {"attempt": a.get("attempt"),
+             "stage": a.get("ladder_stage_positional"),
+             "epsfcn_at_entry": a.get("epsfcn_at_entry"),
+             "ifail": a.get("ifail"),
+             "n_solver_iterations": a.get("n_solver_iterations")}
+            for a in (fx.get("attempts") or [])],
+    }
+
+
+def _retry_analysis(deck: str, ident: dict) -> dict:
+    """The B2/B3 comparison on BOTH iteration statistics.
+
+    V3's check 2 uses ``n_solver_iterations`` -- the final attempt.  The
+    same records also carry the sum over attempts, which is the total
+    optimiser work the run actually did.  Where one arm retried and the
+    other did not, the two statistics can disagree in SIGN, and a reader
+    told only one of them would be misled.  Both are published here with
+    the same pair set and the same sign test.
+    """
+    att = {arm: {k: _attempts(deck, arm, k) for k in range(N_STARTS)}
+           for arm in ("B2", "B3")}
+    retried = {arm: [k for k in range(N_STARTS)
+                     if (att[arm][k].get("n_attempts") or 0) > 1]
+               for arm in ("B2", "B3")}
+    # over the both-converged pair set only -- the population a B2 -> B3
+    # comparison is actually made on, and the one a B0-anchored study will
+    # report, so the two lists can be compared without a population argument
+    retried_in_pairs = {arm: [] for arm in ("B2", "B3")}
+
+    # V3's own pair set, taken from the imported analysis's result rather
+    # than rebuilt, so the two statistics are compared over the SAME pairs.
+    pair_seeds = sorted(
+        {e["seed"] for e in (ident.get("differing_pairs") or [])})
+    # every both-converged pair, differing or not
+    allpairs = [k for k in range(N_STARTS)
+                if all(att[a][k].get("status") == "ok"
+                       and att[a][k].get("ifail") == 1.0 for a in ("B2", "B3"))]
+
+    for arm in ("B2", "B3"):
+        retried_in_pairs[arm] = [
+            k for k in retried[arm]
+            if all(att[a][k].get("status") == "ok"
+                   and att[a][k].get("ifail") == 1.0 for a in ("B2", "B3"))]
+
+    def _sum(arm, field, seeds):
+        return sum((att[arm][k].get(field) or 0) for k in seeds)
+
+    per_pair = []
+    for k in allpairs:
+        a, b = att["B2"][k], att["B3"][k]
+        per_pair.append({
+            "seed": k,
+            "B2_attempts": a.get("n_attempts"),
+            "B3_attempts": b.get("n_attempts"),
+            "same_number_of_attempts": a.get("n_attempts") == b.get(
+                "n_attempts"),
+            "B2_final": a.get("iterations_final_attempt"),
+            "B3_final": b.get("iterations_final_attempt"),
+            "B2_summed": a.get("iterations_summed_over_attempts"),
+            "B3_summed": b.get("iterations_summed_over_attempts"),
+            "differs_on_final": (a.get("iterations_final_attempt")
+                                 != b.get("iterations_final_attempt")),
+            "differs_on_summed": (a.get("iterations_summed_over_attempts")
+                                  != b.get("iterations_summed_over_attempts")),
+        })
+
+    def _sign(field_a, field_b, which):
+        d = [{"seed": e["seed"], "B2": e[field_a], "B3": e[field_b]}
+             for e in per_pair if e[which]]
+        return _sign_test(d), d
+
+    st_final, d_final = _sign("B2_final", "B3_final", "differs_on_final")
+    st_sum, d_sum = _sign("B2_summed", "B3_summed", "differs_on_summed")
+
+    # --- the clean subset: pairs where NEITHER arm used the retry ladder --
+    clean = [e for e in per_pair if e["B2_attempts"] == 1
+             and e["B3_attempts"] == 1]
+    clean_diff_final = [{"seed": e["seed"], "B2": e["B2_final"],
+                         "B3": e["B3_final"]}
+                        for e in clean if e["differs_on_final"]]
+    clean_stats = {
+        "what": ("the same comparison restricted to pairs where NEITHER arm "
+                 "invoked the retry ladder, so both numbers count one "
+                 "uninterrupted VMCON solve and the final-attempt and "
+                 "summed statistics coincide"),
+        "n_clean_pairs": len(clean),
+        "clean_seeds": [e["seed"] for e in clean],
+        "n_differing": len(clean_diff_final),
+        "differing_pairs": clean_diff_final,
+        "sum_B2": sum(e["B2_final"] for e in clean),
+        "sum_B3": sum(e["B3_final"] for e in clean),
+        "ratio_B3_over_B2": (
+            sum(e["B3_final"] for e in clean)
+            / sum(e["B2_final"] for e in clean)
+            if sum(e["B2_final"] for e in clean) else None),
+        "sign_test": _sign_test(clean_diff_final),
+    }
+
+    a44 = {"path": str(A44_FACTORISATION), "present": A44_FACTORISATION.exists()}
+    if A44_FACTORISATION.exists():
+        a44["sha256"] = sha256_of(A44_FACTORISATION)
+        a44["mtime"] = A44_FACTORISATION.stat().st_mtime
+        try:
+            fj = jload(A44_FACTORISATION)
+            sd = ((fj.get("decks") or {}).get(deck) or {})
+            theirs = (sd.get("st_rung_split") or {}).get("B2->B3_differ")
+            mine = sorted(e["seed"] for e in per_pair
+                          if e["differs_on_final"])
+            a44["their_B2_B3_differing_seeds"] = theirs
+            a44["my_B2_B3_differing_seeds_final_attempt"] = mine
+            a44["their_population"] = sd.get("identical_converged_seeds")
+            a44["my_population"] = allpairs
+            a44["in_mine_not_theirs"] = (
+                sorted(set(mine) - set(theirs or [])) if theirs else None)
+            a44["in_theirs_not_mine"] = (
+                sorted(set(theirs or []) - set(mine)) if theirs else None)
+            a44["reconciliation"] = (
+                "their statistic is problem-calls over the identical-CONVERGED "
+                "B0/B3 seed set; mine is optimiser iterations over the "
+                "both-converged B2/B3 pair set that V3 check 2 declared.  A "
+                "seed present in mine and absent from theirs is a seed where "
+                "B2 and B3 both converged but B0 did not, so it cannot enter "
+                "a B0-anchored set.")
+            a44["seeds_where_B0_did_not_converge"] = [
+                k for k in range(N_STARTS)
+                if not (( _campaign_metrics(deck, "B0", k) or {}
+                         ).get("status") == "ok"
+                        and (((_campaign_metrics(deck, "B0", k) or {}
+                               ).get("mfile") or {}).get("ifail") == 1.0))]
+            spl = sd.get("st_rung_split") or {}
+            a44["their_retried_seeds_by_arm"] = spl.get(
+                "retried_seeds_by_arm")
+            a44["their_B2_B3_differ_without_retry"] = spl.get(
+                "B2->B3_differ_without_B2_or_B3_retried")
+            a44["my_retried_seeds_by_arm_all_seeds"] = retried
+            a44["my_retried_seeds_by_arm_pair_set"] = retried_in_pairs
+            a44["retried_seed_lists_agree_on_the_pair_set"] = (
+                (spl.get("retried_seeds_by_arm") or {}).get("B2")
+                == retried_in_pairs["B2"] and
+                (spl.get("retried_seeds_by_arm") or {}).get("B3")
+                == retried_in_pairs["B3"]
+                if spl.get("retried_seeds_by_arm") else None)
+            a44["my_clean_differing_seeds"] = [
+                e["seed"] for e in clean_diff_final]
+            a44["clean_differing_reconciliation"] = (
+                "any seed in my clean differing list and absent from theirs "
+                "is a seed their B0-anchored population excludes; a B2 -> B3 "
+                "comparison does not need B0 to have converged, so it stays "
+                "in mine.  Stated as a derived disagreement, not resolved "
+                "by adopting either list.")
+            a44["their_retried_seeds_if_findable"] = _find_retried(fj, deck)
+        except Exception as exc:  # noqa: BLE001
+            a44["read_error"] = f"{type(exc).__name__}: {exc}"
+        a44["note"] = (
+            "task A44 (transfer-gap) factorises the same campaign records "
+            "independently and publishes its own retried-seed lists.  Its "
+            "artifact is untracked and IN FLIGHT while that task is open, so "
+            "it is cross-checked here, never cited: every number in this "
+            "file is derived from the campaign records by this script.")
+    return {
+        "what": (
+            "the B2 vs B3 optimiser-iteration comparison on both available "
+            "statistics: the FINAL attempt's count (which is what "
+            "n_solver_iterations records and what V3 check 2 used) and the "
+            "SUM over all attempts of the retry ladder (the total optimiser "
+            "work the run did).  Where one arm retried and the other did "
+            "not, the two can disagree in sign."),
+        "n_both_converged_pairs": len(allpairs),
+        "both_converged_pairs": allpairs,
+        "retried_seeds": retried,
+        "retried_seeds_within_the_both_converged_pair_set": retried_in_pairs,
+        "sum_final_attempt": {a: _sum(a, "iterations_final_attempt", allpairs)
+                              for a in ("B2", "B3")},
+        "sum_over_attempts": {
+            a: _sum(a, "iterations_summed_over_attempts", allpairs)
+            for a in ("B2", "B3")},
+        "ratio_B3_over_B2_final": (
+            _sum("B3", "iterations_final_attempt", allpairs)
+            / _sum("B2", "iterations_final_attempt", allpairs)
+            if _sum("B2", "iterations_final_attempt", allpairs) else None),
+        "ratio_B3_over_B2_summed": (
+            _sum("B3", "iterations_summed_over_attempts", allpairs)
+            / _sum("B2", "iterations_summed_over_attempts", allpairs)
+            if _sum("B2", "iterations_summed_over_attempts", allpairs)
+            else None),
+        "n_pairs_with_unequal_attempt_counts": sum(
+            1 for e in per_pair if not e["same_number_of_attempts"]),
+        "clean_subset_no_retry_either_arm": clean_stats,
+        "sign_test_final_attempt": st_final,
+        "sign_test_summed_over_attempts": st_sum,
+        "differing_pairs_final_attempt": d_final,
+        "differing_pairs_summed_over_attempts": d_sum,
+        "v3_declared_differing_seeds": pair_seeds,
+        "per_pair": per_pair,
+        "per_run_attempts": att,
+        "a44_cross_check": a44,
+    }
+
+
+def _find_retried(fj: dict, deck: str) -> dict:
+    """Pull A44's retried-seed lists for one config out of their JSON,
+    whatever shape it has: a recursive search for a mapping that carries
+    both an arm-like key and a 'retried' key.  A miss is reported as a
+    miss; nothing here depends on finding it."""
+    found: dict = {}
+
+    def walk(o, ctx):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if "retr" in str(k).lower() and isinstance(v, list):
+                    found[f"{ctx}/{k}"] = v
+                walk(v, f"{ctx}/{k}")
+        elif isinstance(o, list):
+            for i, v in enumerate(o):
+                walk(v, f"{ctx}[{i}]")
+
+    walk(fj, "")
+    return {k: v for k, v in found.items() if deck in k or "st" in k}
+
+
+def _sign_test(differing: list) -> dict:
+    """Is the DIRECTION of the iteration difference established?
+
+    Over the pairs whose iteration counts differ, count how many go each
+    way and give the exact one-sided binomial tail against a fair-coin
+    null.  The null is the right one if the mechanism is a sub-tolerance
+    perturbation of the optimiser's path, which has no reason to be signed;
+    it is the wrong one if the mechanism is a systematically less accurate
+    handover, which does.  Reported so a reader can see which claims the
+    data support and which they do not, rather than reading a summed
+    percentage as a direction.
+    """
+    n = len(differing)
+    worse = sum(1 for e in differing if (e.get("B3") or 0) > (e.get("B2") or 0))
+    better = n - worse
+    k = max(worse, better)
+    tail = sum(math.comb(n, j) for j in range(k, n + 1)) / (2 ** n) if n else None
+    return {
+        "what": ("direction of the B2 -> B3 iteration change over the pairs "
+                 "that differ at all, with the exact one-sided binomial tail "
+                 "against a fair-coin null"),
+        "n_differing_pairs": n,
+        "n_B3_worse": worse,
+        "n_B3_better": better,
+        "sum_B2": sum(e.get("B2") or 0 for e in differing),
+        "sum_B3": sum(e.get("B3") or 0 for e in differing),
+        "one_sided_p_fair_coin": tail,
+        "significant_at_0_05": (tail is not None and tail <= 0.05),
+    }
+
+
+def _clusters(deck: str, pb: dict):
+    """V3 check 1a's clusters, per seed, cross-checked against the count
+    v3_report_analysis publishes for the same pair."""
+    cfg, _runner, rep = _v3()
+    accepted = []
+    for arm in cfg.PHASE_B_ARMS:
+        for k in range(N_STARTS):
+            m = _campaign_metrics(deck, arm, k)
+            if m is None:
+                continue
+            if not (m.get("status") == "ok"
+                    and (m.get("mfile") or {}).get("ifail") == 1.0):
+                continue
+            h = (m.get("exact") or {}).get("norm_objf")
+            if h is None:
+                continue
+            accepted.append((arm, k, float.fromhex(h)))
+    gap = cfg.CLUSTER_GAP_FLOOR_FACTOR * cfg.OBJF_FLOOR_REL
+    order = sorted(range(len(accepted)), key=lambda i: accepted[i][2])
+    groups: list = []
+    for i in order:
+        if groups:
+            prev = accepted[groups[-1][-1]][2]
+            cur = accepted[i][2]
+            denom = max(abs(prev), abs(cur))
+            if denom and abs(cur - prev) / denom > gap:
+                groups.append([i])
+                continue
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    cof = {(accepted[i][0], accepted[i][1]): ci
+           for ci, g in enumerate(groups) for i in g}
+    per_seed = {
+        str(k): {a: cof.get((a, k)) for a in cfg.PHASE_B_ARMS
+                 if (a, k) in cof}
+        for k in range(N_STARTS)}
+    hop_seeds = [k for k in range(N_STARTS)
+                 if (("B2", k) in cof and ("B3", k) in cof
+                     and cof[("B2", k)] != cof[("B3", k)])]
+    declared = (((pb.get(deck) or {}).get("check1a") or {})
+                .get("hop_rates_per_pair") or {}).get("B2->B3") or {}
+    check = {
+        "n_clusters_over_all_accepted_runs": len(groups),
+        "declared_n_pairs": declared.get("n_pairs"),
+        "declared_n_hops": declared.get("n_hops"),
+        "repeated_n_hops": len(hop_seeds),
+        "agrees": (declared.get("n_hops") == len(hop_seeds)
+                   if declared else None),
+    }
+    return per_seed, hop_seeds, check
 
 
 # ==========================================================================
@@ -757,9 +1146,26 @@ def stage_trace(out: Path, seeds: list, jobs: int) -> dict:
             "identical": None, "n_fields_compared": 0}
         if cmp_.get("identical"):
             n_identical += 1
+        fx = m.get("exit_forensics") or {}
         row = {
             "arm": "B2", "seed": k, "outdir": str(d),
             "status": m.get("status"),
+            # The retry ladder splits a run into attempts and
+            # n_solver_iterations records only the last one, so every traced
+            # run carries its attempt list: a B2/B3 difference that begins
+            # inside a retried attempt is a different object from one that
+            # begins in a clean solve.
+            "n_attempts": fx.get("n_attempts"),
+            "ladder_stage": fx.get("ladder_stage"),
+            "iterations_summed_over_attempts": fx.get(
+                "n_solver_iterations_summed_over_attempts"),
+            "attempts": [
+                {"attempt": a.get("attempt"),
+                 "stage": a.get("ladder_stage_positional"),
+                 "epsfcn_at_entry": a.get("epsfcn_at_entry"),
+                 "ifail": a.get("ifail"),
+                 "n_solver_iterations": a.get("n_solver_iterations")}
+                for a in (fx.get("attempts") or [])],
             "n_solver_iterations": m.get("n_solver_iterations"),
             "n_call_models": (m.get("module_solve_totals") or {}).get(
                 "n_call_models"),
@@ -1031,6 +1437,7 @@ INNER_TAU_LADDER = (
     ("inner_1e-8", {"PROCESS_ARCH_INNER_TAU": "1e-08"}),
     ("inner_1e-10", {"PROCESS_ARCH_INNER_TAU": "1e-10"}),
     ("inner_1e-12", {"PROCESS_ARCH_INNER_TAU": "1e-12"}),
+    ("inner_1e-14", {"PROCESS_ARCH_INNER_TAU": "1e-14"}),
 )
 
 
@@ -1062,6 +1469,13 @@ def stage_exitgap(out: Path, seeds: list, delta: float = 0.10) -> dict:
     for mod, keys in subsets.items():
         for k in keys:
             block_of[k] = mod
+    # Denominators for the per-block mover counts.  "M1: 0 movers" only
+    # means anything beside "M1 owns N of the tested components" (trap T11).
+    tested_by_block: dict = defaultdict(int)
+    for i in range(len(spec.keys)):
+        if spec.category[i] == "continuous":
+            tested_by_block[block_of.get(spec.name(i), "UNMAPPED")] += 1
+    owned_by_block = {m: len(v) for m, v in subsets.items()}
 
     rows, pairs = [], []
     for k, (tname, tenv) in itertools.product(seeds, INNER_TAU_LADDER):
@@ -1070,9 +1484,17 @@ def stage_exitgap(out: Path, seeds: list, delta: float = 0.10) -> dict:
             d = RUNS / "exitgap" / f"seed{k:03d}" / tname / arm
             m = _eval_one(arm, k, d, delta, extra_env=tenv)
             aud = m.get("exit_audit") or {}
-            mst = m.get("module_solve_totals") or m.get(
-                "module_solve_stats") or {}
+            mst = m.get("module_solve_totals") or {}
+            mss = m.get("module_solve_stats") or {}
             rows.append({
+                # inner_counts is per OUTER PASS: [sweeps on pass 1, sweeps
+                # on pass 2, ...] for each block.  A block that takes ONE
+                # inner sweep on pass 2 moved less than inner_tau in that
+                # sweep and stopped -- the second pass buying one sweep of
+                # slack per block, not solving anything new.
+                "inner_counts_per_outer_pass": mss.get("inner_counts"),
+                "outer_residual_trace": mss.get("outer_residual_trace"),
+                "cap_hit": mss.get("cap_hit"),
                 "seed": k, "inner_tau_setting": tname, "arm": arm,
                 "status": m.get("status"), "rc": m.get("_rc"),
                 "arch_outer_mode": m.get("arch_outer_mode"),
@@ -1134,6 +1556,10 @@ def stage_exitgap(out: Path, seeds: list, delta: float = 0.10) -> dict:
                     None if res.argmax is None
                     else block_of.get(spec.name(res.argmax), "UNMAPPED")),
                 "movers_by_block": dict(sorted(per_block.items())),
+                "continuous_components_tested_by_block":
+                    dict(sorted(tested_by_block.items())),
+                "components_owned_by_block": dict(sorted(
+                    owned_by_block.items())),
                 "top_movers": [
                     {"component": kk, "scaled": v,
                      "block": block_of.get(kk, "UNMAPPED")}
@@ -1282,20 +1708,96 @@ def stage_classify(out: Path) -> dict:
             entry["per_pass"] = pp
         ladder_rows.append(entry)
 
-    # --- static export join, for whatever moved above tau --------------
-    static = None
+    # --- static export join --------------------------------------------
+    # Two populations are joined, and they are different questions.
+    #   (i) whatever moved AT OR ABOVE tau at pass >= 2 -- the components a
+    #       missed feedback edge would have to carry;
+    #   (ii) the components that differ between the two arms' HANDOVER
+    #       states at all, above tau or not -- the sub-tau movers, which is
+    #       where the B2/B3 difference actually lives.
+    # For each, every static writer and reader is mapped to the block it
+    # runs in under the run's OWN recorded schedule, and a pair whose writer
+    # block runs AFTER its reader block within one pass is flagged: that is
+    # what "loop-carried cross-block edge" means under a block schedule, and
+    # it is the only shape that would make hypothesis (a) live.
+    egp = out / "exitgap.json"
+    subtau_movers: list = []
+    if egp.exists():
+        eg = jload(egp)
+        seen: dict = {}
+        for q in eg.get("handover_difference", []):
+            for mv in q.get("top_movers", []):
+                seen[mv["component"]] = max(
+                    seen.get(mv["component"], 0.0), mv["scaled"])
+        subtau_movers = sorted(seen.items(), key=lambda kv: -kv[1])[:40]
+
     movers = sorted(above2, key=lambda k: -above2[k])
-    if movers:
+    static = None
+    if movers or subtau_movers:
         maps = a31._load_static_maps()
-        static = {"export_sha256": maps["export_sha256"],
-                  "export_path": maps["export_path"], "per_component": []}
-        for key in movers[:50]:
-            field = key.split(".", 1)[-1]
-            static["per_component"].append({
+        # the block each driver node runs in, from a run's own schedule
+        ref = _campaign_metrics(DECK, "B2", 0) or {}
+        node_block = a31._node_block(
+            ref.get("arch_block_schedule") or [],
+            ref.get("arch_hoist_tails_resolved") or [[], []])
+        order = {lab: i for i, (lab, _n, _it)
+                 in enumerate(ref.get("arch_block_schedule") or [])}
+
+        def _join(key: str, extra: dict) -> dict:
+            # The export names variables fully qualified
+            # ("superconducting_tfcoil.a_tf_plasma_case"), the same way the
+            # ystate spec does, so the key joins directly.  The bare field
+            # name is tried only as a fallback and the record says which
+            # matched -- a silent miss would read as "no edge" and that is
+            # exactly the failure this join exists to avoid.
+            match = "qualified"
+            w = maps["writers"].get(key)
+            r = maps["readers"].get(key)
+            if w is None and r is None:
+                field = key.split(".", 1)[-1]
+                w, r = maps["writers"].get(field), maps["readers"].get(field)
+                match = "bare_field" if (w or r) else "NOT_FOUND"
+            w, r = w or [], r or []
+            extra = {"export_name_match": match, **extra}
+            wb = sorted({node_block.get(n, f"not-in-schedule:{n}") for n in w})
+            rb = sorted({node_block.get(n, f"not-in-schedule:{n}") for n in r})
+            # Only blocks of the executed schedule take part.  The export's
+            # workflow drivers -- COOR_SingleRun (the input loader) and the
+            # MDA_Output / MDA_Idempotence pseudo-nodes -- are HUBS: models
+            # writing loop-tested state connect in and models reading it
+            # connect out, and the pairing is lost (DSM register V14
+            # follow-up 2 withdrew a three-pathway claim built on exactly
+            # that artifact).  They are kept in the record, named, and
+            # excluded from the pairing.
+            carried = sorted({
+                f"{x}->{y}" for x in wb for y in rb
+                if x in order and y in order and order[x] > order[y]})
+            return {
                 "component": key,
-                "static_writers": maps["writers"].get(field),
-                "static_readers": maps["readers"].get(field),
-            })
+                "writing_block_from_committed_write_subsets":
+                    mod_of.get(key) or [],
+                "static_writers": w, "static_writer_blocks": wb,
+                "static_readers": r, "static_reader_blocks": rb,
+                "loop_carried_cross_block_pairs": carried,
+                **extra,
+            }
+
+        static = {
+            "export_sha256": maps["export_sha256"],
+            "export_path": maps["export_path"],
+            "block_schedule_used": ref.get("arch_block_schedule"),
+            "above_tau_movers": [
+                _join(k, {"n_records": above2[k]}) for k in movers[:50]],
+            "subtau_handover_movers": [
+                _join(k, {"max_scaled_over_exitgap_rows": v})
+                for k, v in subtau_movers],
+        }
+        static["n_subtau_movers_with_a_loop_carried_cross_block_pair"] = sum(
+            1 for e in static["subtau_handover_movers"]
+            if e["loop_carried_cross_block_pairs"])
+        static["n_above_tau_movers_with_a_loop_carried_cross_block_pair"] = sum(
+            1 for e in static["above_tau_movers"]
+            if e["loop_carried_cross_block_pairs"])
 
     res = {
         "what": (
@@ -1311,7 +1813,7 @@ def stage_classify(out: Path) -> dict:
         "pass1_argmax_census": _classify(argmax1),
         "pass_ge2_argmax_census": _classify(argmax2),
         "pass_ge2_above_tau_census": _classify(above2),
-        "static_export_join_for_above_tau_movers": static,
+        "static_export_join": static,
         "ladder": ladder_rows,
         "write_subset_provenance": {
             "artifact": str(DATA / f"writeset_a26_{DECK}.json"),
@@ -1397,17 +1899,137 @@ def stage_tables(out: Path) -> dict:
                   f"/{ident.get('n_pairs')}**. Objective bit-identical: "
                   f"**{ident.get('n_objf_bit_identical')}/"
                   f"{ident.get('n_pairs')}**.\n")
-        md.append("| seed | B2 | B3 | Δ |")
-        md.append("|---|---|---|---|")
+        cl = (d.get("clusters_B2_B3") or {})
+        per_seed_cl = cl.get("per_seed") or {}
+        hops = set(cl.get("hop_seeds_B2_to_B3") or [])
+        md.append("| seed | B2 | B3 | \u0394 | B2 cluster | B3 cluster | "
+                  "attractor hop |")
+        md.append("|---|---|---|---|---|---|---|")
         s2 = s3 = 0
         for e in ident.get("differing_pairs", []):
             s2 += e["B2"]
             s3 += e["B3"]
+            c = per_seed_cl.get(str(e["seed"])) or {}
             md.append(f"| {e['seed']} | {e['B2']} | {e['B3']} | "
-                      f"{e['B3'] - e['B2']:+d} |")
+                      f"{e['B3'] - e['B2']:+d} | {c.get('B2')} | "
+                      f"{c.get('B3')} | "
+                      f"{'**yes**' if e['seed'] in hops else 'no'} |")
         md.append(f"| **sum, differing seeds only** | **{s2}** | **{s3}** | "
-                  f"**{s3 - s2:+d}** |")
+                  f"**{s3 - s2:+d}** | | | |")
         md.append("")
+        st = d.get("sign_test_on_differing_pairs") or {}
+        xc = cl.get("cross_check_against_v3_report_analysis") or {}
+        md.append(
+            f"Direction: B3 worse on **{st.get('n_B3_worse')}** of "
+            f"**{st.get('n_differing_pairs')}** differing pairs, better on "
+            f"**{st.get('n_B3_better')}**; exact one-sided binomial tail "
+            f"against a fair-coin null **p = "
+            f"{_fmt(st.get('one_sided_p_fair_coin'), 3)}** \u2014 "
+            f"{'significant' if st.get('significant_at_0_05') else 'NOT significant'}"
+            f" at 0.05. Cross-check of the cluster repeat against "
+            f"`v3_report_analysis`'s own hop count for B2\u2192B3: "
+            f"{_fmt(xc.get('agrees'))} ({xc.get('repeated_n_hops')} vs "
+            f"{xc.get('declared_n_hops')}).\n")
+
+    # T2b retry analysis
+    if art["pairing"]:
+        ra = ((art["pairing"]["per_deck"].get(DECK) or {})
+              .get("retry_analysis") or {})
+        if ra:
+            md.append("### T2b — the same records, three defensible "
+                      "constructions, two signs\n")
+            md.append(
+                "*Caption: the B2 → B3 optimiser-iteration comparison on "
+                "`st_regression`, over the same 23 both-converged pairs, "
+                "under three constructions. **final attempt** is "
+                "`n_solver_iterations`, what V3 check 2 used: the last VMCON "
+                "attempt only. **summed over attempts** adds the iterations "
+                "of every attempt the retry ladder discarded (VMCON exits "
+                "`ifail != 1`, the driver retries with `epsfcn` × 10, then × "
+                "0.1, then a reset Hessian). **clean pairs** restricts to "
+                "pairs where neither arm invoked the ladder, where the two "
+                "statistics coincide. `p` is the exact one-sided binomial "
+                "tail on the direction over the differing pairs, against a "
+                "fair-coin null. Units: optimiser iterations. Source: "
+                "committed campaign records, `exit_forensics`; stage "
+                "`pairing`.*\n")
+            cs = ra["clean_subset_no_retry_either_arm"]
+            sf = ra["sign_test_final_attempt"]
+            ss = ra["sign_test_summed_over_attempts"]
+            md.append("| construction | pairs | Σ B2 | Σ B3 | B3/B2 | "
+                      "differing | B3 worse | B3 better | p |")
+            md.append("|---|---|---|---|---|---|---|---|---|")
+            md.append(
+                f"| final attempt (V3 check 2) | "
+                f"{ra['n_both_converged_pairs']} | "
+                f"{ra['sum_final_attempt']['B2']} | "
+                f"{ra['sum_final_attempt']['B3']} | "
+                f"**{ra['ratio_B3_over_B2_final']:.4f}** | "
+                f"{sf['n_differing_pairs']} | {sf['n_B3_worse']} | "
+                f"{sf['n_B3_better']} | {_fmt(sf['one_sided_p_fair_coin'])} |")
+            md.append(
+                f"| summed over attempts | {ra['n_both_converged_pairs']} | "
+                f"{ra['sum_over_attempts']['B2']} | "
+                f"{ra['sum_over_attempts']['B3']} | "
+                f"**{ra['ratio_B3_over_B2_summed']:.4f}** | "
+                f"{ss['n_differing_pairs']} | {ss['n_B3_worse']} | "
+                f"{ss['n_B3_better']} | {_fmt(ss['one_sided_p_fair_coin'])} |")
+            md.append(
+                f"| clean pairs (no retry either arm) | "
+                f"{cs['n_clean_pairs']} | {cs['sum_B2']} | {cs['sum_B3']} | "
+                f"**{cs['ratio_B3_over_B2']:.4f}** | {cs['n_differing']} | "
+                f"{cs['sign_test']['n_B3_worse']} | "
+                f"{cs['sign_test']['n_B3_better']} | "
+                f"{_fmt(cs['sign_test']['one_sided_p_fair_coin'])} |")
+            md.append("")
+            md.append(
+                f"Retried seeds (more than one VMCON attempt): B2 "
+                f"{ra['retried_seeds']['B2']}, B3 "
+                f"{ra['retried_seeds']['B3']}; pairs where the two arms took "
+                f"different numbers of attempts: "
+                f"**{ra['n_pairs_with_unequal_attempt_counts']}** of "
+                f"{ra['n_both_converged_pairs']}.\n")
+            md.append("| seed | B2 attempts (stage : iterations : ifail) | "
+                      "B3 attempts | B2 final | B3 final | B2 summed | "
+                      "B3 summed |")
+            md.append("|---|---|---|---|---|---|---|")
+            att = ra["per_run_attempts"]
+            for e in ra["per_pair"]:
+                if e["same_number_of_attempts"] and not e["differs_on_final"]:
+                    continue
+                k = e["seed"]
+
+                def _a(arm, k=k):
+                    return "; ".join(
+                        f"{x['stage']}:{x['n_solver_iterations']}:{x['ifail']}"
+                        for x in att[arm][str(k)]["attempts"]) if str(k) in att[arm] \
+                        else "; ".join(
+                            f"{x['stage']}:{x['n_solver_iterations']}:{x['ifail']}"
+                            for x in att[arm][k]["attempts"])
+                md.append(
+                    f"| {k} | {_a('B2')} | {_a('B3')} | {e['B2_final']} | "
+                    f"{e['B3_final']} | {e['B2_summed']} | {e['B3_summed']} |")
+            md.append("")
+            a44 = ra.get("a44_cross_check") or {}
+            if a44.get("present"):
+                md.append(
+                    f"**Cross-check against task A44 (transfer-gap)**, which "
+                    f"factorised the same records independently on a "
+                    f"different statistic (problem-calls) over a different "
+                    f"population (the identical-converged B0/B3 set of "
+                    f"{len(a44.get('their_population') or [])}): their "
+                    f"B2→B3 differing seeds {a44.get('their_B2_B3_differing_seeds')} "
+                    f"against mine "
+                    f"{a44.get('my_B2_B3_differing_seeds_final_attempt')}. "
+                    f"In mine and not theirs: "
+                    f"**{a44.get('in_mine_not_theirs')}**; in theirs and not "
+                    f"mine: {a44.get('in_theirs_not_mine')}. Derived here, "
+                    f"not taken from them: B0 did not converge on seeds "
+                    f"{a44.get('seeds_where_B0_did_not_converge')}, so those "
+                    f"seeds cannot enter a B0-anchored set — which is the "
+                    f"whole difference. Their artifact is untracked and was "
+                    f"in flight; sha256 `{(a44.get('sha256') or '')[:16]}…`. "
+                    f"No number in this report comes from it.\n")
 
     # T3 divergence
     if art["divergence"]:
@@ -1424,18 +2046,32 @@ def stage_tables(out: Path) -> dict:
             "Units: call index (dimensionless). Population: all 25 seeds. "
             "Source: committed campaign `entry_census_series.json`; stage "
             "`divergence`.*\n")
-        md.append("| seed | B2 it | B3 it | first differing entry | "
+        _ra = ((art["pairing"] or {}).get("per_deck", {}).get(DECK) or {}
+               ).get("retry_analysis") or {}
+        _r2 = (_ra.get("retried_seeds") or {}).get("B2") or []
+        _r3 = (_ra.get("retried_seeds") or {}).get("B3") or []
+        md.append(
+            f"Retry note: the series of a run that invoked the retry ladder "
+            f"spans more than one VMCON attempt, and the two arms' series "
+            f"are then not step-for-step comparable past the first attempt's "
+            f"end. Retried on this config: B2 {_r2}, B3 {_r3}.\n")
+        md.append("| seed | B2 it | B3 it | B2/B3 attempts | "
+                  "first differing entry | "
                   "rel. diff at entry 1 | first > 1e-12 | first > 1e-9 | "
                   "first > 1e-6 | first > 1e-3 | max rel. |")
-        md.append("|---|---|---|---|---|---|---|---|---|---|")
+        md.append("|---|---|---|---|---|---|---|---|---|---|---|")
+        _att = _ra.get("per_run_attempts") or {}
         for r in dv["per_seed"]:
             if r.get("status") == "missing_entry_census":
-                md.append(f"| {r['seed']} | — | — | *missing* | | | | | | |")
+                md.append(f"| {r['seed']} | — | — | — | *missing* | | | | | | |")
                 continue
             fo = r["first_index_rel_over"]
+            _na = "/".join(
+                str(((_att.get(a) or {}).get(str(r['seed'])) or {})
+                    .get("n_attempts")) for a in ("B2", "B3"))
             md.append(
                 f"| {r['seed']} | {r['B2_iterations']} | {r['B3_iterations']} "
-                f"| {r['first_index_differing_at_all']} | "
+                f"| {_na} | {r['first_index_differing_at_all']} | "
                 f"{_fmt(r['rel_diff_at_entry_1'])} | {_fmt(fo.get('1e-12'))} | "
                 f"{_fmt(fo.get('1e-09'))} | {_fmt(fo.get('1e-06'))} | "
                 f"{_fmt(fo.get('0.001'))} | "
@@ -1529,6 +2165,58 @@ def stage_tables(out: Path) -> dict:
                       f"{', '.join(r['writing_block_from_committed_write_subsets']) or '—'} |")
         md.append("")
 
+    # T5b per-seed pass-2 census
+    if art["trace"]:
+        tr = art["trace"]
+        md.append("### T5b — the verification pass, per seed\n")
+        md.append(
+            "*Caption: one row per traced B2 run on `st_regression` at the "
+            "campaign's own settings (tau = inner tau = 1e-6). `pass-2 "
+            "records` is the number of `call_models` that took a second "
+            "whole-schedule pass; the rest terminated at pass 1 because the "
+            "state they were entered with was already at the fixed point. "
+            "`residual max` columns are the scaled joint-test residual the "
+            "second pass measured (dimensionless), over that run's pass-2 "
+            "records. `≥ tau` is how many coupling-state components, summed "
+            "over those records, were at or above tau = 1e-6 — the count a "
+            "third pass would have been taken for. `reproduces campaign` "
+            "compares the run against its committed campaign record on the "
+            "eight exact fields of the neutrality comparator. Source: stage "
+            "`trace`.*\n")
+        md.append("| seed | iters | calls | pass-1 only | pass-2 records | "
+                  "residual max med | residual max p90 | residual max | "
+                  "≥ tau | zero-residual pass-2 records | reproduces "
+                  "campaign |")
+        md.append("|---|---|---|---|---|---|---|---|---|---|---|")
+        for r in tr.get("per_run", []):
+            t = r.get("trace") or {}
+            pp = t.get("per_pass") or {}
+            p1 = pp.get("1") or {}
+            p2 = pp.get("2") or {}
+            rm = p2.get("residual_max") or {}
+            md.append(
+                f"| {r['seed']} | {_fmt(r['n_solver_iterations'])} | "
+                f"{_fmt(r['n_call_models'])} | "
+                f"{_fmt((p1.get('n_records') or 0) - (p2.get('n_records') or 0))} | "
+                f"{_fmt(p2.get('n_records'))} | {_fmt(rm.get('median'))} | "
+                f"{_fmt(rm.get('p90'))} | {_fmt(rm.get('max'))} | "
+                f"**{_fmt(p2.get('n_components_above_tau_total'))}** | "
+                f"{_fmt(p2.get('n_records_with_residual_exactly_zero'))} | "
+                f"{_fmt(r.get('reproduces_campaign_record'))} |")
+        md.append("")
+        b3 = tr.get("b3_control") or {}
+        pt = b3.get("plumbing_tooth") or {}
+        md.append(
+            f"**B3 control** (seed {b3.get('seed')}, trust mode): joint-test "
+            f"records written by the trace = **{b3.get('n_joint_test_records')}**"
+            f" (trace file created: {_fmt(b3.get('trace_present'))}); the run "
+            f"reproduces its campaign record: "
+            f"{_fmt(b3.get('reproduces_campaign_record'))}. Plumbing tooth "
+            f"(same environment plus `PROCESS_ARCH_MODULE_SOLVE=off`, which "
+            f"the instrument must refuse): refused with the expected message "
+            f"= **{_fmt(pt.get('refused_with_the_expected_message'))}**, "
+            f"rc = {pt.get('rc')}.\n")
+
     # T6 ladder
     if art["ladder"]:
         md.append("### T6 — the discriminator: one tolerance at a time\n")
@@ -1581,12 +2269,16 @@ def stage_tables(out: Path) -> dict:
             "arm). The outer tolerance tau is 1e-6 in every row; only the "
             "inner block tolerance moves. Source: stage `exitgap`.*\n")
         md.append("| seed | inner tol. | arm | status | block sweeps | "
-                  "restricted audit max | argmax |")
-        md.append("|---|---|---|---|---|---|---|")
+                  "inner sweeps per outer pass | restricted audit max | "
+                  "argmax |")
+        md.append("|---|---|---|---|---|---|---|---|")
         for r in eg["rows"]:
+            ic = r.get("inner_counts_per_outer_pass") or {}
+            icu = "; ".join(f"{b}:{v}" for b, v in ic.items()
+                            if b != "FF") if ic else "\u2014"
             md.append(
                 f"| {r['seed']} | `{r['inner_tau_setting']}` | {r['arm']} | "
-                f"{r['status']} | {_fmt(r['block_sweeps'])} | "
+                f"{r['status']} | {_fmt(r['block_sweeps'])} | {icu} | "
                 f"{_fmt(r['audit_restricted_max'])} | "
                 f"`{r['audit_restricted_argmax']}` |")
         md.append("")
@@ -1605,8 +2297,12 @@ def stage_tables(out: Path) -> dict:
             "tolerance the outer loop is set to. `by block` attributes each "
             "differing component to the block that writes it, from the "
             "committed per-block write subsets. Source: stage `exitgap`.*\n")
-        md.append("| seed | inner tol. | n differing / 805 | n ≥ tau | "
-                  "max scaled | argmax | argmax block | by block |")
+        den = ((eg.get("handover_difference") or [{}])[0]
+               .get("continuous_components_tested_by_block") or {})
+        md.append("Continuous components tested, by writing block: "
+                  + ", ".join(f"{b} {n}" for b, n in den.items()) + ".\n")
+        md.append("| seed | inner tol. | n differing / 805 | n \u2265 tau | "
+                  "max scaled | argmax | argmax block | movers by block |")
         md.append("|---|---|---|---|---|---|---|---|")
         for q in eg["handover_difference"]:
             md.append(
@@ -1615,6 +2311,42 @@ def stage_tables(out: Path) -> dict:
                 f"**{q['n_components_at_or_above_tau']}** | "
                 f"{_fmt(q['max_scaled'])} | `{q['argmax']}` | "
                 f"{q['argmax_block']} | {q['movers_by_block']} |")
+        md.append("")
+
+    # T10 static export join
+    if art["classify"] and art["classify"].get("static_export_join"):
+        sj = art["classify"]["static_export_join"]
+        md.append("### T10 — the movers against the static dependency "
+                  "export\n")
+        md.append(
+            "*Caption: every component that differs between the two arms' "
+            "handover states (the sub-tau movers, top 40 by magnitude), "
+            "joined to the frozen per-deck static dependency export. "
+            "`writer blocks` / `reader blocks` map each static writer and "
+            "reader of the field to the block it runs in under the run's own "
+            "recorded block schedule. `loop-carried` lists any (writer block "
+            "→ reader block) pair whose writer runs AFTER its reader within "
+            "one schedule pass — the only shape that makes a component a "
+            "cross-block feedback carrier under a block schedule. Export "
+            f"sha256 `{sj['export_sha256'][:16]}…`. Source: stage "
+            "`classify`.*\n")
+        md.append(
+            f"**{sj.get('n_subtau_movers_with_a_loop_carried_cross_block_pair')}"
+            f"/{len(sj.get('subtau_handover_movers') or [])}** sub-tau movers "
+            f"have any loop-carried cross-block writer→reader pair; "
+            f"**{sj.get('n_above_tau_movers_with_a_loop_carried_cross_block_pair')}"
+            f"/{len(sj.get('above_tau_movers') or [])}** above-tau movers do."
+            "\n")
+        md.append("| component | write subset | writer blocks | reader blocks "
+                  "| loop-carried |")
+        md.append("|---|---|---|---|---|")
+        for e in (sj.get("subtau_handover_movers") or [])[:25]:
+            md.append(
+                f"| `{e['component']}` | "
+                f"{', '.join(e['writing_block_from_committed_write_subsets']) or '—'} | "
+                f"{', '.join(e['static_writer_blocks']) or '—'} | "
+                f"{', '.join(e['static_reader_blocks']) or '—'} | "
+                f"{', '.join(e['loop_carried_cross_block_pairs']) or '**none**'} |")
         md.append("")
 
     # T7 I-20
