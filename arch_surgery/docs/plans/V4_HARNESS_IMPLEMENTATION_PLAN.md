@@ -1262,6 +1262,16 @@ of what looks like bulk is the instrument.
   approved by the user (D24). D24 also delegates the rest of the rebuild: every remaining task is
   minted (§11.5, A48–A60), the driver changes merge on their gates without a per-change approval,
   and one whole-implementation assessment closes it. Run directories are `seed000…`.
+- **2026-09-10 — amendment 6, at the merge of A50 (harness-run): gate GR PASSED.** H0–H3 are
+  delivered. GR ran at the copy commit before any driver change and reproduced the previous revision's
+  twenty runs on 270/270 compared values (§7.1 as amended), with seven teeth and the two §7.5
+  substitutes (`AR` in the weaker form: anchored on the gate's own `BR` first call, since no V3 record
+  carries first-call quantities); the orchestrator re-ran it from scratch. Rulings: the exit audit's
+  declared position is reached by a snapshot at the entry to `write_output_files` with the residual
+  computed after the run (hook with A57); A56 adds a typed `ArchitectureRefusal` to the copy; the
+  lifted-input digests committed in `harness/input_files.py` are A51's derivation gate. The
+  composition tooth measured `PROCESS_ARCH_OUTER` as load-bearing for the partitioned arms — A56
+  folds it into `partitioned`. GR took 324 s at three workers, not the ~1.5 h estimated (context only).
 
 ---
 

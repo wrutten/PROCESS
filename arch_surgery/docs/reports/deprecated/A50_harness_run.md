@@ -1,7 +1,8 @@
 # A50 (harness-run) — the run path, and gate GR
 
-> **Document status** — **OPEN**, awaiting the orchestrator's critical assessment (protocol §5).
-> Written by task **A50 (harness-run)** on branch `A50-harness-run`, off `architecture_surgery` at
+> **Document status** — **MERGED, archived** — merged into `architecture_surgery` on 2026-09-10
+> (`6be26e85`); the orchestrator's critical assessment (protocol §5) is §11; folder position records
+> lifecycle, not validity (trap T3). Written by task **A50 (harness-run)** on branch `A50-harness-run`, off `architecture_surgery` at
 > `9a8defa6`. This report describes task **H3** of the approved V4 harness implementation plan: the
 > run path, and **gate GR**, the check that the rewritten harness is the same instrument as the one
 > it replaces. Nothing under `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/process/` was

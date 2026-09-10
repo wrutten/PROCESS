@@ -322,7 +322,7 @@ declares the difference; the exit audit is taken at the same position in every a
 entry to `write_output_files`, before any output-time sweep — and the audit position is
 recorded per run; and the one signal `MDA_Output` found by accident in V3 (three st `B3` runs
 whose handed-over state was not MFILE-idempotent after two flat passes) is looked for on
-purpose: the exit audit at the accepted point, per run, with the count of components above τ.
+purpose: the exit audit at the accepted point, per run, with the count of components above τ. *Implementation note, 2026-09-10 (orchestrator, at A50 (harness-run)'s merge):* the audit sweep mutates the state it measures, so it cannot run *at* that entry without handing the output path an audited state; the position is reached by a **snapshot** of the coupling state taken at the entry to `write_output_files`, with the residual computed after the run from the restored snapshot. The snapshot hook is a driver change in the copy and lands with A57 (driver-output-path); until then every record carries both `audit_position` (after the run, where V3 also audited — GR's matching `exit_audit.residual_max_hex` values confirm it) and `audit_position_declared`.
 
 **Empty blocks and empty nodes are left as they are** *(user ruling 2026-09-10 on item 2)*. On
 `st_regression` the `PULSE` block survives in the schedule after its only member has left it and is
@@ -1039,3 +1039,9 @@ implementation plan's.*
   A48–A60 minted; the campaign still waits for `EXECUTION_APPROVED`). The harness regenerates this
   plan's §3.2 matrix cell for cell from its arm records and refuses a rung whose computed difference
   is not the declared one.
+- 2026-09-10 — **A50 (harness-run) merged; gate GR PASSES**: the rewritten harness reproduces V3's
+  twenty reference runs on 270/270 compared values with no tolerance, against the untouched PROCESS
+  copy, re-run independently by the orchestrator; seven teeth trip, the `A0p` and `AR` substitutes
+  pass. §3.3: the audit position's implementation stated (snapshot at the declared entry, residual
+  after the run; hook with A57). The composition tooth measured that `PROCESS_ARCH_OUTER` is still
+  load-bearing for the partitioned arms until A56 folds it into `partitioned`.
