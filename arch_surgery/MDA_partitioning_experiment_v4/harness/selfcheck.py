@@ -40,7 +40,12 @@ if str(_EXPERIMENT_DIR) not in sys.path:
 from harness import arms as arms_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
 from harness import switches as sw  # noqa: E402
-from harness.config import Campaign, repository_tree_campaign  # noqa: E402
+from harness.config import (  # noqa: E402
+    ARTIFACT_NAMES,
+    DRIVER_FIXED_ARTIFACTS,
+    Campaign,
+    repository_tree_campaign,
+)
 
 # --------------------------------------------------------------------------
 # results
@@ -109,9 +114,11 @@ _PREVIOUS_NAME = {"BR": "R", "A0": "A0", "A1": "A1", "B0": "B0", "B1": "B1", "B3
 def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str]:
     """What the previous revision set for *arm* on *config*, by transcription.
 
-    Artifact values are the file names only: the previous revision read them
-    from the repository's shared data directory and V4 reads its own copy, so
-    the directory is expected to differ and the file is not.
+    Artifact values are the artifact's **role**, not its path: the previous
+    revision read the files from the repository's shared data directory under
+    the old spellings, and V4 reads its own copy under names that say what each
+    file is for.  What must be equal is which artifact each switch is handed,
+    and that is what a role compares.
     """
     name = config.name
     pulsed = config.pulsed
@@ -120,8 +127,8 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
         return {}
     base = {
         "PROCESS_ARCH_TAU": tau,
-        "PROCESS_ARCH_YSTATE": f"ystate_a26_{name}.json",
-        "PROCESS_ARCH_WRITESET": f"writeset_a26_{name}.json",
+        "PROCESS_ARCH_YSTATE": "<coupling_state>",
+        "PROCESS_ARCH_WRITESET": "<write_sets>",
     }
     if arm in ("A0", "B0"):
         return {**base, "PROCESS_ARCH_MODULE_SOLVE": "flat_state"}
@@ -145,9 +152,9 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
         # the one stamped for the base constraint set; Phase B's runs the
         # lifted deck and takes the other.
         env["PROCESS_ARCH_POST_SOLVE"] = (
-            f"postsolve_nolift_{name}.json"
+            "<defer_per_run_frozen_deck>"
             if (arm == "A1" and pulsed)
-            else f"postsolve_{name}.json"
+            else "<defer_per_run>"
         )
         if pulsed:
             env["PROCESS_ARCH_LIFT"] = "burn_time"
@@ -157,15 +164,33 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
     raise KeyError(arm)
 
 
-def _architecture_only(env: dict[str, str], *, basenames: bool = True) -> dict[str, str]:
-    """The architecture switches of *env*, artifact paths reduced to files."""
+def _artifact_role(file_name: str, configuration: str) -> str | None:
+    """Which artifact *file_name* is, under any naming scheme this repo uses."""
+    for scheme in ARTIFACT_NAMES.values():
+        for role, template in scheme.items():
+            if template.format(name=configuration) == file_name:
+                return role
+    for role, fixed in DRIVER_FIXED_ARTIFACTS.items():
+        if fixed == file_name:
+            return role
+    return None
+
+
+def _architecture_only(env: dict[str, str], config) -> dict[str, str]:
+    """The architecture switches of *env*, artifact paths reduced to roles.
+
+    A path is replaced by what the file is *for*, so that two revisions
+    reading the same artifact under different names still compare equal, and
+    two revisions reading *different* artifacts still compare unequal.
+    """
     out = {}
     for name in sw.all_names():
         if name not in env:
             continue
         value = env[name]
-        if basenames and value.startswith("/"):
-            value = Path(value).name
+        if value.startswith("/"):
+            role = _artifact_role(Path(value).name, config.name)
+            value = f"<{role}>" if role else Path(value).name
         out[name] = value
     return out
 
@@ -219,7 +244,7 @@ def check_composition(campaign: Campaign) -> Check:
                 continue
             composed[(name, config.name)] = env
             if arms_mod.ARMS[name].is_reference:
-                set_here = _architecture_only(env)
+                set_here = _architecture_only(env, config)
                 if set_here:
                     check.fail(
                         f"{name} on {config.name} is the reference arm and "
@@ -253,7 +278,7 @@ def check_composition(campaign: Campaign) -> Check:
         for name in _PREVIOUS_NAME:
             if name in config.skips or (name, config.name) not in composed:
                 continue
-            mine = _architecture_only(composed[(name, config.name)])
+            mine = _architecture_only(composed[(name, config.name)], config)
             if "PROCESS_ARCH_PIN_BURN_TIME" in mine:
                 mine["PROCESS_ARCH_PIN_BURN_TIME"] = "<pin>"
             theirs = _previous_environment(name, config, campaign)
@@ -343,7 +368,7 @@ def check_composition(campaign: Campaign) -> Check:
 
     # --- teeth -------------------------------------------------------------
     config = campaign.configurations[0]
-    broken = dict(_architecture_only(composed[("B0", config.name)]))
+    broken = dict(_architecture_only(composed[("B0", config.name)], config))
     broken["PROCESS_ARCH_MODULE_SOLVE"] = "per_module"
     check.tooth(
         "wrong switch value in one arm",
@@ -351,7 +376,7 @@ def check_composition(campaign: Campaign) -> Check:
         "B0's analysis-loop switch set to the partitioned value must not "
         "match the previous revision's B0",
     )
-    missing = dict(_architecture_only(composed[("B3", config.name)]))
+    missing = dict(_architecture_only(composed[("B3", config.name)], config))
     missing.pop("PROCESS_ARCH_PRIME", None)
     check.tooth(
         "one switch dropped from an arm",
@@ -359,6 +384,18 @@ def check_composition(campaign: Campaign) -> Check:
         "B3 without the method-arrangement switch must not match the "
         "previous revision's B3",
     )
+    pulsed = [c for c in campaign.configurations if c.pulsed]
+    if pulsed:
+        swapped = dict(_architecture_only(composed[("A1", pulsed[0].name)], pulsed[0]))
+        swapped["PROCESS_ARCH_POST_SOLVE"] = "<defer_per_run>"
+        check.tooth(
+            "the wrong per-run artifact handed to an arm",
+            swapped != _previous_environment("A1", pulsed[0], campaign),
+            "the evaluation phase's block arm runs the frozen deck, so it "
+            "takes the artifact stamped for the base constraint set; handing "
+            "it the lifted deck's artifact must not match",
+        )
+
     steady = [c for c in campaign.configurations if not c.pulsed]
     if steady:
         caught = False
@@ -801,10 +838,7 @@ def crosscheck_previous(campaign: Campaign) -> Check:
             if key not in theirs_all:
                 check.fail(f"no previous-revision environment for {key}")
                 continue
-            theirs = {
-                k: (Path(v).name if v.startswith("/") else v)
-                for k, v in theirs_all[key].items()
-            }
+            theirs = _architecture_only(theirs_all[key], config)
             if "PROCESS_ARCH_PIN_BURN_TIME" in theirs:
                 theirs["PROCESS_ARCH_PIN_BURN_TIME"] = "<pin>"
             mine = _previous_environment(name, config, campaign)
@@ -818,10 +852,7 @@ def crosscheck_previous(campaign: Campaign) -> Check:
     first = campaign.configurations[0]
     key = f"B:B3:{first.name}"
     if key in theirs_all:
-        theirs = {
-            k: (Path(v).name if v.startswith("/") else v)
-            for k, v in theirs_all[key].items()
-        }
+        theirs = _architecture_only(theirs_all[key], first)
         corrupted = dict(_previous_environment("B3", first, campaign))
         corrupted["PROCESS_ARCH_HOIST"] = "feedforward"
         check.tooth(

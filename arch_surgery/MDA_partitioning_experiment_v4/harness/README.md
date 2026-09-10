@@ -131,7 +131,40 @@ arm that asks for it is refused.*
 | pass trace | `PROCESS_ARCH_PASS_TRACE` | unchanged | a file | never; cleared |
 | pass trace detail | `PROCESS_ARCH_PASS_TRACE_FULL_FROM` | unchanged | a number | never; cleared |
 
-Two rows need a word.
+### 4.1 The names of the committed artifacts
+
+Three of the switches above are handed a **file**: the coupling-state description, the per-block
+write sets, and the set of nodes deferred to once per run. The experiment keeps its own copy of
+those files in `data/`, and they are named for what each one *is for*:
+
+*Caption: one row per committed artifact. "In `harness/data/`" is the name the experiment's own
+copy uses; "in the repository's shared directory" is the older spelling of the same file, kept
+because the earlier revisions of the experiment read it. `{name}` is the configuration's name. The
+last two rows are named by a path constant inside the copied driver, so renaming either of them
+is a change to the driver, not to the harness.*
+
+| what it is | in `harness/data/` | in the repository's shared directory |
+|---|---|---|
+| which fields make up the coupling state, and the scale of each | `coupling_state_{name}.json` | `ystate_a26_{name}.json` |
+| which of those fields each block writes | `write_sets_{name}.json` | `writeset_a26_{name}.json` |
+| the nodes deferred to once per run, for a run of the lifted deck | `defer_per_run_{name}.json` | `postsolve_{name}.json` |
+| the same node set, stamped for a run of the frozen deck | `defer_per_run_frozen_deck_{name}.json` | `postsolve_nolift_{name}.json` |
+| what each node writes, measured | `node_writesets.json` | `node_writesets.json` |
+| which block each node belongs to | `dsm_node_map.json` | `dsm_node_map.json` |
+
+The old spellings carry the number of the task that first produced the file, which the naming
+rule for this revision forbids, and they use words the vocabulary has since replaced. Both
+spellings resolve: `default_campaign()` uses the first column and `repository_tree_campaign()` the
+second, so the harness can be pointed at either set of files without either name being written
+twice.
+
+Because of that, the check that this revision composes the same environments as the last one
+compares **which artifact each switch is handed**, not which file name — so a rename compares
+equal and handing an arm the *wrong* artifact still compares unequal. There is a tooth for
+exactly that: giving the evaluation phase's block arm the lifted deck's artifact, when it runs the
+frozen deck, must be caught.
+
+Two more rows need a word.
 
 **`schedule passes` is composed but never declared.** The partitioned arms work through their
 three blocks once. The driver's own default is to repeat the whole schedule while anything is
@@ -203,8 +236,9 @@ and `pkill` reports success while killing nothing. A whole set of runs was lost 
 ## 6. Adding things
 
 **A configuration.** Add a row to `default_configurations()` in `config.py`: its name, whether the
-plant is pulsed, its objective, its variable and constraint counts, its artifacts, and the arms
-that are inactive on it with the reason. Nothing downstream counts configurations for itself —
+plant is pulsed, its objective, its variable and constraint counts, its coupling-state component
+count, and the arms that are inactive on it with the reason. Its artifact paths follow from its
+name through `ARTIFACT_NAMES` (§4.1) and are not written out. Nothing downstream counts configurations for itself —
 every population is derived from the campaign's list — so a fourth configuration needs no other
 edit.
 

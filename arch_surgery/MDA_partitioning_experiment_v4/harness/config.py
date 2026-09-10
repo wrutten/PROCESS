@@ -93,6 +93,15 @@ class Config:
     def __post_init__(self) -> None:
         object.__setattr__(self, "skips", MappingProxyType(dict(self.skips)))
 
+    def artifact_roles(self) -> dict[str, Path]:
+        """Role -> the file this configuration resolves for it."""
+        return {
+            "coupling_state": self.coupling_state_path,
+            "write_sets": self.write_sets_path,
+            "defer_per_run": self.defer_per_run_path,
+            "defer_per_run_frozen_deck": self.defer_per_run_frozen_deck_path,
+        }
+
     def per_run_artifact(self, *, lifted_deck: bool) -> Path:
         """The per-run deferral artifact stamped for the deck actually run.
 
@@ -238,6 +247,40 @@ class Campaign:
 # the declared configuration set (D17), and the default campaign
 # --------------------------------------------------------------------------
 
+#: How the committed per-configuration artifacts are named, per naming scheme.
+#:
+#: ``harness`` is V4's own scheme and is what the experiment's ``data/``
+#: directory holds: the file is named for the **role** it plays, with no task
+#: token and no revision token (harness plan §11.1) and with the terms of
+#: §11.2 — "coupling state", "write sets", "deferral per_run".  ``repository``
+#: is the spelling the repository's shared data directory uses, kept so that
+#: the harness can be pointed at those files unchanged.
+#:
+#: Two names are **not** in here because they are not the harness's to choose:
+#: ``node_writesets.json`` and ``dsm_node_map.json`` are fixed by two path
+#: constants inside the copied driver, and renaming either is a driver edit.
+ARTIFACT_NAMES: dict[str, dict[str, str]] = {
+    "harness": {
+        "coupling_state": "coupling_state_{name}.json",
+        "write_sets": "write_sets_{name}.json",
+        "defer_per_run": "defer_per_run_{name}.json",
+        "defer_per_run_frozen_deck": "defer_per_run_frozen_deck_{name}.json",
+    },
+    "repository": {
+        "coupling_state": "ystate_a26_{name}.json",
+        "write_sets": "writeset_a26_{name}.json",
+        "defer_per_run": "postsolve_{name}.json",
+        "defer_per_run_frozen_deck": "postsolve_nolift_{name}.json",
+    },
+}
+
+#: Artifacts whose file name a path constant in the copied driver fixes.
+DRIVER_FIXED_ARTIFACTS: dict[str, str] = {
+    "node_write_sets": "node_writesets.json",
+    "node_map": "dsm_node_map.json",
+}
+
+
 #: Arms inactive on a steady-state configuration, with the reason recorded.
 #: On k = 0 there is no burn-time coupling: the ownership rung has nothing to
 #: move, so the two arms that carry it collapse onto their predecessors.
@@ -247,13 +290,22 @@ _STEADY_STATE_SKIPS = {
 }
 
 
-def default_configurations(*, scenario_dir: Path, data_dir: Path) -> tuple[Config, ...]:
-    """The three configurations of D17, in the order used in every table.
+def default_configurations(
+    *, scenario_dir: Path, data_dir: Path, naming: str = "harness"
+) -> tuple[Config, ...]:
+    """The three declared configurations, in the order used in every table.
 
     Component counts and figure-of-merit codes are the artifacts' and the
     decks' own; they are asserted against the files at preflight rather than
-    trusted from here.
+    trusted from here.  *naming* selects which spelling of the artifact file
+    names to resolve — see :data:`ARTIFACT_NAMES`.
     """
+    if naming not in ARTIFACT_NAMES:
+        raise KeyError(
+            f"{naming!r} is not a known artifact naming scheme; "
+            f"expected one of {tuple(ARTIFACT_NAMES)}"
+        )
+    names = ARTIFACT_NAMES[naming]
 
     def make(
         name: str,
@@ -265,7 +317,7 @@ def default_configurations(*, scenario_dir: Path, data_dir: Path) -> tuple[Confi
         ncon: int,
         n_components: int,
     ) -> Config:
-        per_run = data_dir / f"postsolve_{name}.json"
+        per_run = data_dir / names["defer_per_run"].format(name=name)
         return Config(
             name=name,
             pulsed=pulsed,
@@ -274,11 +326,13 @@ def default_configurations(*, scenario_dir: Path, data_dir: Path) -> tuple[Confi
             n_iteration_variables=nvar,
             n_constraints=ncon,
             input_path=scenario_dir / f"{name}.IN.DAT",
-            coupling_state_path=data_dir / f"ystate_a26_{name}.json",
-            write_sets_path=data_dir / f"writeset_a26_{name}.json",
+            coupling_state_path=data_dir / names["coupling_state"].format(name=name),
+            write_sets_path=data_dir / names["write_sets"].format(name=name),
             defer_per_run_path=per_run,
             defer_per_run_frozen_deck_path=(
-                data_dir / f"postsolve_nolift_{name}.json" if pulsed else per_run
+                data_dir / names["defer_per_run_frozen_deck"].format(name=name)
+                if pulsed
+                else per_run
             ),
             n_coupling_components=n_components,
             skips={} if pulsed else dict(_STEADY_STATE_SKIPS),
@@ -335,6 +389,7 @@ def default_campaign() -> Campaign:
         configurations=default_configurations(
             scenario_dir=REPO_ROOT / "arch_surgery" / "idf_probe" / "scenarios",
             data_dir=data_dir,
+            naming="harness",
         ),
     )
 
@@ -357,6 +412,6 @@ def repository_tree_campaign() -> Campaign:
         runs_dir=EXPERIMENT_DIR / "runs",
         derived_decks_dir=EXPERIMENT_DIR / "runs" / "decks",
         configurations=default_configurations(
-            scenario_dir=scenario_dir, data_dir=data_dir
+            scenario_dir=scenario_dir, data_dir=data_dir, naming="repository"
         ),
     )
