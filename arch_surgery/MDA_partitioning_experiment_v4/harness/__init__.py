@@ -15,7 +15,7 @@ from __future__ import annotations
 
 #: Harness version.  Bumped when the public surface or the record schema
 #: changes; stamped into every record so a record says which harness wrote it.
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .arms import (  # noqa: F401
     ARMS,
@@ -47,6 +47,17 @@ from .config import (  # noqa: F401
     default_configurations,
     repository_tree_campaign,
 )
+from .perturb import (  # noqa: F401
+    coupling_state_factor,
+    design_vector_factor,
+    is_perturbed,
+)
+from .pool import (  # noqa: F401
+    Job,
+    PoolError,
+    run_all,
+    seed_directory,
+)
 from .provenance import (  # noqa: F401
     BASE_COMMIT,
     ProvenanceError,
@@ -55,6 +66,14 @@ from .provenance import (  # noqa: F401
     banner,
     git_stamp,
     stamp,
+)
+from .records import (  # noqa: F401
+    FAILURE_CLASSES,
+    REGIMES,
+    RUN_KINDS,
+    RecordError,
+    assert_usable,
+    resolve_path,
 )
 from .switches import (  # noqa: F401
     PREVIOUS_ARM_NAMES,
@@ -75,6 +94,19 @@ from .switches import (  # noqa: F401
 
 __all__ = [
     "__version__",
+    "seed_directory",
+    "run_all",
+    "resolve_path",
+    "is_perturbed",
+    "design_vector_factor",
+    "coupling_state_factor",
+    "assert_usable",
+    "RecordError",
+    "RUN_KINDS",
+    "REGIMES",
+    "PoolError",
+    "Job",
+    "FAILURE_CLASSES",
     "ARMS",
     "ARTIFACT_NAMES",
     "Arm",

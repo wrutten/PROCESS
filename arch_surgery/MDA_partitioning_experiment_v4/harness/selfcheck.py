@@ -43,6 +43,10 @@ if str(_EXPERIMENT_DIR) not in sys.path:
 
 from harness import arms as arms_mod  # noqa: E402
 from harness import data_provenance as data_mod  # noqa: E402
+from harness import input_files as input_files_mod  # noqa: E402
+from harness import perturb as perturb_mod  # noqa: E402
+from harness import pool as pool_mod  # noqa: E402
+from harness import records as records_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
 from harness import switches as sw  # noqa: E402
 from harness.config import (  # noqa: E402
@@ -1019,6 +1023,293 @@ def crosscheck_previous(campaign: Campaign) -> Check:
 # --------------------------------------------------------------------------
 
 
+# --------------------------------------------------------------------------
+# 6. the run path
+# --------------------------------------------------------------------------
+#
+# No PROCESS run happens here: what is checked is the machinery around one —
+# the record's own contract, the displacement streams' keying, and the
+# refusals that stop a run being made against the wrong tree or without a
+# switch its arm declares.  The runs themselves are gate GR's business
+# (harness/reproduction.py), which is a measurement and takes an hour and a
+# half; these are the parts that can be shown to fail in a second.
+
+
+def _synthetic_record(phase: str) -> dict:
+    """A record carrying every declared field, so the contract has a baseline.
+
+    Built from the schema rather than typed out: a field added to the schema
+    and forgotten here would make this check fail, which is the point.
+    """
+    record: dict[str, Any] = {}
+    for field in records_mod.fields_for(phase, finished=True):
+        _set_path(record, field.name, 0)
+    for path in records_mod.CONTRACT[phase]:
+        _set_path(record, path, 0)
+    record["campaign_phase"] = phase
+    record["campaign_run_kind"] = "smoke"
+    record["failure_class"] = "ok"
+    record["status"] = "ok"
+    record["attempts"] = []
+    return record
+
+
+def _set_path(record: dict, path: str, value) -> None:
+    """Write *value* at a dotted path, making the intermediate levels dicts.
+
+    A field of the schema and a path of the contract can name the same key at
+    different depths (``mfile`` and ``mfile.ifail``); the deeper one wins,
+    because it is the one with a shape.
+    """
+    cursor = record
+    parts = path.split(".")
+    for step in parts[:-1]:
+        if not isinstance(cursor.get(step), dict):
+            cursor[step] = {}
+        cursor = cursor[step]
+    if parts[-1] not in cursor or not isinstance(cursor[parts[-1]], dict):
+        cursor[parts[-1]] = value
+
+
+def check_run_path(campaign: Campaign) -> Check:
+    """The record contract, the displacement streams, and the run refusals."""
+    check = Check(
+        name="run path",
+        binds="a record that does not carry what it declares is refused; the "
+        "two displacement streams key on what they say they key on; and a run "
+        "against the wrong tree, or without a switch its arm declares, is "
+        "refused rather than made",
+        population=(
+            "2 phases x the declared field list; 2 displacement streams; "
+            "3 refusals"
+        ),
+    )
+
+    # --- the record's own contract ---------------------------------------
+    for phase in ("A", "B"):
+        record = _synthetic_record(phase)
+        check.n_compared += 1
+        missing = records_mod.missing_fields(record)
+        if missing:
+            check.fail(
+                f"phase {phase}: a record built from the schema itself is "
+                f"reported as missing {missing}"
+            )
+    complete = _synthetic_record("B")
+
+    stripped = json.loads(json.dumps(complete))
+    stripped.pop("node_calls_solve_phase")
+    caught, message = _must_refuse_here(
+        lambda: records_mod.assert_complete(stripped, where="a tooth")
+    )
+    check.tooth(
+        "a declared field removed",
+        caught,
+        f"a finished record without node_calls_solve_phase must be refused, "
+        f"not summarised over ({message})",
+    )
+
+    unlabelled = json.loads(json.dumps(complete))
+    unlabelled["campaign_run_kind"] = "measurement"
+    caught, message = _must_refuse_here(
+        lambda: records_mod.assert_run_kind(unlabelled)
+    )
+    check.tooth(
+        "a record that does not say what kind of run made it",
+        caught,
+        f"a gate run and a campaign run are indistinguishable afterwards, and "
+        f"one of them is not a measurement ({message})",
+    )
+
+    unsummed = json.loads(json.dumps(complete))
+    unsummed["node_calls_solve_phase"] = 1000
+    unsummed["attempts"] = [
+        {"attempt": 1, "node_calls_solve_phase": 400},
+        {"attempt": 2, "node_calls_solve_phase": 550},
+    ]
+    caught, message = _must_refuse_here(
+        lambda: records_mod.assert_attempt_summation(unsummed, where="a tooth")
+    )
+    check.tooth(
+        "per-attempt costs that do not sum to the run total",
+        caught,
+        f"400 + 550 against a total of 1000 must be refused: the cost ratio "
+        f"published with and without retried seeds would otherwise be computed "
+        f"over quantities that do not decompose the published one ({message})",
+    )
+
+    partial = json.loads(json.dumps(complete))
+    partial["node_calls_solve_phase"] = 1000
+    partial["attempts"] = [
+        {"attempt": 1, "node_calls_solve_phase": 1000},
+        {"attempt": 2, "node_calls_solve_phase": None},
+    ]
+    caught, message = _must_refuse_here(
+        lambda: records_mod.assert_attempt_summation(partial, where="a tooth")
+    )
+    check.tooth(
+        "per-attempt costs stamped at some attempts and not others",
+        caught,
+        f"a partial decomposition cannot be summed and must be refused "
+        f"({message})",
+    )
+
+    # --- the two displacement streams ------------------------------------
+    # The design-vector stream is keyed on the variable's NUMBER, which is what
+    # lets a lifted design vector — one element longer — give bit-identical
+    # factors to every variable it shares with the committed one.  Checked as a
+    # computation over two vectors of different length, not asserted.
+    committed = [2, 5, 9, 13]
+    lifted = [2, 5, 9, 13, 178]
+    check.n_compared += len(committed)
+    for number in committed:
+        a = perturb_mod.design_vector_factor(1, number, campaign.delta)
+        b = perturb_mod.design_vector_factor(1, number, campaign.delta)
+        if a != b:
+            check.fail(f"the design-vector stream is not deterministic at {number}")
+    shared_differ = [
+        number
+        for index, number in enumerate(committed)
+        if perturb_mod.design_vector_factor(1, number, campaign.delta)
+        != perturb_mod.design_vector_factor(
+            1, lifted[index], campaign.delta
+        )
+    ]
+    if shared_differ:
+        check.fail(
+            f"a design vector one element longer changes the factor of shared "
+            f"variables {shared_differ}: the stream is keyed on position, not "
+            f"on the variable's number"
+        )
+    check.note(
+        f"the design-vector stream gives bit-identical factors to all "
+        f"{len(committed)} shared variables across a {len(committed)}-element "
+        f"and a {len(lifted)}-element vector"
+    )
+    by_position = [
+        perturb_mod.design_vector_factor(1, index, campaign.delta)
+        for index in range(len(committed))
+    ]
+    by_number = [
+        perturb_mod.design_vector_factor(1, number, campaign.delta)
+        for number in committed
+    ]
+    check.tooth(
+        "the design-vector stream keyed on position instead of number",
+        by_position != by_number,
+        "keying on the position in the vector must give different factors "
+        "from keying on the variable's number, or the invariance above is "
+        "vacuous",
+    )
+    check.tooth(
+        "the two streams sharing a namespace",
+        perturb_mod.coupling_state_factor(1, "178", campaign.delta)
+        != perturb_mod.design_vector_factor(1, 178, campaign.delta),
+        "a coupling component and an iteration variable that happen to share a "
+        "key must not share a factor",
+    )
+
+    # --- the refusals -----------------------------------------------------
+    config = campaign.configurations[0]
+    elsewhere = repository_tree_campaign()
+    job = pool_mod.Job(
+        phase="B",
+        arm="BR",
+        config=elsewhere.configurations[0],
+        seed=0,
+        outdir=Path(elsewhere.runs_dir) / "_never",
+        run_kind="smoke",
+    )
+    caught, message = _must_refuse_here(lambda: pool_mod.run(job, elsewhere))
+    check.tooth(
+        "a run against a tree that is not the experiment's copy",
+        caught,
+        f"records are only ever made against the copy; a measurement of "
+        f"another tree produced by forgetting a flag is what that separation "
+        f"prevents ({message})",
+    )
+
+    pending_arm = next(
+        (
+            name
+            for name, arm in arms_mod.ARMS.items()
+            if name not in config.skips
+            and sw.unimplemented(
+                arm.terms(config, pin_hex=_PIN_HEX, campaign=campaign)
+            )
+        ),
+        None,
+    )
+    if pending_arm is None:
+        check.note(
+            "no arm currently asks for a switch this tree does not implement, "
+            "so the two allowance teeth have nothing to bite on"
+        )
+    else:
+        no_allowance = pool_mod.Job(
+            phase=arms_mod.ARMS[pending_arm].phase,
+            arm=pending_arm,
+            config=config,
+            seed=0,
+            outdir=Path(campaign.runs_dir) / "_never",
+            pin_hex=_PIN_HEX,
+            run_kind="smoke",
+        )
+        caught, message = _must_refuse_here(
+            lambda: pool_mod.environment_for(no_allowance, campaign)
+        )
+        check.tooth(
+            "an arm asking for a switch the tree does not implement",
+            caught,
+            f"{pending_arm} declares a switch no tree implements; composing "
+            f"without it would be a successful run of a different arm under "
+            f"this arm's name ({message})",
+        )
+        over_allowed = pool_mod.Job(
+            phase=arms_mod.ARMS[pending_arm].phase,
+            arm=pending_arm,
+            config=config,
+            seed=0,
+            outdir=Path(campaign.runs_dir) / "_never",
+            pin_hex=_PIN_HEX,
+            run_kind="smoke",
+            allow_pending=("mda",),
+        )
+        caught, message = _must_refuse_here(
+            lambda: pool_mod.environment_for(over_allowed, campaign)
+        )
+        check.tooth(
+            "an allowance naming a switch the tree does implement",
+            caught,
+            f"an allowance that covers a switch the tree has is an allowance "
+            f"nobody checked ({message})",
+        )
+
+    # --- the lifted input file's digests ----------------------------------
+    for name in input_files_mod.LIFTED_INPUT_SHA256:
+        check.n_compared += 1
+        if name not in campaign.population:
+            check.fail(
+                f"a lifted-input digest is recorded for {name}, which is not "
+                f"a configuration of this campaign"
+            )
+    check.note(
+        f"lifted input digests recorded for "
+        f"{', '.join(sorted(input_files_mod.LIFTED_INPUT_SHA256))}; the "
+        f"derivation that must reproduce them is task A51 (harness-artifacts)"
+    )
+    return check
+
+
+def _must_refuse_here(call) -> tuple[bool, str]:
+    """Whether *call* refused, and what it said.  A success is a tooth failure."""
+    try:
+        call()
+    except Exception as exc:  # noqa: BLE001 - the refusal is the result
+        return True, f"{type(exc).__name__}: {str(exc).splitlines()[0][:140]}"
+    return False, "it did not refuse"
+
+
 def run_all(
     campaign: Campaign,
     *,
@@ -1030,6 +1321,7 @@ def run_all(
         checks.append(check_capability(campaign))
     checks.append(check_provenance(campaign))
     checks.append(check_data(campaign))
+    checks.append(check_run_path(campaign))
     if include_crosscheck:
         checks.append(crosscheck_previous(campaign))
     return checks
