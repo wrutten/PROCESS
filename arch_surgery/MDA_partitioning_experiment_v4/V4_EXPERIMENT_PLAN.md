@@ -429,7 +429,16 @@ headline unreadable. The failure table carries the retried seeds with each arm's
 2. **Iteration multiplier.** Paired ratio of optimiser iterations over the seed set;
    **acceptance: nearest-rank median ≤ 1.05** for `B0 → B1`, `B0 → B3`; summed
    iterations over the same pairs published beside every median with the sum ratio, since a
-   median and a sum can disagree in direction. `B1 → B3` and `B0 → BR` reported beside,
+   median and a sum can disagree in direction. *Amended 2026-09-10 (user directive relayed by
+   session `process-surgery-bd`; to be confirmed in the orchestrating session):* the iteration
+   count is published in **two constructions** — the **final attempt's** (V3's, kept for
+   comparability) and **summed over every VMCON attempt, failed attempts included**
+   (`n_solver_iterations_summed_over_attempts`, present in every V3 record and never read by V3's
+   tally) — with the per-seed attempt count and ladder stage in the table. The trajectory term
+   check 2 controls is the whole optimiser path, and a failed attempt is part of it. Both sit
+   beside the evaluation count over all attempts, which is the multiplier the transfer needs:
+   iterations, even summed, miss the lift's stencil column and the line-search evaluations that
+   vary at equal iteration count. `B1 → B3` and `B0 → BR` reported beside,
    outside the acceptance rule. **Pre-declared expectation:** on the pulsed configurations
    `B1 → B3` leaves the evaluation count unchanged (`ε = 1` exactly; V3: 33/33 converged seeds).
    RQ5 is not measured by a V4 arm (§3.2); A43 (st-trust-gap)'s verdict decides st's place.
@@ -878,22 +887,26 @@ construction cannot classify — it is a limit of the instrument, stated, not a 
 #### 4.3.3 Iteration multiplier and evaluation multiplier (check 2)
 
 *Caption: per configuration and arm pair over the seed set: the nearest-rank median of per-pair
-optimiser-iteration ratios (final attempt — the acceptance statistic, ≤ 1.05), both arms' iterations
-summed over the same pairs and their sum ratio; then the **evaluation multiplier** `ε` = ratio of
+optimiser-iteration ratios (final attempt — the acceptance statistic, ≤ 1.05), the same median on
+iterations **summed over all VMCON attempts** (failed attempts included), both arms' iterations
+summed over the same pairs and their sum ratio, and the per-seed attempt count (maximum over the
+set) per arm; then the **evaluation multiplier** `ε` = ratio of
 `call_models` counts over all attempts, split into the exact stencil-column factor
 `(nvar_b + 1)/(nvar_a + 1)` and the problem-call ratio; retried seeds per arm; and `ε` without
 retried seeds. `B2 → B3` and `B0 → BR` are reported outside the acceptance rule.*
 
-| config | pair | n | iteration median | Σ iters a → b · ratio | **≤ 1.05** | `ε` | stencil factor | problem-call ratio | retried a · b | `ε` w/o retried |
-|---|---|---|---|---|---|---|---|---|---|---|
-| nof | `B0 → B1` | nn | 0.xxx | nnn → nnn · 0.xxx | PASS/FAIL | 0.xxx | 1.048 | 0.xxx | n · n | 0.xxx |
-| nof | `B0 → B3` | nn | … | … | **PASS/FAIL** | … | 1.048 | … | … | … |
-| nof | `B1 → B3` | nn | 1.000 expected | … | — | **1.000 expected** | 1.000 | … | … | … |
-| nof | `B0 → BR` | nn | … | … | — | … | 1.000 | … | … | … |
-| lad · st | … | | | | | | | | | |
+| config | pair | n | iteration median (final attempt) | iteration median (Σ attempts) | Σ iters a → b · ratio | attempts a · b (max) | **≤ 1.05** | `ε` | stencil factor | problem-call ratio | retried a · b | `ε` w/o retried |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| nof | `B0 → B1` | nn | 0.xxx | 0.xxx | nnn → nnn · 0.xxx | n · n | PASS/FAIL | 0.xxx | 1.048 | 0.xxx | n · n | 0.xxx |
+| nof | `B0 → B3` | nn | … | … | … | … | **PASS/FAIL** | … | 1.048 | … | … | … |
+| nof | `B1 → B3` | nn | 1.000 expected | 1.000 expected | … | … | — | **1.000 expected** | 1.000 | … | … | … |
+| nof | `B0 → BR` | nn | … | … | … | … | — | … | 1.000 | … | … | … |
+| lad · st | … | | | | | | | | | | | |
 
 *How to read: a median and a sum ratio that disagree in direction must both appear — the median
-says what a typical seed does, the sum what the campaign cost. `ε` is what the transfer (4.4) needs
+says what a typical seed does, the sum what the campaign cost. The two iteration medians differ
+only where an arm retried; where they do, the Σ-attempts column is the one that describes the
+optimiser's whole path and the attempts column says which arm paid for it. `ε` is what the transfer (4.4) needs
 and the iteration count cannot supply: it carries the lift's extra stencil column exactly and any
 retry. The pre-declared expectation is `ε = 1.000` exactly on `B1 → B2 → B3` for the pulsed
 configurations (D21); a departure is a finding.*
@@ -1081,6 +1094,9 @@ implementation plan's.*
   placeholder tables in the accepted format (one seed set, failure table, three-way ratios, retries as
   a term, captions and how-to-read notes) for the user's review before any run; the PROCESS copy
   described in §3.8 (i) and gated (GR, G0).
+- 2026-09-10 — check 2 (§3.5, §4.3.3): iterations published in two constructions, final attempt
+  and summed over all VMCON attempts, with per-seed attempt counts — user directive relayed by
+  session `process-surgery-bd`, marked for confirmation in the orchestrating session.
 - 2026-09-10 — user rulings of the second round (D22): `B2` removed from the matrix (§3.2, §3.3,
   §3.5, §3.10, §4, App. B) with the pre-declared rule on `st_regression`; predicate counters
   accepted; no errata to the V3 report; the PROCESS copy taken at the current tip and checked
