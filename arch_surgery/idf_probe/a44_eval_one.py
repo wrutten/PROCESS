@@ -1,5 +1,20 @@
 #!/usr/bin/env python
-"""Run ONE MDA evaluation -- one ``call_models`` -- with NO optimiser anywhere.
+"""A44 (transfer-gap): v2_eval_one.py plus ONE entry option.
+
+Verbatim copy of arch_surgery/idf_probe/v2_eval_one.py at 16a6e87e (first
+commit e2f84ea0), then modified in exactly one way: ``--x-fd-column I``
+(with ``--x-fd-sign +1|-1``) enters the single evaluation at the point the
+optimiser's own gradient stencil would visit -- scaled design variable
+``xcm[I]`` multiplied by ``(1 + sign * numerics.epsfcn)``, built as a COPY
+of the design vector exactly as ``evaluators.fcnvmc2`` builds ``xfor`` /
+``xbac`` -- with the coupling state at whatever ``--entry-state`` supplied.
+With the option unset the runner is v2_eval_one (gated by the A44 identity
+stage against V3's frozen records, never assumed).  ``epsfcn`` is always
+recorded.  The runner stamp is ``a44_eval_one``.
+
+Original module docstring follows.
+
+Run ONE MDA evaluation -- one ``call_models`` -- with NO optimiser anywhere.
 
 Phase A's entry point (V2 plan section 3, ``v2_config.INSTRUMENTATION``
 ``single_mda_eval``; built by task A34).  The per-call factor of the cost
@@ -464,6 +479,19 @@ def main() -> int:
         "spec's keys: the in-loop write set.  The whole-state statistic is "
         "computed exactly as before; this is additive",
     )
+    ap.add_argument(
+        "--x-fd-column", type=int, default=None,
+        help="A44 (transfer-gap): enter at the optimiser's own finite-"
+        "difference stencil point -- scaled design variable xcm[I] "
+        "(0-based position in ixc) multiplied by (1 + SIGN * "
+        "numerics.epsfcn), on a COPY of the design vector, exactly as "
+        "evaluators.fcnvmc2 builds xfor / xbac; the coupling state is "
+        "whatever --entry-state supplied.  Unset: the deck's design "
+        "vector, as v2_eval_one",
+    )
+    ap.add_argument("--x-fd-sign", type=int, default=1, choices=(1, -1),
+                    help="+1 = the stencil's forward point (xfor), "
+                    "-1 = its backward point (xbac)")
     args = ap.parse_args()
 
     outdir = Path(args.outdir).resolve()
@@ -478,7 +506,7 @@ def main() -> int:
     os.environ.pop("PROCESS_IDF_PROBE", None)
 
     result: dict = {
-        "runner": "v2_eval_one",
+        "runner": "a44_eval_one",
         "scenario": args.scenario,
         "outdir": str(outdir),
         "input_file": str(src.resolve()),
@@ -571,6 +599,37 @@ def main() -> int:
     m = int(nums.n_equality_constraints) + int(nums.n_inequality_constraints)
     x = nums.xcm[:n]
     result["nvar"] = n
+    # A44: the deck's own finite-difference step, recorded unconditionally.
+    result["epsfcn"] = float(nums.epsfcn)
+    result["x_fd"] = None
+    if args.x_fd_column is not None:
+        i = int(args.x_fd_column)
+        if not 0 <= i < n:
+            raise SystemExit(
+                f"--x-fd-column {i} is outside the design vector "
+                f"(nvar = {n}); refused, never clamped")
+        eps = float(nums.epsfcn)
+        sign = int(args.x_fd_sign)
+        x = nums.xcm[:n].copy()          # fcnvmc2 works on a copy too
+        x_base_hex = float(x[i]).hex()
+        x[i] = x[i] * (1.0 + sign * eps)  # the stencil's own arithmetic
+        try:
+            from process.core.solver.iteration_variables import (
+                ITERATION_VARIABLES as _IV,
+            )
+            _iv = _IV[int(nums.ixc[i])]
+            _name = f"{_iv.module}.{_iv.target_name or _iv.name}"
+        except Exception:
+            _name = None
+        result["x_fd"] = {
+            "column": i, "sign": sign, "epsfcn": eps,
+            "ixc": int(nums.ixc[i]), "name": _name,
+            "xcm_base_hex": x_base_hex, "xcm_hex": float(x[i]).hex(),
+            "what": "single evaluation at the gradient stencil point "
+                    "xcm[column] * (1 + sign*epsfcn), all other design "
+                    "variables at the deck point; coupling state from "
+                    "--entry-state (the a44 regime probe)",
+        }
     result["n_constraints"] = m
     result["i_figure_merit"] = int(nums.i_figure_merit)
 
