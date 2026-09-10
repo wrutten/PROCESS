@@ -36,8 +36,11 @@ place -- and each must FAIL.  The real tree is never modified.
 
 New in A46 (process-copy); it derives from no earlier file.  A48
 (harness-data) generalised the permitted-edit model from constant markers to
-recorded hunks, so an edit that is not a constant is describable.  Stdlib only,
-no PROCESS run, runs in seconds.
+recorded hunks, so an edit that is not a constant is describable.  A56
+(driver-renames) added three more permitted-edit files and taught the
+edit-behaviour gate to name the per-run deferral switch and entry point per
+side, because the rename means the two trees spell them differently.  Stdlib
+only, no PROCESS run, runs in seconds.
 
 Usage
 -----
@@ -124,6 +127,30 @@ class PermittedEdit:
 #: the expected hunks and post-edit sha256 are recorded and reviewable, and its
 #: guard refuses unless the files that actually differ are exactly these.
 PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
+    "process/core/solver/__init__.py": [
+        PermittedEdit(
+            kind="new definition",
+            name="ArchitectureRefusal",
+            description=(
+                "the typed refusal every driver-side refusal of an "
+                "architecture setting raises, so a measurement harness can "
+                "tell a refused run from a crashed one by the exception's "
+                "type instead of by matching the text of its message"
+            ),
+            task="A56 (driver-renames)",
+        ),
+        PermittedEdit(
+            kind="new definition",
+            name="RETIRED_SWITCHES / assert_no_retired_switches",
+            description=(
+                "the eleven switch names the rename retired, each with the "
+                "switch that replaced it, checked at the import of this "
+                "package: a stale name that is merely ignored runs a "
+                "different arrangement under the right name"
+            ),
+            task="A56 (driver-renames)",
+        ),
+    ],
     "process/core/solver/module_solve.py": [
         PermittedEdit(
             kind="path constant",
@@ -147,6 +174,91 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
                 "target exists and where its provenance is recorded"
             ),
             task="A48 (harness-data)",
+        ),
+        PermittedEdit(
+            kind="switch rename",
+            name="PROCESS_ARCH_MDA",
+            description=(
+                "the shape of the analysis loop takes its intended name and "
+                "its intended values; the schedule, the predicate and the "
+                "artifact loading are unchanged"
+            ),
+            task="A56 (driver-renames)",
+            was="PROCESS_ARCH_MODULE_SOLVE=off | per_module | flat_state",
+            now="PROCESS_ARCH_MDA=flat | partitioned (unset for upstream's own loop)",
+        ),
+        PermittedEdit(
+            kind="switch retired",
+            name="PROCESS_ARCH_OUTER",
+            description=(
+                "the schedule runs once, which is what the partitioned value "
+                "now means, so the switch that chose between running it once "
+                "and repeating it is gone, along with its mode table, its "
+                "two composition refusals and the pass cap"
+            ),
+            task="A56 (driver-renames)",
+        ),
+        PermittedEdit(
+            kind="switch retired",
+            name="PROCESS_ARCH_INNER_TAU",
+            description=(
+                "one tolerance for every converger (decision D23), so the "
+                "second one and the refusal that guarded its misuse are gone"
+            ),
+            task="A56 (driver-renames)",
+        ),
+        PermittedEdit(
+            kind="switch rename",
+            name="PROCESS_ARCH_COUPLING_STATE / PROCESS_ARCH_WRITE_SETS",
+            description=(
+                "the two committed artifacts a block loop reads take their "
+                "intended names; the files, their validation and their "
+                "cross-check are unchanged"
+            ),
+            task="A56 (driver-renames)",
+            was="PROCESS_ARCH_YSTATE, PROCESS_ARCH_WRITESET",
+            now="PROCESS_ARCH_COUPLING_STATE, PROCESS_ARCH_WRITE_SETS",
+        ),
+        PermittedEdit(
+            kind="typed refusal",
+            name="ArchitectureRefusal",
+            description=(
+                "every refusal of an architecture setting in this file raises "
+                "the typed refusal instead of a bare RuntimeError"
+            ),
+            task="A56 (driver-renames)",
+        ),
+    ],
+    "process/core/solver/subsolve.py": [
+        PermittedEdit(
+            kind="switch rename",
+            name="PROCESS_ARCH_BURN_TIME_OWNER",
+            description=(
+                "the two settings that took the burn time out of the model "
+                "and named its new holder are folded into one switch whose "
+                "value says who owns it; the seam, the value returned and the "
+                "tripwire are unchanged, and the refusal of a constant "
+                "without the site taken out of the loop is gone because that "
+                "combination can no longer be written down"
+            ),
+            task="A56 (driver-renames)",
+            was="PROCESS_ARCH_LIFT=<site list> plus PROCESS_ARCH_PIN_BURN_TIME=<float>",
+            now="PROCESS_ARCH_BURN_TIME_OWNER=loop | optimiser | constant:<hex float>",
+        ),
+    ],
+    "process/core/solver/constraints.py": [
+        PermittedEdit(
+            kind="comment",
+            name="constraint 93's docstring",
+            description=(
+                "the burn-time consistency constraint's docstring named the "
+                "retired switch that used to take the burn time out of the "
+                "model; it names the switch that does now.  Nothing the "
+                "constraint computes changes"
+            ),
+            task="A56 (driver-renames)",
+            was="PROCESS_ARCH_LIFT=burn_time",
+            now="PROCESS_ARCH_BURN_TIME_OWNER=optimiser",
         ),
     ],
     "process/core/caller.py": [
@@ -174,13 +286,14 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
         ),
         PermittedEdit(
             kind="existence check",
-            name="_post_solve_nodes, step (4)",
+            name="_defer_per_run_nodes, step (4)",
             description=(
                 "the per-run deferral path read NODE_WRITESET_PATH with no "
                 "existence check and raised a bare FileNotFoundError; it now "
-                "raises a RuntimeError naming the artifact and its provenance "
-                "file, mirroring the check the per-call path already had.  No "
-                "behaviour change on any path where the file exists"
+                "raises a typed refusal naming the artifact and its "
+                "provenance file, mirroring the check the per-call path "
+                "already had.  No behaviour change on any path where the file "
+                "exists"
             ),
             task="A48 (harness-data)",
         ),
@@ -196,6 +309,44 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
                 "the two constants' comments say the target exists"
             ),
             task="A48 (harness-data)",
+        ),
+        PermittedEdit(
+            kind="switch rename",
+            name="every architecture switch this file reads",
+            description=(
+                "the four switches resolved here take their intended names, "
+                "and so do the module-level readbacks a harness reads them "
+                "back through; every branch, table and derivation is "
+                "unchanged"
+            ),
+            task="A56 (driver-renames)",
+            was="PROCESS_ARCH_SEQUENCE, _PRIME, _HOIST, _POST_SOLVE",
+            now="PROCESS_ARCH_ARRANGEMENT_NODE, _ARRANGEMENT_METHOD, _DEFER_PER_CALL, _DEFER_PER_RUN",
+        ),
+        PermittedEdit(
+            kind="removal",
+            name="the repeated schedule",
+            description=(
+                "the block schedule runs exactly once, so the loop over "
+                "schedule passes, the joint residual evaluation that decided "
+                "whether to repeat it, that evaluation's trace hook and the "
+                "pass-cap refusal are removed from "
+                "Caller._call_models_partitioned.  Every arm this experiment "
+                "runs already took the single-pass path, which gate GR is "
+                "what proves"
+            ),
+            task="A56 (driver-renames)",
+        ),
+        PermittedEdit(
+            kind="typed refusal",
+            name="ArchitectureRefusal",
+            description=(
+                "every refusal of an architecture setting in this file raises "
+                "the typed refusal instead of a bare RuntimeError; upstream's "
+                "own ten-pass raise is left as it is, because it is a finding "
+                "about the shipped code rather than a refused setting"
+            ),
+            task="A56 (driver-renames)",
         ),
     ],
 }
@@ -617,7 +768,14 @@ artifact_present = sys.argv[1] == "present"
 missing = Path(sys.argv[2])
 node_map = Path(sys.argv[3])
 write_sets = Path(sys.argv[4])
-record = json.loads(Path(os.environ["PROCESS_ARCH_POST_SOLVE"]).read_text())
+# The two trees spell the per-run deferral switch and its entry point
+# differently -- that rename is itself one of the permitted edits -- so the
+# caller passes the name each tree uses and this probe reaches the same code on
+# both sides.  Without it the arm run against the source commit would fail on
+# the name rather than on the behaviour, and the comparison would say nothing.
+variable = sys.argv[5]
+entry_point = sys.argv[6]
+record = json.loads(Path(os.environ[variable]).read_text())
 
 # Both trees are given the same two artifacts by hand, so that the only thing
 # that differs between the arms is the tree's own code.  Without this the tree
@@ -644,7 +802,7 @@ class _Data:
 if not artifact_present:
     caller.NODE_WRITESET_PATH = missing
 try:
-    caller._post_solve_nodes(_Data(record))
+    getattr(caller, entry_point)(_Data(record))
     out = {"raised": None, "message": ""}
 except BaseException as exc:
     out = {"raised": type(exc).__name__, "message": str(exc)[:400]}
@@ -652,12 +810,25 @@ print("@@B@@" + json.dumps(out) + "@@B@@")
 """
 
 
-def _behaviour_child(tree: Path, artifact: Path, present: bool) -> dict:
+#: How each side of the edit-behaviour gate names the per-run deferral: the
+#: switch it reads and the function that validates the artifact.  The copy's
+#: names are A56 (driver-renames)'; the source commit's are what it was written
+#: with.  Naming both is what keeps the two arms a comparison of *behaviour*.
+_PER_RUN_NAMES = {
+    "copy": ("PROCESS_ARCH_DEFER_PER_RUN", "_defer_per_run_nodes"),
+    "source": ("PROCESS_ARCH_POST_SOLVE", "_post_solve_nodes"),
+}
+
+
+def _behaviour_child(
+    tree: Path, artifact: Path, present: bool, *, side: str = "copy"
+) -> dict:
     """Run the probe above against *tree*, and report what it raised."""
     missing = Path(tempfile.gettempdir()) / "a_write_set_file_that_is_not_there.json"
+    variable, entry_point = _PER_RUN_NAMES[side]
     env = {k: v for k, v in os.environ.items() if not k.startswith("PROCESS_ARCH")}
     env["PYTHONPATH"] = str(tree)
-    env["PROCESS_ARCH_POST_SOLVE"] = str(artifact)
+    env[variable] = str(artifact)
     neutral = tempfile.mkdtemp()
     proc = subprocess.run(
         [
@@ -668,6 +839,8 @@ def _behaviour_child(tree: Path, artifact: Path, present: bool) -> dict:
             str(missing),
             str(artifact.parent / "dsm_node_map.json"),
             str(artifact.parent / "node_writesets.json"),
+            variable,
+            entry_point,
         ],
         cwd=neutral,
         env=env,
@@ -694,8 +867,8 @@ def check_edit_behaviour(prov: dict) -> tuple[bool, dict]:
     from inside ``json.loads``.  A48 (harness-data) added the missing check.
     Three arms, one gate:
 
-    * **the copy, artifact absent** -- must raise ``RuntimeError`` naming the
-      artifact and ``harness/data/PROVENANCE.json``;
+    * **the copy, artifact absent** -- must raise ``ArchitectureRefusal``
+      naming the artifact and ``harness/data/PROVENANCE.json``;
     * **the source commit, artifact absent** -- must raise
       ``FileNotFoundError``, which is the defect the edit repairs and is what
       makes the first arm a change rather than a restatement;
@@ -738,15 +911,20 @@ def check_edit_behaviour(prov: dict) -> tuple[bool, dict]:
             stdout=subprocess.PIPE,
         ).stdout
         subprocess.run(["tar", "-x", "-C", str(source_tree)], input=archive, check=True)
-        at_source = _behaviour_child(source_tree, artifact, present=False)
+        at_source = _behaviour_child(
+            source_tree, artifact, present=False, side="source"
+        )
     in_copy = _behaviour_child(COPY_ROOT, artifact, present=False)
     tooth = _behaviour_child(COPY_ROOT, artifact, present=True)
 
     failures = []
-    if in_copy["raised"] != "RuntimeError" or "PROVENANCE.json" not in in_copy["message"]:
+    if (
+        in_copy["raised"] != "ArchitectureRefusal"
+        or "PROVENANCE.json" not in in_copy["message"]
+    ):
         failures.append(
             f"the copy raised {in_copy['raised']} ({in_copy['message']!r}); "
-            "expected a RuntimeError naming harness/data/PROVENANCE.json"
+            "expected an ArchitectureRefusal naming harness/data/PROVENANCE.json"
         )
     if at_source["raised"] != "FileNotFoundError":
         failures.append(

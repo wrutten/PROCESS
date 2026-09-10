@@ -7,30 +7,39 @@ Upstream PROCESS solves its multidisciplinary analysis with **one flat loop**:
 they moved.  Every model is re-run on every sweep, whatever moved.
 
 Variant point VP4 replaces that with a **block Gauss-Seidel** schedule over the
-DSM's three modules.  Each module is iterated to *its own* fixed point before
-the next module runs, and an outer loop over the modules closes whatever
-cross-module coupling remains::
+DSM's three modules.  Each module is iterated to *its own* fixed point, at the
+one tolerance, and the schedule then runs **once**::
 
-    outer:  [M1 solved]  [M2 solved]  [PULSE]  [M3 solved]  [FF]
-            \\____________________ until y stops moving ______________/
+    one pass:  [M1 solved]  [M2 solved]  [PULSE]  [M3 solved]  [FF]
 
-``off`` is the default and is upstream behaviour exactly: :data:`ENABLED` is
-``False``, ``Caller.call_models`` never consults anything here, and the module
-is not even asked for its predicate.  An unrecognised value of
-``PROCESS_ARCH_MODULE_SOLVE`` is an **import-time** error, not a silent
-fallback to the baseline -- a misspelled arm that quietly runs the reference is
-the failure mode that makes a whole measurement worthless (the pattern A3 set
-for VP1 and A13 for VP2).
+Upstream behaviour is the default: with ``PROCESS_ARCH_MDA`` unset
+:data:`ENABLED` is ``False``, ``Caller.call_models`` never consults anything
+here, and the module is not even asked for its predicate.  An unrecognised
+value is an **import-time** refusal, not a silent fallback to the baseline -- a
+misspelled arm that quietly runs the reference is the failure mode that makes a
+whole measurement worthless (the pattern A3 set for VP1 and A13 for VP2).
+
+**The schedule runs once, and that is not a setting.**  An earlier revision
+offered a second policy in which the whole schedule repeated while a joint test
+over the entire coupling state still saw movement -- a verification receipt the
+arm paid for.  Task A43 (st-trust-gap) measured it: across 91 888 evaluations of
+that arm, the verification pass triggered a further pass **zero times**.  The
+user removed the arm that used it (decision D22) and fixed one tolerance for
+every converger (decision D23), so there is no longer anything for a second
+policy to select and the switch that selected it is retired.  What used to
+verify the feed-forward assertion is the **uncharged exit audit**, taken outside
+the arm, which is where it belonged: an in-loop receipt is a cost the arm pays
+to tell the experimenter something the experimenter can measure for free.
 
 The predicate is Phase A's, not a new one
 -----------------------------------------
 Decision **D14(c)**, as revised by the user: *a per-module solver cannot use a
 global objective/constraint test, because one module does not determine those
-quantities.*  So the inner and outer tests here are Phase A's **coupling-state**
+quantities.*  So every block loop here stops on the **coupling-state**
 predicate --  ``max |dy_i| / s_i < tau`` over the continuous components, exact
 equality over the discrete ones, and constants asserted rather than excluded --
-with the categories and scales taken from the committed per-scenario artifact
-``harness/data/coupling_state_<configuration>.json``.
+with the categories and scales taken from the committed per-configuration
+artifact ``harness/data/coupling_state_<configuration>.json``.
 
 That artifact is *loaded*, and the predicate code is *imported from Phase A's
 own module*, rather than either being reimplemented here.  Two implementations
@@ -39,11 +48,12 @@ variant is tested by the same rule Phase A measured.  The load is lazy and
 happens only when VP4 is on, so ``process`` still imports standalone with the
 variant point off.
 
-The inner test is restricted to the module's own write set
-----------------------------------------------------------
-Exactly as Phase A's block arm restricts it (``arms.build_blocks``), and the
-subsets come from a committed artifact ``writeset_<scenario>.json`` measured by
-the ``modules`` probe's write census.
+A block loop's test is restricted to that block's own write set
+---------------------------------------------------------------
+Exactly as the evaluation phase's block arm restricts it
+(``arms.build_blocks``), and the subsets come from the committed artifact
+``harness/data/write_sets_<configuration>.json`` measured by the write
+census.
 
 **A25 first tried to skip that**, on the argument that a component no running
 node writes cannot move, so testing the whole vector must give the same answer.
@@ -56,56 +66,49 @@ for all twenty inner sweeps, and the run died at the cap.  Equality of *values*
 is not equality of *scores*.  The subsets are not an optimisation; they are
 load-bearing.
 
-Two non-default arms, one predicate
------------------------------------
-``per_module`` is the block schedule above.  ``flat_state`` is the same
-predicate on a **single block containing every in-loop node** --- one flat
-sweep of the whole model sequence, repeated until the coupling state stops
-moving.  It is decision **D18**'s predicate-matched control ``A0'``: the
-baseline ``R`` and ``A0'`` differ only in the stopping rule, and ``A0'`` and
-the variant ``A1'`` differ only in the architecture, so the two effects
-Phase B previously measured as a sum can be separated.
+Two non-default arrangements, one predicate
+------------------------------------------
+``partitioned`` is the block schedule above.  ``flat`` is the same predicate on
+a **single block containing every in-loop node** --- one flat sweep of the whole
+model sequence, repeated until the coupling state stops moving.  It is decision
+**D18**'s predicate-matched control ``A0'``: the reference arm and ``A0'``
+differ only in the stopping rule, and ``A0'`` and the intervention differ only
+in the arrangement, so the two effects an earlier revision measured as a sum can
+be separated.
 
-The outer pass is **skipped** when one block covers every in-loop node, and
-that is a correctness statement rather than an optimisation: the block's own
-inner test already compares two successive full sweeps over the whole coupling
-vector, which is exactly what the outer test would ask.  Paying it anyway costs
-one extra full sweep per ``call_models`` --- ``y_outer_prev`` is the state at
-*entry*, so outer pass 1 always fails and outer pass 2 always succeeds after
-one sweep.  ``caller._call_models_by_module`` records whether the guard fired,
-per call.
+A block loop that covers every in-loop node has already compared two successive
+full sweeps over the whole coupling vector when it stops, so there is nothing
+left for a further pass to ask.  ``caller._call_models_partitioned`` records
+whether that condition held, per call, from the schedule that was actually
+built rather than from the arrangement's name.
 
 Selection
 ---------
-``PROCESS_ARCH_MODULE_SOLVE``
-    ``off`` (default), ``per_module``, or ``flat_state``.
+``PROCESS_ARCH_MDA``
+    ``flat`` or ``partitioned``; unset is upstream's own loop.
 ``PROCESS_ARCH_TAU``
-    Convergence tolerance for the coupling-state predicate.  Default ``1e-6``,
-    Phase A's starting rung (decision D15).
-``PROCESS_ARCH_INNER_TAU``
-    Tolerance of an inner block solve, defaulting to ``PROCESS_ARCH_TAU``.
-    Unset reproduces A25's arm exactly.  It exists because A26 established
-    that arms must be compared at matched **achieved** accuracy rather than at
-    matched tolerance, and the block arm's inner tolerance is the parameter
-    that moves its achieved accuracy independently of its outer one.  Setting
-    it under ``flat_state`` is an import-time error: that arm has one block and
-    one tolerance.
-``PROCESS_ARCH_YSTATE``
-    Path to the committed ``ystate_<scenario>.json`` for the deck being run.
-    **Required** when VP4 is on: there is no default, because a predicate
-    silently taken from the wrong deck's scales is exactly the kind of quiet
-    wrong answer this project gates against.
-``PROCESS_ARCH_WRITESET``
-    Path to the committed ``writeset_<scenario>.json`` for the same deck.  Also
-    required, for the same reason, and cross-checked against the ystate
+    Convergence tolerance for the coupling-state predicate -- **the one
+    tolerance every converger in every arm uses** (decision D23), the flat loop
+    and each block loop alike.  Default ``1e-6``, the evaluation phase's
+    starting rung (decision D15).  There is no second, "inner" tolerance: the
+    switch that offered one is retired, because comparisons are made at matched
+    *achieved* accuracy, which the exit audit records per run, rather than at
+    matched settings.
+``PROCESS_ARCH_COUPLING_STATE``
+    Path to the committed coupling-state artifact for the configuration being
+    run.  **Required** when this arrangement is on: there is no default, because
+    a predicate silently taken from another configuration's scales is exactly
+    the kind of quiet wrong answer this project gates against.
+``PROCESS_ARCH_WRITE_SETS``
+    Path to the committed per-block write sets for the same configuration.  Also
+    required, for the same reason, and cross-checked against the coupling-state
     artifact's ``components_sha256`` so the two cannot be from different
-    generations of the same deck.
+    generations of the same configuration.
 ``PROCESS_ARCH_PASS_TRACE``
     **A31 (drift-diagnostic), observation only.**  Path of a JSONL file into
-    which every *joint-test* residual evaluation is appended: the outer test
-    of the block schedule, and — because the flat arm's single-block guard
-    makes its inner test *be* the joint test — the ``FLAT`` block's inner
-    residuals.  Per evaluation it records the pass index, the residual max
+    which every *joint-test* residual evaluation is appended: with one block
+    covering every in-loop node, that block's own inner residuals **are** the
+    joint test.  Per evaluation it records the pass index, the residual max
     and argmax (with the moving element's before/after values as exact hex
     floats), and, from pass 2 on, **every** component at or above ``tau``
     with the same detail.  Pass-1 evaluations record the argmax and counts
@@ -123,178 +126,98 @@ import json
 import os
 from pathlib import Path
 
+from process.core.solver import ArchitectureRefusal
+
 __all__ = [
     "BLOCK_ORDER",
+    "COUPLING_STATE_PATH",
     "ENABLED",
+    "FLAT",
     "FLAT_BLOCK_LABEL",
     "FLAT_BLOCK_ORDER",
     "FLAT_ITERATED",
-    "FLAT_STATE",
-    "INNER_TAU",
     "GLOBAL_BLOCK_SWEEP_CAP",
     "INNER_CAP",
     "ITERATED",
-    "MODULE_SOLVE_NAME",
-    "OUTER_CAP",
-    "OUTER_MODE",
+    "MDA_MODE",
+    "MDA_MODES",
     "PASS_TRACE_PATH",
     "TAU",
     "TRACE_ENABLED",
-    "TRUST_OUTER",
+    "WRITE_SETS_PATH",
     "ModuleSolveFailure",
     "block_order",
     "iterated",
-    "trace_pass",
-    "WRITESET_PATH",
-    "YSTATE_PATH",
     "load_spec",
     "load_subsets",
+    "trace_pass",
 ]
 
 # --------------------------------------------------------------------------
 # Selection, resolved once at import
 # --------------------------------------------------------------------------
 
-_ARMS = ("off", "per_module", "flat_state")
+#: The shape of the analysis loop.  ``upstream`` is the variable unset.
+MDA_MODES = ("upstream", "flat", "partitioned")
 
-MODULE_SOLVE_NAME: str = (
-    os.environ.get("PROCESS_ARCH_MODULE_SOLVE", "").strip() or "off"
-)
+MDA_MODE: str = os.environ.get("PROCESS_ARCH_MDA", "").strip() or "upstream"
 
-if MODULE_SOLVE_NAME not in _ARMS:
-    raise RuntimeError(
-        f"PROCESS_ARCH_MODULE_SOLVE={MODULE_SOLVE_NAME!r} is not a recognised "
-        f"module-solve arm; expected one of {_ARMS} (or unset for 'off')."
+if MDA_MODE not in MDA_MODES:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_MDA={MDA_MODE!r} is not a recognised shape for the "
+        f"analysis loop; expected one of {MDA_MODES} (or unset for "
+        f"{'upstream'!r})."
     )
 
 #: True when the driver runs a coupling-state fixed point instead of
-#: upstream's ``objf``/``conf`` idempotence loop.  Both non-default arms set
+#: upstream's ``objf``/``conf`` idempotence loop.  Both non-default shapes set
 #: it: they differ in the *schedule*, not in the predicate.
-ENABLED: bool = MODULE_SOLVE_NAME != "off"
+ENABLED: bool = MDA_MODE != "upstream"
 
 #: True when the schedule is a single block over every in-loop node --- the
 #: predicate-matched flat control ``A0'`` of decision **D18**.
 #:
-#: A26 §10 asked whether this arm is the degenerate case of the block schedule
-#: with one block containing every node, and answered *nearly*: the schedule
-#: tables hardcoded the three-module partition, and the outer pass is redundant
-#: with one block but was still paid.  Both are fixed here and in
-#: ``caller.module_schedule`` / ``caller._call_models_by_module``; nothing else
-#: about the arm is new.  It inherits the predicate, the spec loading, the
+#: A26 §10 asked whether this arrangement is the degenerate case of the block
+#: schedule with one block containing every node, and answered *nearly*: the
+#: schedule tables hardcoded the three-module partition, and a further pass was
+#: redundant with one block but was still paid.  Both are fixed here and in
+#: ``caller.module_schedule`` / ``caller._call_models_partitioned``; nothing
+#: else about it is new.  It inherits the predicate, the spec loading, the
 #: subset machinery and the failure policy unchanged.
-FLAT_STATE: bool = MODULE_SOLVE_NAME == "flat_state"
+FLAT: bool = MDA_MODE == "flat"
 
-#: Convergence tolerance of the coupling-state predicate (decision D15: Phase
-#: A's first rung, 1e-6).
+#: Convergence tolerance of the coupling-state predicate, and **the only one**:
+#: decision D23 (the user's ruling of 2026-09-10) fixes one tolerance for every
+#: converger in every arm and both phases, so a block loop stops by the same
+#: number a flat loop stops by.  Default 1e-6, the evaluation phase's first
+#: rung (decision D15).
 TAU: float = float(os.environ.get("PROCESS_ARCH_TAU", "1e-6"))
 
-#: Tolerance of an **inner** block solve, defaulting to :data:`TAU`.
-#:
-#: A26's fix 1 established that comparing arms at matched *tolerance* is not a
-#: comparison: the block arm solves each block against inputs that are about to
-#: change, so at one nominal tau it delivers far more accuracy than the flat
-#: arm and only the extra work shows up in the ratio.  Reading cost off at
-#: matched **achieved** accuracy needs the inner tolerance to be a parameter,
-#: which in the replay engine it already is (``engine.solve_block``).  This is
-#: the same knob in the driver.
-#:
-#: The default is :data:`TAU`, so an unset variable reproduces A25's arm
-#: exactly.  ``flat_state`` has a single block and therefore no separate inner
-#: tolerance: setting one there is an import-time error rather than a value
-#: that quietly does nothing.
-INNER_TAU: float = float(
-    os.environ.get("PROCESS_ARCH_INNER_TAU", "").strip() or TAU
+#: The configuration's committed coupling-state artifact.  No default: see the
+#: module docstring.
+COUPLING_STATE_PATH: str | None = (
+    os.environ.get("PROCESS_ARCH_COUPLING_STATE") or None
 )
 
-if FLAT_STATE and os.environ.get("PROCESS_ARCH_INNER_TAU", "").strip():
-    raise RuntimeError(
-        "PROCESS_ARCH_INNER_TAU is set with "
-        "PROCESS_ARCH_MODULE_SOLVE=flat_state, which has one block and "
-        "therefore one tolerance.  A knob that silently does nothing is how a "
-        "ladder rung ends up mislabelled; set PROCESS_ARCH_TAU instead."
+#: The configuration's committed per-block write sets.  No default, same reason.
+WRITE_SETS_PATH: str | None = os.environ.get("PROCESS_ARCH_WRITE_SETS") or None
+
+if ENABLED and not WRITE_SETS_PATH:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_MDA={MDA_MODE!r} needs PROCESS_ARCH_WRITE_SETS to name "
+        f"the committed per-block write sets for the configuration being run.  "
+        f"There is no default: each block loop tests its own block's write "
+        f"set, and another configuration's subsets would silently test the "
+        f"wrong components."
     )
 
-#: The deck's committed coupling-state artifact.  No default: see the module
-#: docstring.
-YSTATE_PATH: str | None = os.environ.get("PROCESS_ARCH_YSTATE") or None
-
-#: The deck's committed per-module write set.  No default, same reason.
-WRITESET_PATH: str | None = os.environ.get("PROCESS_ARCH_WRITESET") or None
-
-if ENABLED and not WRITESET_PATH:
-    raise RuntimeError(
-        f"PROCESS_ARCH_MODULE_SOLVE={MODULE_SOLVE_NAME!r} needs "
-        f"PROCESS_ARCH_WRITESET to name the committed "
-        f"writeset_<scenario>.json for the deck being run.  There is no "
-        f"default: the inner solves test each module's own write set, and "
-        f"another deck's subsets would silently test the wrong components."
-    )
-
-if ENABLED and not YSTATE_PATH:
-    raise RuntimeError(
-        f"PROCESS_ARCH_MODULE_SOLVE={MODULE_SOLVE_NAME!r} needs "
-        f"PROCESS_ARCH_YSTATE to name the committed ystate_<scenario>.json "
-        f"for the deck being run.  There is no default: the predicate's "
-        f"scales are per-deck, and silently taking another deck's scales "
-        f"would change what 'converged' means with no symptom."
-    )
-
-# --------------------------------------------------------------------------
-# A34 (trust mode): whether the outer joint predicate is evaluated at all.
-# --------------------------------------------------------------------------
-
-#: The two outer-loop policies of the block schedule.
-#:
-#: ``verify`` is the default and is the arm as A25 built it and A28/A32
-#: measured it: after each pass of the block schedule the outer joint
-#: predicate compares the whole coupling state across the pass, and the
-#: schedule repeats until that test passes (the verification receipt).
-#:
-#: ``trust`` is V2's Phase-A BLOCKS / Phase-B A2 policy
-#: (``MDA_partitioning_experiment_v2/EXPERIMENT_PLAN.md`` section 3, Appendix
-#: A item 3): the block schedule runs **exactly once** -- each block's inner
-#: solve still converges at its own inner tolerance, the feed-forward tail
-#: still runs once at the end -- and the outer joint predicate is **never
-#: evaluated**: no outer pass 2, no verification receipt.  Feed-forward
-#: partitioning asserts there is no cross-block coupling left to verify;
-#: whether that assertion holds is measured by the **uncharged exit audit**,
-#: outside the arm, not by an in-loop receipt the arm pays for.
-#:
-#: An unrecognised value is an import-time error, not a silent fallback (the
-#: A3/A13/A25 pattern: a misspelled arm that quietly runs the baseline makes a
-#: whole measurement worthless).
-_OUTER_MODES = ("verify", "trust")
-
-OUTER_MODE: str = os.environ.get("PROCESS_ARCH_OUTER", "").strip() or "verify"
-
-if OUTER_MODE not in _OUTER_MODES:
-    raise RuntimeError(
-        f"PROCESS_ARCH_OUTER={OUTER_MODE!r} is not a recognised outer-loop "
-        f"policy; expected one of {_OUTER_MODES} (or unset for 'verify')."
-    )
-
-#: True when the outer joint predicate is skipped.  Every call site guards on
-#: this, so with the variable unset the hook costs one module-attribute read
-#: per outer pass and touches nothing else -- and that neutrality is **gated**
-#: against A32's recorded start000 (protocol 12), not asserted.
-TRUST_OUTER: bool = OUTER_MODE == "trust"
-
-if TRUST_OUTER and not ENABLED:
-    raise RuntimeError(
-        "PROCESS_ARCH_OUTER=trust is set with PROCESS_ARCH_MODULE_SOLVE=off, "
-        "which has no outer loop to trust.  A switch that silently does "
-        "nothing is how an arm ends up mislabelled; unset it, or select a "
-        "block-schedule arm."
-    )
-
-if TRUST_OUTER and FLAT_STATE:
-    raise RuntimeError(
-        "PROCESS_ARCH_OUTER=trust is set with "
-        "PROCESS_ARCH_MODULE_SOLVE=flat_state, whose single block's own inner "
-        "test IS the joint test -- the single-block guard already skips the "
-        "redundant outer pass, so 'trust' has nothing left to switch off "
-        "there.  A knob that silently does nothing is how an arm ends up "
-        "mislabelled; trust mode is a per_module policy."
+if ENABLED and not COUPLING_STATE_PATH:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_MDA={MDA_MODE!r} needs PROCESS_ARCH_COUPLING_STATE to "
+        f"name the committed coupling-state artifact for the configuration "
+        f"being run.  There is no default: the predicate's scales are "
+        f"per-configuration, and silently taking another one's scales would "
+        f"change what 'converged' means with no symptom."
     )
 
 # --------------------------------------------------------------------------
@@ -311,10 +234,11 @@ PASS_TRACE_PATH: str | None = os.environ.get("PROCESS_ARCH_PASS_TRACE") or None
 TRACE_ENABLED: bool = PASS_TRACE_PATH is not None
 
 if TRACE_ENABLED and not ENABLED:
-    raise RuntimeError(
-        "PROCESS_ARCH_PASS_TRACE is set with PROCESS_ARCH_MODULE_SOLVE=off, "
-        "which has no joint test to trace.  A trace that silently records "
-        "nothing is how a diagnostic reports an absence it never measured."
+    raise ArchitectureRefusal(
+        "PROCESS_ARCH_PASS_TRACE is set with PROCESS_ARCH_MDA unset, so the "
+        "run uses upstream's own loop and has no joint test to trace.  A "
+        "trace that silently records nothing is how a diagnostic reports an "
+        "absence it never measured."
     )
 
 #: The pass index from which the full above-tau census is recorded.  Below
@@ -340,9 +264,8 @@ def _trace_fh(spec):
         _TRACE_FILE = open(PASS_TRACE_PATH, "a")  # noqa: SIM115 - held open
         _TRACE_FILE.write(json.dumps({
             "kind": "header",
-            "arm": MODULE_SOLVE_NAME,
+            "mda": MDA_MODE,
             "tau": TAU,
-            "inner_tau": INNER_TAU,
             "full_from": TRACE_FULL_FROM,
             "n_components": len(spec.keys),
             "components_sha256": spec.components_sha256(),
@@ -487,23 +410,23 @@ FLAT_BLOCK_ORDER: tuple[str, ...] = (FLAT_BLOCK_LABEL,)
 #: with a foregone answer (Phase A's ``arms.ITERATED``).
 ITERATED: frozenset[str] = frozenset({"M1", "M2", "M3"})
 
-#: The one block ``flat_state`` iterates.
+#: The one block the flat arrangement iterates.
 FLAT_ITERATED: frozenset[str] = frozenset({FLAT_BLOCK_LABEL})
 
 
 def block_order() -> tuple[str, ...]:
-    """The block labels this arm's outer pass walks, in order."""
-    return FLAT_BLOCK_ORDER if FLAT_STATE else BLOCK_ORDER
+    """The block labels this arrangement's single schedule pass walks."""
+    return FLAT_BLOCK_ORDER if FLAT else BLOCK_ORDER
 
 
 def iterated() -> frozenset[str]:
-    """The block labels this arm solves to their own fixed point."""
-    return FLAT_ITERATED if FLAT_STATE else ITERATED
+    """The block labels this arrangement solves to their own fixed point."""
+    return FLAT_ITERATED if FLAT else ITERATED
 
 #: Caps are **detectors, not budgets** (Phase A's ``engine.py``).  Reaching one
-#: raises; it never silently returns a half-solved state.
+#: raises; it never silently returns a half-solved state.  There is no cap on
+#: schedule passes because there is only ever one of them.
 INNER_CAP = 20
-OUTER_CAP = 20
 GLOBAL_BLOCK_SWEEP_CAP = 200
 
 
@@ -542,15 +465,14 @@ _SUBSET_CACHE: dict = {}
 
 
 def _ystate_module():
-    """Phase A's ``ystate`` module, loaded once, on the VP4-on path only."""
+    """The coupling-state module, loaded once, on the non-upstream path only."""
     global _ystate
     if _ystate is not None:
         return _ystate
     if not YSTATE_MODULE_PATH.exists():
-        raise RuntimeError(
-            f"PROCESS_ARCH_MODULE_SOLVE={MODULE_SOLVE_NAME!r} needs Phase A's "
-            f"coupling-state predicate at {YSTATE_MODULE_PATH}, which is not "
-            f"present."
+        raise ArchitectureRefusal(
+            f"PROCESS_ARCH_MDA={MDA_MODE!r} needs the coupling-state "
+            f"predicate at {YSTATE_MODULE_PATH}, which is not present."
         )
     spec = importlib.util.spec_from_file_location(
         "_arch_surgery_ystate", YSTATE_MODULE_PATH
@@ -562,7 +484,7 @@ def _ystate_module():
 
 
 def load_spec(path: str | Path | None = None):
-    """Rebuild Phase A's :class:`YSpec` from a committed ystate artifact.
+    """Rebuild the coupling-state :class:`YSpec` from its committed artifact.
 
     The artifact records, per component, the key, the category and (for a
     continuous component) the scale -- which is the whole of what the predicate
@@ -576,7 +498,7 @@ def load_spec(path: str | Path | None = None):
     tuple
         ``(spec, provenance)`` -- the spec, and what it was built from.
     """
-    p = Path(path or YSTATE_PATH)
+    p = Path(path or COUPLING_STATE_PATH)
     cached = _SPEC_CACHE.get(str(p))
     if cached is not None:
         return cached
@@ -600,7 +522,7 @@ def load_spec(path: str | Path | None = None):
     rebuilt = spec.components_sha256()
     committed = record.get("components_sha256")
     if committed and rebuilt != committed:
-        raise RuntimeError(
+        raise ArchitectureRefusal(
             f"ystate artifact {p} does not rebuild: components_sha256 is "
             f"{rebuilt} from the rebuilt spec against {committed} recorded in "
             f"the file.  The predicate would not be Phase A's."
@@ -631,11 +553,11 @@ def load_subsets(spec, path: str | Path | None = None):
     convergence test that silently passes early:
 
     * the artifact's ``ystate_components_sha256`` must equal the spec's own
-      ``components_sha256`` -- one deck, one generation, both files;
+      ``components_sha256`` -- one configuration, one generation, both files;
     * every key named in a subset must resolve to a component of the spec, and
       the union of the subsets must cover every component of the spec.
     """
-    p = Path(path or WRITESET_PATH)
+    p = Path(path or WRITE_SETS_PATH)
     cached = _SUBSET_CACHE.get(str(p))
     if cached is not None:
         return cached
@@ -644,10 +566,10 @@ def load_subsets(spec, path: str | Path | None = None):
     spec_sha = spec.components_sha256()
     art_sha = record.get("ystate_components_sha256")
     if art_sha and art_sha != spec_sha:
-        raise RuntimeError(
+        raise ArchitectureRefusal(
             f"write set {p} was built against ystate components {art_sha} but "
             f"the loaded spec is {spec_sha}: the two artifacts are not from "
-            f"the same deck and generation."
+            f"the same configuration and generation."
         )
 
     index = {f"{ns}.{fld}": i for i, (ns, fld) in enumerate(spec.keys)}
@@ -665,13 +587,13 @@ def load_subsets(spec, path: str | Path | None = None):
         subsets[mod] = frozenset(idx)
         covered |= idx
     if unknown:
-        raise RuntimeError(
+        raise ArchitectureRefusal(
             f"write set {p} names {len(unknown)} keys the coupling-state spec "
             f"does not have, e.g. {sorted(unknown)[:5]}"
         )
     missing = len(spec.keys) - len(covered)
     if missing:
-        raise RuntimeError(
+        raise ArchitectureRefusal(
             f"write set {p} covers {len(covered)} of {len(spec.keys)} "
             f"coupling components; {missing} are written by no module, so an "
             f"inner solve would never test them."

@@ -6,8 +6,11 @@ the check must catch before its zeros are believed (orchestration protocol
 §12).  A count without the number of things compared is not reported.
 
 1. **composition** — every arm composes on every configuration, a skipped arm
-   refuses by name, and the arms the previous revision also ran compose to the
-   same switch settings it used.
+   refuses by name, and the arms the previous revision also ran ask the driver
+   for the **same thing** it asked for.  Same thing, not same spelling: the
+   switches have been renamed since, so the comparison is made **by role**,
+   through the registry's map from each revision's variable names to the term
+   for what the switch does.
 2. **rungs** — the plan's matrix regenerates cell for cell from the arm
    records, and the difference between two arms equals the difference the plan
    declares for that step.
@@ -20,7 +23,12 @@ the check must catch before its zeros are believed (orchestration protocol
    predicate module differs from its own source in nothing but the heritage
    paragraph the record names.
 
-Run it directly, or through ``experiment_runner.py --selfcheck``.
+Run it directly, or through ``experiment_runner.py --selfcheck``.  Both check
+the experiment's own copy of PROCESS, which is the tree every run uses;
+``--tree repository`` checks the repository-root package instead, and since the
+switch rename its capability check **fails by design** — that tree belongs to
+the previous revision and does not implement the new names, which is exactly
+what the probe exists to notice.
 """
 
 from __future__ import annotations
@@ -117,6 +125,20 @@ class Check:
 # dictionaries.  `--crosscheck-previous` executes those two functions in a
 # subprocess and compares, so the transcription itself is measured rather
 # than trusted.
+
+# The comparison below is **by role**, and that is the whole reason it still
+# means something after the rename.  The previous revision's environments carry
+# the names it used; this revision's carry the names it uses.  Comparing them
+# literally would report every arm as different and prove nothing.  Comparing
+# them by role -- through `switches.canonical_roles`, which maps each
+# revision's variable names onto the term for what the switch *does* -- asks
+# the question that matters: does this arm ask the driver for the same thing?
+# Two foldings are part of that map and both can fail loudly rather than
+# absorb a difference: `OUTER=trust` alongside the partitioned loop is dropped
+# because the partitioned loop now means exactly that, and any other
+# combination becomes an explicit role that makes the comparison fail; and the
+# two burn-time settings become one owner, with a constant that lacks the lift
+# refused rather than read as some other owner.
 
 #: Arm names as the previous revision spelled them, for the comparison only.
 _PREVIOUS_NAME = {"BR": "R", "A0": "A0", "A1": "A1", "B0": "B0", "B1": "B1", "B3": "B3"}
@@ -215,6 +237,24 @@ def _architecture_only(env: dict[str, str], config) -> dict[str, str]:
     return out
 
 
+def _roles(env: dict[str, str], config, *, revision: str) -> dict[str, str]:
+    """*env* as ``what the switch does -> the value it is given``.
+
+    Artifact paths are reduced to the file's role first, so that the two
+    revisions' different directory layouts do not read as different requests;
+    then the variable names are mapped onto the terms, which is what makes a
+    renamed switch comparable with its old name.
+    """
+    reduced = _architecture_only(env, config)
+    roles = sw.canonical_roles(reduced, revision=revision)
+    constant = roles.get("burn_time_owner", "")
+    if constant.startswith("constant:"):
+        # The constant itself rides a per-seed displacement stream and is not
+        # the thing under comparison; that a constant owns the quantity is.
+        roles["burn_time_owner"] = "constant:<a constant>"
+    return roles
+
+
 _PIN_HEX = float(1234.5).hex()
 
 
@@ -222,7 +262,9 @@ def check_composition(campaign: Campaign) -> Check:
     check = Check(
         name="composition",
         binds="every arm composes on every configuration, and the arms the "
-        "previous revision also ran compose to the same switch settings",
+        "previous revision also ran ask the driver for the same thing — "
+        "compared by role, through the registry's name map, because the "
+        "switches have been renamed since",
         population=(
             f"{len(arms_mod.ARMS)} arms x {len(campaign.configurations)} "
             f"configurations = "
@@ -292,25 +334,32 @@ def check_composition(campaign: Campaign) -> Check:
                 f"owns the burn time"
             )
 
-    # --- equality with the previous revision, switch for switch ------------
+    # --- the same request as the previous revision, role for role ----------
     previous_compared = 0
+    roles_compared = 0
     for config in campaign.configurations:
         for name in _PREVIOUS_NAME:
             if name in config.skips or (name, config.name) not in composed:
                 continue
-            mine = _architecture_only(composed[(name, config.name)], config)
-            if "PROCESS_ARCH_PIN_BURN_TIME" in mine:
-                mine["PROCESS_ARCH_PIN_BURN_TIME"] = "<pin>"
-            theirs = _previous_environment(name, config, campaign)
+            mine = _roles(composed[(name, config.name)], config, revision="current")
+            theirs = _roles(
+                _previous_environment(name, config, campaign),
+                config,
+                revision="previous",
+            )
             previous_compared += 1
+            roles_compared += len(set(mine) | set(theirs))
             if mine != theirs:
                 check.fail(
-                    f"{name} on {config.name}: composed {mine}, the previous "
-                    f"revision composed {theirs}"
+                    f"{name} on {config.name}: asks the driver for {mine}, the "
+                    f"previous revision asked for {theirs}"
                 )
+    check.n_compared += previous_compared
     check.note(
         f"{previous_compared} arm/configuration pair(s) compared against the "
-        f"previous revision's composition"
+        f"previous revision's composition **by role**, {roles_compared} role "
+        f"value(s) in total; the switch names differ on the two sides and the "
+        f"registry's name map is what makes them comparable"
     )
 
     # --- the arms whose declared switches no tree implements ---------------
@@ -387,33 +436,70 @@ def check_composition(campaign: Campaign) -> Check:
     )
 
     # --- teeth -------------------------------------------------------------
+    #
+    # Every break below is made on the **role** dictionary, because that is
+    # what the comparison above compares.  A tooth that broke a variable name
+    # would only prove that the two revisions spell things differently, which
+    # is true and uninteresting.
     config = campaign.configurations[0]
-    broken = dict(_architecture_only(composed[("B0", config.name)], config))
-    broken["PROCESS_ARCH_MODULE_SOLVE"] = "per_module"
+
+    def previous_roles(name: str, cfg) -> dict[str, str]:
+        return _roles(
+            _previous_environment(name, cfg, campaign), cfg, revision="previous"
+        )
+
+    broken = _roles(composed[("B0", config.name)], config, revision="current")
+    broken["mda"] = "partitioned"
     check.tooth(
         "wrong switch value in one arm",
-        broken != _previous_environment("B0", config, campaign),
+        broken != previous_roles("B0", config),
         "B0's analysis-loop switch set to the partitioned value must not "
         "match the previous revision's B0",
     )
-    missing = dict(_architecture_only(composed[("B3", config.name)], config))
-    missing.pop("PROCESS_ARCH_PRIME", None)
+    missing = _roles(composed[("B3", config.name)], config, revision="current")
+    missing.pop("arrangement_method", None)
     check.tooth(
         "one switch dropped from an arm",
-        missing != _previous_environment("B3", config, campaign),
+        missing != previous_roles("B3", config),
         "B3 without the method-arrangement switch must not match the "
         "previous revision's B3",
     )
     pulsed = [c for c in campaign.configurations if c.pulsed]
     if pulsed:
-        swapped = dict(_architecture_only(composed[("A1", pulsed[0].name)], pulsed[0]))
-        swapped["PROCESS_ARCH_POST_SOLVE"] = "<defer_per_run_lifted>"
+        swapped = _roles(
+            composed[("A1", pulsed[0].name)], pulsed[0], revision="current"
+        )
+        swapped["defer_per_run"] = "<defer_per_run_lifted>"
         check.tooth(
             "the wrong per-run artifact handed to an arm",
-            swapped != _previous_environment("A1", pulsed[0], campaign),
+            swapped != previous_roles("A1", pulsed[0]),
             "the evaluation phase's block arm runs the committed input file, "
             "so it takes the artifact stamped for the base constraint set; "
             "handing it the lifted input file's artifact must not match",
+        )
+        folded = _roles(
+            composed[("B3", pulsed[0].name)], pulsed[0], revision="current"
+        )
+        theirs = dict(_previous_environment("B3", pulsed[0], campaign))
+        theirs.pop("PROCESS_ARCH_OUTER", None)
+        check.tooth(
+            "the fold read as a difference",
+            folded == _roles(theirs, pulsed[0], revision="previous"),
+            "the previous revision needed a second switch to say that the "
+            "block schedule runs once; the partitioned loop now means that by "
+            "itself.  Dropping that switch from the previous revision's side "
+            "must leave the two asking for the same thing -- if it did not, "
+            "the comparison above would be treating a rename as a change",
+        )
+        unfolded = dict(_previous_environment("B3", pulsed[0], campaign))
+        unfolded["PROCESS_ARCH_OUTER"] = "verify"
+        check.tooth(
+            "a schedule policy the fold does not cover",
+            folded != _roles(unfolded, pulsed[0], revision="previous"),
+            "the fold drops the previous revision's schedule switch only where "
+            "its value is the one the partitioned loop now implies; the other "
+            "value must survive as a role of its own and make the comparison "
+            "fail",
         )
 
     steady = [c for c in campaign.configurations if not c.pulsed]
@@ -629,15 +715,13 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
 
         wrong_value = sw.Switch(
             term="tooth_wrong_value",
-            driver_name="PROCESS_ARCH_MODULE_SOLVE",
+            driver_name="PROCESS_ARCH_MDA",
             intended_name=None,
             value_kind="enum",
-            values=("per_module",),
+            values=("partitioned",),
             composed=True,
-            readbacks=((sw.MODULE_SOLVE, "MODULE_SOLVE_NAME"),),
-            resolved_as_asked=lambda r, v: r.get(
-                f"{sw.MODULE_SOLVE}.MODULE_SOLVE_NAME"
-            )
+            readbacks=((sw.MODULE_SOLVE, "MDA_MODE"),),
+            resolved_as_asked=lambda r, v: r.get(f"{sw.MODULE_SOLVE}.MDA_MODE")
             == v,
         )
         sw.REGISTRY["tooth_wrong_value"] = wrong_value
@@ -646,7 +730,7 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
         try:
             sw.assert_capable(
                 campaign.tree,
-                {"tooth_wrong_value": "per_module"},
+                {"tooth_wrong_value": "partitioned"},
                 env,
                 label="tooth",
                 timeout=timeout,
@@ -663,18 +747,94 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
         sw.REGISTRY.pop("tooth_absent_switch", None)
         sw.REGISTRY.pop("tooth_wrong_value", None)
 
-    caught = False
-    try:
-        sw.assert_no_retired(
-            {"PROCESS_ARCH_INNER_TAU": "1e-8", **reference_env}
+    # --- every intended name resolves, and every retired one refuses -------
+    #
+    # Measured, not declared.  The registry says which names this revision
+    # uses and which it retired; the tree says the same thing in its own
+    # source.  If the two ever disagree the harness is describing a driver it
+    # is not running -- which is the failure this whole module exists for.
+    probe = sw.probe(
+        campaign.tree,
+        reference_env,
+        readbacks=(*sw.default_readbacks(), (sw.SOLVER, "RETIRED_SWITCHES")),
+        timeout=timeout,
+    )
+    if not probe.ok:
+        check.fail(f"the capability probe could not import the tree: {probe.error}")
+    else:
+        composed_terms = [
+            term
+            for term, entry in sw.REGISTRY.items()
+            if entry.composed and entry.implemented
+        ]
+        unresolved = [
+            f"{term} ({sw.REGISTRY[term].driver_name}) -> {module}.{attribute}"
+            for term in composed_terms
+            for module, attribute in sw.REGISTRY[term].readbacks
+            if f"{module}.{attribute}" not in probe.resolved
+        ]
+        check.n_compared += len(composed_terms)
+        if unresolved:
+            check.fail(
+                "the tree resolves no readback for "
+                + "; ".join(unresolved)
+                + " -- a switch the tree does not implement runs a different "
+                "arrangement under this arm's name"
+            )
+        check.note(
+            f"{len(composed_terms)} composed switch term(s) resolve every "
+            f"readback the registry names, on the tree under test"
         )
-    except sw.SwitchError:
-        caught = True
+
+        in_driver = probe.value(sw.SOLVER, "RETIRED_SWITCHES")
+        in_registry = sorted(sw.retired_names())
+        check.n_compared += 1
+        if not isinstance(in_driver, dict):
+            check.fail(
+                f"the tree has no {sw.SOLVER}.RETIRED_SWITCHES, so the driver "
+                f"refuses no stale switch name and the harness's list is a "
+                f"claim about a tree that cannot keep it"
+            )
+        elif sorted(in_driver) != in_registry:
+            check.fail(
+                f"the driver retires {sorted(in_driver)} but the registry "
+                f"retires {in_registry}; a name on one list and not the other "
+                f"is either a switch the harness clears while the driver still "
+                f"honours it, or one the harness refuses that the driver has "
+                f"never heard of"
+            )
+        else:
+            check.note(
+                f"{len(in_registry)} retired switch name(s), identical in the "
+                f"registry and in the driver's own list: "
+                f"{', '.join(in_registry)}"
+            )
+
+    for retired in sorted(sw.retired_names()):
+        caught = False
+        try:
+            sw.assert_no_retired({retired: "anything", **reference_env})
+        except sw.SwitchError:
+            caught = True
+        check.tooth(
+            f"the retired name {retired} present in the environment",
+            caught,
+            "a retired switch name must be refused, not cleared and forgotten: "
+            "an ignored one runs a different arrangement under the right name",
+        )
+
+    refused_by_driver = sw.probe(
+        campaign.tree,
+        {**reference_env, "PROCESS_ARCH_OUTER": "trust"},
+        timeout=timeout,
+    )
     check.tooth(
-        "a retired switch name present in the environment",
-        caught,
-        "a second tolerance was retired by the one-tolerance ruling and must "
-        "be refused, not cleared and forgotten",
+        "the driver's own refusal of a retired name",
+        (not refused_by_driver.ok)
+        and "ArchitectureRefusal" in (refused_by_driver.error or ""),
+        "the guard is in the driver as well as in the harness, so a caller "
+        "that bypasses the harness is refused too: the tree must fail to "
+        f"import with a retired name set ({refused_by_driver.error})",
     )
     return check
 
@@ -1354,10 +1514,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--tree",
         choices=("copy", "repository"),
-        default="repository",
-        help="which tree to check against: the experiment's own copy of "
-        "PROCESS, or the repository's (the default while the copy is being "
-        "created by another task)",
+        default="copy",
+        help="which tree to check against.  The default is the experiment's "
+        "own copy, which is the tree every run uses.  'repository' checks "
+        "against the repository-root package, which belongs to the previous "
+        "revision: **its capability check now fails by design**, because that "
+        "tree does not implement the renamed switches and the probe's whole "
+        "job is to say so",
     )
     parser.add_argument(
         "--no-capability",

@@ -84,7 +84,14 @@ class Arm:
 
     @property
     def schedule_passes(self) -> str:
-        """How often the block schedule runs: not a choice, a consequence."""
+        """How often the block schedule runs: not a choice, a consequence.
+
+        It composes **no switch**.  The driver used to take a separate setting
+        for it and this property used to be the value of that setting; since
+        the rename, choosing the partitioned loop *is* choosing to run the
+        schedule once, and the old switch name raises if anything sets it.
+        The property survives because the plan's matrix has a row for it.
+        """
         if self.mda == "upstream":
             return "none"
         return "once" if self.mda == "partitioned" else "single block"
@@ -126,7 +133,7 @@ class Arm:
 
         lifted_here = config.pulsed and self.burn_time_out_of_loop
         terms: dict[str, str] = {
-            "mda": {"flat": "flat_state", "partitioned": "per_module"}[self.mda],
+            "mda": self.mda,
             "tolerance": repr(campaign.tau),
             "coupling_state": str(config.coupling_state_path),
             "write_sets": str(config.write_sets_path),
@@ -149,7 +156,10 @@ class Arm:
                 )
             )
         if lifted_here:
-            terms["burn_time_lift"] = "burn_time"
+            # One switch says who owns the burn time.  The two settings this
+            # replaces could disagree with each other -- a constant owning a
+            # quantity the model still solved for -- and that combination can
+            # no longer be written down.
             if self.burn_time_owner == "constant":
                 if pin_hex is None:
                     raise SwitchError(
@@ -159,9 +169,9 @@ class Arm:
                         + ": running it without that constant would leave the "
                         f"loop owning the variable and measure a different arm"
                     )
-                terms["burn_time_pin"] = pin_hex
-        if self.mda == "partitioned":
-            terms["schedule_passes"] = "trust"
+                terms["burn_time_owner"] = f"constant:{pin_hex}"
+            else:
+                terms["burn_time_owner"] = self.burn_time_owner
         if self.output_loop == "none":
             terms["output_loop"] = "none"
         if predicate_mode != campaign.predicate_mode_default:

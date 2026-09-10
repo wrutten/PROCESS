@@ -274,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         child.install_node_census(caller_mod) if args.node_census else None
     )
     nodes_before = caller_mod.NODE_CALLS[0]
-    prime_cell = getattr(caller_mod, "PRIME_CALLS", None)
+    prime_cell = getattr(caller_mod, "ARRANGEMENT_METHOD_CALLS", None)
     prime_before = prime_cell[0] if prime_cell is not None else None
 
     objf = conf = None
@@ -320,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
                 numerics.i_figure_merit
             )[0]
         ]
-        if getattr(caller_mod, "MODULE_SOLVE_ENABLED", False)
+        if getattr(caller_mod, "MDA_ENABLED", False)
         else None
     )
     if objf is not None:
@@ -332,14 +332,14 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     record["t_plant_pulse_burn"] = float(data.times.t_plant_pulse_burn)
     record["t_plant_pulse_burn_hex"] = child.hexf(data.times.t_plant_pulse_burn)
     pinned = record["resolved_switches"].get(
-        "process.core.solver.subsolve.PIN_ENABLED"
+        "process.core.solver.subsolve.CONSTANT_OWNS_BURN_TIME"
     )
     record["pin_intact_at_exit"] = (
         (
             float(data.times.t_plant_pulse_burn)
             == float(
                 record["resolved_switches"].get(
-                    "process.core.solver.subsolve.PIN_BURN_TIME"
+                    "process.core.solver.subsolve.BURN_TIME_CONSTANT"
                 )
             )
         )
