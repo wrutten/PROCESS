@@ -77,6 +77,12 @@ committed script; the failure paths are reachable from the same entry point)
     tolerance it was set -- and then the exact component-by-component
     difference between the two arms' recorded handover states.  That
     difference is not a proxy for the B2/B3 gap; it is the gap.
+``tooth``
+    The plumbing tooth for the B3 control's zero: with the trace variable
+    still set and ``PROCESS_ARCH_MODULE_SOLVE=off`` the instrument must
+    refuse at import naming ``PROCESS_ARCH_PASS_TRACE``.  Two cases,
+    because ``module_solve``'s guard order matters and the first version of
+    this tooth was pre-empted by an earlier guard -- both are recorded.
 ``ladder``
     The discriminator.  Two knobs, moved one at a time, on small seeds:
     lowering the OUTER tolerance (``PROCESS_ARCH_TAU``) while the inner
@@ -97,8 +103,8 @@ committed script; the failure paths are reachable from the same entry point)
 ``tables``
     Emits every table the report cites, as markdown and JSON.
 ``all``
-    pairing, divergence, neutrality, trace, ladder, exitgap, classify,
-    tables.
+    pairing, divergence, neutrality, trace, tooth, ladder, exitgap,
+    classify, tables.
 
 Isolation, trees, tolerances
 ----------------------------
@@ -1251,6 +1257,85 @@ def stage_trace(out: Path, seeds: list, jobs: int) -> dict:
 
 
 # ==========================================================================
+# stage: tooth -- can B3's zero trace records be an artifact of the harness?
+# ==========================================================================
+
+def stage_tooth(out: Path, seed: int) -> dict:
+    """Show that ``PROCESS_ARCH_PASS_TRACE`` actually reaches the subprocess.
+
+    Trust mode never evaluates the joint test, so a traced B3 run writes no
+    joint-test record and the trace file is never even created.  That zero
+    is only evidence about trust mode if the trace variable ARRIVED.
+    ``module_solve`` refuses at import when a trace is requested of an arm
+    with no joint test at all (``PROCESS_ARCH_MODULE_SOLVE=off``), so the
+    same plumbing plus that one extra variable must kill the run with that
+    specific message.
+
+    Two runs, because the guards are ordered and the first one wins:
+
+    ``trust_and_off``
+        B3's environment plus ``MODULE_SOLVE=off``.  ``module_solve`` checks
+        ``TRUST_OUTER and not ENABLED`` BEFORE it checks the trace, so this
+        dies on the trust guard.  It proves the arm switches arrive; it says
+        nothing about the trace variable.  Recorded because the first
+        version of this tooth was exactly this and it does not bite.
+    ``trace_and_off``
+        the same, with ``PROCESS_ARCH_OUTER`` removed so the trace guard is
+        the first one reached.  This is the tooth: it must die naming
+        ``PROCESS_ARCH_PASS_TRACE``.
+    """
+    _assert_tree()
+    want_trace = ("PROCESS_ARCH_PASS_TRACE is set with "
+                  "PROCESS_ARCH_MODULE_SOLVE=off")
+    want_trust = ("PROCESS_ARCH_OUTER=trust is set with "
+                  "PROCESS_ARCH_MODULE_SOLVE=off")
+    cases = {
+        "trust_and_off": ({"PROCESS_ARCH_MODULE_SOLVE": "off"}, want_trust),
+        "trace_and_off": ({"PROCESS_ARCH_MODULE_SOLVE": "off",
+                           "PROCESS_ARCH_OUTER": None}, want_trace),
+    }
+    rows = {}
+    for name, (env, want) in cases.items():
+        d = RUNS / "tooth" / name
+        r = run_arm("B3", seed, d, trace=True, extra_env=env, timeout=900)
+        err = (d / "stderr.log").read_text() if (d / "stderr.log").exists() \
+            else ""
+        mp = d / "metrics.json"
+        st = jload(mp).get("status") if mp.exists() else None
+        rows[name] = {
+            "env_added": {k: v for k, v in env.items()},
+            "rc": r.get("rc"),
+            "status": st,
+            "expected_message": want,
+            "refused_with_the_expected_message": want in err,
+            "refused_at_all": (r.get("rc") not in (0, None)),
+            "stderr_tail": err[-700:],
+            "outdir": str(d),
+        }
+    return_ = {
+        "what": (
+            "the plumbing tooth for B3's zero: with the same environment "
+            "plus PROCESS_ARCH_MODULE_SOLVE=off the trace instrument must "
+            "refuse at import, naming PROCESS_ARCH_PASS_TRACE.  If it did "
+            "not, the trace variable was never reaching the subprocess and "
+            "B3's zero would be a harness artifact rather than a property "
+            "of trust mode."),
+        "seed": seed,
+        "cases": rows,
+        "gate": bool(rows["trace_and_off"]["refused_with_the_expected_message"]),
+        "note": (
+            "`trust_and_off` is recorded because it was the first version of "
+            "this tooth and it does NOT bite: module_solve's guard order puts "
+            "the trust-mode check before the trace check, so that run dies on "
+            "the wrong guard.  A tooth pre-empted by an earlier guard proves "
+            "the wrong thing, and saying so is cheaper than quietly replacing "
+            "it."),
+    }
+    jdump(return_, out / "tooth.json")
+    return return_
+
+
+# ==========================================================================
 # stage: ladder -- the discriminator
 # ==========================================================================
 
@@ -1847,8 +1932,8 @@ def _fmt(x, nd=3):
 def stage_tables(out: Path) -> dict:
     md = []
     art = {}
-    for name in ("pairing", "divergence", "neutrality", "trace", "ladder",
-                 "exitgap", "classify"):
+    for name in ("pairing", "divergence", "neutrality", "trace", "tooth",
+                 "ladder", "exitgap", "classify"):
         p = out / f"{name}.json"
         art[name] = jload(p) if p.exists() else None
 
@@ -2205,17 +2290,36 @@ def stage_tables(out: Path) -> dict:
                 f"{_fmt(r.get('reproduces_campaign_record'))} |")
         md.append("")
         b3 = tr.get("b3_control") or {}
-        pt = b3.get("plumbing_tooth") or {}
         md.append(
             f"**B3 control** (seed {b3.get('seed')}, trust mode): joint-test "
             f"records written by the trace = **{b3.get('n_joint_test_records')}**"
             f" (trace file created: {_fmt(b3.get('trace_present'))}); the run "
             f"reproduces its campaign record: "
-            f"{_fmt(b3.get('reproduces_campaign_record'))}. Plumbing tooth "
-            f"(same environment plus `PROCESS_ARCH_MODULE_SOLVE=off`, which "
-            f"the instrument must refuse): refused with the expected message "
-            f"= **{_fmt(pt.get('refused_with_the_expected_message'))}**, "
-            f"rc = {pt.get('rc')}.\n")
+            f"{_fmt(b3.get('reproduces_campaign_record'))}.\n")
+        th = art.get("tooth") or {}
+        if th:
+            md.append(
+                "*Plumbing tooth for that zero (stage `tooth`): the same "
+                "environment plus `PROCESS_ARCH_MODULE_SOLVE=off`, which the "
+                "trace instrument must refuse at import. A row is one case; "
+                "`refused with the expected message` requires the refusal to "
+                "name the variable being tested.*\n")
+            md.append("| case | env added | rc | refused at all | refused "
+                      "naming `PROCESS_ARCH_PASS_TRACE`\u2020 |")
+            md.append("|---|---|---|---|---|")
+            for nm, c in (th.get("cases") or {}).items():
+                md.append(
+                    f"| `{nm}` | `{c['env_added']}` | {c['rc']} | "
+                    f"{_fmt(c['refused_at_all'])} | "
+                    f"{_fmt(c['refused_with_the_expected_message'])} |")
+            md.append("")
+            md.append(
+                "† for `trust_and_off` the expected message is the "
+                "trust-mode guard's, not the trace guard's — that case is "
+                "recorded because it was the first version of this tooth "
+                "and it is pre-empted by an earlier guard, so it proves the "
+                "wrong thing. `trace_and_off` is the tooth. Gate: "
+                f"**{'PASS' if th.get('gate') else 'FAIL'}**.\n")
 
     # T6 ladder
     if art["ladder"]:
@@ -2381,8 +2485,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="A43 (st-trust-gap): the st_regression B2/B3 gap")
     ap.add_argument("stage", choices=(
-        "pairing", "divergence", "neutrality", "trace", "ladder", "exitgap",
-        "classify", "tables", "all"))
+        "pairing", "divergence", "neutrality", "trace", "tooth", "ladder",
+        "exitgap", "classify", "tables", "all"))
     ap.add_argument("--out", default=str(RUNS / "out"),
                     help="where the stage JSON/markdown artifacts land")
     ap.add_argument("--seeds", default=None,
@@ -2423,6 +2527,10 @@ def main(argv=None) -> int:
         r = stage_trace(out, seeds, args.jobs)
         print(f"  {r['n_runs_reproducing_campaign_record']}/{r['n_runs']} "
               f"traced runs reproduce their campaign record exactly")
+    if args.stage in ("tooth", "all"):
+        print("\n== stage tooth ==")
+        r = stage_tooth(out, args.neutrality_seed)
+        print(f"  tooth: {'PASS' if r['gate'] else 'FAIL'}")
     if args.stage in ("ladder", "all"):
         print("\n== stage ladder ==")
         stage_ladder(out, lseeds, args.jobs)
