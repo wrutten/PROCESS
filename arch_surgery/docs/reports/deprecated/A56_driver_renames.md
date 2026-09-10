@@ -1,11 +1,8 @@
 # A56 (driver-renames) — the V4 driver's switches take their intended names
 
-> **Document status** — **OPEN.** Task report for `A56 (driver-renames)`, branch
-> `A56-driver-renames`, worktree
-> `/home/wrutten/projects/PROCESS_surgery_worktrees/A56-driver-renames`, off
-> `architecture_surgery` at `f1f90c20`. Every number below was produced by a committed script in
-> this branch and the section that quotes it names the script and the commit it ran at. Nothing
-> here is a timing.
+> **Document status** — **MERGED, archived.** Task **A56 (driver-renames)**, branch `A56-driver-renames`
+> (retired) off `architecture_surgery` at `f1f90c20`, merged on 2026-09-10 (`16d7eb55`); the orchestrator's
+> critical assessment (protocol §5) is §14. Folder position records lifecycle, not validity (trap T3).
 
 ---
 

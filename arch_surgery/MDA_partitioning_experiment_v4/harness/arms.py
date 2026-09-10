@@ -319,8 +319,8 @@ PLAN_MATRIX: dict[str, tuple[str, ...]] = {
                   "upstream", "flat", "flat", "partitioned"),
     "stopping rule": ("objf/conf", "y @ τ", "y @ τ", "y @ τ",
                       "objf/conf", "y @ τ", "y @ τ", "y @ τ"),
-    "outer loop": ("—", "(one block)", "(one block)", "trust",
-                   "—", "(one block)", "(one block)", "trust"),
+    "block schedule": ("—", "(one block)", "(one block)", "one pass",
+                       "—", "(one block)", "(one block)", "one pass"),
     "arrangement · node (build after physics)": ("—", "—", "—", "✓",
                                                  "—", "—", "—", "✓"),
     "arrangement · method (prime)": ("—", "—", "—", "✓", "—", "—", "—", "✓"),
@@ -343,8 +343,8 @@ def matrix_cell(arm: Arm, row: str) -> str:
         return arm.mda
     if row == "stopping rule":
         return arm.stopping_rule
-    if row == "outer loop":
-        return {"none": "—", "single block": "(one block)", "once": "trust"}[
+    if row == "block schedule":
+        return {"none": "—", "single block": "(one block)", "once": "one pass"}[
             arm.schedule_passes
         ]
     if row == "arrangement · node (build after physics)":

@@ -1272,6 +1272,17 @@ of what looks like bulk is the instrument.
   lifted-input digests committed in `harness/input_files.py` are A51's derivation gate. The
   composition tooth measured `PROCESS_ARCH_OUTER` as load-bearing for the partitioned arms — A56
   folds it into `partitioned`. GR took 324 s at three workers, not the ~1.5 h estimated (context only).
+- **2026-09-10 — amendment 7, at the merge of A56 (driver-renames): DR1 landed.** The copy reads the §11.2
+  switch names; `PROCESS_ARCH_OUTER` is removed (the partitioned loop runs its schedule once; the
+  verified-schedule code is deleted, and GR after the rename shows the deletion moved nothing), `INNER_TAU`
+  retired under the one τ, the lift and pin folded into `PROCESS_ARCH_BURN_TIME_OWNER`; eleven retired names
+  raise; a typed `ArchitectureRefusal`. `harness/gates.py` exists with the `Gate`/`Tooth` framework, G0′ and
+  G1 (six run pairs, 0 of 2 383 values and 0 of 51 319 output lines differ; 648 values and 45 lines excluded by
+  name — A52 inherits the exclusion set to review, not extend). Rulings: the experiment plan's matrix row
+  "outer loop" is "block schedule" (`one pass`) and the harness transcription moved with it; record fields
+  carrying V3 mechanism words are renamed by A53 through a field-name map in `reference.py`, never by
+  regenerating the committed reference; `pulse.py:246`'s comment naming a retired switch is a frozen-file
+  question for the user (D11).
 
 ---
 

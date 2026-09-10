@@ -205,7 +205,7 @@ Nodes not deferred run `per_sweep`. `AR`/`BR` have every switch unset: PROCESS a
 |---|---|---|---|---|---|---|---|---|
 | MDA solve | upstream | flat | flat | **partitioned** | upstream | flat | flat | partitioned |
 | stopping rule | objf/conf | `y` @ τ | `y` @ τ | `y` @ τ | objf/conf | `y` @ τ | `y` @ τ | `y` @ τ |
-| outer loop | — | *(one block)* | *(one block)* | trust | — | *(one block)* | *(one block)* | trust |
+| block schedule | — | *(one block)* | *(one block)* | one pass | — | *(one block)* | *(one block)* | one pass |
 | arrangement · node (`build` after `physics`) | — | — | — | ✓ | — | — | — | ✓ |
 | arrangement · method (prime) | — | — | — | ✓ | — | — | — | ✓ |
 | deferral `per_call` | — | — | — | ✓ | — | — | — | ✓ |
@@ -226,14 +226,7 @@ own inner-solve slack below τ (max 3.3e-9, in M2 and M3, none in M1), and 0 of 
 loop-carried cross-block edge in the dependency export. **`st_regression` stays in V4.** What the
 verification pass bought was sub-τ accuracy, and the inner tolerance buys it instead — decision (g).
 
-*The switches, for the record (level names per item 1d; the environment-variable names for the
-two renamed deferral switches are **proposed here and fixed by the harness implementation
-plan**; the V3 name in parentheses where it changes):* `PROCESS_ARCH_MODULE_SOLVE = flat_state | per_module`; `PROCESS_ARCH_OUTER = verify | trust`;
-`PROCESS_ARCH_SEQUENCE = build_after_physics`; `PROCESS_ARCH_PRIME = fw_geometry`;
-`PROCESS_ARCH_DEFER_PER_CALL` (was `HOIST`) and `PROCESS_ARCH_DEFER_PER_RUN = <artifact>` (was
-`POST_SOLVE`); `PROCESS_ARCH_LIFT = burn_time`; `PROCESS_ARCH_PIN_BURN_TIME = <hex>`;
-`PROCESS_ARCH_TAU`, `PROCESS_ARCH_YSTATE`, `PROCESS_ARCH_WRITESET` (the tolerance and the two
-committed per-configuration artifacts that define `y` and the per-node write sets).
+*The switches, for the record — the names the copy reads since DR1 (A56 (driver-renames), 2026-09-10; harness plan §11.2), the V3 name in parentheses; every retired name raises if set:* `PROCESS_ARCH_MDA = flat | partitioned` (was `MODULE_SOLVE = flat_state | per_module`; `OUTER` retired — `partitioned` runs its block schedule once); `PROCESS_ARCH_ARRANGEMENT_NODE = build_after_physics` (was `SEQUENCE`); `PROCESS_ARCH_ARRANGEMENT_METHOD = fw_geometry` (was `PRIME`); `PROCESS_ARCH_DEFER_PER_CALL = feedforward | feedforward_lifted` (was `HOIST`); `PROCESS_ARCH_DEFER_PER_RUN = <artifact>` (was `POST_SOLVE`); `PROCESS_ARCH_BURN_TIME_OWNER = loop | constant:<hex> | optimiser` (was `LIFT = burn_time` and `PIN_BURN_TIME = <hex>`); `PROCESS_ARCH_TAU` (`INNER_TAU` retired, D23); `PROCESS_ARCH_COUPLING_STATE` and `PROCESS_ARCH_WRITE_SETS` (were `YSTATE`, `WRITESET`) — the two committed per-configuration artifacts that define `y` and the per-block write sets. Pending, refused until their driver change lands: `PROCESS_ARCH_OUTPUT_LOOP = none` (A57) and `PROCESS_ARCH_PREDICATE = frozen | mixed` (A59).
 
 **The rungs, and what each isolates.** Adjacent arms differ by one named thing; the ladder is
 declared, and the harness refuses an arm pair whose declared difference does not match its
@@ -248,7 +241,7 @@ Phase B twin and every Phase B arm a Phase A one.*
 |---|---|---|---|
 | `AR → A0` | `BR → B0` | **the stopping rule** — upstream's objective/constraint test at its two-pass floor vs the coupling-state test at τ | reported, never accepted on (a comparison at unmatched accuracy by construction — §3.6) |
 | `A0 → A0p` | `B0 → B1` | **burn-time ownership** — the loop vs a constant (A) / the optimiser (B); *the one rung where the phases differ in kind* — and, in Phase B only, **the output-time loop** (`upstream → none`), placed on this rung deliberately: it is the rung already declared to differ in kind between the phases, so the headline rung `B1 → B3` keeps a switch set identical to `A0p → A1`. *(Wording completed 2026-09-10 after A47 (harness-skeleton) found the row named only ownership; the matrix is unchanged. The output-time loop's sweeps are counted per run and published as their own column, so neither rung's attribution carries them silently.)* | Phase A: cost and audit at matched map; Phase B: checks 1–3 |
-| `A0p → A1` | `B1 → B3` | **the partitioning intervention** — block solves + arrangement (node and method) + both deferrals + trust | Phase A headline (RQ1); Phase B headline via `B0 → B3` (RQ2); `ε = 1` pre-declared on the pulsed configurations |
+| `A0p → A1` | `B1 → B3` | **the partitioning intervention** — block solves + arrangement (node and method) + both deferrals + one pass over the block schedule | Phase A headline (RQ1); Phase B headline via `B0 → B3` (RQ2); `ε = 1` pre-declared on the pulsed configurations |
 
 `B0 → B3` is the designed-architecture comparison and the Phase B headline; `BR → B3` is the
 user-facing figure and is published beside it, never instead of it.
@@ -289,7 +282,7 @@ time), so `A0 → A0p` changes the owner without changing the node set.
 order, each iterated to its own fixed point at τ (inner cap 20 sweeps; reaching it is a
 refusal, not a budget); `build` resequenced after `physics`; the prime at every sweep head;
 `per_call` and `per_run` deferral by the measured routing rule; the burn time lifted. Both run
-the outer loop in **trust** mode — one schedule pass, no verification. There are no prime-free
+**one pass over the block schedule** — what V3 called the outer loop in trust mode; the switch that chose it (`PROCESS_ARCH_OUTER`) is retired and the verified-schedule code removed (DR1, A56 (driver-renames), 2026-09-10). There are no prime-free
 twins (item 0; V3 decision O5) and no verified-outer-loop twin (§3.2). **Their certificate of
 convergence is the block solves' inner tolerance plus the uncharged exit audit at the handover
 point** — there is no outer verification pass, so the inner tolerance is what sets the handover
@@ -1045,3 +1038,8 @@ implementation plan's.*
   pass. §3.3: the audit position's implementation stated (snapshot at the declared entry, residual
   after the run; hook with A57). The composition tooth measured that `PROCESS_ARCH_OUTER` is still
   load-bearing for the partitioned arms until A56 folds it into `partitioned`.
+- 2026-09-10 — **A56 (driver-renames) merged — DR1**: the copy's switches carry the §11.2 names; `PROCESS_ARCH_OUTER`
+  removed (the partitioned loop runs its schedule once, the verified-schedule code deleted), `INNER_TAU` retired, the
+  lift and pin folded into the burn-time owner; a typed refusal. Gates G0′, G1 (0 differences over 2 383 values and
+  51 319 output lines) and GR after the rename (270/270) all PASS, re-run by the orchestrator. §3.2: the matrix row
+  "outer loop" is now "block schedule" (`one pass`), the rung wording and the switch list follow.
