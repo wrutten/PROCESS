@@ -91,6 +91,8 @@ Decomposed into the questions V4 answers, each with its own arm pair and accepta
 | **lift** | taking the burn time out of the loop; its **owner** becomes either a *constant* (Phase A: pinned at the entry value) or *the optimiser* (Phase B: iteration variable 178 with consistency constraint 93) |
 | **arrangement** | *when* things run: at node granularity (`build` after `physics`) and at method granularity (the **prime** — the run-constant first-wall geometry method executed at the head of every sweep so that `build` reads this pass's value) |
 | **deferral** | how often a node runs: **`per_sweep`** (in the loop), **`per_call`** (once per `call_models`, after convergence, before or after the predicate depending on what the predicate reads), **`per_run`** (once per optimisation, at the accepted optimum). Membership is derived from measured read/write sets, never listed by hand |
+| **configuration** | one optimisation problem — plant, objective, constraint set — named by its input file's stem (`large_tokamak_nof`, `low_aspect_ratio_DEMO`, `st_regression`); the word replaces V3's "deck" and "scenario" |
+| **input file** | the configuration's committed `<name>.IN.DAT` (never edited, D9) or its **lifted** derived copy (§3.3); "frozen" is reserved for the physics freeze and the predicate mode |
 | **seed-pairing** | every arm sees bit-identical perturbed entries for the same seed index, so comparisons are paired |
 | **teeth** | a gate's demonstrated ability to fail: a deliberately broken input that must trip it before its zeros are accepted |
 
@@ -192,8 +194,9 @@ the harness composes each arm's environment *from this table and nothing else* (
 cleared first, then set), and records the composed environment in every run record.
 
 *Caption: one column per arm, one row per switch. Phase A arms (`A*`) run one evaluation; Phase
-B arms (`B*`) run an optimisation. "Frozen" is the committed configuration deck, never edited;
-"lifted" is a derived copy differing in exactly three lines (§3.3). Rows marked ⁺ apply on the
+B arms (`B*`) run an optimisation. "Committed" is the configuration's committed input file, never
+edited; "lifted" is a derived copy of it differing in exactly three lines (§3.3). The Phase A arms
+never reach the output path, so the output-time-loop row is not applicable (`n/a`) to them. Rows marked ⁺ apply on the
 pulsed configurations only; on `st_regression` (`k = 0`) they are inactive, `A0p` composes to
 `A0` and is skipped and recorded as skipped, and `B1` composes to `B0` and is skipped likewise.
 Nodes not deferred run `per_sweep`. `AR`/`BR` have every switch unset: PROCESS as shipped.*
@@ -209,8 +212,8 @@ Nodes not deferred run `per_sweep`. `AR`/`BR` have every switch unset: PROCESS a
 | deferral `per_run` | — | — | — | ✓ | — | — | — | ✓ |
 | burn time out of the loop ⁺ | — | — | **✓** | ✓ | — | — | ✓ | ✓ |
 | **burn-time owner** ⁺ | loop | loop | **constant** | constant | loop | loop | **optimiser** | optimiser |
-| deck ⁺ | frozen | frozen | frozen | frozen | frozen | frozen | **lifted** | lifted |
-| output-time loop (`MDA_Output`) | upstream | upstream | upstream | upstream | upstream | upstream | **none** | none |
+| input file ⁺ | committed | committed | committed | committed | committed | committed | **lifted** | lifted |
+| output-time loop (`MDA_Output`) | n/a | n/a | n/a | n/a | upstream | upstream | **none** | none |
 
 **`B2` — the partitioned arm with the outer loop in verify mode — is removed** (user ruling
 2026-09-10). V3 measured its verification pass triggering a third pass **zero** times in 91 888
@@ -237,13 +240,14 @@ declared, and the harness refuses an arm pair whose declared difference does not
 composed environments.
 
 *Caption: one row per rung; the Phase A and Phase B steps in a row are the same set of switch
-changes, so a Phase A ratio may be read against its Phase B twin. Every Phase A arm has a Phase B
-twin and every Phase B arm a Phase A one.*
+changes — with one declared exception, the output-time loop on the ownership rung, which exists in
+Phase B only — so a Phase A ratio may be read against its Phase B twin. Every Phase A arm has a
+Phase B twin and every Phase B arm a Phase A one.*
 
 | Phase A step | Phase B step | isolates | acceptance / role |
 |---|---|---|---|
 | `AR → A0` | `BR → B0` | **the stopping rule** — upstream's objective/constraint test at its two-pass floor vs the coupling-state test at τ | reported, never accepted on (a comparison at unmatched accuracy by construction — §3.6) |
-| `A0 → A0p` | `B0 → B1` | **burn-time ownership** — the loop vs a constant (A) / the optimiser (B); *the one rung where the phases differ in kind* | Phase A: cost and audit at matched map; Phase B: checks 1–3 |
+| `A0 → A0p` | `B0 → B1` | **burn-time ownership** — the loop vs a constant (A) / the optimiser (B); *the one rung where the phases differ in kind* — and, in Phase B only, **the output-time loop** (`upstream → none`), placed on this rung deliberately: it is the rung already declared to differ in kind between the phases, so the headline rung `B1 → B3` keeps a switch set identical to `A0p → A1`. *(Wording completed 2026-09-10 after A47 (harness-skeleton) found the row named only ownership; the matrix is unchanged. The output-time loop's sweeps are counted per run and published as their own column, so neither rung's attribution carries them silently.)* | Phase A: cost and audit at matched map; Phase B: checks 1–3 |
 | `A0p → A1` | `B1 → B3` | **the partitioning intervention** — block solves + arrangement (node and method) + both deferrals + trust | Phase A headline (RQ1); Phase B headline via `B0 → B3` (RQ2); `ε = 1` pre-declared on the pulsed configurations |
 
 `B0 → B3` is the designed-architecture comparison and the Phase B headline; `BR → B3` is the
@@ -277,7 +281,7 @@ would change nothing measurable and move the reference's first call — V3 decis
 of the loop, nothing else. In Phase A the owner is a **constant**: `A0p` pins the burn time at
 the seed's perturbed value — the same hex value `A1` receives — so `A0p` and `A1` solve the
 same reduced map and their exit states are comparable without exclusion. In Phase B the owner
-is **the optimiser**: the lifted deck adds iteration variable 178 and equality constraint 93.
+is **the optimiser**: the lifted input file adds iteration variable 178 and equality constraint 93.
 With deferral off the `pulse` node still executes in `A0p` (it just stops computing the burn
 time), so `A0 → A0p` changes the owner without changing the node set.
 
@@ -296,20 +300,23 @@ with block loops at 1e-8 reproduces the removed two-pass `B2` at 1e-6 to every d
 accuracy, and at 1e-6 its handover is ~30× looser *below* τ — a sub-τ difference the exit audit
 records per run and the matched-accuracy rule (§3.6) governs. Not required for V4.
 
-**The lifted deck** differs from the frozen one in exactly three lines: the burn time becomes
+**The lifted input file** differs from the committed one in exactly three lines: the burn time becomes
 iteration variable 178; its consistency residual becomes equality constraint 93, inserted
-inside the deck's equality block with the count raised in the same edit; and the variable's
-initial value is set to the burn time the baseline's own loop settles on at the deck's starting
+inside the input file's equality block with the count raised in the same edit; and the variable's
+initial value is set to the burn time the baseline's own loop settles on at the configuration's starting
 design vector, so that the lifted arm's entry consistency residual is exactly 0.0. It is derived
-by a committed stage, never hand-edited, and never used in Phase A: the pin refuses any deck
+by a committed stage, never hand-edited, and never used in Phase A: the pin refuses any input file
 naming iteration variable 178 ("two owners is a refusal, not a race").
 
 **`MDA_Output`** (item 1b). Upstream writes its output files through a second, flat
-idempotence loop (up to ten sweeps, MFILEs compared float by float at `rtol = 1e-6`). `AR`,
-`A0`, `A0p`, `BR`, `B0` keep it: they are the incumbent or its predicate-matched shadow. The
-intervention arms **do not run it**: their solve phase hands over a state it has already
-verified, and re-solving that state with a different loop before writing it out is a property
-of the incumbent, not of the architecture. Consequences, all binding: the replacement output
+idempotence loop (up to ten sweeps, MFILEs compared float by float at `rtol = 1e-6`). `BR` and
+`B0` keep it: they are the incumbent and its predicate-matched shadow. The Phase A arms never
+reach the output path, so the row is not applicable to them and they carry no switch for it
+(`A1` therefore runs before driver change DR2 lands; only `B1` and `B3` wait on it). `B1` and
+`B3` **do not run it**: their solve phase hands over a state it has already verified at τ, and
+re-solving that state with a different loop before writing it out is a property of the
+incumbent, not of the architecture. *(Keep-list corrected 2026-09-10 after A47 (harness-skeleton)
+found the matrix and this sentence disagreeing on `A1`.)* Consequences, all binding: the replacement output
 path calls `finalise` once on the accepted state (a driver change, §3.5); the rung table above
 declares the difference; the exit audit is taken at the same position in every arm — at the
 entry to `write_output_files`, before any output-time sweep — and the audit position is
@@ -327,8 +334,8 @@ sweeps says that node weights differ between sweeps and that empty sweeps are in
 
 ### 3.4 Phase A — per-call cost and accuracy without an optimiser
 
-**Entries.** Per configuration, the **reference** is the converged flat state at the deck
-point (one `A0` evaluation from the cold deck entry; its cost is the once-per-run cold-start
+**Entries.** Per configuration, the **reference** is the converged flat state at the
+configuration's design point (one `A0` evaluation from the cold entry of the input file; its cost is the once-per-run cold-start
 term, reported beside, never pooled). Campaign entries are multiplicative `1 ± δ·u`
 perturbations of that snapshot over the coupling state, `u` uniform in `[−1, 1)` per component
 from a hash of (seed, component), seeds 1–25, seed-paired across arms and verified
@@ -340,7 +347,7 @@ outputs that no optimiser-driven call displaces after call 1, which is what make
 measurable; **acceptance stays here** (comparability with V2, V3, A35, A38; the prime's
 detectability). And **the stencil regime**, the representative one: for each arm and configuration,
 the `nvar` **forward** stencil points — design variable `i` at `x_i (1 + epsfcn)`, every other
-variable at the deck point, coupling state at the reference fixed point — and the `nvar`
+variable at the configuration's design point, coupling state at the reference fixed point — and the `nvar`
 **backward** points `x_i (1 − epsfcn)`, each entered from its forward point's exit, which is
 exactly the sequence `fcnvmc2` executes (`evaluators.py:136-143`); plus the lifted column on the
 pinned arms. Deterministic, no seeds, `2(nvar + 1)` single evaluations per arm per configuration.
@@ -462,7 +469,7 @@ headline unreadable. The failure table carries the retried seeds with each arm's
    the burn time; residuals at unconverged exits beside, never pooled.
 4. **Cost and robustness reporting (no robustness claim).** Solve-phase node calls on the
    one seed set in the one format; the per-block split as a first-class artifact; the failure
-   taxonomy with denominators of 25; the deck-invalid-seed statistic (a seed failing in every
+   taxonomy with denominators of 25; the configuration-invalid-seed statistic (a seed failing in every
    arm is configuration hardness, counted separately). **Pre-declared expectations (context,
    not acceptance), from V3:** `B3/B0 ≈ 0.64 / 0.45 / 0.53`; `BR → B0 ≈ 0.98 / 1.03 / 1.16`.
 5. **The per-sweep overhead, counted** (item 3). Two new driver counters, exact and
@@ -597,7 +604,7 @@ arguments; a draft mode runs preflight, gates and smoke only; refuses the campai
 artifacts). Everything else in a self-contained `harness/` package — nothing imported from
 `idf_probe/` or `fixedpoint/`. It must provide: derivation of the per-configuration artifacts
 (coupling-state spec, write sets, `per_run` sets by class-level classification with a committed
-runtime read census — item 6a, lifted decks) as committed stages; arm composition **from the
+runtime read census — item 6a, lifted input files) as committed stages; arm composition **from the
 switch matrix as data**, every switch cleared first, the composed environment recorded per run;
 one isolated fresh subprocess per PROCESS run in its own directory with `process.__file__`
 asserted against the tree; the W = 3 pool, deterministic job lists, no retries; run records
@@ -868,9 +875,9 @@ retried a VMCON attempt.*
 *Caption (failure table): per configuration, every seed **outside** the set: which arm(s) failed,
 each failed arm's `ifail`, attempts and solve-phase node calls, and the other arms' node calls on the
 same seed, so a failure's cost is visible beside what the other arms paid at the same start. A seed
-failing in every arm is marked deck-invalid (configuration hardness, not an arm effect).*
+failing in every arm is marked configuration-invalid (configuration hardness, not an arm effect).*
 
-| config | seed | failed arm(s) | `ifail` | attempts | failed arm node calls | other arms' node calls (`BR` / `B0` / `B1` / `B3`) | deck-invalid |
+| config | seed | failed arm(s) | `ifail` | attempts | failed arm node calls | other arms' node calls (`BR` / `B0` / `B1` / `B3`) | configuration-invalid |
 |---|---|---|---|---|---|---|---|
 | lad | k | `B0`, `BR` | 5, 5 | 1, 1 | nn nnn, nn nnn | — / — / nnn nnn / nnn nnn | no |
 | lad | k | all | 5 ×4 | 1 ×4 | … | … | **yes** |
@@ -1018,3 +1025,12 @@ implementation plan's.*
   and had survived in the row). Two facts for the run path: without `PYTHONPATH` the import lands in
   the main checkout, and `process.__version__` is identical for both trees (traps T6/T10) — every
   child asserts `process.__file__` for equality against the copy.
+- 2026-09-10 — **terminology and two rung corrections at A47 (harness-skeleton)'s assessment**
+  (orchestrator, applying harness plan §11.2): "deck" removed — the file is the **input file**,
+  *committed* or *lifted*; "frozen" is reserved for the physics freeze and the predicate mode;
+  the matrix row reads `input file ⁺ | committed | … | lifted`; "deck-invalid" seeds are
+  "configuration-invalid". The output-time-loop row is `n/a` for the four Phase A arms (an
+  evaluation never reaches the output path; `A1` no longer waits on DR2), and §3.3's keep-list
+  is `BR`, `B0`. The `B0 → B1` rung's *isolates* wording now names the output-time loop, Phase B
+  only, with the reason it sits on that rung (the alternative — moving the change to `B3` —
+  would put a Phase-B-only field on the headline rung and break its twin with `A0p → A1`).

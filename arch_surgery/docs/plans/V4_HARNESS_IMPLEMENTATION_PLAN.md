@@ -1271,7 +1271,8 @@ experiment plan's §1.3 follows it.*
 
 | V4 term | replaces | why |
 |---|---|---|
-| **configuration** (`Config`) | deck, scenario, config | one word for one input file; "deck" is PROCESS jargon a reader does not know |
+| **configuration** (`Config`) | deck, scenario, config | one word for one optimisation problem; "deck" is PROCESS jargon a reader does not know |
+| **input file** — *committed* or *lifted* *(ruled 2026-09-10, orchestrator, at A47 (harness-skeleton)'s assessment)* | "deck" kept for the file; "frozen deck" / "lifted deck"; `deck_for()`; `scenario_dir`; the plan's `decks.py` | a configuration has two files, so the file needs a word, and it is the plain one: `input_file_for()`, `input_dir`, `harness/input_files.py`. **"frozen" is reserved** for the physics freeze and the predicate mode (`frozen \| mixed`) and names no file, field or matrix cell. The per-run deferral artifacts follow: `defer_per_run_{name}.json` for the committed input file (the unmarked default), `defer_per_run_lifted_{name}.json` for the lifted one |
 | **arm** | arm, variant, arrangement | kept — one column of the switch matrix |
 | **flat** / **partitioned** (switch values) | `flat_state` / `per_module` | say what the MDA is, not how V3 spelt it |
 | **block loop**; **one τ** | inner loop / outer loop; `INNER_TAU`; trust / verify | there is one kind of loop and one tolerance (D23); "trust/verify" named an arm V4 does not have |
