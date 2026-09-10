@@ -484,17 +484,26 @@ def render_markdown(prov: dict, files: list[FileDiff], frozen: list[str]) -> Non
         "path inside the package; lines added and removed by `git diff` against "
         "the commit (not against any working tree); the number of hunks; and, "
         "per hunk, the switch or mechanism the annotation map in "
-        "`PROCESS_diff.py` says it serves. `UNEXPLAINED` means no annotation "
-        "claims the hunk. Population: all "
+        "`PROCESS_diff.py` says it serves, with the number of the file's hunks "
+        "that claim names in brackets. A hunk may serve more than one "
+        "mechanism. `UNEXPLAINED` means no annotation claims the hunk. "
+        "Population: all "
         f"{src['file_count']} files of the copied package.*"
     )
     print()
     print("| file | + | − | hunks | serves |")
     print("|---|---:|---:|---:|---|")
     for f in files:
-        serves = "; ".join(
-            dict.fromkeys(h["serves"] or "**UNEXPLAINED**" for h in f.hunks)
-        )
+        # Claims are deduplicated **individually**, not as whole per-hunk
+        # strings: a hunk usually serves more than one mechanism, and joining
+        # first would make every distinct combination a separate row entry and
+        # the column unreadable.  The count beside each claim is how many of
+        # the file's hunks it claims.
+        counts: dict[str, int] = {}
+        for hunk in f.hunks:
+            for claim in (hunk["serves"] or "**UNEXPLAINED**").split("; "):
+                counts[claim] = counts.get(claim, 0) + 1
+        serves = "; ".join(f"{claim} ({n})" for claim, n in counts.items())
         print(f"| `{f.path}` | {f.added} | {f.removed} | {len(f.hunks)} | {serves} |")
     print()
     for f in files:
