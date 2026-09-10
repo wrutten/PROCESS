@@ -494,6 +494,18 @@ def stage_factorise() -> int:
                 "B0->B2_differ_clean": [s for s in clean if pc("B0", s) != pc("B2", s)],
                 "B2->B3_differ_clean": [s for s in clean if pc("B2", s) != pc("B3", s)],
                 "B0->B3_differ_clean": [s for s in clean if pc("B0", s) != pc("B3", s)],
+                # per rung: a seed contaminates a comparison only if one of
+                # ITS two arms retried there (seed 2's B0 retry does not touch
+                # B2->B3, where B2 and B3 both converged at the first attempt)
+                "B0->B2_differ_without_B0_or_B2_retried": [
+                    s for s in S03 if s in F["B2"] and pc("B0", s) != pc("B2", s)
+                    and s not in retried_any["B0"] and s not in retried_any["B2"]],
+                "B2->B3_differ_without_B2_or_B3_retried": [
+                    s for s in S03 if s in F["B2"] and pc("B2", s) != pc("B3", s)
+                    and s not in retried_any["B2"] and s not in retried_any["B3"]],
+                "B0->B3_differ_without_B0_or_B3_retried": [
+                    s for s in S03 if pc("B0", s) != pc("B3", s)
+                    and s not in retried_any["B0"] and s not in retried_any["B3"]],
                 "note": "problem-calls (C / 2(nvar+1), all attempts) compared per "
                         "seed; on a retried seed the comparison charges that arm "
                         "both attempts while check 2 credits the final attempt "
