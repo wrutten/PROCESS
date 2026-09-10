@@ -19,11 +19,12 @@
 > the user approves this plan by a dated edit of this header and flips the harness's
 > `EXECUTION_APPROVED` flag in the same commit, as V3 did.
 >
-> **Two investigations are running whose results this plan will absorb as dated amendments**:
-> A43 (st-trust-gap — whether the outer verification loop's remaining work on `st_regression`
-> is a missed coupling or a methodology artefact; decides whether `st_regression` stays in V4, §3.3) and A44
-> (transfer-gap — the exact factorisation of the Phase A → Phase B gap; bears on §3.4). Neither
-> blocks approval of the design; either may add a pre-declared expectation.
+> **Both investigations that fed this plan have reported and are merged.** A44 (transfer-gap):
+> the Phase A → Phase B gap is the entry regime (per-evaluation term, uniform) times an
+> evaluation-count term (lift stencil column, retries, trajectory) — absorbed in §3.4/§3.5. A43
+> (st-trust-gap): the outer verification loop never fired in the whole V3 campaign; the `B2`/`B3`
+> difference is inner-solve slack below τ, not a missed coupling; `st_regression` stays (D22's
+> conditional answered *no*) — absorbed in §3.2/§3.3/§3.7 (e)/(g).
 
 ---
 
@@ -70,9 +71,10 @@ Decomposed into the questions V4 answers, each with its own arm pair and accepta
   test with a coupling-state test cost, and where does upstream's test actually leave the
   coupling state? *(`AR → A0`, `BR → B0`.)*
 - **RQ5 — the trust step.** After the partition, is the outer verification loop still doing
-  work — i.e. is the block decomposition complete — on every configuration? *(answered by
-  investigation A43 (st-trust-gap) on V3's records, not by a V4 arm — the verified-outer-loop arm
-  `B2` is removed, §3.2; its verdict decides whether `st_regression` stays.)*
+  work — i.e. is the block decomposition complete — on every configuration? *(answered by A43
+  (st-trust-gap) on V3's records: the decomposition is complete on every configuration — the
+  verification pass never fired, and one schedule pass reaches the flat fixed point bit for bit once
+  the blocks are solved exactly. No V4 arm measures it; `B2` is removed, §3.2.)*
 
 ### 1.3 Terms used throughout
 
@@ -214,9 +216,12 @@ Nodes not deferred run `per_sweep`. `AR`/`BR` have every switch unset: PROCESS a
 2026-09-10). V3 measured its verification pass triggering a third pass **zero** times in 91 888
 calls across the three configurations (A43 (st-trust-gap), records stage), so as an arm it
 measures nothing the uncharged exit audit does not; its only remaining role — detecting an
-incomplete decomposition on `st_regression` — is A43's, on V3's records. **Pre-declared rule:** if
-A43 finds st's trust-mode `B3` unreliable, `st_regression` is dropped from the analysis, and likely
-from the experiment, because it needs a different intervention to decouple.
+incomplete decomposition on `st_regression` — is A43's, on V3's records. **A43 (st-trust-gap) has since answered the question the removal left open:** on st a single
+schedule pass reaches the flat fixed point *bit for bit* once the blocks are solved exactly (0 of 805
+components differ at inner τ = 1e-14, on every traced seed); the `B2`/`B3` difference was the blocks'
+own inner-solve slack below τ (max 3.3e-9, in M2 and M3, none in M1), and 0 of its 40 movers has a
+loop-carried cross-block edge in the dependency export. **`st_regression` stays in V4.** What the
+verification pass bought was sub-τ accuracy, and the inner tolerance buys it instead — decision (g).
 
 *The switches, for the record (level names per item 1d; the environment-variable names for the
 two renamed deferral switches are **proposed here and fixed by the harness implementation
@@ -281,7 +286,14 @@ order, each iterated to its own fixed point at τ (inner cap 20 sweeps; reaching
 refusal, not a budget); `build` resequenced after `physics`; the prime at every sweep head;
 `per_call` and `per_run` deferral by the measured routing rule; the burn time lifted. Both run
 the outer loop in **trust** mode — one schedule pass, no verification. There are no prime-free
-twins (item 0; V3 decision O5) and no verified-outer-loop twin (§3.2).
+twins (item 0; V3 decision O5) and no verified-outer-loop twin (§3.2). **Their certificate of
+convergence is the block solves' inner tolerance plus the uncharged exit audit at the handover
+point** — there is no outer verification pass, so the inner tolerance is what sets the handover
+accuracy, and it is a declared setting (decision (g), §3.10): A43 (st-trust-gap) measured that
+`B3` at inner τ = 1e-8 reproduces the removed `B2` (inner τ = 1e-6, two passes) to every digit of
+achieved accuracy at a single evaluation, and that at inner τ = 1e-6 `B3` hands over a state ~30×
+looser below τ than `B2` did. The in-loop cost of the tighter setting is measured in V4, not
+assumed.
 
 **The lifted deck** differs from the frozen one in exactly three lines: the burn time becomes
 iteration variable 178; its consistency residual becomes equality constraint 93, inserted
@@ -438,7 +450,10 @@ headline unreadable. The failure table carries the retried seeds with each arm's
    check 2 controls is the whole optimiser path, and a failed attempt is part of it. Both sit
    beside the evaluation count over all attempts, which is the multiplier the transfer needs:
    iterations, even summed, miss the lift's stencil column and the line-search evaluations that
-   vary at equal iteration count. `B1 → B3` and `B0 → BR` reported beside,
+   vary at equal iteration count. **The acceptance statistic is declared as the summed-over-attempts
+   median** (pending the same confirmation; A43 (st-trust-gap) P2 — the same 23 st pairs read 1.17,
+   0.91 and 1.07 under three constructions, and a check whose sign depends on an undeclared choice
+   is not a check); the final-attempt median is published beside it for comparability with V3. `B1 → B3` and `B0 → BR` reported beside,
    outside the acceptance rule. **Pre-declared expectation:** on the pulsed configurations
    `B1 → B3` leaves the evaluation count unchanged (`ε = 1` exactly; V3: 33/33 converged seeds).
    RQ5 is not measured by a V4 arm (§3.2); A43 (st-trust-gap)'s verdict decides st's place.
@@ -528,10 +543,11 @@ where the ruling is applied.*
 | **(b)** | objective/structure confound | **no fourth configuration in V4.** Three case studies; the confound is disclosed in every cross-configuration caption and no synthesis is claimed. A separate experiment follows only if V4's results stay inconclusive | §3.3, §3.11, §4 captions |
 | **(c)** | Phase B seed set and format | **accepted**: one every-arm-converged set, the failure table, one format, retries as an explicit term. §4 carries placeholder tables in that format for review before any run | §3.5, §4 |
 | **(d)** | driver changes | **accepted:** `MDA_Output` removed from the intervention arms (1b); switch renames (1d); predicate mode `frozen \| mixed` (5a), implemented cleanly. **Rejected:** empty-block / empty-node skipping (2) — left as is and disclaimed. Predicate-evaluation counters (3) — **accepted** (2026-09-10, after the explanation in §3.5 check 5). All changes are made in **V4's own copy of PROCESS** (D20), which owes V3 no backward compatibility | §3.3, §3.5, §3.8 |
-| **(e)** | `B2`'s fate | **removed** (user, 2026-09-10; D22). If A43 (st-trust-gap) shows st's `B3` unreliable, `st_regression` is dropped from the analysis and likely from the experiment | §3.2, §3.3, §3.5, §3.10, §4 |
+| **(e)** | `B2`'s fate | **removed** (user, 2026-09-10; D22). **A43 (st-trust-gap) answered D22's conditional: `B3` is not unreliable on st** — 0 components above τ at every inner tolerance, its single pass reaching `B2`'s two-pass state bit for bit once the blocks are solved exactly — so **`st_regression` stays** | §3.2, §3.3 |
+| **(g)** | inner tolerance of the intervention arms `A1` / `B3`, now that the verification pass is gone (A43 P1) | **recommendation: inner τ = 1e-8** — reproduces the removed `B2`'s achieved handover accuracy (1.12e-10) to every digit at a single evaluation; the in-loop cost is measured, never assumed. Alternatives: keep inner τ = τ = 1e-6 (V3's `B3`; ships the ~30× looser handover by default), or run P1's ladder {1e-8, 1e-10, 1e-12} as extra `B3` arms (~150 optimisations) to measure the exchange rate in-loop | §3.3, §3.10 — **open** |
 | **(f)** | wait for A43/A44 before approving | **do not wait**; both land as dated amendments (A44's already has) | header |
 
-**All ruled (2026-09-10).** The V3 report receives **no errata**: A44 (transfer-gap)'s retry finding
+**All ruled (2026-09-10) except (g)**, which A43 (st-trust-gap)'s verdict opened the same day. The V3 report receives **no errata**: A44 (transfer-gap)'s retry finding
 lives in its own report and is carried into V4's method (§3.5), not written back into V3. The
 PROCESS copy is taken at the current `architecture_surgery` tip, the commit recorded (§3.8 (i)).
 The §4 table format awaits the user's review.
@@ -634,6 +650,7 @@ approval except by dated amendment.*
 | cluster gap | 10 × floor = 1e-5, with the resolution category declared | check 1a/1b | V3; item 5 |
 | iteration bound | median paired ratio ≤ 1.05 | check 2 | V2 App. B |
 | median | nearest-rank, upper-middle (`sorted[n // 2]`) | every Phase B check | V3 |
+| inner τ | **1e-8** recommended (decision (g) open); V3 used inner τ = τ | the block solves' tolerance — the trust arms' handover accuracy | A43 (st-trust-gap) §6.1: `B3`@1e-8 ≡ `B2`@1e-6 in achieved accuracy |
 | inner cap | 20 sweeps per block; a cap hit is a refusal | partitioned arms | V2 |
 | upstream cap | 10 passes (raises) → `unconverged-at-cap` | `AR`/`BR` | upstream; item 1 |
 | W | 3 | worker pool | V2 |
@@ -872,131 +889,12 @@ campaign, F = 10, floor = 1e-6; the verdict; hops (seeds whose two sides land in
 `norm_objf` clusters, gap 1e-5) and the hop rate; the within-cluster statistics; and the count of
 pairs that are distinct optima below cluster resolution (1e-6 < r < 1e-5).*
 
-| config | pair | n | r median · p90 | threshold median · p90 | **verdict** | hops (rate) | within-cluster median · p90 | below-resolution |
-|---|---|---|---|---|---|---|---|---|
-| nof | `BR → B0` (yardstick) | nn | x.xe−xx · x.xe−xx | — | — | n (0.xx) | … | n |
-| nof | `B0 → B1` | nn | x.xe−x · x.xe−x | x.xe−x · x.xe−x | PASS/FAIL | n (0.xx) | x.xe−x · x.xe−x | n |
-| nof | `B0 → B3` | nn | … | … | **PASS/FAIL** | … | … | n |
-| lad · st | … | | | | | | | |
-
-*How to read: this check gates optimality, not location (D6). A FAIL that survives hop removal
-localises to a rung; a FAIL with a high hop rate on a multi-attractor configuration is attractor
-selection, and `BR → B0`'s own hop rate is the comparator. "Below-resolution" counts pairs the
-construction cannot classify — it is a limit of the instrument, stated, not a verdict.*
-
-#### 4.3.3 Iteration multiplier and evaluation multiplier (check 2)
-
-*Caption: per configuration and arm pair over the seed set: the nearest-rank median of per-pair
-optimiser-iteration ratios (final attempt — the acceptance statistic, ≤ 1.05), the same median on
-iterations **summed over all VMCON attempts** (failed attempts included), both arms' iterations
-summed over the same pairs and their sum ratio, and the per-seed attempt count (maximum over the
-set) per arm; then the **evaluation multiplier** `ε` = ratio of
-`call_models` counts over all attempts, split into the exact stencil-column factor
-`(nvar_b + 1)/(nvar_a + 1)` and the problem-call ratio; retried seeds per arm; and `ε` without
-retried seeds. `B2 → B3` and `B0 → BR` are reported outside the acceptance rule.*
-
-| config | pair | n | iteration median (final attempt) | iteration median (Σ attempts) | Σ iters a → b · ratio | attempts a · b (max) | **≤ 1.05** | `ε` | stencil factor | problem-call ratio | retried a · b | `ε` w/o retried |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| nof | `B0 → B1` | nn | 0.xxx | 0.xxx | nnn → nnn · 0.xxx | n · n | PASS/FAIL | 0.xxx | 1.048 | 0.xxx | n · n | 0.xxx |
-| nof | `B0 → B3` | nn | … | … | … | … | **PASS/FAIL** | … | 1.048 | … | … | … |
-| nof | `B1 → B3` | nn | 1.000 expected | 1.000 expected | … | … | — | **1.000 expected** | 1.000 | … | … | … |
-| nof | `B0 → BR` | nn | … | … | … | … | — | … | 1.000 | … | … | … |
-| lad · st | … | | | | | | | | | | | |
-
-*How to read: a median and a sum ratio that disagree in direction must both appear — the median
-says what a typical seed does, the sum what the campaign cost. The two iteration medians differ
-only where an arm retried; where they do, the Σ-attempts column is the one that describes the
-optimiser's whole path and the attempts column says which arm paid for it. `ε` is what the transfer (4.4) needs
-and the iteration count cannot supply: it carries the lift's extra stencil column exactly and any
-retry. The pre-declared expectation is `ε = 1.000` exactly on `B1 → B2 → B3` for the pulsed
-configurations (D21); a departure is a finding.*
-
-#### 4.3.4 Lift closure (check 3)
-
-*Caption: per configuration, constraint 93's residual — the burn-time inconsistency — at every
-accepted optimum of the lifted arms, in seconds and relative to the burn time: median and maximum
-over the seed set; residuals at unconverged exits beside, never pooled. `st_regression` has nothing
-lifted.*
-
-| config | arms | n accepted | median abs residual s · relative | max s · relative | at unconverged exits (n): median s |
-|---|---|---|---|---|---|
-| nof | `B1` / `B2` / `B3` | nn | x.xe−x · x.xe−x | x.xe−x · x.xe−x | (n) x.xe−x |
-| lad | `B1` / `B2` / `B3` | nn | … | … | … |
-| st | — | — | k = 0, inactive | | |
-
-*How to read: a residual small in seconds is not therefore small in effect — on lad the lifted
-quantity is the objective. Read beside 4.3.2's `B0 → B1` row.*
-
-#### 4.3.5 Cost (check 4) — one set, one format
-
-*Caption: per configuration over the seed set, solve-phase model-node executions per run (mean with
-seed bracket) for every arm; the ratio against `B0` three ways — pooled (sum/sum), per-run median
-`[min, max]`, seeds worse; the same pooled ratio **without** retried seeds (retried count per arm
-in 4.3.1); prime calls per run (D19, beside, never inside); and the per-block split of the arm's
-node calls (M1 / M2 / M3 / `per_call` nodes / `per_run` nodes). Output-time and audit sweeps are
-excluded symmetrically. `B3 / BR` is given once in the last row.*
-
-| config | arm | n | node calls / run [min, max] | vs `B0` pooled · median [min, max] · worse | pooled w/o retried | prime calls / run | M1 / M2 / M3 / `per_call` / `per_run` |
-|---|---|---|---|---|---|---|---|
-| nof | `BR` | nn | nnn nnn [nnn nnn, nnn nnn] | 0.xxx · 0.xxx [0.xxx, 0.xxx] · n | 0.xxx | 0 | nn % / nn % / nn % / — / — |
-| nof | `B0` | nn | nnn nnn [nnn nnn, nnn nnn] | 1 | 1 | 0 | nn % / nn % / nn % / — / — |
-| nof | `B1` | nn | … | 0.xxx · 0.xxx [ ] · n | 0.xxx | 0 | … |
-| nof | `B3` | nn | … | **0.xxx** · 0.xxx [ ] · n | **0.xxx** | nnn | … |
-| nof | `B3 / BR` | nn | — | 0.xxx · 0.xxx [ ] · n | 0.xxx | — | — |
-| lad · st | … | | | | | | |
-
-*How to read: the bold pooled `B3` cell is the Phase B cost headline (RQ2); its neighbour without
-retried seeds says how much of it is a flat-arm retry the partitioned arm avoided. If the two
-differ materially, both are the result — "cost per converged optimisation when both arms converge
-first time" and "campaign cost including failed attempts" — and the failure table says which seed.
-Every value in this table is on the same `n`.*
-
-#### 4.3.6 Per-sweep overhead, counted (check 5) — *if driver change (3) is accepted*
-
-*Caption: per configuration and arm over the seed set, per-run means of: dispatch sweeps (flat
-sweeps or block sweeps; **empty block visits included and counted separately** — node weights
-differ between sweeps, and V4 does not repair the empty `PULSE` block, §3.3); convergence-predicate
-evaluations; coupling-state components compared; and model-node executions; each also as a ratio to
-`B0`.*
-
-| config | arm | dispatch sweeps / run (empty) | predicate evaluations / run | components compared / run | node calls / run | sweeps · predicate · components · nodes vs `B0` |
-|---|---|---|---|---|---|---|
-| nof | `B0` | n nnn (0) | n nnn | nn nnn nnn | nnn nnn | 1 · 1 · 1 · 1 |
-| nof | `B3` | n nnn (n) | n nnn | nn nnn nnn | nnn nnn | x.xx · x.xx · x.xx · 0.xx |
-| lad · st | … | | | | | |
-
-*How to read: the wall-clock gap of V3 (§7 there) needs a cost term that does not scale with node
-calls; if the components-compared ratio is of the size the gap requires while the node ratio is
-well below 1, the predicate is that term — settled on counts, without a timing.*
-
-#### 4.3.7 Timing (context only — never evidence)
-
-*Caption: per configuration and arm, wall-clock seconds per run, median and range over 3 serial
-repetitions of one seed, first run discarded (JIT), on the machine named in the record. Context for
-the reader; no conclusion rests on it (I-10).*
-
-| config | arm | wall s median [range], 3 reps | node calls / run (from 4.3.5) | s per 1 000 node calls |
-|---|---|---|---|---|
-| nof | `B0` · `B3` | nnn [nnn, nnn] · nnn [nnn, nnn] | nnn nnn · nnn nnn | n.nn · n.nn |
-| lad · st | … | | | |
-
-### 4.4 The transfer
-
-*Caption: per configuration and Phase A regime, the exact factorisation `R / ρ_A = (ρ_B / ρ_A) × ε`
-over the one seed set: `ρ_A` Phase A's per-evaluation-mean ratio at the regime; `ρ_B` the in-loop
-per-evaluation ratio with its per-seed spread `[min, max]`; `ε` and its split (4.3.3); the predicted
-end-to-end ratio `ρ_A × ε`; the measured `R`; and the error `R / predicted − 1` (positive: Phase A
-promised more saving than delivered). Given with and without retried seeds. The once-per-run
-`per_run` executions and the reference arms' output-time sweeps are carried as separate terms so the
-identity is exact. **No number elsewhere in this report is derived through this table.***
-
-| config | set | regime | `ρ_A` | `ρ_B` [min, max] | `ρ_B / ρ_A` | `ε` = stencil × problem-call | predicted `ρ_A × ε` | measured `R` | **error** |
+| config | pair | n | r median · p90 | threshold median · p90 | **verdict** | hops (rate) | within-cluster median · p90 | below-resolution | retried seeds in pair |
 |---|---|---|---|---|---|---|---|---|---|
-| nof | with retried | δ = 0.10 | 0.xxx | 0.xxx [0.xxx, 0.xxx] | x.xxx | x.xxx = 1.048 × 0.xxx | 0.xxx | 0.xxx | +nn.n % |
-| nof | with retried | stencil fwd | 0.xxx | ″ | x.xxx | ″ | 0.xxx | ″ | +n.n % |
-| nof | with retried | stencil bwd | **0.xxx** | ″ | x.xxx | ″ | **0.xxx** | ″ | **±n.n %** |
-| nof | w/o retried | stencil bwd | … | … | … | … | … | … | … |
-| lad · st | … | | | | | | | | |
+| nof | `BR → B0` (yardstick) | nn | x.xe−xx · x.xe−xx | — | — | n (0.xx) | … | n | n |
+| nof | `B0 → B1` | nn | x.xe−x · x.xe−x | x.xe−x · x.xe−x | PASS/FAIL | n (0.xx) | x.xe−x · x.xe−x | n | n |
+| nof | `B0 → B3` | nn | … | … | **PASS/FAIL** | … | … | n | n |
+| lad · st | … | | | | | | | | | |
 
 *How to read: the pre-declared expectation is that the error at the stencil regime is within ±5 %
 (A44 (transfer-gap) measured ≤ 1 % at the backward points on V3's records) while δ = 0.10 leaves
@@ -1094,6 +992,10 @@ implementation plan's.*
   placeholder tables in the accepted format (one seed set, failure table, three-way ratios, retries as
   a term, captions and how-to-read notes) for the user's review before any run; the PROCESS copy
   described in §3.8 (i) and gated (GR, G0).
+- 2026-09-10 — A43 (st-trust-gap) merged and absorbed: `st_regression` stays (D22's conditional
+  answered *no*); the intervention arms' certificate stated (§3.3); decision (g) opened — the inner
+  tolerance of `A1`/`B3`, recommended 1e-8 (§3.7, §3.10); check 2's acceptance construction declared
+  (P2); a retried-seeds column added to check 1's table (P3); header updated.
 - 2026-09-10 — check 2 (§3.5, §4.3.3): iterations published in two constructions, final attempt
   and summed over all VMCON attempts, with per-seed attempt counts — user directive relayed by
   session `process-surgery-bd`, marked for confirmation in the orchestrating session.

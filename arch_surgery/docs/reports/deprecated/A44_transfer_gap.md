@@ -570,3 +570,175 @@ The V3 records are read from the main checkout's untracked
 **Consequences taken by the orchestrator today, dated, pending this task's confirmation and merge.** The V4 experiment plan's §3.4 replaces the δ = 0.001 second amplitude with a stencil-regime entry set (E3 forward points from the reference fixed point; E3b backward points from each forward exit; the lifted column on pinned arms; deterministic, 2(nvar+1) evaluations per arm per configuration), its §3.5 restates the transfer as `ρ_A(stencil) × (nvar_B3+1)/(nvar_B0+1) × problem-call ratio` with E3/E3b as the published bracket and `ε = 1` pre-declared on `B1 → B2 → B3` for the pulsed configurations, and its decision (a) is reframed. Both erratum sentences go to the user for acceptance. At merge this report is archived to `deprecated/` (§7) and the run records under `idf_probe/runs/a44/` are relocated by the retire script before the worktree is removed.
 
 **Verdict.** Fit to merge once the four additions are in and the user has confirmed the task and ruled on the errata. I-17's mechanism is identified and measured; what remains of it is a Phase B quantity (the optimiser's response to the lift and, on st, to the partition) that Phase A was never going to predict, and the report says so.
+
+---
+
+# Post-merge addendum (2026-09-10) — appended by the orchestrator at the user's request
+
+*Requested by the user through session `process-surgery-bd` and written by that session after A44's merge; appended here verbatim as a dated addendum. The archived report above it is unchanged. Nothing in the addendum is new measurement — every number traces to `factorisation.json` / `tally.json`, now under `arch_surgery/idf_probe/runs/A44-transfer-gap_runs/a44/`.*
+
+## Addendum — the A→B transfer difference in plain language (for the user's later reference)
+
+*Written 2026-09-10 by session `process-surgery-bd` (task A44, transfer-gap) at the user's request,
+from the conversation that followed the report. Every number is from the report's committed
+stages; nothing new was run. **The user's assessment at the time of writing (2026-09-10): the
+explanation is reasonable.** Recorded here so that a later reader knows it was accepted as a
+working explanation on that date, not as a settled result; §6 says which parts are measured and
+which inferred.*
+
+### 1. What the transfer argument expected, in model-call arithmetic
+
+The cost of a whole optimisation, counted in model-node calls, is a product of two things:
+
+    cost  =  (number of model evaluations the optimiser makes)  ×  (model-node calls per evaluation)
+
+The first factor is the optimiser's business. Each time VMCON evaluates the problem it makes
+2·(nvar + 1) model evaluations: one at the point, one forward and one backward finite-difference
+nudge per design variable (that is the "stencil"), and one reconciling evaluation at the end. It
+does this once per iteration plus once per extra line-search trial, and if the whole optimisation
+fails and is retried, again for every attempt. So
+
+    evaluations  =  2·(nvar + 1)  ×  (iterations + line-search extras), summed over all attempts.
+
+The second factor is what Phase A measures: one evaluation of the coupled models, from a displaced
+state, in the flat arrangement (A0) and the partitioned one (A1). Phase A found A1/A0 ≈ 0.52, 0.57
+and 0.50 on the three cases.
+
+The transfer argument said: the partition does not change the first factor (check 2 confirmed the
+iteration counts match), so the end-to-end ratio should equal Phase A's per-evaluation ratio:
+
+    expected B3/B0  ≈  0.52 / 0.57 / 0.50        measured  0.64 / 0.45 / 0.53
+
+Writing the ratio of two optimisations out in the same two factors makes the gap exact:
+
+    B3/B0  =  [calls per evaluation, B3 ÷ B0]  ×  [evaluations, B3 ÷ B0]
+
+The argument assumed the first bracket equals Phase A's ratio and the second equals 1. Measured,
+neither holds, and the gap is the product of the two errors.
+
+### 2. The second bracket: the optimiser makes a different number of evaluations
+
+The iteration count cannot see three of the four things that move it.
+
+1. **The extra design variable.** The lift promotes the burn time to a design variable, so every
+   gradient costs one more forward and one more backward evaluation: 22/21 = +4.8 % on nof, 21/20
+   = +5.0 % on lad, nothing on st. Exact, structural, and never carried by the transfer.
+2. **Retried optimisations.** When VMCON fails, PROCESS restarts it with a different
+   finite-difference step. The failed attempt's evaluations are all paid for; the iteration count
+   records only the final attempt. On lad, seed 1's baseline failed after 100 iterations and
+   converged on a 16-iteration retry: its cost is 7.5× what its iteration count says, and it is a
+   quarter of lad's baseline total. Removing that one seed moves lad's headline from 0.45 to 0.66.
+   *(This is what the user asked to be incorporated in the Phase B analysis.)*
+3. **A different path.** After the lift the optimiser is solving a different problem and takes a
+   different number of line-search trials, at nearly the same iteration count: on lad every seed
+   changes, netting +1 %; on nof five seeds, netting −1 %. On st, which has no lift, the partition
+   itself changes the path on 8 of 22 seeds, netting −3 to −5 %.
+4. **What does not change it.** On both pulsed cases the three partitioned arms (B1, B2, B3) make
+   exactly the same number of evaluations and iterations on every converged seed. The partition and
+   the trust step are invisible to the optimiser's path; only the lift moves it.
+
+So the control the transfer needs is the evaluation count, over all attempts, not the iteration
+count: iterations miss item 1 entirely, miss item 2 unless summed over attempts, and see item 3
+only partly.
+
+### 3. The first bracket: an evaluation inside the optimiser is a different object
+
+Phase A shakes the *whole* model state by 10 % and watches it recover. The optimiser nudges *one
+design variable* by 0.1 % with everything else already at the solution, forty-plus times per
+iteration. These are different regimes, and the partition's advantage is different in each.
+
+The models fall into three blocks in the partition: M1 (plasma geometry and physics, 2 models),
+M2 (radial build, TF coil, PF coil, 3 models) and M3 (everything downstream, 12 models). M2 is the
+slowest block whenever a displacement reaches it: it needs 5 passes from Phase A's shake and 4 to 5
+from a nudge of a radial-build variable. M3 recovers in 3 from anything; M1 in 3 to 4.
+
+- **In Phase A everything is displaced.** The flat loop must repeat all 21 models until the slowest
+  coupling settles, and that is M2: 5.5 passes. The partition lets M3 (12 models) stop after 3 and
+  M1 after 4 instead of waiting for M2. That is worth a lot: ratio ≈ 0.5. M2 itself gains nothing.
+- **Inside the optimiser only one variable moves.** The flat loop repeats all 21 models about 3.3
+  times. In the partition, each block re-converges only as far as the nudge reaches it. Most
+  nudges (the plasma variables) do not reach M2 at all: it passes its own convergence check after
+  one sweep, on 7 of 21 columns on nof. M3 sits downstream of everything, so every nudge reaches it
+  and it always needs 2 or more sweeps against the flat loop's 3.3, so its advantage nearly
+  vanishes. Net ratio ≈ 0.6.
+
+Phase A rewards "the fast blocks do not wait for the slow one"; the optimiser rewards "blocks the
+step does not reach do not re-run". They favour different blocks, and the totals differ.
+
+It is the direction of the displacement that matters, not its size. Shrinking Phase A's shake by a
+factor of 100 in the same direction barely moved anything (flat loop 5.5 → 5.0 passes, ratio 0.52
+→ 0.54). Changing what is displaced, to one design variable by the optimiser's own step,
+reproduced the in-loop pass counts and ratios on all three cases.
+
+### 4. The numbers, once
+
+*Caption: the two brackets per case, over the seeds on which both arms converged. ρ_A is Phase
+A's ratio at its 10 % shake; ρ_B the same ratio measured inside the optimiser; ε the ratio of
+evaluation counts. R = ρ_B × ε exactly.*
+
+| case | R measured | ρ_A (Phase A) | ρ_B (in-loop) | ε (evaluations) | gap R/ρ_A |
+|---|---|---|---|---|---|
+| nof | 0.640 | 0.522 | 0.614 | 1.041 | 1.226 |
+| lad | 0.450 | 0.568 | 0.616 | 0.731 | 0.793 |
+| lad, without the retried seed | 0.659 | 0.568 | 0.619 | 1.065 | 1.161 |
+| st | 0.533 | 0.502 | 0.560 | 0.951 | 1.063 |
+
+*Caption: what the transfer predicts when Phase A is measured at the optimiser's own regime (a
+nudge of one design variable, entered from the previous nudge's converged state) and multiplied by
+the evaluation ratio, against the measured ratio.*
+
+| case | predicted, Phase A at 10 % × ε | predicted, Phase A at stencil regime × ε | measured |
+|---|---|---|---|
+| nof | 0.543 (+18 % off) | 0.636 (+0.5 % off) | 0.640 |
+| lad, without retried seed | 0.605 (+9 % off) | 0.658 (+0.2 % off) | 0.659 |
+| st | 0.477 (+12 % off) | 0.531 (+0.4 % off) | 0.533 |
+
+The agreement at the stencil regime is within the probe's honest resolution of about 5 % (its
+forward-only variant lands 2 to 5 % off); the ≤ 1 % figures are at the declared variant only.
+
+### 5. What this changes for V4
+
+- Measure Phase A at the optimiser's regime as well as at the 10 % shake: nudge each design
+  variable by the deck's own step, from the converged state and from the previous nudge's converged
+  state. Deterministic, about 40 evaluations per arm per case. Keep the 10 % shake for what it is
+  good at (detecting the run-constant carrier); do not replace it with a smaller shake, which was
+  measured not to work.
+- Add the A0p arm (flat + lift + pinned burn time) so one Phase A step (A0p→A1) matches one Phase
+  B step (B1→B3), where the evaluation counts are identical seed for seed.
+- Control the transfer on evaluations summed over all attempts, with iterations beside; pre-declare
+  the +1 stencil column of the lift; record node calls per optimiser attempt; publish cost ratios
+  with and without retried seeds and say which question each answers.
+- Expect B1 = B2 = B3 in evaluations on the pulsed cases; any departure is a finding.
+
+### 6. What is measured and what is inferred, from the conversation
+
+- Measured: every number above; the per-block pass counts at every regime; that M2 finishes in one
+  sweep on most stencil columns and is the slowest block on the radial-build columns; that the
+  in-loop per-evaluation ratio is tight across seeds on nof and lad (all within ±0.02) and wide on
+  st (0.53 to 0.60), where the probe hits the pooled value rather than a per-seed constant.
+- Inferred: that the same selective skipping happens inside the optimiser. V3 recorded per-block
+  passes only as run totals, never per evaluation. It is read through the probe reproducing the
+  in-loop aggregates; M2 is the one block the probe under-reproduces, by 0.4 passes, and that
+  residual is not separated (candidates: the block arm entering from its own trust-mode exit; the
+  few larger line-search steps). A per-evaluation per-block pass histogram in the V4 harness would
+  settle it at no cost.
+- One correction made to a summary offered during the conversation: M2 is *not* the block most
+  sensitive to the stencil steps; it is the block most steps do not reach. Its in-loop gain comes
+  from being skipped, not from converging fast. M3 is the sensitive one and gains least.
+
+### 7. Glossary
+
+**Sweep / pass** — one run through every model in a loop or block. **Evaluation** — one call of
+the coupled models by the optimiser, to convergence; costs one or more sweeps per block.
+**Stencil** — the set of finite-difference nudges the optimiser evaluates around a point to build a
+gradient; one nudge is a stencil step or column. **Problem-call** — one VMCON evaluation of
+objective, constraints and gradients: 2·(nvar + 1) model evaluations. **Iteration** — one VMCON
+step; costs one problem-call plus line-search trials. **Attempt** — one run of VMCON; a failed
+attempt is retried with a different finite-difference step. **Lift** — making the burn time a
+design variable with a consistency constraint instead of solving it inside the loop. **Pin** —
+holding the lifted burn time at a fixed value in Phase A, where no optimiser owns it. **Trust
+mode** — the partitioned loop with one pass over the blocks and no outer verification loop (B3);
+with the verification loop it is B2. **ρ_A, ρ_B** — the partitioned-over-flat cost per evaluation,
+in Phase A and inside the optimiser. **ε** — the ratio of the number of evaluations the optimiser
+makes, partitioned over flat. **Floor** — the fewest sweeps an evaluation can take: one when the
+entry state is already the solution.

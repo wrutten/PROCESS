@@ -368,7 +368,7 @@ a **pure no-op**; `times.t_plant_pulse_burn` is absent from that deck's measured
 coupling state; the routing rule correctly demotes `pulse` to post-solve (5 executions per
 run). **But the `PULSE` block survives in the schedule after its only member has left it, and
 is swept 570 times per run in B3 and 1131 in B2, executing nothing** — the DSM register's V12
-trap in live form. Roughly 3.4 % of st's B3 block sweeps are empty visits.
+trap in live form. Roughly 3.4 % of st's B3 block sweeps are empty visits. *(Corrected 2026-09-10 by A43 (st-trust-gap) §7.2, from the same records: **10.84 %** on `start000`, **11.12 %** campaign-wide for B3 and **15.24 %** for B2 — the verification pass visited the empty block a second time, 49 887 empty visits across the st campaign. The filed 3.4 % was wrong; no published number moves. The user ruled (D21) that the visits stay and are disclaimed.)*
 
 Fix, driver-side and provably neutral: **drop a block whose membership is empty after
 hoisting**, and **skip a post-solve node whose measured write set is empty**. Costs no model
@@ -640,3 +640,26 @@ The originally requested arm set (A0/A1/B0/B3) cannot show the outer verificatio
 B0 skips it via the single-block guard, B3 via `trust`. Only B2 exercises it. Since the V3
 campaign's sharpest result is B2 vs B3, the DSM needs B2 to depict what it most needs to
 explain. Cost: one config entry.
+
+## From A43 (st-trust-gap), 2026-09-10 — candidates, attributed to its report §9
+
+### 9. Establish causality on `st_regression` with a controlled sub-tolerance injection *(A43 P5)*
+
+A driver switch that perturbs the handover state by a named sub-τ amount in one named component,
+then the optimiser's iteration count. A43 measured that `B2` and `B3` hand the optimiser states
+differing by at most 3.3e-9 (below τ) and that st's trajectory differs on four clean seeds; that
+the second causes the first is **inferred**, from V3's location diagnostics. If the count moves
+under a controlled injection the mechanism is demonstrated; if it does not, A43's reading is wrong
+and that is a result. A driver change (needs approval); one configuration; small run budget.
+
+### 10. A permutation control for the block-slack discriminator *(A43 P7)*
+
+Run the same blocks in a different order and check whether the pass-2 movers follow schedule
+position rather than block identity — confirming A43 §6.3 from the other side. One arm, one
+configuration.
+
+### 6b. The trace instrument records an argmax on a zero residual *(A43 P8)*
+
+`module_solve.trace_pass` records an `argmax` component even when `res.max == 0.0`, so a reader
+can invent a mover where nothing moved (A43 §5.3 found and named the artifact). One-line fix in the
+V4 copy: `argmax: null` when the residual is exactly zero.

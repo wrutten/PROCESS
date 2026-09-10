@@ -1,6 +1,6 @@
 # A43 (st-trust-gap) — the outer verification loop has never once fired, and what it buys on `st_regression` is sub-tolerance accuracy that a tighter inner tolerance buys instead
 
-> **Document status** — **CURRENT · OPEN TASK REPORT.** Written by task A43 (st-trust-gap),
+> **Document status** — **MERGED 2026-09-10 and archived to `deprecated/` (protocol §7); folder position records lifecycle, not validity (trap T3). The findings stand; the orchestrator's assessment is appended at the end.** Was: CURRENT · OPEN TASK REPORT. Written by task A43 (st-trust-gap),
 > 2026-09-10, on branch `A43-st-trust-gap` in worktree
 > `/home/wrutten/projects/PROCESS_surgery_worktrees/A43-st-trust-gap`, branched from
 > `architecture_surgery` at `16a6e87e`; experiment base commit `c0ae5b28`.
