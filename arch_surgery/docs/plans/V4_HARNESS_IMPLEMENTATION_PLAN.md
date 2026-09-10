@@ -302,9 +302,11 @@ the discipline the file states for itself, and the G1-shape gates test it.
 
 ### 3.2 What V4 needs from the driver, and what each costs the harness
 
-*Caption: one row per driver change the V4 experiment plan requires (its §3.7 decision (d), plus
-the renames of improvement-list item 1d). "Harness impact" is what the harness must do
-differently once the change exists; "if declined" is what the harness does instead.*
+*Caption: one row per driver change V4 needs — the V4 experiment plan's §3.7 decision (d) and the
+renames of improvement-list item 1d (**DR1–DR5**), its §3.5 per-attempt requirement (**DR7**), and
+one proposed by this plan (**DR6**, and conditionally so). "Harness impact" is what the harness
+must do differently once the change exists; "if declined" is what the harness does instead. Every
+row needs the user's approval before merge and carries its own switch-neutrality gate with teeth.*
 
 | # | driver change | harness impact | if declined |
 |---|---|---|---|
@@ -313,7 +315,8 @@ differently once the change exists; "if declined" is what the harness does inste
 | **DR3** | **Empty-block / empty-node skipping**: drop a block whose membership is empty after deferral; skip a `per_run` node whose measured write set is empty | nothing to compose; the harness records `blocks_dropped` and `per_run_nodes_skipped` and the tally reports them | st keeps 570–1131 empty `PULSE` visits per run (I-20a); item 3's per-sweep-overhead question keeps a confound |
 | **DR4** | **Predicate-evaluation and components-compared counters** | two more record fields; one more tally column; the V4 plan §3.5 check 5 | check 5 cannot be answered on counts and the per-sweep-overhead hypothesis stays open, or rests on a timing — which nothing may (I-10) |
 | **DR5** | **Predicate mode `frozen \| mixed`** in the one coupling-state module both driver and harness import, recorded in every artifact preamble and every run record | `predicate_mode` becomes an arm/campaign parameter; artifacts gain a preamble field; G8 | the item 5a trial does not run; the frozen denominator stands with I-12 unaddressed |
-| **DR6** | **Environment overrides for the three hard-coded research-tree paths** (§3.3) — *this one is proposed by this plan, not by the experiment plan* | `harness/` can own the predicate module and, if wanted, the artifacts | the harness cannot be self-contained for those files; decision (2)/(3) resolve to "resolve in place" |
+| **DR6** | **Environment overrides for the three hard-coded research-tree paths** (§3.3) — *this one is proposed by this plan, not by the experiment plan*. **Conditional** (amended 2026-09-10): its **data half** (the two `docs/data/` artifacts) is **moot** if decision (3) is taken as recommended, since the artifacts then stay where the driver already looks; its **code half** (the predicate module) is **replaced** if decision (2) is settled as option (iv), since driver code imported normally needs no path override. DR6 is therefore only needed in full under decision (2) option (i) **and** decision (3)'s alternative | `harness/` can own the predicate module and, if wanted, the artifacts | the harness cannot be self-contained for those files; decision (2)/(3) resolve to "resolve in place" |
+| **DR7** | **Per-attempt node-call accounting** (amended 2026-09-10). Stamp `NODE_CALLS` and the sweep histogram at **each retry-ladder attempt boundary**, in the shape of the existing `NODE_CALLS_AT_OUTPUT` freeze (`caller.py:1825-1826`): integer-only, no float touched, no branch a result depends on, switch-neutral | the record gains `attempts[]` (§4.4); `stats.py` gains "retried seeds per arm" and "ratio with / without retried seeds" (§4.2); the failure table gains per-attempt columns; GR gains the summation tooth (§7.3) | **the headline stays partly an artefact of the mismatch**: node calls are run totals while `n_solver_iterations` and `ifail` are per VMCON attempt. Task A44 established from V3's records that this is most of `low_aspect_ratio_DEMO`'s published `B3/B0 = 0.450` — 0.659 without the one retried `B0` seed — and the V4 experiment plan §3.5 now requires the per-attempt figures and both ratios |
 
 **On DR1's exact names.** The V4 experiment plan §3.2 marks them *proposed, fixed by the harness
 implementation plan*. This plan proposes **`PROCESS_ARCH_DEFER_PER_CALL`** with values
@@ -496,8 +499,10 @@ holds both `Vacuum` and `VacuumVessel`, and the prefix rule would silently mark 
 (`sorted[n // 2]`), nearest-rank p90, the accepted-optimum predicate (`status == ok` **and** MFILE
 `ifail == 1`), the one Phase B seed set (every arm converged), the failure table, the clustering
 rule and its resolution category, the pooled/median/worse-count ratio triple, and the seed
-bracket. Each carries its definition in its docstring, and the docstring is what the report's
-caption quotes.
+bracket. **Plus, from DR7** (amended 2026-09-10): **retried seeds per arm** (a seed whose record
+carries more than one attempt), the cost ratio published **with and without** retried seeds, and
+the failure table's per-attempt columns (`stage`, `epsfcn`, `ifail`, node calls). Each carries its
+definition in its docstring, and the docstring is what the report's caption quotes.
 
 **`gates.py`** — a `Gate` has a name, what it binds, a criterion, **at least one `Tooth`**, and a
 record path; a gate with no tooth cannot be registered. `run()` returns PASS/FAIL with the record
@@ -561,6 +566,7 @@ inventory finding that requires it. Fields not listed are carried unchanged.*
 | **add — output path** | `output_path` (`mda_output` \| `finalise_once`), `mda_output_sweeps` | DR2; and item 1b's first task is to commit the `MDA_Output` sweep count per run by arm and configuration |
 | **add — counters** | `predicate_evaluations`, `components_compared` | DR4 / plan §3.5 check 5 |
 | **add — schedule** | `blocks_dropped`, `per_run_nodes_skipped` | DR3 |
+| **add — per attempt** *(amended 2026-09-10)* | `attempts: [{stage, epsfcn, n_iterations, ifail, node_calls_solve_phase, sweeps}]`, one entry per retry-ladder attempt, in order | DR7. V3's record has `exit_forensics.attempts` for the solver-owned fields but **no node calls per attempt** — the cost is a run total while `n_solver_iterations` and `ifail` are per attempt. A44 measured what that costs: most of lad's `B3/B0 = 0.450`, which is 0.659 without the one retried `B0` seed. The run total stays and must equal the sum of the attempts, which is a gate (§7.3) |
 | **add — campaign identity** | `v4_amplitude` (δ), `v4_run_kind` (`campaign`\|`gate`\|`smoke`\|`reference`) | two Phase A amplitudes; and V3's `v3_machinery_smoke` boolean generalises |
 | **add — taxonomy** | `failure_class` ∈ `ok` \| `crashed` \| `refused` \| `unconverged` \| **`unconverged-at-cap`** \| `infeasible-at-audit` \| `machinery` | item 1: upstream's loop raises after ten passes, and `AR` at δ = 0.10 may hit it. That is a **finding about the shipped code**, not a machinery failure — and V3's first launch proved how badly the two can be confused |
 | **keep, emphatically** | `tree`, `tree_git_head`, `tree_git_branch`, `tree_git_dirty`, `tree_contains_base_commit`, `process_file`, `python`, `pythonpath` | trap T6/T10; every one of V3's 599 records carried them and that is why the campaign is auditable |
@@ -636,21 +642,31 @@ versioned directory. **Decision (3)** puts the alternative to the user.
 
 The user's instruction is that everything used from `/idf_probe` or `/fixedpoint` lives in
 `/harness`. For `fixedpoint/`, that is exactly one file — `ystate.py` — and the driver loads it by
-absolute path. Three options, in the order this plan ranks them:
+absolute path. **Four** options *(option (iv) added 2026-09-10 at the orchestrator's review)*:
 
 *Caption: one row per option for the convergence-predicate module. "Two implementations?" is the
-D14(c) question: does the option create a second copy that can drift from the one the driver runs?*
+D14(c) question: does the option create a second copy that can drift from the one the driver runs?
+"Path hack?" is whether the driver still reaches a code module by filesystem path rather than by
+import.*
 
-| option | self-contained? | two implementations? | cost |
-|---|---|---|---|
-| **(i) move to `harness/ystate.py`; driver path becomes `PROCESS_ARCH_PREDICATE_MODULE` with today's path as default** — *recommended* | yes | **no**, if `fixedpoint/ystate.py` is left as the frozen V2/V3 copy and a gate asserts the V4 copy reproduces it bit-for-bit in `frozen` mode | DR6 (a small driver change); one gate; the V4 harness sets the override on every run |
-| (ii) leave it in `fixedpoint/`; `harness/predicate.py` imports it by the driver's own constant | no — one file stays outside | no | zero; but the user's instruction is not met and the buried `importlib` load survives, merely relocated |
-| (iii) copy it into `harness/` and leave the driver pointing at `fixedpoint/` | yes, apparently | **yes** — two predicates, the driver running one and the audit running the other | rejected: this is precisely the failure D14(c) and `module_solve.py:524-528` are written against, and it would fail silently |
+| option | self-contained? | two implementations? | path hack? | cost |
+|---|---|---|---|---|
+| **(i) move to `harness/ystate.py`; driver path becomes `PROCESS_ARCH_PREDICATE_MODULE` with today's path as default** — *this plan's original recommendation* | yes | **no**, if `fixedpoint/ystate.py` is left as the frozen V2/V3 copy and a gate asserts the V4 copy reproduces it bit-for-bit in `frozen` mode | **yes, and now environment-selected** — which means the run record must carry the loaded module's **path and hash**, or two runs on different predicates are indistinguishable after the fact (improvement item 5a's trap (i), in a new place) | DR6 (a small driver change); one gate; the V4 harness must set the override on **every** run, gates and smokes included |
+| **(iv) the predicate is driver code: split `ystate.py`** — the predicate and residual (what `module_solve.py` executes every sweep) move to **`process/core/solver/ystate.py`** and are imported normally by both driver and harness; the spec *generation* (harness-only) moves to `harness/` — *the orchestrator's recommendation* | yes — the harness imports `process` anyway | **no** | **no** — an ordinary import, so nothing in the record needs to disambiguate which module was loaded | a driver change with the same bit-identity gate (i) needs, plus the split itself. `process/core/solver/` already holds this experiment's variant points (`module_solve.py`, `subsolve.py`), so it is the permitted surface (D5/D11) |
+| (ii) leave it in `fixedpoint/`; `harness/predicate.py` imports it by the driver's own constant | no — one file stays outside | no | yes, unchanged | zero; but the user's instruction is not met and the buried `importlib` load survives, merely relocated |
+| (iii) copy it into `harness/` and leave the driver pointing at `fixedpoint/` | yes, apparently | **yes** — two predicates, the driver running one and the audit running the other | yes | rejected: this is precisely the failure D14(c) and `module_solve.py:524-528` are written against, and it would fail silently |
 
-Option (i) also happens to be what DR5 (the `frozen | mixed` predicate trial) needs: the trial
-requires *one* implementation with a mode, imported by both sides, and a neutrality gate proving
-the default mode reproduces V3 bit-for-bit. That gate is the same gate that proves the move did
-not change the predicate.
+**What (i) and (iv) share, and where they part.** Both give one implementation and both need the
+same bit-identity gate — the `frozen`-mode predicate must reproduce V3's Phase A records exactly,
+which is also DR5's gate 1, so the move and the predicate trial are certified by one measurement.
+They part on *where the anomaly goes*. (i) keeps a code module reached by filesystem path and
+makes that path environment-selected, which adds a provenance obligation the record must then
+carry. (iv) removes the anomaly: the convergence test the driver runs every sweep becomes driver
+code, imported, and nothing in `process/` depends on a version-numbered directory — which is also
+the objection that killed the idea of moving the *artifacts* into `…_v4/` (§5.2 reason 3). The
+cost of (iv) is that `process/` grows a file, i.e. it is unambiguously a driver change needing the
+user's approval; the cost of (i) is a permanent path indirection. **Decision (2) puts both to the
+user with both recommendations named.**
 
 ### 5.4 The A18 harvest — a chain that no committed stage can currently close
 
@@ -705,9 +721,11 @@ did not, and it is a *precondition for the rewrite being accepted*, not a step o
 
 ### 7.1 What it compares
 
-*Caption: the GR reference set. One row per reference run; "V3 record" is the path under
-`arch_surgery/MDA_partitioning_experiment_v3/runs/` in the main checkout, at V3's campaign commit
-`362c0b47`. `start000` is the unperturbed start; Phase A seeds are 1-based.*
+*Caption: the GR reference set. One row per group of reference runs; "V3 record" is the path
+under `arch_surgery/MDA_partitioning_experiment_v3/runs/` in the main checkout, at V3's campaign
+commit `362c0b47`. `start000` is the **unperturbed** start and `start001` the first **perturbed**
+one; Phase A seeds are 1-based, so `start001` is Phase A's first perturbed entry. The last two
+rows were added on 2026-09-10 so that the Phase B perturbation stream is exercised — see below.*
 
 | phase | V4 arm | V3 arm | runs | V3 record |
 |---|---|---|---|---|
@@ -716,9 +734,20 @@ did not, and it is a *precondition for the rewrite being accepted*, not a step o
 | B | `B3` | `B3` | 3 | `phase_b/campaign/<config>/B3/start000/metrics.json` |
 | A | `A0` | `A0` | 3 | `phase_a/campaign/<config>/A0/start001/metrics.json` |
 | A | `A1` | `A1` | 3 | `phase_a/campaign/<config>/A1/start001/metrics.json` |
+| **B — perturbed** | `B3` | `B3` | **3** | `phase_b/campaign/<config>/B3/start001/metrics.json` |
+| **B — perturbed, lifted vector** | `B1` | `B1` | **2** (pulsed configurations only; `B1` degenerates to `B0` at `k = 0` and V3 did not run it on st) | `phase_b/campaign/<config>/B1/start001/metrics.json` |
 
-Fifteen runs: nine optimisations and six single evaluations. Context cost, from V3's timings:
-under an hour at W = 3.
+**Twenty runs: fourteen optimisations and six single evaluations.** Context cost, from V3's
+timings: roughly an hour and a half at W = 3.
+
+**Why the last two rows exist.** Every `start000` row is the *unperturbed* start, so without them
+`perturb.py`'s **Phase B** stream is exercised by nothing in the gate. That stream is keyed on the
+iteration-variable **number**, not on its position, precisely so that a lifted design vector — one
+element longer, because the burn time becomes iteration variable 178 — still gives bit-identical
+factors to every variable the two arms share. `B1 start001` on the two pulsed configurations is
+where those two vector lengths meet, and is therefore the row that actually tests the keying;
+`B3 start001` tests the same stream through the full intervention. The Phase A stream (keyed on
+component name) is already exercised by the `A0`/`A1` rows, whose seeds are perturbed entries.
 
 **Compared fields, all exact:** `node_calls_solve_phase`, `node_calls_total`, `n_model_calls`,
 `n_prime_calls`, `exact.norm_objf` (hex float), `exit_audit.residual_max_hex`,
@@ -755,16 +784,38 @@ GR's zeros are accepted (protocol §12).*
 | **missing key** | delete one compared field from a copy of the reference record | **FAIL, not skip** |
 | **bad name map** | ask for V3 arm `BR` (which V3 never had) without the map | **RAISE** — the map is what makes `BR → R` legal, and a lookup that misses must raise |
 | composition | run `B3` **without** the `v3_compat` switches | FAIL (this is the positive control: it proves GR is sensitive to the driver changes it is holding fixed) |
+| **attempt summation** *(added 2026-09-10, DR7)* | a record whose `attempts[]` node calls do **not** sum to `node_calls_solve_phase` | **REFUSED** — per-attempt accounting whose parts do not add up to the whole it replaces is worse than no per-attempt accounting, because the "with / without retried seeds" ratio would then be computed over quantities that do not decompose the published one |
 
 ### 7.4 The reference must not depend on untracked bulk
 
 V3's `runs/` is untracked and this project has destroyed untracked run artifacts three times.
-Before the rewrite starts, a small stage should extract the fifteen reference records' compared
+Before the rewrite starts, a small stage should extract the twenty reference records' compared
 fields into **`harness/reference/v3_reference.json`** — the field values, V3's campaign commit,
 each source record's path and its sha256 — and commit it. GR then reads a committed file, with
 the live records used only to *re-derive* it (a second stage, run once, whose output must match
 byte-for-byte). Cost: one small stage and a ~10 KB committed file. Benefit: the gate survives the
 next worktree removal.
+
+### 7.5 What GR cannot cover, and what does *(added 2026-09-10)*
+
+GR compares against V3's records, so it can only cover arms V3 ran. **Two V4 arms are new, and a
+gate silent about what it does not cover is trap T11's shape.** Each is covered by a named gate of
+the V4 experiment plan §3.9 instead, and the GR record states so.
+
+*Caption: one row per V4 arm outside GR's reach; "covered instead by" is the gate that does test
+the path, with its criterion. Neither substitute is a bit-comparison against a prior record,
+because no prior record exists — both are internal consistency checks against a reference the run
+itself produces.*
+
+| arm | why GR cannot cover it | covered instead by |
+|---|---|---|
+| **`A0p`** (flat + lift + pin; improvement item 1c) | V3 never ran flat-with-pin: its Phase A pin appears only on the block arms, so there is no V3 record to reproduce | **G6, the warm-equivalence gate.** Pinned at the reference's *converged* burn time, `A0p` must reproduce the reference fixed point with cross-state maximum scaled residual `< τ` **and** the pinned component bit-identical. That is the same construction V3's G6 already passes on both pulsed configurations for the block arms, applied to the new arm |
+| **`AR`** (Phase A reference: every switch unset; improvement item 1) | V3 had no Phase A reference arm at all | **a G1-shape check**: `evaluate.py` with every architecture switch cleared must reproduce the **first `call_models`** of `BR start000` on the counts that call records — node calls for the call, sweeps for the call, and the objective hex at its exit. Both sides are then upstream's own loop entered from the same state, so any difference is the harness's, which is exactly what the check is for |
+
+Two consequences the plan holds to. **The GR record names both rows explicitly**, so a reader
+sees the coverage boundary rather than inferring it from an arm's absence. And **`AR`'s
+substitute cannot be run before `BR` reproduces** — it is anchored on a `BR` run — which fixes
+its position in H3's gate order.
 
 ---
 
@@ -802,15 +853,15 @@ under; "if the other way" says what changes. Nothing here is decided.*
 | # | decision | recommendation | if the other way |
 |---|---|---|---|
 | **1** | **Names for the two renamed deferral switches** (item 1d; the experiment plan defers this here) | `PROCESS_ARCH_DEFER_PER_CALL` (values `off \| feedforward \| feedforward_lifted`) and `PROCESS_ARCH_DEFER_PER_RUN` (artifact path). **And the retired names `PROCESS_ARCH_HOIST` / `PROCESS_ARCH_POST_SOLVE` must raise if set, not be ignored** | `PROCESS_ARCH_PER_CALL` / `…_PER_RUN` is the shorter alternative; keeping V3's names means item 1d is not implemented and every V4 table keeps the words "hoist" and "post-solve". If the retired-name refusal is declined, a stale caller silently measures the wrong arm under the right name |
-| **2** | **Where the convergence predicate module lives.** `process/core/solver/module_solve.py` loads `arch_surgery/fixedpoint/ystate.py` by absolute path | **Move it to `harness/ystate.py`** and make the driver's path an environment override with today's value as the default (DR6), with a gate proving the V4 copy reproduces the frozen predicate bit-for-bit. Self-contained, one implementation per run | Leave it in `fixedpoint/` and import it (§5.3 option ii): everything else is self-contained, one file is not. **Do not** copy it (option iii) — two predicates that can drift is what D14(c) exists to prevent |
+| **2** | **Where the convergence predicate module lives.** `process/core/solver/module_solve.py` loads `arch_surgery/fixedpoint/ystate.py` by absolute path — a *code* module reached by filesystem path. **Four options in §5.3; two are live** | Two recommendations, and the user picks *(row amended 2026-09-10)*. **A45's:** option **(i)** — move it to `harness/ystate.py` and make the driver's path an environment override with today's value as the default (DR6), gated by a bit-identity check on the `frozen` predicate. **The orchestrator's, which A45 accepts as the better of the two:** option **(iv)** — **the predicate is driver code**: the predicate and residual move to `process/core/solver/ystate.py` and are imported normally by both sides; only the spec *generation* moves to `harness/`. (iv) removes the path indirection entirely, needs no environment override for code, and avoids the provenance obligation (i) creates — under (i) the run record must carry the loaded module's path **and hash**, or two runs on different predicates are indistinguishable afterwards (improvement item 5a's trap (i)) | Option **(ii)**: leave it in `fixedpoint/` and import it — everything else is self-contained, one file is not. **Do not** copy it (option **iii**) — two predicates that can drift is what D14(c) exists to prevent. Taking **(iv)** replaces DR6's code half; taking **(i)** keeps it; taking **(ii)** or **(iii)** removes DR6's code half and leaves the hard-coded path in place |
 | **3** | **Where the committed artifacts live** (`ystate_a26_*`, `writeset_a26_*`, `postsolve_*`, `node_writesets.json`, `dsm_node_map.json`) | **Keep them in `arch_surgery/docs/data/`**; the harness owns resolution and validation, not the files. They are shared with V2/V3 and read by the driver by hard-coded path | Copy them under `…_v4/harness/data/`: literally self-contained, but requires DR6 *and* an override set on every single run including gates and smokes, and creates a second copy that can drift from the one V3's records were made against |
-| **4** | **The A18 harvest** — the committed artifacts defining `y` derive from 138 MB of **untracked** pickle that no committed stage can regenerate without it, in a repository that has destroyed untracked run artifacts three times (I-14/I-15/I-16) | **(a)** add an `artifacts --check` stage that validates the committed artifacts against their recorded harvest identity and **refuses** when the harvest is absent rather than passing quietly; **and (b)** commit a small extracted "harvest identity + scales" record so the chain is auditable without the pickles | **(c)** commit the three `harvest.pkl` files (138 MB) — the only option that makes regeneration reproducible, at a real cost in repository size; or **(d)** accept the gap and state it in the V4 report's provenance section. This is the user's call because it changes what the repository holds |
+| **4** | **The A18 harvest** — the committed artifacts defining `y` derive from 138 MB of **untracked** pickle that no committed stage can regenerate without it, in a repository that has destroyed untracked run artifacts three times (I-14/I-15/I-16) | **(a)** add an `artifacts --check` stage that validates the committed artifacts against their recorded harvest identity and **refuses** when the harvest is absent rather than passing quietly; **and (b)** commit a small extracted "harvest identity + scales" record so the chain is auditable without the pickles. **And, binding either way** *(added 2026-09-10)*: **`artifacts --derive` must never run inside a campaign.** The a26 scales `s_i` are part of the **frozen ruler** — regenerating them from a new harvest changes what τ means and breaks comparability with V2, V3 and A38 (and with A35's and A38's residual figures, which are quoted on that ruler). Derivation is a **provenance stage only**, run deliberately and never as a side effect of a campaign stage; `experiment_runner.py` must not reach it, and a campaign that finds an artifact missing **refuses** rather than deriving one | **(c)** commit the three `harvest.pkl` files (138 MB) — the only option that makes regeneration reproducible, at a real cost in repository size; or **(d)** accept the gap and state it in the V4 report's provenance section. This is the user's call because it changes what the repository holds |
 | **5** | **`runs/` layout** | Keep V3's, adding one level for the Phase A amplitude (`…/<arm>/d100/start001`) | A flat run-id layout with a manifest is tidier but forces a second mapping inside GR, on top of the arm-name map, for no measurement benefit |
 | **6** | **One tally implementation or two** | **Two** — the tally and the independent analysis compute the declared definitions separately and `--verify` compares them cell by cell. This is what caught I-18 (26 of 144 cells wrong) and I-19 | One implementation plus a golden-record test: ≈ 30 % less code, and the class of defect that has bitten twice becomes undetectable |
 | **7** | **Smoke scope before execution approval** | A `--mode smoke` on every stage **plus** a one-seed end-to-end pass (campaign → tally → analysis → `--verify`) runnable while `EXECUTION_APPROVED = False` | Machinery-only smokes as in V3: cheaper, but the tally and analysis are then first exercised on the real campaign, which is when V3's launch failure and I-18 were found |
 | **8** | **What the "minimal" harness drops** | Drop the four probe modes from the run path, `--exit-audit-at-call`, the A18-mode specs, the per-pass trace composition, and 19 of 20 `fixedpoint/` modules. **Keep** the per-node census, `sweeps_per_eval`, the entry census and the exit forensics (§4.6) | Dropping the censuses would remove the per-module tables, the transfer factorisation (the answer to I-17) and the cost unit's own consistency check |
-| **9** | **The GR reference record** | Commit `harness/reference/v3_reference.json` — the fifteen reference runs' compared fields, V3's commit, and each source record's sha — **before** the rewrite starts | Read V3's live `runs/` directly: no new committed file, and the gate stops working the day that worktree is retired |
-| **10** | **Which `process/` changes are approved, and in what order** | Approve DR1–DR5 as the experiment plan's decision (d) proposes, **plus DR6** (environment overrides for the three research-tree paths), each as its own change with its own neutrality gate and its own merge | Any subset. A declined DR2 removes gate G9 and the `output_path` matrix row; a declined DR3 leaves I-20a's empty sweeps in place; a declined DR4 leaves the per-sweep-overhead question unanswerable on counts; a declined DR5 cancels the predicate trial; a declined DR6 forces decision (2) to option (ii) and decision (3) to "keep in `docs/data/`" |
+| **9** | **The GR reference record** | Commit `harness/reference/v3_reference.json` — the twenty reference runs' compared fields, V3's commit, and each source record's sha — **before** the rewrite starts | Read V3's live `runs/` directly: no new committed file, and the gate stops working the day that worktree is retired |
+| **10** | **Which `process/` changes are approved, and in what order** | Approve DR1–DR5 as the experiment plan's decision (d) proposes, **plus DR7** (per-attempt node-call accounting — *added 2026-09-10*), **plus DR6 conditionally** (needed in full only under decision (2) option (i) together with decision (3)'s alternative; its code half is replaced if decision (2) is settled as option (iv), and if decision (2) is settled as (iv), a driver change for `process/core/solver/ystate.py` is approved in its place). Each as its own change, its own neutrality gate, its own merge | Any subset. A declined DR2 removes gate G9 and the `output_path` matrix row; a declined DR3 leaves I-20a's empty sweeps in place; a declined DR4 leaves the per-sweep-overhead question unanswerable on counts; a declined DR5 cancels the predicate trial; a declined DR6 forces decision (2) to option (ii) and decision (3) to "keep in `docs/data/`"; **a declined DR7 leaves the cost headline partly an artefact of run-total-versus-per-attempt accounting — A44 measured that as most of lad's `B3/B0 = 0.450` against 0.659 without the one retried seed — and the V4 experiment plan §3.5's "with and without retried seeds" tables cannot be produced** |
 | **11** | **The three A18-era root scripts** (`arch_surgery/experiment_runner.py`, `MDA_partition_experiment.py`, `MDA_partition_opt_experiment.py`) | **Leave frozen and untouched.** They are the record of the A18/A28-generation experiment and are cited by A28's report. V4's one-button entry point is `…_v4/experiment_runner.py`, a different file with the same basename as the first of them | Retiring them is a separate decision; if taken, it should be its own task with the citing reports updated |
 
 ---
@@ -828,24 +879,28 @@ merged, per protocol §6 (a failed gate blocks the merge and is reported as a re
 |---|---|---|---|---|
 | **H1** | *harness-skeleton* | `config.py`, `switches.py`, `arms.py`, `provenance.py`, `harness/README.md`, the `experiment_runner.py` shell with preflight only | all nine arms compose on every configuration; `rung()` reproduces the V4 plan §3.2 rung table exactly; the capability probe **refuses** an arm whose switch the tree does not implement (tooth: ask for a switch name that does not exist); no PROCESS run yet | M |
 | **H2** | *harness-reference* | the GR reference extraction stage and `harness/reference/v3_reference.json` (decision (9)) | the extracted file re-derives byte-identically from V3's records; a missing record path **refuses** | S |
-| **H3** | *harness-run* | `child.py`, `optimise.py`, `evaluate.py`, `pool.py`, `records.py`, `perturb.py`, `predicate.py` (+ `ystate.py` per decision (2)) | **gate GR** (§7): fifteen runs reproduce V3 bit-exactly on the listed fields, all six teeth trip, including the `v3_compat` positive control | **L — the largest single piece** |
+| **H3** | *harness-run* | `child.py`, `optimise.py`, `evaluate.py`, `pool.py`, `records.py`, `perturb.py`, `predicate.py` (+ `ystate.py` per decision (2)) | **gate GR** (§7): twenty runs reproduce V3 bit-exactly on the listed fields, all seven teeth trip, including the `v3_compat` positive control and the DR7 attempt-summation refusal; plus §7.5's two substitutes for the arms GR cannot cover | **L — the largest single piece** |
 | **H4** | *harness-artifacts* | `artifacts.py`, `decks.py`, `census.py`, `postsolve.py` and their stages | derived decks byte-identical to V3's; `per_run` sets re-derived equal to the committed ones **under the class-level classifier** (item 6a(a)), with any difference reported as a finding rather than absorbed; `artifacts --check` refuses on an absent harvest | M–L |
 | **H5** | *harness-gates* | `gates.py` and G0, G4, G5, G6, G7 in the new framework | every gate PASSes with every tooth tripping at the V4 commit; G0 refuses on a missing reference key | M |
 | **H6** | *harness-tally* | `stats.py`, `phase_a.stage_tally`, `phase_b.stage_tally`, `tables.py` | the tally reproduces V3's published cells for the GR reference runs; every declared construction of V4 plan §3.5 present, including item 6's within-cluster field **in the tally as well as the analysis** | M |
 | **H7** | *harness-analysis* | `analysis.py` with `--verify`, `--teeth`, `--tables` | 0 mismatches over the full cell set with the denominator stated; every tooth trips; `--verify` refuses on an empty comparison | M |
 | **H8** | *harness-smoke* | the one-seed end-to-end mode and the draft-mode chain in `experiment_runner.py` | a full one-seed pass on the cheapest configuration reaches a `--verify` with 0 mismatches, from the one button, with `EXECUTION_APPROVED = False` | S |
-| **D-a…D-f** | *driver changes DR1–DR6* | one task each, on `process/` | each: byte-identity with the switch unset, on three configurations, with a 1-ULP tooth (gate G1's shape); the user's approval before merge | S–M each, six of them |
+| **D-a…D-g** | *driver changes DR1–DR7* *(DR7 added 2026-09-10; DR6 conditional per decisions (2) and (3))* | one task each, on `process/` | each: byte-identity with the switch unset, on three configurations, with a 1-ULP tooth (gate G1's shape); the user's approval before merge. **DR7 additionally**: the per-attempt node calls must sum to `node_calls_solve_phase` on every record, with a tooth that breaks the sum and is refused | S–M each, seven of them |
 
 **Sequencing constraints that matter.** H2 before H3 (GR needs its reference committed first).
 H3 before H4 (the artifact stages are validated by running the arms they feed). DR1 (the renames)
 should land **after** H3, so GR compares against V3 through one map rather than two. DR2–DR5 must
-each be composable back to V3's behaviour (§7.2) or they make the rewrite unverifiable.
+each be composable back to V3's behaviour (§7.2) or they make the rewrite unverifiable. **DR7 is
+the one driver change that should land *before* H6** (amended 2026-09-10): the tally's declared
+constructions include "ratio with / without retried seeds", and a tally written against records
+that lack `attempts[]` would have to be rewritten rather than extended. **`AR`'s substitute check
+(§7.5) is anchored on a `BR` run**, so it follows GR's `BR` rows inside H3's gate order.
 
 **Total scope, stated plainly.** ≈ 3 400 lines of new `harness/` code plus **821 moved verbatim**
 (`ystate.py`), ≈ 1 450 lines across `phase_a.py` / `phase_b.py` / `experiment_runner.py`, ≈ 900
 lines of `analysis.py` — ≈ **6 570** against the V3 stack's measured **8 828**, about a 26 %
-reduction. Plus six small driver changes each with its own gate, and one reproduction gate of
-fifteen runs. The gain is not the line count: it is self-containment, one arm composition instead
+reduction. Plus seven small driver changes each with its own gate, and one reproduction gate of
+twenty runs. The gain is not the line count: it is self-containment, one arm composition instead
 of two, measured capability instead of a declared ledger, and a rewrite that is *provably* the
 same measurement.
 Anyone who expected "minimal" to mean an order of magnitude smaller should read §4.6 first: most
@@ -860,3 +915,31 @@ of what looks like bulk is the instrument.
   were read **uncommitted** from the main checkout on the same date and may have moved since.
   Status **DRAFT · NOT APPROVED**; decisions (1)–(11) open. No code written; no file under
   `process/`, `idf_probe/`, `fixedpoint/`, `…_v2/` or `…_v3/` touched.
+- **2026-09-10 — amendment 1, from the orchestrator's critical assessment (protocol §5).**
+  **(A) Per-attempt node-call accounting added**: new driver change **DR7** in §3.2 (stamp
+  `NODE_CALLS` and the sweep histogram at each retry-ladder attempt boundary, in the shape of the
+  existing `NODE_CALLS_AT_OUTPUT` freeze); record field `attempts[]` in §4.4; the "retried seeds"
+  and "with / without retried seeds" constructions in `stats.py` (§4.2); an attempt-summation
+  tooth in §7.3; DR7 in decision (10) and in §10's task table, with the note that it should land
+  before H6. Reason: node calls are recorded as **run totals** while `n_solver_iterations` and
+  `ifail` are **per VMCON attempt**, and task **A44** established from V3's records that this
+  mismatch is most of `low_aspect_ratio_DEMO`'s published `B3/B0 = 0.450` — 0.659 without the one
+  retried `B0` seed. The V4 experiment plan §3.5 now requires both figures; that amendment landed
+  after this plan first read it.
+  **(B) Gate GR's coverage widened and its boundary named**: §7.1 gains `B3 start001` on all three
+  configurations and `B1 start001` on the two pulsed ones — the **perturbed** Phase B starts,
+  without which `perturb.py`'s Phase B stream (keyed on iteration-variable number, so a lifted
+  design vector one element longer leaves shared variables bit-identical) was exercised by nothing
+  in the gate. GR is now **twenty** runs, ≈ 1.5 h at W = 3. New **§7.5** names the two arms GR
+  cannot cover and what covers them instead: `A0p` by the V4 plan's **G6** warm gate (pinned at the
+  reference's converged burn time, reproducing the reference fixed point below τ with the pinned
+  component bit-identical) and `AR` by a **G1-shape** check that `evaluate.py` with every switch
+  cleared reproduces the first `call_models` of `BR start000` on that call's counts.
+  **(C) Decision (2) gains option (iv)** — *the predicate is driver code*: split `ystate.py`, the
+  predicate and residual to `process/core/solver/ystate.py` imported normally by both sides, the
+  spec generation to `harness/`. Added to §5.3's table with the comparison to option (i), and to
+  decision (2) with the orchestrator's recommendation of (iv) beside A45's (i). Consequently
+  **DR6 is now stated conditionally** in §3.2 and decision (10).
+  **(D) Decision (4) gains a binding rule**: `artifacts --derive` must **never** run inside a
+  campaign — the a26 scales are part of the frozen ruler and regenerating them changes what τ
+  means; derivation is a provenance stage only.
