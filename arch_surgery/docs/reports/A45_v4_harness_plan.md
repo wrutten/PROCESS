@@ -152,6 +152,57 @@ scoping choice rather than a methodological one. "Reversal" is what it costs to 
   ruler. **Nothing was restructured and no other recommendation changed.** A45 accepts (iv) as the
   better of the two predicate options and says so in the row; the user still decides. Still no
   code; status **DRAFT · NOT APPROVED**; decisions (1)–(11) open.
+- **2026-09-10 — the user's rulings and decision D20 received; amendment 2 made to the plan.**
+  **The frame changed.** **D20**: V4 runs **its own copy of the whole `process/` package** at
+  `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/process/`, taken at a named commit; every V4
+  driver change is made in the copy; the repository-root `process/` stays as V2/V3's tree; the
+  harness sets `PYTHONPATH` to the copy with the exact-tree assertion and never relies on the
+  editable install. Measured and reported for the user: **`du -sh process/` = 5.6 MB over 224
+  tracked files**, 3.0 MB of it `process/models/`.
+  Carried through the plan: §1's verdict, §3's preamble and §3.2/§3.3, §4.1's tree, §4.3's data
+  flow, §5.2–§5.4, §6, §7, §8's R12, §9 and §10.
+  **What D20 removed:** **DR6** (environment overrides for the three research-tree paths) —
+  dropped, the copy re-points them statically; and the **`v3_compat` composition together with the
+  "every V4 driver change must be composable back to V3" design rule** — §7 restated so that **GR
+  runs once**, at the copy commit, before any driver change, which makes the harness the only
+  variable in the comparison. **G1 is now run per driver change and never batched.**
+  **What D20 added:** **gate G0′** (new §7.6) — `…_v4/PROCESS/process/models/` byte-identical to
+  `c0ae5b28` at **every** V4 commit, with teeth for a 1-byte edit, a removed file and an added
+  file. A duplicated tree nobody checks is how a frozen model quietly stops being frozen.
+  **Rulings recorded in §9:** decisions (1), (5), (6), (7), (8), (9), (11) accepted as
+  recommended. **(4)** settled — *"leave it as is"*: V4 never regenerates the a26 artifacts
+  (their scales are the frozen ruler), so **no `--derive` stage exists**, `artifacts --check`
+  validates from the artifact's own `harvest_identity`, and the gap is stated once in the report's
+  provenance section. **(10)**: DR1 accepted, DR2 accepted, **DR3 rejected** — the empty `PULSE`
+  visits stay and are **disclaimed**, which becomes a required clause in every per-sweep and
+  per-block table caption and removes the `blocks_dropped` / `per_run_nodes_skipped` record
+  fields; DR4 **pending**; DR5 accepted; DR6 dropped; DR7 stands.
+  **Two recommendations reversed by D20**, with the old reasoning kept visible as an audit trail
+  rather than rewritten away: **(2)** now recommends **option (iv)** — the predicate is driver
+  code, `…_v4/PROCESS/process/core/solver/ystate.py`, imported normally — with **option (v)** (the
+  whole file in `harness/` at a **fixed** relative path, no environment variable) as the live
+  alternative; the user prefers copying to an opaque override and the final choice is pending.
+  **(3)** now recommends **copying** the committed artifacts into `…_v4/harness/data/` with a
+  one-off sha256 gate and a `PROVENANCE.json`; the user asked whether this was gates-only — it is
+  not, and their approval is pending.
+  **New binding requirement from the user:** **every verification gate is implemented inside
+  `harness/`** — none imported from `arch_surgery/idf_probe/` or `arch_surgery/fixedpoint/`, none
+  invoked as a subprocess into them. Stated in §4.2, §6 and H5, and H5's size estimate raised to
+  M–L because G1/G2/G3/G3c were previously inherited rather than written.
+  **Also carried:** the V4 plan's §3.4 second Phase A regime is the **stencil** regime — forward
+  stencil points from the reference fixed point, backward points from each forward exit,
+  `2(nvar + 1)` evaluations per arm per configuration — **not δ = 0.001**, which A44 measured does
+  not reproduce the in-loop regime; `evaluate.py` needs the stencil-point entry (A44's
+  `--x-fd-column` / `--x-fd-sign`), which this task verified against the optimiser's own
+  arithmetic at `process/core/solver/evaluators.py:132-143` (`xv[j] * (1 ± numerics.epsfcn)` on a
+  copy, one column at a time). The record gains `regime` and the `x_fd` block. **Provenance
+  splits `tree_git_dirty`** into `tree_modified_tracked` and `tree_untracked_paths`, because A44's
+  records stamped dirty purely on untracked files while the measured code was clean. **§10 gains
+  task H0** (*v4-process-copy*), which must be its own task so its diff is reviewable by
+  inspection. All markdown tables re-validated (one pre-existing broken row in §0's vocabulary
+  table — unescaped absolute-value bars in the τ definition — fixed in passing).
+  Still no code; status **DRAFT · NOT APPROVED**; open: decision (2)'s final choice, decision
+  (3)'s approval, DR4.
 
 ---
 
