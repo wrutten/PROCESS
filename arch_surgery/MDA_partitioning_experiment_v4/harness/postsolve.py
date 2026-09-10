@@ -1094,7 +1094,7 @@ def stage(
                     config,
                     campaign,
                     entry=census_entry,
-                    read_census=False,
+                    read_census=True,
                     resume=resume,
                 )
             except (census_mod.CensusError, RuntimeError) as exc:

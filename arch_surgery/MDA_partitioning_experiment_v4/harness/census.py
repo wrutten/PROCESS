@@ -299,6 +299,27 @@ def take(
     directory = Path(
         outdir or (Path(campaign.runs_dir) / RUNS_SUBPATH / config.name / entry)
     )
+    existing = directory / "census.json"
+    if resume and existing.exists():
+        previous = json.loads(existing.read_text())
+        matches = (
+            previous.get("configuration") == config.name
+            and previous.get("entry") == entry
+            and (previous.get("read_census") or not read_census)
+        )
+        if matches:
+            # A census already on disk for exactly this configuration and entry,
+            # carrying at least the halves this call asks for.  Resume means
+            # *this*: a directory alone is never evidence, and a census taken
+            # with the read half off cannot stand in for one that needs it.
+            print(
+                f"  {config.name:24s} census   entry={entry:<12s} resumed "
+                f"(a matching census is already on disk)",
+                flush=True,
+            )
+            previous.setdefault("run", {})["resumed"] = True
+            previous["run"]["outdir"] = str(directory)
+            return previous
     job = pool_mod.Job(
         phase="census",
         arm=CENSUS_ARM[entry],
@@ -311,7 +332,7 @@ def take(
         census_read=read_census,
         node_census=False,
     )
-    result = pool_mod.run(job, campaign, resume=resume)
+    result = pool_mod.run(job, campaign, resume=False)
     path = directory / "census.json"
     if not path.exists():
         raise CensusError(
