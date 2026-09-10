@@ -30,6 +30,7 @@ if str(HERE) not in sys.path:
 
 from harness import arms as arms_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
+from harness import reference as reference_mod  # noqa: E402
 from harness import selfcheck as selfcheck_mod  # noqa: E402
 from harness.config import (  # noqa: E402
     EXECUTION_APPROVED,
@@ -220,6 +221,41 @@ def stage_capability(campaign: Campaign, *, probe: bool = True) -> tuple[int, di
     return (0 if check.passed else 3), check.as_record()
 
 
+def stage_reference(campaign: Campaign) -> tuple[int, dict[str, Any]]:
+    """The committed reproduction reference: what the rewrite must reproduce.
+
+    The reference holds the compared fields of the previous revision's twenty
+    reference runs, so that the reproduction gate reads a committed file
+    rather than untracked run records that a retired working tree can delete
+    — which has happened to this project three times.  This stage reports
+    what is committed; ``--reference verify`` re-derives it from the live
+    records and requires byte-for-byte equality, and ``--reference teeth``
+    shows the four ways it refuses.
+    """
+    _rule("reproduction reference")
+    try:
+        document = reference_mod.load()
+    except reference_mod.ReferenceError as exc:
+        print(f"  MISSING    {exc}")
+        return 3, {"present": False, "error": str(exc)}
+    for line in reference_mod.summary(document):
+        print(line)
+    provenance = document["provenance"]
+    print(
+        "  re-derive  experiment_runner.py --reference verify "
+        "--previous-runs <root>"
+    )
+    return 0, {
+        "present": True,
+        "path": str(reference_mod.REFERENCE_PATH),
+        "n_entries": len(document["entries"]),
+        "source_revision": provenance["source_revision"],
+        "population": provenance["population"],
+        "compared_fields": provenance["compared_fields"],
+        "not_covered": provenance["not_covered_by_this_reference"],
+    }
+
+
 def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
     """Every campaign stage, and why it refuses.
 
@@ -274,6 +310,48 @@ def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
+def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
+    """One reproduction-reference stage, from the button rather than by hand.
+
+    Every stage of the experiment is reachable from this entry point,
+    successes and refusals alike: a run that can only be started by retyping a
+    module invocation with flags is not reproducible (protocol §15).  The
+    stage's own record goes under ``runs/reference/``, which is untracked.
+    """
+    if args.reference == "tables":
+        return reference_mod.main(["--tables"])
+    if args.reference == "show":
+        code, record = stage_reference(campaign)
+        name = "show"
+    elif args.reference == "extract":
+        code, record = stage_extract_reference(args.previous_runs, campaign)
+        name = "extract"
+    elif args.reference == "verify":
+        code, record = reference_mod.stage_verify(
+            runs_root=args.previous_runs, campaign=campaign
+        )
+        name = "verify"
+    else:
+        code, record = reference_mod.stage_teeth(
+            runs_root=args.previous_runs, campaign=campaign
+        )
+        name = "teeth"
+    if name != "show":
+        reference_mod.report(name, code, record)
+    out = args.json or (campaign.runs_dir / "reference" / f"{name}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(record, indent=2, default=str))
+    print(f"record: {out}")
+    return code
+
+
+def stage_extract_reference(
+    previous_runs: Path | None, campaign: Campaign
+) -> tuple[int, dict[str, Any]]:
+    """Rebuild the committed reference from the previous revision's records."""
+    return reference_mod.stage_extract(runs_root=previous_runs, campaign=campaign)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -301,6 +379,22 @@ def main(argv: list[str] | None = None) -> int:
         help="skip the capability probe (it starts a child process per arm "
         "and configuration)",
     )
+    parser.add_argument(
+        "--reference",
+        choices=("show", "tables", "extract", "verify", "teeth"),
+        help="run one stage of the reproduction reference and stop: show what "
+        "is committed, emit the report's tables from it, extract it from the "
+        "previous revision's records, verify that it re-derives from them "
+        "byte for byte, or run its four teeth.  'extract', 'verify' and "
+        "'teeth' need --previous-runs",
+    )
+    parser.add_argument(
+        "--previous-runs",
+        type=Path,
+        help="root of the previous revision's untracked run records, for the "
+        "reference stages; they live in the main checkout, so a task worktree "
+        "must be pointed at it",
+    )
     parser.add_argument("--json", type=Path, help="write the preflight record here")
     args = parser.parse_args(argv)
 
@@ -313,6 +407,9 @@ def main(argv: list[str] | None = None) -> int:
             campaign, include_capability=not args.no_capability
         )
         return selfcheck_mod.report(checks)
+
+    if args.reference:
+        return _run_reference_stage(args, campaign)
 
     print("=" * WIDTH)
     print("MDA partitioning experiment — plan: EXPERIMENT_PLAN.md")
@@ -335,6 +432,8 @@ def main(argv: list[str] | None = None) -> int:
     rc, record["capability"] = stage_capability(
         campaign, probe=tree_present and not args.no_capability
     )
+    codes.append(rc)
+    rc, record["reference"] = stage_reference(campaign)
     codes.append(rc)
     rc, record["campaign"] = stage_campaign(campaign)
     codes.append(rc)
