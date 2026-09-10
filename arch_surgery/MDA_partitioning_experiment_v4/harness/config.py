@@ -61,7 +61,7 @@ class Config:
     problem is read from (README §3).
     """
 
-    #: Configuration name; also the frozen input file's stem.
+    #: Configuration name; also the committed input file's stem.
     name: str
     #: Pulsed plant (burn-time coupling present, k = 1) or steady state (k = 0).
     pulsed: bool

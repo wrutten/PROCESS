@@ -1034,3 +1034,8 @@ implementation plan's.*
   is `BR`, `B0`. The `B0 → B1` rung's *isolates* wording now names the output-time loop, Phase B
   only, with the reason it sits on that rung (the alternative — moving the change to `B3` —
   would put a Phase-B-only field on the headline rung and break its twin with `A0p → A1`).
+- 2026-09-10 — **A47 (harness-skeleton) merged**; the two rulings of the previous entry **approved by
+  the user (D24)**, who also delegated the remainder of the rebuild to the orchestrator (tasks
+  A48–A60 minted; the campaign still waits for `EXECUTION_APPROVED`). The harness regenerates this
+  plan's §3.2 matrix cell for cell from its arm records and refuses a rung whose computed difference
+  is not the declared one.

@@ -1,8 +1,9 @@
 # A47 (harness-skeleton) — the harness package skeleton and the runner's preflight
 
-> **Document status** — **OPEN TASK REPORT**, complete, with the orchestrator's **five pre-merge
-> rulings of 2026-09-10 applied and re-gated** (§4.3); awaiting re-assessment and merge
-> (protocol §5: the assessment gates the merge). Task **A47 (harness-skeleton)**, branch `A47-harness-skeleton` off
+> **Document status** — **MERGED TASK REPORT, archived.** Merged into `architecture_surgery` on
+> 2026-09-10 (`42a1edd1`) after one review round (the five rulings of §4.3, approved by the user as
+> D24); the orchestrator's critical assessment (protocol §5) is §10. Folder position records
+> lifecycle, not validity (trap T3). Task **A47 (harness-skeleton)**, branch `A47-harness-skeleton` off
 > `architecture_surgery` at `f2dc9243`. Implements task **H1** of the approved V4 harness plan
 > [`../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md`](../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md).
 > Every number below is produced by executing

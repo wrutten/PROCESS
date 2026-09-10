@@ -1100,7 +1100,7 @@ merged, per protocol §6 (a failed gate blocks the merge and is reported as a re
 | **H6** | *harness-tally* | `stats.py`, `phase_a.stage_tally`, `phase_b.stage_tally`, `tables.py` | the tally reproduces V3's published cells for the GR reference runs; every declared construction of V4 plan §3.5 present, including item 6's within-cluster field **in the tally as well as the analysis** | M |
 | **H7** | *harness-analysis* | `analysis.py` with `--verify`, `--teeth`, `--tables` | 0 mismatches over the full cell set with the denominator stated; every tooth trips; `--verify` refuses on an empty comparison | M |
 | **H8** | *harness-smoke* | the one-seed end-to-end mode and the draft-mode chain in `experiment_runner.py` | a full one-seed pass on the cheapest configuration reaches a `--verify` with 0 mismatches, from the one button, with `EXECUTION_APPROVED = False` | S |
-| **D-a…D-e** | *driver changes DR1, DR2, DR4, DR5, DR7* *(amended 2026-09-10: DR4 approved; DR3 rejected, DR6 dropped)* | one task each, **in `…_v4/PROCESS/process/`, never in the repository-root tree** | each: **G1** — with the switch unset, byte-identical to the copy *immediately before that change*, three configurations, 1-ULP tooth — **run per change and never batched** (§7.2); **G0′** at the same commit; the user's approval before merge. **DR7 additionally**: the per-attempt node calls must sum to `node_calls_solve_phase` on every record, with a tooth that breaks the sum and is refused | S–M each, four or five of them |
+| **D-a…D-e** | *driver changes DR1, DR2, DR4, DR5, DR7* *(amended 2026-09-10: DR4 approved; DR3 rejected, DR6 dropped)* | one task each, **in `…_v4/PROCESS/process/`, never in the repository-root tree** | each: **G1** — with the switch unset, byte-identical to the copy *immediately before that change*, three configurations, 1-ULP tooth — **run per change and never batched** (§7.2); **G0′** at the same commit; the user's approval before merge *(D24, 2026-09-10: delegated — merged by the orchestrator on the gates alone; the physics freeze is unchanged)*. **DR7 additionally**: the per-attempt node calls must sum to `node_calls_solve_phase` on every record, with a tooth that breaks the sum and is refused | S–M each, four or five of them |
 
 **Sequencing constraints that matter** *(restated 2026-09-10 under D20)*. **H0 first and alone** —
 the copy is reviewable only if its diff contains nothing but the copy. H2 before H3 (GR needs its
@@ -1243,6 +1243,14 @@ of what looks like bulk is the instrument.
   string move to **A48 (harness-data)**, minted for H0's remainder (§11.5). §10's H3 row still
   lists `harness/ystate.py`; it is A48's. The `…_v4/.gitignore` (`runs/`, and a `!*.dat`
   re-include for the copy's 42 data files) was added by the orchestrator at the merge.
+- **2026-09-10 — amendment 5, at the merge of A47 (harness-skeleton) and decision D24.** H1 delivered
+  and gated (five checks, 15 teeth; six shared arms equal V3's composition switch for switch). The
+  orchestrator's five rulings at review — "deck" → input file with "frozen" reserved; `input_dir`
+  under `harness/data/`; Phase A arms without the output-time-loop switch (`A1` runs before DR2);
+  the `B0 → B1` wording; `--tree repository` preflight/self-check only — are recorded in §11.2 and
+  approved by the user (D24). D24 also delegates the rest of the rebuild: every remaining task is
+  minted (§11.5, A48–A60), the driver changes merge on their gates without a per-change approval,
+  and one whole-implementation assessment closes it. Run directories are `seed000…`.
 
 ---
 
@@ -1280,7 +1288,7 @@ experiment plan's §1.3 follows it.*
 | **arrangement · node** / **arrangement · method** | `SEQUENCE=build_after_physics` / `PRIME=fw_geometry` | both are *when* something runs; the prime is a method-level reorder (matrix rows) |
 | **burn-time owner**: loop / constant / optimiser | lift, pin, `ixc 178`, constraint 93 | the matrix row; "lift" and "pin" survive only as the mechanism names in docstrings |
 | **reference arm** `AR` / `BR` | `R`, "PROCESS as shipped" | the phase in the name |
-| **seed** (both phases) | seed (A) / start (B) | one word; Phase B's `start000` is seed 0 |
+| **seed** (both phases) | seed (A) / start (B) | one word; Phase B's `start000` is seed 0. **Run directories are `seed000…`, not `start000…`** *(ruled 2026-09-10 at A47's assessment; approved, D24)* |
 | **coupling state**, **coupling-state spec**, **write sets** | ystate, spec, writeset, harvest | plain nouns; "harvest" is the frozen ruler's origin and appears only in provenance |
 | **output-time loop** | `MDA_Output`, idempotence loop | says when it runs |
 | **stencil regime** / **δ regime** | E3/E3b, warm δ-stream | the two Phase A entry regimes by what displaces the state |
@@ -1324,4 +1332,15 @@ user's approval; sequencing as §10. Driver changes follow the reproduction gate
 | H0 | **A46 (process-copy)** | `PROCESS/process/` copied at the current tip, `PROVENANCE.json`, byte-identity gate against `git show`, the three path constants, `PROCESS_diff.py` |
 | H1 | **A47 (harness-skeleton)** | `config`, `switches`, `arms`, `provenance`, the runner shell with preflight, `README.md`, the terminology table; no PROCESS run |
 | H0, remainder | **A48 (harness-data)** *(minted 2026-09-10 at A46's merge; dispatched when A47 merges)* | `harness/data/` — the committed artifacts the copied driver and the harness read, each sha256-identical to its `docs/data/` original, named per §11.1/§11.2 and as the skeleton's environment composer asks, with their own `PROVENANCE.json`; `harness/ystate.py` moved whole; the two one-line copy edits of §3.3 (existence check, stale string) with `copy_gates.py`'s permitted-edit model generalised from constant names to recorded hunks; no PROCESS run |
-| H2–H8, DR1/2/4/5/7 | minted when their predecessors merge | as §10 |
+| H2 | **A49 (harness-reference)** *(minted 2026-09-10, D24)* | the 20-record reproduction reference, extraction and verification stages |
+| H3 | **A50 (harness-run)** | the run path; gate GR at the copy commit before any driver change; `seed000…` directories |
+| H4 | **A51 (harness-artifacts)** | `artifacts`, `input_files` (the plan's `decks.py`), `census`, `postsolve` |
+| H5 | **A52 (harness-gates)** | `gates.py`, every gate inside `harness/` |
+| H6 | **A53 (harness-tally)** | `stats`, tally stages, `tables` — after DR7 |
+| H7 | **A54 (harness-analysis)** | `analysis.py` |
+| H8 | **A55 (harness-smoke)** | the one-seed end-to-end mode |
+| DR1 | **A56 (driver-renames)** | switch names of §11.2, `OUTER` folded into `partitioned` |
+| DR2 | **A57 (driver-output-path)** | `PROCESS_ARCH_OUTPUT_LOOP`; G9 |
+| DR4 | **A58 (driver-predicate-counters)** | per-sweep and predicate counters |
+| DR5 | **A59 (driver-predicate-mode)** | `frozen \| mixed` |
+| DR7 | **A60 (driver-attempts)** | per-attempt accounting, before the tally |
