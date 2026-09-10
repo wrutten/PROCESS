@@ -671,3 +671,54 @@ stay untracked; summaries and verdicts are committed).
 | `c37dcbdf` | the copy's five edits; `copy_gates.py`'s permitted-edit model generalised to recorded hunks; `PROCESS/PROVENANCE.json` regenerated; gate `edit-behaviour`; four `PROCESS_diff.py` annotations and rewritten summaries |
 | `e8111221` | the fifth self-check `data` with its four teeth; `harness/README.md` §4.1, §8 and §10 |
 | *(this commit)* | this report |
+
+---
+
+## 13. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `bce21213` and the
+scripts on the same branch. Load-bearing claims re-run or re-derived, not taken from the report.*
+
+**Verified independently.** (1) The sixteen files: hashed by me against `git cat-file
+30198919:<source>` in the main repository — 16 of 16 identical, each matching the sha256 in
+`harness/data/PROVENANCE.json`. (2) `harness/ystate.py` against `arch_surgery/fixedpoint/ystate.py`:
+a unified diff shows 19 added lines, all inside the module docstring's heritage paragraph, and 0
+removed. (3) `PROCESS/copy_gates.py all` into a fresh records directory: the smoke import,
+`edit-behaviour`, `copy-identity` (224 compared, 222 identical, 0 unexplained) and G0′ (77 / 76,
+`pulse.py` the one approved difference) all PASS, every tooth TRIPPED; `PROCESS_diff.py` exit 0,
+two files, 7 hunks, 0 unexplained, `--teeth` TRIPPED; the copy's diff against the branch point is
++19 / −6 in two files, every changed line one of the five recorded edits. (4)
+`experiment_runner.py --selfcheck` against the production copy: **5 of 5 PASS — the first time on
+the production target** — with capability 22 examined, 17 probed and resolved as asked, 5 refused,
+exactly `B1`/`B3` on the pulsed configurations and `B3` on `st_regression`; the preflight READY,
+exit 0, 0 artifacts missing; `--tree repository --crosscheck-previous` 6 of 6. (5) `git
+check-ignore`: `harness/data/st_regression.IN.DAT` is not ignored and a `.DAT` under `runs/` still
+is. (6) Scope: 28 files, all under `…_v4/` plus this report; the copy's `models/` untouched.
+
+**Endorsed, including one correction of my own.** The `.IN.DAT` finding: at A46's merge I wrote
+that the V4 `.gitignore`'s `!*.dat` made the copy's data files stageable and tested it on a
+lower-case `.dat` path; the root `.gitignore` also ignores `*.DAT`, matching is case-sensitive,
+and the three input files would have needed `git add -f` — the exact shape of an artifact that
+silently fails to be committed. A48's scoped re-include is the right fix, and this paragraph
+corrects my earlier statement. Also endorsed: the role-to-name mapping taken from
+`config.artifact_file_names()` with a refusal on disagreement rather than a list typed twice; the
+permitted-edit model generalised to recorded hunks, so the copy's provenance states what each of
+the seven hunks is and the gate fails on an eighth; the `edit-behaviour` gate exercising the one
+non-comment edit on both branches (artifact present and absent); the stale `ystate_artifact` name
+left byte-identical and documented, with the pairing verified to be by content hash.
+
+**Limits I hold it to.** (a) `copy_gates.py all` now needs `harness/data/` — acceptable, the copy
+and its data are one experiment — but `copy-identity` and `frozen-physics` stay independently
+runnable and every driver-change task runs them at its commit. (b) The data check compares
+against the sources at `30198919`; a later regeneration of the `docs/data/` originals would not be
+noticed, and must not be — V4 reads `harness/data/` only. (c) The `write_sets_*` internal name is
+stale by design; nothing parses it by name today, and review must keep it so. (d) No PROCESS run
+yet — `edit-behaviour` imports the driver; the first run is A50's.
+
+**Consequences drawn (orchestrator, today).** H0 is complete: the copy, its gates, its data and
+the predicate module are in place, and the self-check passes against the production target. The
+harness plan's disposition row for the input files ("resolve — they stay where they are") is
+amended to the copy. A50 (harness-run) is dispatched off the merged tip: the run path, with gate
+GR at that commit, before any driver change.
+
+**Verdict.** Fit to merge; nothing returned.
