@@ -1,0 +1,3828 @@
+"""Library containing routines that can be shared by the blanket modules."""
+
+import logging
+from enum import IntEnum
+
+import numpy as np
+
+from process.core import constants
+from process.core import process_output as po
+from process.core.coolprop_interface import FluidProperties
+from process.core.exceptions import ProcessValueError
+from process.core.model import Model
+from process.data_structure.blanket_variables import BlktModelTypes
+from process.data_structure.build_variables import InboardBlanketConfiguration
+from process.models.build import FwBlktVVShape
+from process.models.engineering.ivc_functions import (
+    calculate_pipe_bend_radius,
+    dshellarea,
+    dshellvol,
+    eshellarea,
+    eshellvol,
+)
+from process.models.engineering.pumping import (
+    CoolantType,
+    calculate_reynolds_number,
+    darcy_friction_haaland,
+)
+from process.models.power import PumpingPowerModelTypes
+
+logger = logging.getLogger(__name__)
+
+# Acronyms for this module:
+# BB          Breeding Blanket
+# FW          First Wall
+# BZ          Breeder Zone
+# MF/BSS      Manifold/Back Supporting Structure
+# LT          Low Temperature
+# HT          High Temperature
+# MMS         Multi Module Segment
+# SMS         Single Module Segment
+# IB          Inboard
+# OB          Outboard
+# HCD         Heating & Current Drive
+# FCI         Flow Channel Insert
+
+
+class FWBlktCoolantLoopTypes(IntEnum):
+    """Enumeration for first wall and blanket coolant loop types.
+    `i_fw_blkt_shared_coolant`.
+    """
+
+    SHARED_LOOP = 0
+    SEPARATE_LOOPS = 1
+
+
+class BlanketLibrary(Model):
+    """Module containing blanket library routines"""
+
+    def __init__(self, fw):
+        self.outfile = constants.NOUT
+
+        self.fw = fw
+
+    def output(self):
+        """BlanketLibrary model doesn't have any output"""
+
+    def run(self):
+        """BlanketLibrary model doesn't need to be run"""
+
+    def component_volumes(self):
+        """Calculate the blanket, shield, vacuum vessel and cryostat volumes
+
+        Calculate the blanket, shield, vacuum vessel and cryostat volumes
+        """
+        # Calculate half-height
+        # Blanket
+        self.data.blanket.dz_blkt_half = self.calculate_blkt_half_height(
+            z_plasma_xpoint_lower=self.data.build.z_plasma_xpoint_lower,
+            dz_xpoint_divertor=self.data.build.dz_xpoint_divertor,
+            dz_divertor=self.data.divertor.dz_divertor,
+            z_plasma_xpoint_upper=self.data.build.z_plasma_xpoint_upper,
+            dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+            dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+            dr_fw_inboard=self.data.build.dr_fw_inboard,
+            dr_fw_outboard=self.data.build.dr_fw_outboard,
+            dz_blkt_upper=self.data.build.dz_blkt_upper,
+            n_divertors=self.data.divertor.n_divertors,
+        )
+
+        # D-shaped blanket and shield
+        if (
+            self.data.physics.itart == 1
+            or self.data.fwbs.i_fw_blkt_vv_shape == FwBlktVVShape.D_SHAPED
+        ):
+            (
+                self.data.build.a_blkt_inboard_surface_full_coverage,
+                self.data.build.a_blkt_outboard_surface_full_coverage,
+                self.data.build.a_blkt_total_surface_full_coverage,
+            ) = self.calculate_dshaped_blkt_areas(
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                dr_blkt_inboard=self.data.build.dr_blkt_inboard,
+                dr_fw_inboard=self.data.build.dr_fw_inboard,
+                dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+                rminor=self.data.physics.rminor,
+                dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+                dr_fw_outboard=self.data.build.dr_fw_outboard,
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+            )
+
+            (
+                self.data.fwbs.vol_blkt_inboard_full_coverage,
+                self.data.fwbs.vol_blkt_outboard_full_coverage,
+                self.data.fwbs.vol_blkt_total_full_coverage,
+            ) = self.calculate_dshaped_blkt_volumes(
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                dr_blkt_inboard=self.data.build.dr_blkt_inboard,
+                dr_fw_inboard=self.data.build.dr_fw_inboard,
+                dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+                rminor=self.data.physics.rminor,
+                dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+                dr_fw_outboard=self.data.build.dr_fw_outboard,
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+                dr_blkt_outboard=self.data.build.dr_blkt_outboard,
+                dz_blkt_upper=self.data.build.dz_blkt_upper,
+            )
+
+        # Elliptical blanket and shield
+        else:
+            (
+                self.data.build.a_blkt_inboard_surface_full_coverage,
+                self.data.build.a_blkt_outboard_surface_full_coverage,
+                self.data.build.a_blkt_total_surface_full_coverage,
+            ) = self.calculate_elliptical_blkt_areas(
+                rmajor=self.data.physics.rmajor,
+                rminor=self.data.physics.rminor,
+                triang=self.data.physics.triang,
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                dr_blkt_inboard=self.data.build.dr_blkt_inboard,
+                r_shld_outboard_outer=self.data.build.r_shld_outboard_outer,
+                dr_shld_outboard=self.data.build.dr_shld_outboard,
+                dr_blkt_outboard=self.data.build.dr_blkt_outboard,
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+            )
+
+            (
+                self.data.fwbs.vol_blkt_inboard_full_coverage,
+                self.data.fwbs.vol_blkt_outboard_full_coverage,
+                self.data.fwbs.vol_blkt_total_full_coverage,
+            ) = self.calculate_elliptical_blkt_volumes(
+                rmajor=self.data.physics.rmajor,
+                rminor=self.data.physics.rminor,
+                triang=self.data.physics.triang,
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                dr_blkt_inboard=self.data.build.dr_blkt_inboard,
+                r_shld_outboard_outer=self.data.build.r_shld_outboard_outer,
+                dr_shld_outboard=self.data.build.dr_shld_outboard,
+                dr_blkt_outboard=self.data.build.dr_blkt_outboard,
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+                dz_blkt_upper=self.data.build.dz_blkt_upper,
+            )
+
+        # Apply coverage factors to volumes and surface areas
+        self.apply_coverage_factors()
+
+    @staticmethod
+    def calculate_blkt_half_height(
+        z_plasma_xpoint_lower: float,
+        dz_xpoint_divertor: float,
+        dz_divertor: float,
+        z_plasma_xpoint_upper: float,
+        dr_fw_plasma_gap_inboard: float,
+        dr_fw_plasma_gap_outboard: float,
+        dr_fw_inboard: float,
+        dr_fw_outboard: float,
+        dz_blkt_upper: float,
+        n_divertors: int,
+    ) -> float:
+        """Calculate the blanket half-height based on plasma and component geometry.
+
+        Parameters
+        ----------
+        z_plasma_xpoint_lower : float
+            Lower vertical position of the plasma x-point (m)
+        dz_xpoint_divertor : float
+            Vertical distance from x-point to divertor (m)
+        dz_divertor : float
+            Vertical thickness of the divertor (m)
+        z_plasma_xpoint_upper : float
+            Upper vertical position of the plasma x-point (m)
+        dr_fw_plasma_gap_inboard : float
+            Radial gap between first wall and plasma on inboard side (m)
+        dr_fw_plasma_gap_outboard : float
+            Radial gap between first wall and plasma on outboard side (m)
+        dr_fw_inboard : float
+            Radial thickness of the first wall on inboard side (m)
+        dr_fw_outboard : float
+            Radial thickness of the first wall on outboard side (m)
+        dz_blkt_upper : float
+            Vertical thickness of the upper blanket (m)
+        n_divertors : int
+            Number of divertors (1 for single null, 2 for double null)
+
+        Returns
+        -------
+        float
+            Calculated blanket half-height (m)
+        """
+        # Calculate component internal lower half-height (m)
+        # Blanket
+        z_bottom = (
+            z_plasma_xpoint_lower + dz_xpoint_divertor + dz_divertor - dz_blkt_upper
+        )
+
+        # Calculate component internal upper half-height (m)
+        # If a double null machine then symmetric
+        if n_divertors == 2:
+            z_top = z_bottom
+        else:
+            # Blanket
+            z_top = z_plasma_xpoint_upper + 0.5 * (
+                dr_fw_plasma_gap_inboard
+                + dr_fw_plasma_gap_outboard
+                + dr_fw_inboard
+                + dr_fw_outboard
+            )
+
+        # Average of top and bottom (m)
+        return 0.5 * (z_top + z_bottom)
+
+    @staticmethod
+    def calculate_dshaped_blkt_areas(
+        r_shld_inboard_inner: float,
+        dr_shld_inboard: float,
+        dr_blkt_inboard: float,
+        dr_fw_inboard: float,
+        dr_fw_plasma_gap_inboard: float,
+        rminor: float,
+        dr_fw_plasma_gap_outboard: float,
+        dr_fw_outboard: float,
+        dz_blkt_half: float,
+    ) -> tuple[float, float, float]:
+        """Calculate D-shaped blanket surface areas.
+
+        Parameters
+        ----------
+        r_shld_inboard_inner : float
+            Inner radius of inboard shield (m)
+        dr_shld_inboard : float
+            Thickness of inboard shield (m)
+        dr_blkt_inboard : float
+            Thickness of inboard blanket (m)
+        dr_fw_inboard : float
+            Thickness of inboard first wall (m)
+        dr_fw_plasma_gap_inboard : float
+            Radial gap between inboard first wall and plasma (m)
+        rminor : float
+            Minor radius of the plasma (m)
+        dr_fw_plasma_gap_outboard : float
+            Radial gap between outboard first wall and plasma (m)
+        dr_fw_outboard : float
+            Thickness of outboard first wall (m)
+        dz_blkt_half : float
+            Half-height of the blanket (m)
+
+        Returns
+        -------
+        :
+            Tuple containing inboard blanket surface area (m²),
+            outboard blanket surface area (m²),
+            and total blanket surface area (m²)
+        """
+        # Calculate major radius to outer edge of inboard ...
+        # ... section (m)
+        r1 = r_shld_inboard_inner
+
+        # ... blanket (m)
+
+        r1 = r1 + dr_shld_inboard + dr_blkt_inboard
+        # Horizontal distance between inside edges (m)
+        # i.e. outer radius of inboard part to inner radius of outboard part
+
+        r2 = (
+            dr_fw_inboard
+            + dr_fw_plasma_gap_inboard
+            + 2.0 * rminor
+            + dr_fw_plasma_gap_outboard
+            + dr_fw_outboard
+        )
+
+        (
+            a_blkt_inboard_surface,
+            a_blkt_outboard_surface,
+            a_blkt_total_surface,
+        ) = dshellarea(rmajor=r1, rminor=r2, zminor=dz_blkt_half)
+
+        return a_blkt_inboard_surface, a_blkt_outboard_surface, a_blkt_total_surface
+
+    @staticmethod
+    def calculate_dshaped_blkt_volumes(
+        r_shld_inboard_inner: float,
+        dr_shld_inboard: float,
+        dr_blkt_inboard: float,
+        dr_fw_inboard: float,
+        dr_fw_plasma_gap_inboard: float,
+        rminor: float,
+        dr_fw_plasma_gap_outboard: float,
+        dr_fw_outboard: float,
+        dz_blkt_half: float,
+        dr_blkt_outboard: float,
+        dz_blkt_upper: float,
+    ) -> tuple[float, float, float]:
+        """Calculate D-shaped blanket volumes.
+
+        Parameters
+        ----------
+        r_shld_inboard_inner : float
+            Inner radius of inboard shield (m)
+        dr_shld_inboard : float
+            Thickness of inboard shield (m)
+        dr_blkt_inboard : float
+            Thickness of inboard blanket (m)
+        dr_fw_inboard : float
+            Thickness of inboard first wall (m)
+        dr_fw_plasma_gap_inboard : float
+            Radial gap between inboard first wall and plasma (m)
+        rminor : float
+            Minor radius of the plasma (m)
+        dr_fw_plasma_gap_outboard : float
+            Radial gap between outboard first wall and plasma (m)
+        dr_fw_outboard : float
+            Thickness of outboard first wall (m)
+        dz_blkt_half : float
+            Half-height of the blanket (m)
+        dr_blkt_outboard : float
+            Thickness of outboard blanket (m)
+        dz_blkt_upper : float
+            Upper vertical thickness of the blanket (m)
+
+        Returns
+        -------
+        tuple[float, float, float]
+            Tuple containing inboard blanket volume (m³), outboard blanket volume (m³),
+            and total blanket volume (m³)
+        """
+        # Calculate major radius to outer edge of inboard ...
+        # ... section (m)
+        r1 = r_shld_inboard_inner
+
+        r1 = r1 + dr_shld_inboard + dr_blkt_inboard
+        # Horizontal distance between inside edges (m)
+        # i.e. outer radius of inboard part to inner radius of outboard part
+
+        r2 = (
+            dr_fw_inboard
+            + dr_fw_plasma_gap_inboard
+            + 2.0 * rminor
+            + dr_fw_plasma_gap_outboard
+            + dr_fw_outboard
+        )
+
+        (
+            vol_blkt_inboard,
+            vol_blkt_outboard,
+            vol_blkt_total,
+        ) = dshellvol(
+            rmajor=r1,
+            rminor=r2,
+            zminor=dz_blkt_half,
+            drin=dr_blkt_inboard,
+            drout=dr_blkt_outboard,
+            dz=dz_blkt_upper,
+        )
+
+        return vol_blkt_inboard, vol_blkt_outboard, vol_blkt_total
+
+    @staticmethod
+    def calculate_elliptical_blkt_areas(
+        rmajor: float,
+        rminor: float,
+        triang: float,
+        r_shld_inboard_inner: float,
+        dr_shld_inboard: float,
+        dr_blkt_inboard: float,
+        r_shld_outboard_outer: float,
+        dr_shld_outboard: float,
+        dr_blkt_outboard: float,
+        dz_blkt_half: float,
+    ) -> tuple[float, float, float]:
+        """Calculate elliptical blanket surface areas.
+
+        Parameters
+        ----------
+        rmajor : float
+            Major radius of the plasma (m)
+        rminor : float
+            Minor radius of the plasma (m)
+        triang : float
+            Triangularity of the plasma
+        r_shld_inboard_inner : float
+            Inner radius of inboard shield (m)
+        dr_shld_inboard : float
+            Thickness of inboard shield (m)
+        dr_blkt_inboard : float
+            Thickness of inboard blanket (m)
+        r_shld_outboard_outer : float
+            Outer radius of outboard shield (m)
+        dr_shld_outboard : float
+            Thickness of outboard shield (m)
+        dr_blkt_outboard : float
+            Thickness of outboard blanket (m)
+        dz_blkt_half : float
+            Half-height of the blanket (m)
+
+        Returns
+        -------
+        :
+            Tuple containing inboard blanket surface area (m²),
+            outboard blanket surface area (m²),
+            and total blanket surface area (m²)
+        """
+        # Major radius to centre of inboard and outboard ellipses (m)
+        # (coincident in radius with top of plasma)
+        r1 = rmajor - rminor * triang
+
+        # Calculate distance between r1 and outer edge of inboard ...
+        # ... section (m)
+        r2 = r1 - r_shld_inboard_inner
+
+        r2 = r2 - dr_shld_inboard - dr_blkt_inboard
+
+        # Calculate distance between r1 and inner edge of outboard ...
+        # ... section (m)
+        r3 = r_shld_outboard_outer - r1
+
+        r3 = r3 - dr_shld_outboard - dr_blkt_outboard
+
+        # Calculate surface area, assuming 100% coverage
+
+        (
+            a_blkt_inboard_surface,
+            a_blkt_outboard_surface,
+            a_blkt_total_surface,
+        ) = eshellarea(r1, r2, r3, dz_blkt_half)
+
+        return a_blkt_inboard_surface, a_blkt_outboard_surface, a_blkt_total_surface
+
+    @staticmethod
+    def calculate_elliptical_blkt_volumes(
+        rmajor: float,
+        rminor: float,
+        triang: float,
+        r_shld_inboard_inner: float,
+        dr_shld_inboard: float,
+        dr_blkt_inboard: float,
+        r_shld_outboard_outer: float,
+        dr_shld_outboard: float,
+        dr_blkt_outboard: float,
+        dz_blkt_half: float,
+        dz_blkt_upper: float,
+    ) -> tuple[float, float, float]:
+        """Calculate elliptical blanket volumes.
+
+        Parameters
+        ----------
+        rmajor : float
+            Major radius of the plasma (m)
+        rminor : float
+            Minor radius of the plasma (m)
+        triang : float
+            Triangularity of the plasma
+        r_shld_inboard_inner : float
+            Inner radius of inboard shield (m)
+        dr_shld_inboard : float
+            Thickness of inboard shield (m)
+        dr_blkt_inboard : float
+            Thickness of inboard blanket (m)
+        r_shld_outboard_outer : float
+            Outer radius of outboard shield (m)
+        dr_shld_outboard : float
+            Thickness of outboard shield (m)
+        dr_blkt_outboard : float
+            Thickness of outboard blanket (m)
+        dz_blkt_half : float
+            Half-height of the blanket (m)
+        dz_blkt_upper : float
+            Upper vertical thickness of the blanket (m)
+
+        Returns
+        -------
+        tuple[float, float, float]
+            Tuple containing inboard blanket volume (m³), outboard blanket volume (m³),
+            and total blanket volume (m³)
+        """
+        # Major radius to centre of inboard and outboard ellipses (m)
+        # (coincident in radius with top of plasma)
+        r1 = rmajor - rminor * triang
+
+        # Calculate distance between r1 and outer edge of inboard ...
+        # ... section (m)
+        r2 = r1 - r_shld_inboard_inner
+
+        r2 = r2 - dr_shld_inboard - dr_blkt_inboard
+
+        # Calculate distance between r1 and inner edge of outboard ...
+        # ... section (m)
+        r3 = r_shld_outboard_outer - r1
+
+        r3 = r3 - dr_shld_outboard - dr_blkt_outboard
+
+        # Calculate surface area, assuming 100% coverage
+
+        (
+            vol_blkt_inboard,
+            vol_blkt_outboard,
+            vol_blkt_total,
+        ) = eshellvol(
+            rshell=r1,
+            rmini=r2,
+            rmino=r3,
+            zminor=dz_blkt_half,
+            drin=dr_blkt_inboard,
+            drout=dr_blkt_outboard,
+            dz=dz_blkt_upper,
+        )
+
+        return vol_blkt_inboard, vol_blkt_outboard, vol_blkt_total
+
+    def apply_coverage_factors(self):
+        """Apply coverage factors to volumes
+
+        Apply coverage factors to volumes
+        """
+        # Apply blanket coverage factors
+        if self.data.divertor.n_divertors == 2:
+            # double null configuration
+            self.data.build.a_blkt_outboard_surface = (
+                self.data.build.a_blkt_total_surface_full_coverage
+                * (
+                    1.0
+                    - 2.0 * self.data.fwbs.f_ster_div_single
+                    - self.data.fwbs.f_a_fw_outboard_hcd
+                )
+                - self.data.build.a_blkt_inboard_surface_full_coverage
+            )
+        else:
+            # single null configuration
+            self.data.build.a_blkt_outboard_surface = (
+                self.data.build.a_blkt_total_surface_full_coverage
+                * (
+                    1.0
+                    - self.data.fwbs.f_ster_div_single
+                    - self.data.fwbs.f_a_fw_outboard_hcd
+                )
+                - self.data.build.a_blkt_inboard_surface_full_coverage
+            )
+
+        self.data.build.a_blkt_total_surface = (
+            self.data.build.a_blkt_inboard_surface_full_coverage
+            + self.data.build.a_blkt_outboard_surface
+        )
+
+        self.data.fwbs.vol_blkt_outboard = (
+            self.data.fwbs.vol_blkt_total_full_coverage
+            * (
+                1.0
+                - self.data.fwbs.f_ster_div_single
+                - self.data.fwbs.f_a_fw_outboard_hcd
+            )
+            - self.data.fwbs.vol_blkt_inboard_full_coverage
+        )
+        self.data.fwbs.vol_blkt_inboard = self.data.fwbs.vol_blkt_inboard_full_coverage
+
+        self.data.build.a_blkt_inboard_surface = (
+            self.data.build.a_blkt_inboard_surface_full_coverage
+        )
+
+        self.data.fwbs.vol_blkt_total = (
+            self.data.fwbs.vol_blkt_inboard_full_coverage
+            + self.data.fwbs.vol_blkt_outboard
+        )
+
+    def output_blkt_volumes_and_areas(self):
+        """Outputs blanket volumes and areas to the output file"""
+        po.oheadr(self.outfile, "Blanket Volumes and Surface Areas")
+
+        po.ovarre(
+            self.outfile,
+            "Inboard Blanket Volume with gaps and holes (m3)",
+            "(vol_blkt_inboard)",
+            self.data.fwbs.vol_blkt_inboard,
+        )
+        po.ovarre(
+            self.outfile,
+            "Outboard Blanket Volume with gaps and holes (m3)",
+            "(vol_blkt_outboard)",
+            self.data.fwbs.vol_blkt_outboard,
+        )
+        po.ovarre(
+            self.outfile,
+            "Total Blanket Volume with gaps and holes (m3)",
+            "(vol_blkt_total)",
+            self.data.fwbs.vol_blkt_total,
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Inboard Blanket Volume if toridally continuous (m3)",
+            "(vol_blkt_inboard_full_coverage)",
+            self.data.fwbs.vol_blkt_inboard_full_coverage,
+        )
+        po.ovarre(
+            self.outfile,
+            "Outboard Blanket Volume if toridally continuous (m3)",
+            "(vol_blkt_outboard_full_coverage)",
+            self.data.fwbs.vol_blkt_outboard_full_coverage,
+        )
+        po.ovarre(
+            self.outfile,
+            "Total Blanket Volume if toridally continuous (m3)",
+            "(vol_blkt_total_full_coverage)",
+            self.data.fwbs.vol_blkt_total_full_coverage,
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Inboard Blanket Surface Area with gaps and holes (m2)",
+            "(a_blkt_inboard_surface)",
+            self.data.build.a_blkt_inboard_surface,
+        )
+        po.ovarre(
+            self.outfile,
+            "Outboard Blanket Surface Area with gaps and holes (m2)",
+            "(a_blkt_outboard_surface)",
+            self.data.build.a_blkt_outboard_surface,
+        )
+        po.ovarre(
+            self.outfile,
+            "Total Blanket Surface Area with gaps and holes (m2)",
+            "(a_blkt_total_surface)",
+            self.data.build.a_blkt_total_surface,
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Inboard blanket surface area if toridally continuous (m2)",
+            "(a_blkt_inboard_surface_full_coverage)",
+            self.data.build.a_blkt_inboard_surface_full_coverage,
+        )
+        po.ovarre(
+            self.outfile,
+            "Outboard blanket surface area if toridally continuous (m2)",
+            "(a_blkt_outboard_surface_full_coverage)",
+            self.data.build.a_blkt_outboard_surface_full_coverage,
+        )
+        po.ovarre(
+            self.outfile,
+            "Total blanket surface area if toridally continuous (m2)",
+            "(a_blkt_total_surface_full_coverage)",
+            self.data.build.a_blkt_total_surface_full_coverage,
+        )
+        po.oblnkl(self.outfile)
+        po.ovarre(
+            self.outfile,
+            "Outboard blanket poloidal angle subtended by plasma (degrees)",
+            "(deg_blkt_outboard_poloidal_plasma)",
+            self.data.blanket.deg_blkt_outboard_poloidal_plasma,
+        )
+        po.ovarre(
+            self.outfile,
+            "Angle fraction of outboard blanket poloidal angle subtended by plasma",
+            "(f_deg_blkt_outboard_poloidal_plasma)",
+            self.data.blanket.f_deg_blkt_outboard_poloidal_plasma,
+        )
+        po.ovarre(
+            self.outfile,
+            "Inboard blanket poloidal angle subtended by plasma (degrees)",
+            "(deg_blkt_inboard_poloidal_plasma)",
+            self.data.blanket.deg_blkt_inboard_poloidal_plasma,
+        )
+        po.ovarre(
+            self.outfile,
+            "Angle fraction of inboard blanket poloidal angle subtended by plasma",
+            "(f_deg_blkt_inboard_poloidal_plasma)",
+            self.data.blanket.f_deg_blkt_inboard_poloidal_plasma,
+        )
+
+    def primary_coolant_properties(self, output: bool):
+        """Calculates the fluid properties of the Primary Coolant in the FW and BZ.
+        Uses middle value of input and output temperatures of coolant.
+        Curently have H20 and He options.
+
+        References: see pumppower function description
+
+        Parameters
+        ----------
+        output: bool
+
+        Raises
+        ------
+        ProcessValueError
+            If there is an error in primary_coolant_properties.
+            See
+
+        """
+        # Make sure that, if the inputs for the FW and blanket inputs are different,
+        # the i_fw_blkt_shared_coolant variable is
+        # appropriately set for separate coolants
+        if CoolantType(self.data.fwbs.i_fw_coolant_type) != CoolantType(
+            self.data.fwbs.i_blkt_coolant_type
+        ):
+            self.data.fwbs.i_fw_blkt_shared_coolant = (
+                FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+            )
+
+        # If FW and BB have same coolant...
+        i_fw_blkt_shared_coolant = FWBlktCoolantLoopTypes(
+            self.data.fwbs.i_fw_blkt_shared_coolant
+        )
+        if i_fw_blkt_shared_coolant == FWBlktCoolantLoopTypes.SHARED_LOOP:
+            # Use FW inlet temp and BB outlet temp
+            mid_temp = (
+                self.data.fwbs.temp_fw_coolant_in + self.data.fwbs.temp_blkt_coolant_out
+            ) * 0.5
+            # FW/BB
+            fw_bb_fluid_properties = FluidProperties.of(
+                CoolantType(self.data.fwbs.i_fw_coolant_type).full_name,
+                temperature=mid_temp,
+                pressure=self.data.fwbs.pres_fw_coolant,
+            )
+            self.data.fwbs.den_fw_coolant = fw_bb_fluid_properties.density
+            self.data.fwbs.cp_fw = fw_bb_fluid_properties.specific_heat_const_p
+            self.data.fwbs.cv_fw = fw_bb_fluid_properties.specific_heat_const_v
+            self.data.fwbs.visc_fw_coolant = fw_bb_fluid_properties.viscosity
+
+            self.data.fwbs.den_blkt_coolant = self.data.fwbs.den_fw_coolant
+            self.data.fwbs.visc_blkt_coolant = self.data.fwbs.visc_fw_coolant
+            self.data.fwbs.cp_bl = self.data.fwbs.cp_fw
+            self.data.fwbs.cv_bl = self.data.fwbs.cv_fw
+
+        # If FW and BB have different coolants...
+        else:
+            # FW
+            mid_temp_fw = (
+                self.data.fwbs.temp_fw_coolant_in + self.data.fwbs.temp_fw_coolant_out
+            ) * 0.5
+            fw_fluid_properties = FluidProperties.of(
+                CoolantType(self.data.fwbs.i_fw_coolant_type).full_name,
+                temperature=mid_temp_fw,
+                pressure=self.data.fwbs.pres_fw_coolant,
+            )
+            self.data.fwbs.den_fw_coolant = fw_fluid_properties.density
+            self.data.fwbs.cp_fw = fw_fluid_properties.specific_heat_const_p
+            self.data.fwbs.cv_fw = fw_fluid_properties.specific_heat_const_v
+            self.data.fwbs.visc_fw_coolant = fw_fluid_properties.viscosity
+
+            # BB
+            mid_temp_bl = (
+                self.data.fwbs.temp_blkt_coolant_in
+                + self.data.fwbs.temp_blkt_coolant_out
+            ) * 0.5
+            bb_fluid_properties = FluidProperties.of(
+                CoolantType(self.data.fwbs.i_blkt_coolant_type).full_name,
+                temperature=mid_temp_bl,
+                pressure=self.data.fwbs.pres_blkt_coolant,
+            )
+            self.data.fwbs.den_blkt_coolant = bb_fluid_properties.density
+            self.data.fwbs.cp_bl = bb_fluid_properties.specific_heat_const_p
+            self.data.fwbs.cv_bl = bb_fluid_properties.specific_heat_const_v
+            self.data.fwbs.visc_blkt_coolant = bb_fluid_properties.viscosity
+
+        if (
+            self.data.fwbs.den_fw_coolant > 1e9
+            or self.data.fwbs.den_fw_coolant <= 0
+            or np.isnan(self.data.fwbs.den_fw_coolant)
+        ):
+            raise ProcessValueError(
+                "Error in primary_coolant_properties. "
+                f"{self.data.fwbs.den_fw_coolant = }"
+            )
+        if (
+            self.data.fwbs.den_blkt_coolant > 1e9
+            or self.data.fwbs.den_blkt_coolant <= 0
+            or np.isnan(self.data.fwbs.den_blkt_coolant)
+        ):
+            raise ProcessValueError(
+                "Error in primary_coolant_properties. "
+                f"{self.data.fwbs.den_blkt_coolant = }"
+            )
+
+        if output:
+            po.oheadr(
+                self.outfile, "First wall and blanket : (Primary) Coolant Properties"
+            )
+            po.ocmmnt(
+                self.outfile,
+                "Calculated using mid temp(s) of system "
+                "(or systems if use different coolant types).",
+            )
+
+            # FW (or FW/BB)
+            if (
+                self.data.fwbs.i_fw_blkt_shared_coolant
+                == FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+            ):
+                po.osubhd(self.outfile, "First Wall :")
+
+            po.ovarre(
+                self.outfile,
+                "Coolant type",
+                "(i_fw_coolant_type)",
+                f"'{CoolantType(self.data.fwbs.i_fw_coolant_type).full_name}'",
+            )
+            po.ovarre(
+                self.outfile,
+                "Density (kg m-3)",
+                "(den_fw_coolant)",
+                self.data.fwbs.den_fw_coolant,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "Viscosity (Pa s)",
+                "(visc_fw_coolant)",
+                self.data.fwbs.visc_fw_coolant,
+                "OP ",
+            )
+
+            po.ovarre(
+                self.outfile,
+                "Inlet Temperature (Celcius)",
+                "(temp_fw_coolant_in)",
+                self.data.fwbs.temp_fw_coolant_in,
+                "OP ",
+            )
+
+            if (
+                self.data.fwbs.i_fw_blkt_shared_coolant
+                == FWBlktCoolantLoopTypes.SHARED_LOOP
+            ):
+                po.ovarre(
+                    self.outfile,
+                    "Outlet Temperature (Celcius)",
+                    "(temp_blkt_coolant_out)",
+                    self.data.fwbs.temp_blkt_coolant_out,
+                    "OP ",
+                )
+
+            else:
+                po.ovarre(
+                    self.outfile,
+                    "Outlet Temperature (Celcius)",
+                    "(temp_fw_coolant_out)",
+                    self.data.fwbs.temp_fw_coolant_out,
+                    "OP ",
+                )
+
+            # BB
+            if (
+                self.data.fwbs.i_fw_blkt_shared_coolant
+                == FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+            ):
+                po.osubhd(self.outfile, "Breeding Blanket :")
+
+                if self.data.fwbs.i_blkt_coolant_type == CoolantType.HELIUM:
+                    po.ocmmnt(
+                        self.outfile, "Coolant type (i_blkt_coolant_type=1), Helium"
+                    )
+                if self.data.fwbs.i_blkt_coolant_type == CoolantType.WATER:
+                    po.ocmmnt(
+                        self.outfile, "Coolant type (i_blkt_coolant_type=2), Water"
+                    )
+                po.ovarre(
+                    self.outfile,
+                    "Density (kg m-3)",
+                    "(den_blkt_coolant)",
+                    self.data.fwbs.den_blkt_coolant,
+                    "OP ",
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Viscosity (Pa s)",
+                    "(visc_blkt_coolant)",
+                    self.data.fwbs.visc_blkt_coolant,
+                    "OP ",
+                )
+
+                po.ovarre(
+                    self.outfile,
+                    "Inlet Temperature (Celcius)",
+                    "(temp_blkt_coolant_in)",
+                    self.data.fwbs.temp_blkt_coolant_in,
+                    "OP ",
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Outlet Temperature (Celcius)",
+                    "(temp_blkt_coolant_out)",
+                    self.data.fwbs.temp_blkt_coolant_out,
+                    "OP ",
+                )
+
+    def set_blanket_module_geometry(self):
+        """Sets the geometry parameters for blanket modules,
+        including coolant channel dimensions,
+        module segmentation, and flow lengths,
+        based on the current configuration and input variables.
+
+        The method performs the following steps:
+        - Determines inboard and outboard coolant channel radial lengths
+            based on blanket type.
+        - Segments the blanket modules poloidally and toroidally according to input
+            segmentation settings.
+        - Calculates the toroidal segment lengths for inboard and outboard
+            blanket modules.
+        - Computes the poloidal height of blanket modules.
+        - For dual coolant blankets, calculates the minimum available space
+            for liquid breeder pipes in radial, toroidal, and poloidal directions,
+            and checks for geometric constraints.
+        - Calculates total flow lengths for primary coolant channels,
+            used in pressure drop calculations.
+
+        Raises
+        ------
+        Error
+            If the poloidal segment length is less than three times
+            the minimum liquid breeder pipe width.
+        """
+        i_blanket_type = BlktModelTypes(self.data.fwbs.i_blanket_type)
+        if i_blanket_type == BlktModelTypes.DCLL:
+            # Unless DCLL then we will use BZ
+            self.data.blanket.len_blkt_inboard_coolant_channel_radial = (
+                self.data.build.blbuith
+            )
+            self.data.blanket.len_blkt_outboard_coolant_channel_radial = (
+                self.data.build.blbuoth
+            )
+        else:
+            self.data.blanket.len_blkt_inboard_coolant_channel_radial = (
+                0.8e0 * self.data.build.dr_blkt_inboard
+            )
+            self.data.blanket.len_blkt_outboard_coolant_channel_radial = (
+                0.8e0 * self.data.build.dr_blkt_outboard
+            )
+
+        # Using the total perimeter of the machine, segment the outboard
+        # blanket into nblktmodp*nblktmodt modules, all assumed to be the same size
+
+        # If SMS blanket then do not have separate poloidal modules....
+        # Should not need this as n_blkt_inboard_modules_poloidal is input
+        # but make sure here.
+        if self.data.fwbs.i_blkt_module_segmentation == 1:
+            self.data.fwbs.n_blkt_inboard_modules_poloidal = 1
+            self.data.fwbs.n_blkt_outboard_modules_poloidal = 1
+
+        if (
+            self.data.physics.itart == 1
+            or self.data.fwbs.i_fw_blkt_vv_shape == FwBlktVVShape.D_SHAPED
+        ):
+            self.data.blanket.len_blkt_inboard_segment_poloidal = self.calculate_dshaped_inboard_blkt_segment_poloidal(  # noqa: E501
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+                n_blkt_inboard_modules_poloidal=self.data.fwbs.n_blkt_inboard_modules_poloidal,
+            )
+
+            self.data.blanket.len_blkt_outboard_segment_poloidal = self.calculate_dshaped_outboard_blkt_segment_poloidal(  # noqa: E501
+                n_blkt_outboard_modules_poloidal=self.data.fwbs.n_blkt_outboard_modules_poloidal,
+                dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+                rminor=self.data.physics.rminor,
+                dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+                n_divertors=self.data.divertor.n_divertors,
+                f_ster_div_single=self.data.fwbs.f_ster_div_single,
+            )
+        else:
+            self.data.blanket.len_blkt_inboard_segment_poloidal = self.calculate_elliptical_inboard_blkt_segment_poloidal(  # noqa: E501
+                rmajor=self.data.physics.rmajor,
+                rminor=self.data.physics.rminor,
+                triang=self.data.physics.triang,
+                dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+                n_blkt_inboard_modules_poloidal=self.data.fwbs.n_blkt_inboard_modules_poloidal,
+                n_divertors=self.data.divertor.n_divertors,
+                f_ster_div_single=self.data.fwbs.f_ster_div_single,
+            )
+
+            self.data.blanket.len_blkt_outboard_segment_poloidal = self.calculate_elliptical_outboard_blkt_segment_poloidal(  # noqa: E501
+                rmajor=self.data.physics.rmajor,
+                rminor=self.data.physics.rminor,
+                triang=self.data.physics.triang,
+                dz_blkt_half=self.data.blanket.dz_blkt_half,
+                dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+                n_blkt_outboard_modules_poloidal=self.data.fwbs.n_blkt_outboard_modules_poloidal,
+                n_divertors=self.data.divertor.n_divertors,
+                f_ster_div_single=self.data.fwbs.f_ster_div_single,
+            )
+
+        # If liquid breeder or dual coolant blanket then calculate
+        if self.data.fwbs.i_blkt_dual_coolant > 0:
+            # Use smallest space available to pipes for pipe sizes
+            # in pumping calculations (worst case)
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                # Radial direction
+                self.data.fwbs.b_bz_liq = (
+                    min(
+                        (
+                            self.data.blanket.len_blkt_inboard_coolant_channel_radial
+                            * self.data.fwbs.r_f_liq_ib
+                        ),
+                        (
+                            self.data.blanket.len_blkt_outboard_coolant_channel_radial
+                            * self.data.fwbs.r_f_liq_ob
+                        ),
+                    )
+                    / self.data.fwbs.nopol
+                )
+                # Toroidal direction
+                self.data.fwbs.a_bz_liq = (
+                    min(
+                        (
+                            self.data.blanket.len_blkt_inboard_segment_toroidal
+                            * self.data.fwbs.w_f_liq_ib
+                        ),
+                        (
+                            self.data.blanket.len_blkt_outboard_segment_toroidal
+                            * self.data.fwbs.w_f_liq_ob
+                        ),
+                    )
+                    / self.data.fwbs.nopipes
+                )
+                # Poloidal
+                if (
+                    self.data.blanket.len_blkt_inboard_segment_poloidal
+                    < (self.data.fwbs.b_bz_liq * 3)
+                ) or (
+                    self.data.blanket.len_blkt_outboard_segment_poloidal
+                    < (self.data.fwbs.b_bz_liq * 3)
+                ):
+                    logger.error(
+                        "Your blanket modules are too small for the Liquid Metal pipes"
+                    )
+
+            # Unless there is no IB blanket...
+            else:
+                # Radial direction
+                self.data.fwbs.b_bz_liq = (
+                    self.data.blanket.len_blkt_outboard_coolant_channel_radial
+                    * self.data.fwbs.r_f_liq_ob
+                ) / self.data.fwbs.nopol
+                # Toroidal direction
+                self.data.fwbs.a_bz_liq = (
+                    self.data.blanket.len_blkt_outboard_segment_toroidal
+                    * self.data.fwbs.w_f_liq_ob
+                ) / self.data.fwbs.nopipes
+                # Poloidal
+                if self.data.blanket.len_blkt_outboard_segment_poloidal < (
+                    self.data.fwbs.b_bz_liq * 3
+                ):
+                    logger.error(
+                        "Your blanket modules are too small for the Liquid Metal pipes"
+                    )
+
+        # Calculate total flow lengths, used for pressure drop calculation
+        # Blanket primary coolant flow
+        self.data.blanket.len_blkt_inboard_channel_total = (
+            self.data.fwbs.n_blkt_inboard_module_coolant_sections_radial
+            * self.data.blanket.len_blkt_inboard_coolant_channel_radial
+            + self.data.fwbs.n_blkt_inboard_module_coolant_sections_poloidal
+            * self.data.blanket.len_blkt_inboard_segment_poloidal
+        )
+        self.data.blanket.len_blkt_outboard_channel_total = (
+            self.data.fwbs.n_blkt_outboard_module_coolant_sections_radial
+            * self.data.blanket.len_blkt_outboard_coolant_channel_radial
+            + self.data.fwbs.n_blkt_outboard_module_coolant_sections_poloidal
+            * self.data.blanket.len_blkt_outboard_segment_poloidal
+        )
+
+    def thermo_hydraulic_model_pressure_drop_calculations(self, output: bool):
+        """Function that calculates the pressure drops for the thermo-hydraulic model
+        when i_p_coolant_pumping = 2.
+
+        Within are calculations necessary for the deltap_tot function but not required
+        for other calculations within the thermo-hydraulic model as then they are just
+        included there.
+
+        Returns the pressure drops as a list with the number of entries dependent upon
+        the switches i_blkt_dual_coolant and i_blkt_inboard.
+
+        Parameters
+        ----------
+        output: bool
+
+        """
+        npoltoti = 0
+        npoltoto = 0
+        npblkti_liq = 0
+        npblkto_liq = 0
+
+        # Blanket secondary coolant/breeder flow
+        pollengi = self.data.blanket.len_blkt_inboard_segment_poloidal
+        pollengo = self.data.blanket.len_blkt_outboard_segment_poloidal
+        self.data.fwbs.nopol = 2
+        self.data.fwbs.nopipes = 4
+        bzfllengi_liq = (
+            self.data.fwbs.bzfllengi_n_rad_liq
+            * self.data.blanket.len_blkt_inboard_coolant_channel_radial
+            + self.data.fwbs.bzfllengi_n_pol_liq
+            * self.data.blanket.len_blkt_inboard_segment_poloidal
+        )
+        bzfllengo_liq = (
+            self.data.fwbs.bzfllengo_n_rad_liq
+            * self.data.blanket.len_blkt_outboard_coolant_channel_radial
+            + self.data.fwbs.bzfllengo_n_pol_liq
+            * self.data.blanket.len_blkt_outboard_segment_poloidal
+        )
+
+        # ======================================================================
+
+        # Coolant channel bends
+
+        # Number of angle turns in FW and blanket flow channels, n.b. these are the
+        # same for CCFE HCPB and KIT DCLL. FW is also be the same for DCLL MMS ans SMS.
+
+        N_FW_PIPE_90_DEG_BENDS = 2
+        N_FW_PIPE_180_DEG_BENDS = 0
+
+        # N.B. This is for BZ only, does not include MF/BSS.
+        if self.data.fwbs.i_blkt_dual_coolant in {1, 2}:
+            N_BLKT_PIPE_90_DEG_BENDS = 4
+            N_BLKT_PIPE_180_DEG_BENDS = 1
+            no90bz_liq = 2
+            no180bz_liq = 1
+        else:
+            N_BLKT_PIPE_90_DEG_BENDS = 4
+            N_BLKT_PIPE_180_DEG_BENDS = 1
+
+        # ======================================================================
+
+        # FW Pipe Flow and Velocity
+
+        # Mass flow rate per FW coolant pipe (kg/s):
+        self.data.blanket.mflow_fw_inboard_coolant_channel = (
+            self.data.blanket.mflow_fw_inboard_coolant_total
+            / self.data.blanket.n_fw_inboard_channels
+        )
+        self.data.blanket.mflow_fw_outboard_coolant_channel = (
+            self.data.blanket.mflow_fw_outboard_coolant_total
+            / self.data.blanket.n_fw_outboard_channels
+        )
+
+        # Coolant velocity in FW (m/s)
+        vel_fw_inboard_coolant = self.flow_velocity(
+            i_channel_shape=1,
+            mass_flow_rate=self.data.blanket.mflow_fw_inboard_coolant_channel,
+            flow_density=self.data.fwbs.den_fw_coolant,
+        )
+        vel_fw_outboard_coolant = self.flow_velocity(
+            i_channel_shape=1,
+            mass_flow_rate=self.data.blanket.mflow_fw_outboard_coolant_channel,
+            flow_density=self.data.fwbs.den_fw_coolant,
+        )
+
+        # If the blanket is dual-coolant...
+        if self.data.fwbs.i_blkt_dual_coolant == 2:
+            # Calc total num of pipes (in all inboard modules) from
+            # coolant frac and channel dimensions
+            # Assumes up/down flow, two 90 deg bends per length
+            self.data.blanket.n_blkt_outboard_channels = (
+                self.data.fwbs.f_a_blkt_cooling_channels
+                * self.data.fwbs.vol_blkt_outboard
+            ) / (
+                np.pi
+                * self.data.fwbs.radius_fw_channel
+                * self.data.fwbs.radius_fw_channel
+                * self.data.blanket.len_blkt_outboard_channel_total
+            )
+            npblkto_liq = (
+                self.data.fwbs.nopipes
+                * self.data.fwbs.n_blkt_outboard_modules_toroidal
+                * self.data.fwbs.n_blkt_outboard_modules_poloidal
+            )
+
+            # Mass flow rate per coolant pipe
+            self.data.blanket.mfblktpo = (
+                self.data.blanket.mflow_blkt_outboard_coolant
+                / self.data.blanket.n_blkt_outboard_channels
+            )
+            mfblktpo_liq = self.data.blanket.mfblkto_liq / npblkto_liq
+            # Coolant velocites in blanket (m/s)
+            # Assume BZ structure has same channel width as FW
+            self.data.blanket.vel_blkt_outboard_coolant = self.flow_velocity(
+                i_channel_shape=1,
+                mass_flow_rate=self.data.blanket.mfblktpo,
+                flow_density=self.data.fwbs.den_blkt_coolant,
+            )
+            velblkto_liq = self.flow_velocity(
+                i_channel_shape=2,
+                mass_flow_rate=mfblktpo_liq,
+                flow_density=self.data.fwbs.den_liq,
+            )
+
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                # Calc total num of pipes (in all inboard modules) from
+                # coolant frac and channel dimensions
+                # Assumes up/down flow, two 90 deg bends per length
+                self.data.blanket.n_blkt_inboard_channels = (
+                    self.data.fwbs.f_a_blkt_cooling_channels
+                    * self.data.fwbs.vol_blkt_inboard
+                ) / (
+                    np.pi
+                    * self.data.fwbs.radius_fw_channel
+                    * self.data.fwbs.radius_fw_channel
+                    * self.data.blanket.len_blkt_inboard_channel_total
+                )
+                # Have DEMO DCLL set here for now
+                npblkti_liq = (
+                    self.data.fwbs.nopipes
+                    * self.data.fwbs.n_blkt_inboard_modules_toroidal
+                    * self.data.fwbs.n_blkt_inboard_modules_poloidal
+                )
+
+                # Mass flow rate per coolant pipe
+                self.data.blanket.mfblktpi = (
+                    self.data.blanket.mflow_blkt_inboard_coolant
+                    / self.data.blanket.n_blkt_inboard_channels
+                )
+                self.data.blanket.mfblktpi_liq = (
+                    self.data.blanket.mfblkti_liq / npblkti_liq
+                )
+
+                # Coolant velocites in blanket (m/s)
+                # Assume BZ structure has same channel width as FW
+                self.data.blanket.vel_blkt_inboard_coolant = self.flow_velocity(
+                    i_channel_shape=1,
+                    mass_flow_rate=self.data.blanket.mfblktpi,
+                    flow_density=self.data.fwbs.den_blkt_coolant,
+                )
+                velblkti_liq = self.flow_velocity(
+                    i_channel_shape=2,
+                    mass_flow_rate=self.data.blanket.mfblktpi_liq,
+                    flow_density=self.data.fwbs.den_liq,
+                )
+
+        # If the blanket is single-coolant with liquid metal breeder...
+        elif self.data.fwbs.i_blkt_dual_coolant == 1:
+            # Calc total num of pipes (in all inboard modules) from
+            # coolant frac and channel dimensions
+            # Assumes up/down flow, two 90 deg bends per length
+            self.data.blanket.n_blkt_outboard_channels = (
+                self.data.fwbs.f_a_blkt_cooling_channels
+                * self.data.fwbs.vol_blkt_outboard
+            ) / (
+                np.pi
+                * self.data.fwbs.radius_fw_channel
+                * self.data.fwbs.radius_fw_channel
+                * self.data.blanket.len_blkt_outboard_channel_total
+            )
+            npblkto_liq = (
+                self.data.fwbs.nopipes
+                * self.data.fwbs.n_blkt_outboard_modules_toroidal
+                * self.data.fwbs.n_blkt_outboard_modules_poloidal
+            )
+
+            # Mass flow rate per coolant pipe
+            self.data.blanket.mfblktpo = (
+                self.data.blanket.mflow_blkt_outboard_coolant
+                / self.data.blanket.n_blkt_outboard_channels
+            )
+
+            # Coolant velocity in blanket (m/s)
+            # Assume BZ structure has same channel width as FW
+            self.data.blanket.vel_blkt_outboard_coolant = self.flow_velocity(
+                i_channel_shape=1,
+                mass_flow_rate=self.data.blanket.mfblktpo,
+                flow_density=self.data.fwbs.den_blkt_coolant,
+            )
+
+            # Get mass flow rate etc. for inboard blanket breeder flow
+            # for tritium extraction
+            # Use the number of desired recirculations ([Aub2013]=10)
+            # and mass from dcll_masses
+            # N.B. wht_liq is BZ mass, does not include manifold.
+            self.data.blanket.mfblkto_liq = (
+                self.data.fwbs.n_liq_recirc * self.data.fwbs.wht_liq_ob
+            ) / (24 * 3600)
+            self.data.blanket.mfblktpo_liq = self.data.blanket.mfblkto_liq / npblkto_liq
+            velblkto_liq = self.flow_velocity(
+                i_channel_shape=2,
+                mass_flow_rate=self.data.blanket.mfblktpo_liq,
+                flow_density=self.data.fwbs.den_liq,
+            )
+
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                # Calc total num of pipes (in all inboard modules) from
+                # coolant frac and channel dimensions
+                # Assumes up/down flow, two 90 deg bends per length
+                self.data.blanket.n_blkt_inboard_channels = (
+                    self.data.fwbs.f_a_blkt_cooling_channels
+                    * self.data.fwbs.vol_blkt_inboard
+                ) / (
+                    np.pi
+                    * self.data.fwbs.radius_fw_channel
+                    * self.data.fwbs.radius_fw_channel
+                    * self.data.blanket.len_blkt_inboard_channel_total
+                )
+                # Have DEMO DCLL set here for now
+                npblkti_liq = (
+                    self.data.fwbs.nopipes
+                    * self.data.fwbs.n_blkt_inboard_modules_toroidal
+                    * self.data.fwbs.n_blkt_inboard_modules_poloidal
+                )
+
+                # Mass flow rate per coolant pipe
+                self.data.blanket.mfblktpi = (
+                    self.data.blanket.mflow_blkt_inboard_coolant
+                    / self.data.blanket.n_blkt_inboard_channels
+                )
+
+                # Coolant velocity in blanket (m/s)
+                # Assume BZ structure has same channel width as FW
+                self.data.blanket.vel_blkt_inboard_coolant = self.flow_velocity(
+                    i_channel_shape=1,
+                    mass_flow_rate=self.data.blanket.mfblktpi,
+                    flow_density=self.data.fwbs.den_blkt_coolant,
+                )
+
+                # Get mass flow rate etc. for inboard blanket breeder flow for
+                # tritium extraction
+                # Use the number of desired recirculations ([Aub2013]=10) and
+                # mass from dcll_masses
+                # N.B. wht_liq is BZ mass, does not include manifold.
+                self.data.blanket.mfblkti_liq = (
+                    self.data.fwbs.n_liq_recirc * self.data.fwbs.wht_liq_ib
+                ) / (24 * 3600)
+                self.data.blanket.mfblktpi_liq = (
+                    self.data.blanket.mfblkti_liq / npblkti_liq
+                )
+                velblkti_liq = self.flow_velocity(
+                    i_channel_shape=2,
+                    mass_flow_rate=self.data.blanket.mfblktpi_liq,
+                    flow_density=self.data.fwbs.den_liq,
+                )
+
+        # If the blanket is single-coolant with solid breeder...
+        else:
+            # Calculate total number of pipes (in all outboard modules) from
+            # coolant fraction and
+            # channel dimensions (assumes up/down flow, two 90 deg bends per length)
+            self.data.blanket.n_blkt_outboard_channels = (
+                self.data.fwbs.f_a_blkt_cooling_channels
+                * self.data.fwbs.vol_blkt_outboard
+            ) / (
+                np.pi
+                * self.data.fwbs.radius_fw_channel
+                * self.data.fwbs.radius_fw_channel
+                * self.data.blanket.len_blkt_outboard_channel_total
+            )
+
+            # Mass flow rate per coolant pipe
+            self.data.blanket.mfblktpo = (
+                self.data.blanket.mflow_blkt_outboard_coolant
+                / self.data.blanket.n_blkt_outboard_channels
+            )
+
+            # Coolant velocity in blanket (m/s)
+            # Assume BZ structure has same channel width as FW
+            self.data.blanket.vel_blkt_outboard_coolant = self.flow_velocity(
+                i_channel_shape=1,
+                mass_flow_rate=self.data.blanket.mfblktpo,
+                flow_density=self.data.fwbs.den_blkt_coolant,
+            )
+
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                # Calc total num of pipes (in all inboard modules) from
+                # coolant frac and channel dimensions
+                # Assumes up/down flow, two 90 deg bends per length
+                self.data.blanket.n_blkt_inboard_channels = (
+                    self.data.fwbs.f_a_blkt_cooling_channels
+                    * self.data.fwbs.vol_blkt_inboard
+                ) / (
+                    np.pi
+                    * self.data.fwbs.radius_fw_channel
+                    * self.data.fwbs.radius_fw_channel
+                    * self.data.blanket.len_blkt_inboard_channel_total
+                )
+
+                # Mass flow rate per coolant pipe
+                self.data.blanket.mfblktpi = (
+                    self.data.blanket.mflow_blkt_inboard_coolant
+                    / self.data.blanket.n_blkt_inboard_channels
+                )
+
+                # Coolant velocity in blanket (m/s)
+                # Assume BZ structure has same channel width as FW
+                self.data.blanket.vel_blkt_inboard_coolant = self.flow_velocity(
+                    i_channel_shape=1,
+                    mass_flow_rate=self.data.blanket.mfblktpi,
+                    flow_density=self.data.fwbs.den_blkt_coolant,
+                )
+
+        # FW Presure Drops ###############
+
+        (
+            self.data.fwbs.radius_blkt_channel_90_bend,
+            self.data.fwbs.radius_blkt_channel_180_bend,
+        ) = calculate_pipe_bend_radius(
+            i_ps=1,
+            radius_fw_channel=self.data.fwbs.radius_fw_channel,
+            b_bz_liq=self.data.fwbs.b_bz_liq,
+        )
+
+        dpres_fw_inboard_coolant = self.total_pressure_drop(
+            output,
+            icoolpump=1,
+            vel_coolant=vel_fw_inboard_coolant,
+            len_pipe=self.data.fwbs.len_fw_channel,
+            n_pipe_90_deg_bends=N_FW_PIPE_90_DEG_BENDS,
+            n_pipe_180_deg_bends=N_FW_PIPE_180_DEG_BENDS,
+            den_coolant=self.data.fwbs.den_fw_coolant,
+            visc_coolant_dynamic=self.data.fwbs.visc_fw_coolant,
+            coolant_electrical_conductivity=0.0e0,
+            pol_channel_length=pollengi,
+            nopolchan=npoltoti,
+            label="Inboard first wall",
+        )
+
+        dpres_fw_outboard_coolant = self.total_pressure_drop(
+            output,
+            icoolpump=1,
+            vel_coolant=vel_fw_outboard_coolant,
+            len_pipe=self.data.fwbs.len_fw_channel,
+            n_pipe_90_deg_bends=N_FW_PIPE_90_DEG_BENDS,
+            n_pipe_180_deg_bends=N_FW_PIPE_180_DEG_BENDS,
+            den_coolant=self.data.fwbs.den_fw_coolant,
+            visc_coolant_dynamic=self.data.fwbs.visc_fw_coolant,
+            coolant_electrical_conductivity=0.0e0,
+            pol_channel_length=pollengo,
+            nopolchan=npoltoto,
+            label="Outboard first wall",
+        )
+
+        # BB Presure Drops ###############
+        (
+            self.data.fwbs.radius_blkt_channel_90_bend,
+            self.data.fwbs.radius_blkt_channel_180_bend,
+        ) = calculate_pipe_bend_radius(
+            i_ps=1,
+            radius_fw_channel=self.data.fwbs.radius_fw_channel,
+            b_bz_liq=self.data.fwbs.b_bz_liq,
+        )
+
+        # Long polodal flows
+        if (
+            self.data.build.i_blkt_inboard
+            == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+        ):
+            npoltoti = self.data.fwbs.nopol * npblkti_liq
+        npoltoto = self.data.fwbs.nopol * npblkto_liq
+
+        dpres_blkt_outboard_coolant = self.total_pressure_drop(
+            output,
+            icoolpump=1,
+            vel_coolant=self.data.blanket.vel_blkt_outboard_coolant,
+            len_pipe=self.data.blanket.len_blkt_outboard_channel_total,
+            n_pipe_90_deg_bends=N_BLKT_PIPE_90_DEG_BENDS,
+            n_pipe_180_deg_bends=N_BLKT_PIPE_180_DEG_BENDS,
+            den_coolant=self.data.fwbs.den_blkt_coolant,
+            visc_coolant_dynamic=self.data.fwbs.visc_blkt_coolant,
+            coolant_electrical_conductivity=0.0e0,
+            pol_channel_length=pollengo,
+            nopolchan=npoltoto,
+            label="Outboard blanket",
+        )
+
+        if (
+            self.data.build.i_blkt_inboard
+            == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+        ):
+            dpres_blkt_inboard_coolant = self.total_pressure_drop(
+                output,
+                icoolpump=1,
+                vel_coolant=self.data.blanket.vel_blkt_inboard_coolant,
+                len_pipe=self.data.blanket.len_blkt_inboard_channel_total,
+                n_pipe_90_deg_bends=N_BLKT_PIPE_90_DEG_BENDS,
+                n_pipe_180_deg_bends=N_BLKT_PIPE_180_DEG_BENDS,
+                den_coolant=self.data.fwbs.den_blkt_coolant,
+                visc_coolant_dynamic=self.data.fwbs.visc_blkt_coolant,
+                coolant_electrical_conductivity=0.0e0,
+                pol_channel_length=pollengi,
+                nopolchan=npoltoti,
+                label="Inboard blanket",
+            )
+
+        # If the blanket has a liquid metal breeder...
+        if self.data.fwbs.i_blkt_dual_coolant > 0:
+            deltap_blo_liq = self.total_pressure_drop(
+                output,
+                icoolpump=2,
+                vel_coolant=velblkto_liq,
+                len_pipe=bzfllengo_liq,
+                n_pipe_90_deg_bends=no90bz_liq,
+                n_pipe_180_deg_bends=no180bz_liq,
+                den_coolant=self.data.fwbs.den_liq,
+                visc_coolant_dynamic=self.data.fwbs.dynamic_viscosity_liq,
+                coolant_electrical_conductivity=self.data.fwbs.electrical_conductivity_liq,
+                pol_channel_length=pollengo,
+                nopolchan=npoltoto,
+                label="Outboard blanket breeder liquid",
+            )
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                deltap_bli_liq = self.total_pressure_drop(
+                    output,
+                    icoolpump=2,
+                    vel_coolant=velblkti_liq,
+                    len_pipe=bzfllengi_liq,
+                    n_pipe_90_deg_bends=no90bz_liq,
+                    n_pipe_180_deg_bends=no180bz_liq,
+                    den_coolant=self.data.fwbs.den_liq,
+                    visc_coolant_dynamic=self.data.fwbs.dynamic_viscosity_liq,
+                    coolant_electrical_conductivity=self.data.fwbs.electrical_conductivity_liq,
+                    pol_channel_length=pollengi,
+                    nopolchan=npoltoti,
+                    label="Inboard blanket breeder liquid",
+                )
+
+                return [
+                    dpres_fw_inboard_coolant,
+                    dpres_fw_outboard_coolant,
+                    dpres_blkt_outboard_coolant,
+                    dpres_blkt_inboard_coolant,
+                    deltap_blo_liq,
+                    deltap_bli_liq,
+                ]
+            return [
+                dpres_fw_inboard_coolant,
+                dpres_fw_outboard_coolant,
+                dpres_blkt_outboard_coolant,
+                deltap_blo_liq,
+            ]
+
+        if (
+            self.data.build.i_blkt_inboard
+            == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+        ):
+            return [
+                dpres_fw_inboard_coolant,
+                dpres_fw_outboard_coolant,
+                dpres_blkt_outboard_coolant,
+                dpres_blkt_inboard_coolant,
+            ]
+        return [
+            dpres_fw_inboard_coolant,
+            dpres_fw_outboard_coolant,
+            dpres_blkt_outboard_coolant,
+        ]
+
+    @staticmethod
+    def calculate_dshaped_inboard_blkt_segment_poloidal(
+        dz_blkt_half: float, n_blkt_inboard_modules_poloidal: int
+    ) -> float:
+        """Calculate D-shaped inboard blanket module poloidal segment length.
+
+        Parameters
+        ----------
+        dz_blkt_half :
+            Half-height of the blanket module (m)
+        n_blkt_inboard_modules_poloidal :
+            Number of inboard blanket modules in poloidal direction
+
+        Returns
+        -------
+        :
+            Segment length of inboard blanket module in poloidal direction (m)
+        """
+        # D-shaped machine
+        # Segment vertical inboard surface (m)
+        return (2.0 * dz_blkt_half) / n_blkt_inboard_modules_poloidal
+
+    @staticmethod
+    def calculate_dshaped_outboard_blkt_segment_poloidal(
+        n_blkt_outboard_modules_poloidal: int,
+        dr_fw_plasma_gap_inboard: float,
+        rminor: float,
+        dr_fw_plasma_gap_outboard: float,
+        dz_blkt_half: float,
+        n_divertors: int,
+        f_ster_div_single: float,
+    ) -> float:
+        """Calculate D-shaped outboard blanket module poloidal segment length.
+
+        Parameters
+        ----------
+        n_blkt_outboard_modules_poloidal :
+            Number of outboard blanket modules in poloidal direction
+        dr_fw_plasma_gap_inboard :
+            Radial gap between inboard first wall and plasma (m)
+        rminor :
+            Minor radius of the plasma (m)
+        dr_fw_plasma_gap_outboard :
+            Radial gap between outboard first wall and plasma (m)
+        dz_blkt_half :
+            Half-height of the blanket module (m)
+        n_divertors :
+            Number of divertors (1 for single null, 2 for double null)
+        f_ster_div_single :
+            Fractional poloidal length of the divertor in single null configuration
+
+        Returns
+        -------
+        :
+            Segment length of outboard blanket module in poloidal direction (m)
+        """
+        # Calculate perimeter of ellipse that defines the internal
+        # surface of the outboard first wall / blanket
+
+        # Mid-plane distance from inboard to outboard side (m)
+        a = dr_fw_plasma_gap_inboard + 2.0 * rminor + dr_fw_plasma_gap_outboard
+
+        # Internal half-height of blanket (m)
+        b = dz_blkt_half
+
+        # Calculate ellipse circumference using Ramanujan approximation (m)
+        ptor = np.pi * (3.0 * (a + b) - np.sqrt((3.0 * a + b) * (a + 3.0 * b)))
+
+        # Calculate blanket poloidal length and segment, subtracting divertor length (m)
+        # kit hcll version only had the single null option
+        if n_divertors == 2:
+            # Double null configuration
+            len_blkt_outboard_segment_poloidal = (
+                0.5
+                * ptor
+                * (1.0 - 2.0 * f_ster_div_single)
+                / n_blkt_outboard_modules_poloidal
+            )
+        else:
+            # single null configuration
+            len_blkt_outboard_segment_poloidal = (
+                0.5 * ptor * (1.0 - f_ster_div_single) / n_blkt_outboard_modules_poloidal
+            )
+
+        return len_blkt_outboard_segment_poloidal
+
+    @staticmethod
+    def calculate_elliptical_inboard_blkt_segment_poloidal(
+        rmajor: float,
+        rminor: float,
+        triang: float,
+        dr_fw_plasma_gap_inboard: float,
+        dz_blkt_half: float,
+        n_blkt_inboard_modules_poloidal: int,
+        n_divertors: int,
+        f_ster_div_single: float,
+    ) -> float:
+        """Calculate elliptical inboard blanket module poloidal segment length.
+
+        Parameters
+        ----------
+        rmajor :
+            Major radius of the plasma (m)
+        rminor :
+            Minor radius of the plasma (m)
+        triang :
+            Triangularity of the plasma
+        dr_fw_plasma_gap_inboard :
+            Radial gap between inboard first wall and plasma (m)
+        dz_blkt_half :
+            Half-height of the blanket module (m)
+        n_blkt_inboard_modules_poloidal :
+            Number of inboard blanket modules in poloidal direction
+        n_divertors :
+            Number of divertors (1 for single null, 2 for double null)
+        f_ster_div_single :
+            Fractional poloidal length of the divertor in single null configuration
+
+        Returns
+        -------
+        :
+            Segment length of inboard blanket module in poloidal direction (m)
+        """
+        # Major radius where half-ellipses 'meet' (m)
+        r1 = rmajor - rminor * triang
+
+        # Internal half-height of blanket (m)
+        b = dz_blkt_half
+
+        # Distance between r1 and nearest edge of inboard first wall / blanket (m)
+        a = r1 - (rmajor - rminor - dr_fw_plasma_gap_inboard)
+
+        # Calculate ellipse circumference using Ramanujan approximation (m)
+        ptor = np.pi * (3.0 * (a + b) - np.sqrt((3.0 * a + b) * (a + 3.0 * b)))
+
+        # Calculate inboard blanket poloidal length and segment,
+        # subtracting divertor length (m)
+        # Assume divertor lies between the two ellipses,
+        # so fraction f_ster_div_single still applies
+
+        # kit hcll version only had the single null option
+        if n_divertors == 2:
+            # Double null configuration
+            len_blkt_inboard_segment_poloidal = (
+                0.5
+                * ptor
+                * (1.0 - 2.0 * f_ster_div_single)
+                / n_blkt_inboard_modules_poloidal
+            )
+        else:
+            # single null configuration
+            len_blkt_inboard_segment_poloidal = (
+                0.5 * ptor * (1.0 - f_ster_div_single) / n_blkt_inboard_modules_poloidal
+            )
+
+        return len_blkt_inboard_segment_poloidal
+
+    @staticmethod
+    def calculate_elliptical_outboard_blkt_segment_poloidal(
+        rmajor: float,
+        rminor: float,
+        triang: float,
+        dz_blkt_half: float,
+        dr_fw_plasma_gap_outboard: float,
+        n_blkt_outboard_modules_poloidal: int,
+        n_divertors: int,
+        f_ster_div_single: float,
+    ) -> float:
+        """Calculate elliptical outboard blanket module poloidal segment length.
+
+        Parameters
+        ----------
+        rmajor :
+            Major radius of the plasma (m)
+        rminor :
+            Minor radius of the plasma (m)
+        triang :
+            Triangularity of the plasma
+        dz_blkt_half :
+            Half-height of the blanket module (m)
+        dr_fw_plasma_gap_outboard :
+            Radial gap between outboard first wall and plasma (m)
+        n_blkt_outboard_modules_poloidal :
+            Number of outboard blanket modules in poloidal direction
+        n_divertors :
+            Number of divertors (1 for single null, 2 for double null)
+        f_ster_div_single :
+            Fractional poloidal length of the divertor in single null configuration
+
+        Returns
+        -------
+        :
+            Segment length of outboard blanket module in poloidal direction (m)
+        """
+        # Major radius where half-ellipses 'meet' (m)
+        r1 = rmajor - rminor * triang
+
+        # Internal half-height of blanket (m)
+        b = dz_blkt_half
+
+        # Distance between r1 and inner edge of outboard first wall / blanket (m)
+        a = rmajor + rminor + dr_fw_plasma_gap_outboard - r1
+
+        # Calculate ellipse circumference using Ramanujan approximation (m)
+        ptor = np.pi * (3.0 * (a + b) - np.sqrt((3.0 * a + b) * (a + 3.0 * b)))
+
+        # kit hcll version only had the single null option
+        # Calculate outboard blanket poloidal length and segment,
+        # subtracting divertor length (m)
+        if n_divertors == 2:
+            # Double null configuration
+            len_blkt_outboard_segment_poloidal = (
+                0.5
+                * ptor
+                * (1.0 - 2.0 * f_ster_div_single)
+                / n_blkt_outboard_modules_poloidal
+            )
+        else:
+            # single null configuration
+            len_blkt_outboard_segment_poloidal = (
+                0.5 * ptor * (1.0 - f_ster_div_single) / n_blkt_outboard_modules_poloidal
+            )
+        return len_blkt_outboard_segment_poloidal
+
+    def liquid_breeder_properties(self, output: bool = False):
+        """Calculates the fluid properties of the
+        Liquid Metal Breeder/Coolant in the Blanket BZ
+
+        Uses middle value of input and output temperatures of
+        Liquid Metal Breeder/Coolant
+        Curently have PbLi but can expand with e.g., Lithium
+
+        Parameters
+        ----------
+        output: bool
+             (Default value = False)
+
+        References
+        ----------
+        [Mal1995]   Malang and Mattas (1995), Comparison of lithium and the eutectic
+                    lead-lithium alloy, two candidate liquid metal breeder materials
+                    for self-cooled blankets, Fusion Engineering and Design 27, 399-406.
+
+        [Mas2008]   Mas de les Valles et al. (2008), Lead-lithium material database for
+                    nuclear fusion technology, Journal of Nuclear Materials, Vol. 376(6).
+
+        [Mar2019]   Martelli et al. (2019), Literature review of lead-lithium
+                    thermophysical properties, Fusion Engineering and Design, 138,
+                    183-195.
+        """
+        # Use mid temp
+        if self.data.fwbs.inlet_temp_liq == self.data.fwbs.outlet_temp_liq:
+            mid_temp_liq = self.data.fwbs.outlet_temp_liq
+        else:
+            mid_temp_liq = (
+                self.data.fwbs.inlet_temp_liq + self.data.fwbs.outlet_temp_liq
+            ) * 0.5
+
+        # If the liquid metal is PbLi...
+        if self.data.fwbs.i_blkt_liquid_breeder_type == 0:
+            # PbLi from [Mar2019]
+            # Constant pressure ~ 17 atmospheres ~ 1.7D6 Pa
+            # Li content is ~ 17%
+            #
+            # density                      kg m-3     T in Kelvin     range = 508-880 K
+            #
+            # specific_heat                J kg-1 K-1 T in Kelvin     range = 508-880 K
+            #
+            # thermal_conductivity         W m-1 K-1  T in Celcius    range = 508-773 K
+            #
+            # dynamic_viscosity            Pa s       T in Celcius    range = 508-873 K
+            #
+            # electrical_conductivity      A V-1 m-1  T in Kelvin     range = 600-800 K
+
+            # Caculate properties
+            self.data.fwbs.den_liq = 1.052e4 * (1 - mid_temp_liq * 1.13e-4)
+
+            self.data.fwbs.specific_heat_liq = 1.95e2 - mid_temp_liq * 9.116e-3
+
+            self.data.fwbs.thermal_conductivity_liq = (
+                1.95 + (mid_temp_liq - 273.15) * 1.96e-2
+            )
+
+            self.data.fwbs.dynamic_viscosity_liq = (
+                6.11e-3
+                - (2.257e-5 * (mid_temp_liq - 273.15))
+                + (3.766e-8 * (mid_temp_liq - 273.15) ** 2)
+                - (2.289e-11 * (mid_temp_liq - 273.15) ** 3)
+            )
+
+            t_ranges = np.zeros((5, 2))
+
+            t_ranges[:4, 0] = 508.0
+            t_ranges[:4, 1] = 880.0
+
+            self.data.fwbs.electrical_conductivity_liq = 1.0 / (
+                1.03e-6 - (6.75e-11 * mid_temp_liq) + (4.18e-13 * mid_temp_liq**2)
+            )
+
+            t_ranges[4, 0] = 600.0
+            t_ranges[4, 1] = 800.0
+
+        # If the liquid metal is Li...
+        elif self.data.fwbs.i_blkt_liquid_breeder_type == 1:
+            # Temporary - should be updated with information from Li reviews conducted
+            # at CCFE once completed
+            # Li Properties from [Mal1995] at 300 Celcius
+            # den_liq = 505                            kg/m3
+            # specific_heat_liq = 4260                 J kg-1 K-1
+            # thermal_conductivity_liq = 46            W m-1 K-1
+            # dynamic_viscosity_liq = 1.0D-6           m2 s-1
+            # electrical_conductivity_liq = 3.03D6     A V-1 m-1
+
+            # New from 'Application of lithium in systems of fusion reactors.
+            # 1. Physical and chemical properties of lithium'
+            # Lyublinski et al., 2009, Plasma Devicec and Operations
+            self.data.fwbs.den_liq = (
+                504.43
+                - (0.2729 * mid_temp_liq)
+                - (8.0035e-5 * mid_temp_liq**2)
+                + (3.799e-8 * mid_temp_liq**3)
+            )
+            self.data.fwbs.specific_heat_liq = (
+                31.227
+                + (0.205e6 * mid_temp_liq ** (-2))
+                - (5.265e-3 * mid_temp_liq)
+                + (2.628e6 * mid_temp_liq ** (-2))
+            )
+            # thermal_conductivity_liq also in paper
+            self.data.fwbs.dynamic_viscosity_liq = np.exp(
+                -4.16e0 - (0.64 * np.log(mid_temp_liq)) + (262.1 / mid_temp_liq)
+            )
+            self.data.fwbs.electrical_conductivity_liq = (
+                (0.9249e9 * mid_temp_liq) + 2.3167e6 - (0.7131e3 * mid_temp_liq)
+            )
+
+        # Magnetic field strength in T for Hartmann calculation
+        # IB
+        if (
+            self.data.build.i_blkt_inboard
+            == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+        ):
+            self.data.fwbs.b_mag_blkt[0] = (
+                self.data.physics.b_plasma_toroidal_on_axis
+                * self.data.physics.rmajor
+                / (
+                    self.data.physics.rmajor
+                    - (self.data.physics.rmajor / self.data.physics.aspect)
+                    - (self.data.build.dr_blkt_inboard / 2)
+                )
+            )
+        # We do not use this if there is no IB blanket, but will use edge as fill value
+        if (
+            self.data.build.i_blkt_inboard
+            == InboardBlanketConfiguration.NO_INBOARD_BLANKET
+        ):
+            self.data.fwbs.b_mag_blkt[0] = (
+                self.data.physics.b_plasma_toroidal_on_axis
+                * self.data.physics.rmajor
+                / (
+                    self.data.physics.rmajor
+                    - (self.data.physics.rmajor / self.data.physics.aspect)
+                )
+            )
+        # OB
+        self.data.fwbs.b_mag_blkt[1] = (
+            self.data.physics.b_plasma_toroidal_on_axis
+            * self.data.physics.rmajor
+            / (
+                self.data.physics.rmajor
+                + (self.data.physics.rmajor / self.data.physics.aspect)
+                + (self.data.build.dr_blkt_outboard / 2)
+            )
+        )
+
+        # Calculate Hartmann number
+        con_vsc_rat = (
+            self.data.fwbs.electrical_conductivity_liq
+            / self.data.fwbs.dynamic_viscosity_liq
+        )
+        # Use toroidal width of the rectangular cooling channel
+        # as characteristic length scale
+        self.data.fwbs.hartmann_liq = (
+            np.asarray(self.data.fwbs.b_mag_blkt)
+            * self.data.fwbs.a_bz_liq
+            / 2.0
+            * np.sqrt(con_vsc_rat)
+        )
+
+        # Error for temperature range of breeder property realtions
+        if self.data.fwbs.i_blkt_liquid_breeder_type == 0 and (
+            (t_ranges[:, 0] > mid_temp_liq).any()
+            or (t_ranges[:, 1] < mid_temp_liq).any()
+        ):
+            logger.error(
+                "Outside temperature limit for one or more "
+                "liquid metal breeder properties"
+            )
+
+            if output:
+                po.ocmmnt(
+                    self.outfile,
+                    "Outside temperature limit for one or "
+                    "more liquid metal breeder properties.",
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Liquid metal temperature (K)",
+                    "(mid_temp_liq)",
+                    mid_temp_liq,
+                    "OP ",
+                )
+                po.ocmmnt(self.outfile, "Density: Max T = 880 K, Min T = 508 K")
+                po.ocmmnt(self.outfile, "Specific heat: Max T = 880 K, Min T = 508 K")
+                po.ocmmnt(
+                    self.outfile, "Thermal conductivity: Max T = 880 K, Min T = 508 K"
+                )
+                po.ocmmnt(
+                    self.outfile, "Dynamic viscosity : Max T = 880 K, Min T = 508 K"
+                )
+                po.ocmmnt(
+                    self.outfile,
+                    "Electrical conductivity: Max T = 800 K, Min T = 600 K",
+                )
+
+        if not output:
+            return
+
+        po.oheadr(self.outfile, "Blanket : Liquid Breeder Properties")
+
+        if self.data.fwbs.i_blkt_dual_coolant == 1:
+            po.ocmmnt(
+                self.outfile,
+                "Single coolant: liquid metal circulted for tritium extraction.",
+            )
+        if self.data.fwbs.i_blkt_dual_coolant == 2:
+            po.ocmmnt(self.outfile, "Dual coolant: self-cooled liquid metal breeder.")
+
+        if self.data.fwbs.i_blkt_liquid_breeder_type == 0:
+            po.ocmmnt(
+                self.outfile,
+                "Blanket breeder type (i_blkt_liquid_breeder_type=0), PbLi (~ 17% Li)",
+            )
+        if self.data.fwbs.i_blkt_liquid_breeder_type == 1:
+            po.ocmmnt(
+                self.outfile, "Blanket breeder type (i_blkt_liquid_breeder_type=1), Li"
+            )
+
+        po.ovarre(
+            self.outfile, "Density (kg m-3)", "(den_liq)", self.data.fwbs.den_liq, "OP "
+        )
+        po.ovarre(
+            self.outfile,
+            "Viscosity (Pa s)",
+            "(dynamic_viscosity_liq)",
+            self.data.fwbs.dynamic_viscosity_liq,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Electrical Conductivity (A V-1 m-1)",
+            "(electrical_conductivity_liq)",
+            self.data.fwbs.electrical_conductivity_liq,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Hartmann Number IB",
+            "(hartmann_liq)",
+            self.data.fwbs.hartmann_liq[0],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Hartmann Number OB",
+            "(hartmann_liq)",
+            self.data.fwbs.hartmann_liq[0],
+            "OP ",
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Inlet Temperature (Celcius)",
+            "(inlet_temp_liq)",
+            self.data.fwbs.inlet_temp_liq,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Outlet Temperature (Celcius)",
+            "(outlet_temp_liq)",
+            self.data.fwbs.outlet_temp_liq,
+            "OP ",
+        )
+
+    def flow_velocity(self, i_channel_shape, mass_flow_rate, flow_density):
+        """Calculate the coolant flow velocity (m/s) for given pipe mass flow rate
+        and pipe size/shape.
+
+        N.B. Assumed that primary BB and FW coolants have same pipe radius
+        (= radius_fw_channel).
+
+
+        Parameters
+        ----------
+        i_channel_shape :
+            Switch for circular or rectangular channel crossection.
+            Shape depends on whether primary or secondary coolant.
+            1: circle (primary)
+            2: rectangle (secondary)
+        mass_flow_rate :
+            Coolant mass flow rate per pipe (kg/s)
+        flow_density :
+            Coolant density
+
+        Raises
+        ------
+        ProcessValueError
+            If i_channel_shape is an invalid option (not in [1,2])
+        """
+        if i_channel_shape == 1:
+            return mass_flow_rate / (
+                flow_density
+                * np.pi
+                * self.data.fwbs.radius_fw_channel
+                * self.data.fwbs.radius_fw_channel
+            )
+
+        # If secondary coolant then rectangular channels assumed
+        if i_channel_shape == 2:
+            return mass_flow_rate / (
+                flow_density * self.data.fwbs.a_bz_liq * self.data.fwbs.b_bz_liq
+            )
+
+        raise ProcessValueError(
+            f"i_channel_shape ={i_channel_shape} is an invalid option."
+        )
+
+    def thermo_hydraulic_model(self, output: bool):
+        """Thermo-hydraulic model for first wall and blanket
+        ONLY CALLED if i_p_coolant_pumping = 2 or 3
+
+        Calculations for detailed powerflow model i_thermal_electric_conversion > 1
+
+        Dual-coolant modifications and generalisation refactor: G. Graham, CCFE
+
+        Three options:
+        1.   Solid breeder - nuclear heating in the blanket is
+            exctrated by the primary coolant.
+        2.   Liquid metal breeder, single-coolant
+                 - nuclear heating in the blanket is exctrated by the primary coolant.
+                 - liquid metal is circulated for tritium extraction, specified
+                    by number of circulations/day.
+        3.   Liquid metal breeder, dual-coolant -
+                 - nuclear heating in the liquid breeder/coolant is extracted
+                    by the liquid breeder/coolant.
+                 - nuclear heating in the blanket structure is extracted
+                    by the primary coolant
+
+        Flow Channel and Coolant Input Info:
+
+        N.B. Primary coolant applies to single-coolant BB, or structural cooling of
+        dual-coolant BB.
+        Secondary coolant applies to self-cooled breeder material.
+
+        Coolant Channels          FW                      BB primary          BB Liquid Breeder/Coolant
+
+        length (m)                  len_fw_channel
+        width (m)                   radius_fw_channel    radius_fw_channel    a_bz_liq, b_bz_liq (rectangular)
+                                    (radius, cicular)
+        wall thickness (m)          dr_fw_wall                 dr_fw_wall      th_wall_secondary
+        dx_fw_module (m)            dx_fw_module
+        roughness epsilon           roughness_fw_channel
+        peak FW temp (K)            temp_fw_peak
+        maximum temp (K)            temp_fw_max
+        FCI switch                  ---                     ---        i_blkt_liquid_breeder_channel_type
+
+        Coolant                     FW                      BB primary              BB secondary
+
+        primary coolant switch      i_fw_coolant_type       i_blkt_coolant_type     ---
+        secondary coolant switch   ---                  ---                         i_blkt_liquid_breeder_type
+        inlet temp (K)              temp_fw_coolant_in      temp_blkt_coolant_in    inlet_temp_liq
+        outlet temp (K)             temp_fw_coolant_out     temp_blkt_coolant_out   outlet_temp_liq
+        pressure (Pa)               pres_fw_coolant         pres_blkt_coolant       blpressure_liq
+
+        Parameters
+        ----------
+        output: bool
+
+        """  # noqa: E501
+        ######################################################
+        # Pre calculations needed for thermo-hydraulic model #
+        ######################################################
+        # IB/OB FW (MW)
+        self.data.blanket.p_fw_inboard_nuclear_heat_mw = (
+            self.data.fwbs.p_fw_nuclear_heat_total_mw
+            * self.data.first_wall.a_fw_inboard
+            / self.data.first_wall.a_fw_total
+        )
+        self.data.blanket.p_fw_outboard_nuclear_heat_mw = (
+            self.data.fwbs.p_fw_nuclear_heat_total_mw
+            * self.data.first_wall.a_fw_outboard
+            / self.data.first_wall.a_fw_total
+        )
+
+        # IB/OB Blanket (MW)
+
+        # Neutron power deposited in inboard blanket (MW)
+        if (
+            self.data.build.i_blkt_inboard
+            == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+        ):
+            self.data.blanket.p_blkt_nuclear_heat_inboard_mw = (
+                self.data.fwbs.p_blkt_nuclear_heat_total_mw
+                * self.data.fwbs.vol_blkt_inboard
+                / self.data.fwbs.vol_blkt_total
+            )
+
+        # Neutron power deposited in outboard blanket (MW)
+        self.data.blanket.p_blkt_nuclear_heat_outboard_mw = (
+            self.data.fwbs.p_blkt_nuclear_heat_total_mw
+            * self.data.fwbs.vol_blkt_outboard
+            / self.data.fwbs.vol_blkt_total
+        )
+
+        # For a dual-coolant blanket, some fraction of the power goes into the
+        # structure of the BZ and is cooled by the primary coolant, and some fraction
+        # goes into the liquid breeder to be cooled by itself.
+
+        # If the blanket is dual-coolant...
+        if self.data.fwbs.i_blkt_dual_coolant == 2:
+            f_nuc_pow_bz_liq = 1 - self.data.fwbs.f_nuc_pow_bz_struct
+
+            # Inboard blanket calc. Will return 0 if no inboard dr_shld_inboard thickness
+            pnucblkti_struct = (
+                self.data.fwbs.p_blkt_nuclear_heat_total_mw
+                * self.data.fwbs.f_nuc_pow_bz_struct
+            ) * (self.data.fwbs.vol_blkt_inboard / self.data.fwbs.vol_blkt_total)
+            pnucblkti_liq = (
+                self.data.fwbs.p_blkt_nuclear_heat_total_mw * f_nuc_pow_bz_liq
+            ) * (self.data.fwbs.vol_blkt_inboard / self.data.fwbs.vol_blkt_total)
+            pnucblkto_struct = (
+                self.data.fwbs.p_blkt_nuclear_heat_total_mw
+                * self.data.fwbs.f_nuc_pow_bz_struct
+            ) * (self.data.fwbs.vol_blkt_outboard / self.data.fwbs.vol_blkt_total)
+            pnucblkto_liq = (
+                self.data.fwbs.p_blkt_nuclear_heat_total_mw * f_nuc_pow_bz_liq
+            ) * (self.data.fwbs.vol_blkt_outboard / self.data.fwbs.vol_blkt_total)
+
+        # FW and BB Mass Flow ###########
+
+        # Make sure that, if the inputs for the FW and blanket inputs are different,
+        # the i_fw_blkt_shared_coolant variable is appropriately set
+        # for separate coolants
+        if CoolantType(self.data.fwbs.i_fw_coolant_type) != CoolantType(
+            self.data.fwbs.i_blkt_coolant_type
+        ):
+            self.data.fwbs.i_fw_blkt_shared_coolant = (
+                FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+            )
+
+        # If FW and BB have the same coolant...
+        if self.data.fwbs.i_fw_blkt_shared_coolant == FWBlktCoolantLoopTypes.SHARED_LOOP:
+            # Fraction of heat to be removed by IB/OB FW
+            if self.data.fwbs.i_blkt_dual_coolant == 2:
+                f_nuc_fwi = (
+                    self.data.blanket.p_fw_inboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwi
+                ) / (
+                    self.data.blanket.p_fw_inboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwi
+                    + pnucblkti_struct
+                )
+                f_nuc_fwo = (
+                    self.data.blanket.p_fw_outboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwo
+                ) / (
+                    self.data.blanket.p_fw_outboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwo
+                    + pnucblkto_struct
+                )
+            else:
+                f_nuc_fwi = (
+                    self.data.blanket.p_fw_inboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwi
+                ) / (
+                    self.data.blanket.p_fw_inboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwi
+                    + self.data.blanket.p_blkt_nuclear_heat_inboard_mw
+                )
+                f_nuc_fwo = (
+                    self.data.blanket.p_fw_outboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwo
+                ) / (
+                    self.data.blanket.p_fw_outboard_nuclear_heat_mw
+                    + self.data.fwbs.psurffwo
+                    + self.data.blanket.p_blkt_nuclear_heat_outboard_mw
+                )
+
+            # Outlet FW/inlet BB temp (mass flow FW = mass flow BB)
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                fwoutleti = (f_nuc_fwi * self.data.fwbs.temp_blkt_coolant_out) + (
+                    1 - f_nuc_fwi
+                ) * self.data.fwbs.temp_fw_coolant_in
+                inlet_tempi = fwoutleti
+            else:
+                fwoutleti = self.data.fwbs.temp_fw_coolant_out
+
+            fwoutleto = (f_nuc_fwo * self.data.fwbs.temp_blkt_coolant_out) + (
+                1 - f_nuc_fwo
+            ) * self.data.fwbs.temp_fw_coolant_in
+            inlet_tempo = fwoutleto
+
+        elif (
+            self.data.fwbs.i_fw_blkt_shared_coolant
+            == FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+        ):
+            fwoutleti = self.data.fwbs.temp_fw_coolant_out
+            inlet_tempi = self.data.fwbs.temp_blkt_coolant_in
+            fwoutleto = self.data.fwbs.temp_fw_coolant_out
+            inlet_tempo = self.data.fwbs.temp_blkt_coolant_in
+
+        # Maximum FW temperature. (27/11/2015) Issue #348
+        # First wall flow is just along the first wall, with no allowance for radial
+        # pipes, manifolds etc. The outputs are mid quantities of inlet and outlet.
+        # This subroutine recalculates cp and rhof.
+        (
+            self.data.blanket.temp_fw_inboard_peak,
+            _,
+            _,
+            self.data.blanket.mflow_fw_inboard_coolant_channel,
+        ) = self.fw.fw_temp(
+            output,
+            self.data.fwbs.radius_fw_channel,
+            self.data.build.dr_fw_inboard,
+            self.data.first_wall.a_fw_inboard,
+            self.data.fwbs.psurffwi,
+            self.data.blanket.p_fw_inboard_nuclear_heat_mw,
+            "Inboard first wall",
+        )
+        (
+            self.data.blanket.temp_fw_outboard_peak,
+            _cf,
+            _rhof,
+            self.data.blanket.mflow_fw_outboard_coolant_channel,
+        ) = self.fw.fw_temp(
+            output,
+            self.data.fwbs.radius_fw_channel,
+            self.data.build.dr_fw_outboard,
+            self.data.first_wall.a_fw_outboard,
+            self.data.fwbs.psurffwo,
+            self.data.blanket.p_fw_outboard_nuclear_heat_mw,
+            "Outboard first wall",
+        )
+
+        # Peak first wall temperature (K)
+        self.data.fwbs.temp_fw_peak = max(
+            self.data.blanket.temp_fw_inboard_peak,
+            self.data.blanket.temp_fw_outboard_peak,
+        )
+
+        # Total mass flow rate to remove inboard FW power (kg/s)
+        self.data.blanket.mflow_fw_inboard_coolant_total = (
+            1.0e6
+            * (self.data.blanket.p_fw_inboard_nuclear_heat_mw + self.data.fwbs.psurffwi)
+            / (self.data.fwbs.cp_fw * (fwoutleti - self.data.fwbs.temp_fw_coolant_in))
+        )
+        # Total mass flow rate to remove outboard FW power (kg/s)
+        self.data.blanket.mflow_fw_outboard_coolant_total = (
+            1.0e6
+            * (self.data.blanket.p_fw_outboard_nuclear_heat_mw + self.data.fwbs.psurffwo)
+            / (self.data.fwbs.cp_fw * (fwoutleto - self.data.fwbs.temp_fw_coolant_in))
+        )
+
+        # If the blanket is dual-coolant...
+        if self.data.fwbs.i_blkt_dual_coolant == 2:
+            # Mass flow rates for outboard blanket coolants (kg/s)
+            self.data.blanket.mflow_blkt_outboard_coolant = (
+                1.0e6
+                * (pnucblkto_struct)
+                / (
+                    self.data.fwbs.cp_bl
+                    * (self.data.fwbs.temp_blkt_coolant_out - inlet_tempo)
+                )
+            )
+            self.data.blanket.mfblkto_liq = (
+                1.0e6
+                * (pnucblkto_liq)
+                / (
+                    self.data.fwbs.specific_heat_liq
+                    * (self.data.fwbs.outlet_temp_liq - self.data.fwbs.inlet_temp_liq)
+                )
+            )
+
+            # If there is an IB blanket...
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                # Mass flow rates for inboard blanket coolants (kg/s)
+                self.data.blanket.mflow_blkt_inboard_coolant = (
+                    1.0e6
+                    * (pnucblkti_struct)
+                    / (
+                        self.data.fwbs.cp_bl
+                        * (self.data.fwbs.temp_blkt_coolant_out - inlet_tempi)
+                    )
+                )
+                self.data.blanket.mfblkti_liq = (
+                    1.0e6
+                    * (pnucblkti_liq)
+                    / (
+                        self.data.fwbs.specific_heat_liq
+                        * (
+                            self.data.fwbs.outlet_temp_liq
+                            - self.data.fwbs.inlet_temp_liq
+                        )
+                    )
+                )
+
+        # If the blanket is single-coolant with liquid metal breeder...
+        elif self.data.fwbs.i_blkt_dual_coolant == 1:
+            # Mass flow rate for outboard blanket coolant (kg/s)
+            self.data.blanket.mflow_blkt_outboard_coolant = (
+                1.0e6
+                * (self.data.blanket.p_blkt_nuclear_heat_outboard_mw)
+                / (
+                    self.data.fwbs.cp_bl
+                    * (self.data.fwbs.temp_blkt_coolant_out - inlet_tempo)
+                )
+            )
+
+            # Get mass flow rate etc. for inboard blanket breeder flow
+            # for tritium extraction
+            # Use the number of desired recirculations ([Aub2013]=10)
+            # and mass from dcll_masses
+            # N.B. wht_liq is BZ mass, does not include manifold.
+            self.data.blanket.mfblkto_liq = (
+                self.data.fwbs.n_liq_recirc * self.data.fwbs.wht_liq_ob
+            ) / (24 * 3600)
+
+            # If there is an IB blanket...
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                # Mass flow rate for inboard blanket coolant (kg/s)
+                self.data.blanket.mflow_blkt_inboard_coolant = (
+                    1.0e6
+                    * (self.data.blanket.p_blkt_nuclear_heat_inboard_mw)
+                    / (
+                        self.data.fwbs.cp_bl
+                        * (self.data.fwbs.temp_blkt_coolant_out - inlet_tempi)
+                    )
+                )
+                # Mass flow rate for inboard breeder flow (kg/s)
+                self.data.fwbs.mfblkti_liq = (
+                    self.data.fwbs.n_liq_recirc * self.data.fwbs.wht_liq_ib
+                ) / (24 * 3600)
+
+        # If the blanket is single-coolant with solid breeder...
+        else:
+            # Mass flow rate for inboard blanket coolant (kg/s)
+            self.data.blanket.mflow_blkt_outboard_coolant = (
+                1.0e6
+                * (self.data.blanket.p_blkt_nuclear_heat_outboard_mw)
+                / (
+                    self.data.fwbs.cp_bl
+                    * (self.data.fwbs.temp_blkt_coolant_out - inlet_tempo)
+                )
+            )
+
+            # If there is an IB blanket...
+            # Mass flow rate for inboard blanket coolant (kg/s)
+            if (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                self.data.blanket.mflow_blkt_inboard_coolant = (
+                    1.0e6
+                    * (self.data.blanket.p_blkt_nuclear_heat_inboard_mw)
+                    / (
+                        self.data.fwbs.cp_bl
+                        * (self.data.fwbs.temp_blkt_coolant_out - inlet_tempi)
+                    )
+                )
+
+        ########################################################
+        # Handling of pressure drops and coolant pumping power #
+        ########################################################
+
+        # load in pressures if primary pumping == 2
+        i_p_coolant_pumping = PumpingPowerModelTypes(self.data.fwbs.i_p_coolant_pumping)
+        if i_p_coolant_pumping == PumpingPowerModelTypes.MECHANICAL:
+            deltap = self.thermo_hydraulic_model_pressure_drop_calculations(
+                output=output
+            )
+            deltap_fwi = deltap[0]
+            deltap_fwo = deltap[1]
+            deltap_blo = deltap[2]
+            if self.data.fwbs.i_blkt_dual_coolant > 0:
+                if (
+                    self.data.build.i_blkt_inboard
+                    == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+                ):
+                    deltap_bli = deltap[3]
+                    deltap_blo_liq = deltap[4]
+                    deltap_bli_liq = deltap[5]
+                else:
+                    deltap_blo_liq = deltap[3]
+            elif (
+                self.data.build.i_blkt_inboard
+                == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+            ):
+                deltap_bli = deltap[3]
+
+        # Pumping Power
+        # If FW and BB have the same coolant...
+        if self.data.fwbs.i_fw_blkt_shared_coolant == FWBlktCoolantLoopTypes.SHARED_LOOP:
+            # Total pressure drop in the first wall/blanket  (Pa)
+            if i_p_coolant_pumping == PumpingPowerModelTypes.MECHANICAL:
+                if (
+                    self.data.build.i_blkt_inboard
+                    == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+                ):
+                    deltap_fw_blkt = deltap_fwi + deltap_bli + deltap_fwo + deltap_blo
+                if (
+                    self.data.build.i_blkt_inboard
+                    == InboardBlanketConfiguration.NO_INBOARD_BLANKET
+                ):
+                    deltap_fw_blkt = deltap_fwi + deltap_fwo + deltap_blo
+            elif (
+                i_p_coolant_pumping
+                == PumpingPowerModelTypes.MECHANICAL_WITH_PRESSURE_DROP
+            ):
+                deltap_fw_blkt = self.data.primary_pumping.dp_fw_blkt
+            # Total coolant mass flow rate in the first wall/blanket (kg/s)
+            self.data.blanket.mftotal = (
+                self.data.blanket.mflow_fw_inboard_coolant_total
+                + self.data.blanket.mflow_fw_outboard_coolant_total
+            )
+
+            # Total mechanical pumping power (MW)
+            self.data.primary_pumping.p_fw_blkt_coolant_pump_mw = (
+                self.coolant_pumping_power(
+                    output=output,
+                    i_liquid_breeder=1,
+                    temp_coolant_pump_outlet=self.data.fwbs.temp_fw_coolant_in,
+                    temp_coolant_pump_inlet=self.data.fwbs.temp_blkt_coolant_out,
+                    pres_coolant_pump_inlet=self.data.fwbs.pres_fw_coolant,
+                    dpres_coolant=deltap_fw_blkt,
+                    mflow_coolant_total=self.data.blanket.mftotal,
+                    i_coolant_type=self.data.fwbs.i_fw_coolant_type,
+                    den_coolant=self.data.fwbs.den_fw_coolant,
+                    label="First Wall and Blanket",
+                )
+            )
+
+        # If FW and BB have different coolants...
+        elif (
+            self.data.fwbs.i_fw_blkt_shared_coolant
+            == FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+        ):
+            if i_p_coolant_pumping == PumpingPowerModelTypes.MECHANICAL:
+                # Total pressure drop in the first wall (Pa)
+                deltap_fw = deltap_fwi + deltap_fwo
+
+                # Total pressure drop in the blanket (Pa)
+                if (
+                    self.data.build.i_blkt_inboard
+                    == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+                ):
+                    deltap_blkt = deltap_bli + deltap_blo
+                if (
+                    self.data.build.i_blkt_inboard
+                    == InboardBlanketConfiguration.NO_INBOARD_BLANKET
+                ):
+                    deltap_blkt = deltap_blo
+            elif (
+                i_p_coolant_pumping
+                == PumpingPowerModelTypes.MECHANICAL_WITH_PRESSURE_DROP
+            ):
+                deltap_fw = self.data.primary_pumping.dp_fw
+                deltap_blkt = self.data.primary_pumping.dp_blkt
+
+            # Total coolant mass flow rate in the first wall (kg/s)
+            self.data.blanket.mflow_fw_coolant_total = (
+                self.data.blanket.mflow_fw_inboard_coolant_total
+                + self.data.blanket.mflow_fw_outboard_coolant_total
+            )
+            # Total coolant mass flow rate in the blanket (kg/s)
+            self.data.blanket.mflow_blkt_coolant_total = (
+                self.data.blanket.mflow_blkt_inboard_coolant
+                + self.data.blanket.mflow_blkt_outboard_coolant
+            )
+
+            # Mechanical pumping power for the first wall (MW)
+            self.data.heat_transport.p_fw_coolant_pump_mw = self.coolant_pumping_power(
+                output=output,
+                i_liquid_breeder=1,
+                temp_coolant_pump_outlet=self.data.fwbs.temp_fw_coolant_in,
+                temp_coolant_pump_inlet=self.data.fwbs.temp_fw_coolant_out,
+                pres_coolant_pump_inlet=self.data.fwbs.pres_fw_coolant,
+                dpres_coolant=deltap_fw,
+                mflow_coolant_total=self.data.blanket.mflow_fw_coolant_total,
+                i_coolant_type=self.data.fwbs.i_fw_coolant_type,
+                den_coolant=self.data.fwbs.den_fw_coolant,
+                label="First Wall",
+            )
+
+            # Mechanical pumping power for the blanket (MW)
+            self.data.heat_transport.p_blkt_coolant_pump_mw = self.coolant_pumping_power(
+                output=output,
+                i_liquid_breeder=1,
+                temp_coolant_pump_outlet=self.data.fwbs.temp_blkt_coolant_in,
+                temp_coolant_pump_inlet=self.data.fwbs.temp_blkt_coolant_out,
+                pres_coolant_pump_inlet=self.data.fwbs.pres_blkt_coolant,
+                dpres_coolant=deltap_blkt,
+                mflow_coolant_total=self.data.blanket.mflow_blkt_coolant_total,
+                i_coolant_type=(self.data.fwbs.i_blkt_coolant_type),
+                den_coolant=self.data.fwbs.den_blkt_coolant,
+                label="Blanket",
+            )
+
+            # Total mechanical pumping power (MW)
+            self.data.primary_pumping.p_fw_blkt_coolant_pump_mw = (
+                self.data.heat_transport.p_fw_coolant_pump_mw
+                + self.data.heat_transport.p_blkt_coolant_pump_mw
+            )
+
+        # If the blanket has a liquid metal breeder...
+        if self.data.fwbs.i_blkt_dual_coolant > 0:
+            # Total pressure drop in the blanket (Pa)
+            if i_p_coolant_pumping == PumpingPowerModelTypes.MECHANICAL:
+                if (
+                    self.data.build.i_blkt_inboard
+                    == InboardBlanketConfiguration.INBOARD_BLANKET_PRESENT
+                ):
+                    deltap_bl_liq = deltap_bli_liq + deltap_blo_liq
+                if (
+                    self.data.build.i_blkt_inboard
+                    == InboardBlanketConfiguration.NO_INBOARD_BLANKET
+                ):
+                    deltap_bl_liq = deltap_blo_liq
+            elif (
+                i_p_coolant_pumping
+                == PumpingPowerModelTypes.MECHANICAL_WITH_PRESSURE_DROP
+            ):
+                deltap_bl_liq = self.data.primary_pumping.dp_liq
+            # Total liquid metal breeder/coolant mass flow rate in the blanket (kg/s)
+            self.data.blanket.mfblkt_liq = (
+                self.data.blanket.mfblkti_liq + self.data.blanket.mfblkto_liq
+            )
+
+            # Mechanical pumping power for the blanket (MW)
+            self.data.heat_transport.p_blkt_breeder_pump_mw = self.coolant_pumping_power(
+                output=output,
+                i_liquid_breeder=2,
+                temp_coolant_pump_outlet=self.data.fwbs.inlet_temp_liq,
+                temp_coolant_pump_inlet=self.data.fwbs.outlet_temp_liq,
+                pres_coolant_pump_inlet=self.data.fwbs.blpressure_liq,
+                dpres_coolant=deltap_bl_liq,
+                mflow_coolant_total=self.data.blanket.mfblkt_liq,
+                i_coolant_type=(self.data.fwbs.i_blkt_coolant_type),
+                den_coolant=self.data.fwbs.den_liq,
+                label="Liquid Metal Breeder/Coolant",
+            )
+
+            self.data.heat_transport.htpmw_blkt_tot = (
+                self.data.primary_pumping.p_fw_blkt_coolant_pump_mw
+                + self.data.heat_transport.p_blkt_breeder_pump_mw
+            )
+
+        if output:
+            po.oheadr(self.outfile, "Summary of first wall and blanket thermohydraulics")
+
+            # FW
+            po.osubhd(self.outfile, "First wall: ")
+
+            po.ovarre(
+                self.outfile,
+                "First wall coolant type",
+                "(i_fw_coolant_type)",
+                self.data.fwbs.i_fw_coolant_type,
+            )
+            po.ovarre(
+                self.outfile,
+                "Wall thickness of first wall cooling channels (m)",
+                "(dr_fw_wall)",
+                self.data.fwbs.dr_fw_wall,
+            )
+            po.ovarre(
+                self.outfile,
+                "Radius of first wall cooling channels (m)",
+                "(radius_fw_channel)",
+                self.data.fwbs.radius_fw_channel,
+            )
+            po.ovarre(
+                self.outfile,
+                "Radius of blanket cooling channels (m)",
+                "(radius_blkt_channel)",
+                self.data.fwbs.radius_blkt_channel,
+            )
+            po.ovarre(
+                self.outfile,
+                "Roughness of first wall cooling channels (m)",
+                "(roughness_fw_channel)",
+                self.data.fwbs.roughness_fw_channel,
+            )
+            po.ovarre(
+                self.outfile,
+                "Inlet temperature of first wall coolant (K)",
+                "(temp_fw_coolant_in)",
+                self.data.fwbs.temp_fw_coolant_in,
+            )
+            po.ovarre(
+                self.outfile,
+                "Outlet temperature of first wall coolant (K)",
+                "(temp_fw_coolant_out)",
+                self.data.fwbs.temp_fw_coolant_out,
+            )
+            po.ovarre(
+                self.outfile,
+                "First wall coolant pressure (Pa)",
+                "(pres_fw_coolant)",
+                self.data.fwbs.pres_fw_coolant,
+            )
+            if (
+                self.data.fwbs.i_fw_blkt_shared_coolant
+                == FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+            ):
+                po.ovarre(
+                    self.outfile,
+                    "First wall coolant mass flow rate (kg/s)",
+                    "(mflow_fw_coolant_total)",
+                    self.data.blanket.mflow_fw_coolant_total,
+                    "OP ",
+                )
+            po.ovarre(
+                self.outfile,
+                "Allowable temperature of first wall material, excluding armour (K)",
+                "(temp_fw_max)",
+                self.data.fwbs.temp_fw_max,
+            )
+            po.ovarre(
+                self.outfile,
+                "Actual peak temperature of first wall material (K)",
+                "(temp_fw_peak)",
+                self.data.fwbs.temp_fw_peak,
+                "OP ",
+            )
+
+            # BB
+            po.osubhd(self.outfile, "Breeding Blanket (primary): ")
+            po.ovarre(
+                self.outfile,
+                "Blanket half height (m)",
+                "(dz_blkt_half)",
+                self.data.blanket.dz_blkt_half,
+            )
+            po.ovarre(
+                self.outfile,
+                "Blanket coolant type (1=He, 2=H20)",
+                "(i_blkt_coolant_type)",
+                self.data.fwbs.i_blkt_coolant_type,
+            )
+            po.ovarre(
+                self.outfile,
+                "Inlet temperature of blanket coolant (K)",
+                "(temp_blkt_coolant_in)",
+                self.data.fwbs.temp_blkt_coolant_in,
+            )
+            po.ovarre(
+                self.outfile,
+                "Outlet temperature of blanket coolant (K)",
+                "(temp_blkt_coolant_out)",
+                self.data.fwbs.temp_blkt_coolant_out,
+            )
+            po.ovarre(
+                self.outfile,
+                "Blanket (primary) coolant pressure (Pa)",
+                "(pres_blkt_coolant)",
+                self.data.fwbs.pres_blkt_coolant,
+            )
+            if (
+                self.data.fwbs.i_fw_blkt_shared_coolant
+                == FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+            ):
+                po.ovarre(
+                    self.outfile,
+                    "Blanket coolant mass flow rate (kg/s)",
+                    "(mflow_blkt_coolant_total)",
+                    self.data.blanket.mflow_blkt_coolant_total,
+                    "OP ",
+                )
+
+            # Total primary coolant mass flow rate (if they are the same coolant)
+            if (
+                self.data.fwbs.i_fw_blkt_shared_coolant
+                == FWBlktCoolantLoopTypes.SHARED_LOOP
+            ):
+                po.ovarre(
+                    self.outfile,
+                    "Total (FW+BB) primary coolant mass flow rate(kg/s)",
+                    "(mftotal)",
+                    self.data.blanket.mftotal,
+                    "OP ",
+                )
+
+            # BB Liquid Metal Breeder !
+            if self.data.fwbs.i_blkt_dual_coolant > 0:
+                po.osubhd(self.outfile, "Breeding Blanket (breeder): ")
+
+                po.ovarre(
+                    self.outfile,
+                    "Blanket liquid breeder type (0=PbLi, 1=Li)",
+                    "(i_blkt_liquid_breeder_type)",
+                    self.data.fwbs.i_blkt_liquid_breeder_type,
+                )
+                if self.data.fwbs.i_blkt_dual_coolant == 2:
+                    po.ocmmnt(self.outfile, "Dual-coolant BB, i.e. self-cooled breeder.")
+                    po.ovarre(
+                        self.outfile,
+                        "Inlet temperature of blanket liquid breeder (K)",
+                        "(inlet_temp_liq)",
+                        self.data.fwbs.inlet_temp_liq,
+                    )
+                    po.ovarre(
+                        self.outfile,
+                        "Outlet temperature of blanket liquid breeder (K)",
+                        "(outlet_temp_liq)",
+                        self.data.fwbs.outlet_temp_liq,
+                    )
+                    po.ovarre(
+                        self.outfile,
+                        "Blanket liquid breeder pressure (Pa)",
+                        "(blpressure_liq)",
+                        self.data.fwbs.blpressure_liq,
+                    )
+                else:
+                    po.ocmmnt(
+                        self.outfile,
+                        "single-coolant BB, breeder circulated for tritium extraction.",
+                    )
+
+                po.ovarre(
+                    self.outfile,
+                    "Blanket liquid breeder mass flow rate (kg/s)",
+                    "(mfblkt_liq)",
+                    self.data.blanket.mfblkt_liq,
+                    "OP ",
+                )
+
+            # Pumping Power
+            po.osubhd(self.outfile, "Mechanical pumping power: ")
+
+            if (
+                self.data.fwbs.i_fw_blkt_shared_coolant
+                == FWBlktCoolantLoopTypes.SEPARATE_LOOPS
+            ):
+                po.ovarre(
+                    self.outfile,
+                    "Mechanical pumping power for FW (MW)",
+                    "(p_fw_coolant_pump_mw)",
+                    self.data.heat_transport.p_fw_coolant_pump_mw,
+                    "OP ",
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Mechanical pumping power for blanket (primary) coolant (MW)",
+                    "(p_blkt_coolant_pump_mw)",
+                    self.data.heat_transport.p_blkt_coolant_pump_mw,
+                    "OP ",
+                )
+            if self.data.fwbs.i_blkt_dual_coolant > 0:
+                po.ovarre(
+                    self.outfile,
+                    "Mechanical pumping power for blanket liquid breeder (MW)",
+                    "(p_blkt_breeder_pump_mw)",
+                    self.data.heat_transport.p_blkt_breeder_pump_mw,
+                    "OP ",
+                )
+            po.ovarre(
+                self.outfile,
+                "Total mechanical pumping power for FW and blanket (MW)",
+                "(p_fw_blkt_coolant_pump_mw)",
+                self.data.primary_pumping.p_fw_blkt_coolant_pump_mw,
+                "OP ",
+            )
+            if self.data.fwbs.i_blkt_dual_coolant > 0:
+                po.ovarre(
+                    self.outfile,
+                    "Total mechanical pumping power for FW, "
+                    "blanket and liquid metal breeder(MW)",
+                    "(htpmw_blkt_tot)",
+                    self.data.heat_transport.htpmw_blkt_tot,
+                    "OP ",
+                )
+            po.ovarre(
+                self.outfile,
+                "Pumping power for divertor (MW)",
+                "(p_div_coolant_pump_mw)",
+                self.data.heat_transport.p_div_coolant_pump_mw,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "Pumping power for shield and vacuum vessel (MW)",
+                "(p_shld_coolant_pump_mw)",
+                self.data.heat_transport.p_shld_coolant_pump_mw,
+                "OP ",
+            )
+
+    def total_pressure_drop(
+        self,
+        output: bool,
+        icoolpump: int,
+        vel_coolant: float,
+        len_pipe: float,
+        n_pipe_90_deg_bends: int,
+        n_pipe_180_deg_bends: int,
+        den_coolant: float,
+        visc_coolant_dynamic: float,
+        coolant_electrical_conductivity: float,
+        pol_channel_length: float,
+        nopolchan: int,
+        label: str,
+    ) -> float:
+        """Calculate the total pressure drop (Pa) for coolant flow in the
+        first wall (FW) and breeding blanket (BZ).
+
+        This includes frictional losses and, for liquid breeder coolants,
+        magnetohydrodynamic (MHD) losses.
+
+        Parameters
+        ----------
+        output : bool
+            Whether to write output to file.
+        icoolpump : int
+            Switch for coolant type (1=primary He/H2O, 2=secondary PbLi/Li).
+        vel_coolant : float
+            Coolant flow velocity (m/s).
+        len_pipe : float
+            Total flow length along pipe (m).
+        n_pipe_90_deg_bends : int
+            Number of 90 degree bends in pipe.
+        n_pipe_180_deg_bends : int
+            Number of 180 degree bends in pipe.
+        den_coolant : float
+            Coolant density (kg/m³).
+        visc_coolant_dynamic : float
+            Coolant dynamic viscosity (Pa s).
+        coolant_electrical_conductivity : float
+            Coolant electrical conductivity (A V⁻¹ m⁻¹).
+        pol_channel_length : float
+            Length of poloidal channel section (m).
+        nopolchan : int
+            Number of poloidal channel sections.
+        label : str
+            Description label for output.
+
+        Returns
+        -------
+        float
+            Total pressure drop (Pa).
+        """
+        radius_pipe_90_deg_bend, radius_pipe_180_deg_bend = calculate_pipe_bend_radius(
+            i_ps=icoolpump,
+            radius_fw_channel=self.data.fwbs.radius_fw_channel,
+            b_bz_liq=self.data.fwbs.b_bz_liq,
+        )
+
+        # Friction - for all coolants
+        dpres_friction = self.coolant_friction_pressure_drop(
+            i_ps=icoolpump,
+            radius_pipe_90_deg_bend=radius_pipe_90_deg_bend,
+            radius_pipe_180_deg_bend=radius_pipe_180_deg_bend,
+            n_pipe_90_deg_bends=n_pipe_90_deg_bends,
+            n_pipe_180_deg_bends=n_pipe_180_deg_bends,
+            len_pipe=len_pipe,
+            den_coolant=den_coolant,
+            visc_coolant=visc_coolant_dynamic,
+            vel_coolant=vel_coolant,
+            label=label,
+            output=output,
+        )
+
+        if icoolpump == 2:
+            dpres_mhd = self.liquid_breeder_mhd_pressure_drop(
+                vel_coolant,
+                visc_coolant_dynamic,
+                coolant_electrical_conductivity,
+                pol_channel_length,
+                nopolchan,
+                label,
+                output=output,
+            )
+        else:
+            dpres_mhd = 0
+
+        # Total pressure drop (Pa)
+        dpres_total = dpres_friction + dpres_mhd
+
+        if output:
+            po.osubhd(self.outfile, f"Total pressure drop for {label}")
+
+            po.ocmmnt(self.outfile, "Friction drops plus MHD drops if applicaple")
+            po.ovarre(
+                self.outfile, "Total pressure drop (Pa)", "(deltap)", dpres_total, "OP "
+            )
+            po.ovarre(
+                self.outfile,
+                "Coolant flow velocity (m/s)",
+                "(flow_velocity, formerly vv)",
+                vel_coolant,
+                "OP ",
+            )
+
+        return dpres_total
+
+    def liquid_breeder_mhd_pressure_drop(
+        self,
+        vel: float,
+        vsc: float,
+        conduct_liq: float,
+        l_channel: float,
+        num_pol: int,
+        label: str,
+        output: bool = False,
+    ):
+        """Calculates the pressure drop in a liquid metal flow channel
+        due to MHD effects.
+        The total pressure drop is the sum of contributions.
+        This is only used for secondary coolant/breeder so rectangular flow
+        channels are assumed.
+
+
+
+        Parameters
+        ----------
+        vel :
+            liquid metal coolant/breeder flow velocity (m/s)
+        vsc :
+            liquid metal visosity
+        conduct_liq :
+            liquid metal conductivity
+        l_channel :
+            length long poloidal sections of channel
+        num_pol :
+            number long poloidal sections of channel
+        label :
+            description of calculation
+        output: bool
+             (Default value = False)
+
+        References
+        ----------
+        [Miy1986]   Miyazaki et al. (1986), Magneto-Hydro-Dynamic
+        Pressure Drop of Lithium
+        Flow in Rectangular Ducts, Fusion Technology, 10:3P2A, 830-836,
+        DOI: 10.13182/FST10-830
+
+        [Mal1995]   Malang and Mattas (1995), Comparison of lithium and the eutectic
+        lead-lithium alloy, two candidate liquid metal breeder materials
+        for self-cooled blankets, Fusion Engineering and Design 27, 399-406
+
+        [Iba2013]   Ibano et al (2013), neutronics and pumping power analysis on the
+        Tokamak reactor for the fusion-biomass hybrid concept,
+        Fusion Engineering and Design, 88
+
+        [Sho2018]   Shoki et al (2018), MHD pressure drop measurement of PbLi flow
+        in double-bended pipe, Fusion Engineering and Design, 136, 17-23
+
+        [Klu2019]   Kluber et al. (2019), Numerical simulations of 3D magnetohydrodynamic
+        flows in dual-coolant lead lithium blankets, Fusion Engineering and Design,
+        146, 684-687
+
+        [Sua2021]   MHD effects in geometrical sigularities on high velocity breeding
+        blanket designs. Part II, ENR-PRD.BB-T007-D002, EFDA_D_2PDT9U.
+        Also, see asssociated paper: Suarez et al. (2021), On the use of CFD
+        to obtain head loss coefficients in hydraulic systems and it's appliaction
+        to liquid metal flows in nuclear fusion reactor blankets, Plasma. Phys.
+        Control fusion, 63, 124002
+
+        """
+        # Magnetic field strength in IB or OB blanket
+        if label == "Inboard blanket breeder liquid":
+            b_mag = self.data.fwbs.b_mag_blkt[0]  # IB
+        if label == "Outboard blanket breeder liquid":
+            b_mag = self.data.fwbs.b_mag_blkt[1]  # OB
+
+        # Half-widths
+        # N.B. a_bz_liq (width in the toroidal direction) is in B direction
+        half_wth_a = self.data.fwbs.a_bz_liq * 0.5
+        half_wth_b = self.data.fwbs.b_bz_liq * 0.5
+
+        # If have thin conducting walls...
+        if self.data.fwbs.i_blkt_liquid_breeder_channel_type != 1:
+            # Caculate resistances of fluid and walls
+            r_i = half_wth_b / (conduct_liq * half_wth_a)
+            r_w = half_wth_b / (
+                self.data.fwbs.bz_channel_conduct_liq * self.data.fwbs.th_wall_secondary
+            )
+            big_c = r_i / r_w
+            #  Calculate pressure drop for conducting wall [Miy1986]
+            kp = big_c / (1 + half_wth_a / (3 * half_wth_b) + big_c)
+            mhd_pressure_drop = kp * conduct_liq * vel * (b_mag**2) * l_channel
+
+        # If have perfcetly insulating FCIs...
+        else:
+            # Calculate pressure drop for (perfectly) insulating FCI [Mal1995]
+            mhd_pressure_drop = (
+                vel * b_mag * l_channel * np.sqrt(conduct_liq * vsc / half_wth_a)
+            )
+
+        # Total (Pa)
+        liquid_breeder_pressure_drop_mhd = num_pol * mhd_pressure_drop
+
+        if output:
+            po.osubhd(
+                self.outfile,
+                f"Liquid metal breeder/coolant MHD pressure drop for {label}",
+            )
+
+            if self.data.fwbs.i_blkt_liquid_breeder_channel_type == 0:
+                po.ocmmnt(
+                    self.outfile,
+                    "Flow channels have thin conducting walls "
+                    "(i_blkt_liquid_breeder_channel_type==0)",
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Wall conductance (A V-1 m-1)",
+                    "(bz_channel_conduct_liq)",
+                    self.data.fwbs.bz_channel_conduct_liq,
+                    "OP ",
+                )
+            elif self.data.fwbs.i_blkt_liquid_breeder_channel_type == 2:
+                po.ocmmnt(
+                    self.outfile,
+                    "Flow Channel Inserts (FCIs) used "
+                    "(i_blkt_liquid_breeder_channel_type==2)",
+                )
+                po.ovarre(
+                    self.outfile,
+                    "FCI conductance (A V-1 m-1)",
+                    "(bz_channel_conduct_liq)",
+                    self.data.fwbs.bz_channel_conduct_liq,
+                    "OP ",
+                )
+            else:
+                po.ocmmnt(
+                    self.outfile,
+                    "Flow Channel Inserts - assumed perfect insulator "
+                    "(i_blkt_liquid_breeder_channel_type==1)",
+                )
+
+            po.ovarre(
+                self.outfile,
+                "Length of long poloidal secion of channel (m)",
+                "(l_channel)",
+                l_channel,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "Number of long poloidal secions of channel",
+                "(num_pol)",
+                num_pol,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "MHD pressure drop (Pa)",
+                "(liquid_breeder_pressure_drop_mhd)",
+                liquid_breeder_pressure_drop_mhd,
+                "OP ",
+            )
+
+        return liquid_breeder_pressure_drop_mhd
+
+    def coolant_friction_pressure_drop(
+        self,
+        i_ps: int,
+        radius_pipe_90_deg_bend: float,
+        radius_pipe_180_deg_bend: float,
+        n_pipe_90_deg_bends: float,
+        n_pipe_180_deg_bends: float,
+        len_pipe: float,
+        den_coolant: float,
+        visc_coolant: float,
+        vel_coolant: float,
+        label: str,
+        output: bool = False,
+    ):
+        """Pressure drops are calculated for a pipe with a number of 90
+        and 180 degree bends. The pressure drop due to frictional forces along
+        the total straight length of the pipe is calculated, then the pressure
+        drop due to the bends is calculated. The total pressure drop is the sum
+        of all contributions.
+
+        Parameters
+        ----------
+        i_ps :
+            switch for primary or secondary coolant
+        radius_pipe_90_deg_bend :
+            radius of 90 degree bend in pipe (m)
+        radius_pipe_180_deg_bend :
+            radius of 180 degree bend in pipe (m)
+        n_pipe_90_deg_bends :
+            number of 90 degree bends in the pipe
+        n_pipe_180_deg_bends :
+            number of 180 degree bends in the pipe
+        len_pipe :
+            total flow length along pipe (m)
+        den_coolant :
+            coolant density (kg/m³)
+        visc_coolant :
+            coolant viscosity (Pa s)
+        vel_coolant :
+            coolant flow velocity (m/s)
+        label :
+            component name
+        output :
+            boolean of whether to write data to output file
+
+        :Notes:
+            Darcy-Weisbach Equation (straight pipe):
+
+            ΔP = λ * L/D * (p 〈v〉²) / 2
+
+            λ - Darcy friction factor, L - pipe length, D - hydraulic diameter,
+            p - fluid density, 〈v〉 - fluid flow average velocity
+
+            This function also calculates pressure drop equations for elbow bends,
+            with modified coefficients.
+
+            N.B. Darcy friction factor is estimated from the Haaland approximation.
+        """
+        # Calculate hydraulic dimater for round or retancular pipe (m)
+        dia_pipe = self.pipe_hydraulic_diameter(i_ps)
+
+        # Reynolds number
+        reynolds_number = calculate_reynolds_number(
+            den_coolant=den_coolant,
+            vel_coolant=vel_coolant,
+            radius_channel=dia_pipe / 2,
+            visc_coolant=visc_coolant,
+        )
+
+        # Calculate Darcy friction factor
+        # N.B. friction function Uses Haaland approx.
+        # which assumes a filled circular pipe.
+        # Use dh which allows us to do fluid calculations for non-cicular tubes
+        # (dh is estimate appropriate for fully developed flow).
+
+        darcy_friction_factor = darcy_friction_haaland(
+            reynolds=reynolds_number,
+            roughness_channel=self.data.fwbs.roughness_fw_channel,
+            radius_channel=self.data.fwbs.radius_fw_channel,
+        )
+
+        # Pressure drop coefficient
+
+        # Straight section
+        f_straight = darcy_friction_factor * len_pipe / dia_pipe
+
+        # 90 degree elbow pressure drop coefficient
+        f_elbow_90 = self.elbow_coeff(
+            radius_pipe_elbow=radius_pipe_90_deg_bend,
+            deg_pipe_elbow=90.0,
+            darcy_friction=darcy_friction_factor,
+            dia_pipe=dia_pipe,
+        )
+
+        # 180 degree elbow pressure drop coefficient
+        f_elbow_180 = self.elbow_coeff(
+            radius_pipe_elbow=radius_pipe_180_deg_bend,
+            deg_pipe_elbow=180.0,
+            darcy_friction=darcy_friction_factor,
+            dia_pipe=dia_pipe,
+        )
+
+        # Pressure drop due to friction in straight sections
+        dpres_straight = f_straight * 0.5 * den_coolant * vel_coolant**2
+
+        # Pressure drop due to 90 and 180 degree bends
+        dpres_90 = n_pipe_90_deg_bends * f_elbow_90 * 0.5 * den_coolant * vel_coolant**2
+        dpres_180 = (
+            n_pipe_180_deg_bends * f_elbow_180 * 0.5 * den_coolant * vel_coolant**2
+        )
+
+        # Total pressure drop (Pa)
+        dpres_total = dpres_straight + dpres_90 + dpres_180
+
+        if output:
+            po.osubhd(self.outfile, f"Pressure drop (friction) for {label}")
+            po.ovarre(self.outfile, "Reynolds number", "(reyn)", reynolds_number, "OP ")
+            po.ovarre(
+                self.outfile,
+                "Darcy friction factor",
+                "(lambda)",
+                darcy_friction_factor,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "Pressure drop (Pa)",
+                "(pressure_drop)",
+                dpres_total,
+                "OP ",
+            )
+            po.ocmmnt(self.outfile, "This is the sum of the following:")
+            po.ovarre(
+                self.outfile,
+                "            Straight sections (Pa)",
+                "(pdropstraight)",
+                dpres_straight,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "            90 degree bends (Pa)",
+                "(pdrop90)",
+                dpres_90,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "            180 degree bends (Pa)",
+                "(pdrop180)",
+                dpres_180,
+                "OP ",
+            )
+
+            # TN: always write verbose stuff, it has no harm
+            po.ovarre(
+                self.outfile,
+                "Straight section pressure drop coefficient",
+                "(kstrght)",
+                f_straight,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "90 degree elbow coefficient",
+                "(kelbwn)",
+                f_elbow_90,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "180 degree elbow coefficient coefficient",
+                "(kelbwt)",
+                f_elbow_180,
+                "OP ",
+            )
+
+        return dpres_total
+
+    def pipe_hydraulic_diameter(self, i_channel_shape):
+        """Caculate the hydraulic diameter (m) for a given coolant pipe size/shape.
+
+
+        Parameters
+        ----------
+        i_channel_shape :
+            switch for circular or rectangular channel crossection.
+            Shape depends on whether primary or secondary coolant
+
+        Raises
+        ------
+        ProcessValueError
+            If i_channel_shape is an invalid option (not in [1,2])
+        """
+        # If primary coolant then circular channels assumed
+        if i_channel_shape == 1:
+            return 2.0 * self.data.fwbs.radius_fw_channel
+
+        # If secondary coolant then rectangular channels assumed
+        if i_channel_shape == 2:
+            return (
+                2
+                * self.data.fwbs.a_bz_liq
+                * self.data.fwbs.b_bz_liq
+                / (self.data.fwbs.a_bz_liq + self.data.fwbs.b_bz_liq)
+            )
+
+        raise ProcessValueError(
+            f"i_channel_shape ={i_channel_shape} is an invalid option."
+        )
+
+    @staticmethod
+    def elbow_coeff(
+        radius_pipe_elbow: float,
+        deg_pipe_elbow: float,
+        darcy_friction: float,
+        dia_pipe: float,
+    ) -> float:
+        """Calculates elbow bend coefficients for pressure drop calculations.
+
+        Parameters
+        ----------
+        radius_pipe_elbow : float
+            Pipe elbow radius (m)
+        deg_pipe_elbow : float
+            Pipe elbow angle (degrees)
+        darcy_friction : float
+            Darcy friction factor
+        dia_pipe : float
+            Pipe diameter (m)
+
+        Returns
+        -------
+        float
+            Elbow coefficient for pressure drop calculation
+
+        Raises
+        ------
+        ProcessValueError
+            If 70 <= elbow angle(deg) <= 100 as there is no formula
+            for this range
+
+        References
+        ----------
+        - [Ide1969] Idel'Cik, I. E. (1969), Memento des pertes de charge,
+        Collection de la Direction des Etudes et Recherches d'Electricité de France.
+        """
+        if deg_pipe_elbow == 90:
+            a = 1.0
+        elif deg_pipe_elbow < 70:
+            a = 0.9 * np.sin(deg_pipe_elbow * np.pi / 180.0)
+        elif deg_pipe_elbow > 100:
+            a = 0.7 + (0.35 * np.sin((deg_pipe_elbow / 90.0) * (np.pi / 180.0)))
+        else:
+            raise ProcessValueError(
+                "No formula for 70 <= elbow angle(deg) <= 100, "
+                "only 90 deg option available in this range."
+            )
+
+        r_ratio = radius_pipe_elbow / dia_pipe
+
+        if r_ratio > 1:
+            b = 0.21 / r_ratio**0.5
+        elif r_ratio < 1:
+            b = 0.21 / r_ratio**2.5
+        else:
+            b = 0.21
+
+        # Singularity
+        ximt = a * b
+
+        # Friction
+        xift = (
+            (np.pi / 180.0)
+            * darcy_friction
+            * (radius_pipe_elbow / dia_pipe)
+            * deg_pipe_elbow
+        )
+
+        # Elbow Coefficient
+        return ximt + xift
+
+    def coolant_pumping_power(
+        self,
+        output: bool,
+        i_liquid_breeder: int,
+        temp_coolant_pump_outlet: float,
+        temp_coolant_pump_inlet: float,
+        pres_coolant_pump_inlet: float,
+        dpres_coolant: float,
+        mflow_coolant_total: float,
+        i_coolant_type: int,
+        den_coolant: float,
+        label: str,
+    ) -> float:
+        """Calculate the coolant pumping power in MW for the first wall (FW) or
+        breeding blanket (BZ) coolant.
+
+        Parameters
+        ----------
+        output : bool
+            Whether to write data to output file.
+        i_liquid_breeder : int
+            Switch for primary coolant or secondary coolant/breeder
+            (1=primary He/H2O, 2=secondary PbLi/Li).
+        temp_coolant_pump_outlet : float
+            Pump outlet temperature (K).
+        temp_coolant_pump_inlet : float
+            Pump inlet temperature (K).
+        pres_coolant_pump_inlet : float
+            Outlet (pump inlet) coolant pressure (Pa).
+        dpres_coolant : float
+            Coolant pressure drop (Pa).
+        mflow_coolant_total : float
+            Total coolant mass flow rate in (kg/s).
+        i_coolant_type : int
+            Type of FW/blanket coolant (e.g., 1=Helium, 2=Water)
+        den_coolant : float
+            Density of coolant or liquid breeder (kg/m³).
+        label : str
+            Description label for output.
+
+        Returns
+        -------
+        float
+            Pumping power in MW.
+
+        Raises
+        ------
+        ProcessValueError
+            If calculated pressure drops in the coolant are too large to be feasible
+
+        References
+        ----------
+            - Idel'Cik, I. E. (1969), Memento des pertes de charge
+            - S.P. Sukhatme (2005), A Textbook on Heat Transfer
+        """
+        # Pump outlet pressure (Pa)
+        # The pump adds the pressure lost going through the coolant channels back
+        pres_coolant_pump_outlet = pres_coolant_pump_inlet + dpres_coolant
+
+        # Adiabatic index for helium or water
+        gamma = (5 / 3) if i_coolant_type == CoolantType.HELIUM else (4 / 3)
+
+        # If calculating for primary coolant
+        if i_liquid_breeder == 1:
+            # The pumping power is be calculated in the most general way,
+            # using enthalpies before and after the pump.
+
+            pump_outlet_fluid_properties = FluidProperties.of(
+                fluid_name=CoolantType(i_coolant_type).full_name,
+                temperature=temp_coolant_pump_outlet,
+                pressure=pres_coolant_pump_outlet,
+            )
+
+            # Assume isentropic pump so that s1 = s2
+            s1 = pump_outlet_fluid_properties.entropy
+
+            # Get specific enthalpy at the outlet (J/kg) before pump using
+            # pressure and entropy s1
+            pump_inlet_fluid_properties = FluidProperties.of(
+                fluid_name=CoolantType(i_coolant_type).full_name,
+                pressure=pres_coolant_pump_inlet,
+                entropy=s1,
+            )
+
+            # Pumping power (MW) is given by enthalpy change, with a correction for
+            # the isentropic efficiency of the pump.
+            fp = (
+                temp_coolant_pump_outlet
+                * (
+                    1
+                    - (pres_coolant_pump_outlet / pres_coolant_pump_inlet)
+                    ** -((gamma - 1) / gamma)
+                )
+                / (
+                    self.data.fwbs.etaiso
+                    * (temp_coolant_pump_inlet - temp_coolant_pump_outlet)
+                )
+            )
+            pumppower = (
+                1e-6
+                * mflow_coolant_total
+                * (
+                    pump_outlet_fluid_properties.enthalpy
+                    - pump_inlet_fluid_properties.enthalpy
+                )
+                / self.data.fwbs.etaiso
+            ) / (1 - fp)
+
+        # If calculating for secondary coolant/breeder...
+        else:
+            # Calculate specific volume
+            spec_vol = 1 / den_coolant
+
+            # Pumping power (MW) is given by pressure change, with a correction for
+            # the isentropic efficiency of the pump.
+            fp = (
+                temp_coolant_pump_outlet
+                * (
+                    1
+                    - (pres_coolant_pump_outlet / pres_coolant_pump_inlet)
+                    ** -((gamma - 1) / gamma)
+                )
+                / (
+                    self.data.fwbs.etaiso_liq
+                    * (temp_coolant_pump_inlet - temp_coolant_pump_outlet)
+                )
+            )
+            pumppower = (
+                1e-6
+                * mflow_coolant_total
+                * spec_vol
+                * dpres_coolant
+                / self.data.fwbs.etaiso_liq
+            ) / (1 - fp)
+
+        # Error for dpres_coolant too large
+        if fp >= 1:
+            raise ProcessValueError(
+                "Pressure drops in coolant are too large to be feasible"
+            )
+
+        if output:
+            po.oheadr(self.outfile, "Mechanical Pumping Power for " + label)
+            po.osubhd(self.outfile, "Pumping power for " + label)
+
+            po.ovarre(
+                self.outfile, "Pumping power (MW)", "(pumppower)", pumppower, "OP "
+            )
+            po.ovarre(
+                self.outfile,
+                "FW or Blanket inlet (pump oulet) pressure (Pa)",
+                "(coolpin)",
+                pres_coolant_pump_outlet,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "FW or Blanket oulet (pump inlet) pressure (Pa)",
+                "(pres_coolant_pump_inlet)",
+                pres_coolant_pump_inlet,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "FW or Blanket total pressure drop (Pa)",
+                "(dpres_coolant)",
+                dpres_coolant,
+                "OP ",
+            )
+            po.ovarre(
+                self.outfile,
+                "Mass flow rate in (kg/s) = ",
+                "(mf)",
+                mflow_coolant_total,
+                "OP ",
+            )
+
+        return pumppower
+
+
+class OutboardBlanket(BlanketLibrary):
+    """Outboard blanket routines"""
+
+    def calculate_basic_geometry(self):
+        """Calculate basic outboard blanket geometry"""
+        self.component_volumes()
+
+        dia_blkt_channel = self.pipe_hydraulic_diameter(i_channel_shape=1)
+        self.data.fwbs.radius_blkt_channel = dia_blkt_channel / 2
+        (
+            self.data.fwbs.radius_blkt_channel_90_bend,
+            self.data.fwbs.radius_blkt_channel_180_bend,
+        ) = calculate_pipe_bend_radius(
+            i_ps=1,
+            radius_fw_channel=self.data.fwbs.radius_fw_channel,
+            b_bz_liq=self.data.fwbs.b_bz_liq,
+        )
+
+    @staticmethod
+    def blkt_outboard_poloidal_plasma_angle(
+        n_divertors: int, deg_div_poloidal_plasma: float
+    ) -> float:
+        """Calculate the poloidal angle subtended by the outboard blanket at the
+        plasma mid-plane.
+
+        Parameters
+        ----------
+        n_divertors : int
+            Number of divertors in the design (1 or 2).
+        deg_div_poloidal_plasma : float
+            Poloidal angle subtended by the divertor at the plasma mid-plane (degrees).
+
+        Returns
+        -------
+        float
+            Poloidal angle subtended by outboard blanket at plasma mid-plane (degrees).
+
+        Raises
+        ------
+        ProcessValueError
+            If n_divertors is not 1 or 2.
+        """
+        if n_divertors == 1:
+            return 180.0 + deg_div_poloidal_plasma
+        if n_divertors == 2:
+            return 180.0
+        raise ProcessValueError(
+            f"n_divertors = {n_divertors} is an invalid option. Only 1 or 2 divertors "
+            f"are supported."
+        )
+
+    @property
+    def f_deg_blkt_outboard_poloidal_plasma(self) -> float:
+        """Calculate the poloidal angle subtended by the outboard blanket at the
+        plasma mid-plane.
+        """
+        return self.data.blanket.deg_blkt_outboard_poloidal_plasma / 360.0
+
+    @staticmethod
+    def calculate_blkt_outboard_poloidal_plasma_angle(
+        rminor: float,
+        dr_blkt_outboard: float,
+        dz_blkt_half: float,
+        dr_fw_plasma_gap_outboard: float,
+        dr_fw_outboard: float,
+    ) -> float:
+        """Calculate the poloidal angle subtended by the outboard blanket at the
+        plasma mid-plane.
+
+        Parameters
+        ----------
+        rminor :
+            Plasma minor radius (m).
+        dr_blkt_outboard :
+            Radial thickness of outboard blanket (m).
+        dz_blkt_half :
+            Vertical half-height of outboard blanket (m).
+        dr_fw_plasma_gap_outboard :
+            Outboard first wall to plasma gap (m).
+        dr_fw_outboard :
+            Radial thickness of outboard first wall (m).
+
+        Returns
+        -------
+        deg_blkt_outboard_poloidal_plasma :
+            Poloidal angle subtended by outboard blanket at plasma mid-plane (degrees).
+        """
+        return np.degrees(
+            2.0
+            * np.arctan(
+                dz_blkt_half
+                / (
+                    rminor
+                    + dr_blkt_outboard
+                    + dr_fw_plasma_gap_outboard
+                    + dr_fw_outboard
+                )
+            )
+        )
+
+    @staticmethod
+    def calculate_blanket_outboard_module_geometry(
+        n_blkt_outboard_modules_toroidal: int,
+        rmajor: float,
+        rminor: float,
+        dr_fw_plasma_gap_outboard: float,
+    ) -> float:
+        """Calculate the mid-plane toroidal circumference and segment length of the
+        outboard blanket.
+
+        Parameters
+        ----------
+        n_blkt_outboard_modules_toroidal : int
+            Number of outboard blanket modules in the toroidal direction.
+        rmajor : float
+            Major radius (m).
+        rminor : float
+            Minor radius (m).
+        dr_fw_plasma_gap_outboard : float
+            Outboard first wall to plasma gap (m).
+
+        Returns
+        -------
+        float
+            Length of outboard blanket segment in the toroidal direction (m).
+        """
+        return (
+            2.0 * np.pi * (rmajor + rminor + dr_fw_plasma_gap_outboard)
+        ) / n_blkt_outboard_modules_toroidal
+
+
+class InboardBlanket(BlanketLibrary):
+    """Inboard blanket routines"""
+
+    def calculate_basic_geometry(self):
+        """Calculate basic inboard blanket geometry"""
+        self.component_volumes()
+
+        dia_blkt_channel = self.pipe_hydraulic_diameter(i_channel_shape=1)
+        self.data.fwbs.radius_blkt_channel = dia_blkt_channel / 2
+        (
+            self.data.fwbs.radius_blkt_channel_90_bend,
+            self.data.fwbs.radius_blkt_channel_180_bend,
+        ) = calculate_pipe_bend_radius(
+            i_ps=1,
+            radius_fw_channel=self.data.fwbs.radius_fw_channel,
+            b_bz_liq=self.data.fwbs.b_bz_liq,
+        )
+
+        self.set_blanket_module_geometry()
+
+    @staticmethod
+    def calculate_blkt_inboard_poloidal_plasma_angle(
+        rminor: float,
+        dz_blkt_half: float,
+        dr_fw_plasma_gap_inboard: float,
+    ) -> float:
+        """Calculate the poloidal angle subtended by the inboard blanket
+        at the plasma mid-plane.
+
+        Angle is taken from the FW surface
+
+        Parameters
+        ----------
+        rminor :
+            Plasma minor radius (m).
+        dz_blkt_half :
+            Vertical half-height of inboard blanket (m).
+        dr_fw_plasma_gap_inboard :
+            Inboard first wall to plasma gap (m).
+
+        Returns
+        -------
+        deg_blkt_inboard_poloidal_plasma :
+            Poloidal angle subtended by inboard blanket at plasma mid-plane (degrees).
+        """
+        return np.degrees(
+            2.0 * np.arctan(dz_blkt_half / (rminor + dr_fw_plasma_gap_inboard))
+        )
+
+    @staticmethod
+    def calculate_blanket_inboard_module_geometry(
+        n_blkt_inboard_modules_toroidal: int,
+        rmajor: float,
+        rminor: float,
+        dr_fw_plasma_gap_inboard: float,
+    ) -> float:
+        """Calculate the mid-plane toroidal circumference and segment length
+        of the inboard blanket.
+
+        Parameters
+        ----------
+        n_blkt_inboard_modules_toroidal : int
+            Number of inboard blanket modules in the toroidal direction.
+        rmajor : float
+            Major radius (m).
+        rminor : float
+            Minor radius (m).
+        dr_fw_plasma_gap_inboard : float
+            Inboard first wall to plasma gap (m).
+
+        Returns
+        -------
+        float
+            Length of inboard blanket segment in the toroidal direction (m).
+        """
+        return (
+            2.0 * np.pi * (rmajor + rminor + dr_fw_plasma_gap_inboard)
+        ) / n_blkt_inboard_modules_toroidal
