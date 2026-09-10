@@ -882,20 +882,35 @@ COMPONENTS_COMPARED_BY_BLOCK: dict[str, int] = {}
 #: or not the visit executed anything.
 BLOCK_VISITS: dict[str, int] = {}
 
-#: Of those visits, how many executed **no node** because the block's
-#: membership was empty.
+#: Of those visits, how many executed **no model node at all** -- measured on
+#: :data:`NODE_CALLS`, not on the block's membership, because the two differ
+#: and the difference is the point.
 #:
-#: This is issue I-20(a) in live form: on ``st_regression`` the ``PULSE`` block
-#: survives in the schedule after its only member has left it -- ``pulse``
-#: writes nothing that configuration's predicate reads, so the routing rule
-#: demotes it -- and the schedule then visits an empty block once per
-#: evaluation of the model set, executing nothing.  The user ruled (decision
-#: D21) that this is **not repaired**: it is one of PROCESS's oddities this
-#: experiment does not undertake to fix, and dropping the block would change
-#: the node weights the comparison rests on.  It is **counted and disclaimed**
-#: instead, so that every table which weights sweeps can state how many of them
-#: were empty.
+#: This is issue I-20(a) in live form.  On ``st_regression`` the ``PULSE``
+#: block still *has* its member in the schedule: the per-run deferral moves
+#: ``pulse`` out of the loop at the call site, not out of the block, so the
+#: block is visited, a sweep of the dispatch body is charged for it, and
+#: nothing runs.  Membership would have called that visit non-empty.  A block
+#: whose membership the per-call deferral has emptied -- the feed-forward tail
+#: under the intervention arms -- is empty too, and costs nothing at all, which
+#: is why the two cases are separated by :data:`EMPTY_BLOCK_SWEEPS` below
+#: rather than summed into one number.
+#:
+#: The user ruled (decision D21) that this is **not repaired**: it is one of
+#: PROCESS's oddities this experiment does not undertake to fix, and dropping
+#: the block would change the node weights the comparison rests on.  It is
+#: **counted and disclaimed** instead, so that every table which weights sweeps
+#: can state how many of them were empty.
 EMPTY_BLOCK_VISITS: dict[str, int] = {}
+
+#: Sweeps of the dispatch body spent inside those empty visits.  A block the
+#: schedule visits with no members costs **no** sweep; a block whose members
+#: are all skipped at the call site costs a full walk of the dispatch body --
+#: the design-vector injection at its head, the switch dispatch through every
+#: call site, and the arrangement method if it is on -- executing no model.
+#: That is the cost the empty visit actually has, and it is the number a
+#: per-sweep-overhead table needs; the visit count alone would overstate it.
+EMPTY_BLOCK_SWEEPS: dict[str, int] = {}
 
 #: Evaluations of **upstream's** stopping test during the solve phase: the
 #: ``check_agreement`` pair in ``_call_models_inner`` that compares the
@@ -1407,21 +1422,36 @@ class Caller:
         # a recorded quantity because the run record publishes the distribution
         # of it, and a constant 1 is a statement -- "the schedule was not
         # repeated in this run" -- where a missing field would be a silence.
+        # DR4 (A58): every visit the schedule makes to a block, and the subset
+        # of those that executed no model node -- measured on NODE_CALLS across
+        # the visit, because a block can be visited with its member still in it
+        # and have that member skipped at the call site (issue I-20a's PULSE
+        # block).  Counted, never acted on: decision D21 keeps the empty visits
+        # and disclaims them.
+        def close_visit(label: str, nodes_before: int, sweeps_before: int) -> None:
+            if NODE_CALLS[0] != nodes_before:
+                return
+            EMPTY_BLOCK_VISITS[label] = EMPTY_BLOCK_VISITS.get(label, 0) + 1
+            spent = DISPATCH_SWEEPS[0] - sweeps_before
+            if spent:
+                EMPTY_BLOCK_SWEEPS[label] = (
+                    EMPTY_BLOCK_SWEEPS.get(label, 0) + spent
+                )
+
         schedule_passes = 1
         for label, nodes, iterate in schedule:
-            # DR4 (A58): every visit the schedule makes to a block, and the
-            # subset of those that execute nothing because the block's
-            # membership is empty.  Counted, never acted on -- decision D21
-            # keeps the empty visits and disclaims them (issue I-20a).
             BLOCK_VISITS[label] = BLOCK_VISITS.get(label, 0) + 1
+            visit_nodes = NODE_CALLS[0]
+            visit_sweeps = DISPATCH_SWEEPS[0]
             if not nodes:
-                EMPTY_BLOCK_VISITS[label] = EMPTY_BLOCK_VISITS.get(label, 0) + 1
+                close_visit(label, visit_nodes, visit_sweeps)
                 inner_counts[label].append(0)
                 continue
             if not iterate:
                 charge()
                 self._sweep_block(xc, nodes)
                 inner_counts[label].append(1)
+                close_visit(label, visit_nodes, visit_sweeps)
                 continue
             # A block loop's test is restricted to that block's own write set,
             # as the evaluation phase's block arm restricts it.  Not an
@@ -1471,6 +1501,7 @@ class Caller:
                     inner_ok = True
                     break
             inner_counts[label].append(s)
+            close_visit(label, visit_nodes, visit_sweeps)
             if not inner_ok:
                 self.module_solve_stats = self._module_stats(
                     block_sweeps, schedule_passes, inner_counts,

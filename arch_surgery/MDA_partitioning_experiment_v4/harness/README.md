@@ -166,6 +166,70 @@ constant on the first sweep. `PROCESS_ARCH_BURN_TIME_OWNER` says it once — the
 or a named constant, passed as a hexadecimal float so a measured value survives the round trip
 exactly — and the inconsistent pair can no longer be written down.
 
+### 4.1 The counters — things the driver reports, which nothing sets
+
+*Caption: one row per module-level counter the driver exposes and every run record carries. None of
+them is a switch: nothing sets one, no arm composes one, and none has an environment variable. They
+are listed in `switches.py` beside the registry (`DIAGNOSTIC_READBACKS`) so that the self-check can
+ask the tree under test whether it has them — a tree missing one would write a null into a record,
+and a null is not something a reader can tell apart from "this run stopped early".*
+
+| counter | what it counts | record field |
+|---|---|---|
+| `NODE_CALLS` | model executions, the whole run | `node_calls_total` |
+| `NODE_CALLS_AT_OUTPUT` | the same, frozen when the output path is entered — the **cost unit** | `node_calls_solve_phase` |
+| `ARRANGEMENT_METHOD_CALLS` | executions of the run-constant geometry method | `n_prime_calls` |
+| `DISPATCH_SWEEPS` | sweeps of the model sequence, every path included | `dispatch_sweeps` |
+| `SWEEPS_PER_EVAL_HIST` | the same sweeps, binned per evaluation of the model set | `sweeps_per_eval` |
+| `OUTPUT_LOOP_SWEEPS` / `OUTPUT_PATH_ENTRIES` | what the output-time loop cost, and how often it ran | `output_loop_sweeps`, `output_path_entries` |
+| `PREDICATE_EVALUATIONS` / `COMPONENTS_COMPARED` | the coupling-state convergence test: how often, and how wide | `predicate_evaluations`, `components_compared` |
+| `PREDICATE_EVALUATIONS_BY_BLOCK` / `COMPONENTS_COMPARED_BY_BLOCK` | the same two, per block | inside `predicate_counters` |
+| `BLOCK_VISITS` / `EMPTY_BLOCK_VISITS` / `EMPTY_BLOCK_SWEEPS` | the schedule's visits to each block, the ones that executed no model node, and what those cost | `block_visits`, `empty_block_visits`, `empty_block_sweeps` |
+| `UPSTREAM_PREDICATE_EVALUATIONS` / `UPSTREAM_COMPONENTS_COMPARED` | upstream's own stopping test: how often, and how wide | `upstream_predicate_evaluations`, `upstream_components_compared` |
+
+**Why the convergence test is counted at all.** The partitioned arrangement runs far more sweeps of
+the model sequence than the flat one while executing far fewer model nodes, and the previous
+revision found it no faster in wall clock. That can only be true if a sweep costs something that is
+not proportional to the nodes it runs. The convergence test is the obvious suspect: a flat loop
+compares the **whole** coupling state — 827 to 846 components, depending on the configuration — on
+every one of its sweeps, while a block loop compares only its own block's write set. Nothing in this
+experiment may rest on a clock, so the question is asked in counts instead: how many times a test
+was evaluated, and how many components each of those tests walked. Their ratio is the average width
+of the test, which is the number the question is about.
+
+**Two predicates, counted separately.** An arm stops on exactly one of them and they are not the
+same test, so pooling them would produce an average of two different things. The coupling-state
+predicate is what the flat and partitioned arrangements stop on; upstream's own test compares the
+objective and the constraint vector against the previous sweep's — about 27 values rather than 840 —
+and the reference arms stop on that. Counting both is what keeps the reference arm's row in the
+published table a measurement rather than a zero. Upstream's pair short-circuits, so the width
+recorded for it is the width **compared**, not the width declared.
+
+**Empty block visits are counted and disclaimed, never repaired.** On `st_regression` the `PULSE`
+block survives in the schedule after its only member has left it: that configuration runs no pulsed
+plant, `pulse` writes nothing the predicate reads, the routing rule correctly moves it out of the
+loop — and the block stays behind and is visited once per evaluation, executing nothing. The user
+ruled that this stays as it is. It is one of PROCESS's oddities this experiment does not undertake
+to fix, and dropping the block would change the node weights the whole comparison rests on. So it is
+counted, and **every table that weights sweeps must say that empty visits are included and how many
+there were**.
+
+*Empty is measured on the node counter, not on the block's membership*, and the two are not the
+same. The routing rule moves `pulse` out of the loop **at the call site**, not out of the block, so
+the `PULSE` block still lists its member: it is visited, a full sweep of the model sequence is
+charged for it, and no model runs. Membership would have called that visit non-empty and missed the
+whole finding. A block the per-call deferral has genuinely emptied — the feed-forward tail under the
+intervention arms — is empty too, but costs **no** sweep at all. `EMPTY_BLOCK_SWEEPS` is what keeps
+the two apart: it is the sweeps those empty visits actually spent, and it is the number a
+per-sweep-overhead table needs, because the visit count alone would charge the free case as if it
+cost a sweep.
+
+**Why the counters are safe.** Every one is a plain integer increment. None touches a float, none
+changes a branch a result depends on, and all of them count the **solve** phase only — the
+output-time loop's own comparisons are counted by neither predicate, exactly as the per-evaluation
+sweep histogram excludes them. That the driver behaves identically with every switch unset is a
+**gate**, not a claim: see §8.
+
 **Why a retired name raises instead of being ignored.** Before the rename, a switch name the driver
 did not recognise was simply ignored. A script still setting an old name would therefore produce a
 *successful* run of a *different* arrangement under the right name, with no error anywhere — a wrong
@@ -174,7 +238,7 @@ eleven retired names are listed in the driver as well as in the registry, and th
 compares the two lists rather than assuming they agree: a name on one list and not the other would
 mean the harness is describing a driver it is not running.
 
-### 4.1 The names of the committed artifacts
+### 4.2 The names of the committed artifacts
 
 Three of the switches above are handed a **file**: the coupling-state description, the per-block
 write sets, and the set of nodes deferred to once per run. The experiment keeps its own copy of
@@ -334,7 +398,7 @@ and `pkill` reports success while killing nothing. A whole set of runs was lost 
 **A configuration.** Add a row to `default_configurations()` in `config.py`: its name, whether the
 plant is pulsed, its objective, its variable and constraint counts, its coupling-state component
 count, and the arms that are inactive on it with the reason. Its artifact paths follow from its
-name through `ARTIFACT_NAMES` (§4.1) and are not written out. Nothing downstream counts configurations for itself —
+name through `ARTIFACT_NAMES` (§4.2) and are not written out. Nothing downstream counts configurations for itself —
 every population is derived from the campaign's list — so a fourth configuration needs no other
 edit.
 
@@ -482,6 +546,9 @@ A record of one run carries, at minimum:
 - **what it cost**: node calls in total and per node, sweeps per evaluation, and — per attempt,
   because the optimiser retries — the same counts again, so that a run total is never divided by a
   per-attempt count;
+- **what its convergence tests cost**: how many times each of the two predicates was evaluated in
+  the solve phase, how many components each of those tests walked, the schedule's visits to every
+  block and how many of those executed nothing (§4.1);
 - **what it achieved**: the normalised objective, the optimiser's exit code, and an audit of how
   far the coupling state still was from converged, taken at the same fixed point in every arm;
 - **how it ended**: one of a small set of outcomes — finished, crashed, refused, did not converge,

@@ -407,6 +407,41 @@ def _owner_resolved_as_asked(resolved: Mapping[str, object], value: str) -> bool
     return owner == value
 
 
+#: Module-level names the driver exposes that are **counters, not switches**:
+#: nothing sets them, an arm never composes them, and they carry no environment
+#: variable.  They are listed here, beside the switch registry, for one reason:
+#: :func:`default_readbacks` feeds the capability probe, and a tree that does
+#: not expose a counter the harness is about to record should say so in the
+#: probe's report rather than have the harness discover a ``None`` in a record
+#: afterwards.  ``Switch`` is the wrong shape for them — a Switch with no
+#: driver name is a capability the tree *lacks*, which is refused, and these
+#: are capabilities it *has*.
+#:
+#: Every entry is a ``(module, attribute)`` pair, in the same shape as a
+#: switch's readbacks.  Added by task A58 (driver-predicate-counters): before
+#: it, ``OUTPUT_LOOP_SWEEPS`` and the sweep counter were read by name in
+#: ``child.py`` and named nowhere else, so nothing checked that the tree under
+#: test had them.
+DIAGNOSTIC_READBACKS: tuple[tuple[str, str], ...] = (
+    (CALLER, "NODE_CALLS"),
+    (CALLER, "NODE_CALLS_AT_OUTPUT"),
+    (CALLER, "ARRANGEMENT_METHOD_CALLS"),
+    (CALLER, "DISPATCH_SWEEPS"),
+    (CALLER, "SWEEPS_PER_EVAL_HIST"),
+    (CALLER, "OUTPUT_LOOP_SWEEPS"),
+    (CALLER, "OUTPUT_PATH_ENTRIES"),
+    (CALLER, "PREDICATE_EVALUATIONS"),
+    (CALLER, "COMPONENTS_COMPARED"),
+    (CALLER, "PREDICATE_EVALUATIONS_BY_BLOCK"),
+    (CALLER, "COMPONENTS_COMPARED_BY_BLOCK"),
+    (CALLER, "BLOCK_VISITS"),
+    (CALLER, "EMPTY_BLOCK_VISITS"),
+    (CALLER, "EMPTY_BLOCK_SWEEPS"),
+    (CALLER, "UPSTREAM_PREDICATE_EVALUATIONS"),
+    (CALLER, "UPSTREAM_COMPONENTS_COMPARED"),
+)
+
+
 #: Instrumentation variables that are not architecture switches: they select
 #: and tune the in-driver probe.  Cleared before every arm for the same reason
 #: the switches are — an inherited one changes what a run does — and never
@@ -738,11 +773,24 @@ def probe(
 
 
 def default_readbacks() -> tuple[tuple[str, str], ...]:
-    """Every readback the registry names, deduplicated."""
+    """Every readback the registry names, deduplicated.
+
+    Switches only.  :data:`DIAGNOSTIC_READBACKS` is deliberately **not** folded
+    in here: this is what a run record's ``resolved_switches`` block is built
+    from, and a counter's value is not a thing the driver *resolved* — putting
+    one there would both duplicate it and hide it, since the neutrality gate
+    excludes that whole block by name.  The counters are probed by
+    :func:`counter_readbacks`, whose caller is the self-check.
+    """
     pairs: list[tuple[str, str]] = []
     for sw in REGISTRY.values():
         pairs.extend(sw.readbacks)
     return tuple(dict.fromkeys(pairs))
+
+
+def counter_readbacks() -> tuple[tuple[str, str], ...]:
+    """The switch readbacks and the counters, for a probe that checks both."""
+    return tuple(dict.fromkeys((*default_readbacks(), *DIAGNOSTIC_READBACKS)))
 
 
 def unimplemented(terms: Mapping[str, str]) -> tuple[str, ...]:

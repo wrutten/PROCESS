@@ -389,6 +389,61 @@ VOLATILE_RECORD_PATHS: dict[str, str] = {
         "the change rewrites.  audit_position itself is compared, and the two "
         "captures are refused if it differs"
     ),
+    # The predicate counters (DR4).  Each is a field whose value is *null on
+    # the earlier side because no counter existed* and a number on the later
+    # one -- which is the change itself, not a behavioural difference, and is
+    # the only reason each is here.  Two of them, the upstream pair, are not
+    # zero on the later side: the reference arms the gate runs stop on
+    # upstream's own test, so those two count a loop upstream was already
+    # running.  That is precisely why they cannot be compared across the two
+    # captures, and precisely why the rest of the record -- the node counts,
+    # the sweep histogram, the exit audit, every output-file line -- is what
+    # carries the neutrality claim instead.
+    "predicate_evaluations": (
+        "null before the counter existed, a number after: the count is the "
+        "change.  It is 0 in these runs, because the reference arms never "
+        "enter the block path, and 0 is still not null"
+    ),
+    "components_compared": (
+        "null before, a number after; 0 in these runs for the same reason as "
+        "the line above"
+    ),
+    "block_visits": (
+        "null before, a per-block mapping after.  Empty in these runs: the "
+        "reference arms build no block schedule"
+    ),
+    "empty_block_visits": (
+        "null before, a per-block mapping after; empty in these runs for the "
+        "same reason"
+    ),
+    "empty_block_sweeps": (
+        "null before, a per-block mapping after; empty in these runs for the "
+        "same reason"
+    ),
+    "dispatch_sweeps": (
+        "null before, the run's sweep total after.  The count itself is not "
+        "new -- the driver has always incremented this cell, and the sweep "
+        "histogram it feeds IS compared, value for value, on both sides -- "
+        "what is new is the record field"
+    ),
+    "upstream_predicate_evaluations": (
+        "null before, a number after, and **not** zero: these runs are the "
+        "reference arms, which stop on upstream's own test.  What the test "
+        "decided is compared in full through the sweep histogram, the node "
+        "counts and the output file"
+    ),
+    "upstream_components_compared": (
+        "null before, a number after; not zero, for the same reason as the "
+        "line above"
+    ),
+    "predicate_counters": (
+        "the block the counters are split out in, with their sentences: "
+        "absent on the earlier side entirely"
+    ),
+    "predicate_counters_null_because": (
+        "the sentence explaining the absent counters, present only on the "
+        "side that had none"
+    ),
 }
 
 #: Keys of PROCESS's own output file that record when and where a run happened

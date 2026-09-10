@@ -259,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     # ------------------------------------------------------------------
     record.update(child.harvest_counters(caller_mod, module_solve=module_solve_mod))
     record.update(child.harvest_output_path(caller_mod))
+    record.update(child.harvest_predicate_counters(caller_mod))
     record["first_call_models"] = call_census["first_call_models"]
     record["audit_snapshot"] = (
         child.collect_exit_snapshots(caller_mod, snapshot_state, outdir)
