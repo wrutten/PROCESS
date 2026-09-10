@@ -1027,9 +1027,14 @@ def stage_tally() -> int:
                            "decks": {dk: {"verdict": prep["decks"][dk].get("verdict"),
                                           "reference": prep["decks"][dk].get("reference")} for dk in DECKS}},
                "regime": {dk: {"verdict": rec["decks"][dk]["verdict"],
-                               "ratios": {rg: (rec["decks"][dk]["regimes"][rg].get("ratio_A1_over_A0"),
+                               "ratios_A1_over_A0__A1_over_A0p": {rg: (rec["decks"][dk]["regimes"][rg].get("ratio_A1_over_A0"),
                                                rec["decks"][dk]["regimes"][rg].get("ratio_A1_over_A0p"))
                                           for rg in rec["decks"][dk]["regimes"]},
+                               "ratios_of_sums": {rg: (rec["decks"][dk]["regimes"][rg].get("ratio_A1_over_A0_of_sums"),
+                                                       rec["decks"][dk]["regimes"][rg].get("ratio_A1_over_A0p_of_sums"))
+                                                  for rg in rec["decks"][dk]["regimes"]},
+                               "distance_to_inloop": rec["decks"][dk]["distance_to_inloop"],
+                               "probe_provenance": rec["probe_provenance"],
                                "rho_A_0p10": rec["decks"][dk]["rho_A_0p10"],
                                "rho_B_inloop": rec["decks"][dk]["rho_B_inloop_B3_over_B0"],
                                "rho_inloop_B3_over_B1": rec["decks"][dk]["rho_inloop_B3_over_B1"],
@@ -1037,7 +1042,7 @@ def stage_tally() -> int:
                                "closure": rec["decks"][dk]["closure"],
                                "per_arm": {rg: {a: {k: rec["decks"][dk]["regimes"][rg][a][k]
                                                     for k in ("n_ok", "calls_per_eval", "sweeps_per_eval", "nodes_per_sweep", "block_sweeps_per_eval")}
-                                                for a in rec["decks"][dk]["regimes"][rg] if isinstance(rec["decks"][dk]["regimes"][rg][a], dict)}
+                                                for a in rec["decks"][dk]["regimes"][rg] if a in A_ARMS}
                                            for rg in rec["decks"][dk]["regimes"]}}
                           for dk in DECKS}}
     _dump(SUMMARY, summary)
