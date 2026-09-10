@@ -48,7 +48,7 @@ its tooth shows that without `PYTHONPATH` the same subprocess resolves to
 `/home/wrutten/projects/PROCESS_surgery/process/` (the **main checkout**, not even this worktree).
 That is trap T6 demonstrated live.
 
-**`PROCESS_diff.py`** runs in 0.15 s, claims all three hunks from its annotation map, reports 0
+**`PROCESS_diff.py`** runs in about 0.12 s, claims all three hunks from its annotation map, reports 0
 unexplained hunks, and restates gate G0′ for a reader. Its own tooth — an unannotated line
 appended to a throwaway copy — is reported as **UNEXPLAINED** with a non-zero exit.
 
@@ -252,7 +252,7 @@ copy, the gate is re-run, and it must FAIL.*
 The fourth tooth is the reason G0′ is not a blanket pardon for `pulse.py`. Without it, the
 approved exception would be a hole the size of the file.
 
-**G0′ is a stage, not a one-off.** It is a repository-state check costing 0.7 s including its
+**G0′ is a stage, not a one-off.** It is a repository-state check costing about 0.2 s including its four
 teeth, takes its commits from `PROVENANCE.json` rather than hard-coding them, and runs from any
 working directory — so it can and should run at every future V4 commit, as the plan requires.
 
@@ -299,7 +299,7 @@ Verdict **PASS**, tooth **TRIPPED**.
 At the top level of the V4 folder, beside where `experiment_runner.py` will go, with the name the
 user asked for. It reads `PROVENANCE.json` for the source commit, extracts that commit's
 `process/` into a temporary directory, and diffs the copy against it with `git diff --no-index` —
-**against the commit, never the repository-root working tree**. It runs in **0.15 s** and needs no
+**against the commit, never the repository-root working tree**. It runs in about **0.12 s** and needs no
 PROCESS run.
 
 What it prints: the copy's identity line (source commit, file count, copy date, task); per changed
@@ -421,7 +421,8 @@ reproduced by the scripts' own records.*
 | Table 10 (`PROCESS_diff.py`'s tooth) | `PROCESS_diff.py --teeth` | `e130467a` |
 | Table 1 (file count, byte total, shas) | `PROCESS/copy_gates.py provenance` → `PROVENANCE.json` | `2eec5fee` |
 
-**To re-run all of it** (0.9 s total, no PROCESS run, from any working directory):
+**To re-run all of it** (about one second in total, no PROCESS run, from any working
+directory). Timings are context only and no conclusion rests on one (CLAUDE.md):
 
 ```
 PY=/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
