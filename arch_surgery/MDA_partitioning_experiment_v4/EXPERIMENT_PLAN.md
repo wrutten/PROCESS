@@ -947,11 +947,12 @@ implementation plan's.*
 | `EXPERIMENT_REPORT.md` | the report, written from the committed analysis only |
 | `experiment_runner.py` | one-button entry point; draft mode; refuses the campaign until approved |
 | `phase_a.py` | preflight / artifacts / reference / gates / campaign (`AR`, `A0`, `A0p`, `A1`; two amplitudes; predicate trial) / tally |
-| `phase_b.py` | preflight / gates / campaign (`BR`, `B0`, `B1`, `B2`, `B3`) / tally / timing context |
-| `PROCESS/` | V4's own copy of the PROCESS package (D20); every V4 driver change lives here; `models/` frozen at `c0ae5b28`, gated |
+| `phase_b.py` | preflight / gates / campaign (`BR`, `B0`, `B1`, `B3`) / tally / timing context |
+| `PROCESS/` | V4's own copy of the PROCESS package (D20); every V4 driver change lives here; `models/` frozen at `c0ae5b28`, gated. `PROCESS/PROVENANCE.json` names the source commit (`f2dc9243`) and every file's sha256; `PROCESS/copy_gates.py` is the copy-identity gate, G0′ and the smoke import, nine teeth (A46 (process-copy), merged 2026-09-10) |
 | `PROCESS_diff.py` | shows every change the experiment made to PROCESS: a `git diff` of `PROCESS/process/` against the copy's source commit, grouped by file with a plain-language overview (user, 2026-09-10) |
 | `harness/` | the self-contained package (per the implementation plan); every verification gate is implemented here |
 | `runs/` | untracked bulk artifacts |
+| `.gitignore` | `runs/` untracked; the copy's `.dat` files re-included against the repository-root `*.dat` pattern (added at A46's merge) |
 
 ## Appendix B — Traceability to the improvement list
 
@@ -1011,3 +1012,9 @@ implementation plan's.*
   §3.5, §3.10, §4, App. B) with the pre-declared rule on `st_regression`; predicate counters
   accepted; no errata to the V3 report; the PROCESS copy taken at the current tip and checked
   against `git show`; predicate and artifacts under `harness/` (§3.8 (i)).
+- 2026-09-10 — **A46 (process-copy) merged** (`38057e27`): the PROCESS copy of §3.8 (i) exists at
+  `f2dc9243` and is gated (`copy-identity`, G0′; nine teeth); `PROCESS_diff.py` in place. Appendix A:
+  `PROCESS/` row extended, `.gitignore` row added, `phase_b.py` row corrected (`B2` was removed by D22
+  and had survived in the row). Two facts for the run path: without `PYTHONPATH` the import lands in
+  the main checkout, and `process.__version__` is identical for both trees (traps T6/T10) — every
+  child asserts `process.__file__` for equality against the copy.

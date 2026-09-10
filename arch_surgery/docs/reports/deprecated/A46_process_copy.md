@@ -1,9 +1,10 @@
 # A46 (process-copy) — V4's own copy of PROCESS
 
-> **Document status** — OPEN task report. Task A46 (process-copy), branch `A46-process-copy`,
-> worktree `/home/wrutten/projects/PROCESS_surgery_worktrees/A46-process-copy`. Awaiting the
-> orchestrator's critical assessment before merge (protocol §5). Archived to
-> `deprecated/` at merge; folder position records lifecycle, not validity (trap T3).
+> **Document status** — MERGED task report, archived. Task A46 (process-copy), branch
+> `A46-process-copy` (retired), merged into `architecture_surgery` on 2026-09-10; the
+> orchestrator's critical assessment (protocol §5) is §12. Folder position records lifecycle,
+> not validity (trap T3). Line numbers cited for the copy are as of the merge commit; the
+> follow-ups of §9 and §12 are tracked in the queue as A48 (harness-data).
 
 **Jargon, spelled out once** (protocol §4). *Decision `D<n>`* — a recorded user decision in the
 master queue's register. *Gate* — a committed check that must pass before a number is cited;

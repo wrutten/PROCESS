@@ -403,7 +403,12 @@ by inspection.*
 time and no run record has to carry "which module or artifact was loaded". The `caller.py:583`
 missing-existence-check asymmetry is repaired in the copy as part of the same edit — it touches
 the same constant's readers and is the one place where "beyond necessity" is worth spending a
-second line.
+second line. *Amended 2026-09-10, after A46 (process-copy) merged: the copy commit carries the
+three constants and nothing else, so that it is reviewable by one tree hash; the one-line
+existence check (now `caller.py:587` in the copy), the stale generator string at `caller.py:350`
+and the two comments naming `docs/data/` sources land with **A48 (harness-data)**, the task that
+gives the constant its target — each as a recorded hunk in `PROCESS/PROVENANCE.json` and a row in
+`PROCESS_diff.py`'s annotation map.*
 
 ### 3.4 The rule the harness enforces against the driver
 
@@ -1227,6 +1232,17 @@ of what looks like bulk is the instrument.
   **No errata to the V3 report** (user); this plan proposes none and never did.
   Status **DRAFT · NOT APPROVED**; still no code; **all decisions settled**, the rebuild's first
   task (H0) unblocked.
+- **2026-09-10 — amendment 4, at the merge of A46 (process-copy).** H0's copy is delivered and
+  gated: `…_v4/PROCESS/process/` at `f2dc9243`, tree hash identical to the source commit; the
+  three constants and nothing else; `models/` against `c0ae5b28` = `pulse.py` (D14(b)) alone;
+  `copy-identity` and G0′ live in `PROCESS/copy_gates.py` with nine teeth, and `PROCESS_diff.py`
+  claims every hunk. Two things measured there bind the run-path task: without `PYTHONPATH` the
+  import lands in the **main checkout** (trap T6), and `process.__version__` is identical for the
+  copy and the root tree and names a third commit (trap T10, live in this repository) — §6's
+  exact-tree rule is the only witness. §3.3 amended: the `caller.py` existence check and the stale
+  string move to **A48 (harness-data)**, minted for H0's remainder (§11.5). §10's H3 row still
+  lists `harness/ystate.py`; it is A48's. The `…_v4/.gitignore` (`runs/`, and a `!*.dat`
+  re-include for the copy's 42 data files) was added by the orchestrator at the merge.
 
 ---
 
@@ -1306,4 +1322,5 @@ user's approval; sequencing as §10. Driver changes follow the reproduction gate
 |---|---|---|
 | H0 | **A46 (process-copy)** | `PROCESS/process/` copied at the current tip, `PROVENANCE.json`, byte-identity gate against `git show`, the three path constants, `PROCESS_diff.py` |
 | H1 | **A47 (harness-skeleton)** | `config`, `switches`, `arms`, `provenance`, the runner shell with preflight, `README.md`, the terminology table; no PROCESS run |
+| H0, remainder | **A48 (harness-data)** *(minted 2026-09-10 at A46's merge; dispatched when A47 merges)* | `harness/data/` — the committed artifacts the copied driver and the harness read, each sha256-identical to its `docs/data/` original, named per §11.1/§11.2 and as the skeleton's environment composer asks, with their own `PROVENANCE.json`; `harness/ystate.py` moved whole; the two one-line copy edits of §3.3 (existence check, stale string) with `copy_gates.py`'s permitted-edit model generalised from constant names to recorded hunks; no PROCESS run |
 | H2–H8, DR1/2/4/5/7 | minted when their predecessors merge | as §10 |

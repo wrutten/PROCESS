@@ -1,0 +1,14 @@
+# Bulk run artifacts stay untracked (CLAUDE.md; experiment plan Appendix A);
+# summaries and verdicts are committed in the task and experiment reports.
+# Without this line `git status --porcelain` is never empty while runs/
+# exists, so every record this directory produces would stamp
+# `tree_git_dirty: true` and the clean-tree stamp could never be reached
+# (the same line as MDA_partitioning_experiment_v2/ and _v3/).
+runs/
+# The repository-root .gitignore ignores *.dat, which would silently skip
+# the 42 tabulated-data files of the PROCESS copy under PROCESS/process/
+# (A46 (process-copy) had to stage them with `git add -f`).  Re-include
+# them here so a plain `git add` sees them and the copy-identity gate's
+# file-set comparison is not the only thing standing between a missing
+# data file and a committed copy.
+!*.dat
