@@ -1,6 +1,6 @@
 # A45 (v4-harness-plan) — task report
 
-> **Document status** — **CURRENT · OPEN TASK.** Written 2026-09-10 by task
+> **Document status** — **MERGED 2026-09-10 and archived to `deprecated/` (protocol §7); folder position records lifecycle, not validity (trap T3). The deliverable, [`../../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md`](../../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md), stays live in `docs/plans/`.** Was: CURRENT · OPEN TASK. Written 2026-09-10 by task
 > **A45 (v4-harness-plan)** on branch `A45-v4-harness-plan`, worktree
 > `/home/wrutten/projects/PROCESS_surgery_worktrees/A45-v4-harness-plan`, branch point
 > `16a6e87e`. The deliverable is
