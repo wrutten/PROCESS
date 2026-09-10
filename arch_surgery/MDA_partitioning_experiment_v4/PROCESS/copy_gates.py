@@ -348,6 +348,45 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             ),
             task="A56 (driver-renames)",
         ),
+        PermittedEdit(
+            kind="switch added",
+            name="PROCESS_ARCH_OUTPUT_LOOP",
+            description=(
+                "the output path becomes a driver choice.  Upstream re-solves "
+                "the accepted state through a second flat idempotence loop "
+                "before writing the output files; 'none' calls finalise once "
+                "on the accepted state and runs no output-time sweep.  Two "
+                "integer counters travel with it -- the sweeps that loop "
+                "actually ran, and the entries to write_output_files -- so "
+                "what the second loop costs is a measured column and not a "
+                "term nobody counted.  Unset is upstream's own behaviour, "
+                "line for line"
+            ),
+            task="A57 (driver-output-path)",
+            was="one output path: upstream's output-time loop, uncounted",
+            now="PROCESS_ARCH_OUTPUT_LOOP=upstream | none (unset for upstream)",
+        ),
+        PermittedEdit(
+            kind="instrument hook",
+            name="EXIT_SNAPSHOT_HOOK / EXIT_SNAPSHOTS",
+            description=(
+                "a callable slot the measurement subprocess installs, called "
+                "at two named positions on the output path: the entry to "
+                "write_output_files -- the state the solve handed over, "
+                "before the per-run deferred nodes and before any output-time "
+                "sweep -- and immediately before the single finalise that "
+                "writes the real files.  It is what lets the exit audit be "
+                "taken where the experiment plan declares it: the audit's own "
+                "sweep mutates the state it measures, so the state is "
+                "snapshotted there and the residual computed after the run "
+                "from the restored snapshot.  With the hook uninstalled -- "
+                "every run of PROCESS that is not being measured -- the "
+                "mechanism is two 'is None' tests per run, and a hook that "
+                "raises is recorded rather than allowed to change the run's "
+                "outcome"
+            ),
+            task="A57 (driver-output-path)",
+        ),
     ],
 }
 

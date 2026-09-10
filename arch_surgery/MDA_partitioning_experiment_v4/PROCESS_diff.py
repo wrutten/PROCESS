@@ -83,6 +83,8 @@ _INNER = "retired switch PROCESS_ARCH_INNER_TAU: one tolerance for every converg
 _REFUSAL = "the typed refusal ArchitectureRefusal, raised by every refusal of an architecture setting"
 _RETIRED = "the retired-name guard: a stale switch name raises instead of being ignored"
 _WORDS = "vocabulary only: the words of the terminology table in comments and messages (no behaviour)"
+_OUTPUT_LOOP = "switch PROCESS_ARCH_OUTPUT_LOOP: whether the accepted state is re-solved before it is written out"
+_SNAPSHOT = "the exit-audit snapshot hook: the coupling state captured at the declared audit position, so the residual can be computed after the run"
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
@@ -173,6 +175,16 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/solver/constraints.py", "PROCESS_ARCH_LIFT", _OWNER),
     Annotation("process/core/solver/__init__.py", "ArchitectureRefusal", _REFUSAL),
     Annotation("process/core/solver/__init__.py", "RETIRED_SWITCHES", _RETIRED),
+    # --- A57: the output path, and the audit snapshot hook ---------------
+    Annotation("process/core/caller.py", "OUTPUT_LOOP", _OUTPUT_LOOP),
+    Annotation("process/core/caller.py", "OUTPUT_PATH", _OUTPUT_LOOP),
+    Annotation("process/core/caller.py", "output-time loop", _OUTPUT_LOOP),
+    Annotation("process/core/caller.py", "output path", _OUTPUT_LOOP),
+    Annotation("process/core/caller.py", "finalise", _OUTPUT_LOOP),
+    Annotation("process/core/caller.py", "EXIT_SNAPSHOT", _SNAPSHOT),
+    Annotation("process/core/caller.py", "_take_exit_snapshot", _SNAPSHOT),
+    Annotation("process/core/caller.py", "snapshot", _SNAPSHOT),
+    Annotation("process/core/caller.py", "exit audit", _SNAPSHOT),
 ]
 
 #: One paragraph per changed driver file, for a reader who will not read the
@@ -210,7 +222,31 @@ SUMMARIES: dict[str, str] = {
         "than restating it.  Finally, every refusal of an architecture setting "
         "raises the typed refusal instead of a bare RuntimeError; upstream's "
         "own ten-pass raise is deliberately left alone, because it is a "
-        "finding about the shipped code and not a setting being refused."
+        "finding about the shipped code and not a setting being refused.  Last, the "
+        "output path itself becomes a choice.  Upstream writes its output "
+        "files through a *second* flat idempotence loop: it evaluates the "
+        "whole model set, writes an output file to a scratch location, and "
+        "repeats -- up to ten times -- until two successive files agree float "
+        "by float, and only then writes the real ones.  That loop belongs to "
+        "the incumbent's stopping rule, not to the models: an arm whose solve "
+        "already converged the coupling state to its own tolerance has "
+        "nothing left for it to find, and re-solving the state before writing "
+        "it means the numbers in the output files are not the numbers the "
+        "optimiser accepted.  PROCESS_ARCH_OUTPUT_LOOP=none therefore calls "
+        "finalise once on the accepted state and runs no output-time sweep; "
+        "unset, the loop is there unchanged, and two integer counters now say "
+        "how many sweeps it took and how many times the output path was "
+        "entered.  Alongside it is a hook: a callable slot the measurement "
+        "subprocess installs, called at the entry to the output path and "
+        "again immediately before the file-writing call.  The experiment "
+        "audits how accurate each arm's answer is by taking one further sweep "
+        "past termination and measuring how far the state moves, and it must "
+        "take that measurement at the same point in every arm -- the point "
+        "the solve handed over.  The sweep mutates what it measures, so it "
+        "cannot simply be run there; the hook captures the state instead and "
+        "the residual is computed after the run.  With nothing installed the "
+        "hook is two 'is None' tests per run, and a hook that raises is "
+        "recorded rather than allowed to change the run's outcome."
     ),
     "process/core/solver/__init__.py": (
         "Two additions to a file that was one line of docstring.  The first is "
