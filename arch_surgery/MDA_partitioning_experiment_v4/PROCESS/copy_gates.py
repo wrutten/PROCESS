@@ -437,7 +437,14 @@ def smoke_import() -> dict:
     The tooth is the same subprocess without PYTHONPATH: it must resolve
     somewhere other than the copy, or PYTHONPATH was not what selected it.
     """
-    code = "import process; print(process.__file__)"
+    # __version__ is recorded, never asserted on: trap T10 -- a frozen archive
+    # reports the version string of whatever tree wrote its _version.py, so a
+    # passing __version__ check on the wrong tree is worse than no check.  The
+    # copy has no _version.py at all (it is untracked by design), so its
+    # __version__ comes from the installed distribution's metadata, which is
+    # the repository-root editable install's.  Recording both makes that
+    # visible instead of tempting.
+    code = "import process; print(process.__file__); print(process.__version__)"
     neutral = tempfile.mkdtemp()
     results = {}
     for name, env_extra in (("with_pythonpath", str(COPY_ROOT)), ("tooth_without_pythonpath", None)):
@@ -452,9 +459,11 @@ def smoke_import() -> dict:
             stderr=subprocess.PIPE,
             text=True,
         )
+        lines = proc.stdout.strip().splitlines()
         results[name] = {
             "returncode": proc.returncode,
-            "process_file": proc.stdout.strip(),
+            "process_file": lines[0] if lines else "",
+            "process_version_recorded_not_asserted": lines[1] if len(lines) > 1 else "",
             "stderr": proc.stderr.strip()[-400:],
         }
     shutil.rmtree(neutral, ignore_errors=True)
@@ -703,6 +712,11 @@ def main(argv: list[str] | None = None) -> int:
             f"    tooth (no PYTHONPATH, must differ): "
             f"{s['tooth_without_pythonpath']['process_file']}  "
             f"[{s['tooth_result']}]"
+        )
+        print(
+            "    __version__ (recorded, never asserted -- trap T10): "
+            f"copy {s['with_pythonpath']['process_version_recorded_not_asserted']} "
+            f"/ root {s['tooth_without_pythonpath']['process_version_recorded_not_asserted']}"
         )
         out = Path(args.records) / "smoke_import" / "gate.json"
         out.parent.mkdir(parents=True, exist_ok=True)
