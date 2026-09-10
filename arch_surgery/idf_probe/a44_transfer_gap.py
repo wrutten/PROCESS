@@ -868,6 +868,11 @@ def stage_tally() -> int:
     fac = json.loads((RUNS / "factorisation.json").read_text())
     prep = json.loads((RUNS / "prepare.json").read_text())
     rec = {"stage": "tally", "provenance": _provenance(),
+           "ratio_construction": "ratio of per-evaluation means (A1 mean node "
+                                 "calls / A0 mean node calls), the analogue of "
+                                 "rho_B; the ratio of column sums is published "
+                                 "beside and double-counts the lift's extra "
+                                 "stencil column where entry counts differ",
            "rule": {"supported": "E3b ratio A1/A0 closer to rho_B than to rho_A(0.10) AND above rho_A(0.10)",
                     "refuted": f"E3b ratio A1/A0 <= rho_A(0.10) + {REFUTE_MARGIN}",
                     "indeterminate": "otherwise"},
@@ -902,19 +907,31 @@ def stage_tally() -> int:
                 ag = _agg(_regime_records(deck, rg, a))
                 if ag:
                     row[a] = ag
+            # The ratio that matches rho_B's definition is the ratio of the
+            # arms' PER-EVALUATION MEANS: in-loop, the lifted arm's mean
+            # includes its extra stencil column, and the (nvar+1) column-count
+            # factor is carried by eps.  At E3/E3b the pinned arms have one
+            # more entry (the lifted column) than A0, so a ratio of column
+            # SUMS would count that factor twice; it is published beside, and
+            # the two coincide wherever the entry counts are equal (E0, E2,
+            # V3's delta = 0.10, and every st regime).
             if "A0" in row and "A1" in row:
-                row["ratio_A1_over_A0"] = row["A1"]["N"] / row["A0"]["N"] if row["A0"]["N"] else None
-                row["n_pairs"] = min(row["A0"]["n_ok"], row["A1"]["n_ok"])
+                row["ratio_A1_over_A0"] = row["A1"]["calls_per_eval"] / row["A0"]["calls_per_eval"]
+                row["ratio_A1_over_A0_of_sums"] = row["A1"]["N"] / row["A0"]["N"] if row["A0"]["N"] else None
+                row["n_entries"] = {"A0": row["A0"]["n_ok"], "A1": row["A1"]["n_ok"]}
             if "A0p" in row and "A1" in row:
-                row["ratio_A1_over_A0p"] = row["A1"]["N"] / row["A0p"]["N"]
+                row["ratio_A1_over_A0p"] = row["A1"]["calls_per_eval"] / row["A0p"]["calls_per_eval"]
+                row["ratio_A1_over_A0p_of_sums"] = row["A1"]["N"] / row["A0p"]["N"]
             if "A0" in row and "A0p" in row:
-                row["ratio_A0p_over_A0"] = row["A0p"]["N"] / row["A0"]["N"]
+                row["ratio_A0p_over_A0"] = row["A0p"]["calls_per_eval"] / row["A0"]["calls_per_eval"]
             d["regimes"][rg] = row
         # verdict
         r3 = (d["regimes"].get("E3b") or {}).get("ratio_A1_over_A0")
         r3f = (d["regimes"].get("E3") or {}).get("ratio_A1_over_A0")
+        r3s = (d["regimes"].get("E3b") or {}).get("ratio_A1_over_A0_of_sums")
+        r3fs = (d["regimes"].get("E3") or {}).get("ratio_A1_over_A0_of_sums")
         v = {}
-        for name, r in (("E3b", r3), ("E3", r3f)):
+        for name, r in (("E3b", r3), ("E3", r3f), ("E3b_of_sums", r3s), ("E3_of_sums", r3fs)):
             if r is None:
                 v[name] = "NOT RUN"
             elif r <= rho_A + REFUTE_MARGIN:
@@ -1044,6 +1061,8 @@ def _tally_tables(rec: dict, fac: dict) -> str:
                      f"{a0p['calls_per_eval']:.2f} | " if a0p else f"| {SHORT[deck]} | {rg} | {a1['n_ok']} | {a0['calls_per_eval']:.2f} | {a0['sweeps_per_eval']:.2f} | — | ")
             L[-1] += (f"{a1['calls_per_eval']:.2f} | {a1['sweeps_per_eval']:.2f} | {blk} | {row.get('ratio_A1_over_A0'):.4f} | "
                       + (f"{row['ratio_A1_over_A0p']:.4f} |" if row.get("ratio_A1_over_A0p") else "— |"))
+            if row.get("n_entries") and row["n_entries"]["A0"] != row["n_entries"]["A1"]:
+                L[-1] += f" (entries A0 {row['n_entries']['A0']} / A1 {row['n_entries']['A1']}; ratio of sums {row['ratio_A1_over_A0_of_sums']:.4f})"
         ic = d["inloop_calls_per_eval"]; isw = d["inloop_sweeps_per_eval"]; b3 = d["inloop_block_sweeps_per_eval_B3"]
         blk = "/".join(f"{b3.get(k, 0):.2f}" for k in ("M1", "M2", "M3"))
         L.append(f"| {SHORT[deck]} | **in-loop (V3 Phase B)** | — | {ic['B0']:.2f} | {isw['B0']:.2f} | "
