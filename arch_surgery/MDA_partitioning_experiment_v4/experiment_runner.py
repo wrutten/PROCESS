@@ -318,6 +318,8 @@ def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
     module invocation with flags is not reproducible (protocol §15).  The
     stage's own record goes under ``runs/reference/``, which is untracked.
     """
+    if args.reference == "tables":
+        return reference_mod.main(["--tables"])
     if args.reference == "show":
         code, record = stage_reference(campaign)
         name = "show"
@@ -379,11 +381,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--reference",
-        choices=("show", "extract", "verify", "teeth"),
+        choices=("show", "tables", "extract", "verify", "teeth"),
         help="run one stage of the reproduction reference and stop: show what "
-        "is committed, extract it from the previous revision's records, "
-        "verify that it re-derives from them byte for byte, or run its four "
-        "teeth.  'extract', 'verify' and 'teeth' need --previous-runs",
+        "is committed, emit the report's tables from it, extract it from the "
+        "previous revision's records, verify that it re-derives from them "
+        "byte for byte, or run its four teeth.  'extract', 'verify' and "
+        "'teeth' need --previous-runs",
     )
     parser.add_argument(
         "--previous-runs",

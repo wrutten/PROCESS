@@ -1112,6 +1112,76 @@ def summary(document: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def tables(document: Mapping[str, Any]) -> str:
+    """The report's tables, emitted by the same script that made the numbers.
+
+    A table is never written by hand from a JSON read at a shell prompt: the
+    figures a report cites come out of a committed script, and so does the
+    caption that says what population they are over (protocol §15 and §16).
+    """
+    provenance = document["provenance"]
+    source = provenance["source_revision"]
+    out: list[str] = []
+
+    out.append(
+        f"*Caption: the {len(document['entries'])} entries of the committed "
+        f"reproduction reference — one row per reference run of harness plan "
+        f"§7.1. \"Arm\" is this revision's name and \"previous\" the name the "
+        f"record directory carries; \"seed\" 0 is the unperturbed start and 1 "
+        f"the first perturbed one. \"sha256\" is the first 12 characters of "
+        f"the source record file's digest. The two value columns are examples "
+        f"of the compared fields, not the whole set: the optimisation phase "
+        f"compares {len(REFERENCE_FIELDS['B'])} fields per record and the "
+        f"evaluation phase {len(REFERENCE_FIELDS['A'])}, all of them in the "
+        f"committed file. Node calls are model executions during the solve "
+        f"(optimisation phase) or in the one evaluation (evaluation phase); "
+        f"the objective is a hex float, exact. Population: "
+        f"{provenance['population']}, every record at {source['name']} commit "
+        f"`{source['campaign_commit'][:8]}`.*"
+    )
+    out.append("")
+    out.append(
+        "| arm | previous | configuration | phase | seed | sha256 | node calls "
+        "| objective (hex) |"
+    )
+    out.append("|---|---|---|---|---|---|---:|---|")
+    for entry in document["entries"]:
+        fields = entry["fields"]
+        if entry["phase"] == "B":
+            calls = fields["node_calls_solve_phase"]
+            objective = fields["exact.norm_objf"]
+        else:
+            calls = fields["node_calls_single_eval"]
+            objective = fields["exact.objf"]
+        out.append(
+            f"| `{entry['arm']}` | `{entry['previous_arm']}` | "
+            f"{entry['configuration']} | {entry['phase']} | {entry['seed']} | "
+            f"`{entry['source_sha256'][:12]}` | {calls} | `{objective}` |"
+        )
+
+    out.append("")
+    out.append(
+        "*Caption: the compared fields, per phase, with the number of records "
+        "carrying each. Every field was enumerated from the records rather "
+        "than assumed; a field the plan names for a phase that a record does "
+        "not carry is a refusal naming the record and the field, so every "
+        "denominator below is also the check. \"beyond the plan\" marks a "
+        "field harness plan §7.1 does not name literally.*"
+    )
+    out.append("")
+    out.append("| phase | field | carried by | beyond the plan |")
+    out.append("|---|---|---:|---|")
+    for phase, block in provenance["field_population"].items():
+        label = "B (optimisation)" if phase == "B" else "A (evaluation)"
+        for name, carried in block["carried_by"].items():
+            beyond = "yes" if name in FIELDS_BEYOND_THE_PLAN else ""
+            out.append(
+                f"| {label} | `{name}` | {carried} / {block['n_records']} | "
+                f"{beyond} |"
+            )
+    return "\n".join(out)
+
+
 def report(name: str, code: int, record: Mapping[str, Any]) -> int:
     """Print one stage's verdict in the same shape as the harness's own checks."""
     width = 74
@@ -1159,6 +1229,12 @@ def main(argv: list[str] | None = None) -> int:
         help="print what the committed reference holds and what it does not "
         "cover, without touching the live records",
     )
+    stage.add_argument(
+        "--tables",
+        action="store_true",
+        help="emit the report's two tables, with their captions, from the "
+        "committed reference",
+    )
     parser.add_argument(
         "--previous-runs",
         type=Path,
@@ -1180,12 +1256,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", type=Path, help="write the stage's record here")
     args = parser.parse_args(argv)
 
-    if args.show:
+    if args.show or args.tables:
         try:
             document = load(args.out)
         except ReferenceError as exc:
             print(f"[FAIL] {exc}")
             return 3
+        if args.tables:
+            print(tables(document))
+            return 0
         print("=" * 74)
         print("reproduction reference — what is committed")
         print("=" * 74)
