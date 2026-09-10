@@ -9,14 +9,14 @@
 > [`arch_surgery/MDA_partitioning_experiment_v4/harness/selfcheck.py`](../../MDA_partitioning_experiment_v4/harness/selfcheck.py)
 > or
 > [`arch_surgery/MDA_partitioning_experiment_v4/experiment_runner.py`](../../MDA_partitioning_experiment_v4/experiment_runner.py)
-> at commit **`6713c07b`** (protocol §15: every published number comes from a committed script).
+> at commit **`7aba492e`** (protocol §15: every published number comes from a committed script).
 > **No PROCESS run was made by this task**, and no file outside
 > `arch_surgery/MDA_partitioning_experiment_v4/` was created or changed.
 
 | | |
 |---|---|
-| **Verdict** | **PASS.** Eight arms on three configurations compose from one implementation; the composed environments of the six arms the previous revision (V3) also ran are equal to V3's **switch for switch**, verified twice — against a transcription and against V3's own two composition functions executed in a subprocess, **17 of 17 arm/configuration pairs, 0 mismatches, both routes**. The experiment plan's §3.2 matrix regenerates from the arm records **88 of 88 cells**, and all **6** rung steps reproduce the plan's declared differences. The capability probe examined **22** arm/configuration pairs: **17** probed and resolved every switch exactly as asked, **5** refused before probing because they declare a switch **no tree implements yet**. Provenance separates a tracked modification from an untracked file over three states of a throwaway repository. **Thirteen teeth, thirteen tripped.** Total run time ≈ 30 s, no PROCESS run. |
-| **What this delivers** | `harness/{__init__,config,switches,arms,provenance,selfcheck}.py`, `harness/README.md` and `experiment_runner.py` with preflight only. |
+| **Verdict** | **PASS.** Eight arms on three configurations compose from one implementation; the composed environments of the six arms the previous revision (V3) also ran are equal to V3's **switch for switch**, verified twice — against a transcription and against V3's own two composition functions executed in a subprocess, **17 of 17 arm/configuration pairs, 0 mismatches, both routes**. The experiment plan's §3.2 matrix regenerates from the arm records **88 of 88 cells**, and all **6** rung steps reproduce the plan's declared differences. The capability probe examined **22** arm/configuration pairs: **17** probed and resolved every switch exactly as asked, **5** refused before probing because they declare a switch **no tree implements yet**. Provenance separates a tracked modification from an untracked file over three states of a throwaway repository. **Fourteen teeth, fourteen tripped.** Total run time ≈ 30 s, no PROCESS run. |
+| **What this delivers** | `harness/{__init__,config,switches,arms,provenance,selfcheck}.py`, `harness/README.md` and `experiment_runner.py` with preflight only — 3 712 lines. Plus the **V4 names of the four per-configuration committed artifacts** (§4.2), which the queue row for A48 (harness-data) defers to this task. |
 | **Two findings inside the approved plan** | (i) The rung from the flat control to the optimiser-owned burn time (`B0 → B1`) moves **two** fields, not one — burn-time ownership *and* the output-time loop — while the plan's rung table names only ownership. The matrix places it there deliberately, so that the next rung matches its Phase A twin exactly; the *isolates* wording is what is incomplete. (ii) The matrix gives `A1` the output-time loop while §3.3's keep-list omits `A1`. Both are flagged, not fixed: the plan is not this task's to amend. §6. |
 | **One structural consequence, stated plainly** | On the tree as it stands, **`B1` and `B3` cannot be run at all** — they declare the output-time-loop switch, which the approved-but-unmade driver change DR2 supplies. The harness **refuses** them rather than composing an environment without it; that is a change from V3, which would have run them with the switch simply absent. §5.2. |
 | **Nothing needing a decision blocks the merge** | Two items want the orchestrator's ruling before the *plan* is next amended (§6), and one wants a ruling before the run-path task is written (§7 item 9). Neither blocks this branch. |
@@ -60,12 +60,12 @@ in the repository was created or changed.*
 
 | file | lines | what it owns |
 |---|---|---|
-| `…_v4/harness/config.py` | 362 | `Config` and `Campaign` as frozen dataclasses; the declared settings of the experiment plan §3.10; the configuration list and its removal mechanism; `EXECUTION_APPROVED` |
+| `…_v4/harness/config.py` | 417 | `Config` and `Campaign` as frozen dataclasses; the declared settings of the experiment plan §3.10; the configuration list and its removal mechanism; `EXECUTION_APPROVED` |
 | `…_v4/harness/switches.py` | 672 | the switch vocabulary as data; `clear_all`; the retired-name refusal; the capability probe and `assert_capable` |
 | `…_v4/harness/arms.py` | 575 | the plan's §3.2 matrix and rung table as data; `env_for`, `deck_for`, `rung` |
 | `…_v4/harness/provenance.py` | 222 | the interpreter refusal, the exact-tree assertion, the git stamp with the two kinds of dirt separated |
-| `…_v4/harness/selfcheck.py` | 937 | four checks and their teeth, plus the opt-in cross-check against V3's own composition |
-| `…_v4/harness/README.md` | 354 | the package in plain language, for a reader new to the project |
+| `…_v4/harness/selfcheck.py` | 968 | four checks and their teeth, plus the opt-in cross-check against V3's own composition |
+| `…_v4/harness/README.md` | 388 | the package in plain language, for a reader new to the project |
 | `…_v4/harness/__init__.py` | 119 | the version string and the one public import surface |
 | `…_v4/experiment_runner.py` | 351 | the button: preflight only; campaign stages refuse and say why |
 
@@ -95,10 +95,13 @@ exactly, which is a check on both.
 
 ## 3. The gates, with their teeth
 
-All five checks were run at commit `6713c07b` by
-`harness/selfcheck.py --crosscheck-previous`, against the repository's own PROCESS tree (the
-experiment's own copy is created by the parallel task A46 (process-copy) and did not exist in this
-worktree). The tree was stamped **not dirty**, head `6713c07b`.
+All five checks were run at commit `7aba492e` by
+`harness/selfcheck.py --crosscheck-previous`, against the repository's own PROCESS tree. The
+experiment's own copy is A46 (process-copy)'s, which merged on `architecture_surgery` while this
+task was open; this branch is off `f2dc9243`, which predates that merge, so the copy is absent
+here and the checks were run against the repository's tree instead. The tree was stamped with **0 tracked modifications** (its
+own split working: the only thing outstanding at the time was this report, a tracked file, which
+the stamp duly reports), head `7aba492e`.
 
 *Caption: one row per check. "Compared" is the number of things actually compared — the
 denominator (protocol §12); "mismatched" is how many of them disagreed. "Teeth" is the number of
@@ -107,7 +110,7 @@ no PROCESS run.*
 
 | check | binds | compared | mismatched | teeth tripped |
 |---|---|---|---|---|
-| composition | every arm composes on every configuration; skips refuse by name; reference arms compose to every switch cleared; the six shared arms equal V3's composition switch for switch | 25 | 0 | 3 / 3 |
+| composition | every arm composes on every configuration; skips refuse by name; reference arms compose to every switch cleared; the six shared arms equal V3's composition switch for switch | 25 | 0 | 4 / 4 |
 | rungs | the plan's §3.2 matrix regenerates cell for cell; each rung's computed difference equals the plan's declared difference; no removed arm present | 98 | 0 | 3 / 3 |
 | capability | the tree resolves every switch each arm asks for; an arm asking for an unimplemented switch is refused before anything runs | 22 | 0 | 3 / 3 |
 | provenance | a tracked modification and an untracked file are recorded separately, and only the first marks the tree dirty | 3 | 0 | 3 / 3 |
@@ -128,7 +131,7 @@ no PROCESS run.*
 - **cross-check, 17**: 6 arms × 3 configurations = 18, minus `B1` on `st_regression`, which is a
   recorded skip.
 
-### 3.2 The thirteen teeth
+### 3.2 The fourteen teeth
 
 *Caption: one row per deliberate break. Every one tripped its check. A check whose failure mode has
 never been exercised is an assertion, not a measurement (protocol §12).*
@@ -137,6 +140,7 @@ never been exercised is an assertion, not a measurement (protocol §12).*
 |---|---|---|
 | composition | a wrong switch value in one arm | `B0`'s analysis-loop switch set to the partitioned value must not match V3's `B0` |
 | composition | one switch dropped from an arm | `B3` without the method-arrangement switch must not match V3's `B3` |
+| composition | the wrong per-run artifact handed to an arm | the evaluation phase's block arm runs the frozen deck, so it takes the artifact stamped for the base constraint set; handing it the lifted deck's artifact must not match |
 | composition | a skipped arm asked to compose | `A0p` on `st_regression` must refuse and quote its recorded reason |
 | rungs | a wrong expected difference | the partitioning rung with one deferral removed from its declared difference |
 | rungs | a wrong cell in the transcribed matrix | `B1`'s burn-time owner written as the loop |
@@ -167,9 +171,10 @@ A transcription compared against one's own code proves less than it appears to, 
 `--crosscheck-previous` **executes** V3's `v3_runner.env_for` and `phase_a.env_for_phase_a` in a
 subprocess and compares their output with the transcription: **17 of 17, 0 mismatches**, with a
 tooth. It is opt-in, is not one of the four gates, and is labelled in the code as deliberately
-reaching outside the package for exactly this one purpose. Comparison of path-valued switches is
-on the **file name**: V3 reads the artifacts from the repository's shared data directory and V4
-reads its own copy, so the directory is expected to differ and the file is not.
+reaching outside the package for exactly this one purpose. Comparison of path-valued switches is on the artifact's **role**, not its
+file name (§4.2): V4's own copy of the artifacts is named for what each file is *for*, so a rename
+must compare equal while handing an arm the wrong artifact must not — and there is a tooth for
+exactly that.
 
 ### 3.4 The preflight, run both ways
 
@@ -231,6 +236,49 @@ one τ; **deferral `per_call` / `per_run`**; **arrangement · node** / **arrange
 **coupling state**; **output-time loop**; **stencil regime** / **δ regime**; **teeth**, **tally**,
 **analysis**.
 
+### 4.2 The names of the committed artifacts, decided here
+
+While this task was open, **A46 (process-copy) merged** and the orchestrator minted **A48
+(harness-data)** for the remainder of the copy task — `harness/data/` and `harness/ystate.py` —
+and **queued it behind this task**, with the reason recorded in the queue row: *"the skeleton's
+environment composer decides the names"*. So the names are settled here.
+
+Three of the composed switches are handed a file. Their existing names carry the number of the
+task that first produced them (`ystate_a26_…`) and use words the vocabulary has since replaced,
+both of which the harness plan's naming note forbids. The names below say what each file is for.
+
+*Caption: one row per committed per-configuration artifact. `{name}` is the configuration's name.
+The last two rows are fixed by path constants inside the copied driver — A46 (process-copy)
+re-pointed them at `harness/data/node_writesets.json` and `harness/data/dsm_node_map.json` — so
+renaming either is a driver edit and neither is renamed here.*
+
+| what the file is | name in `harness/data/` | name in `arch_surgery/docs/data/` |
+|---|---|---|
+| the coupling state's components and their measured scales | `coupling_state_{name}.json` | `ystate_a26_{name}.json` |
+| which of those components each block writes | `write_sets_{name}.json` | `writeset_a26_{name}.json` |
+| the nodes deferred to once per run, for a run of the lifted deck | `defer_per_run_{name}.json` | `postsolve_{name}.json` |
+| the same node set, stamped for a run of the frozen deck | `defer_per_run_frozen_deck_{name}.json` | `postsolve_nolift_{name}.json` |
+| what each node writes, measured | `node_writesets.json` | `node_writesets.json` |
+| which block each node belongs to | `dsm_node_map.json` | `dsm_node_map.json` |
+
+That makes **11 per-configuration files** — on the steady-state configuration the last two rows of
+the first group are the same file — plus the **2** the driver's constants fix: **13 files** for
+A48 to copy, each byte-identical to its original.
+
+Both spellings resolve. `config.ARTIFACT_NAMES` holds the two schemes and
+`default_configurations(..., naming=…)` selects one, so `default_campaign()` (the experiment's own
+copy) and `repository_tree_campaign()` (the shared directory, as the earlier revisions read it)
+differ in one argument and neither set of names is written out twice.
+
+One consequence, and it improves the check rather than weakening it: the comparison against the
+previous revision's composition is on the artifact's **role**, not its file name. A rename
+therefore compares equal, and handing an arm the *wrong* artifact still compares unequal — with a
+tooth that does exactly that, swapping the two per-run artifacts on a pulsed configuration. That
+swap is a defect the previous revision's duplicated composition could have produced, since it made
+the same choice twice in two files.
+
+---
+
 ---
 
 ## 5. Autonomous decisions, with their reversal paths
@@ -244,7 +292,8 @@ undo, so that none of them is load-bearing by accident.*
 | 2 | **`PROCESS_ARCH_OUTER=trust` is supplied by the registry when the partitioned loop is selected, rather than being an arm field** | the brief and D23: the partitioned arms run the schedule once, so it is a consequence of the loop, not a choice. The plan's matrix row is regenerated from it, so the plan's table is unchanged | make it an `Arm` field and add a column to `PLAN_MATRIX`; about ten lines |
 | 3 | **The per-run deferral artifact is chosen from the deck the arm reads**, not from which phase it belongs to | V3 chose `postsolve_nolift_*` in the evaluation phase and `postsolve_*` in the optimisation phase — the same decision written twice. Both spellings are reproduced exactly by the one rule, verified against V3's own code | restore the phase test in `Config.per_run_artifact`; two lines |
 | 4 | **Every probe variable is cleared, not only the parent one.** V3 cleared `PROCESS_IDF_PROBE`; V4 clears its twelve companions too | they are inert while the parent is unset, so clearing them changes nothing measurable and removes a way for an inherited value to matter later. The comparison with V3 is over variables *set*, so it is unaffected | remove them from `PROBE_VARIABLES` |
-| 5 | **The V3-equality check compares path-valued switches by file name**, recording the directory separately | V4 reads its own copy of the artifacts, so the directory is *expected* to differ. Comparing full paths would fail for the one reason that is not a defect | compare full paths and add a directory-substitution rule |
+| 5 | **The V3-equality check compares path-valued switches by the artifact's role**, not by path or file name | V4's copy of the artifacts is renamed (§4.2), so a file-name comparison would fail for the one reason that is not a defect, while a role comparison still fails when an arm is handed the wrong artifact — which is a defect V3's duplicated composition could have produced. There is a tooth for it | compare file names and add a rename map |
+| 5a | **The V4 names of the four per-configuration artifacts were decided here** (§4.2), because the queue row for A48 (harness-data) says the skeleton's environment composer decides them, and A48 is queued behind this task for that reason | the old names carry a task number, which the naming note forbids, and use words the vocabulary has replaced. Both spellings resolve, selected by a `naming` argument, so neither is written twice | change the four templates in `ARTIFACT_NAMES`; one dictionary in `config.py` |
 | 6 | **`Campaign.tree` and `Campaign.data_dir` are parameters, defaulting to V4's own copy**; a second constructor points the whole campaign at the repository's tree | the copy is another task's and did not exist here. The default is the production target, so the checking variant has to be asked for explicitly and cannot be reached by forgetting a flag | drop `repository_tree_campaign()`; the self-check then needs the copy present |
 | 7 | **`default_campaign()` is a function, not a module-level instance** | a settings object anything can reach and rebind is the module global the plan asked to remove | make it a constant |
 | 8 | **The cross-check against V3's own composition is committed but opt-in**, and is not one of the four gates | it deliberately reaches outside `harness/`, which the user's requirement forbids for *gates*. Keeping it, labelled, measures the transcription instead of trusting it; keeping it out of the gate set honours the requirement | delete `crosscheck_previous`; the transcription then stands on review alone |
@@ -257,7 +306,10 @@ undo, so that none of them is load-bearing by accident.*
   brief were read; nothing was imported from them at run time except by the opt-in cross-check,
   which runs in a subprocess.
 - **Nothing under `…_v4/PROCESS/`, `…_v4/harness/data/`, `harness/ystate.py`, `harness/child.py`
-  or the run path was created**; those belong to A46 (process-copy) and to later tasks.
+  or the run path was created**; the first belongs to A46 (process-copy), which merged while this
+  task was open, the next two to A48 (harness-data), and the rest to later tasks. This branch is
+  off `f2dc9243`, which predates A46's merge, so V4's copy of PROCESS is absent from this
+  worktree; §4.2 records the names A48 needs from here.
 - **No driver change was made.** The five approved ones are separate tasks with their own gates.
 - **No PROCESS run.** The capability probe imports three driver modules in a child process and
   reads module-level names; it calls no model and opens no output file.
@@ -310,7 +362,8 @@ predecessor merges.*
 
 | owner | piece | what it must satisfy that this task already assumes |
 |---|---|---|
-| H0 / **A46 (process-copy)** | `…_v4/PROCESS/process/`, `…_v4/harness/data/`, `harness/ystate.py`, the `.gitignore` for `runs/` | `Campaign.tree` and `Campaign.data_dir` default to exactly those paths; the preflight names all 18 artifact entries it resolves — 13 distinct files — by the names `Config` derives |
+| H0 / **A46 (process-copy)**, **merged 2026-09-10** | `…_v4/PROCESS/process/` with its three re-pointed path constants, `PROCESS_diff.py`, the `.gitignore` for `runs/` | `Campaign.tree` defaults to exactly `…_v4/PROCESS`, which the merged copy provides |
+| H0 remainder / **A48 (harness-data)**, queued behind this task | `…_v4/harness/data/` and `harness/ystate.py` | `Campaign.data_dir` defaults to `…_v4/harness/data`; the 13 files and their V4 names are §4.2's table, which A48's queue row defers to this task; the preflight names all 18 artifact entries it resolves by exactly those names |
 | H2 | the reproduction reference extracted from V3's records | `switches.PREVIOUS_ARM_NAMES` maps V3's `R` to `BR` and `switches.RETIRED_ARM_NAMES` names `A1u` and `B2`; a lookup that misses must raise |
 | H3 | the run path: the child process, the two entry points, the worker pool, the record schema, the perturbation stream and the predicate layer | must call `switches.assert_capable` before starting any run, must set `PYTHONPATH` to `Campaign.tree` and assert the exact tree inside the child, and must record the arm's environment **as the driver resolved it**. Run directories should be named `seed001`, not `start001` (§4.1 item 9) |
 | H4 | the artifact, deck, census and per-run-set stages | the preflight's artifact check here is existence plus the declared component count; the full validation — format, the components checksum rebuilt, the expected objective, the constraint set, the predicate mode — is that task's |
@@ -336,9 +389,10 @@ $PY experiment_runner.py --tree repository   # READY, exit 0
 $PY experiment_runner.py                     # NOT READY, exit 3
 ```
 
-Both scripts were committed in `6713c07b` **before** the numbers above were taken, and the JSON
-record carries the tree, the head commit, the configuration list and every check's population,
-denominator and teeth.
+Both scripts were committed — the package in `6713c07b`, the artifact naming in `7aba492e` —
+**before** the numbers above were taken, and the JSON record carries the tree, the head commit, the
+configuration list and every check's population, denominator and teeth. The numbers are identical
+at both commits; `7aba492e` adds the fourteenth tooth.
 
 ---
 
@@ -355,3 +409,11 @@ denominator and teeth.
   tripped, no PROCESS run. Two disagreements inside the experiment plan flagged (§6); nine
   terminology decisions recorded (§4.1); nine autonomous decisions recorded with their reversals
   (§5).
+- **2026-09-10** — commit `7aba492e`, after A46 (process-copy) merged on `architecture_surgery`
+  and A48 (harness-data) was minted and queued behind this task with the artifact names deferred
+  to it: the two naming schemes in `config.ARTIFACT_NAMES`, the V4 names of the four
+  per-configuration artifacts (§4.2), and the previous-revision comparison moved from file names
+  to artifact **roles**, with a fourteenth tooth that swaps the two per-run artifacts. Five checks
+  PASS, fourteen teeth tripped, populations unchanged (25 / 98 / 22 / 3 / 17, 0 mismatches).
+  This branch is off `f2dc9243` and therefore does not contain A46's merge; nothing here depends
+  on it beyond the default paths, which already pointed at the copy.
