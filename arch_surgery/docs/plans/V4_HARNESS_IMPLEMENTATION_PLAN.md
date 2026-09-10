@@ -920,7 +920,18 @@ component name) is already exercised by the `A0`/`A1` rows, whose seeds are pert
 `module_solve_totals.{n_call_models, block_sweeps, outer_pass_hist, inner_sweeps_by_block}`,
 `n_solver_iterations`, `mfile.ifail`, and for Phase A `node_calls_single_eval`,
 `n_model_calls_sweeps`. No tolerance anywhere — these are counts and bit-comparisons, which is
-the only kind of quantity this project accepts (I-10).
+the only kind of quantity this project accepts (I-10). *Amended 2026-09-10 at A49
+(harness-reference)'s merge, from the records rather than from this list:* the optimisation phase
+also compares `exit_forensics.n_solver_iterations_summed_over_attempts`, `exit_forensics.n_attempts`
+and `exit_forensics.attempts[].n_solver_iterations` (check 2's second construction); the
+evaluation phase compares `exact.objf` (no Phase A record carries `norm_objf` — without it six of
+twenty entries would have had no objective bit-comparison), `n_prime_calls`,
+`exit_audit.residual_max_hex`, the block-solver totals and `exit_forensics.n_attempts` (always 0
+there, compared as a value); and the block-solver totals are present on **every** record, the
+reference arm's in the never-entered shape (0 calls, empty histograms), and are compared as values
+rather than marked not applicable — so a harness that entered the block solver under `BR`'s name
+would move that zero. **20 entries, 270 compared values** (15 × 14 + 10 × 6);
+`harness/reference.py` exports the list as `REFERENCE_FIELDS`.
 
 ### 7.2 When GR runs, and why once is enough *(restated 2026-09-10)*
 
@@ -969,7 +980,7 @@ GR's zeros are accepted (protocol §12).*
 
 V3's `runs/` is untracked and this project has destroyed untracked run artifacts three times.
 Before the rewrite starts, a small stage should extract the twenty reference records' compared
-fields into **`harness/reference/v3_reference.json`** — the field values, V3's campaign commit,
+fields into **`harness/reference/reproduction_reference.json`** (§11.1's name; this section said `v3_reference.json` until A49 merged) — the field values, V3's campaign commit,
 each source record's path and its sha256 — and commit it. GR then reads a committed file, with
 the live records used only to *re-derive* it (a second stage, run once, whose output must match
 byte-for-byte). Cost: one small stage and a ~10 KB committed file. Benefit: the gate survives the

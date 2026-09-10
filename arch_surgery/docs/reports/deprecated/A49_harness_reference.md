@@ -1,9 +1,9 @@
 # A49 (harness-reference) — the reproduction reference, committed
 
-> **Document status** — **OPEN task report.** Task `A49 (harness-reference)`, branch
-> `A49-harness-reference` off `architecture_surgery` at `30198919`. Awaiting the orchestrator's
-> critical assessment (orchestration protocol §5), which gates the merge. Nothing here is merged
-> and nothing here is a campaign result: **no PROCESS run was made by this task.**
+> **Document status** — **MERGED task report, archived.** Task `A49 (harness-reference)`, branch
+> `A49-harness-reference` (retired) off `architecture_surgery` at `30198919`, merged on 2026-09-10
+> (`92990fe7`); the orchestrator's critical assessment (protocol §5) is §13. Folder position
+> records lifecycle, not validity (trap T3). **No PROCESS run was made by this task.**
 
 ---
 
