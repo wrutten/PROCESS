@@ -893,3 +893,76 @@ from `--lifted-from`, and G9 refuses at its front door, by name, if they are not
 | 2026-09-10 | **Gate G1 FAILED** at `b78d96cd`: 6 of 2 371 values, one per pair, all `tree_untracked_paths_n` moving 0 → 1 because the tree held this task's own draft report. 0 of 51 319 output-file lines; no tracked file modified on either side. §7.4. |
 | 2026-09-10 | **`29beeeae`** — the defect G1's failure exposed, fixed: its exclusion set excluded `tree_modified_tracked` and `tree_untracked_paths` but not their `_n` counts, so a scratch file failed a byte-identity gate on a field that cannot change what the driver does. Both counts excluded, with the reason. |
 | 2026-09-10 | **G1 re-run at `29beeeae`: PASS** — 0 of 2 359 values, 0 of 51 319 lines, 6 pairs, 4 teeth. G0′, the copy gates, `PROCESS_diff.py` and the self-check re-run at the same commit and all PASS. |
+
+---
+
+## 16. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `12c80f64` and the copy
+and harness on the same branch. Every gate was re-run by the orchestrator, not read off the report.*
+
+**Verified independently.** (1) **Gate GR after DR2**, re-run from scratch (the gate regenerated
+the branch's reproduction records in place): 20 of 20 runs, **270 of 270 values identical**,
+contract 20 of 20, both substitutes PASS, seven teeth tripped, with the recorded
+`output_loop = upstream` override on `B1`/`B3` derived from the matrix and set-equality guarded.
+(2) **G9** (`gates.py output-path`) compared against those fresh records: PASS on 11 runs — **0 of
+3 825** coupling-state components differ in hex between the snapshot and the written state, **0 of
+54** solve-describing values differ from GR's records, the loop ran 2 sweeps under `upstream` and 0
+under `none` on every run; four teeth tripped, the one-ULP perturbation between snapshot and
+`finalise` among them. (3) **G1** (`switch-neutrality --compare`): 6 pairs, 0 of 2 359 values, 0 of
+51 319 output-file lines, four teeth including the new refusal of captures audited at different
+positions. (4) **G0′** PASS; `PROCESS/copy_gates.py all` ALL GATES PASS; `PROCESS_diff.py` exit 0
+over 68 hunks, 0 unexplained; `--selfcheck` six checks PASS with the pending list now empty. (5)
+Scope: fifteen files — the copy's `caller.py` alone among driver files, its provenance and diff
+tooling, the harness files the brief assigned plus `optimise.py`, `evaluate.py` and `pool.py` (the
+audit lives in the first, the job description in the third — unavoidable and stated), the README's
+registry section and this report; `models/`, the repository-root `process/` and
+`experiment_runner.py` untouched. Against trunk, which took A51 (harness-artifacts) meanwhile, the
+two files both sides changed (`pool.py`, the README) merge without conflict.
+
+**Endorsed.** The snapshot hook as a callable slot the measurement installs, so the copy holds the
+*position* and never a second definition of the coupling state (D14(c)); the restore proven bit-exact
+before the audit is taken, and a restore that is not bit-exact refusing the audit rather than
+reporting a residual of a state nobody chose. Two snapshot positions, so G9's first criterion is a
+comparison and not an argument from code structure. GR's allowance replaced by an override derived
+from the matrix cell rather than listed, refused for the campaign, and stamped with GR's audit
+position in one block. **G1's failure reported in full** — six values differing, all the untracked
+count moved by the task's own draft report — and the defect located in the gate's own exclusion set
+(the `_n` counts of the two provenance fields were not excluded while the fields were), fixed, and
+re-run; not committing the report first, which would have made it pass, is exactly the discipline
+the protocol asks for. The sweep-count and above-τ measurements produced by committed stages, with
+both whole-state and restricted constructions side by side and the reason the two differ stated in
+the caption.
+
+**Limits I hold it to.** (a) GR's optimisation runs audit at `after_run`, where the previous
+revision measured, and only GR may ask for it; every campaign record audits at the declared entry.
+The two positions must never appear in one table without saying so — A53 carries that as a caption
+rule. (b) `exit_audit.restricted` is null on optimisation records until A52 passes the two
+artifacts to the audit; §10.3's restricted numbers come from the committed residual vectors by the
+same derivation, so nothing is lost, but the field is not yet in the record. (c) One seed each in
+§10.3; five runs are not a distribution and none is claimed. (d) The runner's `--outdir` does not
+redirect `--gate reproduction`, which writes to the campaign's records directory — harmless, and
+worth one line in A52's wiring of the gates.
+
+**The finding that matters for the experiment.** At the accepted point on both pulsed
+configurations, in both arms whose burn time the optimiser owns, exactly one coupling-state
+component sits above τ on the restricted ruler: **`tfcoil.insstrain`, at 7.1e-3 and 7.0e-3
+scaled**, identical between `B1` and `B3` on the same seed; `st_regression` has nothing above τ
+(restricted maximum 1.6e-11). This is the signal the plan said to look for on purpose. It is
+**not diagnosed here** and I do not pretend to know its cause — a genuinely unconverged coupling, a
+component whose measured scale is too small, or a discontinuity in the model are all open. It goes
+on the improvement list as an item for the user, and A52's G4 and A53's tally will make it visible
+rather than average it away.
+
+**Rulings and consequences drawn (orchestrator, today).** The two stale plan sentences (§13) are
+replaced at the merge with the text proposed here. A52 (harness-gates) wires `g0prime`,
+`switch_neutrality` and `output_path` into the runner, passes the per-run artifact and the node
+write sets to the optimisation-phase audit so `exit_audit.restricted` is populated (and re-runs G1
+with that one named exclusion), and inherits G1's 33-name exclusion set to review. A53
+(harness-tally) reads `output_path`, `output_loop_sweeps`, `output_path_entries`, and states the
+audit position in every residual caption. A58 (driver-predicate-counters) follows the
+`OUTPUT_LOOP_SWEEPS` pattern and removes the corresponding nulls from
+`child.stamp_capabilities_absent`. The `--outdir` note goes to A52.
+
+**Verdict.** Fit to merge; nothing returned. DR2 lands with its neutrality, its own gate and the
+reproduction gate all passing, and the exit audit now measures what the plan said it should.
