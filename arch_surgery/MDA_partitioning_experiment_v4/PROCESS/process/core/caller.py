@@ -241,11 +241,13 @@ _PREDICATE_SOURCES = (
 
 #: Committed per-node write sets (framework component C8's sibling), measured
 #: by the ``modules`` write census.  Read only when the hoist is on; never
-#: read live from a generated artifact (trap T9).
+#: read live from a generated artifact (trap T9).  Re-pointed from
+#: ``arch_surgery/docs/data/`` to the V4 harness beside this copy by
+#: A46 (process-copy) under decision D20.
+#: The target does not exist yet; a later harness task creates it.
 NODE_WRITESET_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "arch_surgery"
-    / "docs"
+    Path(__file__).resolve().parents[3]
+    / "harness"
     / "data"
     / "node_writesets.json"
 )
@@ -353,10 +355,12 @@ def _node_write_sets() -> dict[str, frozenset[str]]:
 
 #: Committed DSM node map (framework component C8).  Read only when the hoist
 #: is on; never read live from the dependency-analysis repository (trap T9).
+#: Re-pointed from ``arch_surgery/docs/data/`` to the V4 harness beside this
+#: copy by A46 (process-copy) under decision D20.
+#: The target does not exist yet; a later harness task creates it.
 NODE_MAP_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "arch_surgery"
-    / "docs"
+    Path(__file__).resolve().parents[3]
+    / "harness"
     / "data"
     / "dsm_node_map.json"
 )

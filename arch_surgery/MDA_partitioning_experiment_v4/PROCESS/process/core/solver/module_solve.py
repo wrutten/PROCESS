@@ -521,15 +521,16 @@ class ModuleSolveFailure(RuntimeError):
 # Phase A's predicate, imported rather than reimplemented
 # --------------------------------------------------------------------------
 
-#: ``arch_surgery/fixedpoint/ystate.py`` -- Phase A's coupling-state predicate.
-#: Reached by path for the same reason ``caller.NODE_MAP_PATH`` is: the
-#: research tree is not an importable package, and vendoring a second copy of
-#: the predicate into ``process/`` would create exactly the drift D14(c) exists
-#: to prevent.
+#: ``harness/ystate.py`` -- the coupling-state predicate, in the V4 harness
+#: beside this copy.  Reached by path for the same reason
+#: ``caller.NODE_MAP_PATH`` is: the harness is not an importable package.
+#: Re-pointed from ``arch_surgery/fixedpoint/ystate.py`` by A46 (process-copy)
+#: under decision D20 -- V4 runs its own copy of PROCESS, so the copy reaches
+#: for the V4 harness and not for V3's research tree.
+#: The target does not exist yet; a later harness task creates it.
 YSTATE_MODULE_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "arch_surgery"
-    / "fixedpoint"
+    Path(__file__).resolve().parents[4]
+    / "harness"
     / "ystate.py"
 )
 
