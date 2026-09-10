@@ -30,7 +30,7 @@ quantities.*  So the inner and outer tests here are Phase A's **coupling-state**
 predicate --  ``max |dy_i| / s_i < tau`` over the continuous components, exact
 equality over the discrete ones, and constants asserted rather than excluded --
 with the categories and scales taken from the committed per-scenario artifact
-``arch_surgery/docs/data/ystate_<scenario>.json``.
+``harness/data/coupling_state_<configuration>.json``.
 
 That artifact is *loaded*, and the predicate code is *imported from Phase A's
 own module*, rather than either being reimplemented here.  Two implementations
@@ -527,7 +527,9 @@ class ModuleSolveFailure(RuntimeError):
 #: Re-pointed from ``arch_surgery/fixedpoint/ystate.py`` by A46 (process-copy)
 #: under decision D20 -- V4 runs its own copy of PROCESS, so the copy reaches
 #: for the V4 harness and not for V3's research tree.
-#: The target does not exist yet; a later harness task creates it.
+#: The target is a committed file of this experiment: its source, its sha256
+#: and the check that the two are byte-identical are recorded in
+#: ``harness/data/PROVENANCE.json``.
 YSTATE_MODULE_PATH = (
     Path(__file__).resolve().parents[4]
     / "harness"

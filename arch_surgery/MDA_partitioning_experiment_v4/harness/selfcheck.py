@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """The harness's own gates, each shown able to fail.  No PROCESS run.
 
-Four things are checked, and each carries a *tooth*: a deliberate break that
+Five things are checked, and each carries a *tooth*: a deliberate break that
 the check must catch before its zeros are believed (orchestration protocol
 §12).  A count without the number of things compared is not reported.
 
@@ -15,6 +15,10 @@ the check must catch before its zeros are believed (orchestration protocol
    asking for a switch the tree does not implement is refused, never run.
 4. **provenance** — a modified tracked file and an untracked file are recorded
    separately, and only the first marks the tree dirty.
+5. **data** — every committed file the experiment reads is byte-identical to
+   its source at the recorded commit, the file set matches, and the moved
+   predicate module differs from its own source in nothing but the heritage
+   paragraph the record names.
 
 Run it directly, or through ``experiment_runner.py --selfcheck``.
 """
@@ -38,6 +42,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
 from harness import arms as arms_mod  # noqa: E402
+from harness import data_provenance as data_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
 from harness import switches as sw  # noqa: E402
 from harness.config import (  # noqa: E402
@@ -795,6 +800,122 @@ def check_provenance(campaign: Campaign) -> Check:
 
 
 # --------------------------------------------------------------------------
+# 5. data
+# --------------------------------------------------------------------------
+
+
+def _stage_data(source: Path, destination: Path) -> Path:
+    """A throwaway copy of the data directory.  The real one is never touched."""
+    shutil.copytree(source, destination)
+    return destination
+
+
+def check_data(campaign: Campaign) -> Check:
+    """The committed data is the source's, and the record says whose.
+
+    ``harness/data/`` holds the files the copied driver and the harness read.
+    Each was copied from the repository at a recorded commit and must still be
+    byte-identical to it.  Two comparisons, not one: the file's sha256 against
+    the one the record carries, **and** the record's sha256 against the source
+    read back from the commit -- so regenerating the record cannot be the way a
+    changed file becomes blessed.  The moved predicate module
+    ``harness/ystate.py`` is checked the same way, except that it is allowed to
+    differ from its source by exactly the heritage paragraph the record holds
+    as an expected hunk: the check removes that paragraph again and compares
+    the remainder byte for byte.
+
+    The *campaign* argument selects the tree the rest of the self-check runs
+    against and does not apply here: ``harness/data/`` is the experiment's own
+    directory under its own naming scheme whichever tree is being checked, so
+    the declared counts are compared against the production campaign's
+    configurations in both cases.
+    """
+    production = default_campaign()
+    declared = data_mod.declared_files(production)
+    check = Check(
+        name="data",
+        binds="every committed file the experiment reads is byte-identical to "
+        "its source at the recorded commit, the file set matches exactly, and "
+        "the moved predicate module differs from its source only by the "
+        "recorded heritage paragraph",
+        population=(
+            f"{len(declared)} committed file(s) in harness/data/ + the moved "
+            f"predicate module = {len(declared) + 1} comparisons; and "
+            f"{3 * len(production.configurations)} declared counts "
+            f"({len(production.configurations)} configurations x "
+            f"coupling-state components, iteration variables, constraints)"
+        ),
+    )
+    if not data_mod.PROVENANCE.exists():
+        check.fail(
+            f"{data_mod.PROVENANCE} is not present; the committed data has no "
+            f"provenance record, so there is nothing to check it against and "
+            f"an empty comparison would report a zero over nothing"
+        )
+        return check
+    prov = data_mod.load_provenance()
+
+    result = data_mod.verify(
+        prov,
+        data_mod.DATA_DIR,
+        ystate_path=data_mod.YSTATE,
+        campaign=production,
+    )
+    check.n_compared = result.n_declared
+    for failure in result.failures:
+        check.fail(failure)
+    for note in result.notes:
+        check.note(note)
+    check.note(
+        f"{result.n_identical}/{result.n_declared} identical; sources read "
+        f"from {', '.join(sorted(result.read_from)) or '(nothing)'}"
+    )
+    check.note(
+        f"the mapping from a role to a file name is config.artifact_file_names() "
+        f"under both naming schemes, compared against the list "
+        f"data_provenance.py declares; a disagreement raises rather than "
+        f"picking a side"
+    )
+
+    # --- teeth -------------------------------------------------------------
+    # Each perturbation is made on a throwaway copy of harness/data/ and the
+    # same verification is re-run against it.  The real directory is never
+    # modified.
+    victim = declared[1].name  # a copied artifact, not an input file
+    teeth: list[tuple[str, str]] = [
+        ("one byte changed in a copied file", victim),
+        ("a copied file missing", victim),
+        ("a file added that the record does not name", "_a_file_nobody_recorded.json"),
+        ("a changed file whose recorded sha256 was updated to match", victim),
+    ]
+    for name, target in teeth:
+        with tempfile.TemporaryDirectory() as td:
+            staged = _stage_data(data_mod.DATA_DIR, Path(td) / "data")
+            path = staged / target
+            if name == "a copied file missing":
+                path.unlink()
+                what = f"removed {target}"
+            elif name.startswith("a file added"):
+                path.write_text("{}\n")
+                what = f"added {target}"
+            else:
+                raw = bytearray(path.read_bytes())
+                raw[0] = raw[0] ^ 0x20 if raw[0] != 0x20 else 0x09
+                path.write_bytes(bytes(raw))
+                what = f"one byte of {target} changed"
+            staged_prov = prov
+            if name.startswith("a changed file whose recorded"):
+                staged_prov = json.loads(json.dumps(prov))
+                staged_prov["files"][target]["sha256"] = data_mod.sha256(
+                    path.read_bytes()
+                )
+                what += ", and the record's sha256 updated to match it"
+            broken = data_mod.verify(staged_prov, staged, campaign=None)
+            check.tooth(name, not broken.passed, what)
+    return check
+
+
+# --------------------------------------------------------------------------
 # the previous revision's own composition, executed
 # --------------------------------------------------------------------------
 
@@ -908,6 +1029,7 @@ def run_all(
     if include_capability:
         checks.append(check_capability(campaign))
     checks.append(check_provenance(campaign))
+    checks.append(check_data(campaign))
     if include_crosscheck:
         checks.append(crosscheck_previous(campaign))
     return checks

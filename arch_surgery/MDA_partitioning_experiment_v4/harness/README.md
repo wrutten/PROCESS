@@ -159,6 +159,34 @@ spellings resolve: `default_campaign()` uses the first column and `repository_tr
 second, so the harness can be pointed at either set of files without either name being written
 twice.
 
+**Those files are copies, and `data/PROVENANCE.json` says whose.** Sixteen files sit in `data/` —
+the six kinds above for three configurations, plus the three committed input files. Each was
+copied out of the repository at a recorded commit, read from the commit itself rather than from
+anyone's working tree, and each is byte-identical to what it was copied from. The record names,
+per file, the role it plays, the configuration it belongs to, the path it came from, its sha256
+and the fields the artifact carries about its own making — the script that produced it and the
+commit that script ran at. The self-check's **data** check compares both directions: the file
+against the record, and the record against the source read back from the commit, so regenerating
+the record cannot be the way a changed file becomes blessed.
+
+Nothing here is ever *derived*. The scales inside the coupling-state artifacts are this
+experiment's fixed ruler; re-deriving them from a fresh measurement would change what the
+tolerance means and break comparability with every earlier revision that quoted a distance on that
+ruler. A campaign that finds an artifact missing refuses — it does not make one.
+
+One thing in the copies is deliberately stale. Each `write_sets_{name}.json` carries an internal
+field naming the coupling-state file it was built against, under the older spelling
+(`ystate_a26_{name}.json`), which is not the name that file has here. It is left exactly as it
+was, because the copy being byte-identical to its source is worth more than the field being
+tidy — and because **the driver never pairs the two files by name**. It requires the write set's
+recorded hash of the component list to equal the loaded coupling-state description's own hash, and
+raises otherwise. A wrong pairing is caught by the bytes; a renamed file is not noticed at all.
+
+`harness/ystate.py` — the code that decides what "converged" means — was moved here from the
+repository's research tree under the same rule, and is recorded in the same file. Its body is
+byte-identical to its source: the only difference is a paragraph in its docstring saying where it
+came from, and the check removes that paragraph again and compares the remainder byte for byte.
+
 Because of that, the check that this revision composes the same environments as the last one
 compares **which artifact each switch is handed**, not which file name — so a rename compares
 equal and handing an arm the *wrong* artifact still compares unequal. There is a tooth for
@@ -321,7 +349,7 @@ measurement. This project has published a zero over a population quietly smaller
 named, and has once had a check that returned "pass" over an empty set, which is why every count
 below carries the number of things actually compared.
 
-`harness/selfcheck.py` runs four checks, each with its teeth, in about half a minute, and starts no
+`harness/selfcheck.py` runs five checks, each with its teeth, in about half a minute, and starts no
 PROCESS run.
 
 *Caption: one row per check. "Compares" is the population; "teeth" are the deliberate breaks it is
@@ -333,6 +361,7 @@ shown to catch.*
 | **rungs** | the plan's matrix regenerates cell for cell from the arm records; the difference between two arms equals the difference the plan declares for that step; no removed arm is present | a wrong expected difference; a wrong cell in the transcribed matrix; an arm compared with itself |
 | **capability** | the tree resolves every switch each arm asks for, exactly as asked; an arm asking for something no tree implements is refused before anything runs | a switch name no tree defines; a switch the environment does not carry claimed as resolved; a retired name present in the environment |
 | **provenance** | a modified tracked file and an untracked file are recorded separately, and only the first marks the tree dirty | each kind of change, one at a time, in a throwaway repository; and the tree asserted by a prefix instead of exactly |
+| **data** | every committed file in `data/` is byte-identical to its source at the recorded commit and the file set matches exactly; `ystate.py` differs from its own source only by the recorded heritage paragraph; the counts `config.py` declares are the ones the files carry | one byte changed; a file missing; a file the record does not name; and a changed file whose recorded hash was updated to match it — which passes a record-only check and must still fail |
 
 Two of these deserve their reason stated.
 
@@ -399,11 +428,11 @@ The record's schema and the code that reads it are a later task; this list is wh
 ## 10. What is not here yet
 
 `config.py`, `switches.py`, `arms.py`, `provenance.py`, `selfcheck.py` and the runner's preflight
-exist. The coupling-state module, the committed artifacts, the run path (the child process, the
-two entry points, the worker pool, the record schema), the artifact and census stages, the gates
-against the earlier revisions, the tally and the analysis are separate tasks. The preflight names
-each missing piece and the stage that produces it rather than falling back to something that
-happens to be there.
+exist, and so do the committed data in `data/` and the coupling-state module `ystate.py`. The run
+path (the child process, the two entry points, the worker pool, the record schema), the derived
+input files and the census stages, the gates against the earlier revisions, the tally and the
+analysis are separate tasks. The preflight names each missing piece and the stage that produces it
+rather than falling back to something that happens to be there.
 
 ---
 
