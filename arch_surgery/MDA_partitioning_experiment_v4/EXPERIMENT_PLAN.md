@@ -443,7 +443,7 @@ headline unreadable. The failure table carries the retried seeds with each arm's
    **acceptance: nearest-rank median ≤ 1.05** for `B0 → B1`, `B0 → B3`; summed
    iterations over the same pairs published beside every median with the sum ratio, since a
    median and a sum can disagree in direction. *Amended 2026-09-10 (user directive, relayed by
-   session `process-surgery-bd`, explained in the orchestrating session; stands unless vetoed):* the iteration
+   session `process-surgery-bd`, explained and **confirmed by the user in the orchestrating session**):* the iteration
    count is published in **two constructions** — the **final attempt's** (V3's, kept for
    comparability) and **summed over every VMCON attempt, failed attempts included**
    (`n_solver_iterations_summed_over_attempts`, present in every V3 record and never read by V3's
@@ -1002,6 +1002,8 @@ implementation plan's.*
   answered *no*); the intervention arms' certificate stated (§3.3); decision (g) opened — the inner
   tolerance of `A1`/`B3`, recommended 1e-8 (§3.7, §3.10); check 2's acceptance construction declared
   (P2); a retried-seeds column added to check 1's table (P3); header updated.
+- 2026-09-10 — check 2's summed-over-attempts acceptance construction **confirmed by the user**
+  ("check-2 accepted indeed"); decision (g) closed by D23 the same day.
 - 2026-09-10 — check 2 (§3.5, §4.3.3): iterations published in two constructions, final attempt
   and summed over all VMCON attempts, with per-seed attempt counts — user directive relayed by
   session `process-surgery-bd`, marked for confirmation in the orchestrating session.
