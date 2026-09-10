@@ -883,3 +883,59 @@ python experiment_runner.py --artifacts census
 | 2026-09-10 | **`5f51c519`** — this report, and `PROCESS_diff.py`'s `caller.py` summary corrected to say what was measured about the empty block rather than what was assumed. |
 | 2026-09-10 | **Everything re-run at the head commit `5f51c519`** and unchanged: `copy_gates.py all` PASS; `PROCESS_diff.py` exit 0 with its tooth tripping; G0′ PASS (77 / 76 / 1); G1 PASS (0 of 2 341 values, 0 of 51 319 lines, 6 pairs); GR PASS (20/20, 270/270, 7 teeth, both substitutes, record contract 20/20); `--selfcheck` PASS 6/6 with 16 counters resolving; the measurement identical, 20 of 20 sweep totals decomposing with residual 0. |
 | 2026-09-10 | **Self-check PASS** at `aebe1c67`, 6/6, 16 driver counters resolving. **Measurement published** (§10): the partitioned arm compares **0.530–0.666×** as many components as the flat control while running **2.12–2.66×** as many sweeps, tracking its node calls to within 0.02 — **the convergence test is excluded as the per-sweep overhead's carrier**. `st_regression` `B3` seed 0: **570 empty `PULSE` visits, 570 sweeps, 10.84 % of block sweeps**, reproducing A43 (st-trust-gap)'s figure to the digit. |
+
+---
+
+## 15. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `e43ff184` and the copy
+and harness on the same branch. Every gate and the measurement were re-run by the orchestrator.*
+
+**Verified independently.** (1) **Gate GR after DR4**, re-run from scratch: 20 of 20 runs, **270 of
+270 values identical**, both substitutes PASS, seven teeth tripped. (2) **The measurement stage**
+(`python -m harness.gates predicate-counters`) on those fresh records: `st_regression` `B3` seed 0 —
+570 empty `PULSE` sweeps, **10.84 %** of the run's block sweeps, 3 510 and 11.30 % at seed 1; the
+five flat-versus-partitioned pairs give component-comparison ratios **0.530–0.666** against node-call
+ratios 0.524–0.650, widths 0.284–0.285 — the report's numbers to the digit. (3) **G1**
+(`switch-neutrality --compare`): 6 pairs, 0 of 2 341 values, 0 of 51 319 output-file lines, four
+teeth; the compared population fell by exactly the three previously-null fields × six pairs, and the
+exclusion set grew 33 → 43 by exactly the nine new fields plus the retired null-reason key. (4)
+**G0′** PASS; `PROCESS/copy_gates.py all` ALL GATES PASS; `PROCESS_diff.py` exit 0 over six files, 0
+unexplained; `--selfcheck` six checks PASS with the sixteen driver counters resolving. (5) Scope:
+fifteen files — three driver files of the copy (`caller.py`, `_idf_probe_modules.py`; `module_solve.py`
+untouched as it turned out), the copy's provenance and diff tooling, the harness files the brief
+assigned plus one-line touches in `optimise.py` and `evaluate.py`, the README's registry section and
+this report; `models/`, the repository-root `process/` and `experiment_runner.py` untouched; no
+conflict with trunk.
+
+**Endorsed.** The defect found and fixed on the branch (§3.3) is the report's most valuable
+paragraph: a counter built to find I-20(a) that reported `{"FF": 570}` and missed it, because the
+routing rule skips `pulse` at the call site rather than by emptying its block. The corrected
+definition — empty means *no node executed*, measured on the node counter across the visit — and the
+split into `EMPTY_BLOCK_VISITS` and `EMPTY_BLOCK_SWEEPS`, because a member-empty block costs no
+sweep and a skipped-member block costs a full walk, is exactly the distinction that keeps the
+disclaimer honest: the visit share is 40 % on every configuration and is not a cost; the sweep share
+is 0 / 0 / 10.84–11.30 %. The instrument line landed as A51 specified and the census reads the report
+with identical results (69 node read sets, 4 641 pairs). The sweep-total decomposition checked on
+every record rather than assumed. Two predicates kept as separate fields so that `BR`'s
+27-component test and `B0`'s 840-component test can never be pooled.
+
+**Limits I hold it to.** (a) The measurement is one seed per cell; it settles the *sign* of item 3's
+hypothesis on counts and claims nothing about a distribution. (b) The exclusion set is now 43 names,
+two of them excluded while carrying non-zero values on the later side (the upstream predicate pair);
+A52 reviews the set as one table. (c) What the per-sweep overhead *is* remains open — the candidates
+the counters cannot resolve are named in §10.2 — and the plan should carry that as an open question,
+not as a closed one.
+
+**Consequences drawn (orchestrator, today).** *Issue I-20(a)* is extended in the register, not
+corrected: its `st_regression` share stands (reproduced to the digit by an independent counter); the
+empty `PULSE` visit occurs on all three configurations and costs a sweep on one. *Improvement item 3*
+is closed in the negative: the convergence test is not the non-node-proportional per-sweep cost; the
+partitioned arm compares 33–47 % fewer components, tracking its node calls to within 0.02. *A53
+(harness-tally)* quotes the sweep share, never the visit share, in every empty-visit disclaimer, and
+never pools the two predicates. *A52 (harness-gates)* wires `predicate-counters` beside the other
+stages and reviews the 43-name exclusion set. *A59 (driver-predicate-mode)* uses `COMPONENTS_COMPARED`
+as the free consistency check between `frozen` and `mixed`. A59 is dispatched off the merged tip.
+
+**Verdict.** Fit to merge; nothing returned. DR4 lands with neutrality and reproduction intact, and
+the first question the counters were built to answer is answered.
