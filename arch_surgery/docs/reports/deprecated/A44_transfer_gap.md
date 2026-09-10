@@ -1,6 +1,6 @@
 # A44 (transfer-gap) — why Phase A's per-call ratio does not predict Phase B's end-to-end ratio
 
-> **Document status** — **OPEN TASK REPORT, complete, awaiting the orchestrator's assessment (protocol §5).** Task A44 (transfer-gap), branch
+> **Document status** — **MERGED 2026-09-10 and archived to `deprecated/` (protocol §7). Folder position records lifecycle, not validity (trap T3): the findings stand; the orchestrator's assessment is appended below.** Was: OPEN TASK REPORT, complete, awaiting the orchestrator's assessment (protocol §5). Task A44 (transfer-gap), branch
 > `A44-transfer-gap` off `architecture_surgery` at `16a6e87e`. Investigates queue issue I-17.
 > Every number below is produced by a stage of
 > [`arch_surgery/idf_probe/a44_transfer_gap.py`](../../idf_probe/a44_transfer_gap.py); the
