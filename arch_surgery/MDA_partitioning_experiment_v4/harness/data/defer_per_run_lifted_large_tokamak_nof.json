@@ -1,0 +1,3705 @@
+{
+  "format": "a33-postsolve-1",
+  "scenario": "large_tokamak_nof",
+  "generated_by": "arch_surgery/idf_probe/a33_postsolve.py classify",
+  "tree_git_head": "3820fa5d05412f3315960dcab9a6c83125043e71",
+  "tree_git_dirty": false,
+  "deck": {
+    "path": "arch_surgery/idf_probe/scenarios/large_tokamak_nof.IN.DAT",
+    "minmax": 1,
+    "icc_parsed_from_deck": [
+      1,
+      2,
+      11,
+      30,
+      15,
+      16,
+      24,
+      25,
+      26,
+      27,
+      33,
+      34,
+      35,
+      36,
+      60,
+      62,
+      65,
+      72,
+      81,
+      68,
+      31,
+      32,
+      5,
+      8,
+      9,
+      13
+    ],
+    "lift_adds_icc93": true,
+    "icc_expected_at_runtime": [
+      1,
+      2,
+      5,
+      8,
+      9,
+      11,
+      13,
+      15,
+      16,
+      24,
+      25,
+      26,
+      27,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      60,
+      62,
+      65,
+      68,
+      72,
+      81,
+      93
+    ],
+    "i_figure_merit_expected": 1,
+    "n_constraints_crosscheck": {
+      "parsed_base_icc_count": 26,
+      "lift_adds_icc93": true,
+      "effective_icc_count": 27,
+      "a28_recorded_n_constraints": 27,
+      "a28_expected_table": 27,
+      "a28_i_figure_merit": 1,
+      "match": true,
+      "a28_source": "/home/wrutten/projects/PROCESS_surgery/arch_surgery/idf_probe/runs/a28/h5/large_tokamak_nof/A1p/start000/metrics.json"
+    },
+    "switches_bearing_on_liveness": {
+      "i_plant_availability": 0,
+      "i_pulsed_plant": 1,
+      "itart": null
+    }
+  },
+  "seeds": {
+    "n_fields": 85,
+    "detail": {
+      "objective": [
+        "physics.rmajor"
+      ],
+      "icc_1": [
+        "physics.b_plasma_total",
+        "physics.beta_beam",
+        "physics.beta_fast_alpha",
+        "physics.beta_total_vol_avg",
+        "physics.nd_plasma_electrons_vol_avg",
+        "physics.nd_plasma_ions_total_vol_avg",
+        "physics.temp_plasma_electron_density_weighted_kev",
+        "physics.temp_plasma_ion_density_weighted_kev"
+      ],
+      "icc_2": [
+        "current_drive.p_hcd_injected_total_mw",
+        "physics.f_p_alpha_plasma_deposited",
+        "physics.i_plasma_ignited",
+        "physics.i_rad_loss",
+        "physics.pden_alpha_total_mw",
+        "physics.pden_electron_transport_loss_mw",
+        "physics.pden_ion_transport_loss_mw",
+        "physics.pden_non_alpha_charged_mw",
+        "physics.pden_plasma_core_rad_mw",
+        "physics.pden_plasma_ohmic_mw",
+        "physics.pden_plasma_rad_mw",
+        "physics.vol_plasma"
+      ],
+      "icc_5": [
+        "constraints.f_nd_plasma_electron_limit_max",
+        "physics.i_density_limit",
+        "physics.nd_plasma_electron_line",
+        "physics.nd_plasma_electrons_max",
+        "physics.nd_plasma_electrons_vol_avg"
+      ],
+      "icc_8": [
+        "constraints.pflux_fw_neutron_max_mw",
+        "physics.pflux_fw_neutron_mw"
+      ],
+      "icc_9": [
+        "constraints.p_fusion_total_max_mw",
+        "physics.p_fusion_total_mw"
+      ],
+      "icc_11": [
+        "build.rbld",
+        "physics.rmajor"
+      ],
+      "icc_13": [
+        "constraints.t_burn_min",
+        "times.t_plant_pulse_burn"
+      ],
+      "icc_15": [
+        "constraints.f_h_mode_margin",
+        "physics.p_l_h_threshold_mw",
+        "physics.p_plasma_separatrix_mw"
+      ],
+      "icc_16": [
+        "constraints.p_plant_electric_net_required_mw",
+        "heat_transport.p_plant_electric_net_mw"
+      ],
+      "icc_24": [
+        "physics.beta_beam",
+        "physics.beta_thermal_vol_avg",
+        "physics.beta_toroidal_vol_avg",
+        "physics.beta_total_vol_avg",
+        "physics.beta_vol_avg_max",
+        "physics.i_beta_component",
+        "stellarator.istell"
+      ],
+      "icc_25": [
+        "constraints.b_tf_inboard_max",
+        "tfcoil.b_tf_inboard_peak_with_ripple"
+      ],
+      "icc_26": [
+        "constraints.fjohc",
+        "pf_coil.j_cs_critical_flat_top_end",
+        "pf_coil.j_cs_flat_top_end"
+      ],
+      "icc_27": [
+        "constraints.fjohc0",
+        "pf_coil.j_cs_critical_pulse_start",
+        "pf_coil.j_cs_pulse_start"
+      ],
+      "icc_30": [
+        "current_drive.p_hcd_injected_max",
+        "current_drive.p_hcd_injected_total_mw"
+      ],
+      "icc_31": [
+        "tfcoil.sig_tf_case",
+        "tfcoil.sig_tf_case_max"
+      ],
+      "icc_32": [
+        "tfcoil.sig_tf_wp",
+        "tfcoil.sig_tf_wp_max"
+      ],
+      "icc_33": [
+        "constraints.f_j_tf_wp_critical_max",
+        "tfcoil.j_tf_wp",
+        "tfcoil.j_tf_wp_critical"
+      ],
+      "icc_34": [
+        "tfcoil.v_tf_coil_dump_quench_kv",
+        "tfcoil.v_tf_coil_dump_quench_max_kv"
+      ],
+      "icc_35": [
+        "tfcoil.j_tf_wp",
+        "tfcoil.j_tf_wp_quench_heat_max"
+      ],
+      "icc_36": [
+        "tfcoil.temp_tf_superconductor_margin",
+        "tfcoil.temp_tf_superconductor_margin_min"
+      ],
+      "icc_60": [
+        "pf_coil.temp_cs_superconductor_margin",
+        "tfcoil.temp_cs_superconductor_margin_min"
+      ],
+      "icc_62": [
+        "constraints.f_t_alpha_energy_confinement_min",
+        "physics.f_t_alpha_energy_confinement"
+      ],
+      "icc_65": [
+        "superconducting_tfcoil.vv_stress_quench",
+        "tfcoil.max_vv_stress"
+      ],
+      "icc_68": [
+        "constraints.i_q95_fixed",
+        "constraints.p_div_bt_q_aspect_rmajor_max_mw",
+        "constraints.q95_fixed",
+        "physics.aspect",
+        "physics.b_plasma_toroidal_on_axis",
+        "physics.p_div_bt_q_aspect_rmajor_mw",
+        "physics.p_plasma_separatrix_mw",
+        "physics.rmajor"
+      ],
+      "icc_72": [
+        "build.i_tf_inside_cs",
+        "pf_coil.stress_cs_steel_max",
+        "pf_coil.stress_shear_cs_peak",
+        "tfcoil.i_tf_bucking",
+        "tfcoil.sig_tf_cs_bucked"
+      ],
+      "icc_81": [
+        "physics.nd_plasma_electron_on_axis",
+        "physics.nd_plasma_pedestal_electron"
+      ],
+      "icc_93": [
+        "pf_coil.vs_cs_pf_total_burn",
+        "physics.v_plasma_loop_burn",
+        "times.t_plant_pulse_burn",
+        "times.t_plant_pulse_fusion_ramp"
+      ]
+    }
+  },
+  "writer_authority": {
+    "path": "arch_surgery/docs/data/node_writesets.json",
+    "union_sha256": "bc9e35da9cd9378b5372f7e167f571f368bd00cc76ca60e4489a5976c7002d5c",
+    "note": "run-time write census (PROCESS_IDF_PROBE=modules), closed at the _call_models_once boundary -- no output()-path write is in it (traps T1/T7)"
+  },
+  "dsm": {
+    "export": "/home/wrutten/projects/PROCESS_code_analysis/output/tokamak/process_dependencies.json",
+    "sha256_at_read": "d02dd73dc18c5c54dba2d16e390e5ee2a887e40c835f59f5b0555e9047f8368d",
+    "sibling_git_head": "2b4fea1c861a69a42ac1c53062627a08ca8a00e2",
+    "n_access_read_edges": 4367,
+    "n_supermodels": 51,
+    "analysis_pin": "PROCESS_at_36ac820e",
+    "config_used": "tokamak",
+    "v6_note": "the analysis 'tokamak' preset, which matches this deck exactly (dsm_node_map.json caveat V6, resolved by M100 per-scenario regeneration)",
+    "t1_probe": {
+      "field": "physics.b_plasma_vertical_required",
+      "read_by_units_in_export": [],
+      "read_by_physics": false,
+      "verdict": "PASS: no run-path read into M1 -- the export excludes output() paths on the edge that bit first (trap T1)"
+    },
+    "t9_note": "read live from the sibling's output/ on the task brief's explicit instruction; sha256 recorded at read time so any later regeneration is visible, not silent"
+  },
+  "crawl": {
+    "rule": "backward fixpoint from the seeds: a unit is NEEDED iff its measured writes intersect the consumed field set; a needed unit's DSM reads join that set; every unit never needed is a post-solve candidate",
+    "units": [
+      "availability",
+      "build",
+      "buildings",
+      "ccfe_hcpb",
+      "cicc_sctfcoil",
+      "costs",
+      "cryostat",
+      "divertor",
+      "fw",
+      "pfcoil",
+      "physics",
+      "plasma_geom",
+      "power+",
+      "pulse",
+      "shield",
+      "structure",
+      "vacuum",
+      "vacuum_vessel",
+      "water_use"
+    ],
+    "needed": {
+      "build": {
+        "consumed_writes": [
+          "build.rbld"
+        ],
+        "consumed_by": {
+          "build.rbld": [
+            "seed"
+          ]
+        }
+      },
+      "cicc_sctfcoil": {
+        "consumed_writes": [
+          "superconducting_tfcoil.r_tf_wp_inboard_centre",
+          "superconducting_tfcoil.r_tf_wp_inboard_inner",
+          "superconducting_tfcoil.r_tf_wp_inboard_outer",
+          "superconducting_tfcoil.vv_stress_quench",
+          "tfcoil.b_tf_inboard_peak_with_ripple",
+          "tfcoil.dr_tf_plasma_case",
+          "tfcoil.dx_tf_inboard_out_toroidal",
+          "tfcoil.dx_tf_wp_primary_toroidal",
+          "tfcoil.j_tf_wp",
+          "tfcoil.j_tf_wp_critical",
+          "tfcoil.j_tf_wp_quench_heat_max",
+          "tfcoil.sig_tf_case",
+          "tfcoil.sig_tf_cs_bucked",
+          "tfcoil.sig_tf_wp",
+          "tfcoil.temp_tf_superconductor_margin",
+          "tfcoil.v_tf_coil_dump_quench_kv"
+        ],
+        "consumed_by": {
+          "superconducting_tfcoil.r_tf_wp_inboard_centre": [
+            "build",
+            "cicc_sctfcoil"
+          ],
+          "superconducting_tfcoil.r_tf_wp_inboard_inner": [
+            "build",
+            "cicc_sctfcoil"
+          ],
+          "superconducting_tfcoil.r_tf_wp_inboard_outer": [
+            "build",
+            "cicc_sctfcoil"
+          ],
+          "superconducting_tfcoil.vv_stress_quench": [
+            "seed"
+          ],
+          "tfcoil.b_tf_inboard_peak_with_ripple": [
+            "seed",
+            "cicc_sctfcoil"
+          ],
+          "tfcoil.dr_tf_plasma_case": [
+            "build",
+            "cicc_sctfcoil"
+          ],
+          "tfcoil.dx_tf_inboard_out_toroidal": [
+            "build"
+          ],
+          "tfcoil.dx_tf_wp_primary_toroidal": [
+            "build",
+            "cicc_sctfcoil"
+          ],
+          "tfcoil.j_tf_wp": [
+            "seed",
+            "cicc_sctfcoil"
+          ],
+          "tfcoil.j_tf_wp_critical": [
+            "seed"
+          ],
+          "tfcoil.j_tf_wp_quench_heat_max": [
+            "seed"
+          ],
+          "tfcoil.sig_tf_case": [
+            "seed",
+            "cicc_sctfcoil"
+          ],
+          "tfcoil.sig_tf_cs_bucked": [
+            "seed",
+            "cicc_sctfcoil"
+          ],
+          "tfcoil.sig_tf_wp": [
+            "seed"
+          ],
+          "tfcoil.temp_tf_superconductor_margin": [
+            "seed"
+          ],
+          "tfcoil.v_tf_coil_dump_quench_kv": [
+            "seed",
+            "power+"
+          ]
+        }
+      },
+      "fw": {
+        "consumed_writes": [
+          "build.dr_fw_inboard",
+          "build.dr_fw_outboard",
+          "physics.pflux_fw_neutron_mw"
+        ],
+        "consumed_by": {
+          "build.dr_fw_inboard": [
+            "build",
+            "fw",
+            "ccfe_hcpb",
+            "shield",
+            "vacuum_vessel"
+          ],
+          "build.dr_fw_outboard": [
+            "build",
+            "fw",
+            "ccfe_hcpb",
+            "shield",
+            "vacuum_vessel"
+          ],
+          "physics.pflux_fw_neutron_mw": [
+            "seed",
+            "availability"
+          ]
+        }
+      },
+      "pfcoil": {
+        "consumed_writes": [
+          "pf_coil.a_cs_poloidal",
+          "pf_coil.j_cs_critical_flat_top_end",
+          "pf_coil.j_cs_critical_pulse_start",
+          "pf_coil.j_cs_pulse_start",
+          "pf_coil.n_pf_coils_in_group",
+          "pf_coil.stress_hoop_cs_inner",
+          "pf_coil.stress_radial_cs_peak",
+          "pf_coil.stress_shear_cs_peak",
+          "pf_coil.stress_z_cs_self_peak_midplane",
+          "pf_coil.temp_cs_superconductor_margin",
+          "pf_coil.vs_cs_pf_total_burn"
+        ],
+        "consumed_by": {
+          "pf_coil.a_cs_poloidal": [
+            "cicc_sctfcoil",
+            "pfcoil"
+          ],
+          "pf_coil.j_cs_critical_flat_top_end": [
+            "seed"
+          ],
+          "pf_coil.j_cs_critical_pulse_start": [
+            "seed"
+          ],
+          "pf_coil.j_cs_pulse_start": [
+            "seed",
+            "cicc_sctfcoil",
+            "pfcoil"
+          ],
+          "pf_coil.n_pf_coils_in_group": [
+            "cicc_sctfcoil",
+            "pfcoil",
+            "power+"
+          ],
+          "pf_coil.stress_hoop_cs_inner": [
+            "cicc_sctfcoil",
+            "pfcoil"
+          ],
+          "pf_coil.stress_radial_cs_peak": [
+            "cicc_sctfcoil",
+            "pfcoil"
+          ],
+          "pf_coil.stress_shear_cs_peak": [
+            "seed"
+          ],
+          "pf_coil.stress_z_cs_self_peak_midplane": [
+            "cicc_sctfcoil",
+            "pfcoil"
+          ],
+          "pf_coil.temp_cs_superconductor_margin": [
+            "seed"
+          ],
+          "pf_coil.vs_cs_pf_total_burn": [
+            "seed",
+            "pfcoil",
+            "pulse"
+          ]
+        }
+      },
+      "physics": {
+        "consumed_writes": [
+          "current_drive.p_hcd_injected_total_mw",
+          "physics.b_plasma_total",
+          "physics.beta_fast_alpha",
+          "physics.beta_poloidal_vol_avg",
+          "physics.beta_thermal_vol_avg",
+          "physics.beta_toroidal_vol_avg",
+          "physics.beta_vol_avg_max",
+          "physics.f_c_plasma_inductive",
+          "physics.f_t_alpha_energy_confinement",
+          "physics.ind_plasma",
+          "physics.ind_plasma_internal_norm",
+          "physics.nd_plasma_electron_line",
+          "physics.nd_plasma_electron_on_axis",
+          "physics.nd_plasma_electrons_max",
+          "physics.nd_plasma_ions_total_vol_avg",
+          "physics.nd_plasma_pedestal_electron",
+          "physics.p_alpha_total_mw",
+          "physics.p_div_bt_q_aspect_rmajor_mw",
+          "physics.p_fusion_total_mw",
+          "physics.p_l_h_threshold_mw",
+          "physics.p_plasma_rad_mw",
+          "physics.p_plasma_separatrix_mw",
+          "physics.pden_alpha_total_mw",
+          "physics.pden_electron_transport_loss_mw",
+          "physics.pden_ion_transport_loss_mw",
+          "physics.pden_non_alpha_charged_mw",
+          "physics.pden_plasma_core_rad_mw",
+          "physics.pden_plasma_ohmic_mw",
+          "physics.pden_plasma_rad_mw",
+          "physics.pflux_plasma_surface_neutron_avg_mw",
+          "physics.plasma_current",
+          "physics.temp_plasma_electron_density_weighted_kev",
+          "physics.temp_plasma_ion_density_weighted_kev",
+          "physics.v_plasma_loop_burn",
+          "physics.vs_plasma_ramp_required"
+        ],
+        "consumed_by": {
+          "current_drive.p_hcd_injected_total_mw": [
+            "seed",
+            "physics",
+            "power+"
+          ],
+          "physics.b_plasma_total": [
+            "seed",
+            "physics"
+          ],
+          "physics.beta_fast_alpha": [
+            "seed",
+            "physics"
+          ],
+          "physics.beta_poloidal_vol_avg": [
+            "pfcoil",
+            "physics"
+          ],
+          "physics.beta_thermal_vol_avg": [
+            "seed",
+            "physics"
+          ],
+          "physics.beta_toroidal_vol_avg": [
+            "seed",
+            "physics"
+          ],
+          "physics.beta_vol_avg_max": [
+            "seed"
+          ],
+          "physics.f_c_plasma_inductive": [
+            "pfcoil",
+            "physics"
+          ],
+          "physics.f_t_alpha_energy_confinement": [
+            "seed"
+          ],
+          "physics.ind_plasma": [
+            "pfcoil",
+            "physics"
+          ],
+          "physics.ind_plasma_internal_norm": [
+            "pfcoil",
+            "physics"
+          ],
+          "physics.nd_plasma_electron_line": [
+            "seed",
+            "physics"
+          ],
+          "physics.nd_plasma_electron_on_axis": [
+            "seed",
+            "physics"
+          ],
+          "physics.nd_plasma_electrons_max": [
+            "seed"
+          ],
+          "physics.nd_plasma_ions_total_vol_avg": [
+            "seed",
+            "physics"
+          ],
+          "physics.nd_plasma_pedestal_electron": [
+            "seed",
+            "physics"
+          ],
+          "physics.p_alpha_total_mw": [
+            "fw",
+            "physics"
+          ],
+          "physics.p_div_bt_q_aspect_rmajor_mw": [
+            "seed"
+          ],
+          "physics.p_fusion_total_mw": [
+            "seed",
+            "physics",
+            "power+",
+            "ccfe_hcpb",
+            "availability"
+          ],
+          "physics.p_l_h_threshold_mw": [
+            "seed",
+            "physics"
+          ],
+          "physics.p_plasma_rad_mw": [
+            "fw",
+            "physics",
+            "ccfe_hcpb",
+            "divertor"
+          ],
+          "physics.p_plasma_separatrix_mw": [
+            "seed",
+            "physics",
+            "power+",
+            "ccfe_hcpb",
+            "divertor"
+          ],
+          "physics.pden_alpha_total_mw": [
+            "seed",
+            "physics"
+          ],
+          "physics.pden_electron_transport_loss_mw": [
+            "seed",
+            "physics"
+          ],
+          "physics.pden_ion_transport_loss_mw": [
+            "seed",
+            "physics"
+          ],
+          "physics.pden_non_alpha_charged_mw": [
+            "seed",
+            "physics"
+          ],
+          "physics.pden_plasma_core_rad_mw": [
+            "seed",
+            "physics"
+          ],
+          "physics.pden_plasma_ohmic_mw": [
+            "seed"
+          ],
+          "physics.pden_plasma_rad_mw": [
+            "seed",
+            "physics"
+          ],
+          "physics.pflux_plasma_surface_neutron_avg_mw": [
+            "fw"
+          ],
+          "physics.plasma_current": [
+            "pfcoil",
+            "physics",
+            "pulse",
+            "structure"
+          ],
+          "physics.temp_plasma_electron_density_weighted_kev": [
+            "seed",
+            "physics"
+          ],
+          "physics.temp_plasma_ion_density_weighted_kev": [
+            "seed",
+            "physics"
+          ],
+          "physics.v_plasma_loop_burn": [
+            "seed",
+            "pulse"
+          ],
+          "physics.vs_plasma_ramp_required": [
+            "pfcoil"
+          ]
+        }
+      },
+      "plasma_geom": {
+        "consumed_writes": [
+          "physics.a_plasma_poloidal",
+          "physics.a_plasma_surface",
+          "physics.eps",
+          "physics.kappa95",
+          "physics.len_plasma_poloidal",
+          "physics.rminor",
+          "physics.triang95",
+          "physics.vol_plasma"
+        ],
+        "consumed_by": {
+          "physics.a_plasma_poloidal": [
+            "physics"
+          ],
+          "physics.a_plasma_surface": [
+            "fw",
+            "physics",
+            "ccfe_hcpb"
+          ],
+          "physics.eps": [
+            "physics"
+          ],
+          "physics.kappa95": [
+            "physics"
+          ],
+          "physics.len_plasma_poloidal": [
+            "physics"
+          ],
+          "physics.rminor": [
+            "build",
+            "cicc_sctfcoil",
+            "fw",
+            "pfcoil",
+            "physics",
+            "plasma_geom",
+            "structure",
+            "ccfe_hcpb",
+            "divertor",
+            "shield",
+            "vacuum_vessel"
+          ],
+          "physics.triang95": [
+            "physics"
+          ],
+          "physics.vol_plasma": [
+            "seed",
+            "physics"
+          ]
+        }
+      },
+      "power+": {
+        "consumed_writes": [
+          "heat_transport.p_plant_electric_net_mw"
+        ],
+        "consumed_by": {
+          "heat_transport.p_plant_electric_net_mw": [
+            "seed",
+            "power+"
+          ]
+        }
+      },
+      "pulse": {
+        "consumed_writes": [
+          "times.t_plant_pulse_burn"
+        ],
+        "consumed_by": {
+          "times.t_plant_pulse_burn": [
+            "seed",
+            "physics",
+            "power+",
+            "availability"
+          ]
+        }
+      },
+      "structure": {
+        "consumed_writes": [
+          "structure.coldmass"
+        ],
+        "consumed_by": {
+          "structure.coldmass": [
+            "power+"
+          ]
+        }
+      },
+      "buildings": {
+        "consumed_writes": [
+          "buildings.a_plant_floor_effective"
+        ],
+        "consumed_by": {
+          "buildings.a_plant_floor_effective": [
+            "power+"
+          ]
+        }
+      },
+      "ccfe_hcpb": {
+        "consumed_writes": [
+          "divertor.m_div_plate",
+          "fwbs.m_blkt_total",
+          "fwbs.m_fw_blkt_div_coolant_total",
+          "fwbs.m_fw_total",
+          "fwbs.p_blkt_nuclear_heat_total_mw",
+          "fwbs.p_cp_shield_nuclear_heat_mw",
+          "fwbs.p_fw_hcd_rad_total_mw",
+          "fwbs.p_fw_nuclear_heat_total_mw",
+          "fwbs.p_fw_rad_total_mw",
+          "fwbs.p_shld_nuclear_heat_mw",
+          "fwbs.p_tf_nuclear_heat_mw",
+          "fwbs.whtshld",
+          "heat_transport.p_div_coolant_pump_mw",
+          "heat_transport.p_shld_coolant_pump_mw",
+          "primary_pumping.p_fw_blkt_coolant_pump_mw"
+        ],
+        "consumed_by": {
+          "divertor.m_div_plate": [
+            "structure"
+          ],
+          "fwbs.m_blkt_total": [
+            "structure",
+            "ccfe_hcpb"
+          ],
+          "fwbs.m_fw_blkt_div_coolant_total": [
+            "structure"
+          ],
+          "fwbs.m_fw_total": [
+            "structure",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_blkt_nuclear_heat_total_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_cp_shield_nuclear_heat_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_fw_hcd_rad_total_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_fw_nuclear_heat_total_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_fw_rad_total_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_shld_nuclear_heat_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_tf_nuclear_heat_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.whtshld": [
+            "structure",
+            "buildings",
+            "ccfe_hcpb"
+          ],
+          "heat_transport.p_div_coolant_pump_mw": [
+            "power+"
+          ],
+          "heat_transport.p_shld_coolant_pump_mw": [
+            "power+"
+          ],
+          "primary_pumping.p_fw_blkt_coolant_pump_mw": [
+            "power+"
+          ]
+        }
+      },
+      "cryostat": {
+        "consumed_writes": [
+          "buildings.dz_tf_cryostat",
+          "fwbs.dewmkg",
+          "fwbs.r_cryostat_inboard"
+        ],
+        "consumed_by": {
+          "buildings.dz_tf_cryostat": [
+            "buildings"
+          ],
+          "fwbs.dewmkg": [
+            "structure"
+          ],
+          "fwbs.r_cryostat_inboard": [
+            "buildings",
+            "cryostat"
+          ]
+        }
+      },
+      "divertor": {
+        "consumed_writes": [
+          "divertor.deg_div_poloidal_plasma",
+          "fwbs.f_ster_div_single",
+          "fwbs.p_div_nuclear_heat_total_mw",
+          "fwbs.p_div_rad_total_mw"
+        ],
+        "consumed_by": {
+          "divertor.deg_div_poloidal_plasma": [
+            "ccfe_hcpb",
+            "divertor"
+          ],
+          "fwbs.f_ster_div_single": [
+            "fw",
+            "ccfe_hcpb",
+            "divertor"
+          ],
+          "fwbs.p_div_nuclear_heat_total_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ],
+          "fwbs.p_div_rad_total_mw": [
+            "power+",
+            "ccfe_hcpb"
+          ]
+        }
+      },
+      "shield": {
+        "consumed_writes": [
+          "fwbs.vol_shld_total"
+        ],
+        "consumed_by": {
+          "fwbs.vol_shld_total": [
+            "ccfe_hcpb"
+          ]
+        }
+      },
+      "vacuum_vessel": {
+        "consumed_writes": [
+          "fwbs.m_vv",
+          "fwbs.vol_vv"
+        ],
+        "consumed_by": {
+          "fwbs.m_vv": [
+            "ccfe_hcpb"
+          ],
+          "fwbs.vol_vv": [
+            "ccfe_hcpb",
+            "cryostat",
+            "vacuum_vessel"
+          ]
+        }
+      },
+      "availability": {
+        "consumed_writes": [
+          "divertor.pflux_div_heat_load_mw"
+        ],
+        "consumed_by": {
+          "divertor.pflux_div_heat_load_mw": [
+            "divertor",
+            "availability"
+          ]
+        }
+      }
+    },
+    "candidates": [
+      "vacuum",
+      "water_use",
+      "costs"
+    ]
+  },
+  "evidence": {
+    "costs": {
+      "census_writes": [
+        "costs.blkcst",
+        "costs.c21",
+        "costs.c211",
+        "costs.c212",
+        "costs.c213",
+        "costs.c214",
+        "costs.c2141",
+        "costs.c2142",
+        "costs.c215",
+        "costs.c216",
+        "costs.c217",
+        "costs.c2171",
+        "costs.c2172",
+        "costs.c2173",
+        "costs.c2174",
+        "costs.c22",
+        "costs.c221",
+        "costs.c2211",
+        "costs.c2212",
+        "costs.c22121",
+        "costs.c22122",
+        "costs.c22123",
+        "costs.c22124",
+        "costs.c22125",
+        "costs.c22126",
+        "costs.c22127",
+        "costs.c2213",
+        "costs.c22131",
+        "costs.c22132",
+        "costs.c2214",
+        "costs.c2215",
+        "costs.c222",
+        "costs.c2221",
+        "costs.c22211",
+        "costs.c22212",
+        "costs.c22213",
+        "costs.c22214",
+        "costs.c22215",
+        "costs.c2222",
+        "costs.c22221",
+        "costs.c22222",
+        "costs.c22223",
+        "costs.c22224",
+        "costs.c2223",
+        "costs.c223",
+        "costs.c2231",
+        "costs.c2232",
+        "costs.c224",
+        "costs.c2241",
+        "costs.c2242",
+        "costs.c2243",
+        "costs.c2244",
+        "costs.c2245",
+        "costs.c2246",
+        "costs.c225",
+        "costs.c2251",
+        "costs.c22511",
+        "costs.c22512",
+        "costs.c22513",
+        "costs.c22514",
+        "costs.c22515",
+        "costs.c2252",
+        "costs.c22521",
+        "costs.c22522",
+        "costs.c22523",
+        "costs.c22524",
+        "costs.c22525",
+        "costs.c22526",
+        "costs.c22527",
+        "costs.c2253",
+        "costs.c226",
+        "costs.c2261",
+        "costs.c2262",
+        "costs.c2263",
+        "costs.c227",
+        "costs.c2271",
+        "costs.c2272",
+        "costs.c2273",
+        "costs.c2274",
+        "costs.c228",
+        "costs.c229",
+        "costs.c23",
+        "costs.c24",
+        "costs.c241",
+        "costs.c242",
+        "costs.c243",
+        "costs.c244",
+        "costs.c245",
+        "costs.c25",
+        "costs.c26",
+        "costs.capcost",
+        "costs.ccont",
+        "costs.cdcost",
+        "costs.cdirt",
+        "costs.cdrlife_cal",
+        "costs.chx",
+        "costs.cindrt",
+        "costs.coe",
+        "costs.coecap",
+        "costs.coefuelt",
+        "costs.coeoam",
+        "costs.concost",
+        "costs.cpp",
+        "costs.cppa",
+        "costs.crctcore",
+        "costs.divcst",
+        "costs.fwallcst",
+        "costs.life_div",
+        "costs.moneyint",
+        "fwbs.life_blkt",
+        "physics.wtgpd"
+      ],
+      "n_census_writes": 111,
+      "external_source_read_sites": {
+        "costs.blkcst": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 133,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2771,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c21": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 258,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 66,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c211": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 196,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1136,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c212": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 202,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1137,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c213": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 208,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1138,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c214": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1139,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2141": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 214,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1078,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2142": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 216,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1078,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c215": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 221,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1140,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c216": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 227,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1141,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c217": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1142,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2171": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 233,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1127,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2172": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 239,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1128,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2173": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 245,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1129,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2174": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 251,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1130,
+            "function": "acc21",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 769,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 67,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c221": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 375,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 920,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 925,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2211": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 262,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1198,
+            "function": "acc2211",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1201,
+            "function": "acc2211",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1204,
+            "function": "acc2211",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 967,
+            "function": "acc221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2212": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 343,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1321,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1324,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 968,
+            "function": "acc221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22121": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 268,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 294,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1276,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1311,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22122": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 274,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 300,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1281,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1312,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22123": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 281,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 306,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1286,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1313,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22124": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 287,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 312,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1291,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1314,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22125": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 318,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1296,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1315,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22126": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 324,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1301,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1316,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22127": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1317,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 330,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1306,
+            "function": "acc2212",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2213": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 361,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 969,
+            "function": "acc221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22131": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 349,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1373,
+            "function": "acc2213",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1388,
+            "function": "acc2213",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22132": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 355,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1386,
+            "function": "acc2213",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1388,
+            "function": "acc2213",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2214": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 367,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1403,
+            "function": "acc2214",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 970,
+            "function": "acc221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2215": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 369,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 971,
+            "function": "acc221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1421,
+            "function": "acc2215",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1424,
+            "function": "acc2215",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1427,
+            "function": "acc2215",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c222": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 490,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 920,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 926,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2221": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 997,
+            "function": "acc222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 409,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 446,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22211": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1459,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1463,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1480,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 416,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1466,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1527,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 389,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 396,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1584,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22212": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1476,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1480,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 403,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 422,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1542,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1585,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22213": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 428,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1555,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1586,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22214": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 434,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1566,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1587,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22215": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1588,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 440,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1577,
+            "function": "acc2221",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2222": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 477,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 997,
+            "function": "acc222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22221": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 453,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1797,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1835,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22222": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 459,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1806,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1836,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22223": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 465,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1817,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1837,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22224": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1838,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 471,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1828,
+            "function": "acc2222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2223": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 997,
+            "function": "acc222",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 483,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1850,
+            "function": "acc2223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c223": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1978,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 527,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 920,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 927,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2231": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 500,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 507,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1879,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1880,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1964,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1965,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1973,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2232": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 513,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1902,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1903,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1974,
+            "function": "acc223",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c224": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 567,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 928,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2241": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 535,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1997,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2045,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2242": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 541,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2004,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2046,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2243": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 547,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2014,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2047,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2244": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 549,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2025,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2048,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2245": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 554,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2035,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2049,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2246": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 560,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2040,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2050,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c225": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 667,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 929,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2251": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 606,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1022,
+            "function": "acc225",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22511": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2067,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 576,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2124,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22512": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2086,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 582,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2125,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22513": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2096,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 588,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2126,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22514": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2103,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 594,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2127,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22515": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2119,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2128,
+            "function": "acc2251",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 600,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2252": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 654,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1022,
+            "function": "acc225",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22521": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2141,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 612,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2201,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22522": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2148,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 618,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2202,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22523": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2158,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 624,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2203,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22524": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2172,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 630,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2204,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22525": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2182,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 636,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2205,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22526": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2189,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 642,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2206,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c22527": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2196,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2207,
+            "function": "acc2252",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 648,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2253": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2701,
+            "function": "acc2253",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 660,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1022,
+            "function": "acc225",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2690,
+            "function": "acc2253",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c226": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 712,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 930,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2261": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 687,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2217,
+            "function": "acc226",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2262": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 699,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2217,
+            "function": "acc226",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2263": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 705,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2217,
+            "function": "acc226",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2319,
+            "function": "acc2263",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c227": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 745,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 931,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2271": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 720,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2342,
+            "function": "acc2271",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2329,
+            "function": "acc227",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2272": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 726,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2381,
+            "function": "acc2272",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2330,
+            "function": "acc227",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2273": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 732,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2402,
+            "function": "acc2273",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2331,
+            "function": "acc227",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c2274": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 738,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2332,
+            "function": "acc227",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2415,
+            "function": "acc2274",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c228": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 753,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2425,
+            "function": "acc228",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 932,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c229": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 761,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 933,
+            "function": "acc22",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2433,
+            "function": "acc229",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c23": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 777,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 68,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c24": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 811,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 69,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c241": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 785,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2455,
+            "function": "acc24",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c242": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 787,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2456,
+            "function": "acc24",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c243": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 792,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2457,
+            "function": "acc24",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c244": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 798,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2458,
+            "function": "acc24",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c245": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 804,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2459,
+            "function": "acc24",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c25": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 819,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 70,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.c26": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 71,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 827,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.capcost": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2746,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 876,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.ccont": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 79,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 851,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.cdcost": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 154,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 169,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2865,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.cdirt": [
+          {
+            "file": "process/core/solver/objectives.py",
+            "line": 68,
+            "function": "objective_function",
+            "classification": "objective_function branch not active on this deck (active branch has no overlap -- enforced by the loader's predicate check)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 832,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 79,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2588,
+            "function": "acc9",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2595,
+            "function": "acc9",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.cdrlife_cal": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2853,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.chx": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 681,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2261,
+            "function": "acc2261",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2258,
+            "function": "acc2261",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.cindrt": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 844,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 79,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2595,
+            "function": "acc9",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.coe": [
+          {
+            "file": "process/core/solver/evaluators.py",
+            "line": 80,
+            "function": "fcnvmc1",
+            "classification": "driver debug logging (logger.debug f-string): the value is formatted into a string, never fed to a computation",
+            "live": false
+          },
+          {
+            "file": "process/core/solver/objectives.py",
+            "line": 65,
+            "function": "objective_function",
+            "classification": "objective_function branch not active on this deck (active branch has no overlap -- enforced by the loader's predicate check)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs_2015.py",
+            "line": 405,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 117,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.coecap": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2991,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.coefuelt": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2992,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.coeoam": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2993,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.concost": [
+          {
+            "file": "process/core/solver/objectives.py",
+            "line": 70,
+            "function": "objective_function",
+            "classification": "objective_function branch not active on this deck (active branch has no overlap -- enforced by the loader's predicate check)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs_2015.py",
+            "line": 108,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs_2015.py",
+            "line": 108,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs_2015.py",
+            "line": 107,
+            "function": "run",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 859,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2736,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2742,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2963,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.cpp": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 675,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2261,
+            "function": "acc2261",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2242,
+            "function": "acc2261",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.cppa": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2299,
+            "function": "acc2262",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 693,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2296,
+            "function": "acc2262",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.crctcore": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 840,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.divcst": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 140,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2802,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.fwallcst": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 127,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2771,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.life_div": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 106,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2793,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "costs.moneyint": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2742,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 868,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "fwbs.life_blkt": [
+          {
+            "file": "process/models/stellarator/stellarator.py",
+            "line": 1588,
+            "function": "st_fwbs",
+            "classification": "stellarator path (istell = 0 on every deck; the block driver refuses istell != 0 outright)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 98,
+            "function": "output",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2762,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 3008,
+            "function": "convert_fpy_to_calendar",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ],
+        "physics.wtgpd": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2378,
+            "function": "acc2272",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2915,
+            "function": "coelc",
+            "classification": "internal to candidate 'costs'",
+            "live": false
+          }
+        ]
+      },
+      "dsm_readers_among_needed_units": {},
+      "reads_from_other_candidates": [
+        {
+          "reads_from_candidate": "vacuum",
+          "fields": [
+            "vacuum.dia_vv_vacuum_ducts",
+            "vacuum.dlscal",
+            "vacuum.m_vv_vacuum_duct_shield",
+            "vacuum.n_vac_pumps_high",
+            "vacuum.n_vv_vacuum_ducts"
+          ],
+          "writer_precedes_reader_in_sequence": true
+        }
+      ],
+      "predicate_read_overlap": []
+    },
+    "vacuum": {
+      "census_writes": [
+        "vacuum.dia_vv_vacuum_ducts",
+        "vacuum.dlscal",
+        "vacuum.m_vv_vacuum_duct_shield",
+        "vacuum.n_vac_pumps_high",
+        "vacuum.n_vv_vacuum_ducts"
+      ],
+      "n_census_writes": 5,
+      "external_source_read_sites": {
+        "vacuum.dia_vv_vacuum_ducts": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2022,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          }
+        ],
+        "vacuum.dlscal": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2011,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          }
+        ],
+        "vacuum.m_vv_vacuum_duct_shield": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2032,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          }
+        ],
+        "vacuum.n_vac_pumps_high": [
+          {
+            "file": "process/models/availability.py",
+            "line": 1159,
+            "function": "calc_u_unplanned_vacuum",
+            "classification": "availability branch 'calc_u_unplanned_vacuum' dead: deck sets i_plant_availability = 0 (Taylor/Ward), this function is reachable only from models 2/3 (V6 branch-liveness check)",
+            "live": false
+          },
+          {
+            "file": "process/models/availability.py",
+            "line": 1201,
+            "function": "calc_u_unplanned_vacuum",
+            "classification": "availability branch 'calc_u_unplanned_vacuum' dead: deck sets i_plant_availability = 0 (Taylor/Ward), this function is reachable only from models 2/3 (V6 branch-liveness check)",
+            "live": false
+          },
+          {
+            "file": "process/models/availability.py",
+            "line": 456,
+            "function": "avail_2",
+            "classification": "availability branch 'avail_2' dead: deck sets i_plant_availability = 0 (Taylor/Ward), this function is reachable only from models 2/3 (V6 branch-liveness check)",
+            "live": false
+          },
+          {
+            "file": "process/models/availability.py",
+            "line": 1343,
+            "function": "avail_st",
+            "classification": "availability branch 'avail_st' dead: deck sets i_plant_availability = 0 (Taylor/Ward), this function is reachable only from models 2/3 (V6 branch-liveness check)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1990,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 1994,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          }
+        ],
+        "vacuum.n_vv_vacuum_ducts": [
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2002,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2010,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2021,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          },
+          {
+            "file": "process/models/costs/costs.py",
+            "line": 2031,
+            "function": "acc224",
+            "classification": "internal to candidate 'costs' (post-solve peer)",
+            "live": false
+          }
+        ]
+      },
+      "dsm_readers_among_needed_units": {},
+      "reads_from_other_candidates": [],
+      "predicate_read_overlap": []
+    },
+    "water_use": {
+      "census_writes": [
+        "water_use.energypervol",
+        "water_use.evapratio",
+        "water_use.evapvol",
+        "water_use.volheat",
+        "water_use.volperenergy",
+        "water_use.wateruseonethru",
+        "water_use.wateruserecirc",
+        "water_use.waterusetower"
+      ],
+      "n_census_writes": 8,
+      "external_source_read_sites": {
+        "water_use.energypervol": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 104,
+            "function": "cooling_towers",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          },
+          {
+            "file": "process/models/water_use.py",
+            "line": 234,
+            "function": "cooling_water_body",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ],
+        "water_use.evapratio": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 100,
+            "function": "cooling_towers",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          },
+          {
+            "file": "process/models/water_use.py",
+            "line": 230,
+            "function": "cooling_water_body",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ],
+        "water_use.evapvol": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 110,
+            "function": "cooling_towers",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          },
+          {
+            "file": "process/models/water_use.py",
+            "line": 242,
+            "function": "cooling_water_body",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ],
+        "water_use.volheat": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 100,
+            "function": "cooling_towers",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          },
+          {
+            "file": "process/models/water_use.py",
+            "line": 230,
+            "function": "cooling_water_body",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ],
+        "water_use.volperenergy": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 107,
+            "function": "cooling_towers",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          },
+          {
+            "file": "process/models/water_use.py",
+            "line": 237,
+            "function": "cooling_water_body",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ],
+        "water_use.wateruseonethru": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 270,
+            "function": "cooling_water_body",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ],
+        "water_use.wateruserecirc": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 263,
+            "function": "cooling_water_body",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ],
+        "water_use.waterusetower": [
+          {
+            "file": "process/models/water_use.py",
+            "line": 120,
+            "function": "cooling_towers",
+            "classification": "internal to candidate 'water_use'",
+            "live": false
+          }
+        ]
+      },
+      "dsm_readers_among_needed_units": {},
+      "reads_from_other_candidates": [],
+      "predicate_read_overlap": []
+    }
+  },
+  "post_solve_nodes": [
+    "vacuum",
+    "water_use",
+    "costs"
+  ],
+  "nodes_sha256": "3aca5a94e0d50656dfa64718ba4ad29808d515a74926aaa81246008673e1c474"
+}

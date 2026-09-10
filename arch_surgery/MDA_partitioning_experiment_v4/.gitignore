@@ -12,3 +12,12 @@ runs/
 # file-set comparison is not the only thing standing between a missing
 # data file and a committed copy.
 !*.dat
+# `!*.dat` above does not cover the committed input files: gitignore matching
+# is case-sensitive, the root .gitignore ignores `*.DAT` as well as `*.dat`,
+# and the input files are `<configuration>.IN.DAT`.  Without this line
+# `git check-ignore -v harness/data/*.IN.DAT` reports `.gitignore:52:*.DAT`
+# and the three committed input files can only be staged with `git add -f` --
+# which is exactly the shape of an artifact that silently fails to be
+# committed.  Scoped to the data directory so that a run output written
+# outside `runs/` is still ignored.
+!harness/data/*.IN.DAT

@@ -1,0 +1,286 @@
+{
+  "what": "Provenance of the committed data this experiment reads.  Every file in harness/data/ was copied from the source below at the source commit, not from a working tree, and is byte-identical to it.  harness/selfcheck.py's data check verifies both claims and is runnable at any later commit.",
+  "task": "A48 (harness-data)",
+  "decision": "D20, 2026-09-10 -- the experiment runs its own copy of PROCESS and owns its own inputs; harness implementation plan sections 5.2 and 5.3, ruled the same day",
+  "generated_by": "harness/data_provenance.py copy",
+  "copy_date": "2026-09-10",
+  "source": {
+    "repository": "PROCESS_surgery (this repository), branch architecture_surgery",
+    "artifact_path": "arch_surgery/docs/data/",
+    "input_file_path": "arch_surgery/idf_probe/scenarios/",
+    "predicate_module_path": "arch_surgery/fixedpoint/ystate.py",
+    "commit": "30198919",
+    "commit_full": "301989192b5b240132fe046bce7ec0f49bca5b4f",
+    "read_with": "git cat-file blob <commit>:<path>"
+  },
+  "stale_internal_names": {
+    "what": "Each write_sets_<configuration>.json carries an internal field ystate_artifact naming the file it was built against under the repository's older spelling (ystate_a26_<configuration>.json), which is the name the coupling-state artifact no longer has here.  The field is left as it stands: the copy is byte-identical to its source, and editing it would forfeit that.",
+    "why_it_is_harmless": "The driver never pairs the two files by name.  process/core/solver/module_solve.py's load_subsets (the docstring at lines 631-635, the check at lines 642-649) requires the write set's ystate_components_sha256 to equal the loaded coupling-state spec's own components_sha256 and raises otherwise -- a content hash over the component list, not a file name.  A wrong pairing is caught by the bytes; a renamed file is not noticed at all.",
+    "fields": {
+      "write_sets_large_tokamak_nof.json": "ystate_a26_large_tokamak_nof.json",
+      "write_sets_low_aspect_ratio_DEMO.json": "ystate_a26_low_aspect_ratio_DEMO.json",
+      "write_sets_st_regression.json": "ystate_a26_st_regression.json"
+    }
+  },
+  "not_derivable_here": "The scales inside the coupling-state artifacts come from a harvest that is untracked by policy.  This experiment uses the committed artifacts as its frozen ruler and never regenerates them: a campaign that finds one missing refuses.  Harness implementation plan section 5.4.",
+  "module": {
+    "what": "The coupling-state predicate: which fields make up y, their categories and scales, the residual and the convergence test in both modes.  It is code, not data, and the copied driver loads it by path (module_solve.YSTATE_MODULE_PATH).  Moved whole; the only difference from the source is the heritage paragraph recorded below, and with that paragraph removed the file is byte-identical to the source.",
+    "name": "harness/ystate.py",
+    "source": "arch_surgery/fixedpoint/ystate.py",
+    "sha256_at_source_commit": "ce47ebef1ecbf7e3b89b8b61bf6d623ce5187f416d42d774041b92a71d96b533",
+    "sha256_in_copy": "aac11f0002a8229196a1694cdec1fa494462c799e016eac51a961ef88daae94f",
+    "lines_at_source_commit": 821,
+    "expected_hunks": [
+      "--- source commit:arch_surgery/fixedpoint/ystate.py",
+      "+++ copy:arch_surgery/fixedpoint/ystate.py",
+      "@@ -72,0 +73,19 @@",
+      "+",
+      "+Heritage",
+      "+--------",
+      "+",
+      "+Moved whole into the experiment's own harness from",
+      "+``arch_surgery/fixedpoint/ystate.py`` at commit ``30198919``, by task A48",
+      "+(harness-data).  The body is byte-identical to that source: this paragraph is",
+      "+the only difference, it is recorded as an expected hunk in",
+      "+``harness/data/PROVENANCE.json``, and the harness self-check removes it again",
+      "+and compares the remainder byte for byte.",
+      "+",
+      "+Why it was moved rather than imported: decision **D20** gives this revision of",
+      "+the experiment its own copy of the PROCESS package, and that copy must not",
+      "+reach outside the experiment's own directory for the predicate it converges on.",
+      "+The copied driver loads this file by a fixed relative path",
+      "+(``module_solve.YSTATE_MODULE_PATH``) rather than an environment-selected one,",
+      "+so which predicate a run used is unambiguous afterwards with nothing recorded",
+      "+about it.  Harness implementation plan section 5.3, ruled option (v) on",
+      "+2026-09-10."
+    ]
+  },
+  "files": {
+    "large_tokamak_nof.IN.DAT": {
+      "role": "input_file",
+      "configuration": "large_tokamak_nof",
+      "source": "arch_surgery/idf_probe/scenarios/large_tokamak_nof.IN.DAT",
+      "source_name": "large_tokamak_nof.IN.DAT",
+      "sha256": "4ec4c4975bd0937fe5b36f9baf78034df64e5f458e2da33b4516e619bfe097cd",
+      "bytes": 12774,
+      "note": "the committed input file, never edited (decision D9: the committed input files are the experiment's fixed input); the name is unchanged",
+      "artifact_fields": {}
+    },
+    "coupling_state_large_tokamak_nof.json": {
+      "role": "coupling_state",
+      "configuration": "large_tokamak_nof",
+      "source": "arch_surgery/docs/data/ystate_a26_large_tokamak_nof.json",
+      "source_name": "ystate_a26_large_tokamak_nof.json",
+      "sha256": "cf59c6ebd32bd17a909cca1d1cd5edb15677b86e51b626914100a3d9594fec01",
+      "bytes": 339985,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a26-ystate-1",
+        "scenario": "large_tokamak_nof",
+        "generated_by": "arch_surgery/fixedpoint/gen_ystate.py",
+        "tree_git_head": "1b4df316fa33da7ea5a8cd0239dff1bee4ced366"
+      }
+    },
+    "write_sets_large_tokamak_nof.json": {
+      "role": "write_sets",
+      "configuration": "large_tokamak_nof",
+      "source": "arch_surgery/docs/data/writeset_a26_large_tokamak_nof.json",
+      "source_name": "writeset_a26_large_tokamak_nof.json",
+      "sha256": "cdf035a4f0e29fd3414a905e99c71f36248b868c37e49108cc9f1c3c122ccaab",
+      "bytes": 31747,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a25-writeset-1",
+        "scenario": "large_tokamak_nof",
+        "generated_by": "arch_surgery/idf_probe/a25_writeset.py",
+        "tree_git_head": "3820fa5d05412f3315960dcab9a6c83125043e71",
+        "ystate_artifact": "ystate_a26_large_tokamak_nof.json"
+      }
+    },
+    "defer_per_run_large_tokamak_nof.json": {
+      "role": "defer_per_run",
+      "configuration": "large_tokamak_nof",
+      "source": "arch_surgery/docs/data/postsolve_nolift_large_tokamak_nof.json",
+      "source_name": "postsolve_nolift_large_tokamak_nof.json",
+      "sha256": "d53b608ddc235e041e88963fc45502ac43cfbc5011cc1ea87fd62669524d966e",
+      "bytes": 111221,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a33-postsolve-1",
+        "scenario": "large_tokamak_nof",
+        "generated_by": "arch_surgery/idf_probe/a33_postsolve.py classify",
+        "tree_git_head": "59e91b62d49ba2642cc9516b0dd7d2045dafad90"
+      }
+    },
+    "defer_per_run_lifted_large_tokamak_nof.json": {
+      "role": "defer_per_run_lifted",
+      "configuration": "large_tokamak_nof",
+      "source": "arch_surgery/docs/data/postsolve_large_tokamak_nof.json",
+      "source_name": "postsolve_large_tokamak_nof.json",
+      "sha256": "66385c9449760f66a84cc9cea951c18f6c6d43cea6645b9e97911853f9fadef9",
+      "bytes": 111656,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a33-postsolve-1",
+        "scenario": "large_tokamak_nof",
+        "generated_by": "arch_surgery/idf_probe/a33_postsolve.py classify",
+        "tree_git_head": "3820fa5d05412f3315960dcab9a6c83125043e71"
+      }
+    },
+    "low_aspect_ratio_DEMO.IN.DAT": {
+      "role": "input_file",
+      "configuration": "low_aspect_ratio_DEMO",
+      "source": "arch_surgery/idf_probe/scenarios/low_aspect_ratio_DEMO.IN.DAT",
+      "source_name": "low_aspect_ratio_DEMO.IN.DAT",
+      "sha256": "72845515cdd9779c3b1c2f09f344c6f9ce626576e8e788e71d4df817bd828248",
+      "bytes": 30325,
+      "note": "the committed input file, never edited (decision D9: the committed input files are the experiment's fixed input); the name is unchanged",
+      "artifact_fields": {}
+    },
+    "coupling_state_low_aspect_ratio_DEMO.json": {
+      "role": "coupling_state",
+      "configuration": "low_aspect_ratio_DEMO",
+      "source": "arch_surgery/docs/data/ystate_a26_low_aspect_ratio_DEMO.json",
+      "source_name": "ystate_a26_low_aspect_ratio_DEMO.json",
+      "sha256": "918efe5dae6cda42eb9e24e3f5f1ca0e8a1a8d8dd82799c8aeff8b893d7c94c4",
+      "bytes": 343264,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a26-ystate-1",
+        "scenario": "low_aspect_ratio_DEMO",
+        "generated_by": "arch_surgery/fixedpoint/gen_ystate.py",
+        "tree_git_head": "1b4df316fa33da7ea5a8cd0239dff1bee4ced366"
+      }
+    },
+    "write_sets_low_aspect_ratio_DEMO.json": {
+      "role": "write_sets",
+      "configuration": "low_aspect_ratio_DEMO",
+      "source": "arch_surgery/docs/data/writeset_a26_low_aspect_ratio_DEMO.json",
+      "source_name": "writeset_a26_low_aspect_ratio_DEMO.json",
+      "sha256": "583711c7b04750a67bb0dfde5d768a1b4a46af538eb61e8b4b87d66b0d2ea490",
+      "bytes": 32073,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a25-writeset-1",
+        "scenario": "low_aspect_ratio_DEMO",
+        "generated_by": "arch_surgery/idf_probe/a25_writeset.py",
+        "tree_git_head": "3820fa5d05412f3315960dcab9a6c83125043e71",
+        "ystate_artifact": "ystate_a26_low_aspect_ratio_DEMO.json"
+      }
+    },
+    "defer_per_run_low_aspect_ratio_DEMO.json": {
+      "role": "defer_per_run",
+      "configuration": "low_aspect_ratio_DEMO",
+      "source": "arch_surgery/docs/data/postsolve_nolift_low_aspect_ratio_DEMO.json",
+      "source_name": "postsolve_nolift_low_aspect_ratio_DEMO.json",
+      "sha256": "39add341158adaace38e5ad1dd1b4b920e6305c2c730d366a309b3d33105fd60",
+      "bytes": 112379,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a33-postsolve-1",
+        "scenario": "low_aspect_ratio_DEMO",
+        "generated_by": "arch_surgery/idf_probe/a33_postsolve.py classify",
+        "tree_git_head": "59e91b62d49ba2642cc9516b0dd7d2045dafad90"
+      }
+    },
+    "defer_per_run_lifted_low_aspect_ratio_DEMO.json": {
+      "role": "defer_per_run_lifted",
+      "configuration": "low_aspect_ratio_DEMO",
+      "source": "arch_surgery/docs/data/postsolve_low_aspect_ratio_DEMO.json",
+      "source_name": "postsolve_low_aspect_ratio_DEMO.json",
+      "sha256": "2f76c9eadf31afe58b1daa01bfdcfa0054a64189e0af765fca661836bc5518bf",
+      "bytes": 112814,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a33-postsolve-1",
+        "scenario": "low_aspect_ratio_DEMO",
+        "generated_by": "arch_surgery/idf_probe/a33_postsolve.py classify",
+        "tree_git_head": "3820fa5d05412f3315960dcab9a6c83125043e71"
+      }
+    },
+    "st_regression.IN.DAT": {
+      "role": "input_file",
+      "configuration": "st_regression",
+      "source": "arch_surgery/idf_probe/scenarios/st_regression.IN.DAT",
+      "source_name": "st_regression.IN.DAT",
+      "sha256": "3f33d565b47dfef36eb4f40e63f26733f554194c09f1564e9d2f95d2e96ac5c7",
+      "bytes": 136043,
+      "note": "the committed input file, never edited (decision D9: the committed input files are the experiment's fixed input); the name is unchanged",
+      "artifact_fields": {}
+    },
+    "coupling_state_st_regression.json": {
+      "role": "coupling_state",
+      "configuration": "st_regression",
+      "source": "arch_surgery/docs/data/ystate_a26_st_regression.json",
+      "source_name": "ystate_a26_st_regression.json",
+      "sha256": "7ea07d715e2082a239aba67a0c157b1ad997dcc9337c02a0010eec0db7674524",
+      "bytes": 343008,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a26-ystate-1",
+        "scenario": "st_regression",
+        "generated_by": "arch_surgery/fixedpoint/gen_ystate.py",
+        "tree_git_head": "1b4df316fa33da7ea5a8cd0239dff1bee4ced366"
+      }
+    },
+    "write_sets_st_regression.json": {
+      "role": "write_sets",
+      "configuration": "st_regression",
+      "source": "arch_surgery/docs/data/writeset_a26_st_regression.json",
+      "source_name": "writeset_a26_st_regression.json",
+      "sha256": "2300ce0bfa9ddd146d2babb13ddaa37b434c5b40da03a2e09a19cd09debc332d",
+      "bytes": 31363,
+      "note": "renamed for the role it plays: no task token and no revision token in the name",
+      "artifact_fields": {
+        "format": "a25-writeset-1",
+        "scenario": "st_regression",
+        "generated_by": "arch_surgery/idf_probe/a25_writeset.py",
+        "tree_git_head": "4abfaa75afa78ae885ed26ec9c613af10d1c7cc5",
+        "ystate_artifact": "ystate_a26_st_regression.json"
+      }
+    },
+    "defer_per_run_st_regression.json": {
+      "role": "defer_per_run",
+      "configuration": "st_regression",
+      "source": "arch_surgery/docs/data/postsolve_st_regression.json",
+      "source_name": "postsolve_st_regression.json",
+      "sha256": "be86b7930c86f4dc04101d95cfdaf07c51e2e777d2af91ff4d8246c8c4d27fd1",
+      "bytes": 108636,
+      "note": "steady state: there is no lifted input file, so one file serves both per-run deferral roles and is copied once",
+      "artifact_fields": {
+        "format": "a33-postsolve-1",
+        "scenario": "st_regression",
+        "generated_by": "arch_surgery/idf_probe/a33_postsolve.py classify",
+        "tree_git_head": "3820fa5d05412f3315960dcab9a6c83125043e71"
+      }
+    },
+    "node_writesets.json": {
+      "role": "node_write_sets",
+      "configuration": null,
+      "source": "arch_surgery/docs/data/node_writesets.json",
+      "source_name": "node_writesets.json",
+      "sha256": "7c0f2bee01a1ff9a898a054c2ecac9608643e39cf4083135c07e0c354880da84",
+      "bytes": 161367,
+      "note": "the name is fixed by a path constant inside the copied driver; renaming it would be a driver edit",
+      "artifact_fields": {
+        "format": "a26-node-writesets-1",
+        "generated_by": "arch_surgery/fixedpoint/gen_node_writesets.py",
+        "tree_git_head": "39d1540180efffdf3f6bdccd89638100c21cceeb"
+      }
+    },
+    "dsm_node_map.json": {
+      "role": "node_map",
+      "configuration": null,
+      "source": "arch_surgery/docs/data/dsm_node_map.json",
+      "source_name": "dsm_node_map.json",
+      "sha256": "5195c268a3c48a69fb33a6f7fd6db867c32905be43d10b4bee5e06ee609582ff",
+      "bytes": 14366,
+      "note": "the name is fixed by a path constant inside the copied driver; renaming it would be a driver edit",
+      "artifact_fields": {
+        "format": "a18-node-map-1",
+        "generated_by": "arch_surgery/fixedpoint/gen_node_map.py",
+        "tree_git_head": "7d5c1c03c54cdc2f091c653450150c5053e1702c"
+      }
+    }
+  }
+}
