@@ -324,20 +324,26 @@ REGISTRY: dict[str, Switch] = {
     ),
     "output_loop": Switch(
         term="output_loop",
-        driver_name=None,
+        driver_name="PROCESS_ARCH_OUTPUT_LOOP",
         intended_name="PROCESS_ARCH_OUTPUT_LOOP",
         value_kind="enum",
-        values=("none",),
+        values=("upstream", "none"),
         composed=True,
-        readbacks=((CALLER, "OUTPUT_LOOP_NAME"),),
+        readbacks=(
+            (CALLER, "OUTPUT_LOOP_NAME"),
+            (CALLER, "OUTPUT_PATH_NAME"),
+        ),
         resolved_as_asked=lambda r, v: _resolved(r, CALLER, "OUTPUT_LOOP_NAME") == v,
-        pending_change="approved driver change DR2 (the output path without the output-time loop)",
         note=(
             "Upstream writes its output files through a second loop that "
             "re-solves the accepted state until the output stops changing.  "
-            "The arms whose solve already handed over a verified state do not "
-            "run it.  No tree implements this switch yet, so every arm that "
-            "asks for it is refused rather than run with the loop still on."
+            "The arms whose solve already handed over a state converged at "
+            "the shared tolerance do not run it: 'none' calls the file-writing "
+            "step once on the accepted state.  ``upstream`` is also the "
+            "driver's behaviour with the variable unset, and is listed as a "
+            "value because the reproduction gate sets it **explicitly** — an "
+            "override that has to be read back is an override that can be "
+            "checked, and one that relies on a default is not."
         ),
     ),
     "predicate_mode": Switch(
@@ -563,6 +569,36 @@ def canonical_roles(
     ):
         roles["schedule_passes"] = passes
     return roles
+
+
+def previous_revision_roles() -> frozenset[str]:
+    """Every role the previous revision's environment could express.
+
+    **Measured from the composer, not listed.**  An environment setting every
+    name that revision had is put through :func:`canonical_roles`, and what
+    comes out is what it could say.  That matters because the map from a name
+    to a role is not one to one: two of its names fold into one role of ours
+    (the burn time's owner), and one of them folds away entirely (how often the
+    block schedule runs), so the map's *values* are not the roles.
+
+    The caller is the composition check, which compares this revision's request
+    with the previous one's role by role.  A role that is **not** in this set is
+    a capability the driver has gained since -- the output path is one -- and
+    comparing it against a side that could not express it would report a
+    capability as a disagreement.  A role that *is* in this set can never be
+    set aside, which is what keeps that exception from becoming a place to hide
+    a real difference.
+    """
+    probe = {name: "probe" for name in PREVIOUS_SWITCH_NAMES}
+    # A consistent pair for the fold: that revision refused a constant burn
+    # time without the site taken out of the loop, and so does the fold.
+    probe["PROCESS_ARCH_LIFT"] = "burn_time"
+    probe["PROCESS_ARCH_PIN_BURN_TIME"] = "0x1.0p+0"
+    # The schedule value the partitioned loop now implies, so the fold that
+    # drops it is exercised rather than stepped around.
+    probe["PROCESS_ARCH_MODULE_SOLVE"] = "per_module"
+    probe["PROCESS_ARCH_OUTER"] = "trust"
+    return frozenset(canonical_roles(probe, revision="previous"))
 
 
 def clear_all(env: MutableMapping[str, str]) -> MutableMapping[str, str]:

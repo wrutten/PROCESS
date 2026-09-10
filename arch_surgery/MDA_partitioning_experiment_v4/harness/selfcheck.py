@@ -335,8 +335,22 @@ def check_composition(campaign: Campaign) -> Check:
             )
 
     # --- the same request as the previous revision, role for role ----------
+    #
+    # Comparable only over the roles **both** revisions can express.  A role
+    # this revision has and the previous one had no switch for is not a
+    # disagreement -- it is a capability the driver gained -- and it is
+    # **derived** from the registry's own name map rather than listed here: a
+    # term the map does not carry is a term the previous revision could not
+    # say.  Listing it by hand is how such an exception becomes a place to hide
+    # a real difference.  The roles set aside are named, with their values, and
+    # counted beside the roles compared: a comparison whose population is
+    # quietly smaller than the one stated is this project's trap T11.
+    could_say = sw.previous_revision_roles()
+    new_roles = sorted(term for term in sw.REGISTRY if term not in could_say)
     previous_compared = 0
     roles_compared = 0
+    roles_set_aside = 0
+    set_aside_seen: dict[str, set[str]] = {}
     for config in campaign.configurations:
         for name in _PREVIOUS_NAME:
             if name in config.skips or (name, config.name) not in composed:
@@ -347,6 +361,13 @@ def check_composition(campaign: Campaign) -> Check:
                 config,
                 revision="previous",
             )
+            for term in new_roles:
+                if term in mine:
+                    set_aside_seen.setdefault(term, set()).add(
+                        f"{name}={mine[term]}"
+                    )
+                    roles_set_aside += 1
+                    mine.pop(term)
             previous_compared += 1
             roles_compared += len(set(mine) | set(theirs))
             if mine != theirs:
@@ -360,6 +381,36 @@ def check_composition(campaign: Campaign) -> Check:
         f"previous revision's composition **by role**, {roles_compared} role "
         f"value(s) in total; the switch names differ on the two sides and the "
         f"registry's name map is what makes them comparable"
+    )
+    if set_aside_seen:
+        check.note(
+            f"{roles_set_aside} role value(s) set aside as capabilities the "
+            f"previous revision could not express, measured from its own "
+            f"composer and never listed: "
+            + "; ".join(
+                f"{term} ({', '.join(sorted(values))})"
+                for term, values in sorted(set_aside_seen.items())
+            )
+        )
+    else:
+        check.note(
+            "no role this revision composes is one the previous revision "
+            "could not express, so nothing was set aside"
+        )
+
+    # A role BOTH revisions can express must never be set aside.  The tooth
+    # takes the one the previous revision spelled differently and does exactly
+    # that: if the derivation ever widened to cover it, the comparison would
+    # stop noticing a real difference in the analysis loop.
+    check.tooth(
+        "a role both revisions can express treated as a new capability",
+        "mda" not in new_roles and "burn_time_owner" not in new_roles,
+        "the roles set aside are measured from the previous revision's own "
+        "composer, so a role it *did* have a switch for -- the analysis loop, "
+        "and the burn time's owner, which two of its switches folded into -- "
+        "can never be among them; if one were, a real difference in it would "
+        f"be silently dropped from the comparison (it could say "
+        f"{sorted(could_say)}; set aside: {new_roles})",
     )
 
     # --- the arms whose declared switches no tree implements ---------------
@@ -389,6 +440,14 @@ def check_composition(campaign: Campaign) -> Check:
         check.note(
             "declared but not yet implemented by any tree (refused on a run "
             "path): " + "; ".join(pending_report)
+        )
+    else:
+        check.note(
+            "every switch every arm composes is implemented by the tree under "
+            "test: no arm on any configuration is refused for a capability "
+            "the driver does not have.  The convergence-predicate mode is the "
+            "one declared switch still waiting on its driver change, and no "
+            "arm composes it — only the trial does"
         )
 
     # --- a configuration can leave the experiment by a recorded decision ---
@@ -448,7 +507,20 @@ def check_composition(campaign: Campaign) -> Check:
             _previous_environment(name, cfg, campaign), cfg, revision="previous"
         )
 
-    broken = _roles(composed[("B0", config.name)], config, revision="current")
+    def comparable(name: str, cfg) -> dict[str, str]:
+        """This revision's roles for one arm, on the footing the check compares.
+
+        The same set-aside the comparison applies: a role the previous revision
+        could not express is not part of a comparison against it, so a tooth
+        that broke something else would otherwise be reported as tripping on a
+        difference that is there anyway.
+        """
+        roles = _roles(composed[(name, cfg.name)], cfg, revision="current")
+        for term in new_roles:
+            roles.pop(term, None)
+        return roles
+
+    broken = comparable("B0", config)
     broken["mda"] = "partitioned"
     check.tooth(
         "wrong switch value in one arm",
@@ -456,7 +528,7 @@ def check_composition(campaign: Campaign) -> Check:
         "B0's analysis-loop switch set to the partitioned value must not "
         "match the previous revision's B0",
     )
-    missing = _roles(composed[("B3", config.name)], config, revision="current")
+    missing = comparable("B3", config)
     missing.pop("arrangement_method", None)
     check.tooth(
         "one switch dropped from an arm",
@@ -466,9 +538,7 @@ def check_composition(campaign: Campaign) -> Check:
     )
     pulsed = [c for c in campaign.configurations if c.pulsed]
     if pulsed:
-        swapped = _roles(
-            composed[("A1", pulsed[0].name)], pulsed[0], revision="current"
-        )
+        swapped = comparable("A1", pulsed[0])
         swapped["defer_per_run"] = "<defer_per_run_lifted>"
         check.tooth(
             "the wrong per-run artifact handed to an arm",
@@ -477,9 +547,7 @@ def check_composition(campaign: Campaign) -> Check:
             "so it takes the artifact stamped for the base constraint set; "
             "handing it the lifted input file's artifact must not match",
         )
-        folded = _roles(
-            composed[("B3", pulsed[0].name)], pulsed[0], revision="current"
-        )
+        folded = comparable("B3", pulsed[0])
         theirs = dict(_previous_environment("B3", pulsed[0], campaign))
         theirs.pop("PROCESS_ARCH_OUTER", None)
         check.tooth(
@@ -1389,51 +1457,69 @@ def check_run_path(campaign: Campaign) -> Check:
         f"prevents ({message})",
     )
 
-    pending_arm = next(
+    # The two allowance teeth.  Every switch the *matrix* composes is now
+    # implemented, so the thing that has to be refused is asked for by the
+    # convergence-predicate trial instead: it composes a switch whose driver
+    # change has not landed.  The teeth follow the pending switch rather than a
+    # particular arm, so they keep biting as each driver change lands and stop
+    # only when nothing is pending at all -- which they say.
+    pending_mode = next(
         (
-            name
-            for name, arm in arms_mod.ARMS.items()
-            if name not in config.skips
-            and sw.unimplemented(
-                arm.terms(config, pin_hex=_PIN_HEX, campaign=campaign)
+            mode
+            for mode in campaign.predicate_modes
+            if sw.unimplemented(
+                arms_mod.ARMS["B0"].terms(
+                    config, pin_hex=_PIN_HEX, campaign=campaign,
+                    predicate_mode=mode,
+                )
             )
         ),
         None,
     )
-    if pending_arm is None:
+    if pending_mode is None:
         check.note(
-            "no arm currently asks for a switch this tree does not implement, "
+            "every switch this harness can compose — the matrix's and the "
+            "predicate trial's alike — is implemented by the tree under test, "
             "so the two allowance teeth have nothing to bite on"
         )
     else:
+        pending_terms = sw.unimplemented(
+            arms_mod.ARMS["B0"].terms(
+                config, pin_hex=_PIN_HEX, campaign=campaign,
+                predicate_mode=pending_mode,
+            )
+        )
         no_allowance = pool_mod.Job(
-            phase=arms_mod.ARMS[pending_arm].phase,
-            arm=pending_arm,
+            phase="B",
+            arm="B0",
             config=config,
             seed=0,
             outdir=Path(campaign.runs_dir) / "_never",
             pin_hex=_PIN_HEX,
             run_kind="smoke",
+            predicate_mode=pending_mode,
         )
         caught, message = _must_refuse_here(
             lambda: pool_mod.environment_for(no_allowance, campaign)
         )
         check.tooth(
-            "an arm asking for a switch the tree does not implement",
+            "a run asking for a switch the tree does not implement",
             caught,
-            f"{pending_arm} declares a switch no tree implements; composing "
+            f"B0 under predicate mode {pending_mode!r} declares "
+            f"{list(pending_terms)}, which no tree implements; composing "
             f"without it would be a successful run of a different arm under "
             f"this arm's name ({message})",
         )
         over_allowed = pool_mod.Job(
-            phase=arms_mod.ARMS[pending_arm].phase,
-            arm=pending_arm,
+            phase="B",
+            arm="B0",
             config=config,
             seed=0,
             outdir=Path(campaign.runs_dir) / "_never",
             pin_hex=_PIN_HEX,
             run_kind="smoke",
-            allow_pending=("mda",),
+            predicate_mode=pending_mode,
+            allow_pending=(*pending_terms, "mda"),
         )
         caught, message = _must_refuse_here(
             lambda: pool_mod.environment_for(over_allowed, campaign)
@@ -1443,6 +1529,88 @@ def check_run_path(campaign: Campaign) -> Check:
             caught,
             f"an allowance that covers a switch the tree has is an allowance "
             f"nobody checked ({message})",
+        )
+
+    # --- the reproduction gate's overrides, and what refuses one ----------
+    #
+    # Imported here rather than at the top: the reproduction gate imports this
+    # module's Check, so a module-level import back would be a cycle.
+    from harness import reproduction as reproduction_mod  # noqa: PLC0415
+
+    #
+    # The gate that reproduces the previous revision runs two arms with the
+    # output-time loop on, because that is how the records it reproduces were
+    # made.  That is a departure from the matrix, so it is not allowed to be
+    # quiet: it is derived from the matrix rather than listed, refused for a
+    # campaign run, refused when it changes nothing, and stamped into every
+    # record it produces.
+    overridden = {
+        name
+        for name in arms_mod.ARMS
+        if reproduction_mod.reproduction_overrides(name)
+    }
+    from_matrix = {
+        name
+        for name, entry in arms_mod.ARMS.items()
+        if entry.phase == "B" and entry.output_loop == "none"
+    }
+    check.n_compared += 1
+    if overridden != from_matrix:
+        check.fail(
+            f"the reproduction gate overrides {sorted(overridden)} but the "
+            f"matrix turns the output-time loop off for {sorted(from_matrix)}"
+        )
+    check.note(
+        f"the reproduction gate's overrides are derived from the matrix and "
+        f"cover exactly {sorted(overridden)}, the arm(s) whose matrix cell "
+        f"turns the output-time loop off; every run it makes is stamped with "
+        f"them and audits at the previous revision's position "
+        f"({reproduction_mod.REPRODUCTION_AUDIT_POSITION})"
+    )
+    override_arm = sorted(overridden)[0] if overridden else None
+    if override_arm is None:
+        check.note("no arm carries a reproduction override, so its teeth bite on nothing")
+    else:
+        pulsed = next(c for c in campaign.configurations if c.pulsed)
+        campaign_job = pool_mod.Job(
+            phase="B",
+            arm=override_arm,
+            config=pulsed,
+            seed=0,
+            outdir=Path(campaign.runs_dir) / "_never",
+            run_kind="campaign",
+            reproduction_overrides=reproduction_mod.reproduction_overrides(
+                override_arm
+            ),
+        )
+        caught, message = _must_refuse_here(
+            lambda: pool_mod.environment_for(campaign_job, campaign)
+        )
+        check.tooth(
+            "a campaign run carrying the reproduction gate's override",
+            caught,
+            f"the campaign composes each arm from the matrix and nothing else; "
+            f"an override that reached it would publish {override_arm} as the "
+            f"matrix describes it while running something else ({message})",
+        )
+        inert_job = pool_mod.Job(
+            phase="B",
+            arm=override_arm,
+            config=pulsed,
+            seed=0,
+            outdir=Path(campaign.runs_dir) / "_never",
+            run_kind="gate",
+            reproduction_overrides={"output_loop": "none"},
+        )
+        caught, message = _must_refuse_here(
+            lambda: pool_mod.environment_for(inert_job, campaign)
+        )
+        check.tooth(
+            "a reproduction override that changes nothing",
+            caught,
+            f"an override set to the value the arm composes anyway is an "
+            f"override nobody checked, and would let the declared set drift "
+            f"out of step with the matrix unnoticed ({message})",
         )
 
     # --- the lifted input file's digests ----------------------------------

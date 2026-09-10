@@ -122,6 +122,17 @@ class Job:
     #: gate that runs an arm with one switch deliberately wrong.  A value of
     #: None removes the variable.
     override_env: Mapping[str, str | None] = field(default_factory=dict)
+    #: Switch terms the **reproduction gate** deliberately sets to something
+    #: other than the campaign's composition, term -> value, because that gate
+    #: reproduces the previous revision and the previous revision ran the arm
+    #: that way.  Refused for a campaign run, checked against the arm's own
+    #: composition, and stamped into every record it produces; see
+    #: :func:`environment_for`.
+    reproduction_overrides: Mapping[str, str] = field(default_factory=dict)
+    #: Where an optimisation run takes its exit audit.  The default is the
+    #: position the plan declares for every arm; the reproduction gate is the
+    #: only caller that may ask for the previous revision's.
+    audit_position: str = "entry_to_write_output_files"
 
     @property
     def key(self) -> str:
@@ -141,18 +152,28 @@ def seed_directory(seed: int) -> str:
 def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]:
     """The environment this job runs under, and what it asked for.
 
-    ``allow_pending`` is the **only** way a run happens without a switch its arm
-    declares, and it is neither silent nor general:
+    Two things may make a run differ from what the matrix says, and neither is
+    silent.
+
+    ``allow_pending`` is the only way a run happens **without** a switch its arm
+    declares, and it is for a switch **no tree implements yet**:
 
     * the terms allowed must be exactly the terms this tree cannot implement —
       allowing a term the tree *does* implement, or failing to allow one it
       does not, is a refusal either way;
     * the allowed terms are written into the record, so a run made under the
       allowance says so;
-    * campaign runs never pass it.  The only caller is the reproduction gate,
-      which runs two arms the way the previous revision ran them because that
-      is what "reproduce the previous revision" means, and the switch they now
-      declare did not exist then.
+    * campaign runs never pass it.  No arm of the matrix currently needs it;
+      the switch still waiting on its driver change is the convergence
+      predicate's mode, which only the trial composes.
+
+    ``reproduction_overrides`` is the only way a run happens with a switch set
+    to something **other** than what its arm composes, and it is for a switch
+    the tree *does* implement.  The reproduction gate reproduces the previous
+    revision, and that revision wrote two arms' output files through upstream's
+    output-time loop because the switch that turns it off did not exist yet.
+    See :func:`_apply_reproduction_overrides` for the four things that refuse
+    one; a campaign run carrying one is the first of them.
     """
     arm = arms_mod.ARMS[job.arm]
     terms = arm.terms(
@@ -183,6 +204,7 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
             + " — refused rather than run without it, which would be a "
             "successful run of a different arm under this arm's name"
         )
+    terms = _apply_reproduction_overrides(job, terms)
     env = arms_mod.env_for(
         job.arm,
         job.config,
@@ -192,12 +214,83 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         campaign=campaign,
         pending_ok=bool(allowed),
     )
+    for term, value in (job.reproduction_overrides or {}).items():
+        name = switches_mod.REGISTRY[term].driver_name
+        if name is not None:
+            env[name] = value
     for name, value in (job.override_env or {}).items():
         if value is None:
             env.pop(name, None)
         else:
             env[name] = str(value)
     return env, terms
+
+
+def _apply_reproduction_overrides(
+    job: Job, terms: dict[str, str]
+) -> dict[str, str]:
+    """Fold the reproduction gate's overrides into *terms*, or refuse.
+
+    The gate that reproduces the previous revision has to run two arms the way
+    that revision ran them, and one of them differs from the campaign in a
+    switch that now exists: the output path.  That is a **deliberate departure
+    from the matrix**, so it is not allowed to be quiet.  Four things are
+    checked and each refuses rather than degrades:
+
+    * **a campaign run may not carry one at all.**  The campaign composes from
+      the matrix and nothing else;
+    * every term must be one the registry knows and the tree implements —
+      overriding a switch that does not exist would silently do nothing;
+    * every value must be one the switch declares, so a typo is refused rather
+      than resolved by the driver's own guard three layers down;
+    * the value must actually **differ** from what the arm composes.  An
+      override that changes nothing is an override nobody checked, and it would
+      let the declared set drift out of step with the matrix unnoticed.
+
+    The overrides ride into the run record as ``reproduction_overrides``, so a
+    record made under one says so on its face.
+    """
+    overrides = dict(job.reproduction_overrides or {})
+    if not overrides:
+        return terms
+    if job.run_kind == "campaign":
+        raise PoolError(
+            f"{job.key}: a campaign run may not carry a reproduction override "
+            f"({sorted(overrides)}).  The campaign composes each arm from the "
+            f"experiment's matrix and nothing else; the override exists so "
+            f"that the reproduction gate can run an arm the way the previous "
+            f"revision ran it, and it is that gate's alone."
+        )
+    unknown = sorted(t for t in overrides if t not in switches_mod.REGISTRY)
+    if unknown:
+        raise PoolError(
+            f"{job.key}: reproduction override names {unknown}, which the "
+            f"switch registry does not know.  An override on a switch that "
+            f"does not exist changes nothing and says it changed something."
+        )
+    absent = sorted(t for t in overrides if not switches_mod.REGISTRY[t].implemented)
+    if absent:
+        raise PoolError(
+            f"{job.key}: reproduction override names {absent}, which no tree "
+            f"implements yet; it would be composed into the environment and "
+            f"ignored by the driver."
+        )
+    for term, value in sorted(overrides.items()):
+        legal = switches_mod.REGISTRY[term].values
+        if legal and value not in legal:
+            raise PoolError(
+                f"{job.key}: reproduction override {term}={value!r} is not one "
+                f"of {legal}"
+            )
+        if terms.get(term) == value:
+            raise PoolError(
+                f"{job.key}: reproduction override {term}={value!r} is what "
+                f"the arm composes anyway.  An override that changes nothing "
+                f"is an override nobody checked."
+            )
+    merged = dict(terms)
+    merged.update(overrides)
+    return merged
 
 
 def input_file_for(job: Job, campaign: Campaign) -> tuple[Path, str]:
@@ -250,6 +343,7 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--regime", job.regime,
         "--predicate-mode", job.predicate_mode,
         "--switches-asked", json.dumps(dict(terms)),
+        "--reproduction-overrides", json.dumps(dict(job.reproduction_overrides or {})),
     ]
     if job.allow_pending:
         command += ["--pending-allowed", ",".join(sorted(job.allow_pending))]
@@ -274,6 +368,7 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
                 "--stencil-sign", str(job.stencil_sign),
             ]
     else:
+        command += ["--audit-position", job.audit_position]
         if job.force_maxcal is not None:
             command += ["--force-maxcal", str(job.force_maxcal)]
     return command

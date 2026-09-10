@@ -574,6 +574,107 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
     return out
 
 
+def harvest_output_path(caller) -> dict[str, Any]:
+    """Which output path ran, and what it cost.
+
+    Read from the driver's own module-level names, never from the environment
+    the harness composed: a tree that ignored the switch would otherwise report
+    the arm the harness *asked* for.  ``output_loop_sweeps`` is 0 under the
+    finalise-once path by construction rather than by assertion, and
+    ``output_path_entries`` is 1 for a single problem — a record showing more
+    is a scan, and says so instead of quietly describing its first point.
+    """
+    return {
+        "output_path": getattr(caller, "OUTPUT_PATH_NAME", None),
+        "output_loop_sweeps": getattr(caller, "OUTPUT_LOOP_SWEEPS", [None])[0],
+        "output_path_entries": getattr(caller, "OUTPUT_PATH_ENTRIES", [None])[0],
+    }
+
+
+# --------------------------------------------------------------------------
+# the snapshot the exit audit is taken from
+# --------------------------------------------------------------------------
+
+
+def install_exit_snapshot(caller, module_solve, *, coupling_state_path: Path):
+    """Install the driver's coupling-state snapshot hook, and report what it took.
+
+    The plan declares one audit position for every arm: the entry to the output
+    path, before any output-time sweep — the state the solve handed over.  The
+    audit's sweep mutates the state it measures, so it cannot run there; the
+    driver instead calls this hook at that entry (and again immediately before
+    the file-writing step), and the residual is computed after the run from the
+    restored snapshot.
+
+    The driver owns the *position*; the shape of a snapshot belongs to the
+    coupling-state layer, so what is installed is this function.  It never
+    raises into the run: the driver records an exception rather than letting an
+    instrument change a measurement's outcome, and the state below carries
+    whatever went wrong so the audit can refuse instead of reporting a residual
+    of a state nobody chose.
+    """
+    from . import predicate as predicate_mod
+
+    state: dict[str, Any] = {
+        "installed": True,
+        "coupling_state": str(coupling_state_path),
+        "spec_error": None,
+        "positions": {},
+    }
+    holder: dict[str, Any] = {}
+
+    def hook(models, data, where):  # noqa: ARG001 - the driver's signature
+        if "spec" not in holder:
+            spec, provenance = module_solve.load_spec(str(coupling_state_path))
+            holder["spec"] = spec
+            holder["provenance"] = provenance
+        spec = holder["spec"]
+        record = predicate_mod.snapshot_record(spec, spec.read(spec.bind(data)))
+        state["positions"][where] = {
+            "components_sha256": record["components_sha256"],
+            "n_components": record["n_components"],
+        }
+        return record
+
+    caller.EXIT_SNAPSHOT_HOOK[0] = hook
+    return state
+
+
+def collect_exit_snapshots(caller, state: dict[str, Any], outdir: Path) -> dict[str, Any]:
+    """Write the driver's snapshots out, and say which positions it reached.
+
+    Called after the run.  A position the driver never reached — a run that
+    crashed before the output path — is reported as absent by name, never as an
+    empty comparison (trap T11).
+    """
+    snapshots = dict(getattr(caller, "EXIT_SNAPSHOTS", {}) or {})
+    errors = dict(getattr(caller, "EXIT_SNAPSHOT_ERRORS", {}) or {})
+    written: dict[str, str] = {}
+    for where, record in snapshots.items():
+        name = f"y_{where}.json"
+        (Path(outdir) / name).write_text(json.dumps(record))
+        written[where] = name
+    state = dict(state)
+    state.update(
+        {
+            "positions_offered": list(
+                getattr(caller, "EXIT_SNAPSHOT_POSITIONS", ())
+            ),
+            "positions_taken": sorted(snapshots),
+            "positions_that_raised": errors,
+            "written_to": written,
+            "n_components": {
+                where: record["n_components"] for where, record in snapshots.items()
+            },
+            "components_sha256": {
+                where: record["components_sha256"]
+                for where, record in snapshots.items()
+            },
+        }
+    )
+    return state
+
+
 def summarise_node_census(
     census: Mapping[str, Any],
     *,
@@ -706,6 +807,7 @@ def take_exit_audit(
     per_run_artifact: Path | None = None,
     node_write_sets_path: Path | None = None,
     configuration: str = "",
+    from_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One further full sweep past termination, and how far the state moved.
 
@@ -714,12 +816,33 @@ def take_exit_audit(
     mean anything.  Its own model calls are recorded and **never charged** to
     the arm.  The sweep mutates the state, so the exit state is written out
     first and nothing may run after it.
+
+    ``from_snapshot`` moves the audit to a position the run has already passed:
+    the state the driver captured there is written back into the data structure
+    and the sweep is taken from *that*, which is how the plan's declared
+    position — the entry to the output path — is reached without handing the
+    output path an audited state.  The restore is proved bit-exact before the
+    sweep runs, and an audit whose restore is not bit-exact is **refused**: a
+    residual measured from a state nobody chose is worse than no residual.
     """
     record: dict[str, Any] = {"audit_position": position}
     try:
         from . import predicate as predicate_mod
 
         spec, provenance = module_solve.load_spec(str(coupling_state_path))
+        if from_snapshot is not None:
+            restored = predicate_mod.write_entry_state(spec, data, from_snapshot)
+            record["restored_from_snapshot"] = restored
+            if not restored["readback_bitexact"]:
+                record["refused"] = (
+                    f"the snapshot taken at {position} did not restore bit for "
+                    f"bit ({restored['n_readback_mismatch']} of "
+                    f"{restored['n_components']} components differ, first: "
+                    f"{restored['readback_mismatch_first'][:3]}); auditing the "
+                    f"state that is actually in the data structure would "
+                    f"report a residual of a state nobody chose"
+                )
+                return record
         bound = spec.bind(data)
         y_before = spec.read(bound)
         if write_state:
@@ -970,14 +1093,12 @@ def stamp_capabilities_absent(record: dict[str, Any], *, phase: str) -> None:
         "(driver-predicate-counters)"
     )
     if phase == "B":
-        record["output_path"] = "mda_output"
+        # Filled from the driver's own counters after the run
+        # (:func:`harvest_output_path`).  Present here with a null so that a
+        # record of a run that never reached the driver still carries the key.
+        record["output_path"] = None
         record["output_loop_sweeps"] = None
-        record["output_loop_null_because"] = (
-            "this tree has one output path — upstream's own output-time loop — "
-            "and does not count its sweeps separately; the switch that selects "
-            "the other path and the counter are approved driver change DR2, "
-            "task A57 (driver-output-path)"
-        )
+        record["output_path_entries"] = None
 
 
 def write_record(outdir: Path, record: Mapping[str, Any]) -> Path:
