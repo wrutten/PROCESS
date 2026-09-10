@@ -94,6 +94,17 @@ Selection
     switch that offered one is retired, because comparisons are made at matched
     *achieved* accuracy, which the exit audit records per run, rather than at
     matched settings.
+``PROCESS_ARCH_PREDICATE``
+    ``frozen`` or ``mixed``; unset is ``frozen``.  Which denominator the
+    coupling-state predicate scales a step by -- the measured scale alone, or
+    the measured scale kept as a floor under the current magnitude
+    (``max|dy_i| / max(|y_i|, s_i)``).  The two are bit-identical wherever the
+    current magnitude is at or below the scale, and ``mixed`` is never tighter,
+    so no count can go up.  The choice is passed to every predicate evaluation
+    this arrangement makes -- the flat loop's single block and each block loop
+    alike -- and read back as :data:`PREDICATE_MODE`; the test itself lives in
+    the harness's coupling-state module and is not reimplemented here.  Driver
+    change DR5, improvement item 5a's pre-declared trial.
 ``PROCESS_ARCH_COUPLING_STATE``
     Path to the committed coupling-state artifact for the configuration being
     run.  **Required** when this arrangement is on: there is no default, because
@@ -142,6 +153,8 @@ __all__ = [
     "MDA_MODE",
     "MDA_MODES",
     "PASS_TRACE_PATH",
+    "PREDICATE_MODE",
+    "PREDICATE_MODES",
     "TAU",
     "TRACE_ENABLED",
     "WRITE_SETS_PATH",
@@ -192,6 +205,38 @@ FLAT: bool = MDA_MODE == "flat"
 #: number a flat loop stops by.  Default 1e-6, the evaluation phase's first
 #: rung (decision D15).
 TAU: float = float(os.environ.get("PROCESS_ARCH_TAU", "1e-6"))
+
+#: The two rulers the coupling-state predicate can scale a step by.  The names
+#: are the harness module's own (``ystate.RULERS``); they are repeated here as
+#: a literal rather than imported because this guard runs at *import*, before
+#: any coupling state has been loaded, and a driver that could only refuse a
+#: misspelt setting after it had found a file would refuse it too late.  That
+#: the two lists agree is checked where the predicate is first used, below.
+PREDICATE_MODES = ("frozen", "mixed")
+
+#: Which denominator the coupling-state predicate scales a step by: ``frozen``
+#: -- the measured scale alone, every earlier revision's ruler and the default
+#: here -- or ``mixed``, the conventional scaled step with that scale kept as a
+#: floor under the current magnitude.  Driver change DR5.
+#:
+#: It selects a denominator and nothing else.  The number of components each
+#: evaluation compares is fixed by the block's write set, so
+#: ``COMPONENTS_COMPARED`` is the same under both rulers for the same schedule
+#: -- which is the free consistency check between them: a ``mixed`` run that
+#: never crossed the tolerance differently must reproduce the ``frozen`` run's
+#: counter exactly.
+PREDICATE_MODE: str = (
+    os.environ.get("PROCESS_ARCH_PREDICATE", "").strip() or "frozen"
+)
+
+if PREDICATE_MODE not in PREDICATE_MODES:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_PREDICATE={PREDICATE_MODE!r} is not a recognised "
+        f"convergence ruler; expected one of {PREDICATE_MODES} (or unset for "
+        f"{'frozen'!r}).  Refused rather than defaulted: a run of one "
+        f"predicate recorded under the other's name cannot be told apart "
+        f"afterwards."
+    )
 
 #: The configuration's committed coupling-state artifact.  No default: see the
 #: module docstring.
@@ -444,8 +489,8 @@ class ModuleSolveFailure(RuntimeError):
 # Phase A's predicate, imported rather than reimplemented
 # --------------------------------------------------------------------------
 
-#: ``harness/ystate.py`` -- the coupling-state predicate, in the V4 harness
-#: beside this copy.  Reached by path for the same reason
+#: ``harness/ystate.py`` -- the coupling-state predicate in both of its
+#: rulers, in the V4 harness beside this copy.  Reached by path for the same reason
 #: ``caller.NODE_MAP_PATH`` is: the harness is not an importable package.
 #: Re-pointed from ``arch_surgery/fixedpoint/ystate.py`` by A46 (process-copy)
 #: under decision D20 -- V4 runs its own copy of PROCESS, so the copy reaches
@@ -479,6 +524,21 @@ def _ystate_module():
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    # DR5.  The ruler names are guarded at import from a literal (the refusal
+    # has to happen before any file is read), so the literal is checked against
+    # the module that actually implements them the first time that module is
+    # loaded.  A driver that accepted a setting the predicate does not know
+    # would refuse nothing and run the default under the other's name.
+    rulers = getattr(mod, "RULERS", None)
+    if rulers is None or tuple(rulers) != tuple(PREDICATE_MODES):
+        raise ArchitectureRefusal(
+            f"the coupling-state module at {YSTATE_MODULE_PATH} implements "
+            f"rulers {rulers!r}, this driver guards "
+            f"{tuple(PREDICATE_MODES)!r}.  The two must be the same list: "
+            f"there is one implementation of the predicate per revision of "
+            f"this experiment, and a driver whose guard disagreed with it "
+            f"would accept a setting the predicate ignores."
+        )
     _ystate = mod
     return mod
 
@@ -539,6 +599,11 @@ def load_spec(path: str | Path | None = None):
         ),
         "census": record.get("census"),
         "tau": TAU,
+        # DR5.  The tolerance and the ruler together are what "converged"
+        # means; a block that carried one and not the other would leave a
+        # record naming half of its own stopping rule (improvement item 5a's
+        # trap (i)).
+        "predicate_mode": PREDICATE_MODE,
     }
     _SPEC_CACHE[str(p)] = (spec, provenance)
     return spec, provenance
