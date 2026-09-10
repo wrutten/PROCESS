@@ -30,64 +30,112 @@
     ]
   },
   "permitted_edits": {
-    "what": "The complete set of changes the copy receives (harness implementation plan section 3.3 as amended by section 11).  Three path constants are re-pointed from the repository-root research tree at the V4 harness beside the copy; nothing else in the copied tree differs from the source commit.  The three targets do not exist yet -- later harness tasks create harness/ystate.py and harness/data/.",
+    "what": "The complete set of changes the copy receives (harness implementation plan section 3.3 as amended by section 11).  Three path constants are re-pointed from the repository-root research tree at the V4 harness beside the copy; one existence check is added where the driver read one of those artifacts without one; and the comments that named the artifacts by their old paths name the copies.  Nothing else in the copied tree differs from the source commit.  The permitted edits are recorded as **hunks**, not as constant names: expected_hunks below is the zero-context diff of each file against the source commit and is what the gate compares, so an edit of any kind is reviewable and no file is blanket-pardoned by appearing in this list.",
     "files": {
       "process/core/caller.py": {
-        "constants": [
+        "edits": [
           {
+            "kind": "path constant",
             "name": "NODE_WRITESET_PATH",
+            "description": "the committed per-node write sets are read by path; the copy reads the harness's own copy of them",
+            "task": "A46 (process-copy)",
             "was": "Path(__file__).resolve().parents[2] / \"arch_surgery\" / \"docs\" / \"data\" / \"node_writesets.json\"",
             "now": "Path(__file__).resolve().parents[3] / \"harness\" / \"data\" / \"node_writesets.json\""
           },
           {
+            "kind": "path constant",
             "name": "NODE_MAP_PATH",
+            "description": "the committed node map is read by path; the copy reads the harness's own copy of it",
+            "task": "A46 (process-copy)",
             "was": "Path(__file__).resolve().parents[2] / \"arch_surgery\" / \"docs\" / \"data\" / \"dsm_node_map.json\"",
             "now": "Path(__file__).resolve().parents[3] / \"harness\" / \"data\" / \"dsm_node_map.json\""
+          },
+          {
+            "kind": "existence check",
+            "name": "_post_solve_nodes, step (4)",
+            "description": "the per-run deferral path read NODE_WRITESET_PATH with no existence check and raised a bare FileNotFoundError; it now raises a RuntimeError naming the artifact and its provenance file, mirroring the check the per-call path already had.  No behaviour change on any path where the file exists",
+            "task": "A48 (harness-data)"
+          },
+          {
+            "kind": "comment",
+            "name": "the artifacts' origin",
+            "description": "the per-call refusal named a generator script in the repository's research tree as the way to obtain the write sets, and a comment named the per-run deferral artifact by its path in the shared data directory; both name the committed copy in harness/data/ and its provenance file, and the two constants' comments say the target exists",
+            "task": "A48 (harness-data)"
           }
         ],
         "sha256_at_source_commit": "eef3deebab0fef9b36edfd83fc835450157e9a707d22de796648153aaa5e91b5",
-        "sha256_expected_in_copy": "d2d146aefef91b16f3da788a8c9b1bddbab7def3be0ecc396029156c0c52aa56",
+        "sha256_expected_in_copy": "11926a97006969c0e7b31c4801719deee532d30c77928ea0f8a859728a5bdf3b",
         "expected_hunks": [
           "--- source commit:process/core/caller.py",
           "+++ copy:process/core/caller.py",
-          "@@ -244 +244,4 @@",
+          "@@ -244 +244,6 @@",
           "-#: read live from a generated artifact (trap T9).",
           "+#: read live from a generated artifact (trap T9).  Re-pointed from",
           "+#: ``arch_surgery/docs/data/`` to the V4 harness beside this copy by",
           "+#: A46 (process-copy) under decision D20.",
-          "+#: The target does not exist yet; a later harness task creates it.",
-          "@@ -246,3 +249,2 @@",
+          "+#: The target is a committed file of this experiment: its source, its sha256",
+          "+#: and the check that the two are byte-identical are recorded in",
+          "+#: ``harness/data/PROVENANCE.json``.",
+          "@@ -246,3 +251,2 @@",
           "-    Path(__file__).resolve().parents[2]",
           "-    / \"arch_surgery\"",
           "-    / \"docs\"",
           "+    Path(__file__).resolve().parents[3]",
           "+    / \"harness\"",
-          "@@ -355,0 +358,3 @@",
+          "@@ -348 +352,2 @@",
+          "-            f\"Generate with arch_surgery/fixedpoint/gen_node_writesets.py.\"",
+          "+            f\"It is a committed file of this experiment, copied into \"",
+          "+            f\"harness/data/ and recorded in harness/data/PROVENANCE.json.\"",
+          "@@ -355,0 +361,5 @@",
           "+#: Re-pointed from ``arch_surgery/docs/data/`` to the V4 harness beside this",
           "+#: copy by A46 (process-copy) under decision D20.",
-          "+#: The target does not exist yet; a later harness task creates it.",
-          "@@ -357,3 +362,2 @@",
+          "+#: The target is a committed file of this experiment: its source, its sha256",
+          "+#: and the check that the two are byte-identical are recorded in",
+          "+#: ``harness/data/PROVENANCE.json``.",
+          "@@ -357,3 +367,2 @@",
           "-    Path(__file__).resolve().parents[2]",
           "-    / \"arch_surgery\"",
           "-    / \"docs\"",
           "+    Path(__file__).resolve().parents[3]",
-          "+    / \"harness\""
+          "+    / \"harness\"",
+          "@@ -453 +462 @@",
+          "-# ``arch_surgery/docs/data/postsolve_<scenario>.json`` is produced by",
+          "+# ``harness/data/defer_per_run[_lifted]_<configuration>.json`` is produced by",
+          "@@ -582,0 +592,6 @@",
+          "+    if not NODE_WRITESET_PATH.exists():",
+          "+        raise RuntimeError(",
+          "+            f\"PROCESS_ARCH_POST_SOLVE needs the committed per-node write \"",
+          "+            f\"sets at {NODE_WRITESET_PATH}, which is not present.  Its \"",
+          "+            f\"origin is recorded in harness/data/PROVENANCE.json.\"",
+          "+        )"
         ]
       },
       "process/core/solver/module_solve.py": {
-        "constants": [
+        "edits": [
           {
+            "kind": "path constant",
             "name": "YSTATE_MODULE_PATH",
+            "description": "the coupling-state predicate is loaded by path; the copy loads the harness's own module instead of the repository's research tree",
+            "task": "A46 (process-copy)",
             "was": "Path(__file__).resolve().parents[3] / \"arch_surgery\" / \"fixedpoint\" / \"ystate.py\"",
             "now": "Path(__file__).resolve().parents[4] / \"harness\" / \"ystate.py\""
+          },
+          {
+            "kind": "comment",
+            "name": "the coupling-state artifact's name",
+            "description": "the module docstring named the artifact by its path in the repository's shared data directory; it names the file the copy actually reads, and the constant's comment says the target exists and where its provenance is recorded",
+            "task": "A48 (harness-data)"
           }
         ],
         "sha256_at_source_commit": "3bee14652399180498b2cfa1ae871e36e40866089f2d31681812187ad0f85f94",
-        "sha256_expected_in_copy": "98c5a76f1d50a3d05112774916221621ef164f855d05bb47b73db24e624b7339",
+        "sha256_expected_in_copy": "07c788889181999ad2048c762be761343f94b7acbee0596de98fa82e4df756b5",
         "expected_hunks": [
           "--- source commit:process/core/solver/module_solve.py",
           "+++ copy:process/core/solver/module_solve.py",
-          "@@ -524,5 +524,7 @@",
+          "@@ -33 +33 @@",
+          "-``arch_surgery/docs/data/ystate_<scenario>.json``.",
+          "+``harness/data/coupling_state_<configuration>.json``.",
+          "@@ -524,5 +524,9 @@",
           "-#: ``arch_surgery/fixedpoint/ystate.py`` -- Phase A's coupling-state predicate.",
           "-#: Reached by path for the same reason ``caller.NODE_MAP_PATH`` is: the",
           "-#: research tree is not an importable package, and vendoring a second copy of",
@@ -99,8 +147,10 @@
           "+#: Re-pointed from ``arch_surgery/fixedpoint/ystate.py`` by A46 (process-copy)",
           "+#: under decision D20 -- V4 runs its own copy of PROCESS, so the copy reaches",
           "+#: for the V4 harness and not for V3's research tree.",
-          "+#: The target does not exist yet; a later harness task creates it.",
-          "@@ -530,3 +532,2 @@",
+          "+#: The target is a committed file of this experiment: its source, its sha256",
+          "+#: and the check that the two are byte-identical are recorded in",
+          "+#: ``harness/data/PROVENANCE.json``.",
+          "@@ -530,3 +534,2 @@",
           "-    Path(__file__).resolve().parents[3]",
           "-    / \"arch_surgery\"",
           "-    / \"fixedpoint\"",

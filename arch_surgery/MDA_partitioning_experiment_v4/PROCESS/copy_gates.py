@@ -34,8 +34,10 @@ before its zeros are accepted).  Each gate is re-run against perturbed
 file, and a change made to a file that is allowed to differ but in the wrong
 place -- and each must FAIL.  The real tree is never modified.
 
-New in A46 (process-copy); it derives from no earlier file.  Stdlib only, no
-PROCESS run, runs in seconds.
+New in A46 (process-copy); it derives from no earlier file.  A48
+(harness-data) generalised the permitted-edit model from constant markers to
+recorded hunks, so an edit that is not a constant is describable.  Stdlib only,
+no PROCESS run, runs in seconds.
 
 Usage
 -----
@@ -43,6 +45,7 @@ Usage
     python copy_gates.py copy-identity
     python copy_gates.py frozen-physics
     python copy_gates.py smoke-import       # PYTHONPATH selects the copy (trap T6)
+    python copy_gates.py edit-behaviour     # the one non-comment edit, exercised
     python copy_gates.py provenance --force # regenerate PROVENANCE.json
 
 Exit status: 0 every gate passed, 1 a gate or a tooth failed, 2 setup error.
@@ -74,13 +77,127 @@ MODELS_PREFIX = "process/models"
 #: committed.
 DEFAULT_RECORDS = HERE.parent / "runs" / "gates"
 
+@dataclass(frozen=True)
+class PermittedEdit:
+    """One recorded change the copy is permitted to carry.
+
+    A46 (process-copy) recorded permitted edits as **constant markers**: a file
+    was allowed to differ, and the record named the constants it re-pointed.
+    That model has no place for an edit that is not a constant -- the existence
+    check and the comments A48 (harness-data) adds are neither -- so the model
+    is the **recorded hunk**: every permitted edit is described here, and
+    ``PROVENANCE.json`` records the file's exact hunks and post-edit sha256
+    whatever kind of edit produced them.  The gate compares those, so the
+    description below is documentation and the hunks are the check.
+    """
+
+    #: What kind of change it is: ``path constant``, ``existence check`` or
+    #: ``comment``.
+    kind: str
+    #: The constant, function or subject the edit is about.
+    name: str
+    #: What it does and why, in one sentence a reviewer can check against the
+    #: hunk.
+    description: str
+    #: The task that made it, so the record says who as well as what.
+    task: str
+    #: For a path constant: what it resolved to before and after.
+    was: str = ""
+    now: str = ""
+
+    def as_dict(self) -> dict:
+        record = {
+            "kind": self.kind,
+            "name": self.name,
+            "description": self.description,
+            "task": self.task,
+        }
+        if self.was or self.now:
+            record["was"] = self.was
+            record["now"] = self.now
+        return record
+
+
 #: The complete set of files the copy is permitted to differ from its source
-#: commit in, and the constant each edit re-points.  Adding a row here is not
+#: commit in, and every edit each of them carries.  Adding a row here is not
 #: enough to make an edit legal -- ``PROVENANCE.json`` must be regenerated so
-#: the expected hunks and post-edit sha256 are recorded and reviewable.
-PERMITTED_EDIT_FILES: dict[str, list[str]] = {
-    "process/core/solver/module_solve.py": ["YSTATE_MODULE_PATH"],
-    "process/core/caller.py": ["NODE_WRITESET_PATH", "NODE_MAP_PATH"],
+#: the expected hunks and post-edit sha256 are recorded and reviewable, and its
+#: guard refuses unless the files that actually differ are exactly these.
+PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
+    "process/core/solver/module_solve.py": [
+        PermittedEdit(
+            kind="path constant",
+            name="YSTATE_MODULE_PATH",
+            description=(
+                "the coupling-state predicate is loaded by path; the copy "
+                "loads the harness's own module instead of the repository's "
+                "research tree"
+            ),
+            task="A46 (process-copy)",
+            was='Path(__file__).resolve().parents[3] / "arch_surgery" / "fixedpoint" / "ystate.py"',
+            now='Path(__file__).resolve().parents[4] / "harness" / "ystate.py"',
+        ),
+        PermittedEdit(
+            kind="comment",
+            name="the coupling-state artifact's name",
+            description=(
+                "the module docstring named the artifact by its path in the "
+                "repository's shared data directory; it names the file the "
+                "copy actually reads, and the constant's comment says the "
+                "target exists and where its provenance is recorded"
+            ),
+            task="A48 (harness-data)",
+        ),
+    ],
+    "process/core/caller.py": [
+        PermittedEdit(
+            kind="path constant",
+            name="NODE_WRITESET_PATH",
+            description=(
+                "the committed per-node write sets are read by path; the copy "
+                "reads the harness's own copy of them"
+            ),
+            task="A46 (process-copy)",
+            was='Path(__file__).resolve().parents[2] / "arch_surgery" / "docs" / "data" / "node_writesets.json"',
+            now='Path(__file__).resolve().parents[3] / "harness" / "data" / "node_writesets.json"',
+        ),
+        PermittedEdit(
+            kind="path constant",
+            name="NODE_MAP_PATH",
+            description=(
+                "the committed node map is read by path; the copy reads the "
+                "harness's own copy of it"
+            ),
+            task="A46 (process-copy)",
+            was='Path(__file__).resolve().parents[2] / "arch_surgery" / "docs" / "data" / "dsm_node_map.json"',
+            now='Path(__file__).resolve().parents[3] / "harness" / "data" / "dsm_node_map.json"',
+        ),
+        PermittedEdit(
+            kind="existence check",
+            name="_post_solve_nodes, step (4)",
+            description=(
+                "the per-run deferral path read NODE_WRITESET_PATH with no "
+                "existence check and raised a bare FileNotFoundError; it now "
+                "raises a RuntimeError naming the artifact and its provenance "
+                "file, mirroring the check the per-call path already had.  No "
+                "behaviour change on any path where the file exists"
+            ),
+            task="A48 (harness-data)",
+        ),
+        PermittedEdit(
+            kind="comment",
+            name="the artifacts' origin",
+            description=(
+                "the per-call refusal named a generator script in the "
+                "repository's research tree as the way to obtain the write "
+                "sets, and a comment named the per-run deferral artifact by "
+                "its path in the shared data directory; both name the "
+                "committed copy in harness/data/ and its provenance file, and "
+                "the two constants' comments say the target exists"
+            ),
+            task="A48 (harness-data)",
+        ),
+    ],
 }
 
 #: Model files the experiment has approved a structural edit to, with the
@@ -263,7 +380,7 @@ def check_copy_identity(prov: dict, root: Path) -> GateResult:
                 f"{path} differs from the source commit AND from the expected "
                 f"post-edit content (sha256 {got}, expected "
                 f"{spec['sha256_expected_in_copy']}); something other than the "
-                "recorded path constants has been changed in it."
+                "recorded edits has been changed in it."
             )
         got_hunks = expected_hunks(source[path], copy[path], path)
         if got_hunks != spec["expected_hunks"]:
@@ -482,6 +599,184 @@ def smoke_import() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# edit-behaviour -- the one edit that is not a comment, exercised
+# ---------------------------------------------------------------------------
+
+#: Driven in a child process so that neither tree is imported into this one.
+#: It reaches the per-run deferral path with a stub in place of the run's data
+#: object -- the function reads ``data.numerics`` and nothing else -- and stops
+#: at the step that reads the per-node write sets.  No PROCESS run: nothing is
+#: solved, no model is called, no output file is opened.
+_BEHAVIOUR_SOURCE = r"""
+import json, os, sys
+from pathlib import Path
+
+import process.core.caller as caller
+
+artifact_present = sys.argv[1] == "present"
+missing = Path(sys.argv[2])
+node_map = Path(sys.argv[3])
+write_sets = Path(sys.argv[4])
+record = json.loads(Path(os.environ["PROCESS_ARCH_POST_SOLVE"]).read_text())
+
+# Both trees are given the same two artifacts by hand, so that the only thing
+# that differs between the arms is the tree's own code.  Without this the tree
+# extracted from the source commit stops one step earlier, on a node map that
+# is simply not beside it, and the arms would not be comparable.
+caller.NODE_MAP_PATH = node_map
+caller.NODE_WRITESET_PATH = write_sets
+
+
+class _Numerics:
+    def __init__(self, record):
+        icc = record["deck"]["icc_expected_at_runtime"]
+        self.i_figure_merit = record["deck"]["i_figure_merit_expected"]
+        self.n_equality_constraints = len(icc)
+        self.n_inequality_constraints = 0
+        self.icc = list(icc)
+
+
+class _Data:
+    def __init__(self, record):
+        self.numerics = _Numerics(record)
+
+
+if not artifact_present:
+    caller.NODE_WRITESET_PATH = missing
+try:
+    caller._post_solve_nodes(_Data(record))
+    out = {"raised": None, "message": ""}
+except BaseException as exc:
+    out = {"raised": type(exc).__name__, "message": str(exc)[:400]}
+print("@@B@@" + json.dumps(out) + "@@B@@")
+"""
+
+
+def _behaviour_child(tree: Path, artifact: Path, present: bool) -> dict:
+    """Run the probe above against *tree*, and report what it raised."""
+    missing = Path(tempfile.gettempdir()) / "a_write_set_file_that_is_not_there.json"
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PROCESS_ARCH")}
+    env["PYTHONPATH"] = str(tree)
+    env["PROCESS_ARCH_POST_SOLVE"] = str(artifact)
+    neutral = tempfile.mkdtemp()
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _BEHAVIOUR_SOURCE,
+            "present" if present else "absent",
+            str(missing),
+            str(artifact.parent / "dsm_node_map.json"),
+            str(artifact.parent / "node_writesets.json"),
+        ],
+        cwd=neutral,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    shutil.rmtree(neutral, ignore_errors=True)
+    body = proc.stdout.split("@@B@@")
+    if len(body) < 3:
+        return {
+            "raised": "probe failed",
+            "message": (proc.stderr or proc.stdout).strip()[-400:],
+        }
+    return json.loads(body[1])
+
+
+def check_edit_behaviour(prov: dict) -> tuple[bool, dict]:
+    """The added existence check refuses by name, and changes nothing else.
+
+    The per-node write sets are read on two paths.  The per-call deferral path
+    always checked the file was there and raised a ``RuntimeError`` naming it;
+    the per-run deferral path did not, and raised a bare ``FileNotFoundError``
+    from inside ``json.loads``.  A48 (harness-data) added the missing check.
+    Three arms, one gate:
+
+    * **the copy, artifact absent** -- must raise ``RuntimeError`` naming the
+      artifact and ``harness/data/PROVENANCE.json``;
+    * **the source commit, artifact absent** -- must raise
+      ``FileNotFoundError``, which is the defect the edit repairs and is what
+      makes the first arm a change rather than a restatement;
+    * **the copy, artifact present** (the tooth) -- must *not* refuse, so the
+      check is shown to be a guard on absence and not a new refusal on the
+      path every run takes.
+    """
+    data_dir = COPY_ROOT.parent / "harness" / "data"
+    artifact = data_dir / "defer_per_run_large_tokamak_nof.json"
+    result: dict = {
+        "gate": "edit-behaviour",
+        "label": "the added existence check refuses by name, and only on absence",
+        "artifact_used": str(artifact),
+    }
+    if not artifact.exists() or not (data_dir / "node_writesets.json").exists():
+        result["verdict"] = "FAIL"
+        result["failures"] = [
+            f"the committed artifacts are not in {data_dir}; this gate needs "
+            "them, and falling back to another copy of them would be checking "
+            "a file nobody asked about."
+        ]
+        return False, result
+
+    with tempfile.TemporaryDirectory() as td:
+        source_tree = Path(td)
+        # From the repository's top level: ``git archive``'s pathspec is
+        # relative to the current directory, and this directory does not exist
+        # at the source commit.
+        top = _git("rev-parse", "--show-toplevel").decode().strip()
+        archive = subprocess.run(
+            [
+                "git",
+                "-C",
+                top,
+                "archive",
+                prov["source"]["commit_full"],
+                SOURCE_PREFIX,
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        subprocess.run(["tar", "-x", "-C", str(source_tree)], input=archive, check=True)
+        at_source = _behaviour_child(source_tree, artifact, present=False)
+    in_copy = _behaviour_child(COPY_ROOT, artifact, present=False)
+    tooth = _behaviour_child(COPY_ROOT, artifact, present=True)
+
+    failures = []
+    if in_copy["raised"] != "RuntimeError" or "PROVENANCE.json" not in in_copy["message"]:
+        failures.append(
+            f"the copy raised {in_copy['raised']} ({in_copy['message']!r}); "
+            "expected a RuntimeError naming harness/data/PROVENANCE.json"
+        )
+    if at_source["raised"] != "FileNotFoundError":
+        failures.append(
+            f"the source commit raised {at_source['raised']} "
+            f"({at_source['message']!r}); expected the bare FileNotFoundError "
+            "this edit repairs, so the edit is a change and not a restatement"
+        )
+    tooth_tripped = tooth["raised"] is None
+    if not tooth_tripped:
+        failures.append(
+            f"with the artifact present the copy still refused "
+            f"({tooth['raised']}: {tooth['message']!r}); the check would be a "
+            "new refusal on the path every run takes, not a guard on absence"
+        )
+    result.update(
+        {
+            "verdict": "PASS" if not failures else "FAIL",
+            "copy_artifact_absent": in_copy,
+            "source_commit_artifact_absent": at_source,
+            "tooth_copy_artifact_present": {
+                **tooth,
+                "tooth_result": "TRIPPED" if tooth_tripped else "DID NOT TRIP",
+            },
+            "failures": failures,
+        }
+    )
+    return not failures, result
+
+
+# ---------------------------------------------------------------------------
 # PROVENANCE.json
 # ---------------------------------------------------------------------------
 
@@ -565,20 +860,21 @@ def build_provenance(commit: str, base: str, root: Path) -> dict:
                 "The complete set of changes the copy receives (harness "
                 "implementation plan section 3.3 as amended by section 11).  "
                 "Three path constants are re-pointed from the repository-root "
-                "research tree at the V4 harness beside the copy; nothing "
-                "else in the copied tree differs from the source commit.  The "
-                "three targets do not exist yet -- later harness tasks create "
-                "harness/ystate.py and harness/data/."
+                "research tree at the V4 harness beside the copy; one "
+                "existence check is added where the driver read one of those "
+                "artifacts without one; and the comments that named the "
+                "artifacts by their old paths name the copies.  Nothing else "
+                "in the copied tree differs from the source commit.  The "
+                "permitted edits are recorded as **hunks**, not as constant "
+                "names: expected_hunks below is the zero-context diff of each "
+                "file against the source commit and is what the gate "
+                "compares, so an edit of any kind is reviewable and no file "
+                "is blanket-pardoned by appearing in this list."
             ),
             "files": {
                 path: {
-                    "constants": [
-                        {
-                            "name": name,
-                            "was": WAS[name],
-                            "now": NOW[name],
-                        }
-                        for name in PERMITTED_EDIT_FILES[path]
+                    "edits": [
+                        edit.as_dict() for edit in PERMITTED_EDIT_FILES[path]
                     ],
                     "sha256_at_source_commit": sha256(source[path]),
                     "sha256_expected_in_copy": sha256(copy[path]),
@@ -596,20 +892,6 @@ def build_provenance(commit: str, base: str, root: Path) -> dict:
             "sha256_at_source_commit": {p: sha256(b) for p, b in sorted(source.items())},
         },
     }
-
-
-#: What each re-pointed constant resolved to before and after, written out so
-#: PROVENANCE.json reads without opening the source.
-WAS = {
-    "YSTATE_MODULE_PATH": 'Path(__file__).resolve().parents[3] / "arch_surgery" / "fixedpoint" / "ystate.py"',
-    "NODE_WRITESET_PATH": 'Path(__file__).resolve().parents[2] / "arch_surgery" / "docs" / "data" / "node_writesets.json"',
-    "NODE_MAP_PATH": 'Path(__file__).resolve().parents[2] / "arch_surgery" / "docs" / "data" / "dsm_node_map.json"',
-}
-NOW = {
-    "YSTATE_MODULE_PATH": 'Path(__file__).resolve().parents[4] / "harness" / "ystate.py"',
-    "NODE_WRITESET_PATH": 'Path(__file__).resolve().parents[3] / "harness" / "data" / "node_writesets.json"',
-    "NODE_MAP_PATH": 'Path(__file__).resolve().parents[3] / "harness" / "data" / "dsm_node_map.json"',
-}
 
 
 # ---------------------------------------------------------------------------
@@ -662,6 +944,7 @@ def main(argv: list[str] | None = None) -> int:
             "copy-identity",
             "frozen-physics",
             "smoke-import",
+            "edit-behaviour",
             "provenance",
         ],
     )
@@ -725,6 +1008,33 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "smoke-import":
             return 0 if s["verdict"] == "PASS" else 1
         if s["verdict"] != "PASS":
+            print("\nGATE FAILURE")
+            return 1
+
+    if args.command in ("all", "edit-behaviour"):
+        ok_behaviour, behaviour = check_edit_behaviour(prov)
+        print("\n=== gate edit-behaviour -- the added existence check")
+        print(f"    verdict           : {behaviour['verdict']}")
+        for key, label in (
+            ("copy_artifact_absent", "copy, artifact absent    "),
+            ("source_commit_artifact_absent", "source, artifact absent  "),
+        ):
+            arm = behaviour.get(key, {})
+            print(f"    {label}: {arm.get('raised')}")
+        tooth = behaviour.get("tooth_copy_artifact_present", {})
+        print(
+            f"    tooth (artifact present, must not refuse): "
+            f"{tooth.get('raised')}  [{tooth.get('tooth_result')}]"
+        )
+        for failure in behaviour.get("failures", []):
+            print(f"    FAILURE: {failure}")
+        out = Path(args.records) / "edit_behaviour" / "gate.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(behaviour, indent=2) + "\n")
+        print(f"    record            : {out}")
+        if args.command == "edit-behaviour":
+            return 0 if ok_behaviour else 1
+        if not ok_behaviour:
             print("\nGATE FAILURE")
             return 1
 

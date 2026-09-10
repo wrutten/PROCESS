@@ -244,7 +244,9 @@ _PREDICATE_SOURCES = (
 #: read live from a generated artifact (trap T9).  Re-pointed from
 #: ``arch_surgery/docs/data/`` to the V4 harness beside this copy by
 #: A46 (process-copy) under decision D20.
-#: The target does not exist yet; a later harness task creates it.
+#: The target is a committed file of this experiment: its source, its sha256
+#: and the check that the two are byte-identical are recorded in
+#: ``harness/data/PROVENANCE.json``.
 NODE_WRITESET_PATH = (
     Path(__file__).resolve().parents[3]
     / "harness"
@@ -347,7 +349,8 @@ def _node_write_sets() -> dict[str, frozenset[str]]:
         raise RuntimeError(
             f"PROCESS_ARCH_HOIST={HOIST_NAME!r} needs the committed per-node "
             f"write sets at {NODE_WRITESET_PATH}, which is not present.  "
-            f"Generate with arch_surgery/fixedpoint/gen_node_writesets.py."
+            f"It is a committed file of this experiment, copied into "
+            f"harness/data/ and recorded in harness/data/PROVENANCE.json."
         )
     raw = json.loads(NODE_WRITESET_PATH.read_text())["writes_by_node_union"]
     return {k: frozenset(v) for k, v in raw.items()}
@@ -357,7 +360,9 @@ def _node_write_sets() -> dict[str, frozenset[str]]:
 #: is on; never read live from the dependency-analysis repository (trap T9).
 #: Re-pointed from ``arch_surgery/docs/data/`` to the V4 harness beside this
 #: copy by A46 (process-copy) under decision D20.
-#: The target does not exist yet; a later harness task creates it.
+#: The target is a committed file of this experiment: its source, its sha256
+#: and the check that the two are byte-identical are recorded in
+#: ``harness/data/PROVENANCE.json``.
 NODE_MAP_PATH = (
     Path(__file__).resolve().parents[3]
     / "harness"
@@ -454,7 +459,7 @@ def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
 # accepted optimum, before the output phase begins.
 #
 # Membership is **derived, not asserted**: the committed per-deck artifact
-# ``arch_surgery/docs/data/postsolve_<scenario>.json`` is produced by
+# ``harness/data/defer_per_run[_lifted]_<configuration>.json`` is produced by
 # ``arch_surgery/idf_probe/a33_postsolve.py classify`` from the deck's
 # objective/constraint read sets (AST), the run-time write census and a
 # backward crawl of the collapsed DSM, and is validated here on load:
@@ -584,6 +589,12 @@ def _post_solve_nodes(data) -> frozenset[str]:
     # (4) a node the deck keeps per-call is refused: its measured writes must
     # not intersect what the predicate layer reads for this figure of merit.
     scenario = record.get("scenario")
+    if not NODE_WRITESET_PATH.exists():
+        raise RuntimeError(
+            f"PROCESS_ARCH_POST_SOLVE needs the committed per-node write "
+            f"sets at {NODE_WRITESET_PATH}, which is not present.  Its "
+            f"origin is recorded in harness/data/PROVENANCE.json."
+        )
     per_scenario = json.loads(NODE_WRITESET_PATH.read_text())["per_scenario"]
     if scenario not in per_scenario:
         raise RuntimeError(

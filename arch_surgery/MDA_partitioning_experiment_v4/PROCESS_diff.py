@@ -20,8 +20,9 @@ approved.
 Later driver-change tasks extend ``ANNOTATIONS`` by one line each and add a
 paragraph to ``SUMMARIES``.
 
-New in A46 (process-copy); it derives from no earlier file.  Stdlib only, no
-PROCESS run, runs in seconds.
+New in A46 (process-copy); it derives from no earlier file.  A48
+(harness-data) added the annotations and summaries for the copy's second round
+of edits.  Stdlib only, no PROCESS run, runs in seconds.
 
 Usage
 -----
@@ -66,31 +67,45 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/solver/module_solve.py", "YSTATE_MODULE_PATH", "harness path constant YSTATE_MODULE_PATH -> harness/ystate.py (D20, decision 2 option v)"),
     Annotation("process/core/caller.py", "NODE_WRITESET_PATH", "harness path constant NODE_WRITESET_PATH -> harness/data/ (D20, decision 3)"),
     Annotation("process/core/caller.py", "NODE_MAP_PATH", "harness path constant NODE_MAP_PATH -> harness/data/ (D20, decision 3)"),
+    Annotation("process/core/caller.py", "its source, its sha256", "comment: the artifacts the two path constants name are committed here, and their provenance file says so"),
+    Annotation("process/core/caller.py", "copied into ", "comment: the per-call refusal names the committed artifact and its provenance file instead of a generator script in the research tree"),
+    Annotation("process/core/caller.py", "harness/data/defer_per_run", "comment: the per-run deferral artifact named by the file the copy reads"),
+    Annotation("process/core/caller.py", "PROCESS_ARCH_POST_SOLVE needs the committed per-node write", "existence check on the per-run deferral path, mirroring the per-call one (plan section 3.3); no behaviour change where the file exists"),
+    Annotation("process/core/solver/module_solve.py", "its source, its sha256", "comment: the predicate module the path constant names is committed here, and its provenance file says so"),
+    Annotation("process/core/solver/module_solve.py", "harness/data/coupling_state_", "comment: the coupling-state artifact named by the file the copy reads"),
 ]
 
 #: One paragraph per changed driver file, for a reader who will not read the
 #: diff.  Keyed by path; a file with no entry is reported as undocumented.
 SUMMARIES: dict[str, str] = {
     "process/core/caller.py": (
-        "Two path constants are re-pointed.  The driver reads two committed "
-        "artifacts by absolute path -- the per-node write sets and the DSM "
-        "node map -- and in the repository-root tree it resolves both under "
-        "arch_surgery/docs/data/.  In the copy they resolve under "
-        "MDA_partitioning_experiment_v4/harness/data/ instead, so V4's driver "
-        "reads V4's artifacts and nothing outside the experiment folder.  The "
-        "constants' adjacent comments record the move and note that the "
-        "targets do not exist yet; a later harness task creates them.  No "
-        "behaviour changes: the same code reads the same shape of file from a "
+        "Two path constants are re-pointed, one existence check is added and "
+        "three comments name the copied artifacts.  The driver reads two "
+        "committed artifacts by absolute path -- the per-node write sets and "
+        "the DSM node map -- and in the repository-root tree it resolves both "
+        "under arch_surgery/docs/data/.  In the copy they resolve under "
+        "MDA_partitioning_experiment_v4/harness/data/ instead, so the "
+        "experiment's driver reads the experiment's artifacts and nothing "
+        "outside its own folder.  The write sets are read on two paths and "
+        "only one of them checked that the file was there: the per-call "
+        "deferral path raised a RuntimeError naming the artifact, the per-run "
+        "deferral path raised a bare FileNotFoundError.  The second now "
+        "raises the same kind of error, naming the artifact and the "
+        "provenance file that records where it came from.  Nothing else "
+        "changes: on every path where the file exists the code does exactly "
+        "what it did, and the same code reads the same shape of file from a "
         "different place."
     ),
     "process/core/solver/module_solve.py": (
-        "One path constant is re-pointed.  The per-module solver loads the "
-        "coupling-state predicate as a module by path, because the research "
-        "tree is not an importable package; in the repository-root tree that "
-        "is arch_surgery/fixedpoint/ystate.py.  In the copy it is "
-        "MDA_partitioning_experiment_v4/harness/ystate.py, the V4 harness's "
-        "own copy of the predicate.  Same loader, same contract, different "
-        "file; the target is created by a later harness task."
+        "One path constant is re-pointed and two comments name the copied "
+        "files.  The per-module solver loads the coupling-state predicate as "
+        "a module by path, because the harness is not an importable package; "
+        "in the repository-root tree that is arch_surgery/fixedpoint/"
+        "ystate.py.  In the copy it is MDA_partitioning_experiment_v4/harness/"
+        "ystate.py -- the same module, moved whole, its body byte-identical "
+        "to its source and gated as such.  Same loader, same contract, "
+        "different file.  The docstring's reference to the coupling-state "
+        "artifact follows the file the copy actually reads."
     ),
 }
 
