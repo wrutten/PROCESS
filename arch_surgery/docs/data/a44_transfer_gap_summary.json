@@ -1,0 +1,1514 @@
+{
+  "task": "A44 transfer-gap",
+  "provenance": {
+    "tree": "/home/wrutten/projects/PROCESS_surgery_worktrees/A44-transfer-gap",
+    "git_head": "be075584d41e79451a915ea64f9fa83598b71ed4",
+    "git_branch": "A44-transfer-gap",
+    "git_dirty": false,
+    "python": "/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python",
+    "v3_records": "/home/wrutten/projects/PROCESS_surgery/arch_surgery/MDA_partitioning_experiment_v3/runs"
+  },
+  "factorise": {
+    "verdict": "PASS",
+    "teeth_all_tripped": true,
+    "decks": {
+      "large_tokamak_nof": {
+        "n": 22,
+        "rungs": {
+          "B0->B3": {
+            "R": 0.6394722774606025,
+            "rho": 0.6142203892313344,
+            "rho_inloop": 0.6141526130750704,
+            "eps": 1.0411120970127181,
+            "eps_nvar_factor": 1.0476190476190477,
+            "eps_problem_call_factor": 0.9937888198757764,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 0.9941860465116279,
+            "iters_ratio_summed_attempts": 0.9941860465116279
+          },
+          "B0->B1": {
+            "R": 1.0076784912438257,
+            "rho": 0.9678866417316406,
+            "rho_inloop": 0.9678866417316406,
+            "eps": 1.0411120970127181,
+            "eps_nvar_factor": 1.0476190476190477,
+            "eps_problem_call_factor": 0.9937888198757764,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 0.9941860465116279,
+            "iters_ratio_summed_attempts": 0.9941860465116279
+          },
+          "B1->B2": {
+            "R": 0.8858689770636654,
+            "rho": 0.8858689770636653,
+            "rho_inloop": 0.8857989521729995,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          },
+          "B2->B3": {
+            "R": 0.7163582054515774,
+            "rho": 0.7163582054515774,
+            "rho_inloop": 0.7163357827724777,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          },
+          "B1->B3": {
+            "R": 0.6345995106745519,
+            "rho": 0.6345995106745518,
+            "rho_inloop": 0.6345294857838861,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          },
+          "B0->B2": {
+            "R": 0.8926711142472256,
+            "rho": 0.8574207492243948,
+            "rho_inloop": 0.8573529730681307,
+            "eps": 1.0411120970127181,
+            "eps_nvar_factor": 1.0476190476190477,
+            "eps_problem_call_factor": 0.9937888198757764,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 0.9941860465116279,
+            "iters_ratio_summed_attempts": 0.9941860465116279
+          },
+          "R->B0": {
+            "R": 1.0249683580715683,
+            "rho": 1.0249683580715683,
+            "rho_inloop": 1.0249683580715683,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          }
+        },
+        "gap": {
+          "R_over_rho_A": 1.2256551984661548,
+          "rho_B_over_rho_A": 1.1772557460267243,
+          "rho_B_inloop_over_rho_A": 1.1771258417272183,
+          "eps": 1.0411120970127181,
+          "identity_holds": true,
+          "flat_shortening_calls_per_eval_A0_over_B0": 1.676077233947014,
+          "block_shortening_calls_per_eval_A1_over_B3": 1.4238726009851885,
+          "flat_shortening_sweeps_A0_over_B0": 1.6760772339470138,
+          "block_shortening_sweeps_A1_over_B3": 1.5802010933062707,
+          "nodes_per_block_sweep_phase_a_A1": 4.595744680851064,
+          "nodes_per_block_sweep_inloop_B3": 5.10031639362437,
+          "nodes_per_flat_sweep_phase_a_A0": 21.0,
+          "nodes_per_flat_sweep_inloop_B0": 21.0,
+          "sweep_unit_asymmetry_prediction": 1.0606733795128191,
+          "node_unit_asymmetry": 1.1771258417272186
+        },
+        "phase_a": {
+          "seeds_n": 25,
+          "rho_A_ratio_of_sums": 0.5217391304347826,
+          "rho_A_mean_of_ratios": 0.5257142857142857,
+          "rho_A_median_of_ratios": 0.5,
+          "rho_A_published": 0.5217,
+          "rho_A_matches_published_4dp": true
+        },
+        "retry_accounting": {
+          "retried_seeds_B0_or_B3": [],
+          "note": "no retry in the set"
+        },
+        "st_rung_split": null,
+        "B1_B2_B3_identical_on_all_converged_seeds": true,
+        "B0_B1_problem_calls_differ_seeds": [
+          2,
+          10,
+          14,
+          18,
+          19
+        ]
+      },
+      "low_aspect_ratio_DEMO": {
+        "n": 11,
+        "rungs": {
+          "B0->B3": {
+            "R": 0.4503861502716027,
+            "rho": 0.6161821336837072,
+            "rho_inloop": 0.6161572583290476,
+            "eps": 0.7309302325581395,
+            "eps_nvar_factor": 1.05,
+            "eps_problem_call_factor": 0.6961240310077519,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0087719298245614,
+            "iters_ratio_summed_attempts": 0.7012195121951219
+          },
+          "B0->B1": {
+            "R": 0.6918555543985098,
+            "rho": 0.9465411657377002,
+            "rho_inloop": 0.9465411657377002,
+            "eps": 0.7309302325581395,
+            "eps_nvar_factor": 1.05,
+            "eps_problem_call_factor": 0.6961240310077519,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0087719298245614,
+            "iters_ratio_summed_attempts": 0.7012195121951219
+          },
+          "B1->B2": {
+            "R": 0.903323657416809,
+            "rho": 0.9033236574168091,
+            "rho_inloop": 0.903297377149706,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          },
+          "B2->B3": {
+            "R": 0.7206530200590849,
+            "rho": 0.7206530200590849,
+            "rho_inloop": 0.7206448928205553,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          },
+          "B1->B3": {
+            "R": 0.6509829218082417,
+            "rho": 0.6509829218082417,
+            "rho_inloop": 0.6509566415411386,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          },
+          "B0->B2": {
+            "R": 0.6249694898033958,
+            "rho": 0.8550330277297494,
+            "rho_inloop": 0.8550081523750898,
+            "eps": 0.7309302325581395,
+            "eps_nvar_factor": 1.05,
+            "eps_problem_call_factor": 0.6961240310077519,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0087719298245614,
+            "iters_ratio_summed_attempts": 0.7012195121951219
+          },
+          "R->B0": {
+            "R": 0.970893527151812,
+            "rho": 0.970893527151812,
+            "rho_inloop": 0.970893527151812,
+            "eps": 1.0,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0,
+            "iters_ratio_summed_attempts": 1.0
+          }
+        },
+        "gap": {
+          "R_over_rho_A": 0.7929333631542302,
+          "rho_B_over_rho_A": 1.084827700147372,
+          "rho_B_inloop_over_rho_A": 1.0847839055088866,
+          "eps": 0.7309302325581395,
+          "identity_holds": true,
+          "flat_shortening_calls_per_eval_A0_over_B0": 1.4925891214551008,
+          "block_shortening_calls_per_eval_A1_over_B3": 1.3759322145869295,
+          "flat_shortening_sweeps_A0_over_B0": 1.4925891214551008,
+          "block_shortening_sweeps_A1_over_B3": 1.542233877061203,
+          "nodes_per_block_sweep_phase_a_A1": 4.630434782608695,
+          "nodes_per_block_sweep_inloop_B3": 5.190090988170903,
+          "nodes_per_flat_sweep_phase_a_A0": 21.0,
+          "nodes_per_flat_sweep_inloop_B0": 21.0,
+          "sweep_unit_asymmetry_prediction": 0.9678098397755971,
+          "node_unit_asymmetry": 1.0847839055088866
+        },
+        "phase_a": {
+          "seeds_n": 25,
+          "rho_A_ratio_of_sums": 0.568,
+          "rho_A_mean_of_ratios": 0.568,
+          "rho_A_median_of_ratios": 0.5714285714285714,
+          "rho_A_published": 0.568,
+          "rho_A_matches_published_4dp": true
+        },
+        "retry_accounting": {
+          "retried_seeds_B0_or_B3": [
+            1
+          ],
+          "n_without": 10,
+          "B0->B3_without_retried": {
+            "R": 0.6594273019092811,
+            "rho": 0.6190542017923863,
+            "rho_inloop": 0.6190299125202503,
+            "eps": 1.065217391304348,
+            "eps_nvar_factor": 1.05,
+            "eps_problem_call_factor": 1.0144927536231885,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0141509433962264,
+            "iters_ratio_summed_attempts": 1.0141509433962264
+          },
+          "B0->B3_with_retried": {
+            "R": 0.4503861502716027,
+            "rho": 0.6161821336837072,
+            "rho_inloop": 0.6161572583290476,
+            "eps": 0.7309302325581395,
+            "eps_nvar_factor": 1.05,
+            "eps_problem_call_factor": 0.6961240310077519,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0087719298245614,
+            "iters_ratio_summed_attempts": 0.7012195121951219
+          },
+          "note": "the identical-converged construction COUNTS the failed attempts' evaluations in N and C (they are real cost to reach convergence) but check 2's n_solver_iterations is the final attempt's only"
+        },
+        "st_rung_split": null,
+        "B1_B2_B3_identical_on_all_converged_seeds": true,
+        "B0_B1_problem_calls_differ_seeds": [
+          0,
+          1,
+          5,
+          6,
+          9,
+          11,
+          12,
+          13,
+          15,
+          18,
+          19
+        ]
+      },
+      "st_regression": {
+        "n": 22,
+        "rungs": {
+          "B0->B3": {
+            "R": 0.5330524772152795,
+            "rho": 0.5604282342815681,
+            "rho_inloop": 0.5603885630848231,
+            "eps": 0.9511520737327189,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 0.9511520737327189,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0019011406844107,
+            "iters_ratio_summed_attempts": 0.9529837251356239
+          },
+          "B2->B3": {
+            "R": 0.6281392156198952,
+            "rho": 0.6999613352353483,
+            "rho_inloop": 0.6999429093214263,
+            "eps": 0.8973913043478261,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 0.8973913043478261,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.1896162528216705,
+            "iters_ratio_summed_attempts": 0.9008547008547009
+          },
+          "B0->B2": {
+            "R": 0.8486215538847118,
+            "rho": 0.8006559877955759,
+            "rho_inloop": 0.8006203872085839,
+            "eps": 1.0599078341013826,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 1.0599078341013826,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 0.8422053231939164,
+            "iters_ratio_summed_attempts": 1.057866184448463
+          },
+          "R->B0": {
+            "R": 0.8355717069573919,
+            "rho": 1.04273188130904,
+            "rho_inloop": 1.04273188130904,
+            "eps": 0.8013293943870015,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 0.8013293943870015,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0845360824742267,
+            "iters_ratio_summed_attempts": 0.8061224489795918
+          }
+        },
+        "gap": {
+          "R_over_rho_A": 1.0626390735643998,
+          "rho_B_over_rho_A": 1.1172125918773002,
+          "rho_B_inloop_over_rho_A": 1.117133507423971,
+          "eps": 0.9511520737327189,
+          "identity_holds": true,
+          "flat_shortening_calls_per_eval_A0_over_B0": 1.7116924046643556,
+          "block_shortening_calls_per_eval_A1_over_B3": 1.5322183009364696,
+          "flat_shortening_sweeps_A0_over_B0": 1.7116924046643556,
+          "block_shortening_sweeps_A1_over_B3": 1.6364732114235239,
+          "nodes_per_block_sweep_phase_a_A1": 4.1455525606469,
+          "nodes_per_block_sweep_inloop_B3": 4.427623471081445,
+          "nodes_per_flat_sweep_phase_a_A0": 21.0,
+          "nodes_per_flat_sweep_inloop_B0": 21.0,
+          "sweep_unit_asymmetry_prediction": 1.0459642068784007,
+          "node_unit_asymmetry": 1.1171335074239708
+        },
+        "phase_a": {
+          "seeds_n": 25,
+          "rho_A_ratio_of_sums": 0.5016307893020222,
+          "rho_A_mean_of_ratios": 0.5032380952380953,
+          "rho_A_median_of_ratios": 0.49206349206349204,
+          "rho_A_published": 0.5016,
+          "rho_A_matches_published_4dp": true
+        },
+        "retry_accounting": {
+          "retried_seeds_B0_or_B3": [
+            2
+          ],
+          "n_without": 21,
+          "B0->B3_without_retried": {
+            "R": 0.5438768581412791,
+            "rho": 0.5632400133002355,
+            "rho_inloop": 0.5631988505996148,
+            "eps": 0.9656218402426694,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 0.9656218402426694,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 0.9663366336633663,
+            "iters_ratio_summed_attempts": 0.9663366336633663
+          },
+          "B0->B3_with_retried": {
+            "R": 0.5330524772152795,
+            "rho": 0.5604282342815681,
+            "rho_inloop": 0.5603885630848231,
+            "eps": 0.9511520737327189,
+            "eps_nvar_factor": 1.0,
+            "eps_problem_call_factor": 0.9511520737327189,
+            "identity_R_equals_rho_times_eps": true,
+            "identity_eps_equals_nv_times_pc": true,
+            "iters_ratio_final_attempt": 1.0019011406844107,
+            "iters_ratio_summed_attempts": 0.9529837251356239
+          },
+          "note": "the identical-converged construction COUNTS the failed attempts' evaluations in N and C (they are real cost to reach convergence) but check 2's n_solver_iterations is the final attempt's only"
+        },
+        "st_rung_split": {
+          "B0->B2_differ": [
+            1,
+            2,
+            9,
+            12,
+            15,
+            16,
+            19,
+            24
+          ],
+          "B2->B3_differ": [
+            1,
+            2,
+            9,
+            15,
+            19,
+            24
+          ],
+          "both_differ": [
+            1,
+            2,
+            9,
+            15,
+            19,
+            24
+          ],
+          "B0->B3_differ": [
+            1,
+            2,
+            9,
+            12,
+            15,
+            16,
+            19,
+            24
+          ],
+          "B2_not_converged": [],
+          "retried_seeds_by_arm": {
+            "R": [
+              2,
+              12,
+              24
+            ],
+            "B0": [
+              2
+            ],
+            "B2": [
+              1,
+              15
+            ],
+            "B3": []
+          },
+          "retry_contaminated_seeds": [
+            1,
+            2,
+            12,
+            15,
+            24
+          ],
+          "clean_seeds_no_retry_in_B0_B2_B3": [
+            0,
+            3,
+            4,
+            6,
+            7,
+            8,
+            9,
+            11,
+            12,
+            13,
+            14,
+            16,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "B0->B2_differ_clean": [
+            9,
+            12,
+            16,
+            19,
+            24
+          ],
+          "B2->B3_differ_clean": [
+            9,
+            19,
+            24
+          ],
+          "B0->B3_differ_clean": [
+            9,
+            12,
+            16,
+            19,
+            24
+          ],
+          "B0->B2_differ_without_B0_or_B2_retried": [
+            9,
+            12,
+            16,
+            19,
+            24
+          ],
+          "B2->B3_differ_without_B2_or_B3_retried": [
+            2,
+            9,
+            19,
+            24
+          ],
+          "B0->B3_differ_without_B0_or_B3_retried": [
+            1,
+            9,
+            12,
+            15,
+            16,
+            19,
+            24
+          ],
+          "note": "problem-calls (C / 2(nvar+1), all attempts) compared per seed; on a retried seed the comparison charges that arm both attempts while check 2 credits the final attempt only (the lad finding on the other arm), so the split is published with and without retry-contaminated seeds; A43 (st-trust-gap) owns the B2->B3 half"
+        },
+        "B1_B2_B3_identical_on_all_converged_seeds": null,
+        "B0_B1_problem_calls_differ_seeds": null
+      }
+    }
+  },
+  "prepare": {
+    "verdict": "PASS",
+    "decks": {
+      "large_tokamak_nof": {
+        "verdict": "PASS",
+        "reference": {
+          "outdir": "/home/wrutten/projects/PROCESS_surgery_worktrees/A44-transfer-gap/arch_surgery/idf_probe/runs/a44/large_tokamak_nof/reference",
+          "status": "ok",
+          "node_calls": 126,
+          "sweeps": 6,
+          "t_plant_pulse_burn_hex": "0x1.41043caef8d92p+11",
+          "epsfcn": 0.001,
+          "nvar": 20
+        }
+      },
+      "low_aspect_ratio_DEMO": {
+        "verdict": "PASS",
+        "reference": {
+          "outdir": "/home/wrutten/projects/PROCESS_surgery_worktrees/A44-transfer-gap/arch_surgery/idf_probe/runs/a44/low_aspect_ratio_DEMO/reference",
+          "status": "ok",
+          "node_calls": 105,
+          "sweeps": 5,
+          "t_plant_pulse_burn_hex": "0x1.44eb0e25837b3p+13",
+          "epsfcn": 0.001,
+          "nvar": 19
+        }
+      },
+      "st_regression": {
+        "verdict": "PASS",
+        "reference": {
+          "outdir": "/home/wrutten/projects/PROCESS_surgery_worktrees/A44-transfer-gap/arch_surgery/idf_probe/runs/a44/st_regression/reference",
+          "status": "ok",
+          "node_calls": 147,
+          "sweeps": 7,
+          "t_plant_pulse_burn_hex": "0x1.f400000000000p+9",
+          "epsfcn": 0.001,
+          "nvar": 14
+        }
+      }
+    }
+  },
+  "regime": {
+    "large_tokamak_nof": {
+      "verdict": {
+        "E3b": "SUPPORTED",
+        "E3": "SUPPORTED",
+        "E3b_of_sums": "SUPPORTED",
+        "E3_of_sums": "SUPPORTED"
+      },
+      "ratios_A1_over_A0__A1_over_A0p": {
+        "V3_d0.1": [
+          0.5217391304347826,
+          null
+        ],
+        "E0": [
+          0.8571428571428571,
+          0.8571428571428571
+        ],
+        "E2_d0.01": [
+          0.5494505494505494,
+          0.5714285714285714
+        ],
+        "E2_d0.001": [
+          0.5380952380952381,
+          0.5978835978835979
+        ],
+        "E3": [
+          0.5866897023359608,
+          0.6259600614439325
+        ],
+        "E3b": [
+          0.6111651009610193,
+          0.652073732718894
+        ]
+      },
+      "ratios_of_sums": {
+        "V3_d0.1": [
+          null,
+          null
+        ],
+        "E0": [
+          0.8571428571428571,
+          0.8571428571428571
+        ],
+        "E2_d0.01": [
+          0.5494505494505495,
+          0.5714285714285714
+        ],
+        "E2_d0.001": [
+          0.5380952380952381,
+          0.5978835978835979
+        ],
+        "E3": [
+          0.6160241874527589,
+          0.6259600614439325
+        ],
+        "E3b": [
+          0.6417233560090703,
+          0.652073732718894
+        ]
+      },
+      "distance_to_inloop": {
+        "E3b": -0.0029875121140511274,
+        "E3": -0.02746291073910956
+      },
+      "probe_provenance": {
+        "record_heads": {
+          "127e3d8f": 144,
+          "6aeaeece": 314,
+          "8bf24711": 12,
+          "6ccffb81": 2
+        },
+        "record_dirty_flags": {
+          "True": 391,
+          "False": 81
+        },
+        "runner_last_commit": "6ccffb81",
+        "commits_touching_measuring_code_since_runner_commit": [],
+        "measuring_code_unchanged_across_probe": true,
+        "tracked_tree_clean_now": true,
+        "untracked_now": [
+          "?? arch_surgery/docs/data/a44_transfer_gap_summary.json",
+          "?? arch_surgery/docs/reports/A44_transfer_gap.md"
+        ],
+        "note": "tree_git_dirty in a record is git status --porcelain INCLUDING untracked files (run_one._provenance); the probe's records were stamped while the draft report and summary JSON were untracked"
+      },
+      "rho_A_0p10": 0.5217391304347826,
+      "rho_B_inloop": 0.6141526130750704,
+      "rho_inloop_B3_over_B1": 0.6345294857838861,
+      "delta_scan_ratios_0.1_0.01_0.001": [
+        0.5217391304347826,
+        0.5494505494505494,
+        0.5380952380952381
+      ],
+      "closure": {
+        "with_retried": {
+          "R_measured": 0.6394722774606025,
+          "eps": 1.0411120970127181,
+          "eps_nvar_factor": 1.0476190476190477,
+          "eps_problem_call_factor": 0.9937888198757764,
+          "V3_d0.1": {
+            "rho_A": 0.5217391304347826,
+            "predicted_B3_over_B0": 0.5431889201805485,
+            "measured_over_predicted_minus_1": 0.17725574602672434
+          },
+          "E3": {
+            "rho_A": 0.5866897023359608,
+            "predicted_B3_over_B0": 0.6108097462947596,
+            "measured_over_predicted_minus_1": 0.046925464663445604
+          },
+          "E3b": {
+            "rho_A": 0.6111651009610193,
+            "predicted_B3_over_B0": 0.6362913798825164,
+            "measured_over_predicted_minus_1": 0.004999120966676429
+          }
+        },
+        "B1->B3_rung_eps_exactly_1": {
+          "in_loop_B3_over_B1": 0.6345294857838861,
+          "E3": 0.6259600614439325,
+          "E3b": 0.652073732718894,
+          "E3_minus_inloop": -0.008569424339953668,
+          "E3b_minus_inloop": 0.01754424693500789
+        }
+      },
+      "per_arm": {
+        "V3_d0.1": {
+          "A0": {
+            "n_ok": 25,
+            "calls_per_eval": 115.92,
+            "sweeps_per_eval": 5.52,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.52
+            }
+          },
+          "A1": {
+            "n_ok": 25,
+            "calls_per_eval": 60.48,
+            "sweeps_per_eval": 13.16,
+            "nodes_per_sweep": 4.595744680851064,
+            "block_sweeps_per_eval": {
+              "M1": 4.0,
+              "M2": 5.16,
+              "PULSE": 0.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E0": {
+          "A0": {
+            "n_ok": 1,
+            "calls_per_eval": 21.0,
+            "sweeps_per_eval": 1.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 1.0
+            }
+          },
+          "A0p": {
+            "n_ok": 1,
+            "calls_per_eval": 21.0,
+            "sweeps_per_eval": 1.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 1.0
+            }
+          },
+          "A1": {
+            "n_ok": 1,
+            "calls_per_eval": 18.0,
+            "sweeps_per_eval": 4.0,
+            "nodes_per_sweep": 4.5,
+            "block_sweeps_per_eval": {
+              "M1": 1.0,
+              "M2": 1.0,
+              "PULSE": 0.0,
+              "M3": 1.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E2_d0.01": {
+          "A0": {
+            "n_ok": 10,
+            "calls_per_eval": 109.2,
+            "sweeps_per_eval": 5.2,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.2
+            }
+          },
+          "A0p": {
+            "n_ok": 10,
+            "calls_per_eval": 105.0,
+            "sweeps_per_eval": 5.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.0
+            }
+          },
+          "A1": {
+            "n_ok": 10,
+            "calls_per_eval": 60.0,
+            "sweeps_per_eval": 13.0,
+            "nodes_per_sweep": 4.615384615384615,
+            "block_sweeps_per_eval": {
+              "M1": 4.0,
+              "M2": 5.0,
+              "PULSE": 0.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E2_d0.001": {
+          "A0": {
+            "n_ok": 10,
+            "calls_per_eval": 105.0,
+            "sweeps_per_eval": 5.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.0
+            }
+          },
+          "A0p": {
+            "n_ok": 10,
+            "calls_per_eval": 94.5,
+            "sweeps_per_eval": 4.5,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 4.5
+            }
+          },
+          "A1": {
+            "n_ok": 10,
+            "calls_per_eval": 56.5,
+            "sweeps_per_eval": 11.5,
+            "nodes_per_sweep": 4.913043478260869,
+            "block_sweeps_per_eval": {
+              "M1": 3.0,
+              "M2": 4.5,
+              "PULSE": 0.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E3": {
+          "A0": {
+            "n_ok": 20,
+            "calls_per_eval": 66.15,
+            "sweeps_per_eval": 3.15,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 3.15
+            }
+          },
+          "A0p": {
+            "n_ok": 21,
+            "calls_per_eval": 62.0,
+            "sweeps_per_eval": 2.9523809523809526,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 2.9523809523809526
+            }
+          },
+          "A1": {
+            "n_ok": 21,
+            "calls_per_eval": 38.80952380952381,
+            "sweeps_per_eval": 7.523809523809524,
+            "nodes_per_sweep": 5.158227848101266,
+            "block_sweeps_per_eval": {
+              "M1": 1.9047619047619047,
+              "M2": 2.380952380952381,
+              "PULSE": 0.0,
+              "M3": 2.238095238095238,
+              "FF": 0.0
+            }
+          }
+        },
+        "E3b": {
+          "A0": {
+            "n_ok": 20,
+            "calls_per_eval": 66.15,
+            "sweeps_per_eval": 3.15,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 3.15
+            }
+          },
+          "A0p": {
+            "n_ok": 21,
+            "calls_per_eval": 62.0,
+            "sweeps_per_eval": 2.9523809523809526,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 2.9523809523809526
+            }
+          },
+          "A1": {
+            "n_ok": 21,
+            "calls_per_eval": 40.42857142857143,
+            "sweeps_per_eval": 7.857142857142857,
+            "nodes_per_sweep": 5.1454545454545455,
+            "block_sweeps_per_eval": {
+              "M1": 2.142857142857143,
+              "M2": 2.380952380952381,
+              "PULSE": 0.0,
+              "M3": 2.3333333333333335,
+              "FF": 0.0
+            }
+          }
+        }
+      }
+    },
+    "low_aspect_ratio_DEMO": {
+      "verdict": {
+        "E3b": "SUPPORTED",
+        "E3": "SUPPORTED",
+        "E3b_of_sums": "SUPPORTED",
+        "E3_of_sums": "SUPPORTED"
+      },
+      "ratios_A1_over_A0__A1_over_A0p": {
+        "V3_d0.1": [
+          0.568,
+          null
+        ],
+        "E0": [
+          0.8571428571428571,
+          0.8571428571428571
+        ],
+        "E2_d0.01": [
+          0.5428571428571428,
+          0.6785714285714286
+        ],
+        "E2_d0.001": [
+          0.5238095238095238,
+          0.6547619047619048
+        ],
+        "E3": [
+          0.6016666666666667,
+          0.6440677966101694
+        ],
+        "E3b": [
+          0.6180107526881721,
+          0.6722222222222223
+        ]
+      },
+      "ratios_of_sums": {
+        "V3_d0.1": [
+          null,
+          null
+        ],
+        "E0": [
+          0.8571428571428571,
+          0.8571428571428571
+        ],
+        "E2_d0.01": [
+          0.5428571428571428,
+          0.6785714285714286
+        ],
+        "E2_d0.001": [
+          0.5238095238095238,
+          0.6547619047619048
+        ],
+        "E3": [
+          0.6333333333333333,
+          0.6440677966101694
+        ],
+        "E3b": [
+          0.6505376344086021,
+          0.6722222222222223
+        ]
+      },
+      "distance_to_inloop": {
+        "E3b": 0.001853494359124519,
+        "E3": -0.01449059166238087
+      },
+      "probe_provenance": {
+        "record_heads": {
+          "127e3d8f": 144,
+          "6aeaeece": 314,
+          "8bf24711": 12,
+          "6ccffb81": 2
+        },
+        "record_dirty_flags": {
+          "True": 391,
+          "False": 81
+        },
+        "runner_last_commit": "6ccffb81",
+        "commits_touching_measuring_code_since_runner_commit": [],
+        "measuring_code_unchanged_across_probe": true,
+        "tracked_tree_clean_now": true,
+        "untracked_now": [
+          "?? arch_surgery/docs/data/a44_transfer_gap_summary.json",
+          "?? arch_surgery/docs/reports/A44_transfer_gap.md"
+        ],
+        "note": "tree_git_dirty in a record is git status --porcelain INCLUDING untracked files (run_one._provenance); the probe's records were stamped while the draft report and summary JSON were untracked"
+      },
+      "rho_A_0p10": 0.568,
+      "rho_B_inloop": 0.6161572583290476,
+      "rho_inloop_B3_over_B1": 0.6509566415411386,
+      "delta_scan_ratios_0.1_0.01_0.001": [
+        0.568,
+        0.5428571428571428,
+        0.5238095238095238
+      ],
+      "closure": {
+        "with_retried": {
+          "R_measured": 0.4503861502716027,
+          "eps": 0.7309302325581395,
+          "eps_nvar_factor": 1.05,
+          "eps_problem_call_factor": 0.6961240310077519,
+          "V3_d0.1": {
+            "rho_A": 0.568,
+            "predicted_B3_over_B0": 0.4151683720930232,
+            "measured_over_predicted_minus_1": 0.08482770014737184
+          },
+          "E3": {
+            "rho_A": 0.6016666666666667,
+            "predicted_B3_over_B0": 0.43977635658914727,
+            "measured_over_predicted_minus_1": 0.024125429945219823
+          },
+          "E3b": {
+            "rho_A": 0.6180107526881721,
+            "predicted_B3_over_B0": 0.4517227431857964,
+            "measured_over_predicted_minus_1": -0.0029588789458934173
+          }
+        },
+        "without_retried": {
+          "R_measured": 0.6594273019092811,
+          "eps": 1.065217391304348,
+          "eps_nvar_factor": 1.05,
+          "eps_problem_call_factor": 1.0144927536231885,
+          "V3_d0.1": {
+            "rho_A": 0.568,
+            "predicted_B3_over_B0": 0.6050434782608696,
+            "measured_over_predicted_minus_1": 0.08988415808518724
+          },
+          "E3": {
+            "rho_A": 0.6016666666666667,
+            "predicted_B3_over_B0": 0.6409057971014493,
+            "measured_over_predicted_minus_1": 0.028898950347456376
+          },
+          "E3b": {
+            "rho_A": 0.6180107526881721,
+            "predicted_B3_over_B0": 0.6583158017765312,
+            "measured_over_predicted_minus_1": 0.0016883995944658725
+          }
+        },
+        "B1->B3_rung_eps_exactly_1": {
+          "in_loop_B3_over_B1": 0.6509566415411386,
+          "E3": 0.6440677966101694,
+          "E3b": 0.6722222222222223,
+          "E3_minus_inloop": -0.006888844930969196,
+          "E3b_minus_inloop": 0.02126558068108364
+        }
+      },
+      "per_arm": {
+        "V3_d0.1": {
+          "A0": {
+            "n_ok": 25,
+            "calls_per_eval": 105.0,
+            "sweeps_per_eval": 5.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.0
+            }
+          },
+          "A1": {
+            "n_ok": 25,
+            "calls_per_eval": 59.64,
+            "sweeps_per_eval": 12.88,
+            "nodes_per_sweep": 4.630434782608695,
+            "block_sweeps_per_eval": {
+              "M1": 4.0,
+              "M2": 4.88,
+              "PULSE": 0.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E0": {
+          "A0": {
+            "n_ok": 1,
+            "calls_per_eval": 21.0,
+            "sweeps_per_eval": 1.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 1.0
+            }
+          },
+          "A0p": {
+            "n_ok": 1,
+            "calls_per_eval": 21.0,
+            "sweeps_per_eval": 1.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 1.0
+            }
+          },
+          "A1": {
+            "n_ok": 1,
+            "calls_per_eval": 18.0,
+            "sweeps_per_eval": 4.0,
+            "nodes_per_sweep": 4.5,
+            "block_sweeps_per_eval": {
+              "M1": 1.0,
+              "M2": 1.0,
+              "PULSE": 0.0,
+              "M3": 1.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E2_d0.01": {
+          "A0": {
+            "n_ok": 10,
+            "calls_per_eval": 105.0,
+            "sweeps_per_eval": 5.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.0
+            }
+          },
+          "A0p": {
+            "n_ok": 10,
+            "calls_per_eval": 84.0,
+            "sweeps_per_eval": 4.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 4.0
+            }
+          },
+          "A1": {
+            "n_ok": 10,
+            "calls_per_eval": 57.0,
+            "sweeps_per_eval": 12.0,
+            "nodes_per_sweep": 4.75,
+            "block_sweeps_per_eval": {
+              "M1": 4.0,
+              "M2": 4.0,
+              "PULSE": 0.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E2_d0.001": {
+          "A0": {
+            "n_ok": 10,
+            "calls_per_eval": 105.0,
+            "sweeps_per_eval": 5.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.0
+            }
+          },
+          "A0p": {
+            "n_ok": 10,
+            "calls_per_eval": 84.0,
+            "sweeps_per_eval": 4.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 4.0
+            }
+          },
+          "A1": {
+            "n_ok": 10,
+            "calls_per_eval": 55.0,
+            "sweeps_per_eval": 11.0,
+            "nodes_per_sweep": 5.0,
+            "block_sweeps_per_eval": {
+              "M1": 3.0,
+              "M2": 4.0,
+              "PULSE": 0.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E3": {
+          "A0": {
+            "n_ok": 19,
+            "calls_per_eval": 66.3157894736842,
+            "sweeps_per_eval": 3.1578947368421053,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 3.1578947368421053
+            }
+          },
+          "A0p": {
+            "n_ok": 20,
+            "calls_per_eval": 61.95,
+            "sweeps_per_eval": 2.95,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 2.95
+            }
+          },
+          "A1": {
+            "n_ok": 20,
+            "calls_per_eval": 39.9,
+            "sweeps_per_eval": 7.55,
+            "nodes_per_sweep": 5.28476821192053,
+            "block_sweeps_per_eval": {
+              "M1": 1.9,
+              "M2": 2.3,
+              "PULSE": 0.0,
+              "M3": 2.35,
+              "FF": 0.0
+            }
+          }
+        },
+        "E3b": {
+          "A0": {
+            "n_ok": 19,
+            "calls_per_eval": 68.52631578947368,
+            "sweeps_per_eval": 3.263157894736842,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 3.263157894736842
+            }
+          },
+          "A0p": {
+            "n_ok": 20,
+            "calls_per_eval": 63.0,
+            "sweeps_per_eval": 3.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 3.0
+            }
+          },
+          "A1": {
+            "n_ok": 20,
+            "calls_per_eval": 42.35,
+            "sweeps_per_eval": 8.0,
+            "nodes_per_sweep": 5.29375,
+            "block_sweeps_per_eval": {
+              "M1": 2.15,
+              "M2": 2.35,
+              "PULSE": 0.0,
+              "M3": 2.5,
+              "FF": 0.0
+            }
+          }
+        }
+      }
+    },
+    "st_regression": {
+      "verdict": {
+        "E3b": "SUPPORTED",
+        "E3": "SUPPORTED",
+        "E3b_of_sums": "SUPPORTED",
+        "E3_of_sums": "SUPPORTED"
+      },
+      "ratios_A1_over_A0__A1_over_A0p": {
+        "V3_d0.1": [
+          0.5016307893020222,
+          null
+        ],
+        "E0": [
+          0.8095238095238095,
+          null
+        ],
+        "E2_d0.01": [
+          0.5704567541302236,
+          null
+        ],
+        "E2_d0.001": [
+          0.5983436853002071,
+          null
+        ],
+        "E3": [
+          0.5767195767195767,
+          null
+        ],
+        "E3b": [
+          0.558257345491388,
+          null
+        ]
+      },
+      "ratios_of_sums": {
+        "V3_d0.1": [
+          null,
+          null
+        ],
+        "E0": [
+          0.8095238095238095,
+          null
+        ],
+        "E2_d0.01": [
+          0.5704567541302236,
+          null
+        ],
+        "E2_d0.001": [
+          0.598343685300207,
+          null
+        ],
+        "E3": [
+          0.5767195767195767,
+          null
+        ],
+        "E3b": [
+          0.5582573454913881,
+          null
+        ]
+      },
+      "distance_to_inloop": {
+        "E3b": -0.002131217593435153,
+        "E3": 0.016331013634753644
+      },
+      "probe_provenance": {
+        "record_heads": {
+          "127e3d8f": 144,
+          "6aeaeece": 314,
+          "8bf24711": 12,
+          "6ccffb81": 2
+        },
+        "record_dirty_flags": {
+          "True": 391,
+          "False": 81
+        },
+        "runner_last_commit": "6ccffb81",
+        "commits_touching_measuring_code_since_runner_commit": [],
+        "measuring_code_unchanged_across_probe": true,
+        "tracked_tree_clean_now": true,
+        "untracked_now": [
+          "?? arch_surgery/docs/data/a44_transfer_gap_summary.json",
+          "?? arch_surgery/docs/reports/A44_transfer_gap.md"
+        ],
+        "note": "tree_git_dirty in a record is git status --porcelain INCLUDING untracked files (run_one._provenance); the probe's records were stamped while the draft report and summary JSON were untracked"
+      },
+      "rho_A_0p10": 0.5016307893020222,
+      "rho_B_inloop": 0.5603885630848231,
+      "rho_inloop_B3_over_B1": null,
+      "delta_scan_ratios_0.1_0.01_0.001": [
+        0.5016307893020222,
+        0.5704567541302236,
+        0.5983436853002071
+      ],
+      "closure": {
+        "with_retried": {
+          "R_measured": 0.5330524772152795,
+          "eps": 0.9511520737327189,
+          "eps_nvar_factor": 1.0,
+          "eps_problem_call_factor": 0.9511520737327189,
+          "V3_d0.1": {
+            "rho_A": 0.5016307893020222,
+            "predicted_B3_over_B0": 0.47712716549279904,
+            "measured_over_predicted_minus_1": 0.11721259187729993
+          },
+          "E3": {
+            "rho_A": 0.5767195767195767,
+            "predicted_B3_over_B0": 0.5485480213590813,
+            "measured_over_predicted_minus_1": -0.028248291016363725
+          },
+          "E3b": {
+            "rho_A": 0.558257345491388,
+            "predicted_B3_over_B0": 0.5309876318406566,
+            "measured_over_predicted_minus_1": 0.0038886882684352475
+          }
+        },
+        "without_retried": {
+          "R_measured": 0.5438768581412791,
+          "eps": 0.9656218402426694,
+          "eps_nvar_factor": 1.0,
+          "eps_problem_call_factor": 0.9656218402426694,
+          "V3_d0.1": {
+            "rho_A": 0.5016307893020222,
+            "predicted_B3_over_B0": 0.48438564588820143,
+            "measured_over_predicted_minus_1": 0.12281786786639937
+          },
+          "E3": {
+            "rho_A": 0.5767195767195767,
+            "predicted_B3_over_B0": 0.556893018975931,
+            "measured_over_predicted_minus_1": -0.02337282097482085
+          },
+          "E3b": {
+            "rho_A": 0.558257345491388,
+            "predicted_B3_over_B0": 0.5390654852823817,
+            "measured_over_predicted_minus_1": 0.008925395875376774
+          }
+        }
+      },
+      "per_arm": {
+        "V3_d0.1": {
+          "A0": {
+            "n_ok": 25,
+            "calls_per_eval": 122.64,
+            "sweeps_per_eval": 5.84,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 5.84
+            }
+          },
+          "A1": {
+            "n_ok": 25,
+            "calls_per_eval": 61.52,
+            "sweeps_per_eval": 14.84,
+            "nodes_per_sweep": 4.1455525606469,
+            "block_sweeps_per_eval": {
+              "M1": 4.0,
+              "M2": 5.84,
+              "PULSE": 1.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E0": {
+          "A0": {
+            "n_ok": 1,
+            "calls_per_eval": 21.0,
+            "sweeps_per_eval": 1.0,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 1.0
+            }
+          },
+          "A1": {
+            "n_ok": 1,
+            "calls_per_eval": 17.0,
+            "sweeps_per_eval": 5.0,
+            "nodes_per_sweep": 3.4,
+            "block_sweeps_per_eval": {
+              "M1": 1.0,
+              "M2": 1.0,
+              "PULSE": 1.0,
+              "M3": 1.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E2_d0.01": {
+          "A0": {
+            "n_ok": 10,
+            "calls_per_eval": 102.9,
+            "sweeps_per_eval": 4.9,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 4.9
+            }
+          },
+          "A1": {
+            "n_ok": 10,
+            "calls_per_eval": 58.7,
+            "sweeps_per_eval": 13.9,
+            "nodes_per_sweep": 4.223021582733813,
+            "block_sweeps_per_eval": {
+              "M1": 4.0,
+              "M2": 4.9,
+              "PULSE": 1.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E2_d0.001": {
+          "A0": {
+            "n_ok": 10,
+            "calls_per_eval": 96.6,
+            "sweeps_per_eval": 4.6,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 4.6
+            }
+          },
+          "A1": {
+            "n_ok": 10,
+            "calls_per_eval": 57.8,
+            "sweeps_per_eval": 13.6,
+            "nodes_per_sweep": 4.25,
+            "block_sweeps_per_eval": {
+              "M1": 4.0,
+              "M2": 4.6,
+              "PULSE": 1.0,
+              "M3": 3.0,
+              "FF": 0.0
+            }
+          }
+        },
+        "E3": {
+          "A0": {
+            "n_ok": 14,
+            "calls_per_eval": 67.5,
+            "sweeps_per_eval": 3.2142857142857144,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 3.2142857142857144
+            }
+          },
+          "A1": {
+            "n_ok": 14,
+            "calls_per_eval": 38.92857142857143,
+            "sweeps_per_eval": 8.642857142857142,
+            "nodes_per_sweep": 4.5041322314049586,
+            "block_sweeps_per_eval": {
+              "M1": 2.2142857142857144,
+              "M2": 2.0714285714285716,
+              "PULSE": 1.0,
+              "M3": 2.357142857142857,
+              "FF": 0.0
+            }
+          }
+        },
+        "E3b": {
+          "A0": {
+            "n_ok": 14,
+            "calls_per_eval": 70.5,
+            "sweeps_per_eval": 3.357142857142857,
+            "nodes_per_sweep": 21.0,
+            "block_sweeps_per_eval": {
+              "FLAT": 3.357142857142857
+            }
+          },
+          "A1": {
+            "n_ok": 14,
+            "calls_per_eval": 39.357142857142854,
+            "sweeps_per_eval": 8.785714285714286,
+            "nodes_per_sweep": 4.479674796747967,
+            "block_sweeps_per_eval": {
+              "M1": 2.2142857142857144,
+              "M2": 2.2142857142857144,
+              "PULSE": 1.0,
+              "M3": 2.357142857142857,
+              "FF": 0.0
+            }
+          }
+        }
+      }
+    }
+  }
+}
