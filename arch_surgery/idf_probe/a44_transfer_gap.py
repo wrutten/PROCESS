@@ -430,6 +430,26 @@ def stage_factorise() -> int:
         d["gap"]["node_unit_asymmetry"] = (
             d["gap"]["flat_shortening_calls_per_eval_A0_over_B0"]
             / d["gap"]["block_shortening_calls_per_eval_A1_over_B3"])
+        # Per-seed spread of the in-loop per-evaluation ratio (orchestrator's
+        # assessment, addition ii): is rho_B a tight property of the
+        # architecture across seeds, or a mean the probe happened to hit?
+        def rho_seed(a, b, s):
+            fa, fb = F[a][s], F[b][s]
+            return ((fb["N"] - fb["P"]) / fb["C"]) / ((fa["N"] - fa["P"]) / fa["C"])
+        per_seed_rho = {}
+        for a, b in (("B0", "B3"), ("B1", "B3"), ("B0", "B1")):
+            if a in F and b in F and all(s in F[a] and s in F[b] for s in S03):
+                vals = {s: rho_seed(a, b, s) for s in S03}
+                v = sorted(vals.values())
+                per_seed_rho[f"{a}->{b}"] = {
+                    "per_seed": vals, "n": len(v), "min": v[0],
+                    "median": statistics.median(v), "max": v[-1],
+                    "mean_of_seed_ratios": statistics.mean(v),
+                    "ratio_of_sums": rungs[f"{a}->{b}"]["rho_inloop"] if f"{a}->{b}" in rungs else None,
+                    "spread_max_minus_min": v[-1] - v[0],
+                    "argmin_seed": min(vals, key=vals.get), "argmax_seed": max(vals, key=vals.get),
+                }
+        d["per_seed_rho_inloop"] = per_seed_rho
         d["executing_nodes_per_block_B3"] = _executing_nodes_per_block(F["B3"][S03[0]])
         d["hoist_B3"] = F["B3"][S03[0]]["hoist"]
         d["post_solve_nodes_B3"] = F["B3"][S03[0]]["post_solve_nodes"]
@@ -562,6 +582,12 @@ def _factorise_tables(rec: dict) -> str:
     for deck in DECKS:
         for k, g in rec["decks"][deck]["rungs"].items():
             L.append(f"| {SHORT[deck]} | {k} | {g['R']:.4f} | {g['rho']:.4f} | {g['eps']:.4f} | {g['eps_nvar_factor']:.4f} | {g['eps_problem_call_factor']:.4f} | {g['iters_ratio_final_attempt']:.4f} | {g['iters_ratio_summed_attempts']:.4f} |")
+    L.append("")
+    L.append("| config | rung | n | rho per seed: min | median | max | mean of seed ratios | ratio of sums | argmin seed | argmax seed |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|")
+    for deck in DECKS:
+        for k, v in rec["decks"][deck]["per_seed_rho_inloop"].items():
+            L.append(f"| {SHORT[deck]} | {k} | {v['n']} | {v['min']:.4f} | {v['median']:.4f} | {v['max']:.4f} | {v['mean_of_seed_ratios']:.4f} | {v['ratio_of_sums']:.4f} | {v['argmin_seed']} | {v['argmax_seed']} |")
     L.append("")
     for deck in DECKS:
         ra = rec["decks"][deck]["retry_accounting"]
@@ -1019,6 +1045,8 @@ def stage_tally() -> int:
                                             "gap": fac["decks"][dk]["gap"],
                                             "phase_a": {k: v for k, v in fac["decks"][dk]["phase_a"].items() if k != "arms"},
                                             "retry_accounting": fac["decks"][dk]["retry_accounting"],
+                                            "per_seed_rho_inloop": {k: {kk: vv for kk, vv in v.items() if kk != "per_seed"}
+                                                                    for k, v in fac["decks"][dk]["per_seed_rho_inloop"].items()},
                                             "st_rung_split": fac["decks"][dk].get("st_rung_split"),
                                             "B1_B2_B3_identical_on_all_converged_seeds": fac["decks"][dk].get("B1_B2_B3_identical_on_all_converged_seeds"),
                                             "B0_B1_problem_calls_differ_seeds": fac["decks"][dk].get("B0_B1_problem_calls_differ_seeds")}
