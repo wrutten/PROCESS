@@ -1149,6 +1149,21 @@ def stage(
                     f"{result['only_in_the_committed_artifact']}.  Reported, "
                     f"not absorbed."
                 )
+            branches = derived["availability_branches"]
+            if not branches["agrees"]:
+                check.note(
+                    f"{label}: the dead-branch function list names "
+                    f"{branches['declared_but_absent']}, which this tree's "
+                    f"availability model does not define "
+                    f"({branches['n_found_in_source']} of "
+                    f"{branches['n_declared']} found).  Stale, and harmless in "
+                    f"this direction: a name that does not exist excludes "
+                    f"nothing, so the closure keeps every read it would have "
+                    f"removed.  The dangerous direction — a dead branch the "
+                    f"list does not name — would keep a node in the loop, "
+                    f"which is also safe; reported so the list is not trusted "
+                    f"as current."
+                )
             if derived["live_reads_of_candidate_outputs"]:
                 check.fail(
                     f"{label}: "
