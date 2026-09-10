@@ -244,6 +244,121 @@ sweeps against ≈ 2 000 is noise — or that removing it changes any V3 ratio. 
 what the intervention *is*: an architecture that certifies its own output state does not get
 to borrow the incumbent's second loop to do it, and V3's block arms did.
 
+### 1c. `A0p`: a flat arm that carries the pin, so Phase A varies ownership on its own *(user, 2026-09-10)*
+
+**The change.** Add a Phase A arm **`A0p`** — `MODULE_SOLVE=flat_state` **+** `LIFT=burn_time`
+**+** `PIN_BURN_TIME=<the seed's hex, the same value `A1` gets>`; no hoist, no post-solve, no
+sequence, no prime, the frozen deck. It is the Phase A mirror of `B1`, which
+[`v3_runner.py`](../../MDA_partitioning_experiment_v3/v3_runner.py) already builds for exactly
+this reason: *"Flat solve + the lift, nothing else: B0 -> B1 varies the lift alone"*.
+
+**Why.** On the pulsed configs V3's Phase A pins the burn time in the block arms and **not** in
+the flat control, so `A0 -> A1` varies the burn time's *owner* (the loop → a constant) together
+with the partition, the hoist, the sequence, the trust outer and the post-solve exclusion. The
+displacement is not small and it is measured: Phase A's own tally carries
+`lift_residual_distribution`, whose median is **155 s** (tok) and **526 s** (lad) in the block
+arms against **0** in `A0`, and
+[`phase_a.py`](../../MDA_partitioning_experiment_v3/phase_a.py) declares it *"excluded from the
+similarity statistic"*. `A0p` turns that exclusion into a rung: `A0 -> A0p` is the ownership
+change alone and `A0p -> A1` is the partitioning intervention against a control that sits on the
+same reduced map.
+
+**And it makes the two ladders term-for-term identical.** With `A0p` in place,
+`A0p -> A1` and `B1 -> B3` are the **same set of switch changes** — `flat_state` -> `per_module`,
+plus `SEQUENCE`, `OUTER=trust`, `HOIST`, `POST_SOLVE` and `PRIME` — with the deck held constant
+inside each step. V3 had no Phase A step that matched any Phase B step, so no Phase A ratio could
+be read against a Phase B one. (`B2` remains the one Phase B arm with no Phase A twin: it splits
+that step into `B1 -> B2`, the partition, and `B2 -> B3`, the outer loop.)
+
+**What it buys the headline.** The cross-arm audit comparison stops needing an exclusion where it
+matters most. Pinned at the same value, `A0p` and `A1` converge the **same** map, so the pin's
+inconsistency is common-mode and cancels. That construction is already validated on this
+instrument: the warm equivalence gate G6 pins the block arm at the reference's *converged* burn
+time and then demands cross-state max residual `< tau` plus bit-identity of the pinned component
+— and it passes on both pulsed configs.
+
+**What it does not buy, stated so it is not over-claimed.** (i) Agreement is to `tau`, not
+bit-exact — only the pinned component is bit-identical, which is what G6's
+`pin_component_bit_identical` field checks. (ii) It does **not** close I-17(iii): Phase B's
+`B1`/`B2`/`B3` hand the burn time to *the optimiser* (`ixc = 178` on the derived lifted deck),
+which is a different owner from a constant, and no Phase A arm can carry that. `A0p` removes the
+*within-Phase-A* asymmetry only. (iii) Both pinned arms sit off consistency by construction, so
+`A0p` is not a candidate architecture and its cost must never be quoted as production's.
+
+**Why the pin does not simply go into `A0` instead.** Two reasons, the second load-bearing.
+`A0` is the as-shipped flat control (`phase_a.py`: *"the flat architecture as shipped keeps those
+nodes in its loop"*), and a pinned control models nothing that exists. And converging the burn
+time is real work the flat loop does and the block arms do not: pinning both sides would delete
+that term from the `A0 -> A1` cost ratio, improving the intervention's number by removing
+something that belongs to it. The rung keeps it visible and priced.
+
+**No prime, deliberately.** O4's finding stands — the flat arms self-repair the `FirstWall`→`Build`
+lag within one sweep, so priming `A0p` would change nothing measurable and would move the arm's
+first call. Consistent with `A0`, `B0` and `B1`.
+
+**Cost, and one composition to check at preflight.** No `process/` change: flat + lift + pin is
+already legal — the driver's only refusals are pin ⇒ lift
+([`subsolve.py`](../../../process/core/solver/subsolve.py), `PIN_ENABLED and not is_lifted(...)`)
+and decks naming `ixc = 178` ([`caller.py`](../../../process/core/caller.py),
+`_apply_burn_time_pin`), and Phase A already runs the **frozen** deck for that reason. One branch
+in `env_for_phase_a`, one `pin_hex` predicate widened from `arm in BLOCK_ARMS`. With `HOIST` off
+`pulse` still executes — it just stops computing the burn time — so **`A0 -> A0p` changes the
+owner without changing the node set**, which is what makes it a one-variable rung.
+
+**Where it is inactive.** `st_regression` is `k = 0`: nothing to lift or pin, so `A0p` composes
+to `A0` exactly. It must be **skipped there and recorded as skipped**, never run as a silent
+duplicate — 2 configs x 25 seeds = **50 runs**. Net against V3's 225 Phase A runs, with `A1u`
+retired (item 0) and `AR` added (item 1): **275**.
+
+### 1d. Name deferral by how often a node runs, and fold the prime into "arrangement" *(user, 2026-09-10)*
+
+**Two vocabulary changes, forward-only, each with a mapping to V3's names.**
+
+**(a) Deferral is one ladder, not two mechanisms.** `HOIST` (VP2) and `POST_SOLVE` (VP2c) are
+two levels of the same thing and nest — post-solve ⊂ hoist ⊂ in-loop
+([`caller.py`](../../../process/core/caller.py), VP2c comment: *"VP2 moves a feed-forward node out of
+the sweep but still runs it once per optimiser evaluation. VP2c goes further… running it even once
+per call is pure cost"*). Their names say neither that they are levels nor what a level does. V4
+names the frequency a node runs at:
+
+| V4 name | the node runs | V3 mechanism it replaces |
+|---|---|---|
+| `per_sweep` | every MDA sweep — flat loop or partitioned block, no distinction | in the loop (the default) |
+| `per_call` | once per `call_models` evaluation — every objective/constraint evaluation the optimiser requests, finite-difference perturbations included | `HOIST` (VP2); the pre-/post-predicate routing is kept unchanged |
+| `per_run` | once in total, at the accepted optimum, before the output phase | `POST_SOLVE` (VP2c) |
+
+*Caption: one row per deferral level; "the node runs" is the execution frequency in the solve
+phase; the third column is the V3 env switch whose semantics the name takes over.*
+
+**Why `per_call` and not `per_optit` (decided by the user, 2026-09-10).** The first draft named
+the middle level `per_optit`, "once per optimiser iteration". That is not what the mechanism does:
+`HOIST`'s node runs once per **`call_models` evaluation**, and PROCESS takes central differences, so
+one VMCON major iteration makes on the order of `2n` such evaluations — about 40 on
+`large_tokamak_nof` (`n = 20`). The finite-difference perturbations are calls too, and the node runs
+on every one of them; `per_call` says so. A genuine once-per-major-iteration deferral — the `2n`
+gradient perturbations reading the hoisted node's value from the unperturbed point — would be a
+**different architecture**, with its own staleness question (the finite-difference gradient of
+anything downstream of the hoisted node becomes exactly zero) and its own gate. It is not adopted
+and not proposed here; if it is ever wanted it needs its own item.
+
+**(b) The prime is arrangement at method granularity.** The driver already says so —
+[`caller.py`](../../../process/core/caller.py): *"a driver choice about* when *an existing model
+method runs — the same family as the VP1 reorder but finer-grained (a method, not a node)"*. The
+matrix's `SEQUENCE` and `PRIME` rows merge into one **arrangement** row with two levels: **node**
+(`SEQUENCE=build_after_physics`) and **method** (`PRIME=fw_geometry`). Item 0 already makes the
+prime part of the partitioning intervention; this makes the matrix say so. What does not merge:
+the cost accounting. `n_prime_calls` stays out of `node_calls` by declaration (D19) and is itemised
+beside every ratio that excludes it (trap T11) — merged as a row, still named as a count.
+
+**Cost, and the trap it shares with item 1.** Every V3 run record stores the env by its V3 names,
+and `v3_report_analysis.py --verify` reads them back. The rename is forward-only: V3's records keep
+their names and V3's report stays valid. Any V4 stage that reads a V3 record — G0 against
+`campaign/<deck>/R/start000/metrics.json`, or a V3 baseline in a V4 table — needs an explicit
+name mapping and **must refuse on a missing key, never pass over an empty comparison** (T11; the
+shape A41 repaired with `--mode smoke`). And each renamed switch is re-gated for neutrality with
+the variable unset (protocol §12) — a renamed switch that a stale tree silently ignores is exactly
+the "measures the wrong arm under the right name" failure `env_for_phase_a` exists to refuse.
+
 ## Schedule and driver defects
 
 ### 2. Empty blocks are still swept *(I-20a)*
