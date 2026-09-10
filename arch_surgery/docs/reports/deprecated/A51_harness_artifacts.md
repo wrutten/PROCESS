@@ -1,8 +1,8 @@
 # A51 (harness-artifacts) — the artifact stages of the V4 harness
 
-> **Document status** — **OPEN**. Task report for A51 (harness-artifacts), rebuild task H4 of the
-> approved V4 harness implementation plan. Written on the task branch `A51-harness-artifacts`,
-> branch point `f1f90c20`. Archived to `docs/reports/deprecated/` at merge; folder position records
+> **Document status** — **MERGED, archived.** Task report for A51 (harness-artifacts), rebuild task H4,
+> branch `A51-harness-artifacts` (retired) off `architecture_surgery` at `f1f90c20`, merged on 2026-09-10
+> (`ed343e46`); the orchestrator's critical assessment (protocol §5) is §12. Folder position records
 > lifecycle, not validity (trap T3).
 
 ---

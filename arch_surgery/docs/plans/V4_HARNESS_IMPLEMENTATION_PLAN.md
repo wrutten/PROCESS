@@ -1283,6 +1283,16 @@ of what looks like bulk is the instrument.
   carrying V3 mechanism words are renamed by A53 through a field-name map in `reference.py`, never by
   regenerating the committed reference; `pulse.py:246`'s comment naming a retired switch is a frozen-file
   question for the user (D11).
+- **2026-09-10 — amendment 8, at the merge of A51 (harness-artifacts): H4 delivered.** `artifacts.py`,
+  `input_files.py` (the plan's `decks.py`), `census.py`, `postsolve.py` and their stages on the button. The
+  lifted input files re-derive byte-identically to V3's; the runtime write census reproduces the committed one
+  with 0 differences; the class-level classifier (item 6a) reproduces every committed per-run set from a
+  source scan of the tree under test — the sibling's dependency export is never read live (T9) and is not
+  committed here, so §4.2's `postsolve.py` description is amended accordingly: reachability is a source
+  scan with three counted exclusions. One instrument finding: the predicate node's runtime read set contains
+  `numerics.i_figure_merit`, read at the driver's call site and written by no node; the read-census
+  comparison publishes both constructions and binds on fields a node writes. The one-line `reads_by_node`
+  addition to the probe's summary goes to A58. `harness/pool.py` gained a census entry point (+27).
 
 ---
 
