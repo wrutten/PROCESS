@@ -1,0 +1,696 @@
+"""Plasma density limit models and calculations.
+
+This module provides various electron density limit models used in plasma
+physics calculations, including ASDEX, Borrass, JET, Hugill Murakami, and
+Greenwald limits.
+"""
+
+import logging
+from enum import IntEnum
+from types import DynamicClassAttribute
+
+import numpy as np
+
+from process.core import constants
+from process.core import process_output as po
+from process.core.exceptions import ProcessValueError
+from process.core.model import Model
+
+logger = logging.getLogger(__name__)
+
+
+class DensityLimitModel(IntEnum):
+    """Electron density model types"""
+
+    ASDEX = (1, "ASDEX limit")
+    BORRASS_ITER_I = (2, "Borrass ITER I limit")
+    BORRASS_ITER_II = (3, "Borrass ITER II limit")
+    JET_EDGE_RADIATION = (4, "JET Edge Radiation limit")
+    JET_SIMPLE = (5, "JET Simple limit")
+    HUGILL_MURAKAMI = (6, "Hugill Murakami limit")
+    GREENWALD = (7, "Greenwald limit")
+    ASDEX_NEW = (8, "ASDEX New limit")
+
+    def __new__(cls, value: int, full_name: str):
+        """Create a new DensityLimitModel instance.
+
+        Parameters
+        ----------
+        value : int
+            The integer value for the enum member.
+        full_name : str
+            The full descriptive name of the density limit model.
+
+        Returns
+        -------
+        obj
+            A new instance of DensityLimitModel.
+        """
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj._full_name_ = full_name
+        return obj
+
+    @DynamicClassAttribute
+    def full_name(self):
+        """The full name of the density limit model."""
+        return self._full_name_
+
+
+class PlasmaDensityLimit(Model):
+    """Class to hold plasma density limit calculations for plasma processing."""
+
+    def __init__(self):
+        self.outfile = constants.NOUT
+        self.mfile = constants.MFILE
+
+    def run(self):
+        """Calculate plasma density limits and update physics variables.
+
+        Raises
+        ------
+        ProcessValueError
+            If i_density_limit has an illegal value.
+        """
+        self.data.physics.nd_plasma_electron_max_array, _ = self.calculate_density_limit(
+            b_plasma_toroidal_on_axis=self.data.physics.b_plasma_toroidal_on_axis,
+            i_density_limit=self.data.physics.i_density_limit,
+            p_plasma_separatrix_mw=self.data.physics.p_plasma_separatrix_mw,
+            p_hcd_injected_total_mw=self.data.current_drive.p_hcd_injected_total_mw,
+            plasma_current=self.data.physics.plasma_current,
+            prn1=self.data.divertor.prn1,
+            qcyl=self.data.physics.qstar,
+            q95=self.data.physics.q95,
+            rmajor=self.data.physics.rmajor,
+            rminor=self.data.physics.rminor,
+            a_plasma_surface=self.data.physics.a_plasma_surface,
+            zeff=self.data.physics.n_charge_plasma_effective_vol_avg,
+        )
+
+        # Convert the chosen density limit model to the actual density limit value and
+        # store in physics variables. This is the value that will be used for all
+        # comparisons to the plasma density in the rest of the code.
+        try:
+            model = DensityLimitModel(int(self.data.physics.i_density_limit))
+            self.data.physics.nd_plasma_electrons_max = self.get_density_limit_value(
+                model,
+                self.data.physics.nd_plasma_electron_max_array,
+            )
+        except ValueError:
+            raise ProcessValueError(
+                "Illegal value of i_density_limit",
+                i_density_limit=self.data.physics.i_density_limit,
+            ) from None
+
+        # Assign the Greenwald fraction for the rest of the code
+        self.data.physics.f_nd_plasma_greenwald = (
+            self.data.physics.nd_plasma_electron_line
+            / self.data.physics.nd_plasma_electron_max_array[6]
+        )
+
+    @staticmethod
+    def get_density_limit_value(
+        model: DensityLimitModel, nd_plasma_electron_max_array: np.ndarray
+    ) -> float:
+        """
+        Get the density limit value (n_e_max) for the specified model.
+
+        Parameters
+        ----------
+        model : DensityLimitModel
+            The density limit model type.
+
+        nd_plasma_electron_max_array: np.ndarray
+            Array of plasma electron density upper limits values (/m3)
+
+        Returns
+        -------
+        float
+            The density limit value (m⁻³).
+        """
+        model_map = {
+            DensityLimitModel.ASDEX: nd_plasma_electron_max_array[0],
+            DensityLimitModel.BORRASS_ITER_I: nd_plasma_electron_max_array[1],
+            DensityLimitModel.BORRASS_ITER_II: nd_plasma_electron_max_array[2],
+            DensityLimitModel.JET_EDGE_RADIATION: nd_plasma_electron_max_array[3],
+            DensityLimitModel.JET_SIMPLE: nd_plasma_electron_max_array[4],
+            DensityLimitModel.HUGILL_MURAKAMI: nd_plasma_electron_max_array[5],
+            DensityLimitModel.GREENWALD: nd_plasma_electron_max_array[6],
+            DensityLimitModel.ASDEX_NEW: nd_plasma_electron_max_array[7],
+        }
+        return model_map[model]
+
+    @staticmethod
+    def calculate_asdex_density_limit(
+        p_perp: float,
+        b_plasma_toroidal_on_axis: float,
+        q95: float,
+        rmajor: float,
+        prn1: float,
+    ) -> float:
+        """
+        Calculate the ASDEX density limit.
+
+        Parameters
+        ----------
+        p_perp : float
+            Perpendicular power density (MW/m²).
+        b_plasma_toroidal_on_axis : float
+            Toroidal field on axis (T).
+        q95 : float
+            Safety factor at 95% of the plasma poloidal flux.
+        rmajor : float
+            Plasma major radius (m).
+        prn1 : float
+            Edge density / average plasma density.
+
+        Returns
+        -------
+        float
+            The ASDEX density limit (m⁻³).
+
+        References
+        ----------
+        T.C.Hender et.al., 'Physics Assessment of the European Reactor Study',
+        AEA FUS 172, 1992
+        """
+        return (
+            1.54e20
+            * p_perp**0.43
+            * b_plasma_toroidal_on_axis**0.31
+            / (q95 * rmajor) ** 0.45
+        ) / prn1
+
+    @staticmethod
+    def calculate_borrass_iter_i_density_limit(
+        p_perp: float,
+        b_plasma_toroidal_on_axis: float,
+        q95: float,
+        rmajor: float,
+        prn1: float,
+    ) -> float:
+        """
+        Calculate the Borrass ITER I density limit.
+
+        Parameters
+        ----------
+        p_perp : float
+            Perpendicular power density (MW/m²).
+        b_plasma_toroidal_on_axis : float
+            Toroidal field on axis (T).
+        q95 : float
+            Safety factor at 95% of the plasma poloidal flux.
+        rmajor : float
+            Plasma major radius (m).
+        prn1 : float
+            Edge density / average plasma density.
+
+        Returns
+        -------
+        float
+            The Borrass ITER I density limit (m⁻³).
+
+        References
+        ----------
+        T.C.Hender et.al., 'Physics Assessment of the European Reactor Study',
+        AEA FUS 172, 1992
+        """
+        return (
+            1.8e20
+            * p_perp**0.53
+            * b_plasma_toroidal_on_axis**0.31
+            / (q95 * rmajor) ** 0.22
+        ) / prn1
+
+    @staticmethod
+    def calculate_borrass_iter_ii_density_limit(
+        p_perp: float,
+        b_plasma_toroidal_on_axis: float,
+        q95: float,
+        rmajor: float,
+        prn1: float,
+    ) -> float:
+        """
+        Calculate the Borrass ITER II density limit.
+
+        Parameters
+        ----------
+        p_perp : float
+            Perpendicular power density (MW/m²).
+        b_plasma_toroidal_on_axis : float
+            Toroidal field on axis (T).
+        q95 : float
+            Safety factor at 95% of the plasma poloidal flux.
+        rmajor : float
+            Plasma major radius (m).
+        prn1 : float
+            Edge density / average plasma density.
+
+        Returns
+        -------
+        float
+            The Borrass ITER II density limit (m⁻³).
+
+        References
+        ----------
+        T.C.Hender et.al., 'Physics Assessment of the European Reactor Study',
+        AEA FUS 172, 1992
+        """
+        return (
+            0.5e20
+            * p_perp**0.57
+            * b_plasma_toroidal_on_axis**0.31
+            / (q95 * rmajor) ** 0.09
+        ) / prn1
+
+    @staticmethod
+    def calculate_jet_edge_radiation_density_limit(
+        zeff: float, p_hcd_injected_total_mw: float, prn1: float, qcyl: float
+    ) -> float:
+        """
+        Calculate the JET edge radiation density limit.
+
+        Parameters
+        ----------
+        zeff : float
+            Effective charge (Z_eff).
+        p_hcd_injected_total_mw : float
+            Power injected into the plasma (MW).
+        prn1 : float
+            Edge density / average plasma density.
+        qcyl : float
+            Equivalent cylindrical safety factor (qstar).
+
+        Returns
+        -------
+        float
+            The JET edge radiation density limit (m⁻³).
+
+        References
+        ----------
+        T.C.Hender et.al., 'Physics Assessment of the European Reactor Study',
+        AEA FUS 172, 1992
+        """
+        denom = (zeff - 1.0) * (1.0 - 4.0 / (3.0 * qcyl))
+        if denom <= 0.0:
+            return 0.0
+        return (1.0e20 * np.sqrt(p_hcd_injected_total_mw / denom)) / prn1
+
+    @staticmethod
+    def calculate_jet_simple_density_limit(
+        b_plasma_toroidal_on_axis: float,
+        p_plasma_separatrix_mw: float,
+        rmajor: float,
+        prn1: float,
+    ) -> float:
+        """
+        Calculate the JET simple density limit.
+
+        Parameters
+        ----------
+        b_plasma_toroidal_on_axis : float
+            Toroidal field on axis (T).
+        p_plasma_separatrix_mw : float
+            Power crossing the separatrix (MW).
+        rmajor : float
+            Plasma major radius (m).
+        prn1 : float
+            Edge density / average plasma density.
+
+        Returns
+        -------
+        float
+            The JET simple density limit (m⁻³).
+
+        References
+        ----------
+        T.C.Hender et.al., 'Physics Assessment of the European Reactor Study',
+        AEA FUS 172, 1992
+        """
+        return (
+            0.237e20
+            * b_plasma_toroidal_on_axis
+            * np.sqrt(p_plasma_separatrix_mw)
+            / rmajor
+        ) / prn1
+
+    @staticmethod
+    def calculate_hugill_murakami_density_limit(
+        b_plasma_toroidal_on_axis: float, rmajor: float, qcyl: float
+    ) -> float:
+        """
+        Calculate the Hugill-Murakami density limit.
+
+        Parameters
+        ----------
+        b_plasma_toroidal_on_axis : float
+            Toroidal field on axis (T).
+        rmajor : float
+            Plasma major radius (m).
+        qcyl : float
+            Equivalent cylindrical safety factor (qstar).
+
+        Returns
+        -------
+        float
+            The Hugill-Murakami density limit (m⁻³).
+
+        References
+        ----------
+        N.A. Uckan and ITER Physics Group, 'ITER Physics Design Guidelines: 1989'
+        """
+        return 3.0e20 * b_plasma_toroidal_on_axis / (rmajor * qcyl)
+
+    @staticmethod
+    def calculate_greenwald_density_limit(c_plasma: float, rminor: float) -> float:
+        """
+        Calculate the Greenwald density limit (n_GW).
+
+        Parameters
+        ----------
+        c_plasma : float
+            Plasma current (A).
+        rminor : float
+            Plasma minor radius (m).
+
+        Returns
+        -------
+        float
+            The Greenwald density limit (m⁻³).
+
+        Notes
+        -----
+        The Greenwald limit is typically applied to the line averaged electron density.
+
+        References
+        ----------
+        M. Greenwald et al., "A new look at density limits in tokamaks,"
+        Nuclear Fusion, vol. 28, no. 12, pp. 2199-2207, Dec. 1988,
+        doi: https://doi.org/10.1088/0029-5515/28/12/009.
+
+        M. Greenwald, "Density limits in toroidal plasmas,"
+        Plasma Physics and Controlled Fusion, vol. 44, no. 8, pp. R27-R53, Jul. 2002,
+        doi: https://doi.org/10.1088/0741-3335/44/8/201.
+        """
+        return 1.0e14 * c_plasma / (np.pi * rminor**2)
+
+    @staticmethod
+    def calculate_asdex_new_density_limit(
+        p_hcd_injected_total_mw: float, c_plasma: float, q95: float, prn1: float
+    ) -> float:
+        """
+        Calculate the ASDEX Upgrade new density limit.
+
+        Parameters
+        ----------
+        p_hcd_injected_total_mw : float
+            Power injected into the plasma (MW).
+        c_plasma : float
+            Plasma current (A).
+        q95 : float
+            Safety factor at 95% surface.
+        prn1 : float
+            Edge density / average plasma density.
+
+        Returns
+        -------
+        float
+            The ASDEX Upgrade new density limit (m⁻³).
+
+        Notes
+        -----
+        This limit is for the separatrix density so we scale by `prn1` to get it as a
+        volume average.
+
+        References
+        ----------
+        J. W. Berkery et al., "Density limits as disruption forecasters for spherical
+        tokamaks," Plasma Physics and Controlled Fusion, vol. 65, no. 9,
+        pp. 095003-095003, Jul. 2023, doi: https://doi.org/10.1088/1361-6587/ace476.
+
+        M. Bernert et al., "The H-mode density limit in the full tungsten ASDEX
+        Upgrade tokamak," vol. 57, no. 1, pp. 014038-014038, Nov. 2014,
+        doi: https://doi.org/10.1088/0741-3335/57/1/014038.
+        """
+        return (
+            1.0e20
+            * 0.506
+            * (p_hcd_injected_total_mw**0.396 * (c_plasma / 1.0e6) ** 0.265)
+            / (q95**0.323)
+        ) / prn1
+
+    def calculate_density_limit(
+        self,
+        b_plasma_toroidal_on_axis: float,
+        i_density_limit: int,
+        p_plasma_separatrix_mw: float,
+        p_hcd_injected_total_mw: float,
+        plasma_current: float,
+        prn1: float,
+        qcyl: float,
+        q95: float,
+        rmajor: float,
+        rminor: float,
+        a_plasma_surface: float,
+        zeff: float,
+    ) -> tuple[np.ndarray, float]:
+        """
+        Calculate the density limit using various models.
+
+        Parameters
+        ----------
+        b_plasma_toroidal_on_axis : float
+            Toroidal field on axis (T).
+        i_density_limit : int
+            Switch denoting which formula to enforce (1-7).
+        p_plasma_separatrix_mw : float
+            Power flowing to the edge plasma via charged particles (MW).
+        p_hcd_injected_total_mw : float
+            Power injected into the plasma (MW).
+        plasma_current : float
+            Plasma current (A).
+        prn1 : float
+            Edge density / average plasma density.
+        qcyl : float
+            Equivalent cylindrical safety factor (qstar).
+        q95 : float
+            Safety factor at 95% surface.
+        rmajor : float
+            Plasma major radius (m).
+        rminor : float
+            Plasma minor radius (m).
+        a_plasma_surface : float
+            Plasma surface area (m²).
+        zeff : float
+            Plasma effective charge.
+
+        Returns
+        -------
+        tuple[np.ndarray, float]
+            A tuple containing:
+            - nd_plasma_electron_max_array : Average plasma density limit using eight
+              different models (m⁻³).
+            - nd_plasma_electrons_max : Enforced average plasma density limit (m⁻³).
+
+        Raises
+        ------
+        ProcessValueError
+            If i_density_limit is not between 1 and 7.
+
+        Notes
+        -----
+        This routine calculates several different formulae for the density limit and
+        enforces the one chosen by the user. For i_density_limit = 1-5, 8, we scale the
+        separatrix density limit output by the ratio of the separatrix to volume
+        averaged density.
+
+        References
+        ----------
+        AEA FUS 172: Physics Assessment for the European Reactor Study
+
+        N.A. Uckan and ITER Physics Group, 'ITER Physics Design Guidelines: 1989'
+
+        M. Bernert et al., "The H-mode density limit in the full tungsten ASDEX Upgrade
+        tokamak," vol. 57, no. 1, pp. 014038-014038, Nov. 2014,
+        doi: https://doi.org/10.1088/0741-3335/57/1/014038.
+        """
+        try:
+            i_density_limit = DensityLimitModel(i_density_limit)
+        except ValueError as e:
+            raise ProcessValueError from e
+        nd_plasma_electron_max_array = np.empty((8,))
+
+        # Power per unit area crossing the plasma edge
+        # (excludes radiation and neutrons)
+
+        p_perp = p_plasma_separatrix_mw / a_plasma_surface
+
+        # Old ASDEX density limit formula
+        # This applies to the density at the plasma edge, so must be scaled
+        # to give the density limit applying to the average plasma density.
+
+        nd_plasma_electron_max_array[0] = self.calculate_asdex_density_limit(
+            p_perp=p_perp,
+            b_plasma_toroidal_on_axis=b_plasma_toroidal_on_axis,
+            q95=q95,
+            rmajor=rmajor,
+            prn1=prn1,
+        )
+
+        # Borrass density limit model for ITER (I)
+        # This applies to the density at the plasma edge, so must be scaled
+        # to give the density limit applying to the average plasma density.
+        # Borrass et al, ITER-TN-PH-9-6 (1989)
+
+        nd_plasma_electron_max_array[1] = self.calculate_borrass_iter_i_density_limit(
+            p_perp=p_perp,
+            b_plasma_toroidal_on_axis=b_plasma_toroidal_on_axis,
+            q95=q95,
+            rmajor=rmajor,
+            prn1=prn1,
+        )
+
+        # Borrass density limit model for ITER (II)
+        # This applies to the density at the plasma edge, so must be scaled
+        # to give the density limit applying to the average plasma density.
+        # This formula is (almost) identical to that in the original routine
+        # denlim (now deleted).
+
+        nd_plasma_electron_max_array[2] = self.calculate_borrass_iter_ii_density_limit(
+            p_perp=p_perp,
+            b_plasma_toroidal_on_axis=b_plasma_toroidal_on_axis,
+            q95=q95,
+            rmajor=rmajor,
+            prn1=prn1,
+        )
+
+        # JET edge radiation density limit model
+        # This applies to the density at the plasma edge, so must be scaled
+        # to give the density limit applying to the average plasma density.
+        # qcyl=qstar here, but literature is not clear.
+
+        nd_plasma_electron_max_array[3] = (
+            self.calculate_jet_edge_radiation_density_limit(
+                zeff=zeff,
+                p_hcd_injected_total_mw=p_hcd_injected_total_mw,
+                prn1=prn1,
+                qcyl=qcyl,
+            )
+        )
+
+        # JET simplified density limit model
+        # This applies to the density at the plasma edge, so must be scaled
+        # to give the density limit applying to the average plasma density.
+
+        nd_plasma_electron_max_array[4] = self.calculate_jet_simple_density_limit(
+            b_plasma_toroidal_on_axis=b_plasma_toroidal_on_axis,
+            p_plasma_separatrix_mw=p_plasma_separatrix_mw,
+            rmajor=rmajor,
+            prn1=prn1,
+        )
+
+        # Hugill-Murakami M.q limit
+        # qcyl=qstar here, which is okay according to the literature
+
+        nd_plasma_electron_max_array[5] = self.calculate_hugill_murakami_density_limit(
+            b_plasma_toroidal_on_axis=b_plasma_toroidal_on_axis, rmajor=rmajor, qcyl=qcyl
+        )
+
+        # Greenwald limit
+
+        nd_plasma_electron_max_array[6] = self.calculate_greenwald_density_limit(
+            c_plasma=plasma_current, rminor=rminor
+        )
+
+        nd_plasma_electron_max_array[7] = self.calculate_asdex_new_density_limit(
+            p_hcd_injected_total_mw=p_hcd_injected_total_mw,
+            c_plasma=plasma_current,
+            q95=q95,
+            prn1=prn1,
+        )
+
+        # Enforce the chosen density limit
+
+        return nd_plasma_electron_max_array, nd_plasma_electron_max_array[
+            i_density_limit - 1
+        ]
+
+    def output(self):
+        """Output density limit information to file."""
+        po.oheadr(self.outfile, "Plasma density limits")
+        po.ovarre(
+            self.outfile,
+            "Plasma density limit model used",
+            "(i_density_limit)",
+            self.data.physics.i_density_limit,
+        )
+        po.ocmmnt(
+            self.outfile,
+            "Density limit model selected: "
+            f"{DensityLimitModel(self.data.physics.i_density_limit).full_name}",
+        )
+        po.ovarre(
+            self.outfile,
+            "Density limit from scaling (nₑ<)(/m³)",
+            "(nd_plasma_electrons_max)",
+            self.data.physics.nd_plasma_electrons_max,
+            "OP ",
+        )
+        po.oblnkl(self.outfile)
+        po.ovarre(
+            self.outfile,
+            "Old ASDEX model",
+            "(nd_plasma_electron_max_array(1))",
+            self.data.physics.nd_plasma_electron_max_array[0],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Borrass ITER model I",
+            "(nd_plasma_electron_max_array(2))",
+            self.data.physics.nd_plasma_electron_max_array[1],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Borrass ITER model II",
+            "(nd_plasma_electron_max_array(3))",
+            self.data.physics.nd_plasma_electron_max_array[2],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "JET edge radiation model",
+            "(nd_plasma_electron_max_array(4))",
+            self.data.physics.nd_plasma_electron_max_array[3],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "JET simplified model",
+            "(nd_plasma_electron_max_array(5))",
+            self.data.physics.nd_plasma_electron_max_array[4],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Hugill-Murakami Mq model",
+            "(nd_plasma_electron_max_array(6))",
+            self.data.physics.nd_plasma_electron_max_array[5],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Greenwald model",
+            "(nd_plasma_electron_max_array(7))",
+            self.data.physics.nd_plasma_electron_max_array[6],
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "ASDEX New",
+            "(nd_plasma_electron_max_array(8))",
+            self.data.physics.nd_plasma_electron_max_array[7],
+            "OP ",
+        )
+        po.oblnkl(self.outfile)
