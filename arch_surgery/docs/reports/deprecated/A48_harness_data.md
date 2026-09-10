@@ -1,7 +1,8 @@
 # A48 (harness-data) — the committed data the experiment reads, and the copy's second round of edits
 
-> **Document status** — **OPEN TASK REPORT.** Awaiting the orchestrator's critical assessment
-> (orchestration protocol §5), which gates the merge. Task **A48 (harness-data)**, branch
+> **Document status** — **MERGED TASK REPORT, archived.** Merged into `architecture_surgery` on
+> 2026-09-10 (`d9fe737f`); the orchestrator's critical assessment (protocol §5) is §13; folder
+> position records lifecycle, not validity (trap T3). Task **A48 (harness-data)**, branch
 > `A48-harness-data` off `architecture_surgery` at `30198919`. It completes task **H0** of the
 > approved V4 harness plan
 > [`../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md`](../plans/V4_HARNESS_IMPLEMENTATION_PLAN.md),
