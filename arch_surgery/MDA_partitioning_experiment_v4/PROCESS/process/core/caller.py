@@ -716,7 +716,19 @@ NODE_CALLS: list[int] = [0]
 #: ``call_models``, so its sweeps are counted by neither — which is correct,
 #: since only optimiser-driven evaluations are the object here.
 SWEEPS_PER_EVAL_HIST: dict[str, int] = {}
-_SWEEP_CALLS: list[int] = [0]
+
+#: Sweeps of the dispatch body ``_call_models_once``, over the **whole** run:
+#: every sweep of every arm, on every path that walks the model sequence — the
+#: analysis loop, every block sweep, the output-time loop and the exit audit.
+#: The histogram above bins the same sweeps *per evaluation* and therefore sees
+#: only the optimiser-driven ones; this is the run total.
+#:
+#: DR4 (task A58 (driver-predicate-counters)) gave it this name.  It was
+#: private and existed only to be differenced across ``call_models``:
+#: the per-sweep-overhead question asks what one sweep costs besides its model
+#: calls, and it cannot be asked of a counter the harness has to reach into the
+#: module's private names to read.  Same cell, same increment, public name.
+DISPATCH_SWEEPS: list[int] = [0]
 
 #: :data:`NODE_CALLS` at the moment the final-output path is entered.  The
 #: cost figure Phase B compares is the **solve** phase: everything before
@@ -798,6 +810,106 @@ OUTPUT_LOOP_SWEEPS: list[int] = [0]
 #: a record carrying more than one says so rather than silently describing its
 #: first point.
 OUTPUT_PATH_ENTRIES: list[int] = [0]
+
+
+# --------------------------------------------------------------------------
+# DR4 (task A58 (driver-predicate-counters)) -- what the convergence test
+# costs, counted rather than timed.
+#
+# The intervention runs many more sweeps of the dispatch body than the control
+# while executing far fewer model nodes, and the earlier revision found it no
+# faster.  That can only be true if a sweep costs something that is not
+# proportional to the nodes it runs, and the convergence test is the prime
+# suspect: a flat block loop compares the **whole** coupling state -- 827 to
+# 846 components, depending on the configuration -- on every one of its sweeps,
+# while a block loop compares only its own block's write set.
+#
+# The question is settled on counts, not on a clock, because no conclusion in
+# this experiment may rest on a timing: identical work has been measured
+# varying by up to 35 % in CPU-seconds on this machine (issue I-10).  So the
+# driver counts two things: how many times a convergence test was evaluated,
+# and how many components each of those tests walked.  Their ratio is the
+# average width of the test, which is the number the per-sweep-overhead
+# hypothesis is about.
+#
+# Two predicates exist and they are counted separately rather than pooled,
+# because they are not the same test and an arm runs exactly one of them:
+#
+#   * the **coupling-state** predicate, which the flat and partitioned
+#     arrangements stop on (``PREDICATE_EVALUATIONS`` / ``COMPONENTS_COMPARED``);
+#   * upstream's own **idempotence** test on the objective and the constraint
+#     vector, which the reference arms stop on
+#     (``UPSTREAM_PREDICATE_EVALUATIONS`` / ``UPSTREAM_COMPONENTS_COMPARED``).
+#     Counting it is what keeps the reference arm's row in the published table
+#     a measurement rather than a zero: the reference arm does evaluate a
+#     stopping test, over about 27 components rather than 840, and that
+#     contrast is the whole point of the question.
+#
+# All of them are counted **in the solve phase only**.  The output-time loop
+# calls ``check_agreement`` too -- once per MFILE variable, in
+# ``call_models_and_write_output`` -- and that is a different loop with a
+# different predicate; it is counted by neither, exactly as the sweep
+# histogram excludes it.
+#
+# Same discipline as :data:`NODE_CALLS` and :data:`OUTPUT_LOOP_SWEEPS`: plain
+# integer increments, touching no float and changing no branch a result depends
+# on.  With every switch unset every counter here stays at zero except the
+# upstream pair, which counts the loop upstream was already running -- and gate
+# G1 is what proves that, rather than this comment.
+
+#: Evaluations of the **coupling-state** convergence test during the solve
+#: phase: one per block-loop sweep that reaches its test.  In the flat
+#: arrangement there is one block holding every in-loop node, so this counts
+#: that loop's stopping tests; in the partitioned arrangement it counts every
+#: block loop's.  Zero in the reference arms, which never enter the block path.
+PREDICATE_EVALUATIONS: list[int] = [0]
+
+#: Summed over those evaluations, the number of coupling-state components each
+#: one walked: the block's own write set where the block has one, and the whole
+#: coupling state where it does not (which is the flat arrangement's single
+#: block).  ``COMPONENTS_COMPARED / PREDICATE_EVALUATIONS`` is the average
+#: width of the test.
+COMPONENTS_COMPARED: list[int] = [0]
+
+#: The same two counts, per block label, so that a partitioned run's test width
+#: can be read per block instead of only as a run average.  Keys appear the
+#: first time a block's loop runs.
+PREDICATE_EVALUATIONS_BY_BLOCK: dict[str, int] = {}
+COMPONENTS_COMPARED_BY_BLOCK: dict[str, int] = {}
+
+#: How many times the block schedule visited each block, over the whole run.
+#: One entry per label of the schedule that was actually built, counted whether
+#: or not the visit executed anything.
+BLOCK_VISITS: dict[str, int] = {}
+
+#: Of those visits, how many executed **no node** because the block's
+#: membership was empty.
+#:
+#: This is issue I-20(a) in live form: on ``st_regression`` the ``PULSE`` block
+#: survives in the schedule after its only member has left it -- ``pulse``
+#: writes nothing that configuration's predicate reads, so the routing rule
+#: demotes it -- and the schedule then visits an empty block once per
+#: evaluation of the model set, executing nothing.  The user ruled (decision
+#: D21) that this is **not repaired**: it is one of PROCESS's oddities this
+#: experiment does not undertake to fix, and dropping the block would change
+#: the node weights the comparison rests on.  It is **counted and disclaimed**
+#: instead, so that every table which weights sweeps can state how many of them
+#: were empty.
+EMPTY_BLOCK_VISITS: dict[str, int] = {}
+
+#: Evaluations of **upstream's** stopping test during the solve phase: the
+#: ``check_agreement`` pair in ``_call_models_inner`` that compares the
+#: objective and the constraint vector against the previous sweep's.  One per
+#: test, not one per ``check_agreement`` call.
+UPSTREAM_PREDICATE_EVALUATIONS: list[int] = [0]
+
+#: Summed over those tests, the number of values each one actually compared:
+#: the objective, plus the constraint vector **when the objective agreed**.
+#: The pair short-circuits -- a moved objective means the constraint vector is
+#: never looked at -- so counting the declared width would overstate it, and a
+#: count published wider than the comparison it describes is this project's own
+#: trap T11.
+UPSTREAM_COMPONENTS_COMPARED: list[int] = [0]
 
 
 # --------------------------------------------------------------------------
@@ -1297,7 +1409,13 @@ class Caller:
         # repeated in this run" -- where a missing field would be a silence.
         schedule_passes = 1
         for label, nodes, iterate in schedule:
+            # DR4 (A58): every visit the schedule makes to a block, and the
+            # subset of those that execute nothing because the block's
+            # membership is empty.  Counted, never acted on -- decision D21
+            # keeps the empty visits and disclaims them (issue I-20a).
+            BLOCK_VISITS[label] = BLOCK_VISITS.get(label, 0) + 1
             if not nodes:
+                EMPTY_BLOCK_VISITS[label] = EMPTY_BLOCK_VISITS.get(label, 0) + 1
                 inner_counts[label].append(0)
                 continue
             if not iterate:
@@ -1313,6 +1431,12 @@ class Caller:
             # -- so an unrestricted test is held open for ever by a field the
             # running block cannot touch.
             subset = subsets.get(label)
+            # DR4 (A58): how wide this block's convergence test is.  The
+            # predicate walks exactly the indices the subset names, and the
+            # whole component list when there is no subset -- which is the flat
+            # arrangement's single block.  One integer, resolved once per block
+            # rather than per sweep.
+            width = len(subset) if subset is not None else len(spec.keys)
             y_prev = read(bound)
             inner_ok = False
             s = 0
@@ -1321,6 +1445,15 @@ class Caller:
                 self._sweep_block(xc, nodes)
                 y = read(bound)
                 res = spec.residual(y_prev, y, subset=subset)
+                # DR4 (A58): one convergence test, of this many components.
+                PREDICATE_EVALUATIONS[0] += 1
+                COMPONENTS_COMPARED[0] += width
+                PREDICATE_EVALUATIONS_BY_BLOCK[label] = (
+                    PREDICATE_EVALUATIONS_BY_BLOCK.get(label, 0) + 1
+                )
+                COMPONENTS_COMPARED_BY_BLOCK[label] = (
+                    COMPONENTS_COMPARED_BY_BLOCK.get(label, 0) + width
+                )
                 moved_constants |= {
                     spec.name(i) for i in res.moved_constant
                 }
@@ -1427,11 +1560,11 @@ class Caller:
 
         # I-17 instrument: sweeps taken by THIS evaluation, binned on exit by
         # every path (normal return, the VP4 early return, or a raise).
-        _sweeps_at_entry = _SWEEP_CALLS[0]
+        _sweeps_at_entry = DISPATCH_SWEEPS[0]
         try:
             return self._call_models_inner(xc, m)
         finally:
-            _n = _SWEEP_CALLS[0] - _sweeps_at_entry
+            _n = DISPATCH_SWEEPS[0] - _sweeps_at_entry
             _k = str(_n)
             SWEEPS_PER_EVAL_HIST[_k] = SWEEPS_PER_EVAL_HIST.get(_k, 0) + 1
 
@@ -1498,9 +1631,18 @@ class Caller:
                 continue
 
             # Check for idempotence
-            if self.check_agreement(objf_prev, objf) and self.check_agreement(
-                conf_prev, conf
-            ):
+            #
+            # DR4 (A58): upstream's own stopping test, counted here so that the
+            # reference arms carry a measured predicate cost instead of a zero.
+            # ``check_agreement`` is a pure comparison, so evaluating the
+            # objective half into a name and then using it is the same
+            # evaluation in the same order; what it buys is an exact width,
+            # since the pair short-circuits and the constraint vector is not
+            # compared when the objective has moved.
+            _objf_agrees = self.check_agreement(objf_prev, objf)
+            UPSTREAM_PREDICATE_EVALUATIONS[0] += 1
+            UPSTREAM_COMPONENTS_COMPARED[0] += 1 + (len(conf) if _objf_agrees else 0)
+            if _objf_agrees and self.check_agreement(conf_prev, conf):
                 # Idempotent: no longer changing, so return
                 logger.debug(
                     "Model evaluations idempotent, returning objective "
@@ -1707,7 +1849,7 @@ class Caller:
             Array of optimisation parameters
         """
         # I-17 instrument: one sweep of the dispatch body.  Integer only.
-        _SWEEP_CALLS[0] += 1
+        DISPATCH_SWEEPS[0] += 1
 
         if _idf_probe.ENABLED:
             _idf_probe.sweep(self.models, self.data)
