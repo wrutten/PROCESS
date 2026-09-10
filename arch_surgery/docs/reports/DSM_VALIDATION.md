@@ -600,3 +600,58 @@ states". A one-pass/trust design must additionally ask "is the read displaced at
 back edge dead by value is a δ-proportional one-shot error injector for any schedule that
 never revisits the reader. Owner: the orchestrating session (A35's §6 item 4 executed at
 merge).
+
+## V16 — the block schedule's residual cross-pass movement on `st_regression` is inner-solve slack, not a feedback edge: **one pass reaches the two-pass fixed point bit for bit** (A43, 2026-09-10)
+
+**This entry corroborates the dependency analysis. It reports no defect and owes no handoff.**
+
+V14 closed by naming `pf_power.srcktpm`'s constant-flicker as the mechanism behind the recurring
+above-τ outer passes under the A18-mode spec, and recorded that the a26-mode spec dissolves it by
+construction. V3's Phase B ran under the a26 spec, primed and resequenced, and its report §5.3
+left an untested hypothesis in place: *"on the config with nothing lifted or pinned, the outer loop
+still does work the prime does not account for … another coupling still needs it. Which coupling is
+not identified here."* A43 (st-trust-gap; [`A43_st_trust_gap.md`](A43_st_trust_gap.md)) measures it.
+**The hypothesis is refuted: there is no such coupling.**
+
+1. **At τ = 1e-6 there is nothing left to carry.** Over the whole V3 Phase B campaign — **91 888**
+   `call_models` of the verified arm across three configs — the joint predicate never once found a
+   component at or above τ after a second schedule pass: **0 calls reached outer pass 3** (st
+   47 967 second passes, nof 13 931, lad 28 500; 0/0/0 at pass ≥ 3). Traced at component level over
+   all 25 `st_regression` seeds: **0 components at or above τ** over 47 967 pass-2 records × 827
+   components, with 0 discrete mismatches, 0 moved constants and 0 new NaNs. The zero is gated, not
+   asserted: lowering τ to 1e-9 makes the same loop take third and fourth passes immediately.
+   A31's `srcktpm` fingerprint is absent under the a26 spec exactly as A31 predicted.
+2. **What the second pass moves is sub-τ and it is intra-block.** At a matched single evaluation
+   the two arms' handover states differ in 183/805 continuous components, max scaled **3.27554e-9**,
+   argmax `superconducting_tfcoil.a_tf_plasma_case` (write subset M2). Movers by block: **M2 108,
+   M3 75, M1 0 of 265, FF 0 of 120.** M1 is the first block in the schedule; a feedback edge into it
+   would move it on pass 2 by a first-order amount, and it does not move by one ULP.
+3. **The discriminator, and it is exact.** Holding τ at 1e-6 — so the pass structure stays at
+   exactly two passes — and tightening only the inner block tolerance collapses the gap
+   3.27554e-9 → 1.11615e-10 → 3.77907e-11 → 6.45896e-14 → **0**, and at inner τ = 1e-14 the two arms
+   hand over **bit-identical states (0 of 805 components differ, max exactly `0.0`) on all five
+   seeds measured**. With the blocks solved exactly, **one schedule pass reaches the two-pass fixed
+   point bit for bit.** A loop-carried cross-block edge is a property of pass order, not of inner
+   accuracy, and cannot survive that. The mechanism is named to the block by the per-pass
+   inner-sweep counts: M1 converges in 4 sweeps at every tolerance from 1e-6 to 1e-14 and
+   contributes nothing, while M2's inner solve grows 7 → 8 → 10 → 11 → 13; M3 is downstream of M2.
+4. **Static join.** All 40 largest movers matched the frozen per-deck export (sha256
+   `582b4a5f861f4216…`) by fully-qualified name; each one's static writers and readers map to the
+   same block under the executed schedule, and **0 of 40** carry a writer-that-runs-after-a-reader
+   pair. The export's `MDA_Output` / `COOR_SingleRun` hubs are named and excluded from the pairing
+   (V14 follow-up 2's artifact). The export's assertion — exactly one cross-block loop-carried
+   pathway on this deck, `FirstWall (M3) → build.dr_fw_inboard / dr_fw_outboard → Build (M2)`,
+   provably frozen (V14 follow-up 2; V15) — is corroborated dynamically.
+
+**Liveness verdict, both qualifiers (2026-09-04 convention).** **Value-live: no.** No cross-block
+loop-carried variable moves between schedule passes at any tolerance measured, down to a handover
+difference of exactly zero at inner τ = 1e-14. **Displacement-live: not re-opened.** All five
+measured entry states are cold initialisations (one at the deck point, four at δ = 0.10 perturbed
+coupling states) with the prime **on in both arms**, which is what closes V15's displaced-entry
+carrier; A43 did not test a prime-free schedule and says nothing new about V15.
+
+**Consequence.** V3 report §5.3's hypothesis is refuted; the B2/B3 difference on `st_regression` is
+a handover-tolerance effect, not a coupling, and the outer verification pass is interchangeable
+with two rungs of inner tolerance at higher cost (A43 §6.1). **Nothing goes to
+`PROCESS_code_analysis`** — the demonstrated-defect rule is not met, and this entry exists to record
+the liveness verdict, not to raise a question.

@@ -102,6 +102,11 @@ committed script; the failure paths are reachable from the same entry point)
     join reuses A31's mapping code rather than a second copy of it.
 ``tables``
     Emits every table the report cites, as markdown and JSON.
+``verify``
+    Checks every figure the report states against the stage artifacts it
+    claims to come from, floats by hex, and shows the checker failing when
+    an artifact value is perturbed by one ULP or one count.  No PROCESS
+    run: this is the "re-verify without re-running" lane.
 ``all``
     pairing, divergence, neutrality, trace, tooth, ladder, exitgap,
     classify, tables.
@@ -2554,6 +2559,252 @@ def stage_tables(out: Path) -> dict:
 
 
 # ==========================================================================
+# stage: verify -- the report's published figures against the artifacts
+# ==========================================================================
+
+#: Every figure the report A43_st_trust_gap.md states, as (label, path into
+#: the stage artifacts, expected value).  A path is a list of keys/indices;
+#: a callable computes a derived quantity from the loaded artifacts.  This
+#: is the "re-verify without re-running" lane V3's own analysis has: it
+#: reads the committed stage JSONs and refuses to agree with a report that
+#: has drifted from them.
+def _verify_cells(art: dict) -> list:
+    pa, tr, cl, eg = art["pairing"], art["trace"], art["classify"], art["exitgap"]
+    ne, to, la = art["neutrality"], art["tooth"], art.get("ladder") or {}
+    st = pa["per_deck"][DECK]
+    opc = st["outer_pass_census"]
+    ra = st["retry_analysis"]
+    cs = ra["clean_subset_no_retry_either_arm"]
+    hd = {(q["seed"], q["inner_tau_setting"]): q
+          for q in eg["handover_difference"]}
+    rows = {(r["seed"], r["inner_tau_setting"], r["arm"]): r
+            for r in eg["rows"]}
+    t = cl["totals"]
+    p2 = cl["pass_ge2_residual_max_pooled"]
+    sj = cl["static_export_join"]
+    i20 = pa["i20_empty_block_visits"]
+
+    def _sum(field, key):
+        return sum(v["outer_pass_census"]["B2"][field] if key is None
+                   else v["outer_pass_census"]["B2"][field].get(key, 0)
+                   for v in pa["per_deck"].values())
+
+    cells = [
+        # section 3
+        ("s3.B2_calls_all_configs", _sum("n_call_models_total", None), 91888),
+        ("s3.second_passes_all_configs",
+         _sum("outer_pass_hist_total", "2"), 90398),
+        ("s3.third_passes_all_configs",
+         _sum("n_call_models_needing_pass_3_or_more", None), 0),
+        ("s3.st_calls", opc["B2"]["n_call_models_total"], 48960),
+        ("s3.st_second_passes", opc["B2"]["outer_pass_hist_total"]["2"], 47967),
+        ("s3.st_pass1", opc["B2"]["outer_pass_hist_total"]["1"], 993),
+        ("s3.tok_pass1", pa["per_deck"]["large_tokamak_nof"]
+         ["outer_pass_census"]["B2"]["outer_pass_hist_total"]["1"], 149),
+        ("s3.lad_pass1", pa["per_deck"]["low_aspect_ratio_DEMO"]
+         ["outer_pass_census"]["B2"]["outer_pass_hist_total"]["1"], 348),
+        # section 4
+        ("s4.sum_final_B2", ra["sum_final_attempt"]["B2"], 501),
+        ("s4.sum_final_B3", ra["sum_final_attempt"]["B3"], 587),
+        ("s4.sum_attempts_B2", ra["sum_over_attempts"]["B2"], 643),
+        ("s4.sum_attempts_B3", ra["sum_over_attempts"]["B3"], 587),
+        ("s4.clean_pairs", cs["n_clean_pairs"], 21),
+        ("s4.clean_sum_B2", cs["sum_B2"], 426),
+        ("s4.clean_sum_B3", cs["sum_B3"], 456),
+        ("s4.p_final", ra["sign_test_final_attempt"]
+         ["one_sided_p_fair_coin"], 0.0625),
+        ("s4.p_summed", ra["sign_test_summed_over_attempts"]
+         ["one_sided_p_fair_coin"], 0.5),
+        ("s4.p_clean", cs["sign_test"]["one_sided_p_fair_coin"], 0.1875),
+        ("s4.retried_B2", ra[
+            "retried_seeds_within_the_both_converged_pair_set"]["B2"], [1, 15]),
+        ("s4.retried_B3", ra[
+            "retried_seeds_within_the_both_converged_pair_set"]["B3"], []),
+        ("s4.a44_only_seed_10", ra["a44_cross_check"]
+         .get("in_mine_not_theirs"), [10]),
+        ("s4.B0_not_converged", ra["a44_cross_check"]
+         .get("seeds_where_B0_did_not_converge"), [10, 17]),
+        # section 5
+        ("s5.runs_traced", t["n_runs"], 25),
+        ("s5.calls_traced", t["n_pass1"], 48960),
+        ("s5.pass_ge2_records", t["n_pass_ge2"], 47967),
+        ("s5.components_above_tau",
+         t["n_components_above_tau_at_pass_ge2"], 0),
+        ("s5.discrete_mismatch", t["n_discrete_mismatch_at_pass_ge2"], 0),
+        ("s5.moved_constants", t["n_constant_moved_at_pass_ge2"], 0),
+        ("s5.new_nans", t["n_nan_new_at_pass_ge2"], 0),
+        ("s5.max_pass_index", t["max_pass_index_seen"], 2),
+        ("s5.zero_residual_records",
+         cl["pass_ge2_n_records_with_zero_residual"], 18720),
+        ("s5.nonzero_records",
+         cl["pass_ge2_n_records_with_nonzero_residual"], 29247),
+        ("s5.pass2_max", p2["max_of_run_maxima"], 2.1558933211330034e-07),
+        ("s5.runs_reproducing_campaign",
+         tr["n_runs_reproducing_campaign_record"], 25),
+        ("s5.neutrality_gate", ne["gate"], True),
+        ("s5.teeth_caught", ne["teeth"]["n_caught"], 8),
+        ("s5.teeth_total", ne["teeth"]["n_teeth"], 8),
+        ("s5.b3_joint_records", tr["b3_control"]["n_joint_test_records"], 0),
+        ("s5.b3_trace_file_created", tr["b3_control"]["trace_present"], False),
+        ("s5.tooth_gate", to["gate"], True),
+        # section 6
+        ("s6.seed0_differing", hd[(0, "as_run_1e-6")]
+         ["n_components_differing_at_all"], 183),
+        ("s6.seed0_max", hd[(0, "as_run_1e-6")]["max_scaled"],
+         3.2755368506261723e-09),
+        ("s6.seed0_movers_by_block", hd[(0, "as_run_1e-6")]
+         ["movers_by_block"], {"M2": 108, "M3": 75}),
+        ("s6.all_rungs_zero_above_tau",
+         sum(q["n_components_at_or_above_tau"]
+             for q in eg["handover_difference"]), 0),
+        ("s6.inner_1e-14_all_zero",
+         sorted({q["n_components_differing_at_all"]
+                 for q in eg["handover_difference"]
+                 if q["inner_tau_setting"] == "inner_1e-14"}), [0]),
+        ("s6.tested_by_block", hd[(0, "as_run_1e-6")]
+         ["continuous_components_tested_by_block"],
+         {"FF": 120, "M1": 265, "M2": 204, "M3": 216}),
+        ("s6.identity_B3_1e8_eq_B2_1e6",
+         sorted({rows[(s, "as_run_1e-6", "B2")]["audit_restricted_max"]
+                 for s in eg["seeds"]}
+                | {rows[(s, "inner_1e-8", "B3")]["audit_restricted_max"]
+                   for s in eg["seeds"]}), [1.1161527574246441e-10]),
+        ("s6.identity_B3_1e12_eq_B2_1e10",
+         sorted({rows[(s, "inner_1e-10", "B2")]["audit_restricted_max"]
+                 for s in eg["seeds"]}
+                | {rows[(s, "inner_1e-12", "B3")]["audit_restricted_max"]
+                   for s in eg["seeds"]}), [6.458955838497905e-14]),
+        ("s6.B2_1e6_sweeps",
+         rows[(0, "as_run_1e-6", "B2")]["block_sweeps"], 21),
+        ("s6.B3_1e12_sweeps",
+         rows[(0, "inner_1e-12", "B3")]["block_sweeps"], 21),
+        ("s6.n_exitgap_runs", len(eg["rows"]), 50),
+        ("s6.exitgap_all_ok",
+         sorted({r["status"] for r in eg["rows"]}), ["ok"]),
+        ("s6.static_movers_joined", len(sj["subtau_handover_movers"]), 40),
+        ("s6.static_loop_carried",
+         sj["n_subtau_movers_with_a_loop_carried_cross_block_pair"], 0),
+        ("s6.export_sha_prefix", sj["export_sha256"][:16],
+         "582b4a5f861f4216"),
+        # section 7
+        ("s7.tok_objf_identical", pa["per_deck"]["large_tokamak_nof"]
+         ["b2_b3_trust_step_identity"]["n_objf_bit_identical"], 20),
+        ("s7.lad_objf_identical", pa["per_deck"]["low_aspect_ratio_DEMO"]
+         ["b2_b3_trust_step_identity"]["n_objf_bit_identical"], 0),
+        ("s7.st_objf_identical",
+         st["b2_b3_trust_step_identity"]["n_objf_bit_identical"], 0),
+        ("s7.lad_iters_identical", pa["per_deck"]["low_aspect_ratio_DEMO"]
+         ["b2_b3_trust_step_identity"]["n_iterations_identical"], 11),
+        ("s7.st_iters_identical",
+         st["b2_b3_trust_step_identity"]["n_iterations_identical"], 16),
+        ("s7.i20_empty_visits",
+         i20["n_runs_where_every_visit_executed_nothing"], 50),
+        ("s7.i20_tail_empty",
+         i20["n_runs_where_the_feedforward_tail_executed_nothing"], 50),
+        ("s7.pulse_B2", opc["B2"]["inner_sweeps_by_block_total"]["PULSE"],
+         96927),
+        ("s7.pulse_B3", opc["B3"]["inner_sweeps_by_block_total"]["PULSE"],
+         47040),
+        ("s7.sweeps_B2", opc["B2"]["block_sweeps_total"], 636194),
+        ("s7.sweeps_B3", opc["B3"]["block_sweeps_total"], 423109),
+    ]
+    if la.get("rows"):
+        hists = {r["setting"]: r["outer_pass_hist"] for r in la["rows"]
+                 if r["seed"] == 21}
+        cells += [
+            ("s5.5.as_run_hist_pass2_only",
+             sorted(hists.get("as_run", {})), ["1", "2"]),
+            ("s5.5.inner_1e-8_hist_pass2_only",
+             sorted(hists.get("inner_tau_1e-8", {})), ["1", "2"]),
+            ("s5.5.outer_1e-9_reaches_pass_4",
+             "4" in (hists.get("outer_tau_1e-9") or {}), True),
+        ]
+    return cells
+
+
+def stage_verify(out: Path) -> dict:
+    """Check every figure the report publishes against the stage artifacts.
+
+    Reads only the committed stage JSONs: no PROCESS run, seconds to run.
+    Its teeth mutate a cell's ARTIFACT value by the smallest amount that
+    should register and require the check to fail -- a verifier that has
+    never been seen to fail is an assertion (protocol 12).
+    """
+    art = {}
+    for name in ("pairing", "divergence", "neutrality", "trace", "tooth",
+                 "ladder", "exitgap", "classify"):
+        f = out / f"{name}.json"
+        art[name] = jload(f) if f.exists() else None
+    missing = [k for k in ("pairing", "trace", "classify", "exitgap",
+                           "neutrality", "tooth") if art[k] is None]
+    if missing:
+        raise SystemExit(f"cannot verify: missing stage artifacts {missing}")
+
+    def compare(cells):
+        bad = []
+        for label, got, want in cells:
+            ok = (got == want)
+            if not ok and isinstance(got, float) and isinstance(want, float):
+                ok = float(got).hex() == float(want).hex()
+            if not ok:
+                bad.append({"cell": label, "artifact": got, "report": want})
+        return bad
+
+    cells = _verify_cells(art)
+    bad = compare(cells)
+
+    # --- teeth: the verifier must be able to fail ----------------------
+    import copy  # noqa: PLC0415
+    teeth = []
+    for target in ("s3.third_passes_all_configs", "s5.components_above_tau",
+                   "s6.seed0_max", "s6.identity_B3_1e8_eq_B2_1e6"):
+        mutated = copy.deepcopy(art)
+        if target == "s3.third_passes_all_configs":
+            (mutated["pairing"]["per_deck"][DECK]["outer_pass_census"]["B2"]
+             ["n_call_models_needing_pass_3_or_more"]) += 1
+        elif target == "s5.components_above_tau":
+            mutated["classify"]["totals"][
+                "n_components_above_tau_at_pass_ge2"] += 1
+        elif target == "s6.seed0_max":
+            for q in mutated["exitgap"]["handover_difference"]:
+                if q["seed"] == 0 and q["inner_tau_setting"] == "as_run_1e-6":
+                    q["max_scaled"] = math.nextafter(q["max_scaled"], math.inf)
+        elif target == "s6.identity_B3_1e8_eq_B2_1e6":
+            for r in mutated["exitgap"]["rows"]:
+                if (r["seed"] == 0 and r["arm"] == "B3"
+                        and r["inner_tau_setting"] == "inner_1e-8"):
+                    r["audit_restricted_max"] = math.nextafter(
+                        r["audit_restricted_max"], math.inf)
+        caught = [b["cell"] for b in compare(_verify_cells(mutated))]
+        teeth.append({
+            "cell": target,
+            "perturbation": ("+1 on an integer count" if "max" not in target
+                             else "one ULP on the artifact's float"),
+            "caught": target in caught,
+            "cells_reported": caught,
+        })
+
+    res = {
+        "what": (
+            "every figure the report A43_st_trust_gap.md publishes, checked "
+            "against the stage artifacts it claims to come from.  Floats are "
+            "compared by hex.  No PROCESS run: this is the re-verify lane."),
+        "n_cells": len(cells),
+        "n_mismatches": len(bad),
+        "mismatches": bad,
+        "teeth": {
+            "n_teeth": len(teeth),
+            "n_caught": sum(1 for t in teeth if t["caught"]),
+            "all_caught": all(t["caught"] for t in teeth),
+            "per_tooth": teeth,
+        },
+        "gate": (not bad) and all(t["caught"] for t in teeth),
+    }
+    jdump(res, out / "verify.json")
+    return res
+
+
+# ==========================================================================
 # entry point
 # ==========================================================================
 
@@ -2562,7 +2813,7 @@ def main(argv=None) -> int:
         description="A43 (st-trust-gap): the st_regression B2/B3 gap")
     ap.add_argument("stage", choices=(
         "pairing", "divergence", "neutrality", "trace", "tooth", "ladder",
-        "exitgap", "classify", "tables", "all"))
+        "exitgap", "classify", "tables", "verify", "all"))
     ap.add_argument("--out", default=str(RUNS / "out"),
                     help="where the stage JSON/markdown artifacts land")
     ap.add_argument("--seeds", default=None,
@@ -2619,6 +2870,18 @@ def main(argv=None) -> int:
     if args.stage in ("tables", "all"):
         print("\n== stage tables ==")
         stage_tables(out)
+    if args.stage in ("verify", "all"):
+        print("\n== stage verify ==")
+        r = stage_verify(out)
+        print(f"  {r['n_cells'] - r['n_mismatches']}/{r['n_cells']} cells "
+              f"agree; teeth {r['teeth']['n_caught']}/"
+              f"{r['teeth']['n_teeth']}; gate: "
+              f"{'PASS' if r['gate'] else 'FAIL'}")
+        if r["mismatches"]:
+            for m in r["mismatches"]:
+                print(f"    MISMATCH {m['cell']}: artifact {m['artifact']!r} "
+                      f"vs report {m['report']!r}")
+            return 1
     return 0
 
 
