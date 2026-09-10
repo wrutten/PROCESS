@@ -824,7 +824,7 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
     probe = sw.probe(
         campaign.tree,
         reference_env,
-        readbacks=(*sw.default_readbacks(), (sw.SOLVER, "RETIRED_SWITCHES")),
+        readbacks=(*sw.counter_readbacks(), (sw.SOLVER, "RETIRED_SWITCHES")),
         timeout=timeout,
     )
     if not probe.ok:
@@ -876,6 +876,33 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
                 f"{len(in_registry)} retired switch name(s), identical in the "
                 f"registry and in the driver's own list: "
                 f"{', '.join(in_registry)}"
+            )
+
+        # --- the counters the harness is about to record ------------------
+        #
+        # A counter is not a switch: nothing composes it and no arm refuses on
+        # it.  But every one of them becomes a field of every run record, and a
+        # tree that does not expose one would fill that field with a null that
+        # a reader could not tell from "this run did not get that far".  Said
+        # here, in the probe's own report, rather than discovered afterwards.
+        absent = [
+            f"{module}.{attribute}"
+            for module, attribute in sw.DIAGNOSTIC_READBACKS
+            if f"{module}.{attribute}" not in probe.resolved
+        ]
+        check.n_compared += len(sw.DIAGNOSTIC_READBACKS)
+        if absent:
+            check.fail(
+                "the tree exposes no counter for "
+                + "; ".join(absent)
+                + " -- every one of them is a declared field of every run "
+                "record, and a tree that has none writes a null a reader "
+                "cannot tell from a run that stopped early"
+            )
+        else:
+            check.note(
+                f"{len(sw.DIAGNOSTIC_READBACKS)} driver counter(s) resolve on "
+                f"the tree under test, each a declared record field"
             )
 
     for retired in sorted(sw.retired_names()):

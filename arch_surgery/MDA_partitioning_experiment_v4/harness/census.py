@@ -121,28 +121,39 @@ class CensusError(RuntimeError):
 # ==========================================================================
 
 
-def _reads_by_node(probe_modules) -> dict[str, list[str]]:
-    """The read census, per node, from the instrument's own bookkeeping.
+def _reads_by_node(modules: Mapping[str, Any]) -> dict[str, list[str]]:
+    """The read census, per node, from the instrument's own **report**.
 
-    The instrument records reads per node and reports their **count** in its
-    summary, but not the field names.  The names are what the deferral
-    derivation needs, so they are read here from the instrument's own state
-    inside the same process that produced them.
+    Until task A58 (driver-predicate-counters) this function reached into the
+    instrument's module-level ``_reads_all`` dictionary, because the summary
+    reported the *count* of a node's reads and not the field names, and the
+    names are what the deferral derivation needs.  Task A51
+    (harness-artifacts) recorded that as a handover rather than making the
+    one-line driver change itself: a driver change made from a harness task
+    would land outside its own neutrality gate.
 
-    This is deliberately on the harness side of the line.  Adding the field
-    lists to the instrument's summary is a one-line change to
-    ``_idf_probe_modules.summary()`` — ``"reads_by_node": {n: sorted(f"{a}.{b}"
-    for a, b in v) for n, v in _reads_all.items()}``, exactly beside the
-    ``writes_by_node`` entry already there — and it belongs to whichever driver
-    task next touches the instrument, because a driver change made from a
-    harness task would land outside its own neutrality gate.  Until then the
-    harness reads the state rather than the report, and this docstring is the
-    handover.
+    A58 made it.  ``summary()`` now carries ``reads_by_node`` beside
+    ``writes_by_node``, this function reads the report, and the harness is no
+    longer coupled to the instrument's internal names.  The read sets are
+    identical either way — the report is built from the same dictionary by the
+    same expression — and that was measured before and after the change rather
+    than asserted (task A58's report, section 4).
+
+    A summary that does not carry the key is a refusal, not an empty read set:
+    a census silently reporting that no node read anything would look like a
+    passing comparison against nothing.
     """
-    return {
-        node: sorted(f"{namespace}.{field}" for namespace, field in fields)
-        for node, fields in probe_modules._reads_all.items()
-    }
+    reads = modules.get("reads_by_node")
+    if reads is None:
+        raise CensusError(
+            "the census instrument's summary carries no 'reads_by_node': the "
+            "tree under test is older than the one-line addition task A58 "
+            "(driver-predicate-counters) made to "
+            "process/core/_idf_probe_modules.py::summary().  Refused rather "
+            "than defaulted to an empty read set, which would compare as a "
+            "pass against nothing."
+        )
+    return {node: list(fields) for node, fields in reads.items()}
 
 
 def run_child(args: argparse.Namespace) -> int:
@@ -193,7 +204,6 @@ def run_child(args: argparse.Namespace) -> int:
         local_input.write_text(source.read_text())
 
         from process.core import _idf_probe as probe
-        from process.core import _idf_probe_modules as probe_modules
         from process.core.caller import Caller
         from process.core.solver.iteration_variables import (
             load_iteration_variables,
@@ -258,7 +268,7 @@ def run_child(args: argparse.Namespace) -> int:
             node: fields
             for node, fields in (modules.get("writes_by_node") or {}).items()
         },
-        "reads_by_node": _reads_by_node(probe_modules) if args.read_census else None,
+        "reads_by_node": _reads_by_node(modules) if args.read_census else None,
         "n_call_models": len(modules.get("calls") or []),
     }
     (outdir / "census.json").write_text(json.dumps(census, indent=2))

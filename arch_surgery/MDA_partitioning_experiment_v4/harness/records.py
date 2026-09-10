@@ -44,7 +44,11 @@ one setting of the driver's switches; a **seed** selects which displaced
 starting point is used, and seed 0 is the undisplaced one; a **regime** says how
 the starting point is displaced; the **coupling state** is the set of state
 fields the in-loop models write, and the **audit** is one further full sweep
-past termination that measures how far it still moves.
+past termination that measures how far it still moves.  A **predicate** is the
+convergence test a loop stops on, and there are two of them in this experiment:
+the coupling-state one the flat and partitioned arrangements use, and upstream's
+own test on the objective and the constraint vector.  A record counts both,
+separately, because an arm runs exactly one of them.
 """
 
 from __future__ import annotations
@@ -296,9 +300,16 @@ SCHEMA: tuple[Field, ...] = (
     _f("output_path_entries", "B", "always", "entries to the output path: one per scan point"),
     # --- how this run differed from the campaign, if it did ---------------
     _f("reproduction_overrides", "AB", "always", "what the reproduction gate set differently, or null for a run that is not that gate's"),
-    # --- driver capabilities the plan asks for and this tree lacks --------
-    _f("predicate_evaluations", "AB", "always", "predicate evaluations, or null with the reason"),
-    _f("components_compared", "AB", "always", "components compared by the predicate, or null with the reason"),
+    # --- what the convergence tests cost -----------------------------------
+    _f("predicate_evaluations", "AB", "always", "evaluations of the coupling-state convergence test in the solve phase"),
+    _f("components_compared", "AB", "always", "components those evaluations walked, summed"),
+    _f("block_visits", "AB", "always", "visits the block schedule made to each block, per block"),
+    _f("empty_block_visits", "AB", "always", "of those, the visits that executed no node: counted and disclaimed, never repaired"),
+    _f("empty_block_sweeps", "AB", "always", "sweeps of the model sequence spent inside those empty visits: what they actually cost"),
+    _f("dispatch_sweeps", "AB", "always", "sweeps of the dispatch body over the whole run, every path included"),
+    _f("upstream_predicate_evaluations", "AB", "always", "evaluations of upstream's own stopping test in the solve phase"),
+    _f("upstream_components_compared", "AB", "always", "values those tests actually compared, summed: the pair short-circuits"),
+    _f("predicate_counters", "AB", "always", "the two predicates' counts split out, with the mean test width and the empty-visit share"),
     # --- the optimisation phase ------------------------------------------
     _f("node_calls_solve_phase", "B", "finished", "model executions during the solve: the cost unit"),
     _f("n_model_calls", "B", "finished", "evaluations of the model set the optimiser asked for"),

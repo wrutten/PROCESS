@@ -241,7 +241,7 @@ def install_call_models_census(caller) -> dict[str, Any]:
         "first_call_models": None,
     }
     original = caller.Caller.call_models
-    sweeps_cell = getattr(caller, "_SWEEP_CALLS", None)
+    sweeps_cell = getattr(caller, "DISPATCH_SWEEPS", None)
 
     def censused(self, xc, m):
         try:
@@ -572,6 +572,161 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
     )
     _ = module_solve
     return out
+
+
+#: What each predicate counter is, in one sentence, quoted into every record so
+#: a reader does not need the plan open beside it.
+PREDICATE_COUNTER_NOTES: dict[str, str] = {
+    "predicate_evaluations": (
+        "evaluations of the coupling-state convergence test during the solve "
+        "phase: one per block-loop sweep that reached its test.  0 in the "
+        "reference arms, which stop on upstream's own test instead"
+    ),
+    "components_compared": (
+        "summed over those evaluations, the number of coupling-state "
+        "components each one walked — the block's own write set, or the whole "
+        "coupling state where the block has none, which is the flat "
+        "arrangement's single block"
+    ),
+    "block_visits": (
+        "how many times the block schedule visited each block, whether or not "
+        "the visit executed anything"
+    ),
+    "empty_block_visits": (
+        "of those visits, how many executed no model node at all — measured on "
+        "the node counter across the visit, not on the block's membership.  On "
+        "st_regression the PULSE block still has its member in the schedule "
+        "and that member is skipped at the call site, so the block is visited, "
+        "a sweep of the model sequence is charged for it, and nothing runs.  "
+        "The user ruled that these visits stay and are disclaimed rather than "
+        "repaired, because dropping the block would change the node weights "
+        "the comparison rests on.  Every table that weights sweeps must say "
+        "they are included"
+    ),
+    "empty_block_sweeps": (
+        "sweeps of the model sequence spent inside those empty visits.  A "
+        "block visited with no members costs no sweep; a block whose members "
+        "are all skipped at the call site costs a full walk of the sequence "
+        "executing nothing.  This is what the empty visits actually cost, and "
+        "the visit count alone would overstate it"
+    ),
+    "dispatch_sweeps": (
+        "sweeps of the dispatch body over the whole run, on every path that "
+        "walks the model sequence: the analysis loop, every block sweep, the "
+        "output-time loop and the exit audit"
+    ),
+    "upstream_predicate_evaluations": (
+        "evaluations of upstream's own stopping test — the objective and the "
+        "constraint vector against the previous sweep's — during the solve "
+        "phase.  0 in the arms that stop on the coupling state"
+    ),
+    "upstream_components_compared": (
+        "summed over those tests, the values each actually compared: the "
+        "objective, plus the constraint vector when the objective agreed.  "
+        "The pair short-circuits, so this is the width compared and not the "
+        "width declared"
+    ),
+}
+
+
+def harvest_predicate_counters(caller) -> dict[str, Any]:
+    """What the run's convergence tests cost, from the driver's own counters.
+
+    Read at the same moment as the other counters and for the same reason:
+    **before** the exit audit, whose own sweep goes through the same counted
+    path as any other, so that the measurement is not charged to the thing it
+    measures.
+
+    Two predicates are reported separately, never pooled: an arm stops on
+    exactly one of them, and they are not the same test.  A run's average test
+    width is the ratio of the two counts and is computed here so that every
+    reader of a record computes it the same way; it is ``None`` where the count
+    is zero, because a width over no evaluations is not a small number, it is
+    an absent one.
+    """
+    evaluations = getattr(caller, "PREDICATE_EVALUATIONS", [None])[0]
+    components = getattr(caller, "COMPONENTS_COMPARED", [None])[0]
+    upstream_evaluations = getattr(
+        caller, "UPSTREAM_PREDICATE_EVALUATIONS", [None]
+    )[0]
+    upstream_components = getattr(
+        caller, "UPSTREAM_COMPONENTS_COMPARED", [None]
+    )[0]
+    by_block = dict(getattr(caller, "PREDICATE_EVALUATIONS_BY_BLOCK", {}) or {})
+    width_by_block = dict(
+        getattr(caller, "COMPONENTS_COMPARED_BY_BLOCK", {}) or {}
+    )
+    visits = dict(getattr(caller, "BLOCK_VISITS", {}) or {})
+    empty = dict(getattr(caller, "EMPTY_BLOCK_VISITS", {}) or {})
+    empty_sweeps = dict(getattr(caller, "EMPTY_BLOCK_SWEEPS", {}) or {})
+    n_visits = sum(visits.values())
+    n_empty = sum(empty.values())
+    n_empty_sweeps = sum(empty_sweeps.values())
+    return {
+        "predicate_evaluations": evaluations,
+        "components_compared": components,
+        "block_visits": dict(sorted(visits.items())),
+        "empty_block_visits": dict(sorted(empty.items())),
+        "empty_block_sweeps": dict(sorted(empty_sweeps.items())),
+        "dispatch_sweeps": getattr(caller, "DISPATCH_SWEEPS", [None])[0],
+        "predicate_counters": {
+            "what": (
+                "what the run's convergence tests cost, in counts.  No "
+                "conclusion in this experiment rests on a timing, so the "
+                "per-sweep-overhead question is asked in evaluations and "
+                "components compared"
+            ),
+            "coupling_state_predicate": {
+                "evaluations": evaluations,
+                "components_compared": components,
+                "mean_test_width": (
+                    (components / evaluations)
+                    if (evaluations and components is not None)
+                    else None
+                ),
+                "evaluations_by_block": dict(sorted(by_block.items())),
+                "components_compared_by_block": dict(
+                    sorted(width_by_block.items())
+                ),
+                "mean_test_width_by_block": {
+                    label: (width_by_block.get(label, 0) / n)
+                    for label, n in sorted(by_block.items())
+                    if n
+                },
+            },
+            "upstream_predicate": {
+                "evaluations": upstream_evaluations,
+                "components_compared": upstream_components,
+                "mean_test_width": (
+                    (upstream_components / upstream_evaluations)
+                    if (upstream_evaluations and upstream_components is not None)
+                    else None
+                ),
+                "what": PREDICATE_COUNTER_NOTES["upstream_components_compared"],
+            },
+            "block_schedule": {
+                "visits": n_visits,
+                "empty_visits": n_empty,
+                "empty_share_of_visits": (
+                    (n_empty / n_visits) if n_visits else None
+                ),
+                "empty_visits_that_cost_a_sweep": n_empty_sweeps,
+                "empty_blocks": sorted(k for k, v in empty.items() if v),
+                "empty_blocks_costing_a_sweep": sorted(
+                    k for k, v in empty_sweeps.items() if v
+                ),
+                "disclaimed": (
+                    "the empty visits are counted and disclaimed, never "
+                    "repaired (issue I-20a; the user's ruling): dropping a "
+                    "block whose membership is empty would change the node "
+                    "weights the comparison rests on"
+                ),
+            },
+            "notes": PREDICATE_COUNTER_NOTES,
+        },
+        "upstream_predicate_evaluations": upstream_evaluations,
+        "upstream_components_compared": upstream_components,
+    }
 
 
 def harvest_output_path(caller) -> dict[str, Any]:
@@ -1078,20 +1233,33 @@ def stamp_resources(record: dict[str, Any], usage_before, started: float) -> Non
 
 
 def stamp_capabilities_absent(record: dict[str, Any], *, phase: str) -> None:
-    """The fields the plan declares that this tree cannot yet supply.
+    """The fields a record carries even when the run never reached the driver.
 
-    Present with an explicit null and the reason, never absent: a reader of a
-    record must be able to tell "the driver does not count this yet" from "the
-    harness forgot to write it down".  Each names the approved driver change
-    that will fill it in.
+    Present with an explicit null, never absent: a reader of a record must be
+    able to tell "this run did not get far enough to have one" from "the
+    harness forgot to write it down".  Every field here is filled after the run
+    from the driver's own counters; a record that still carries the null is a
+    record of a run that crashed or was refused before the driver produced one.
+
+    Nothing in this tree is *unsupplied* any more: the predicate counters
+    landed with task A58 (driver-predicate-counters) and the output-path
+    counters with task A57 (driver-output-path).  The name is kept because the
+    contract is the same one — a declared field is present or the record is
+    refused — and the next driver capability the plan asks for will be stamped
+    here in exactly this way.
     """
+    # Filled from the driver's own counters after the run
+    # (:func:`harvest_predicate_counters`).  Present here with a null so that a
+    # record of a run that never reached the driver still carries the key.
     record["predicate_evaluations"] = None
     record["components_compared"] = None
-    record["predicate_counters_null_because"] = (
-        "the driver does not count predicate evaluations or components "
-        "compared; approved driver change DR4, task A58 "
-        "(driver-predicate-counters)"
-    )
+    record["block_visits"] = None
+    record["empty_block_visits"] = None
+    record["empty_block_sweeps"] = None
+    record["dispatch_sweeps"] = None
+    record["upstream_predicate_evaluations"] = None
+    record["upstream_components_compared"] = None
+    record["predicate_counters"] = None
     if phase == "B":
         # Filled from the driver's own counters after the run
         # (:func:`harvest_output_path`).  Present here with a null so that a

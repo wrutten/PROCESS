@@ -685,4 +685,14 @@ def summary() -> dict:
             f"{a}.{b}" for a, b in _fields_changed_between_sweeps
         ),
         "writes_by_node": {n: sorted(f"{a}.{b}" for a, b in v) for n, v in _writes_all.items()},
+        # The read set, per node, by name -- the companion of the line above.
+        # The summary reported the *count* of a node's reads and not the names,
+        # so a reader that needed the names had to reach into this module's own
+        # state from inside the same process.  Task A58
+        # (driver-predicate-counters) added this line on task A51
+        # (harness-artifacts)'s handover: an instrument reports what it
+        # measured, and a caller that has to read the instrument's variables
+        # instead of its report is a caller coupled to the instrument's
+        # internals.
+        "reads_by_node": {n: sorted(f"{a}.{b}" for a, b in v) for n, v in _reads_all.items()},
     }

@@ -315,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     shared.pop("n_prime_calls", None)
     shared.pop("node_calls_solve_phase", None)
     record.update(shared)
+    record.update(child.harvest_predicate_counters(caller_mod))
     record["module_solve_stats"] = (
         the_caller.module_solve_stats if the_caller is not None else None
     )
