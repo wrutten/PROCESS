@@ -808,3 +808,51 @@ corroboration and says so.
 | 2026-09-10 | **§1.1 added after the brief**, answering decision D22's conditional ("if A43 shows st's trust-mode B3 unreliable, st is dropped"). D22 was minted on 2026-09-10, after this task was dispatched, and already cites this task's records-stage result as its ground for removing B2. No new measurement: §1.1 draws only on figures §4 and §6 already publish. |
 | 2026-09-10 | **A `verify` stage was added** so the report's own figures are checked against the artifacts they claim to come from rather than transcribed by hand: 69 cells, floats by hex, with four teeth that perturb an artifact value by one ULP or one count and require the check to fail. 69/69 agree, 4/4 teeth trip. Committed at `6ab6a60a`. |
 | 2026-09-10 | **An argmax artifact was found and the census was split.** 39 % of pass-2 records have a residual of exactly zero, and `numpy.argmax` over an all-zero array returns index 0 — so the spec's first component was being reported as the mover on 18 720 records where nothing moved. The census is now published over the non-zero population only, with the artifact named (§5.3). Committed at `08792116`; stages `classify` and `tables` re-run at that commit, and `trace` re-run so its summaries come from the same commit. |
+
+---
+
+## Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `a0d75a6d` and the
+script `a43_trust_gap.py` on the same branch. Load-bearing claims re-checked from the records and
+the tree, not taken from the report.*
+
+**Verified independently.** (1) The headline zero: reading `module_solve_totals.outer_pass_hist`
+from every V3 `B2` record in the main checkout gives 75 runs, 91 888 `call_models`, histogram
+`{1: 1 490, 2: 90 398}`, **third-or-later passes = 0**; per configuration 14 080 / 28 848 / 48 960
+calls, exactly the report's figures. (2) The branch touches three files — the script, this report,
+`DSM_VALIDATION.md` (V16) — and `process/` is byte-identical to the campaign's, so every run here
+executed the campaign's code. (3) The seed reconciliation with A44 (transfer-gap) holds (their split
+differs by seed 10 for the stated reason; `B2`'s retries on seeds 1 and 15 agree).
+
+**Endorsed.** The discriminator is the right instrument and it is exact: holding τ fixed keeps the
+pass structure at two passes while the inner tolerance alone moves the handover difference
+3.28e-9 → 1.12e-10 → 3.78e-11 → 6.46e-14 → exactly 0, with **`B3` at inner 1e-8 reproducing
+`B2` at inner 1e-6 to every digit** — an identity, not an agreement. The mechanism is measured to
+the block (M2 108 movers, M3 75, M1 none). The zero has teeth (τ → 1e-9 fires the loop). V16 as a
+*corroboration* with no handoff is the correct call under the demonstrated-defect rule. The retry
+split on the trust-gap cost (1.17 / 0.91 / 1.07 under three constructions, no direction) matches
+A44's finding on the other arm and settles that V3 §5.3(iii)'s "17 % increase" is not established
+— flagged, not filed, per the user's ruling of no V3 errata.
+
+**Limits the report states and I hold it to.** The cost equivalence in §1.1 ("`B3` at 1e-12 costs
+the same 21 block sweeps as `B2` at 1e-6") is at a **single evaluation from a common
+initialisation**; the in-loop cost of a tighter inner tolerance is not measured here and V4 must
+measure it, not assume it (P1 says so). §7.1's mechanism for st — the configuration's own sub-τ
+sensitivity — is inferred from V3's location diagnostics, not demonstrated; P5 is the test and was
+correctly not run without a driver change. The I-20(a) share correction is from the same records
+and its `verify` stage (69/69 cells, 4/4 teeth) but was not re-derived by me.
+
+**Consequences drawn for V4 (orchestrator, today).** D22's conditional is answered **no**:
+`st_regression` stays. With `B2` removed, the intervention arms' certificate of convergence is
+the inner tolerances plus the uncharged exit audit, stated as such in the V4 plan (§3.3), and the
+**inner tolerance of `A1`/`B3` becomes an explicit setting** — the plan carries P1's exchange rate
+and recommends inner τ = 1e-8 as an open decision for the user. Check 2's acceptance construction
+is declared (P2). Retry contamination is a category in every Phase B table (P3; already in the
+plan, one column added to check 1). P4's design choice is the one V4 has already made. P5, P7 and
+P8 go on the V4 improvement list as candidates attributed to this task. I-20's row is corrected.
+
+**Verdict.** Fit to merge as it stands; nothing returned to the agent. The question the user set —
+*either the DSM or the methodology must be wrong* — is answered: neither, in the sense intended;
+the outer loop was repairing a tolerance setting, and that is now a design parameter with a
+measured exchange rate.
