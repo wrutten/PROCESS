@@ -203,6 +203,37 @@ scoping choice rather than a methodological one. "Reversal" is what it costs to 
   table — unescaped absolute-value bars in the τ definition — fixed in passing).
   Still no code; status **DRAFT · NOT APPROVED**; open: decision (2)'s final choice, decision
   (3)'s approval, DR4.
+- **2026-09-10 — the final rulings received; amendment 3 made. Nothing is open.**
+  **Decision (2) ruled option (v)**: the **whole** predicate module goes to `harness/ystate.py`,
+  and the copied `module_solve.py` is re-pointed by **one path constant** at a fixed relative path
+  — no environment variable. The reason given is the one that decides it for this project: **do
+  not modify the copied `process/` tree beyond necessity.** §5.3 was rewritten as the ruling with
+  options (i)–(iv) kept as an audit-trail note, and §2.5, §4.1, §4.2 and §5.1 restore
+  `harness/ystate.py`. *(The plan's amendment-2 recommendation and the orchestrator's had both been
+  option (iv) — the predicate as driver code. It was not taken, and the plan says why: (iv) is
+  marginally cleaner as Python, (v) is cleaner as provenance.)*
+  **Decision (3) ruled as proposed**: artifacts copied into `…_v4/harness/data/`, sha256-gated
+  against `docs/data`, with a `PROVENANCE.json`; `caller.py` re-pointed by one constant each.
+  **§3.3 now carries a table of the three path constants as the complete list of edits the copied
+  tree receives** — which is exactly what makes H0's diff reviewable by inspection, and is the
+  clearest statement of "beyond necessity" the plan can make.
+  **DR4 accepted**, so decision (10) is fully ruled: DR1, DR2, DR4, DR5, DR7 approved; DR3
+  rejected; DR6 dropped.
+  **D22 carried through**: `B2` removed from the arm set — Phase B is `BR / B0 / B1 / B3`, **275
+  optimisations**. Every mention updated (§0's vocabulary, §4.5's naming section, DR2's and DR3's
+  cells, and GR's composition tooth, which now perturbs `PROCESS_ARCH_OUTER` to give the
+  **verified** outer loop under `B3`'s name rather than "`B2`'s"). GR's reference set never held
+  `B2`, so it is unaffected. Also carried into `config.py`: **`Config.skips` must express removing
+  a whole configuration by a recorded decision** — the live case being `st_regression` if A43
+  finds its trust-mode `B3` unreliable — and **every table's population is then re-derived, never
+  patched**, which is trap T11's exact shape.
+  **The copy's commit ruled**: H0 copies at the `architecture_surgery` commit current when it runs
+  and the copy gate compares **against `git show <that commit>:process/`**, not against a working
+  tree — so an uncommitted source edit cannot ride along unnoticed. Stated in §3's preamble and in
+  H0's row.
+  **No V3 errata**: checked — the plan proposes none and never did, so nothing was struck.
+  All markdown tables re-validated: 0 bad rows. Still no code; status **DRAFT · NOT APPROVED**,
+  all decisions settled, H0 unblocked. Task complete and ready for merge.
 
 ---
 
