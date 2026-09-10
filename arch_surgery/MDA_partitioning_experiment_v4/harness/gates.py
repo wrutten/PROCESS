@@ -2067,6 +2067,22 @@ def predicate_counter_measurements(
             "n_that_do_not_decompose": len(undecomposed),
             "which": undecomposed,
         },
+        "flat_against_partitioned": {
+            "what": (
+                "the flat control against the partitioned arm at the same "
+                "configuration and the same seed: how much more often the "
+                "convergence test is evaluated, how much narrower each "
+                "evaluation is, and what the two multiply to.  A ratio below "
+                "1 in the components column means the partitioned arm does "
+                "LESS component comparison than the flat one, which is what "
+                "decides the per-sweep-overhead hypothesis on counts"
+            ),
+            "population": (
+                "one run against one run per cell, never a campaign mean, and "
+                "only where both arms have a run at the same seed"
+            ),
+            "rows": predicate_pair_rows(rows),
+        },
         "empty_visits": {
             "n_runs_with_any": len(empty_rows),
             "by_run": [
@@ -2086,6 +2102,81 @@ def predicate_counter_measurements(
     }
 
 
+#: The pairs check 5 is about: the flat control against the partitioned arm, at
+#: the same configuration and the same seed.  ``B1`` is the flat arm carrying
+#: the lift, so it is the one whose design vector matches ``B3``'s; ``B0`` is
+#: the flat control the cost ratio is quoted against.  A pair is formed only
+#: where both runs exist at the same seed — never across seeds, because the two
+#: would then be different problems.
+PREDICATE_PAIRS: tuple[tuple[str, str], ...] = (("B0", "B3"), ("B1", "B3"))
+
+
+def predicate_pair_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Flat against partitioned, at matched configuration and seed.
+
+    The hypothesis check 5 exists to settle is that the partitioned arm pays a
+    per-sweep cost the flat one does not, with the convergence test the prime
+    suspect: the flat loop compares the whole coupling state on every sweep and
+    a block loop compares only its own block's write set.  The suspect predicts
+    that the partitioned arm does **more** component comparison in total, since
+    it runs far more sweeps.  These ratios are what decides that, and they
+    decide it on counts alone.
+
+    Each cell is a ratio of two single runs, not of two campaign means; the
+    caption says so and nothing here is a campaign statistic.
+    """
+    by_key = {(r["configuration"], r["arm"], r["seed"]): r for r in rows}
+    out: list[dict[str, Any]] = []
+    for (configuration, arm, seed), row in sorted(by_key.items()):
+        for flat, partitioned in PREDICATE_PAIRS:
+            if arm != partitioned:
+                continue
+            control = by_key.get((configuration, flat, seed))
+            if control is None or control["status"] != "ok" or row["status"] != "ok":
+                continue
+            out.append(
+                {
+                    "configuration": configuration,
+                    "seed": seed,
+                    "flat_arm": flat,
+                    "partitioned_arm": partitioned,
+                    "flat_evaluations": control["predicate_evaluations"],
+                    "partitioned_evaluations": row["predicate_evaluations"],
+                    "evaluations_ratio": _ratio(
+                        row["predicate_evaluations"], control["predicate_evaluations"]
+                    ),
+                    "flat_width": control["mean_test_width"],
+                    "partitioned_width": row["mean_test_width"],
+                    "width_ratio": _ratio(
+                        row["mean_test_width"], control["mean_test_width"]
+                    ),
+                    "flat_components": control["components_compared"],
+                    "partitioned_components": row["components_compared"],
+                    "components_ratio": _ratio(
+                        row["components_compared"], control["components_compared"]
+                    ),
+                    "flat_sweeps": control["dispatch_sweeps"],
+                    "partitioned_sweeps": row["dispatch_sweeps"],
+                    "sweeps_ratio": _ratio(
+                        row["dispatch_sweeps"], control["dispatch_sweeps"]
+                    ),
+                    "flat_node_calls": control["node_calls_solve_phase"],
+                    "partitioned_node_calls": row["node_calls_solve_phase"],
+                    "node_calls_ratio": _ratio(
+                        row["node_calls_solve_phase"],
+                        control["node_calls_solve_phase"],
+                    ),
+                }
+            )
+    return out
+
+
+def _ratio(a, b):
+    if a is None or not b:
+        return None
+    return a / b
+
+
 def _n(value) -> str:
     if value is None:
         return "—"
@@ -2102,7 +2193,7 @@ def print_predicate_counters(block: Mapping[str, Any]) -> None:
     print(f"    empty visits: {block['empty_visits_disclaimer']}")
     print()
     head = (
-        f"    {'configuration':<22} {'arm':<4} {'stops on':<34} "
+        f"    {'configuration':<22} {'arm':<4} {'seed':>4} {'stops on':<34} "
         f"{'sweeps':>8} {'pred.ev':>8} {'comps':>12} {'width':>8} "
         f"{'visits':>7} {'empty':>7} {'e.sweeps':>9}"
     )
@@ -2112,21 +2203,22 @@ def print_predicate_counters(block: Mapping[str, Any]) -> None:
         if row["status"] != "ok":
             print(
                 f"    {row['configuration']:<22} {row['arm']:<4} "
-                f"NO RECORD ({row['status']})"
+                f"{row['seed']:>4} NO RECORD ({row['status']})"
             )
             continue
         evaluations = row["predicate_evaluations"] or row["upstream_predicate_evaluations"]
         components = row["components_compared"] or row["upstream_components_compared"]
         width = row["mean_test_width"] or row["upstream_mean_test_width"]
         print(
-            f"    {row['configuration']:<22} {row['arm']:<4} {row['stops_on']:<34} "
+            f"    {row['configuration']:<22} {row['arm']:<4} {row['seed']:>4} "
+            f"{row['stops_on']:<34} "
             f"{_n(row['dispatch_sweeps']):>8} {_n(evaluations):>8} "
             f"{_n(components):>12} {_n(width):>8} "
             f"{_n(row['n_block_visits']):>7} {_n(row['n_empty_block_visits']):>7} "
             f"{_n(row['n_empty_block_sweeps']):>9}"
         )
     print()
-    print("    per-block mean test width, partitioned arms only:")
+    print("    per-block mean test width, one row per run:")
     for row in block["rows"]:
         if not row["mean_test_width_by_block"]:
             continue
@@ -2134,7 +2226,32 @@ def print_predicate_counters(block: Mapping[str, Any]) -> None:
             f"{label} {width:.0f} ({row['evaluations_by_block'].get(label, 0):,} tests)"
             for label, width in row["mean_test_width_by_block"].items()
         )
-        print(f"      {row['configuration']:<22} {row['arm']:<4} {widths}")
+        print(
+            f"      {row['configuration']:<22} {row['arm']:<4} "
+            f"{row['seed']:>4} {widths}"
+        )
+    print()
+    pairs = block["flat_against_partitioned"]
+    print("    flat against partitioned, matched configuration and seed:")
+    print(f"      {pairs['what']}")
+    print(f"      population : {pairs['population']}")
+    pair_head = (
+        f"      {'configuration':<22} {'pair':<9} {'seed':>4} "
+        f"{'evals x':>9} {'width x':>9} {'comps x':>9} {'sweeps x':>9} "
+        f"{'nodes x':>9}"
+    )
+    print(pair_head)
+    print("      " + "-" * (len(pair_head) - 6))
+    for pair in pairs["rows"]:
+        def _r(value):
+            return f"{value:.3f}" if value is not None else "—"
+        print(
+            f"      {pair['configuration']:<22} "
+            f"{pair['flat_arm'] + '→' + pair['partitioned_arm']:<9} "
+            f"{pair['seed']:>4} {_r(pair['evaluations_ratio']):>9} "
+            f"{_r(pair['width_ratio']):>9} {_r(pair['components_ratio']):>9} "
+            f"{_r(pair['sweeps_ratio']):>9} {_r(pair['node_calls_ratio']):>9}"
+        )
     print()
     decomposition = block["sweep_decomposition"]
     print(f"    sweep decomposition: {decomposition['identity']}")
