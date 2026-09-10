@@ -409,3 +409,49 @@ Stated rather than left to be inferred.
 - **2026-09-10** — this report. `verify` PASS (20 entries, 270 field values, 32 430 bytes
   identical); teeth 4 of 4 tripped; the preflight remains READY against the repository tree with
   the new stage in the chain.
+
+---
+
+## 13. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `d9ab7214` and the
+module on the same branch. Load-bearing claims re-run, not taken from the report.*
+
+**Verified independently.** (1) `experiment_runner.py --reference verify --previous-runs <the main
+checkout's …_v3/runs>`: PASS, 20 entries, 32 430 bytes identical, 270 compared values; the
+arithmetic is 15 fields × 14 optimisations + 10 fields × 6 evaluations. (2) `--reference teeth`:
+4 of 4 tripped, each refusal naming the record, the field or the arm. (3) The committed JSON: 20
+entries — `BR` and `B0` three each, `B3` six, `B1` two, `A0` and `A1` three each — every entry's
+`tree_git_head` the full hash of `362c0b47`; entry schema arm / previous_arm / configuration /
+phase / seed / group / source_path / source_sha256 / tree_git_head / fields. (4)
+`harness/selfcheck.py --tree repository` still PASS on every check; the preflight's new reference
+section prints the two arms GR cannot cover (`AR`, `A0p`) with their substitute gates, as harness
+plan §7.5 requires. (5) Scope: five files, all under `…_v4/` plus this report; no import of, or
+subprocess into, `idf_probe/` or `fixedpoint/`; the main checkout was read only.
+
+**Endorsed.** Comparing the block-solver totals on the reference arm as a *value* (the
+never-entered shape: 0 calls, empty histograms) rather than marking them not applicable — it makes
+GR sensitive to a harness that entered the block solver under `BR`'s name, the positive-control
+shape §7.3 wants. Adding `exact.objf` for the evaluation phase: §7.1 named `exact.norm_objf`, which
+no Phase A record carries, and without the addition six of twenty entries would have had no
+objective bit-comparison — accepted, and §7.1 is amended to say so. `exit_forensics.n_attempts = 0`
+compared as a value in Phase A: accepted for the same reason. The refusal messages name the
+population they protect (trap T11), and the name map is the only legal route from `R` to `BR`.
+
+**Limits I hold it to.** (a) The reference is the plan's field list, not the whole record: the
+per-node census, the entry census, the constraint residual vector and the design vector are outside
+GR; widening it is a plan amendment, not a quiet extension. (b) `verify` measures the live records
+against the committed file; it cannot detect a record that was already wrong at `362c0b47` — GR's
+twenty runs (A50) are what test that. (c) The `Check` record type is imported from `selfcheck.py`;
+A52 (harness-gates) promotes both together. (d) `.pre-commit-config.yaml` would reformat the JSON if
+pre-commit were ever installed; `verify` would then FAIL by byte offset, and the remedy is
+re-extraction, never a looser comparison — recorded so that nobody relaxes it.
+
+**Consequences drawn (orchestrator, today).** Harness plan §7.1 amended: the evaluation-phase list
+gains `exact.objf` and `exit_forensics.n_attempts`, and the reference arm's block-solver totals are
+compared as values; §7.4 amended to the §11.1 name `reproduction_reference.json`. A50
+(harness-run) reads `REFERENCE_FIELDS` and `lookup()` from this module and carries §8's
+obligations into its brief, including GR's remaining teeth (count, hex, composition) and the DR7
+attempt-summation refusal.
+
+**Verdict.** Fit to merge; nothing returned.
