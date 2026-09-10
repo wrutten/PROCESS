@@ -1970,8 +1970,8 @@ def constraint_equation_93(constraint_registration, data):
 
     The residual of variant point VP5's burn-time lift.  `process.models.pulse`
     normally solves this relation for the burn time in closed form and writes
-    the answer into the data structure; with the site lifted
-    (`PROCESS_ARCH_LIFT=burn_time`) the burn time is instead iteration variable
+    the answer into the data structure; with the optimiser owning the burn time
+    (`PROCESS_ARCH_BURN_TIME_OWNER=optimiser`) it is instead iteration variable
     178 and this equation is what determines it.  The relation itself is
     unchanged -- `burn_time_root` holds the model's own expression.
 

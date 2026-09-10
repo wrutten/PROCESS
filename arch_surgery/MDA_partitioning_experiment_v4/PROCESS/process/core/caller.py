@@ -15,7 +15,7 @@ from process.core import _idf_probe, constants
 from process.core import process_output as po
 from process.core.io.mfile import MFile
 from process.core.process_output import OutputFileManager, ovarre
-from process.core.solver import constraints
+from process.core.solver import ArchitectureRefusal, constraints
 from process.core.solver import module_solve, subsolve
 from process.core.solver.iteration_variables import set_scaled_iteration_variable
 from process.core.solver.objectives import objective_function
@@ -32,16 +32,17 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------
-# VP1 (framework hook F7a) -- the model call sequence is a driver choice.
+# VP1 (framework hook F7a) -- arrangement at node granularity: *when* a model
+# node runs is a driver choice.  Switch: ``PROCESS_ARCH_ARRANGEMENT_NODE``.
 #
 # The first three tokamak nodes are unconditional and adjacent, and they are
 # the only part of the sequence VP1 currently varies, so the variant point is
 # a list of node names that ``_call_models_once`` walks.  Everything after
-# them is switch-selected on the input deck and is left exactly as upstream
+# them is switch-selected on the input file and is left exactly as upstream
 # wrote it; this is a permutation of three calls, not a scheduler.
 #
 # ``upstream`` is the order upstream PROCESS uses and is the default: with
-# ``PROCESS_ARCH_SEQUENCE`` unset the loop below issues ``plasma_geom``,
+# ``PROCESS_ARCH_ARRANGEMENT_NODE`` unset the loop below issues ``plasma_geom``,
 # ``build``, ``physics`` in that order, which is what the three straight-line
 # statements it replaced did.
 #
@@ -49,31 +50,37 @@ logger = logging.getLogger(__name__)
 # Coils -- from inside M1 Physics' span to the head of M2's span, so that M1
 # becomes contiguous in the call order and a per-module solver can wrap it.
 # The selection is resolved once at import, never per call.
-_SEQUENCE_HEADS: dict[str, tuple[str, ...]] = {
+_ARRANGEMENT_NODE_ORDERS: dict[str, tuple[str, ...]] = {
     "upstream": ("plasma_geom", "build", "physics"),
     "build_after_physics": ("plasma_geom", "physics", "build"),
 }
 
-SEQUENCE_NAME: str = os.environ.get("PROCESS_ARCH_SEQUENCE", "").strip() or "upstream"
+ARRANGEMENT_NODE_NAME: str = (
+    os.environ.get("PROCESS_ARCH_ARRANGEMENT_NODE", "").strip() or "upstream"
+)
 
-if SEQUENCE_NAME not in _SEQUENCE_HEADS:
-    raise RuntimeError(
-        f"PROCESS_ARCH_SEQUENCE={SEQUENCE_NAME!r} is not a recognised model "
-        f"sequence; expected one of {tuple(_SEQUENCE_HEADS)} (or unset for "
-        f"{'upstream'!r})."
+if ARRANGEMENT_NODE_NAME not in _ARRANGEMENT_NODE_ORDERS:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_ARRANGEMENT_NODE={ARRANGEMENT_NODE_NAME!r} is not a "
+        f"recognised node arrangement; expected one of "
+        f"{tuple(_ARRANGEMENT_NODE_ORDERS)} (or unset for {'upstream'!r})."
     )
 
 #: Resolved node order for the head of the tokamak model sequence.
-SEQUENCE_HEAD: tuple[str, ...] = _SEQUENCE_HEADS[SEQUENCE_NAME]
+ARRANGEMENT_NODE_HEAD: tuple[str, ...] = _ARRANGEMENT_NODE_ORDERS[ARRANGEMENT_NODE_NAME]
 
 
 # --------------------------------------------------------------------------
-# VP6 (D19, task A40) -- the first-wall geometry prime.
+# VP6 (D19, task A40) -- arrangement at method granularity: *when* a model
+# method runs is a driver choice.  Switch: ``PROCESS_ARCH_ARRANGEMENT_METHOD``.
+# The mechanism's own name for it is the *prime*, and that word survives in
+# these comments because it names what the code does, not what the arm is
+# called.
 #
 # A35 named the one cut edge that carries a displaced entry into a one-pass
-# exit on the study decks: ``FirstWall`` (block M3) computes
+# exit on the study configurations: ``FirstWall`` (block M3) computes
 # ``build.dr_fw_inboard`` / ``dr_fw_outboard`` -- a run-constant of two pure
-# deck inputs (``fw.py:347-352`` at the base commit) -- and ``Build``
+# input-file values (``fw.py:347-352`` at the base commit) -- and ``Build``
 # (block M2, earlier in the executed schedule) reads the *previous* pass's
 # values.  Under an iterating driver the lag costs at most one sweep; under
 # a one-pass schedule it transmits exactly the entry displacement of the
@@ -92,39 +99,44 @@ SEQUENCE_HEAD: tuple[str, ...] = _SEQUENCE_HEADS[SEQUENCE_NAME]
 #
 # The call is deliberately NOT routed through :meth:`Caller._node`: it is
 # not a node, it must add no counted node call, and every count comparison
-# must stay commensurable with V2.  It is **stamped, not counted** -- the
-# runners record :data:`PRIME_CALLS` as ``n_prime_calls`` in every run's
-# metrics, published as a footnote beside the node-call tables and never
-# pooled into them (V3 plan section 2; trap T11 -- no silent work).
-_PRIME: dict[str, bool] = {"off": False, "fw_geometry": True}
+# must stay commensurable with earlier revisions.  It is **stamped, not
+# counted** -- the runners record :data:`ARRANGEMENT_METHOD_CALLS` as
+# ``n_prime_calls`` in every run's metrics, published as a footnote beside the
+# node-call tables and never pooled into them (trap T11 -- no silent work).
+_ARRANGEMENT_METHODS: dict[str, bool] = {"off": False, "fw_geometry": True}
 
-PRIME_NAME: str = os.environ.get("PROCESS_ARCH_PRIME", "").strip() or "off"
+ARRANGEMENT_METHOD_NAME: str = (
+    os.environ.get("PROCESS_ARCH_ARRANGEMENT_METHOD", "").strip() or "off"
+)
 
-if PRIME_NAME not in _PRIME:
-    raise RuntimeError(
-        f"PROCESS_ARCH_PRIME={PRIME_NAME!r} is not a recognised prime "
-        f"setting; expected one of {tuple(_PRIME)} (or unset for "
-        f"{'off'!r})."
+if ARRANGEMENT_METHOD_NAME not in _ARRANGEMENT_METHODS:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_ARRANGEMENT_METHOD={ARRANGEMENT_METHOD_NAME!r} is not a "
+        f"recognised method arrangement; expected one of "
+        f"{tuple(_ARRANGEMENT_METHODS)} (or unset for {'off'!r})."
     )
 
 #: True when the first-wall geometry pair is primed at the sweep head.
-PRIME_FW_GEOMETRY: bool = _PRIME[PRIME_NAME]
+ARRANGEMENT_METHOD_FW_GEOMETRY: bool = _ARRANGEMENT_METHODS[ARRANGEMENT_METHOD_NAME]
 
 #: Invocation counter the runners read (the NODE_CALLS pattern: a one-cell
 #: list, so a reader holds the live cell and not a stale int).  Incremented
 #: only when the prime actually executes; stays 0 with the switch off.
-PRIME_CALLS: list[int] = [0]
+ARRANGEMENT_METHOD_CALLS: list[int] = [0]
 
 
 # --------------------------------------------------------------------------
-# VP2 (framework hook F7b) -- the feed-forward tail runs once, after the
-# fixed point, instead of on every sweep.
+# VP2 (framework hook F7b) -- deferral at *per-call* frequency: the
+# feed-forward tail runs once per evaluation of the model set, after the fixed
+# point, instead of once per sweep.  Switch: ``PROCESS_ARCH_DEFER_PER_CALL``.
+# The mechanism's own name for it is the *hoist*, and that word survives in
+# these comments for the same reason the prime's does.
 #
 # Some model nodes feed nothing back: nothing they write is read by any model
 # that runs before them inside the idempotence loop.  Running them on every
 # sweep is wasted work -- their inputs are final only once the loop has
-# settled, and their outputs affect nothing the loop is deciding.  The hoist
-# defers them out of the sweep and runs them once, after ``call_models`` has
+# settled, and their outputs affect nothing the loop is deciding.  The deferral
+# takes them out of the sweep and runs them once, after ``call_models`` has
 # reached its fixed point.
 #
 # ``off`` is the default and is upstream behaviour exactly: every node runs on
@@ -132,76 +144,83 @@ PRIME_CALLS: list[int] = [0]
 #
 # The **node set is derived at run time, not hard-coded** (framework item
 # C2a).  Membership comes from the committed DSM node map, so it follows the
-# arm: when a later variant point lifts the burn-time coupler out of the loop,
-# ``pulse`` joins the feed-forward tail and the derivation picks it up without
-# a list edit here.  What *is* fixed in this file is which call sites were
-# made deferrable at all; ``_HOIST_UNCOVERED`` below turns a node that should
-# be hoisted but has no deferrable call site into an import-time error rather
-# than a silent in-loop evaluation.
-_HOIST_MODULES: dict[str, frozenset[str]] = {
+# arm: when the burn time leaves the loop, ``pulse`` joins the feed-forward
+# tail and the derivation picks it up without a list edit here.  What *is*
+# fixed in this file is which call sites were made deferrable at all;
+# ``_DEFER_PER_CALL_UNCOVERED`` below turns a node that should be deferred but
+# has no deferrable call site into an import-time refusal rather than a silent
+# in-loop evaluation.
+_DEFER_PER_CALL_MODULES: dict[str, frozenset[str]] = {
     "off": frozenset(),
     "feedforward": frozenset({"FF"}),
-    # FF, plus the burn-time articulation point once it has been lifted.
+    # FF, plus the burn-time articulation point once that quantity is out of
+    # the loop.
     "feedforward_lifted": frozenset({"FF", "PULSE"}),
 }
 
-#: Hoist arms that additionally require a lifted site, and which one.
+#: Deferral settings that additionally require a site to be out of the loop,
+#: and which site.
 #:
-#: Plan §4.1d: once the burn time is a design variable, ``Pulse``'s burn-time
-#: write is a no-op (``subsolve`` returns the design variable untouched) and
-#: the only other field it writes on the pulsed decks,
+#: Plan §4.1d: once the burn time is out of the loop, ``Pulse``'s burn-time
+#: write is a no-op (``subsolve`` returns the value its owner put there) and
+#: the only other field it writes on the pulsed configurations,
 #: ``constraints.t_current_ramp_up_min``, is read by a constraint equation and
-#: by **no model**.  So post-lift ``pulse`` has no feedback into the MDA and
+#: by **no model**.  So ``pulse`` then has no feedback into the analysis and
 #: should run once per optimiser evaluation rather than once per sweep.  This
 #: is the VP2 x VP5 composition the framework predicted and flagged as a latent
 #: defect that fires only when two arms compose; it never fired because the
-#: hoist keyed on the static node-map label and ``pulse`` is labelled
+#: deferral keyed on the static node-map label and ``pulse`` is labelled
 #: ``PULSE``.
 #:
-#: It is its **own arm name** rather than an automatic consequence of turning
-#: the lift on, for two reasons.  A comparison must be able to vary one thing:
-#: ``feedforward`` and ``feedforward_lifted`` with the same lift setting differ
-#: only in whether ``pulse`` leaves the sweep, which is what makes the gate
-#: below a one-variable comparison.  And an arm that silently changes meaning
-#: with an unrelated environment variable is the failure mode this file already
-#: refuses elsewhere.
-_HOIST_REQUIRES_LIFT: dict[str, str] = {
+#: It is its **own value** rather than an automatic consequence of taking the
+#: burn time out of the loop, for two reasons.  A comparison must be able to
+#: vary one thing: ``feedforward`` and ``feedforward_lifted`` with the same
+#: burn-time owner differ only in whether ``pulse`` leaves the sweep, which is
+#: what makes the gate below a one-variable comparison.  And an arm that
+#: silently changes meaning with an unrelated environment variable is the
+#: failure mode this file refuses everywhere else.
+_DEFER_PER_CALL_REQUIRES_BURN_TIME_OUT: dict[str, str] = {
     "feedforward_lifted": subsolve.SITE_BURN_TIME,
 }
 
-HOIST_NAME: str = os.environ.get("PROCESS_ARCH_HOIST", "").strip() or "off"
+DEFER_PER_CALL_NAME: str = (
+    os.environ.get("PROCESS_ARCH_DEFER_PER_CALL", "").strip() or "off"
+)
 
-if HOIST_NAME not in _HOIST_MODULES:
-    raise RuntimeError(
-        f"PROCESS_ARCH_HOIST={HOIST_NAME!r} is not a recognised hoist "
-        f"setting; expected one of {tuple(_HOIST_MODULES)} (or unset for "
-        f"{'off'!r})."
+if DEFER_PER_CALL_NAME not in _DEFER_PER_CALL_MODULES:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_DEFER_PER_CALL={DEFER_PER_CALL_NAME!r} is not a "
+        f"recognised per-call deferral; expected one of "
+        f"{tuple(_DEFER_PER_CALL_MODULES)} (or unset for {'off'!r})."
     )
 
-_needs = _HOIST_REQUIRES_LIFT.get(HOIST_NAME)
-if _needs and not subsolve.is_lifted(_needs):
-    raise RuntimeError(
-        f"PROCESS_ARCH_HOIST={HOIST_NAME!r} hoists the burn-time articulation "
-        f"point out of the sweep, which is only correct once that site is "
-        f"lifted: with PROCESS_ARCH_LIFT={_needs!r} unset, Pulse still solves "
-        f"the burn time in the model and the loop would stop updating it.  "
-        f"Set PROCESS_ARCH_LIFT={_needs}, or use PROCESS_ARCH_HOIST=feedforward."
+_needs = _DEFER_PER_CALL_REQUIRES_BURN_TIME_OUT.get(DEFER_PER_CALL_NAME)
+if _needs and not subsolve.is_out_of_loop(_needs):
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_DEFER_PER_CALL={DEFER_PER_CALL_NAME!r} takes the "
+        f"burn-time articulation point out of the sweep, which is only correct "
+        f"once the burn time itself is out of the loop: with "
+        f"PROCESS_ARCH_BURN_TIME_OWNER unset (or =loop) Pulse still solves the "
+        f"burn time in the model and the loop would stop updating it.  Set "
+        f"PROCESS_ARCH_BURN_TIME_OWNER=optimiser or =constant:<hex float>, or "
+        f"use PROCESS_ARCH_DEFER_PER_CALL=feedforward."
     )
 
 #: Node-map modules whose nodes are deferred out of the sweep.
-HOIST_MODULES: frozenset[str] = _HOIST_MODULES[HOIST_NAME]
+DEFER_PER_CALL_MODULES: frozenset[str] = _DEFER_PER_CALL_MODULES[DEFER_PER_CALL_NAME]
 
-#: True when any node is hoisted.  With the hoist off this guards every branch
-#: the variant point adds, so the default path is upstream's.
-HOIST_ENABLED: bool = bool(HOIST_MODULES)
+#: True when any node is deferred.  With the deferral off this guards every
+#: branch the variant point adds, so the default path is upstream's.
+DEFER_PER_CALL_ENABLED: bool = bool(DEFER_PER_CALL_MODULES)
 
 #: Call sites in :meth:`Caller._call_models_once` routed through
 #: :meth:`Caller._node` and therefore capable of being deferred.  This is a
 #: property of *this file*, not of the arm: it says which statements were
-#: rewritten, not which nodes are hoisted.
+#: rewritten, not which nodes this arm defers.
 DEFERRABLE_NODES: tuple[str, ...] = ("pulse", "water_use", "costs")
 
-#: **The hoist is a routing rule, not an exclusion rule** (plan §4.1d/§4.1e).
+#: **The per-call deferral is a routing rule, not an exclusion rule** (plan
+#: §4.1d/§4.1e).
 #:
 #: ``Caller.call_models`` stops when ``objf`` and ``conf`` agree between
 #: sweeps, so what makes a node unsafe to defer is that the **predicate
@@ -215,17 +234,17 @@ DEFERRABLE_NODES: tuple[str, ...] = ("pulse", "water_use", "costs")
 #: Three slots, then:
 #:
 #: =====================  ===============================================
-#: in the loop            the node-map module is not hoisted by this arm
-#: pre-predicate, once    hoisted, and the predicate layer reads something
+#: in the loop            the node-map module is not deferred by this arm
+#: pre-predicate, once    deferred, and the predicate layer reads something
 #:                        it writes
-#: post-predicate, once   hoisted, and it reads nothing the predicate does
+#: post-predicate, once   deferred, and it reads nothing the predicate does
 #: =====================  ===============================================
 #:
 #: This **generalises A13's figure-of-merit guard and replaces it.**  A13 kept
-#: ``costs`` inside the loop on decks whose figure of merit reads it, which is
-#: correct but more conservative than necessary: the pre-predicate slot does
-#: the same job by running the node once instead of every sweep, so the deck
-#: keeps the saving without the staleness.
+#: ``costs`` inside the loop on configurations whose figure of merit reads it,
+#: which is correct but more conservative than necessary: the pre-predicate
+#: slot does the same job by running the node once instead of every sweep, so
+#: the configuration keeps the saving without the staleness.
 #:
 #: Both inputs are **measured, not listed here.**  The predicate's read set is
 #: taken from the driver's own source by
@@ -240,7 +259,7 @@ _PREDICATE_SOURCES = (
 )
 
 #: Committed per-node write sets (framework component C8's sibling), measured
-#: by the ``modules`` write census.  Read only when the hoist is on; never
+#: by the write census.  Read only when a deferral is on; never
 #: read live from a generated artifact (trap T9).  Re-pointed from
 #: ``arch_surgery/docs/data/`` to the V4 harness beside this copy by
 #: A46 (process-copy) under decision D20.
@@ -263,7 +282,8 @@ def _predicate_read_fields(i_figure_merit: int) -> frozenset[str]:
     (trap T2: ``= `` matches ``==`` when you use a regex; the parser does not
     have that problem).  The objective side is narrowed to the active figure of
     merit's own branch of ``objective_function``'s ``if``/``elif`` chain; the
-    constraint side is the **whole** layer, not only the deck's ``icc``.
+    constraint side is the **whole** layer, not only this configuration's
+    ``icc``.
 
     The asymmetry is deliberate.  Over-reporting routes a node to the
     pre-predicate slot, which is never wrong --- only occasionally
@@ -308,9 +328,9 @@ def _predicate_read_fields(i_figure_merit: int) -> frozenset[str]:
             fn = node
             break
     if fn is None:
-        raise RuntimeError(
-            f"{obj_src} has no objective_function; the hoist's routing rule "
-            f"cannot be derived and must not be guessed."
+        raise ArchitectureRefusal(
+            f"{obj_src} has no objective_function; the per-call deferral's "
+            f"routing rule cannot be derived and must not be guessed."
         )
     seen_chain = False
 
@@ -333,9 +353,10 @@ def _predicate_read_fields(i_figure_merit: int) -> frozenset[str]:
 
     walk(fn.body)
     if not seen_chain:
-        raise RuntimeError(
-            f"{obj_src}'s figure-of-merit chain did not parse; the hoist's "
-            f"routing rule cannot be derived and must not be guessed."
+        raise ArchitectureRefusal(
+            f"{obj_src}'s figure-of-merit chain did not parse; the per-call "
+            f"deferral's routing rule cannot be derived and must not be "
+            f"guessed."
         )
     v = _Reads()
     v.visit(ast.parse(con_src.read_text(), filename=str(con_src)))
@@ -346,9 +367,10 @@ def _predicate_read_fields(i_figure_merit: int) -> frozenset[str]:
 def _node_write_sets() -> dict[str, frozenset[str]]:
     """Per-node write sets from the committed census."""
     if not NODE_WRITESET_PATH.exists():
-        raise RuntimeError(
-            f"PROCESS_ARCH_HOIST={HOIST_NAME!r} needs the committed per-node "
-            f"write sets at {NODE_WRITESET_PATH}, which is not present.  "
+        raise ArchitectureRefusal(
+            f"PROCESS_ARCH_DEFER_PER_CALL={DEFER_PER_CALL_NAME!r} needs the "
+            f"committed per-node write sets at {NODE_WRITESET_PATH}, which is "
+            f"not present.  "
             f"It is a committed file of this experiment, copied into "
             f"harness/data/ and recorded in harness/data/PROVENANCE.json."
         )
@@ -356,8 +378,9 @@ def _node_write_sets() -> dict[str, frozenset[str]]:
     return {k: frozenset(v) for k, v in raw.items()}
 
 
-#: Committed DSM node map (framework component C8).  Read only when the hoist
-#: is on; never read live from the dependency-analysis repository (trap T9).
+#: Committed DSM node map (framework component C8).  Read only when a deferral
+#: or a block schedule is on; never read live from the dependency-analysis
+#: repository (trap T9).
 #: Re-pointed from ``arch_surgery/docs/data/`` to the V4 harness beside this
 #: copy by A46 (process-copy) under decision D20.
 #: The target is a committed file of this experiment: its source, its sha256
@@ -371,84 +394,85 @@ NODE_MAP_PATH = (
 )
 
 
-def _resolve_hoist_nodes() -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Nodes this arm hoists, and any it should hoist but cannot.
+def _resolve_defer_per_call_nodes() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Nodes this arm defers per call, and any it should defer but cannot.
 
     Returns
     -------
     tuple
-        ``(hoisted, uncovered)`` -- the deferrable nodes the node map assigns
-        to a hoisted module, and the mapped nodes that a hoisted module claims
-        but that have no deferrable call site.
+        ``(deferred, uncovered)`` -- the deferrable nodes the node map assigns
+        to a deferred module, and the mapped nodes that a deferred module
+        claims but that have no deferrable call site.
     """
-    if not HOIST_ENABLED:
+    if not DEFER_PER_CALL_ENABLED:
         return (), ()
     if not NODE_MAP_PATH.exists():
-        raise RuntimeError(
-            f"PROCESS_ARCH_HOIST={HOIST_NAME!r} needs the committed DSM node "
-            f"map at {NODE_MAP_PATH}, which is not present."
+        raise ArchitectureRefusal(
+            f"PROCESS_ARCH_DEFER_PER_CALL={DEFER_PER_CALL_NAME!r} needs the "
+            f"committed DSM node map at {NODE_MAP_PATH}, which is not present."
         )
     nodes = json.loads(NODE_MAP_PATH.read_text())["nodes"]
-    hoisted = tuple(
-        n for n in DEFERRABLE_NODES if nodes.get(n, {}).get("module") in HOIST_MODULES
+    deferred = tuple(
+        n for n in DEFERRABLE_NODES if nodes.get(n, {}).get("module") in DEFER_PER_CALL_MODULES
     )
     uncovered = tuple(
         sorted(
             n
             for n, entry in nodes.items()
-            if entry.get("module") in HOIST_MODULES
+            if entry.get("module") in DEFER_PER_CALL_MODULES
             and entry.get("in_call_models_once")
             and n not in DEFERRABLE_NODES
         )
     )
-    return hoisted, uncovered
+    return deferred, uncovered
 
 
-HOIST_NODES, _HOIST_UNCOVERED = _resolve_hoist_nodes()
+DEFER_PER_CALL_NODES, _DEFER_PER_CALL_UNCOVERED = _resolve_defer_per_call_nodes()
 
-if _HOIST_UNCOVERED:
-    raise RuntimeError(
-        f"PROCESS_ARCH_HOIST={HOIST_NAME!r} would hoist {list(_HOIST_UNCOVERED)}, "
+if _DEFER_PER_CALL_UNCOVERED:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_DEFER_PER_CALL={DEFER_PER_CALL_NAME!r} would defer "
+        f"{list(_DEFER_PER_CALL_UNCOVERED)}, "
         f"but those nodes have no deferrable call site in Caller."
         f"_call_models_once. Add them to DEFERRABLE_NODES and route their "
         f"call sites through Caller._node."
     )
 
 
-def resolved_hoist_tails(i_figure_merit: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def resolved_defer_per_call_tails(i_figure_merit: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """``(pre_predicate, post_predicate)`` for a run using *i_figure_merit*.
 
-    Every node the arm hoists is placed in one of the two slots by the routing
+    Every node the arm defers is placed in one of the two slots by the routing
     rule: the predicate layer reads something it writes, or it does not.
-    Nothing is dropped --- a hoisted node always runs exactly once.
+    Nothing is dropped --- a deferred node always runs exactly once.
 
     Public so that a measurement harness can record the tails a run resolved
     without reconstructing the rule.
     """
-    if not HOIST_NODES:
+    if not DEFER_PER_CALL_NODES:
         return (), ()
     reads = _predicate_read_fields(i_figure_merit)
     writes = _node_write_sets()
     pre, post = [], []
-    for n in HOIST_NODES:
+    for n in DEFER_PER_CALL_NODES:
         (pre if (writes.get(n, frozenset()) & reads) else post).append(n)
     return tuple(pre), tuple(post)
 
 
-def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
+def resolved_defer_per_call_tail(i_figure_merit: int) -> tuple[str, ...]:
     """Every deferred node, pre-predicate group first.
 
     Kept because A13's harness records it.  Anything that has to place a node
-    relative to the predicate evaluation must use :func:`resolved_hoist_tails`.
+    relative to the predicate evaluation must use :func:`resolved_defer_per_call_tails`.
     """
-    pre, post = resolved_hoist_tails(i_figure_merit)
+    pre, post = resolved_defer_per_call_tails(i_figure_merit)
     return pre + post
 
 
 # --------------------------------------------------------------------------
-# VP2c (task A33, V2 plan section 1 / Appendix A item 3a) -- the post-solve
-# hoist: nodes whose outputs the optimiser never consumes leave the per-call
-# path entirely.
+# VP2c (task A33) -- deferral at *per-run* frequency: nodes whose outputs the
+# optimiser never consumes leave the per-call path entirely.  Switch:
+# ``PROCESS_ARCH_DEFER_PER_RUN``.
 #
 # VP2 (above) moves a feed-forward node out of the sweep but still runs it
 # once per optimiser evaluation.  VP2c goes further for the nodes that earn
@@ -458,41 +482,46 @@ def resolved_hoist_tail(i_figure_merit: int) -> tuple[str, ...]:
 # every solve-phase sweep and executed **exactly once per run**, at the
 # accepted optimum, before the output phase begins.
 #
-# Membership is **derived, not asserted**: the committed per-deck artifact
+# Membership is **derived, not asserted**: the committed per-configuration
+# artifact
 # ``harness/data/defer_per_run[_lifted]_<configuration>.json`` is produced by
-# ``arch_surgery/idf_probe/a33_postsolve.py classify`` from the deck's
-# objective/constraint read sets (AST), the run-time write census and a
-# backward crawl of the collapsed DSM, and is validated here on load:
+# the per-run classifier from the configuration's objective/constraint read
+# sets (AST), the run-time write census and a backward crawl of the collapsed
+# DSM, and is validated here on load:
 #
 # * ``nodes_sha256`` must match a recomputation over the load-bearing fields,
 #   so a hand-edited artifact is refused rather than trusted;
-# * the artifact must be for THIS deck -- ``i_figure_merit`` and the active
-#   ``icc`` list are checked against the run's own numerics at first use,
-#   because another deck's exclusion list is a silently wrong answer;
+# * the artifact must be for THIS configuration -- ``i_figure_merit`` and the
+#   active ``icc`` list are checked against the run's own numerics at first
+#   use, because another configuration's exclusion list is a silently wrong
+#   answer;
 # * every listed node must exist in the committed node map as a
 #   ``_call_models_once`` call site;
 # * a node whose measured write set intersects the predicate layer's read set
-#   (the deck's objective branch plus the whole constraint layer, the same
-#   rule VP2's routing uses) is refused: that node is one the deck keeps
-#   per-call, and excluding it would hand the optimiser a stale objective or
-#   constraint vector -- the quiet wrong answer this file refuses everywhere.
+#   (the configuration's objective branch plus the whole constraint layer, the
+#   same rule the per-call deferral's routing uses) is refused: that node is
+#   one the configuration keeps per-call, and excluding it would hand the
+#   optimiser a stale objective or constraint vector -- the quiet wrong answer
+#   this file refuses everywhere.
 #
 # ``off`` (the variable unset) is the default and is byte-identical to the
 # behaviour without this section -- gated against A32's record (protocol
 # section 12), not asserted.
-POST_SOLVE_PATH: str | None = os.environ.get("PROCESS_ARCH_POST_SOLVE") or None
-POST_SOLVE_ENABLED: bool = POST_SOLVE_PATH is not None
+DEFER_PER_RUN_PATH: str | None = (
+    os.environ.get("PROCESS_ARCH_DEFER_PER_RUN") or None
+)
+DEFER_PER_RUN_ENABLED: bool = DEFER_PER_RUN_PATH is not None
 
-if POST_SOLVE_ENABLED and not Path(POST_SOLVE_PATH).exists():
-    raise RuntimeError(
-        f"PROCESS_ARCH_POST_SOLVE={POST_SOLVE_PATH!r} does not exist.  There "
-        f"is no default and no fallback: a run asked to exclude nodes must "
+if DEFER_PER_RUN_ENABLED and not Path(DEFER_PER_RUN_PATH).exists():
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_DEFER_PER_RUN={DEFER_PER_RUN_PATH!r} does not exist.  "
+        f"There is no default and no fallback: a run asked to exclude nodes must "
         f"refuse rather than silently run everything."
     )
 
 #: Diagnostics for the run record.  Integer counts and names only.
-POST_SOLVE_TOTALS: dict = {
-    "artifact": POST_SOLVE_PATH,
+DEFER_PER_RUN_TOTALS: dict = {
+    "artifact": DEFER_PER_RUN_PATH,
     "nodes": None,                      # filled after validation
     "n_call_sites_suppressed": 0,       # solve-phase _node sites skipped
     "suppressed_by_node": {},
@@ -500,26 +529,27 @@ POST_SOLVE_TOTALS: dict = {
     "validated": False,
 }
 
-_POST_SOLVE_CACHE: dict = {}
+_DEFER_PER_RUN_CACHE: dict = {}
 
 
-def _post_solve_nodes(data) -> frozenset[str]:
+def _defer_per_run_nodes(data) -> frozenset[str]:
     """The validated exclusion set for this run.  Cached after first use.
 
-    Validation needs the run's own deck (figure of merit, active constraint
-    list), so it happens on the first ``call_models`` rather than at import.
+    Validation needs the run's own input file (figure of merit, active
+    constraint list), so it happens on the first ``call_models`` rather than at
+    import.
     Every check refuses loudly; none falls back.
     """
-    cached = _POST_SOLVE_CACHE.get("nodes")
+    cached = _DEFER_PER_RUN_CACHE.get("nodes")
     if cached is not None:
         return cached
 
     import hashlib  # noqa: PLC0415 - validation path only
 
-    record = json.loads(Path(POST_SOLVE_PATH).read_text())
+    record = json.loads(Path(DEFER_PER_RUN_PATH).read_text())
     if record.get("format") != "a33-postsolve-1":
-        raise RuntimeError(
-            f"post-solve artifact {POST_SOLVE_PATH} has format "
+        raise ArchitectureRefusal(
+            f"per-run deferral artifact {DEFER_PER_RUN_PATH} has format "
             f"{record.get('format')!r}, expected 'a33-postsolve-1'."
         )
     nodes = list(record["post_solve_nodes"])
@@ -541,20 +571,24 @@ def _post_solve_nodes(data) -> frozenset[str]:
     rebuilt = hashlib.sha256(payload).hexdigest()
     committed = record.get("nodes_sha256")
     if rebuilt != committed:
-        raise RuntimeError(
-            f"post-solve artifact {POST_SOLVE_PATH} does not rebuild: "
+        raise ArchitectureRefusal(
+            f"per-run deferral artifact {DEFER_PER_RUN_PATH} does not rebuild: "
             f"nodes_sha256 is {rebuilt} recomputed against {committed} "
             f"recorded in the file.  The exclusion list would not be the "
             f"derived one."
         )
 
-    # (2) the artifact must be for THIS deck.
+    # (2) the artifact must be for THIS configuration.  Its own JSON keys
+    # still spell that 'deck'; the file format is data this task does not
+    # rewrite, so the key is read under the name it has and the vocabulary
+    # changes only where this file speaks for itself.
     ifm = int(data.numerics.i_figure_merit)
     want_ifm = record["deck"]["i_figure_merit_expected"]
     if ifm != want_ifm:
-        raise RuntimeError(
-            f"post-solve artifact {POST_SOLVE_PATH} was derived for "
-            f"i_figure_merit={want_ifm} but this run has {ifm}: wrong deck."
+        raise ArchitectureRefusal(
+            f"per-run deferral artifact {DEFER_PER_RUN_PATH} was derived for "
+            f"i_figure_merit={want_ifm} but this run has {ifm}: it is "
+            f"another configuration's artifact."
         )
     m_all = int(data.numerics.n_equality_constraints) + int(
         data.numerics.n_inequality_constraints
@@ -562,16 +596,17 @@ def _post_solve_nodes(data) -> frozenset[str]:
     icc = sorted(int(v) for v in data.numerics.icc[:m_all])
     want_icc = sorted(record["deck"]["icc_expected_at_runtime"])
     if icc != want_icc:
-        raise RuntimeError(
-            f"post-solve artifact {POST_SOLVE_PATH} was derived for the "
-            f"active constraint set {want_icc} but this run has {icc}: "
-            f"wrong deck, or the deck changed under the artifact."
+        raise ArchitectureRefusal(
+            f"per-run deferral artifact {DEFER_PER_RUN_PATH} was derived for the "
+            f"active constraint set {want_icc} but this run has {icc}: it is "
+            f"another configuration's artifact, or the input file changed "
+            f"under it."
         )
 
     # (3) every listed node must be a known _call_models_once call site.
     if not NODE_MAP_PATH.exists():
-        raise RuntimeError(
-            f"PROCESS_ARCH_POST_SOLVE needs the committed DSM node map at "
+        raise ArchitectureRefusal(
+            f"PROCESS_ARCH_DEFER_PER_RUN needs the committed DSM node map at "
             f"{NODE_MAP_PATH}, which is not present."
         )
     known = {
@@ -581,24 +616,25 @@ def _post_solve_nodes(data) -> frozenset[str]:
     }
     unknown = sorted(set(nodes) - known)
     if unknown:
-        raise RuntimeError(
-            f"post-solve artifact {POST_SOLVE_PATH} names {unknown}, which "
+        raise ArchitectureRefusal(
+            f"per-run deferral artifact {DEFER_PER_RUN_PATH} names {unknown}, which "
             f"are not _call_models_once call sites in the committed node map."
         )
 
-    # (4) a node the deck keeps per-call is refused: its measured writes must
+    # (4) a node the configuration keeps per-call is refused: its measured
+    # writes must
     # not intersect what the predicate layer reads for this figure of merit.
     scenario = record.get("scenario")
     if not NODE_WRITESET_PATH.exists():
-        raise RuntimeError(
-            f"PROCESS_ARCH_POST_SOLVE needs the committed per-node write "
+        raise ArchitectureRefusal(
+            f"PROCESS_ARCH_DEFER_PER_RUN needs the committed per-node write "
             f"sets at {NODE_WRITESET_PATH}, which is not present.  Its "
             f"origin is recorded in harness/data/PROVENANCE.json."
         )
     per_scenario = json.loads(NODE_WRITESET_PATH.read_text())["per_scenario"]
     if scenario not in per_scenario:
-        raise RuntimeError(
-            f"post-solve artifact {POST_SOLVE_PATH} names scenario "
+        raise ArchitectureRefusal(
+            f"per-run deferral artifact {DEFER_PER_RUN_PATH} names scenario "
             f"{scenario!r}, which has no run-time write census in "
             f"{NODE_WRITESET_PATH}."
         )
@@ -607,45 +643,49 @@ def _post_solve_nodes(data) -> frozenset[str]:
     for n in nodes:
         overlap = sorted(set(writes_by_node.get(n, ())) & reads)
         if overlap:
-            raise RuntimeError(
-                f"post-solve artifact {POST_SOLVE_PATH} lists {n!r}, but the "
+            raise ArchitectureRefusal(
+                f"per-run deferral artifact {DEFER_PER_RUN_PATH} lists {n!r}, but the "
                 f"predicate layer reads {overlap[:5]} out of its measured "
-                f"write set: this deck keeps {n!r} per-call, and excluding "
+                f"write set: this configuration keeps {n!r} per-call, and "
+                f"excluding "
                 f"it would hand the optimiser a stale objective or "
                 f"constraint vector."
             )
 
     resolved = frozenset(nodes)
-    _POST_SOLVE_CACHE["nodes"] = resolved
-    POST_SOLVE_TOTALS["nodes"] = sorted(resolved)
-    POST_SOLVE_TOTALS["validated"] = True
-    POST_SOLVE_TOTALS["scenario"] = scenario
-    POST_SOLVE_TOTALS["nodes_sha256"] = committed
+    _DEFER_PER_RUN_CACHE["nodes"] = resolved
+    DEFER_PER_RUN_TOTALS["nodes"] = sorted(resolved)
+    DEFER_PER_RUN_TOTALS["validated"] = True
+    DEFER_PER_RUN_TOTALS["scenario"] = scenario
+    DEFER_PER_RUN_TOTALS["nodes_sha256"] = committed
     return resolved
 
 
 # --------------------------------------------------------------------------
-# VP4 (framework hook F7c) -- one flat loop, or a solve per module.
+# VP4 (framework hook F7c) -- the shape of the analysis loop: upstream's own,
+# one flat block, or a solve per module.  Switch: ``PROCESS_ARCH_MDA``.
 #
 # Upstream runs the whole model sequence and tests two derived scalars for
-# idempotence.  ``per_module`` instead iterates each DSM module to its own
+# idempotence.  ``partitioned`` instead iterates each DSM module to its own
 # fixed point, in the block order A3's VP1 makes available by giving M1 a
-# contiguous span, with an outer loop over whatever cross-module coupling
-# remains.  The arm, its caps and its predicate live in
+# contiguous span, and runs that schedule **once** -- feed-forward
+# partitioning asserts there is no cross-block coupling left to close, and
+# whether that assertion holds is measured by the uncharged exit audit outside
+# the arm rather than by an in-loop receipt the arm pays for.  The
+# arrangement, its caps and its predicate live in
 # ``process/core/solver/module_solve.py``; what lives here is the schedule and
 # the node filter, because those are properties of *this* call sequence.
 #
-# ``flat_state`` is the same predicate on **one block containing every in-loop
+# ``flat`` is the same predicate on **one block containing every in-loop
 # node** --- decision D18's predicate-matched control ``A0'``.  It exists so
-# that the two things ``R -> A1'`` measures as a sum, the stopping rule and the
-# architecture, can be measured apart: ``R -> A0'`` is the predicate alone and
-# ``A0' -> A1'`` is the architecture alone.
+# that the two things the reference-to-intervention step measures as a sum,
+# the stopping rule and the arrangement, can be measured apart.
 #
-# ``off`` is the default and is upstream behaviour exactly: ``_active_nodes``
+# Unset is the default and is upstream behaviour exactly: ``_active_nodes``
 # stays ``None``, every node runs on every sweep, and ``call_models`` never
 # enters the block path.
-MODULE_SOLVE_NAME: str = module_solve.MODULE_SOLVE_NAME
-MODULE_SOLVE_ENABLED: bool = module_solve.ENABLED
+MDA_MODE: str = module_solve.MDA_MODE
+MDA_ENABLED: bool = module_solve.ENABLED
 
 #: Model evaluations, counted as **individual model node calls** -- the unit
 #: Phase A and A22 use (``engine.Budget.node_calls``), and the unit Phase B's
@@ -659,7 +699,8 @@ NODE_CALLS: list[int] = [0]
 #: Sweeps of ``_call_models_once`` executed inside ONE ``call_models`` — that
 #: is, per optimiser-driven evaluation — binned over the run.
 #:
-#: I-17: the A→B transfer over-predicts B3's saving on all three decks
+#: I-17: the A→B transfer over-predicts B3's saving on all three
+#: configurations
 #: (nof +22.6 %, lad +6.0 %, st +41.8 %), and the standing hypothesis is that
 #: a Phase A evaluation is not the same object as an in-loop one — Phase A
 #: enters from a δ = 0.10 perturbed point and takes ≈ 5.5 sweeps, while a
@@ -686,7 +727,7 @@ NODE_CALLS_AT_OUTPUT: list[int | None] = [None]
 
 #: Roll-up of the block schedule's own counts across every ``call_models`` of a
 #: run.  Diagnostics: reported beside the cost figure, never gated on.
-MODULE_SOLVE_TOTALS: dict = {
+MDA_TOTALS: dict = {
     "n_call_models": 0,
     "block_sweeps": 0,
     "outer_pass_hist": {},
@@ -705,14 +746,15 @@ MODULE_SOLVE_TOTALS: dict = {
 def _resolve_node_modules() -> dict[str, str]:
     """``node -> DSM module`` from the committed node map.
 
-    Read only when VP4 is on, from the same committed artifact the hoist uses
-    and never live from the dependency-analysis repository (trap T9).
+    Read only when a block schedule is on, from the same committed artifact
+    the deferrals use, and never live from the dependency-analysis repository
+    (trap T9).
     """
-    if not MODULE_SOLVE_ENABLED:
+    if not MDA_ENABLED:
         return {}
     if not NODE_MAP_PATH.exists():
-        raise RuntimeError(
-            f"PROCESS_ARCH_MODULE_SOLVE={MODULE_SOLVE_NAME!r} needs the "
+        raise ArchitectureRefusal(
+            f"PROCESS_ARCH_MDA={MDA_MODE!r} needs the "
             f"committed DSM node map at {NODE_MAP_PATH}, which is not present."
         )
     nodes = json.loads(NODE_MAP_PATH.read_text())["nodes"]
@@ -734,40 +776,40 @@ NODE_MODULE: dict[str, str] = _resolve_node_modules()
 
 
 def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
-    """``((label, frozenset(nodes), iterate), ...)`` for one run's outer pass.
+    """``((label, frozenset(nodes), iterate), ...)`` for one schedule pass.
 
-    Membership comes from the committed node map, so a node that this deck
+    Membership comes from the committed node map, so a node this configuration
     never executes simply never appears -- the filter in :meth:`Caller._node`
     is a predicate on names, not a list of calls to make.
 
-    **The hoist composes here, and that composition is the thing to get
-    right.**  With VP2 on, every deferred node is removed from its block and
-    returned as the tail, to be run once after the outer fixed point --- both
-    slots, because a per-module schedule's outer test is on the coupling state
-    and not on ``objf``/``conf``, so nothing here is at risk of reading a
-    stale predicate input.  The **placement** of the two groups relative to
-    the predicate evaluation is ``call_models``'s business, not the
-    schedule's; :func:`resolved_hoist_tails` is the one place that decides
-    which group a node is in.
+    **The per-call deferral composes here, and that composition is the thing to
+    get right.**  With it on, every deferred node is removed from its block and
+    returned as the tail, to be run once after the schedule --- both slots,
+    because a block schedule stops on the coupling state and not on
+    ``objf``/``conf``, so nothing here is at risk of reading a stale predicate
+    input.  The **placement** of the two groups relative to the predicate
+    evaluation is ``call_models``'s business, not the schedule's;
+    :func:`resolved_defer_per_call_tails` is the one place that decides which
+    group a node is in.
 
     Returns
     -------
     tuple
-        ``(schedule, tail)`` -- the blocks of one outer pass, and the nodes
-        deferred to after the fixed point (empty when VP2 is off).
+        ``(schedule, tail)`` -- the blocks of the schedule pass, and the nodes
+        deferred to after it (empty when the per-call deferral is off).
     """
     tail = (
-        frozenset(resolved_hoist_tail(i_figure_merit))
-        if HOIST_ENABLED
+        frozenset(resolved_defer_per_call_tail(i_figure_merit))
+        if DEFER_PER_CALL_ENABLED
         else frozenset()
     )
-    # ``flat_state`` (decision D18's control arm A0') is one block over every
+    # ``flat`` (decision D18's control arm A0') is one block over every
     # in-loop node: the same predicate, the same caps, the same failure policy,
     # a different schedule.  It is written as a branch here rather than as a
     # second solver because A26 §10 measured that it is the degenerate case of
     # the block schedule, and two implementations of one loop is how they
     # drift.
-    if module_solve.FLAT_STATE:
+    if module_solve.FLAT:
         return (
             (module_solve.FLAT_BLOCK_LABEL, _loop_node_set(tail), True),
         ), tail
@@ -782,12 +824,12 @@ def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
 
 
 def _loop_node_set(tail=()) -> frozenset[str]:
-    """Every node a block schedule may run, less the hoisted tail.
+    """Every node a block schedule may run, less the deferred tail.
 
     Restricted to the labels :data:`module_solve.BLOCK_ORDER` names, so the
-    single-block arm covers **exactly** what the per-module arm's blocks cover
-    between them --- which is what makes ``A0' -> A1'`` a comparison of the
-    schedule and not of the model set.  The node map also carries
+    single-block arrangement covers **exactly** what the partitioned one's
+    blocks cover between them --- which is what makes ``A0' -> A1'`` a
+    comparison of the schedule and not of the model set.  The node map also carries
     ``<x_inject>`` (module ``X``): that is the design-vector injection at the
     head of ``_call_models_once``, not a model, it is not routed through
     :meth:`Caller._node`, and it runs unconditionally on every sweep of every
@@ -801,20 +843,18 @@ def _loop_node_set(tail=()) -> frozenset[str]:
 
 
 def _single_block_covers_loop(schedule, tail) -> bool:
-    """Does one iterated block hold every node the loop would sweep?
+    """Does one iterated block hold every node the schedule would sweep?
 
-    When it does, the outer residual test is **redundant with the block's own
-    inner test** and skipping it is a correctness statement, not an
-    optimisation.  The inner test compares two successive sweeps of that block
-    over the whole coupling vector; the outer test asks the same question of
-    the same index set.  Paying it anyway costs exactly one extra full sweep
-    per ``call_models``, because ``y_outer_prev`` is the state at *entry*: pass
-    1 compares the entry state against the converged one and fails, pass 2
-    re-runs the block (one sweep, converging immediately) and passes.
+    When it does, a further joint test over the whole coupling state would be
+    **redundant with the block's own test**, which has just compared two
+    successive sweeps of that block over the whole vector.  Since the schedule
+    now runs exactly once in every arrangement (decisions D22 and D23), this is
+    no longer a guard that skips anything: it is a **recorded property of the
+    schedule that was actually built**, so a reader of a run record can tell a
+    single-block run from a partitioned one without trusting the arm's name.
 
-    Measured on the block arm as the wasted-pass effect A0f -> A0, 1.53-1.79 %
-    of model evaluations (A18/A26).  Recorded per call rather than assumed, so
-    a schedule that stops satisfying the condition stops taking the guard.
+    Measured earlier, when a further pass was still paid, as the wasted-pass
+    effect A0f -> A0: 1.53-1.79 % of model evaluations (A18/A26).
     """
     live = [(lab, nodes, it) for lab, nodes, it in schedule if nodes]
     if len(live) != 1:
@@ -825,7 +865,7 @@ def _single_block_covers_loop(schedule, tail) -> bool:
 
 def _roll_up(stats: dict) -> None:
     """Fold one ``call_models``'s block counts into the run's totals."""
-    t = MODULE_SOLVE_TOTALS
+    t = MDA_TOTALS
     t["n_call_models"] += 1
     t["block_sweeps"] += stats["block_sweeps"]
     key = str(stats["outer_passes"])
@@ -841,7 +881,7 @@ def _roll_up(stats: dict) -> None:
     if stats["moved_constants"]:
         t["n_call_models_with_moved_constant"] += 1
     t["moved_constants"].update(stats["moved_constants"])
-    if stats.get("single_block_outer_test_skipped"):
+    if stats.get("single_block_covers_loop"):
         t["n_call_models_single_block"] += 1
     if not stats["converged"]:
         t["n_failed"] += 1
@@ -868,25 +908,25 @@ class Caller:
         self.data = data
         # VP2: the deferral list for the current sweep, or ``None`` when
         # nothing is deferred.  ``None`` is the default and the only value the
-        # hoist-off path ever sees.
+        # deferral-off path ever sees.
         self._pending: list | None = None
         # VP2: the tail resolved for the current ``call_models``.  Re-resolved
-        # on every call rather than memoised: it depends on the deck's figure
-        # of merit, and a scan may change the deck between calls.
-        self._hoist_tail: frozenset[str] = frozenset()
+        # on every call rather than memoised: it depends on the configuration's
+        # figure of merit, and a scan may change that between calls.
+        self._deferred_tail: frozenset[str] = frozenset()
         # VP2 / plan §4.1d: the deferred nodes split into a group that runs
         # before ``objf``/``conf`` and one that runs after.  Both empty on the
         # default path.
-        self._hoist_pre: frozenset[str] = frozenset()
-        self._hoist_post: frozenset[str] = frozenset()
-        # VP2c (A33): the post-solve exclusion set for the current
+        self._defer_per_call_pre: frozenset[str] = frozenset()
+        self._defer_per_call_post: frozenset[str] = frozenset()
+        # VP2c (A33): the per-run exclusion set for the current
         # ``call_models``, or ``None`` when nothing is excluded.  ``None`` is
         # the default and the only value the switch-off path ever sees; it is
         # also what the output-phase and audit Callers keep, because they
-        # never enter ``call_models`` -- which is what lets the one-shot
-        # post-solve execution and the exit audit run the very nodes the
-        # solve phase excluded.
-        self._post_solve: frozenset[str] | None = None
+        # never enter ``call_models`` -- which is what lets the once-per-run
+        # execution and the exit audit run the very nodes the solve phase
+        # excluded.
+        self._defer_per_run: frozenset[str] | None = None
         # VP4: the nodes the current block sweep may run, or ``None`` when the
         # whole sequence runs.  ``None`` is the default and the only value the
         # flat-loop path ever sees.
@@ -896,46 +936,49 @@ class Caller:
         self._yspec = None
         self._yprov = None
         self._ysubsets: dict | None = None
-        #: VP4 diagnostics for the last ``call_models`` -- block sweeps, outer
-        #: passes and inner counts.  Reported, never gated on.
+        #: VP4 diagnostics for the last ``call_models`` -- block sweeps,
+        #: schedule passes and per-block sweep counts.  Reported, never gated
+        #: on.
         self.module_solve_stats: dict | None = None
-        # A34 (pin instrument): the burn-time coupling held at the
-        # env-supplied value, written once here -- "fixed at initialisation"
-        # -- and never overwritten during the solve phase (the tripwire at the
-        # end of ``_call_models_once`` raises on any bit-level change).  With
-        # PROCESS_ARCH_PIN_BURN_TIME unset this branch is dead and nothing
+        # A34: the burn-time coupling held at the constant its owner named,
+        # written once here -- "fixed at initialisation" -- and never
+        # overwritten during the solve phase (the tripwire at the end of
+        # ``_call_models_once`` raises on any bit-level change).  With
+        # PROCESS_ARCH_BURN_TIME_OWNER unset this branch is dead and nothing
         # differs from upstream.
-        if subsolve.PIN_ENABLED:
-            self._apply_burn_time_pin()
+        if subsolve.CONSTANT_OWNS_BURN_TIME:
+            self._apply_burn_time_constant()
 
-    def _apply_burn_time_pin(self) -> None:
-        """Write the pinned burn time into the data structure, refusing decks
-        that would fight over it.
+    def _apply_burn_time_constant(self) -> None:
+        """Write the constant-owned burn time in, refusing an input file that
+        would fight over it.
 
-        The pin replaces the optimiser as the variable's owner (the lifted
-        architecture's per-call structure without an optimiser -- V2 plan
-        section 3).  A deck that names ``ixc = 178`` hands the same variable
-        to the design-vector injection at the head of every sweep, which
-        would silently overwrite the pin; two owners is a refusal, not a
-        race.
+        The constant replaces the optimiser as the variable's owner: it is how
+        the evaluation phase runs the out-of-loop arrangement with no optimiser
+        present.  An input file that names ``ixc = 178`` hands the same
+        variable to the design-vector injection at the head of every sweep,
+        which would silently overwrite the constant; two owners is a refusal,
+        not a race.
         """
         nums = self.data.numerics
         n = int(nums.n_iteration_variables)
         ixc = [int(v) for v in nums.ixc[:n]]
         if subsolve.BURN_TIME_IXC in ixc:
-            raise RuntimeError(
-                f"PROCESS_ARCH_PIN_BURN_TIME={subsolve.PIN_BURN_TIME!r} is "
-                f"set, but this deck names ixc = {subsolve.BURN_TIME_IXC} "
-                f"(the lifted burn time), so the design-vector injection at "
-                f"the head of every sweep would overwrite the pin.  The pin "
-                f"replaces the optimiser as the variable's owner: run it on "
-                f"a deck without ixc = {subsolve.BURN_TIME_IXC}."
+            raise ArchitectureRefusal(
+                f"PROCESS_ARCH_BURN_TIME_OWNER names the constant "
+                f"{subsolve.BURN_TIME_CONSTANT!r} as the burn time's owner, "
+                f"but this input file names ixc = {subsolve.BURN_TIME_IXC} "
+                f"(the burn time as a design variable), so the design-vector "
+                f"injection at the head of every sweep would overwrite it.  "
+                f"Two owners is a refusal, not a race: run this arm on an "
+                f"input file without ixc = {subsolve.BURN_TIME_IXC}, or set "
+                f"PROCESS_ARCH_BURN_TIME_OWNER=optimiser."
             )
-        self.data.times.t_plant_pulse_burn = subsolve.PIN_BURN_TIME
+        self.data.times.t_plant_pulse_burn = subsolve.BURN_TIME_CONSTANT
 
     # -- VP2 -------------------------------------------------------------
 
-    def _resolve_hoist_tails(self) -> tuple[frozenset[str], frozenset[str]]:
+    def _resolve_defer_per_call_tails(self) -> tuple[frozenset[str], frozenset[str]]:
         """``(pre_predicate, post_predicate)`` for this run.
 
         ``call_models`` stops on ``objf`` and ``conf``, so a node whose output
@@ -945,9 +988,9 @@ class Caller:
         runs once after, as A13 built it.  Either way the node leaves the
         sweep, which is where the saving is.
         """
-        if not HOIST_ENABLED:
+        if not DEFER_PER_CALL_ENABLED:
             return frozenset(), frozenset()
-        pre, post = resolved_hoist_tails(self.data.numerics.i_figure_merit)
+        pre, post = resolved_defer_per_call_tails(self.data.numerics.i_figure_merit)
         return frozenset(pre), frozenset(post)
 
     def _acpow(self) -> None:
@@ -965,35 +1008,35 @@ class Caller:
         Four variant points meet in these lines, and the order matters:
 
         1. **VP4** -- when a block sweep is in progress, a node outside the
-           block does not run at all.  This is checked first, so the hoist
+           block does not run at all.  This is checked first, so the deferral
            never collects a node during someone else's block.
         2. **VP2c** -- a node in the validated post-solve set does not run in
            any solve-phase sweep at all; it runs once per run, at the accepted
            optimum (``write_output_files``).  Checked before VP2's collection
            so an excluded node is never gathered into the per-call tail
-           either.  ``_post_solve`` is set only inside ``call_models``, so the
+           either.  ``_defer_per_run`` is set only inside ``call_models``, so the
            output path and the exit audit -- which call
            ``_call_models_once`` on their own Callers -- still run everything.
         3. **VP2** -- a node in the resolved feed-forward tail is collected
            instead of run.  The block path never sets ``_pending``, because
-           under VP4 the tail is a block of its own that runs once after the
-           outer fixed point; this branch is the flat arm's.
+           under a block schedule the tail is a block of its own that runs once
+           at the end of the schedule; this branch is the flat loop's.
         4. Otherwise the node runs, and is counted.
         """
         if self._active_nodes is not None and name not in self._active_nodes:
             return
-        if self._post_solve is not None and name in self._post_solve:
-            POST_SOLVE_TOTALS["n_call_sites_suppressed"] += 1
-            by = POST_SOLVE_TOTALS["suppressed_by_node"]
+        if self._defer_per_run is not None and name in self._defer_per_run:
+            DEFER_PER_RUN_TOTALS["n_call_sites_suppressed"] += 1
+            by = DEFER_PER_RUN_TOTALS["suppressed_by_node"]
             by[name] = by.get(name, 0) + 1
             return
-        if self._pending is not None and name in self._hoist_tail:
+        if self._pending is not None and name in self._deferred_tail:
             self._pending.append((name, run))
             return
         NODE_CALLS[0] += 1
         run()
 
-    def _run_hoisted_tail(self, pending: list) -> None:
+    def _run_deferred_tail(self, pending: list) -> None:
         """Run the deferred feed-forward nodes, once, in sequence order."""
         for _name, run in pending:
             run()
@@ -1038,26 +1081,37 @@ class Caller:
         finally:
             self._active_nodes = None
 
-    def _call_models_by_module(
+    def _call_models_partitioned(
         self, xc: np.ndarray, m: int
     ) -> tuple[float, np.ndarray]:
         """Block Gauss-Seidel over the DSM modules, then objective and constraints.
 
         Each iterated block is solved to its own fixed point on the coupling
-        state before the next block runs; an outer loop closes the cross-module
-        coupling.  The predicate is Phase A's, on ``y``, at ``tau`` -- never
-        ``objf``/``conf``, which no single module determines (D14(c)).
+        state before the next block runs, at the one tolerance, and the
+        schedule then runs **exactly once**.  The predicate is the
+        coupling-state one, on ``y``, at ``tau`` -- never ``objf``/``conf``,
+        which no single module determines (D14(c)).
+
+        **There is no loop over schedule passes, and that is a decision rather
+        than an omission.**  Feed-forward partitioning asserts that nothing is
+        left to close between the blocks; an earlier revision paid for a
+        verification pass that checked the assertion in-loop, and A43
+        (st-trust-gap) measured that pass triggering a further one **zero times
+        in 91 888 evaluations**.  The user removed the arm that used it (D22)
+        and fixed one tolerance for every converger (D23), so the schedule runs
+        once and the assertion is checked outside the arm, by the uncharged
+        exit audit, which every arm pays for equally and none pays for twice.
 
         Raises
         ------
         ModuleSolveFailure
-            if an inner solve, the outer loop or the global block budget hits
-            its cap.  Decision **D15(d)**: a failed per-module solve raises and
-            counts as a failed start, so the arms' failure modes are comparable.
+            if a block loop or the global block budget hits its cap.  Decision
+            **D15(d)**: a failed block solve raises and counts as a failed
+            start, so the arms' failure modes are comparable.
         """
         if self.data.stellarator.istell != 0 or self.data.ife.ife != 0:
             raise module_solve.ModuleSolveFailure(
-                "PROCESS_ARCH_MODULE_SOLVE is a tokamak-only variant point: "
+                "PROCESS_ARCH_MDA is a tokamak-only variant point: "
                 "the stellarator and IFE paths return from _call_models_once "
                 "before any node the DSM partition names, so a block schedule "
                 "over them would be a schedule over nothing."
@@ -1068,23 +1122,23 @@ class Caller:
             self._ysubsets, _ = module_solve.load_subsets(self._yspec)
         spec = self._yspec
         subsets = self._ysubsets
+        # One tolerance, for every block loop of every arm (D23).  The switch
+        # that used to set a second, "inner" one is retired: comparisons are
+        # made at matched *achieved* accuracy, which the exit audit records per
+        # run, not at matched settings.
         tau = module_solve.TAU
 
-        inner_tau = module_solve.INNER_TAU
-
         schedule, tail = module_schedule(self.data.numerics.i_figure_merit)
-        # A26 §10, item 1: with one block covering every in-loop node the outer
-        # residual test asks exactly what the block's own inner test has just
-        # answered, and paying it costs one extra full sweep per call.  The
-        # condition is evaluated from the schedule that was actually built, not
-        # from the arm name, so an arm whose schedule stops being a single
-        # block stops taking the guard.
+        # Recorded, not acted on: whether one block covers every in-loop node.
+        # Evaluated from the schedule that was actually built rather than from
+        # the arm's name, so a run record says what the schedule was.
         single_block = _single_block_covers_loop(schedule, tail)
         bound = spec.bind(self.data)
         read = spec.read
 
-        # VP4 never uses VP2's deferral list: under a block schedule the tail
-        # is a block, run once after the outer fixed point.
+        # The block schedule never uses the per-call deferral's pending list:
+        # under a block schedule the deferred tail is a block, run once at the
+        # end of the schedule.
         self._pending = None
 
         # A31 (drift-diagnostic): the joint-test trace's call index.  With
@@ -1092,15 +1146,13 @@ class Caller:
         # never computed and no hook below runs — neutrality is gated against
         # A28's recorded counts (protocol §12), not asserted.
         trace_call = (
-            MODULE_SOLVE_TOTALS["n_call_models"] + 1
+            MDA_TOTALS["n_call_models"] + 1
             if module_solve.TRACE_ENABLED
             else 0
         )
 
-        y_outer_prev = read(bound)
         block_sweeps = 0
         inner_counts: dict[str, list[int]] = {lab: [] for lab, _n, _i in schedule}
-        outer_trace: list[dict] = []
         moved_constants: set = set()
 
         def charge() -> None:
@@ -1113,118 +1165,71 @@ class Caller:
                     f"tau={tau:g}"
                 )
 
-        converged = False
-        outer = 0
-        for outer in range(1, module_solve.OUTER_CAP + 1):
-            for label, nodes, iterate in schedule:
-                if not nodes:
-                    inner_counts[label].append(0)
-                    continue
-                if not iterate:
-                    charge()
-                    self._sweep_block(xc, nodes)
-                    inner_counts[label].append(1)
-                    continue
-                # The inner test is restricted to the module's own write set,
-                # as Phase A's block arm restricts it.  Not an optimisation:
-                # ``ystate``'s predicate scores any component that is not
-                # float-viewable in *either* snapshot as ``inf``, and in a
-                # fresh process that is every field no model has written yet --
-                # so an unrestricted inner test is held open for ever by a
-                # field the running module cannot touch.
-                subset = subsets.get(label)
-                y_prev = read(bound)
-                inner_ok = False
-                s = 0
-                for s in range(1, module_solve.INNER_CAP + 1):
-                    charge()
-                    self._sweep_block(xc, nodes)
-                    y = read(bound)
-                    res = spec.residual(y_prev, y, subset=subset)
-                    moved_constants |= {
-                        spec.name(i) for i in res.moved_constant
-                    }
-                    # A31: under the single-block guard the outer test below
-                    # is skipped, so THIS residual is the joint test — the
-                    # flat arm's movement lives here.  Full snapshots: the
-                    # single block has no subset in the write-set artifact.
-                    if module_solve.TRACE_ENABLED and single_block:
-                        module_solve.trace_pass(
-                            "flat_inner", trace_call, s, spec, y_prev, y,
-                            res, tau,
-                        )
-                    y_prev = y
-                    if res.converged(inner_tau):
-                        inner_ok = True
-                        break
-                inner_counts[label].append(s)
-                if not inner_ok:
-                    self.module_solve_stats = self._module_stats(
-                        block_sweeps, outer, inner_counts, outer_trace,
-                        moved_constants, converged=False, cap_hit="inner",
-                        tail=tail, single_block=single_block,
-                        inner_tau=inner_tau,
+        # The schedule runs once.  ``schedule_passes`` is kept as a name and as
+        # a recorded quantity because the run record publishes the distribution
+        # of it, and a constant 1 is a statement -- "the schedule was not
+        # repeated in this run" -- where a missing field would be a silence.
+        schedule_passes = 1
+        for label, nodes, iterate in schedule:
+            if not nodes:
+                inner_counts[label].append(0)
+                continue
+            if not iterate:
+                charge()
+                self._sweep_block(xc, nodes)
+                inner_counts[label].append(1)
+                continue
+            # A block loop's test is restricted to that block's own write set,
+            # as the evaluation phase's block arm restricts it.  Not an
+            # optimisation: the coupling-state predicate scores any component
+            # that is not float-viewable in *either* snapshot as ``inf``, and
+            # in a fresh process that is every field no model has written yet
+            # -- so an unrestricted test is held open for ever by a field the
+            # running block cannot touch.
+            subset = subsets.get(label)
+            y_prev = read(bound)
+            inner_ok = False
+            s = 0
+            for s in range(1, module_solve.INNER_CAP + 1):
+                charge()
+                self._sweep_block(xc, nodes)
+                y = read(bound)
+                res = spec.residual(y_prev, y, subset=subset)
+                moved_constants |= {
+                    spec.name(i) for i in res.moved_constant
+                }
+                # A31: with one block covering every in-loop node, THIS
+                # residual is the joint test -- the flat arrangement's movement
+                # lives here.  Full snapshots: the single block has no subset
+                # in the write-set artifact.
+                if module_solve.TRACE_ENABLED and single_block:
+                    module_solve.trace_pass(
+                        "flat_inner", trace_call, s, spec, y_prev, y,
+                        res, tau,
                     )
-                    _roll_up(self.module_solve_stats)
-                    raise module_solve.ModuleSolveFailure(
-                        f"module {label} did not converge in "
-                        f"{module_solve.INNER_CAP} inner sweeps at "
-                        f"inner_tau={inner_tau:g}; max scaled residual "
-                        f"{res.max:g} on {res.brief(inner_tau)['argmax']}, "
-                        f"{res.n_above(inner_tau)} components above inner_tau"
-                    )
-            if single_block:
-                # The block's own inner test has just compared two successive
-                # full sweeps over the whole coupling vector at ``tau``.  The
-                # outer test would compare the same index set by the same rule;
-                # running it compares the *entry* state instead and therefore
-                # always fails once, buying one wasted sweep.
-                converged = True
-                break
-            # A34 (trust mode): with PROCESS_ARCH_OUTER=trust the schedule has
-            # now run exactly once -- every iterated block converged at its
-            # own inner tolerance -- and the outer joint predicate below is
-            # never evaluated: no outer pass 2, no verification receipt.
-            # ``outer`` stays 1, so the run record's outer_pass_hist shows
-            # {1: n} and a tally can see the mode.  Whether the feed-forward
-            # assertion held is measured by the uncharged exit audit, outside
-            # the arm.  With the variable unset TRUST_OUTER is False and this
-            # is one attribute read per outer pass -- neutrality gated against
-            # A32's record (protocol 12), not asserted.
-            if module_solve.TRUST_OUTER:
-                converged = True
-                break
-            y = read(bound)
-            res = spec.residual(y_outer_prev, y)
-            outer_trace.append(res.brief(tau))
-            moved_constants |= {spec.name(i) for i in res.moved_constant}
-            # A31 (drift-diagnostic): record this joint-test evaluation —
-            # which components moved past tau across the pass, before/after
-            # as hex floats — before y_outer_prev is overwritten.
-            if module_solve.TRACE_ENABLED:
-                module_solve.trace_pass(
-                    "outer", trace_call, outer, spec, y_outer_prev, y,
-                    res, tau,
+                y_prev = y
+                if res.converged(tau):
+                    inner_ok = True
+                    break
+            inner_counts[label].append(s)
+            if not inner_ok:
+                self.module_solve_stats = self._module_stats(
+                    block_sweeps, schedule_passes, inner_counts,
+                    moved_constants, converged=False, cap_hit="block",
+                    tail=tail, single_block=single_block,
                 )
-            y_outer_prev = y
-            if res.converged(tau):
-                converged = True
-                break
+                _roll_up(self.module_solve_stats)
+                raise module_solve.ModuleSolveFailure(
+                    f"block {label} did not converge in "
+                    f"{module_solve.INNER_CAP} sweeps at tau={tau:g}; max "
+                    f"scaled residual {res.max:g} on "
+                    f"{res.brief(tau)['argmax']}, {res.n_above(tau)} "
+                    f"components above tau"
+                )
 
-        if not converged:
-            self.module_solve_stats = self._module_stats(
-                block_sweeps, outer, inner_counts, outer_trace,
-                moved_constants, converged=False, cap_hit="outer", tail=tail,
-                single_block=single_block, inner_tau=inner_tau,
-            )
-            _roll_up(self.module_solve_stats)
-            raise module_solve.ModuleSolveFailure(
-                f"the outer loop over modules did not converge in "
-                f"{module_solve.OUTER_CAP} passes at tau={tau:g}"
-            )
-
-        # VP2 inside VP4: the feed-forward tail runs once, on the converged
-        # state.  Charged like any other block sweep.
+        # The per-call deferral inside the block schedule: the feed-forward
+        # tail runs once, on the state the schedule left.  Charged like any
+        # other block sweep.
         if tail:
             charge()
             self._sweep_block(xc, tail)
@@ -1237,31 +1242,35 @@ class Caller:
             _idf_probe.objective_end()
 
         self.module_solve_stats = self._module_stats(
-            block_sweeps, outer, inner_counts, outer_trace, moved_constants,
+            block_sweeps, schedule_passes, inner_counts, moved_constants,
             converged=True, cap_hit=None, tail=tail,
-            single_block=single_block, inner_tau=inner_tau,
+            single_block=single_block,
         )
         _roll_up(self.module_solve_stats)
         return objf, conf
 
     @staticmethod
     def _module_stats(
-        block_sweeps, outer, inner_counts, outer_trace, moved_constants,
-        *, converged, cap_hit, tail, single_block=False, inner_tau=None,
+        block_sweeps, schedule_passes, inner_counts, moved_constants,
+        *, converged, cap_hit, tail, single_block=False,
     ) -> dict:
-        """The block schedule's own counts, for the run record."""
+        """The block schedule's own counts, for the run record.
+
+        ``outer_passes`` keeps its name: it is the key the committed
+        reproduction reference and every earlier record use for the number of
+        schedule passes, and renaming a recorded field is a change to the
+        record schema rather than to the driver.  It is 1 in every arm.
+        """
         return {
             "converged": converged,
             "cap_hit": cap_hit,
-            "single_block_outer_test_skipped": bool(single_block),
-            "inner_tau": inner_tau,
+            "single_block_covers_loop": bool(single_block),
             "block_sweeps": block_sweeps,
-            "outer_passes": outer,
+            "outer_passes": schedule_passes,
             "inner_counts": {k: list(v) for k, v in inner_counts.items()},
             "inner_totals": {k: sum(v) for k, v in inner_counts.items()},
-            "outer_residual_trace": outer_trace,
             "moved_constants": sorted(moved_constants),
-            "hoisted_tail": sorted(tail),
+            "deferred_tail": sorted(tail),
         }
 
     def call_models(self, xc: np.ndarray, m: int) -> tuple[float, np.ndarray]:
@@ -1308,17 +1317,17 @@ class Caller:
         of its own.
         """
         # VP2c: resolve (and on first use validate) the post-solve exclusion
-        # set.  With the switch off ``_post_solve`` stays ``None`` and nothing
+        # set.  With the switch off ``_defer_per_run`` stays ``None`` and nothing
         # below this line differs.
-        if POST_SOLVE_ENABLED:
-            self._post_solve = _post_solve_nodes(self.data)
+        if DEFER_PER_RUN_ENABLED:
+            self._defer_per_run = _defer_per_run_nodes(self.data)
 
         # VP4: the block schedule replaces the flat loop entirely -- including
         # its predicate, which decision D14(c) requires: a per-module solver
         # cannot test a global objective, because one module does not determine
         # it.  With VP4 off nothing below this line differs from upstream.
-        if MODULE_SOLVE_ENABLED:
-            objf, conf = self._call_models_by_module(xc, m)
+        if MDA_ENABLED:
+            objf, conf = self._call_models_partitioned(xc, m)
             if _idf_probe.ENABLED:
                 _idf_probe.call_models_end()
             return objf, conf
@@ -1326,14 +1335,17 @@ class Caller:
         objf_prev = None
         conf_prev = None
 
-        # VP2: with the hoist on, the feed-forward nodes are collected instead
-        # of run, and the last sweep's collection is run once the loop has
-        # settled.  With the hoist off ``_pending`` stays ``None`` and nothing
-        # below this line differs from upstream.
-        if HOIST_ENABLED:
-            self._hoist_pre, self._hoist_post = self._resolve_hoist_tails()
-            self._hoist_tail = self._hoist_pre | self._hoist_post
-            pending: list | None = [] if self._hoist_tail else None
+        # VP2: with the per-call deferral on, the feed-forward nodes are
+        # collected instead of run, and the last sweep's collection is run once
+        # the loop has settled.  With it off ``_pending`` stays ``None`` and
+        # nothing below this line differs from upstream.
+        if DEFER_PER_CALL_ENABLED:
+            (
+                self._defer_per_call_pre,
+                self._defer_per_call_post,
+            ) = self._resolve_defer_per_call_tails()
+            self._deferred_tail = self._defer_per_call_pre | self._defer_per_call_post
+            pending: list | None = [] if self._deferred_tail else None
         else:
             pending = None
 
@@ -1380,10 +1392,10 @@ class Caller:
                 # it is one call to ``objective_function`` and one to
                 # ``constraint_eqns``, on a state that has just converged.
                 if pending:
-                    pre = [t for t in pending if t[0] in self._hoist_pre]
-                    post = [t for t in pending if t[0] not in self._hoist_pre]
+                    pre = [t for t in pending if t[0] in self._defer_per_call_pre]
+                    post = [t for t in pending if t[0] not in self._defer_per_call_pre]
                     if pre:
-                        self._run_hoisted_tail(pre)
+                        self._run_deferred_tail(pre)
                         if _idf_probe.ENABLED:
                             _idf_probe.objective_begin()
                         objf = objective_function(
@@ -1395,7 +1407,7 @@ class Caller:
                         if _idf_probe.ENABLED:
                             _idf_probe.objective_end()
                     if post:
-                        self._run_hoisted_tail(post)
+                        self._run_deferred_tail(post)
                 if _idf_probe.ENABLED:
                     _idf_probe.call_models_end()
                 return objf, conf
@@ -1439,7 +1451,8 @@ class Caller:
         # mfiles at this stage
         previous_mfile_data = None
 
-        # VP2: the hoist applies to the optimiser's evaluation path only.
+        # VP2: the per-call deferral applies to the optimiser's evaluation path
+        # only.
         # This is the final-output path, where ``models.write`` re-enters every
         # model's ``run()`` from its ``output()`` anyway (trap T7), so nothing
         # is deferred here.
@@ -1577,22 +1590,23 @@ class Caller:
         # head of the sweep, so Build (which the schedule runs before
         # FirstWall) reads this pass's value instead of the previous
         # pass's.  Not a node, not routed through _node, not counted in
-        # NODE_CALLS -- stamped via PRIME_CALLS (see the module-level
+        # NODE_CALLS -- stamped via ARRANGEMENT_METHOD_CALLS (see the module-level
         # comment).  Because it sits here, it is on every path that walks
         # the model sequence: the flat loop, every VP4 block sweep
         # (Caller._sweep_block runs blocks through this method), the
         # output phase and the exit audit (harmless, idempotent -- the
         # write is the same run-constant every time).
-        if PRIME_FW_GEOMETRY:
-            PRIME_CALLS[0] += 1
+        if ARRANGEMENT_METHOD_FW_GEOMETRY:
+            ARRANGEMENT_METHOD_CALLS[0] += 1
             self.models.fw.set_fw_geometry()
 
         # Tokamak calls
         # Plasma geometry model, machine build model (radial build) and
         # physics.  Their relative order is the VP1 variant point; see
-        # SEQUENCE_HEAD at module level.  With PROCESS_ARCH_SEQUENCE unset
+        # ARRANGEMENT_NODE_HEAD at module level.  With
+        # PROCESS_ARCH_ARRANGEMENT_NODE unset
         # this is plasma_geom, build, physics -- the upstream order.
-        for _head_node in SEQUENCE_HEAD:
+        for _head_node in ARRANGEMENT_NODE_HEAD:
             self._node(_head_node, getattr(self.models, _head_node).run)
 
         # Toroidal field coil model
@@ -1626,7 +1640,7 @@ class Caller:
 
         # Pulsed reactor model.  Deferrable (VP2): ``pulse`` is the
         # articulation point and joins the feed-forward tail only once the
-        # burn-time coupler is lifted out of the loop.
+        # burn time is out of the loop.
         self._node("pulse", self.models.pulse.run)
 
         self._node("divertor", self.models.divertor.run)
@@ -1708,12 +1722,12 @@ class Caller:
 
         # FISPACT and LOCA model (not used)- removed
 
-        # A34 (pin instrument): the tripwire.  A pinned burn time that any
-        # model call moved is named at the sweep that moved it -- a check,
-        # never a re-pin, because re-forcing the value would mask the writer.
-        # Dead branch with the pin unset.
-        if subsolve.PIN_ENABLED:
-            subsolve.assert_burn_time_pinned(self.data)
+        # A34: the tripwire.  A constant-owned burn time that any model call
+        # moved is named at the sweep that moved it -- a check, never a
+        # rewrite, because re-forcing the value would mask the writer.  Dead
+        # branch unless a constant owns the burn time.
+        if subsolve.CONSTANT_OWNS_BURN_TIME:
+            subsolve.assert_burn_time_constant(self.data)
 
         if _idf_probe.ENABLED:
             _idf_probe.sweep_end()
@@ -1851,14 +1865,14 @@ def write_output_files(
     # accepted x, sweep); it is counted in ``node_calls_total`` but lands
     # after the solve-phase counter was frozen above, so the skipped nodes'
     # own calls are visible in the total and absent from the solve phase.
-    # ``caller`` here never enters ``call_models``, so its ``_post_solve`` is
+    # ``caller`` here never enters ``call_models``, so its ``_defer_per_run`` is
     # ``None`` and the exclusion does not apply to this sweep -- nor to the
     # output phase below, which re-runs every model to MFILE idempotence
     # exactly as upstream does.
-    if POST_SOLVE_ENABLED:
-        ps = _post_solve_nodes(data)
-        POST_SOLVE_TOTALS["executed_once"] = sorted(ps)
-        POST_SOLVE_TOTALS["executed_once_at_node_calls"] = NODE_CALLS[0]
+    if DEFER_PER_RUN_ENABLED:
+        ps = _defer_per_run_nodes(data)
+        DEFER_PER_RUN_TOTALS["executed_once"] = sorted(ps)
+        DEFER_PER_RUN_TOTALS["executed_once_at_node_calls"] = NODE_CALLS[0]
         if ps:
             caller._sweep_block(x, ps)
     if runtime is not None:
