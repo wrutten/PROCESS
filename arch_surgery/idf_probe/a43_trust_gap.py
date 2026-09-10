@@ -1035,6 +1035,15 @@ def summarise_trace(path: Path, tau: float = 1e-6) -> dict:
         "n_constant_moved_total": 0,
         "n_nan_new_total": 0,
         "argmax_census": defaultdict(int),
+        # A residual of exactly 0.0 has no argmax: numpy's argmax over an
+        # all-zero array returns index 0, so the spec's FIRST component is
+        # reported as the mover on every such record.  On this deck that is
+        # blanket.deg_blkt_inboard_poloidal_plasma, and it is not moving.
+        # The two populations are counted apart so the artifact cannot be
+        # read as a finding (A31's lesson, one level down).
+        "argmax_census_nonzero": defaultdict(int),
+        "argmax_census_on_zero_residual": defaultdict(int),
+        "argmax_residuals": defaultdict(list),
         "above_census": defaultdict(int),
         "above_detail": [],
     })
@@ -1062,6 +1071,11 @@ def summarise_trace(path: Path, tau: float = 1e-6) -> dict:
         am = rec.get("argmax")
         if am:
             p["argmax_census"][am.get("key")] += 1
+            if rec["max"] == 0.0:
+                p["argmax_census_on_zero_residual"][am.get("key")] += 1
+            else:
+                p["argmax_census_nonzero"][am.get("key")] += 1
+                p["argmax_residuals"][am.get("key")].append(rec["max"])
         for c in rec.get("above") or []:
             p["above_census"][c.get("key")] += 1
             if len(p["above_detail"]) < 200:
@@ -1088,6 +1102,17 @@ def summarise_trace(path: Path, tau: float = 1e-6) -> dict:
             "n_nan_new_total": p["n_nan_new_total"],
             "argmax_census": dict(sorted(p["argmax_census"].items(),
                                          key=lambda kv: -kv[1])),
+            "n_records_with_nonzero_residual": sum(
+                p["argmax_census_nonzero"].values()),
+            "argmax_census_nonzero_residual": dict(sorted(
+                p["argmax_census_nonzero"].items(), key=lambda kv: -kv[1])),
+            "argmax_census_on_zero_residual": dict(sorted(
+                p["argmax_census_on_zero_residual"].items(),
+                key=lambda kv: -kv[1])),
+            "argmax_residual_stats_by_component": {
+                k: _stats(v) for k, v in sorted(
+                    p["argmax_residuals"].items(), key=lambda kv: -len(kv[1]))
+            },
             "above_census": dict(sorted(p["above_census"].items(),
                                         key=lambda kv: -kv[1])),
             "above_detail_first_200": p["above_detail"],
@@ -1706,6 +1731,9 @@ def stage_classify(out: Path) -> dict:
     pass2_max = []
     pass1_max = []
     argmax2: dict = defaultdict(int)
+    argmax2_nz: dict = defaultdict(int)
+    argmax2_zero: dict = defaultdict(int)
+    argmax2_mag: dict = defaultdict(list)
     argmax1: dict = defaultdict(int)
     above2: dict = defaultdict(int)
     for row in trace.get("per_run", []):
@@ -1735,6 +1763,16 @@ def stage_classify(out: Path) -> dict:
                 pass2_max.append(p["residual_max"])
                 for k, v in p["argmax_census"].items():
                     argmax2[k] += v
+                for k, v in (p.get("argmax_census_nonzero_residual")
+                             or {}).items():
+                    argmax2_nz[k] += v
+                for k, v in (p.get("argmax_census_on_zero_residual")
+                             or {}).items():
+                    argmax2_zero[k] += v
+                for k, st in (p.get("argmax_residual_stats_by_component")
+                              or {}).items():
+                    if st.get("n"):
+                        argmax2_mag[k].append(st)
                 for k, v in p["above_census"].items():
                     above2[k] += v
     tot["n_calls_traced"] = tot["n_pass1"]
@@ -1897,6 +1935,25 @@ def stage_classify(out: Path) -> dict:
         "pass_ge2_residual_max_pooled": _pooled(pass2_max),
         "pass1_argmax_census": _classify(argmax1),
         "pass_ge2_argmax_census": _classify(argmax2),
+        "pass_ge2_n_records_with_zero_residual": sum(argmax2_zero.values()),
+        "pass_ge2_n_records_with_nonzero_residual": sum(argmax2_nz.values()),
+        "pass_ge2_argmax_census_on_zero_residual": _classify(argmax2_zero),
+        "pass_ge2_argmax_census_nonzero_residual": [
+            {**row,
+             "residual_min": min(st["min"] for st in argmax2_mag[row["component"]]),
+             "residual_max": max(st["max"] for st in argmax2_mag[row["component"]]),
+             "n_weighted_mean_of_run_medians": (
+                 sum(st["median"] * st["n"] for st in argmax2_mag[row["component"]])
+                 / sum(st["n"] for st in argmax2_mag[row["component"]]))}
+            for row in _classify(argmax2_nz)
+            if row["component"] in argmax2_mag],
+        "zero_residual_argmax_note": (
+            "a residual of exactly 0.0 has no argmax: numpy's argmax over an "
+            "all-zero array returns index 0, so the spec's FIRST component is "
+            "named on every such record.  On this deck that is "
+            "blanket.deg_blkt_inboard_poloidal_plasma and it is not moving.  "
+            "The two populations are reported apart; only the non-zero one "
+            "is a census of movers."),
         "pass_ge2_above_tau_census": _classify(above2),
         "static_export_join": static,
         "ladder": ladder_rows,
@@ -2239,15 +2296,34 @@ def stage_tables(out: Path) -> dict:
                 f"{_fmt(s['n_weighted_mean_of_run_p90s'])} | "
                 f"{_fmt(s['max_of_run_maxima'])} |")
         md.append("")
-        md.append("**Pass ≥ 2 argmax census** (which component carries the "
-                  "residual maximum; not the same question as which "
-                  "components are above tau — A31 showed the argmax was an "
-                  "innocent bystander on 89 % of its records):\n")
-        md.append("| component | records | writing block |")
-        md.append("|---|---|---|")
-        for r in c["pass_ge2_argmax_census"][:15]:
-            md.append(f"| `{r['component']}` | {_fmt(r['n_records'])} | "
-                      f"{', '.join(r['writing_block_from_committed_write_subsets']) or '—'} |")
+        md.append(
+            f"**Pass \u2265 2 argmax census.** Of the "
+            f"{_fmt(c['pass_ge2_n_records_with_zero_residual'] + c['pass_ge2_n_records_with_nonzero_residual'])} "
+            f"pass-2 records, "
+            f"**{_fmt(c['pass_ge2_n_records_with_zero_residual'])}** have a "
+            f"residual of **exactly 0.0** \u2014 the second pass moved the "
+            f"state by not one bit \u2014 and those records have no argmax: "
+            f"numpy's `argmax` over an all-zero array returns index 0, so the "
+            f"spec's first component "
+            f"(`blanket.deg_blkt_inboard_poloidal_plasma`) is named on every "
+            f"one of them and is not moving. The census below is over the "
+            f"**{_fmt(c['pass_ge2_n_records_with_nonzero_residual'])}** "
+            f"records that did move. Which component holds the maximum is "
+            f"not the same question as which components are above tau \u2014 "
+            f"A31 showed the argmax was an innocent bystander on 89 % of its "
+            f"records \u2014 and here the answer to the second question is "
+            f"*none*.\n")
+        md.append("| component | records | share | writing block | "
+                  "residual: n-weighted mean of run medians | max |")
+        md.append("|---|---|---|---|---|---|")
+        nznz = c["pass_ge2_n_records_with_nonzero_residual"] or 1
+        for r in c["pass_ge2_argmax_census_nonzero_residual"][:12]:
+            md.append(
+                f"| `{r['component']}` | {_fmt(r['n_records'])} | "
+                f"{100.0 * r['n_records'] / nznz:.2f} % | "
+                f"{', '.join(r['writing_block_from_committed_write_subsets']) or '—'} | "
+                f"{_fmt(r['n_weighted_mean_of_run_medians'])} | "
+                f"{_fmt(r['residual_max'])} |")
         md.append("")
 
     # T5b per-seed pass-2 census
