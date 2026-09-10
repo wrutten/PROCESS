@@ -467,3 +467,61 @@ denominator and teeth. The comparison populations are identical at all three com
   preflight READY (exit 0) against the repository tree and NOT READY (exit 3) against the copy.
   Trunk was **not** merged into this branch: the amended plan strings were read from the main
   checkout and transcribed.
+
+---
+
+## 10. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `8cbd7e78` and the
+package on the same branch. Load-bearing claims re-run, not taken from the report; the five
+pre-merge rulings of §4.3 were mine, made at the first-round assessment of `2e078e94`.*
+
+**Verified independently.** (1) `harness/selfcheck.py --tree repository --crosscheck-previous`
+re-run into a fresh JSON record: five checks PASS, 25 / 98 / 22 / 4 / 17 compared, 0 mismatched,
+15 teeth, 15 tripped — run twice on this branch, before and after the rulings (14 → 15 teeth).
+(2) Both preflights: the default target (the copy, absent on this branch) NOT READY, exit 3, 21
+missing artifact entries named, no fallback; `--tree repository` READY, exit 0, with the campaign
+section refusing that tree as not the experiment's copy. (3) The regenerated matrix prints
+`input file ⁺ | committed … lifted` and `output-time loop | n/a n/a n/a n/a upstream upstream none
+none`, the exact strings of the amended plan §3.2 (trunk `6f3c8e3a`); the `B0 → B1` rung prints
+the completed wording. (4) Scope: `f2dc9243..8cbd7e78` is nine files, all under `…_v4/` plus this
+report; nothing under `process/`, `idf_probe/`, `fixedpoint/`, `…_v2/` or `…_v3/`. (5)
+Vocabulary: no "deck" or "scenario" remains outside heritage mentions, the README's "replaces"
+column and V3's own identifier inside the subprocess cross-check; one comment still reads "frozen
+input file" (`config.py:64`) and is corrected at the merge by the orchestrator, one word. (6)
+Names: no task or version token in any file, class or function.
+
+**Endorsed.** One composition (`Arm.terms()`) instead of V3's two drifting chains, with the
+previous revision's composition reproduced switch for switch on all 17 shared pairs and then
+cross-checked against V3's own code in a subprocess. Capability measured by importing the driver
+in a child and reading back what it resolved, with refuse-never-degrade for a switch no tree
+implements — the concrete consequence, that `B1` and `B3` cannot run until DR2 lands, stated
+rather than hidden. `Campaign.is_experiment_copy` closes the one route by which a V4 record could
+have been made against the repository-root tree. The exact-tree assertion is equality and never
+reads `__version__`. The run budget (275 + 418 + 275) is derived from the configuration list and
+reproduces §3.10, which checks both.
+
+**Limits I hold it to.** (a) The capability probe has not yet run against the copy: on this branch
+the copy is absent, and on trunk the per-run deferral artifacts are absent until A48
+(harness-data) lands — the copied driver checks that path at import (`caller.py:481`), so the
+probe against the copy will refuse `A1` until then. The first PASS of the self-check against the
+production target is A48's to show; the pre-A48 state is recorded at the merge. (b) The cross-check
+against V3 executes code from the frozen `…_v3/` directory in a subprocess; it is opt-in and not a
+gate, and stays acceptable only on that footing — the harness's gates import nothing from outside
+`harness/`. (c) `selfcheck.Check` is not yet the plan's `Gate`/`Tooth` pair; H5 promotes it.
+(d) The two artifact naming schemes mark opposite members of the per-run pair (§4.2), a deliberate
+consequence of making the committed input file the unmarked default; A48 maps by role, which
+`config.artifact_file_names()` gives it. (e) Both `--crosscheck-previous` and `--tree repository`
+read the repository's `docs/data/`; once A48 lands the production self-check reads `harness/data/`,
+and the two must agree by sha256 — A48's gate.
+
+**Consequences drawn (orchestrator, today).** A48 (harness-data) is dispatched off the merged tip
+with §4.2's sixteen files under the names fixed here, `harness/ystate.py`, and the two one-line
+copy edits; A49 (harness-reference) is minted for H2 and dispatched in parallel —
+`switches.PREVIOUS_ARM_NAMES` and `RETIRED_ARM_NAMES` are the map it uses. Run directories are
+named `seed001` (harness plan §11.2 makes "seed" the word in both phases; ruled here and recorded
+in the harness plan for the run-path task).
+
+**Verdict.** Fit to merge; nothing returned. The skeleton is what the plan asked for —
+configurations as a list, the matrix as data, capability measured, refusals as records — and its
+own checks have been shown able to fail.
