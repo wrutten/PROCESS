@@ -18,9 +18,39 @@ Two claims are made and both are checked rather than asserted:
 
 ``harness/ystate.py`` is recorded here too.  It is code, not data, but it was
 moved by the same task and under the same rule, and the claim about it has the
-same shape: the file with its heritage paragraph removed is byte-identical to
-its source.  The paragraph is recorded as an expected hunk, exactly the way
-``PROCESS/copy_gates.py`` records the permitted edits to the copied driver.
+same shape as the one ``PROCESS/copy_gates.py`` makes about the copied driver:
+**the file's whole diff against its source at the source commit is exactly the
+recorded hunks, and its post-edit sha256 is the recorded one.**
+
+That criterion is a **re-basing**, made by task A59 (driver-predicate-mode) and
+recorded here rather than in a commit message.  A48 (harness-data) moved the
+module whole and added one paragraph, so the check it could make was the
+strongest available: remove the recorded paragraph and the remainder is
+byte-identical to the source.  A59 implements driver change DR5 in this module
+--- the convergence predicate's second ruler --- so the module is no longer the
+source plus a paragraph, and that reconstruction test is no longer available.
+Two ways out were possible and only one of them is honest: drop the check, or
+re-base it on the model the copied driver already uses, where an edit is legal
+because it is **recorded and reviewable** rather than because it is absent.  The
+second is what is done.  Concretely:
+
+* every hunk of the diff is recorded in ``harness/data/PROVENANCE.json``, and a
+  file whose diff is not exactly those hunks **fails** --- so an edit nobody
+  recorded is refused as before;
+* the post-edit sha256 is recorded too, so an edit that updated the hunks and
+  not the digest fails, and one that updated the digest and not the hunks fails;
+* each recorded edit carries what it is, what it does and which task made it
+  (:data:`MODULE_EDITS`), so the hunks can be read against a claim instead of
+  merely being present;
+* where the recorded hunks *are* a pure addition, the old reconstruction test
+  still runs and is still required.  It is not weakened where it applies; it is
+  only unavailable where it cannot apply, and the record says which of the two
+  held.
+
+What is **not** weakened is the thing the check exists for: this revision of the
+experiment has exactly one implementation of the predicate (decision D14(c)),
+the copied driver loads *this* file by a fixed path, and an unrecorded edit to
+it still fails the gate.
 
 The mapping from a role to a file name is **not** decided here.  It is
 :func:`harness.config.artifact_file_names`, the same function the arms use to
@@ -48,6 +78,7 @@ Usage
     python harness/data_provenance.py verify      # compare, print, exit 0/1
     python harness/data_provenance.py plan        # the declared mapping only
     python harness/data_provenance.py copy --force --source-commit <sha>
+    python harness/data_provenance.py record --force   # re-record, copy nothing
 
 Exit status: 0 everything matches, 1 a comparison failed, 2 setup error.
 """
@@ -298,6 +329,58 @@ def source_bytes(item_source: str, commit: str | None) -> SourceBytes:
 # ---------------------------------------------------------------------------
 
 
+#: Every recorded change ``harness/ystate.py`` carries against its source, in
+#: the order the tasks made them.  This is documentation *of* the hunks, not a
+#: substitute for them: the check compares the hunks and the digest, and this
+#: list is what lets a reviewer read one against a claim.  Same model, same
+#: fields and the same purpose as ``PROCESS/copy_gates.py``'s ``PermittedEdit``.
+MODULE_EDITS: tuple[dict[str, str], ...] = (
+    {
+        "kind": "heritage paragraph",
+        "name": "the module docstring's Heritage section",
+        "description": (
+            "the module was moved whole out of the repository's research tree "
+            "into the experiment's own harness, and says so, with the reason "
+            "it was moved rather than imported"
+        ),
+        "task": "A48 (harness-data)",
+    },
+    {
+        "kind": "second ruler",
+        "name": "RULER_FROZEN / RULER_MIXED / RULERS, and the ruler argument",
+        "description": (
+            "the convergence predicate's denominator becomes an argument.  "
+            "'frozen' is max|dy_i| / s_i -- the measured scale alone, every "
+            "earlier revision's ruler, the default here, and bit-for-bit "
+            "unchanged.  'mixed' is max|dy_i| / max(|y_i|, s_i), the "
+            "conventional scaled step with that scale kept as a floor under "
+            "the current magnitude, where |y_i| is the current value's "
+            "characteristic magnitude taken exactly as the scale was.  The two "
+            "are bit-identical wherever |y_i| <= s_i and 'mixed' is never "
+            "tighter, so no count can go up; discrete components, moved "
+            "constants, a new NaN, a changed non-finite pattern and an "
+            "unwritten component all behave identically under both.  A ruler "
+            "that is neither is refused, never defaulted around"
+        ),
+        "task": "A59 (driver-predicate-mode)",
+    },
+    {
+        "kind": "per-component reporting",
+        "name": "Residual.denominator / .magnitude / .bound_by / "
+                ".value_over_scale / .binding_components / .ruler_detail",
+        "description": (
+            "the residual says which term bound each component's denominator "
+            "and what |y_i| / s_i was there, so the set of components on which "
+            "the two rulers can disagree is read from the residual rather than "
+            "inferred.  brief()'s six keys are deliberately untouched: they are "
+            "compared value for value by the switch-neutrality gate, so the new "
+            "reporting is a separate method"
+        ),
+        "task": "A59 (driver-predicate-mode)",
+    },
+)
+
+
 def module_hunks(source: bytes, copy: bytes, label: str) -> list[str]:
     """The unified diff of the moved module, zero context, as a line list.
 
@@ -317,13 +400,32 @@ def module_hunks(source: bytes, copy: bytes, label: str) -> list[str]:
     ]
 
 
+def is_pure_addition(hunks: list[str]) -> bool:
+    """Whether the recorded diff is one hunk that only adds lines.
+
+    The reconstruction test below is available only then.  It is *not* the
+    identity criterion -- that is the hunks and the digest, as it is for the
+    copied driver -- but where it applies it is a second, independent way of
+    saying the same thing, and it is kept for exactly that reason.
+    """
+    headers = [line for line in hunks if line.startswith("@@")]
+    removals = [
+        line
+        for line in hunks
+        if line.startswith("-") and not line.startswith("---")
+    ]
+    return len(headers) == 1 and not removals
+
+
 def strip_recorded_hunk(copy_text: str, hunks: list[str]) -> str | None:
     """``copy_text`` with the recorded addition removed, or ``None``.
 
-    The recorded hunk must be a pure addition -- a heritage paragraph and
-    nothing else -- so removing it is well defined: drop the added lines at the
-    position the hunk header names.  Anything else in the diff and this returns
-    ``None``, which the caller reports as a failure rather than working around.
+    Applies only where :func:`is_pure_addition` holds: the recorded hunk is a
+    single pure addition -- a heritage paragraph and nothing else -- so removing
+    it is well defined.  Anything else and this returns ``None``; the caller
+    checks :func:`is_pure_addition` first and reports which of the two
+    criteria it was able to apply, rather than treating "cannot reconstruct" as
+    a failure of a file that never claimed to be reconstructible.
     """
     added: list[str] = []
     header: str | None = None
@@ -519,25 +621,52 @@ def verify(
             got_hunks = module_hunks(src.data, copy, module["source"])
             if got_hunks != module["expected_hunks"]:
                 res.failures.append(
-                    f"{module['name']}: the difference from its source is not "
-                    f"the recorded heritage paragraph"
+                    f"{module['name']}: its difference from "
+                    f"{module['source']} is not the recorded set of hunks "
+                    f"({len(got_hunks)} diff line(s) against "
+                    f"{len(module['expected_hunks'])} recorded).  An edit that "
+                    f"is not recorded is refused, whatever the digest says"
                 )
-            else:
+            elif is_pure_addition(module["expected_hunks"]):
+                # The recorded edit adds lines and removes none, so the
+                # stronger reconstruction claim is available and is required.
                 stripped = strip_recorded_hunk(copy.decode(), module["expected_hunks"])
                 if stripped is None or stripped.encode() != src.data:
                     res.failures.append(
-                        f"{module['name']}: with the recorded heritage "
-                        f"paragraph removed it is not byte-identical to "
-                        f"{module['source']}"
+                        f"{module['name']}: with the recorded addition removed "
+                        f"it is not byte-identical to {module['source']}"
                     )
                 else:
                     res.n_identical += 1
                     res.notes.append(
                         f"{module['name']}: {len(module['expected_hunks'])} "
-                        f"recorded diff line(s); with them removed the file is "
-                        f"byte-identical to {module['source']} "
-                        f"(sha256 {sha256(src.data)[:12]})"
+                        f"recorded diff line(s), a pure addition; with them "
+                        f"removed the file is byte-identical to "
+                        f"{module['source']} (sha256 {sha256(src.data)[:12]})"
                     )
+            else:
+                # The recorded edits change the module rather than only add to
+                # it, so the criterion is the copied driver's: the whole diff
+                # is exactly the recorded hunks and the post-edit digest is the
+                # recorded one.  Both were checked above; what is stated here
+                # is which criterion held and what the recorded edits claim to
+                # be, so a reader is not left to infer either.
+                res.n_identical += 1
+                res.notes.append(
+                    f"{module['name']}: {len(module['expected_hunks'])} "
+                    f"recorded diff line(s) in "
+                    f"{sum(1 for h in module['expected_hunks'] if h.startswith('@@'))} "
+                    f"hunk(s) against {module['source']} at the source commit, "
+                    f"and the post-edit sha256 is the recorded one.  The "
+                    f"recorded edits are not a pure addition, so the identity "
+                    f"criterion is the copied driver's -- exactly these hunks, "
+                    f"exactly this digest -- and not reconstruction of the "
+                    f"source: "
+                    + "; ".join(
+                        f"{e['kind']} ({e['task']})"
+                        for e in module.get("recorded_edits", ())
+                    )
+                )
 
     if campaign is not None:
         rows = declaration_checks(campaign, data_dir)
@@ -602,22 +731,46 @@ def build_provenance(commit: str, campaign: Campaign) -> dict:
 
     ystate_src = source_bytes(YSTATE_SOURCE, full)
     ystate_copy = YSTATE.read_bytes()
+    ystate_hunks = module_hunks(ystate_src.data, ystate_copy, YSTATE_SOURCE)
     module = {
         "what": (
             "The coupling-state predicate: which fields make up y, their "
-            "categories and scales, the residual and the convergence test in "
-            "both modes.  It is code, not data, and the copied driver loads it "
-            "by path (module_solve.YSTATE_MODULE_PATH).  Moved whole; the only "
-            "difference from the source is the heritage paragraph recorded "
-            "below, and with that paragraph removed the file is byte-identical "
-            "to the source."
+            "categories and scales, the residual, and the convergence test in "
+            "both of its rulers.  It is code, not data, and the copied driver "
+            "loads it by path (module_solve.YSTATE_MODULE_PATH).  Moved whole "
+            "out of the research tree, then changed by the approved driver "
+            "change DR5, which added the second ruler.  The identity claim is "
+            "the one the copied driver carries: the whole diff against the "
+            "source at the source commit is exactly the hunks recorded below, "
+            "and the post-edit sha256 is the one recorded below.  An edit "
+            "nobody recorded fails either way round -- stale hunks are caught "
+            "by the digest, a digest updated to match is caught by the hunks."
+        ),
+        "identity_criterion": (
+            "the recorded hunks and the post-edit sha256"
+            if not is_pure_addition(ystate_hunks)
+            else "the recorded hunks, the post-edit sha256, and reconstruction "
+                 "of the source by removing the recorded addition"
+        ),
+        "criterion_rebased_by": (
+            "A59 (driver-predicate-mode).  A48 (harness-data) moved the module "
+            "whole and added one paragraph, so it could require that removing "
+            "the paragraph reproduced the source byte for byte.  DR5 changes "
+            "the module, so that reconstruction is no longer available; the "
+            "criterion is re-based on the model PROCESS/copy_gates.py already "
+            "uses for the copied driver -- an edit is legal because it is "
+            "recorded and reviewable, not because it is absent -- and the "
+            "reconstruction test still runs wherever the recorded hunks are a "
+            "pure addition."
         ),
         "name": "harness/ystate.py",
         "source": YSTATE_SOURCE,
         "sha256_at_source_commit": sha256(ystate_src.data),
         "sha256_in_copy": sha256(ystate_copy),
         "lines_at_source_commit": ystate_src.data.decode().count("\n"),
-        "expected_hunks": module_hunks(ystate_src.data, ystate_copy, YSTATE_SOURCE),
+        "lines_in_copy": ystate_copy.decode().count("\n"),
+        "recorded_edits": [dict(edit) for edit in MODULE_EDITS],
+        "expected_hunks": ystate_hunks,
     }
 
     return {
@@ -714,7 +867,7 @@ def load_provenance() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=["verify", "plan", "copy"])
+    parser.add_argument("command", choices=["verify", "plan", "copy", "record"])
     parser.add_argument("--force", action="store_true", help="copy: overwrite")
     parser.add_argument(
         "--source-commit",
@@ -757,6 +910,35 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nwrote {PROVENANCE}")
         print(f"  source commit {prov['source']['commit_full']}")
         print(f"  {len(prov['files'])} files + {prov['module']['name']}")
+        return 0
+
+    if args.command == "record":
+        # Rebuild the record from the files as they stand, copying nothing.
+        # This is what a task that *edits* the predicate module runs: re-copying
+        # the data would re-bless whatever the sources hold, which is a far
+        # larger claim than the one being made.  The symmetry is deliberate --
+        # PROCESS/copy_gates.py's "provenance --force" does exactly this for the
+        # copied driver, and for the same reason.
+        if PROVENANCE.exists() and not args.force:
+            raise SystemExit(
+                f"{PROVENANCE} already exists.  Re-recording blesses whatever "
+                "harness/data/ and the predicate module currently hold, so it "
+                "needs --force and a reviewer who reads the resulting diff."
+            )
+        commit = args.source_commit
+        if commit is None:
+            commit = load_provenance()["source"]["commit_full"]
+        full = _git("rev-parse", commit).decode().strip()
+        prov = build_provenance(full, campaign)
+        PROVENANCE.write_text(json.dumps(prov, indent=2) + "\n")
+        print(f"wrote {PROVENANCE} (nothing copied)")
+        print(f"  source commit {prov['source']['commit_full']}")
+        print(f"  {len(prov['files'])} files + {prov['module']['name']}")
+        print(f"  module criterion: {prov['module']['identity_criterion']}")
+        print(f"  module hunks    : {len(prov['module']['expected_hunks'])} "
+              f"diff line(s), "
+              f"{sum(1 for h in prov['module']['expected_hunks'] if h.startswith('@@'))} "
+              f"hunk(s)")
         return 0
 
     prov = load_provenance()

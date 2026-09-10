@@ -1077,11 +1077,22 @@ def check_data(campaign: Campaign) -> Check:
     byte-identical to it.  Two comparisons, not one: the file's sha256 against
     the one the record carries, **and** the record's sha256 against the source
     read back from the commit -- so regenerating the record cannot be the way a
-    changed file becomes blessed.  The moved predicate module
-    ``harness/ystate.py`` is checked the same way, except that it is allowed to
-    differ from its source by exactly the heritage paragraph the record holds
-    as an expected hunk: the check removes that paragraph again and compares
-    the remainder byte for byte.
+    changed file becomes blessed.
+
+    The moved predicate module ``harness/ystate.py`` is checked on the criterion
+    the copied driver carries: its whole diff against its source at the recorded
+    commit must be exactly the hunks the record holds, **and** its post-edit
+    sha256 must be the recorded one.  Both directions are exercised below --- an
+    edit with stale hunks is caught by the digest, an edit whose digest was
+    updated to match is caught by the hunks.  Where the recorded hunks are a
+    *pure addition* the older and stronger claim still applies and is still
+    required: remove them again and the remainder is byte-identical to the
+    source.  That was the whole of the criterion until task A59
+    (driver-predicate-mode) implemented driver change DR5 in this module; the
+    re-basing, and why the reconstruction test cannot apply to a module that is
+    changed rather than only added to, is recorded in
+    ``harness/data_provenance.py``'s docstring and in the record itself
+    (``module.criterion_rebased_by``).
 
     The *campaign* argument selects the tree the rest of the self-check runs
     against and does not apply here: ``harness/data/`` is the experiment's own
@@ -1095,8 +1106,8 @@ def check_data(campaign: Campaign) -> Check:
         name="data",
         binds="every committed file the experiment reads is byte-identical to "
         "its source at the recorded commit, the file set matches exactly, and "
-        "the moved predicate module differs from its source only by the "
-        "recorded heritage paragraph",
+        "the predicate module differs from its source by exactly the recorded "
+        "hunks and carries the recorded post-edit digest",
         population=(
             f"{len(declared)} committed file(s) in harness/data/ + the moved "
             f"predicate module = {len(declared) + 1} comparisons; and "
@@ -1170,6 +1181,46 @@ def check_data(campaign: Campaign) -> Check:
                 )
                 what += ", and the record's sha256 updated to match it"
             broken = data_mod.verify(staged_prov, staged, campaign=None)
+            check.tooth(name, not broken.passed, what)
+
+    # --- the predicate module's own two teeth ------------------------------
+    #
+    # The module is allowed to differ from its source by the recorded hunks, so
+    # both halves of that permission have to be shown biting: an edit nobody
+    # recorded, and an edit whose recorded digest was updated to match it.  The
+    # second is the one that matters after A59 re-based the criterion --- it is
+    # exactly the move that would make an unrecorded change look blessed --- and
+    # it is caught by the hunks, which the digest cannot be updated to satisfy.
+    module_teeth: list[tuple[str, bool]] = [
+        ("an unrecorded edit to the predicate module", False),
+        (
+            "an edited predicate module whose recorded sha256 was updated to "
+            "match",
+            True,
+        ),
+    ]
+    for name, bless in module_teeth:
+        with tempfile.TemporaryDirectory() as td:
+            staged_module = Path(td) / "ystate.py"
+            raw = bytearray(data_mod.YSTATE.read_bytes())
+            # A comment character deep inside the file: a one-byte change that
+            # cannot alter what the module computes, so what the tooth proves
+            # is that the *check* is sensitive, not that the edit was harmful.
+            raw[3] = raw[3] ^ 0x20 if raw[3] != 0x20 else 0x09
+            staged_module.write_bytes(bytes(raw))
+            staged_prov = json.loads(json.dumps(prov))
+            what = "one byte of harness/ystate.py changed"
+            if bless:
+                staged_prov["module"]["sha256_in_copy"] = data_mod.sha256(
+                    staged_module.read_bytes()
+                )
+                what += ", and the record's sha256 updated to match it"
+            broken = data_mod.verify(
+                staged_prov,
+                data_mod.DATA_DIR,
+                ystate_path=staged_module,
+                campaign=None,
+            )
             check.tooth(name, not broken.passed, what)
     return check
 
