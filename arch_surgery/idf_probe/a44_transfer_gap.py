@@ -932,6 +932,37 @@ def stage_tally() -> int:
         d["delta_scan_monotone_increasing"] = (all(x is not None for x in scan)
                                                 and all(scan[i] < scan[i + 1] for i in range(len(scan) - 1)))
         rec["decks"][deck] = d
+    # Provenance of the probe's records: the runner and the process/ tree
+    # must not have changed since the runner's commit, whatever commit each
+    # record happens to stamp (the stage script may be edited and committed
+    # while a probe runs; the measuring code may not).  tree_git_dirty in the
+    # records counts UNTRACKED files (the draft report, the summary JSON), so
+    # the tracked-tree cleanliness is checked here separately.
+    def g(*args):
+        return subprocess.run(["git", "-C", str(TREE), *args], capture_output=True,
+                              text=True, timeout=60).stdout.strip()
+    heads = {}
+    dirty = {}
+    for deck in DECKS:
+        for m in (json.loads(f.read_text()) for f in (RUNS / deck).glob("*/*/*/metrics.json")):
+            h = (m.get("tree_git_head") or "?")[:8]
+            heads[h] = heads.get(h, 0) + 1
+            dirty[str(m.get("tree_git_dirty"))] = dirty.get(str(m.get("tree_git_dirty")), 0) + 1
+    runner_commit = g("log", "--format=%h", "-1", "--", "arch_surgery/idf_probe/a44_eval_one.py")
+    changed_since = g("log", "--format=%h", f"{runner_commit}..HEAD", "--",
+                      "process", "arch_surgery/idf_probe/a44_eval_one.py",
+                      "arch_surgery/docs/data", "arch_surgery/idf_probe/scenarios")
+    rec["probe_provenance"] = {
+        "record_heads": heads, "record_dirty_flags": dirty,
+        "runner_last_commit": runner_commit,
+        "commits_touching_measuring_code_since_runner_commit": changed_since.split() if changed_since else [],
+        "measuring_code_unchanged_across_probe": not changed_since,
+        "tracked_tree_clean_now": not g("status", "--porcelain", "--untracked-files=no"),
+        "untracked_now": g("status", "--porcelain").splitlines(),
+        "note": "tree_git_dirty in a record is git status --porcelain INCLUDING "
+                "untracked files (run_one._provenance); the probe's records were "
+                "stamped while the draft report and summary JSON were untracked",
+    }
     _dump(RUNS / "tally.json", rec)
     md = _tally_tables(rec, fac)
     (RUNS / "tally.md").write_text(md)
