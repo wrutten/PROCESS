@@ -1,12 +1,8 @@
 # A57 (driver-output-path) — the output path becomes a driver choice, and the exit audit moves to the position the plan declares
 
-> **Document status** — **OPEN**. Task report for **A57 (driver-output-path)**, on branch
-> `A57-driver-output-path`. Every number below was produced by a committed script in this branch,
-> and §2's table names the commit each gate ran at. The numbers are counts and bit comparisons; no
-> conclusion here rests on a timing. **Gate G1 failed once and the failure is reported in full**
-> (§7.4) — it exposed a defect in its own exclusion set, which was fixed and the gate re-run.
-> Archived to `deprecated/` at merge (protocol §7); folder position records lifecycle, not validity
-> (trap T3).
+> **Document status** — **MERGED, archived.** Task **A57 (driver-output-path)**, branch `A57-driver-output-path`
+> (retired) off `architecture_surgery` at `22bb8656`, merged on 2026-09-10 (`6c7c742e`); the orchestrator's
+> critical assessment (protocol §5) is §16. Folder position records lifecycle, not validity (trap T3).
 
 ---
 

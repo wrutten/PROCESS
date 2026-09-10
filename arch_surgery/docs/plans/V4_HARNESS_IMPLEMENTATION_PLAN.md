@@ -1293,6 +1293,19 @@ of what looks like bulk is the instrument.
   `numerics.i_figure_merit`, read at the driver's call site and written by no node; the read-census
   comparison publishes both constructions and binds on fields a node writes. The one-line `reads_by_node`
   addition to the probe's summary goes to A58. `harness/pool.py` gained a census entry point (+27).
+- **2026-09-10 — amendment 9, at the merge of A57 (driver-output-path): DR2 landed.** `PROCESS_ARCH_OUTPUT_LOOP
+  = upstream | none`; `output_loop_sweeps` and `output_path` on every optimisation record (the loop settles at
+  2 sweeps, 3 once). The exit audit is at §3.3's declared position on every campaign record through a snapshot hook
+  in the copy (a callable slot the measurement installs — the coupling state's definition stays in the harness, D14(c))
+  with a bit-exact restore proven before the audit; GR alone still audits `after_run`, where the previous revision
+  measured, and says so. GR's `pending_ok` allowance is replaced by a matrix-derived recorded override
+  (`output_loop = upstream` on `B1`/`B3`), refused for the campaign. G9 exists in `gates.py` (11 runs, 0/3 825
+  components). G1 failed once on its own exclusion set (the `_n` provenance counts) and was fixed and re-run —
+  reported, not hidden. §4.4's `audit_position` row is realised. A52 wires the three gates into the runner, passes
+  the per-run artifact and write sets to the optimisation-phase audit (`exit_audit.restricted`, then a G1 re-run
+  with one named exclusion) and reviews G1's 33-name exclusion set; A53 states the audit position in every residual
+  caption. Finding: `tfcoil.insstrain` ~7e-3 above τ at the accepted point on both pulsed configurations
+  (improvement list item 11, for the user).
 
 ---
 

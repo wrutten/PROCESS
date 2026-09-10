@@ -663,3 +663,16 @@ configuration.
 `module_solve.trace_pass` records an `argmax` component even when `res.max == 0.0`, so a reader
 can invent a mover where nothing moved (A43 §5.3 found and named the artifact). One-line fix in the
 V4 copy: `argmax: null` when the residual is exactly zero.
+
+### 11. `tfcoil.insstrain` above τ at the accepted point on the pulsed configurations *(A57 (driver-output-path), 2026-09-10 — for the user)*
+
+**Measured, not diagnosed.** With the exit audit at the plan's declared position (the entry to `write_output_files`, from a
+bit-exact snapshot), gate G9's seed-0 runs show exactly **one** restricted coupling-state component above τ = 1e-6 on both
+pulsed configurations, in `B1` and `B3` alike: `tfcoil.insstrain` at 7.12e-3 (`large_tokamak_nof`) and 7.02e-3
+(`low_aspect_ratio_DEMO`) scaled; `st_regression` has none (restricted max 1.6e-11). Identical between the flat and the
+partitioned arm on the same seed, so it is a property of the handed-over state at the lifted optimum, not of the partition.
+Candidate causes, none established: a genuinely unconverged coupling; a component whose measured scale is too small (the
+frozen ruler); a discontinuity in the TF-coil insulation-strain model at the accepted point. **Decision for the user:**
+diagnose before the campaign (one task: which node writes it, what it depends on, its scale in the coupling-state
+artifact, its behaviour over seeds), or let the campaign measure it and report it as the dominant term of the restricted
+statistic on those configurations. Until decided, G4 (A52) and the tally (A53) make it visible rather than average it away.
