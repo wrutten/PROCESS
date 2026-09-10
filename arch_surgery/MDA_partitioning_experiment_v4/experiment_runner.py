@@ -29,6 +29,10 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from harness import arms as arms_mod  # noqa: E402
+from harness import artifacts as artifacts_mod  # noqa: E402
+from harness import census as census_mod  # noqa: E402
+from harness import input_files as input_files_mod  # noqa: E402
+from harness import postsolve as postsolve_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
 from harness import records as records_mod  # noqa: E402
@@ -104,40 +108,20 @@ def stage_tree(campaign: Campaign) -> tuple[int, dict[str, Any]]:
 
 
 def stage_configurations(campaign: Campaign) -> tuple[int, dict[str, Any]]:
-    """Resolve every configuration and its committed artifacts.
+    """Resolve every configuration, then *check* every artifact it reads.
 
-    A missing artifact is reported, not fatal: some are produced by stages
-    that do not exist yet.  What *is* fatal is a configuration whose arms
-    cannot be composed, because that is a defect in the experiment's
-    description of itself rather than a file that has not been made.
+    The check is ``artifacts.check``, which **replaces** the existence-and-count
+    test this stage used to make.  The reason is worth stating: a file can
+    exist, carry the declared component count, and still have been built for a
+    different configuration, against a different component set, or from a
+    generation of the scales nobody can identify.  Each of those has a stamp,
+    and each stamp is now rebuilt and compared rather than assumed.  What is
+    kept from the old stage is the human summary — what each configuration is
+    and which arms it skips — because that is orientation, not verification.
     """
     _rule("configurations and artifacts")
-    missing: list[str] = []
     records = []
     for config in campaign.configurations:
-        entries = {
-            "input": config.input_path,
-            "coupling_state": config.coupling_state_path,
-            "write_sets": config.write_sets_path,
-            "defer_per_run": config.defer_per_run_path,
-            "defer_per_run_lifted": config.defer_per_run_lifted_path,
-            "node_write_sets": campaign.data_dir / "node_writesets.json",
-            "node_map": campaign.data_dir / "dsm_node_map.json",
-        }
-        found = {k: v.exists() for k, v in entries.items()}
-        absent = sorted(k for k, ok in found.items() if not ok)
-        missing.extend(f"{config.name}/{k}" for k in absent)
-        components = None
-        if found["coupling_state"]:
-            try:
-                components = json.loads(config.coupling_state_path.read_text()).get(
-                    "n_components"
-                )
-            except Exception as exc:  # noqa: BLE001 - reported, not raised
-                components = f"unreadable: {exc}"
-        agrees = (not found["coupling_state"]) or (
-            components == config.n_coupling_components
-        )
         kind = "pulsed" if config.pulsed else "steady state"
         print(
             f"  {config.name:24s} {kind:12s} "
@@ -148,20 +132,14 @@ def stage_configurations(campaign: Campaign) -> tuple[int, dict[str, Any]]:
             f"    {config.n_iteration_variables} variables, "
             f"{config.n_constraints} constraints, "
             f"{config.n_coupling_components} coupling-state components"
-            + ("" if agrees else f"  [artifact says {components}]")
         )
         for arm, why in config.skips.items():
             print(f"    skipped: {arm} — {why}")
-        if absent:
-            print(f"    MISSING: {', '.join(absent)}")
         records.append(
             {
                 "configuration": config.name,
                 "pulsed": config.pulsed,
-                "missing": absent,
-                "artifact_n_components": components,
                 "declared_n_components": config.n_coupling_components,
-                "components_agree": agrees,
                 "skips": dict(config.skips),
             }
         )
@@ -170,11 +148,19 @@ def stage_configurations(campaign: Campaign) -> tuple[int, dict[str, Any]]:
             f"  removed: {removal.configuration} — {removal.decision}, "
             f"{removal.date}: {removal.reason}"
         )
+    code, checked = artifacts_mod.check(campaign)
+    print()
+    for line in artifacts_mod.ledger_table(checked):
+        print(line)
+    print()
+    for line in artifacts_mod.report(checked):
+        print(line)
     print(
         f"\n  {len(campaign.configurations)} configuration(s) in the "
-        f"population; {len(missing)} artifact(s) missing"
+        f"population; {checked['n_compared']} artifact check(s) made, "
+        f"{checked['n_mismatched']} failed"
     )
-    return (0 if not missing else 3), {"configurations": records, "missing": missing}
+    return code, {"configurations": records, "artifacts": checked}
 
 
 def stage_matrix(campaign: Campaign) -> tuple[int, dict[str, Any]]:
@@ -394,6 +380,145 @@ def stage_reproduction_gate(args: argparse.Namespace, campaign: Campaign) -> int
 
 
 # --------------------------------------------------------------------------
+# the artifact stages
+# --------------------------------------------------------------------------
+
+#: What each artifact stage does, in one line each, for the help text and for
+#: the record.  ``check`` is also the preflight's artifact half.
+ARTIFACT_STAGES = {
+    "check": (
+        "resolve and validate every committed artifact of every configuration: "
+        "rebuild each stamp and compare it with the files it must agree with"
+    ),
+    "derive-inputs": (
+        "derive each pulsed configuration's lifted input file from its "
+        "committed one and gate the bytes on the recorded digest"
+    ),
+    "census": (
+        "take a runtime write and read census and compare it with the "
+        "committed per-node census and per-block subsets"
+    ),
+    "per-run": (
+        "derive each per-run deferral set with the class-level classifier and "
+        "compare it with the committed artifact"
+    ),
+    "teeth": "the deliberate breaks of all four, each of which must be caught",
+    "all": "every stage above, in order, stopping at the first failure",
+}
+
+
+def _write_stage_record(
+    name: str, record: dict[str, Any], args: argparse.Namespace, campaign: Campaign
+) -> None:
+    out = args.json or (
+        campaign.runs_dir / "artifacts" / f"{name.replace('-', '_')}.json"
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(record, indent=2, default=str))
+    print(f"  record: {out}")
+
+
+def stage_artifacts(args: argparse.Namespace, campaign: Campaign) -> int:
+    """One artifact stage, or all of them, from the button.
+
+    Every stage returns a code and writes its record; a failure stops the chain
+    rather than escaping as an exception, so a failed gate is a *result* that
+    the entry point reports (protocol §15: the failure paths are reachable from
+    the same button as the successes).
+    """
+    wanted = (
+        [k for k in ARTIFACT_STAGES if k not in ("all",)]
+        if args.artifacts == "all"
+        else [args.artifacts]
+    )
+    configurations = (
+        [args.configuration] if args.configuration else None
+    )
+    codes: list[int] = []
+    for name in wanted:
+        _rule(f"artifacts — {name}")
+        print(f"  {ARTIFACT_STAGES[name]}")
+        if name == "check":
+            code, record = artifacts_mod.check(campaign)
+            for line in artifacts_mod.ledger_table(record):
+                print(line)
+            print()
+            for line in artifacts_mod.report(record):
+                print(line)
+        elif name == "derive-inputs":
+            code, record = input_files_mod.stage_derive(
+                campaign, configurations=configurations, resume=args.resume
+            )
+            for line in artifacts_mod.report(record):
+                print(line)
+        elif name == "census":
+            code, record = census_mod.stage(
+                campaign,
+                configurations=configurations,
+                entry=args.census_entry,
+                read_census=not args.no_read_census,
+                resume=args.resume,
+            )
+            for line in artifacts_mod.report(record):
+                print(line)
+        elif name == "per-run":
+            code, record = postsolve_mod.stage(
+                campaign,
+                configurations=configurations,
+                census_entry=args.census_entry,
+                resume=True,
+            )
+            for line in artifacts_mod.report(record):
+                print(line)
+        else:
+            code, record = _artifact_teeth(campaign)
+        _write_stage_record(name, record, args, campaign)
+        codes.append(code)
+        if code != 0 and args.artifacts == "all":
+            print(
+                f"\n  stage {name!r} did not pass; the chain stops here.  A "
+                f"failed gate is a result, not an obstacle: nothing below is "
+                f"re-run with different settings."
+            )
+            break
+    return 0 if all(code == 0 for code in codes) else 3
+
+
+def _artifact_teeth(campaign: Campaign) -> tuple[int, dict[str, Any]]:
+    """Every artifact stage's deliberate breaks, in one place."""
+    parts = []
+    codes = []
+    for label, run in (
+        ("artifacts", lambda: artifacts_mod.stage_teeth(campaign)),
+        ("input files", lambda: input_files_mod.stage_teeth(campaign)),
+        ("census", lambda: census_mod.stage_teeth(campaign)),
+        ("per-run deferral sets", lambda: postsolve_mod.stage_teeth(campaign)),
+    ):
+        code, record = run()
+        codes.append(code)
+        parts.append(record)
+        for line in artifacts_mod.report(record):
+            print(line)
+        print()
+    n_teeth = sum(len(part["teeth"]) for part in parts)
+    n_tripped = sum(
+        1 for part in parts for tooth in part["teeth"] if tooth["caught"]
+    )
+    print(f"  {n_tripped}/{n_teeth} tooth/teeth tripped")
+    return (0 if all(code == 0 for code in codes) else 3), {
+        "check": "artifact stages — teeth",
+        "binds": "the four artifact stages' own ability to fail",
+        "verdict": "PASS" if all(code == 0 for code in codes) else "FAIL",
+        "population": f"{n_teeth} deliberate breaks over 4 stages",
+        "n_compared": n_teeth,
+        "n_mismatched": n_teeth - n_tripped,
+        "detail": [f"{n_tripped}/{n_teeth} tripped"],
+        "teeth": [tooth for part in parts for tooth in part["teeth"]],
+        "stages": parts,
+    }
+
+
+# --------------------------------------------------------------------------
 # entry point
 # --------------------------------------------------------------------------
 
@@ -484,6 +609,28 @@ def main(argv: list[str] | None = None) -> int:
         "must be pointed at it",
     )
     parser.add_argument(
+        "--artifacts",
+        choices=tuple(ARTIFACT_STAGES),
+        help="run one artifact stage and stop: "
+        + "; ".join(f"{k} = {v}" for k, v in ARTIFACT_STAGES.items()),
+    )
+    parser.add_argument(
+        "--census-entry",
+        default="optimisation",
+        choices=tuple(census_mod.ENTRIES),
+        help="for --artifacts census / per-run: what the census is taken over "
+        "— one full optimisation (the population the committed census was "
+        "measured over) or one evaluation of the model set (cheaper, one "
+        "design point)",
+    )
+    parser.add_argument(
+        "--no-read-census",
+        action="store_true",
+        help="for --artifacts census: take the write half only.  The read half "
+        "overrides attribute access on every data-structure object and is the "
+        "expensive half",
+    )
+    parser.add_argument(
         "--gate",
         choices=("reproduction",),
         help="run one gate and stop.  'reproduction' is gate GR: the twenty "
@@ -543,6 +690,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.reference:
         return _run_reference_stage(args, campaign)
+
+    if args.artifacts:
+        return stage_artifacts(args, campaign)
 
     if args.gate:
         return stage_reproduction_gate(args, campaign)
