@@ -458,3 +458,70 @@ and not listed.*
 | 2026-09-10 | `PROVENANCE.json` generated; `copy_gates.py` and `PROCESS_diff.py` written and committed as `2eec5fee`. Three defects found and fixed during development, all in the new scripts: `git ls-tree` and `git archive` resolve pathspecs relative to the working directory (fixed with `--full-tree` and `git -C <toplevel>`); `importlib` module loading needs `sys.modules` populated before `exec_module` or `@dataclass` fails; `git diff --no-index` strips the leading `/` of absolute paths and prefixes `a/`/`b/`, which broke the path normalisation and made every hunk read as `UNEXPLAINED` — an accidental but real demonstration of that alarm before the deliberate tooth was written. |
 | 2026-09-10 | Smoke import extended to record `process.__version__` after measuring that it is identical for the copy and the root tree and names a third commit — trap T10 in this repository. Committed as `e130467a`. |
 | 2026-09-10 | All gates re-run at `e130467a`: `copy-identity` PASS (224 compared, 222 identical, 0 missing, 0 added, 0 unexplained), G0′ PASS (77 compared, 76 identical, 1 approved difference `pulse.py` under D14(b), 0 unapproved), smoke import PASS; nine teeth all TRIPPED; `PROCESS_diff.py` 3 hunks all claimed, its tooth TRIPPED. Report written. |
+
+---
+
+## 12. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `d8f7e51d` and the
+scripts on the same branch. Load-bearing claims re-checked from git and by re-running the scripts,
+not taken from the report.*
+
+**Verified independently.** (1) The copy is the commit: `git rev-parse
+bdd9953a:arch_surgery/MDA_partitioning_experiment_v4/PROCESS/process` and `git rev-parse
+f2dc9243:process` both give `8e3723d28e64fb88785b08696e7afd8566acc96b`. (2) The edit is the three
+constants: `git diff bdd9953a bcb2891e` touches two files, +20 / −15, and every changed line is one
+of the three constants or its adjacent comment; the `parents[]` indices re-derived by hand
+(`caller.py` sits four directory levels below the experiment folder, `module_solve.py` five).
+(3) The physics: `git diff --stat c0ae5b28:process/models d8f7e51d:…/PROCESS/process/models` lists
+`pulse.py` alone, +113 / −9; the copy against the root tree at the same commit differs in the two
+edited files only; the copy against `c0ae5b28` differs in 13 files, as §5 reports. (4) Both gates
+and the diff tool re-run by me into a fresh records directory: `copy-identity` PASS (224 compared,
+222 identical, 0 missing, 0 added, 0 unexplained), `frozen-physics` PASS (77 compared, 76
+identical, 1 approved difference, 0 unapproved), smoke import PASS with its tooth landing in the
+main checkout; nine teeth TRIPPED; `PROCESS_diff.py` 3 hunks claimed, 0 unexplained, `--teeth`
+TRIPPED. (5) Scope: the six commits touch `…_v4/PROCESS/`, `…_v4/PROCESS_diff.py` and this report
+and nothing else; the tip-to-tip difference in `EXPERIMENT_PLAN.md` is the trunk's later commit
+`4d15450c`, not an edit here. (6) The "twelve inert references" of §9(d): my grep finds fifteen
+lines containing `arch_surgery`, three of them A46's own new comments — consistent.
+
+**Endorsed.** The fourth tooth on each gate is the load-bearing design choice: without the recorded
+post-edit sha256 and hunks, "permitted to differ" would pardon any later edit to `caller.py`,
+`module_solve.py` or `pulse.py`, which is exactly the hole a frozen copy opens. Comparing against
+the commit with `git cat-file` rather than against a working tree is right for the same reason the
+retire script exists — an uncommitted state must not ride along. The `__version__` measurement is
+a real finding for this repository: the copy has no `_version.py`, so `process.__version__` reports
+the editable install's metadata (`3a8d2af9`, neither the source nor the base commit) for both
+trees — trap T10 is live here, and `process.__file__` is the only witness. Keeping the extraction
+commit separate from the edit commit makes the copy reviewable by inspection, as the plan required.
+
+**Limits I hold it to.** The gates compare against whatever `PROVENANCE.json` names. PROVENANCE is
+committed, and its regeneration refuses unless the set of differing files equals the declared
+permitted set, so an unapproved edit can be legalised only through a reviewable diff of three
+places at once (`PROVENANCE.json`, `PERMITTED_EDIT_FILES`, `ANNOTATIONS`) — adequate, and every
+later driver task must do exactly that. The permitted-edit list is keyed by constant name; a driver
+change that is not a constant (DR1–DR7) will need that model generalised to "recorded hunks", which
+the provenance format already carries. G0′ pins `pulse.py`'s content, so D14(b)'s exception cannot
+widen silently. Nothing here runs PROCESS: the smoke import proves import resolution, not a run —
+the first V4 run belongs to the run-path task.
+
+**Consequences drawn (orchestrator, today).** (a) `…_v4/.gitignore` is added at merge as an
+orchestrator admin edit: `runs/` (V3's precedent, §9(a)) and a `!*.dat` negation so the copy's 42
+data files no longer need `git add -f`. (b) The `caller.py:587` unguarded read: plan §3.3 says it is
+repaired in the copy; the brief said "no other edit", to keep the copy commit reviewable. The brief
+was right for this task, and the repair goes to the task that gives the constant a target
+(`harness/data/`), together with (c) the stale generator string at `caller.py:350` and the two
+comments naming `docs/data/` sources — each as a recorded hunk in PROVENANCE and a row in
+`ANNOTATIONS`. (d) The remaining references point at documents (`REGISTRY_ALLOCATIONS.md`,
+`EXPERIMENT_FRAMEWORK.md`) that exist and stay; `pulse.py:155` is frozen physics and is not
+touched. (e) H0's remainder — `harness/data/` with its provenance, `harness/ystate.py` moved
+whole, the two one-line edits — is minted as **A48 (harness-data)** once A47 (harness-skeleton)
+has merged, so that the artifact names match what the skeleton's environment composer asks for.
+(f) The trap T6/T10 finding is already designed into the skeleton: A47's `provenance.assert_tree`
+compares the resolved tree for equality and never reads `__version__` (harness plan §6); the
+run-path brief will carry it as a gate criterion, and every V4 child sets `PYTHONPATH` to
+`…_v4/PROCESS`.
+
+**Verdict.** Fit to merge as it stands; nothing returned to the agent. The copy is provably the
+commit, the edit is provably the three constants, and the physics is provably `c0ae5b28` plus
+D14(b) — each by one number, each with a tooth.
