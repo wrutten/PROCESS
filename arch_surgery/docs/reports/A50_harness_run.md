@@ -480,3 +480,65 @@ thing, not a description of the task.*
 5. **`harness/input_files.py` is arguably A51's file.** It was created here because gate GR needs
    it; if the orchestrator would rather it be a private helper of `reproduction.py` until A51,
    moving it is a rename.
+
+---
+
+## 11. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `d49ff1b5` and the
+package on the same branch. The gate was re-run by the orchestrator, not read off the report.*
+
+**Verified independently.** (1) **Gate GR re-run from scratch** into a fresh records directory
+(`experiment_runner.py --gate reproduction --lifted-from <the main checkout's …_v3/runs/_decks>`):
+30 PROCESS runs, **20 of 20 reproduced, 270 of 270 compared values identical, 0 mismatched**; the
+record contract 20 of 20; substitute `A0p` PASS on both pulsed configurations with `st_regression`
+skipped for the recorded reason; substitute `AR` PASS, 12 of 12 values; **seven teeth tripped**,
+the composition positive control among them (`B3` on `st_regression` with `PROCESS_ARCH_OUTER`
+cleared does not reproduce). The re-run's per-run wall clock was of the same order as the report's
+(context only). (2) `experiment_runner.py --selfcheck` against the copy: six checks PASS;
+`--reference verify` PASS; `PROCESS/copy_gates.py all` ALL GATES PASS. (3) Scope: sixteen files,
+all under `…_v4/` plus this report; `git diff 9a8defa6..HEAD -- …_v4/PROCESS process` is empty —
+the copy is byte-untouched, which is the premise of GR's single-variable argument. (4) Nothing
+under `harness/` imports from, or starts a subprocess into, `idf_probe/`, `fixedpoint/` or `…_v3/`
+at run time; the mentions found are heritage docstrings, the reference stage's default records
+root and the opt-in cross-check already assessed at A47. (5) The gate-only allowance
+(`Job.allow_pending`) is guarded in `pool.py`, `reproduction.py` and the runner by set equality and
+by `Campaign.is_experiment_copy`, and is stamped in every run record.
+
+**Endorsed.** The composition tooth is the strongest thing in the gate: it measured that the
+partitioned arms still depend on `PROCESS_ARCH_OUTER` (the driver defaults to the verified
+schedule without it, and 8 of 15 values move), so the switch the registry lists as disappearing is
+load-bearing until A56 folds it into `partitioned`. Taking the `AR` substitute in its weaker form
+and saying so, rather than implying a reproduction against a record that does not carry the
+quantity. One dotted-path resolver shared by the reference and the comparator (D14(c)'s shape).
+Recording every driver capability the plan asks for and this driver lacks as an explicit null with
+a reason and the task that supplies it, so a tally cannot mistake "not yet" for "forgot". The
+`first_call_models` field, without which `AR` could be checked against nothing.
+
+**Limits I hold it to.** (a) GR's argument is complete only for the six arms V3 ran; `A0p` and
+`AR` are covered by internal consistency, as §7.5 of the harness plan declares. (b) The lifted
+input files GR ran were staged from V3's untracked `_decks/` after a digest check against the two
+sha256s committed in `input_files.py`; the derivation that reproduces those digests is A51's, and
+until it lands the digests are the only thing standing between GR and a lifted file nobody derived.
+(c) The exit audit is taken after the run, not at the plan's declared position — see the ruling
+below; GR is unaffected because V3 audited at the same place, which the matching
+`exit_audit.residual_max_hex` values confirm. (d) The five-hour-per-run timeout and the
+three-worker pool are the previous revision's settings, kept, not re-derived.
+
+**Rulings and consequences drawn (orchestrator, today).** *Audit position (§6 row 1, §10 item 2):*
+the plan's §3.3 stands — the accuracy compared across arms is the accuracy the *solve* delivered,
+before any output-time sweep re-solves it on the arms that keep that loop. The implementation the
+plan did not spell out is a **snapshot** of the coupling state at the entry to `write_output_files`,
+with the residual computed after the run from the restored snapshot, so nothing the run writes is
+touched by the audit sweep; the snapshot hook is a driver change in the copy and lands with **A57
+(driver-output-path)**, which restructures that function anyway. Until then every record carries
+both `audit_position` and `audit_position_declared`, as this task already does. §3.3 is amended to
+say so. *`input_files.py`* stays where it is; A51 adds the derivation to it. *Typed refusal:* A56
+(driver-renames) adds an `ArchitectureRefusal(RuntimeError)` to the copy and `failure.py` catches
+the type; the message-text match is kept as the fallback for one release and then removed. *The
+restricted-audit artifact divergence:* measured to change nothing, recorded here, no action.
+A51 (harness-artifacts) and A56 (driver-renames) are dispatched in parallel off the merged tip —
+disjoint files (`harness/` stages vs the copy and `switches.REGISTRY`).
+
+**Verdict.** Fit to merge; nothing returned. The rewritten harness is, on every quantity the plan
+compares, the same instrument as the one it replaces.
