@@ -240,22 +240,27 @@ FIELD_NOTES: dict[str, str] = {
 }
 
 #: Fields compared here that the harness plan's §7.1 list does not name
-#: literally, with the reason.  Recorded rather than absorbed: a gate that
-#: quietly compares more than it declares is as hard to read as one that
-#: quietly compares less.
-FIELDS_BEYOND_THE_PLAN: dict[str, str] = {
-    "exact.objf": (
-        "§7.1 names exact.norm_objf, which no evaluation-phase record carries "
-        "— that phase spells the same quantity 'objf'.  Without it the "
-        "evaluation phase would reproduce on counts alone, with no "
-        "bit-comparison of the objective at all"
-    ),
-    "exit_forensics.n_attempts": (
-        "§7.1 names it for the optimisation phase only.  Every evaluation-"
-        "phase record carries it as 0, and comparing it states as a value "
-        "what would otherwise be an assumption: that the evaluation entry "
-        "point starts no optimiser"
-    ),
+#: literally **for that phase**, with the reason.  Keyed by phase, because
+#: the same field can be the plan's for one phase and this module's addition
+#: for the other.  Recorded rather than absorbed: a gate that quietly
+#: compares more than it declares is as hard to read as one that quietly
+#: compares less.
+FIELDS_BEYOND_THE_PLAN: dict[str, dict[str, str]] = {
+    "B": {},
+    "A": {
+        "exact.objf": (
+            "§7.1 names exact.norm_objf, which no evaluation-phase record "
+            "carries — that phase spells the same quantity 'objf'.  Without "
+            "it the evaluation phase would reproduce on counts alone, with no "
+            "bit-comparison of the objective at all"
+        ),
+        "exit_forensics.n_attempts": (
+            "§7.1 names it for the optimisation phase only.  Every "
+            "evaluation-phase record carries it as 0, and comparing it states "
+            "as a value what would otherwise be an assumption: that the "
+            "evaluation entry point starts no optimiser"
+        ),
+    },
 }
 
 
@@ -1173,8 +1178,9 @@ def tables(document: Mapping[str, Any]) -> str:
     out.append("|---|---|---:|---|")
     for phase, block in provenance["field_population"].items():
         label = "B (optimisation)" if phase == "B" else "A (evaluation)"
+        beyond_here = provenance["compared_fields_beyond_the_plan"].get(phase, {})
         for name, carried in block["carried_by"].items():
-            beyond = "yes" if name in FIELDS_BEYOND_THE_PLAN else ""
+            beyond = "yes" if name in beyond_here else ""
             out.append(
                 f"| {label} | `{name}` | {carried} / {block['n_records']} | "
                 f"{beyond} |"

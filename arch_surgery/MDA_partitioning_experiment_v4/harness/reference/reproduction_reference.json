@@ -70,8 +70,11 @@
       "exit_forensics.attempts[].n_solver_iterations": "iterations of each attempt in order, so the summed construction can be checked against its parts rather than trusted"
     },
     "compared_fields_beyond_the_plan": {
-      "exact.objf": "\u00a77.1 names exact.norm_objf, which no evaluation-phase record carries \u2014 that phase spells the same quantity 'objf'.  Without it the evaluation phase would reproduce on counts alone, with no bit-comparison of the objective at all",
-      "exit_forensics.n_attempts": "\u00a77.1 names it for the optimisation phase only.  Every evaluation-phase record carries it as 0, and comparing it states as a value what would otherwise be an assumption: that the evaluation entry point starts no optimiser"
+      "B": {},
+      "A": {
+        "exact.objf": "\u00a77.1 names exact.norm_objf, which no evaluation-phase record carries \u2014 that phase spells the same quantity 'objf'.  Without it the evaluation phase would reproduce on counts alone, with no bit-comparison of the objective at all",
+        "exit_forensics.n_attempts": "\u00a77.1 names it for the optimisation phase only.  Every evaluation-phase record carries it as 0, and comparing it states as a value what would otherwise be an assumption: that the evaluation entry point starts no optimiser"
+      }
     },
     "field_population": {
       "B": {
