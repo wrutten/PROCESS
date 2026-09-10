@@ -338,6 +338,89 @@ def predicate_read_fields(tree: Path, i_figure_merit: int) -> frozenset[str]:
     return frozenset(fields)
 
 
+def driver_predicate_read_fields(
+    tree: Path, i_figure_merit: int
+) -> tuple[frozenset[str] | None, dict[str, Any]]:
+    """The **driver's own** answer to the same question, from a child process.
+
+    :func:`predicate_read_fields` restates a rule the driver also implements.  A
+    restatement that has never been compared with the thing it restates is an
+    assumption; the harness plan is explicit that where a criterion is inherited,
+    its agreement with the original is a *result* rather than something taken on
+    trust.  So the driver's own function is called in a fresh subprocess with the
+    tree under test on the path, and the two answers are compared.
+
+    Returns ``(fields, provenance)``; ``fields`` is None when the driver could
+    not be asked, with the reason in the provenance rather than an exception —
+    a cross-check that cannot run is reported, not silently skipped.
+    """
+    import os  # noqa: PLC0415 - subprocess only
+    import subprocess  # noqa: PLC0415 - subprocess only
+    import tempfile  # noqa: PLC0415 - subprocess only
+
+    tree = Path(tree)
+    program = (
+        "import json,sys;"
+        "from process.core.caller import _predicate_read_fields as f;"
+        "import process;"
+        "print(json.dumps({'process_file': process.__file__, "
+        f"'fields': sorted(f({int(i_figure_merit)}))}}))"
+    )
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(tree)
+    environment.pop("PROCESS_IDF_PROBE", None)
+    with tempfile.TemporaryDirectory() as elsewhere:
+        completed = subprocess.run(
+            [__import__("sys").executable, "-c", program],
+            env=environment,
+            cwd=elsewhere,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    if completed.returncode != 0:
+        return None, {
+            "asked": False,
+            "why": (
+                f"the driver could not be asked: return code "
+                f"{completed.returncode}; {completed.stderr.strip()[-300:]}"
+            ),
+        }
+    payload = json.loads(completed.stdout.strip().splitlines()[-1])
+    resolved = Path(payload["process_file"]).resolve().parent.parent
+    if resolved != tree.resolve():
+        return None, {
+            "asked": False,
+            "why": (
+                f"the child imported PROCESS from {resolved}, not the tree "
+                f"under test {tree.resolve()}"
+            ),
+        }
+    return frozenset(payload["fields"]), {
+        "asked": True,
+        "tree": str(resolved),
+        "n_fields": len(payload["fields"]),
+    }
+
+
+def compare_with_driver(tree: Path, i_figure_merit: int) -> dict[str, Any]:
+    """This package's restatement of the predicate read rule against the driver's."""
+    restated = predicate_read_fields(tree, i_figure_merit)
+    driver, provenance = driver_predicate_read_fields(tree, i_figure_merit)
+    if driver is None:
+        return {"agrees": None, "i_figure_merit": i_figure_merit, **provenance}
+    return {
+        "agrees": restated == driver,
+        "asked": True,
+        "i_figure_merit": i_figure_merit,
+        "n_restated": len(restated),
+        "n_driver": len(driver),
+        "only_in_the_restatement": sorted(restated - driver),
+        "only_in_the_driver": sorted(driver - restated),
+        "tree": provenance["tree"],
+    }
+
+
 def _objective_branch_reads(function, fom_name: str, reader_class) -> set[str]:
     """Reads of the active figure-of-merit branch, plus unconditional ones."""
     fields: set[str] = set()

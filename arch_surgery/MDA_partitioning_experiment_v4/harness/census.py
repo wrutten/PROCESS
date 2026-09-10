@@ -506,7 +506,11 @@ def compare_block_subsets(
 
 
 def compare_predicate_reads(
-    census: Mapping[str, Any], tree: Path, i_figure_merit: int
+    census: Mapping[str, Any],
+    tree: Path,
+    i_figure_merit: int,
+    *,
+    written_fields: set[str],
 ) -> dict[str, Any]:
     """What the predicate layer actually read, against what the source says.
 
@@ -521,10 +525,22 @@ def compare_predicate_reads(
     configuration's own constraints, so it over-reports on purpose: a field it
     lists and the run never read is a constraint this configuration does not
     activate.  A field the run *read* and the scan does not list is the
-    dangerous direction, and would mean the routing rule is derived from an
+    dangerous direction — it would mean the routing rule is derived from an
     incomplete read set.
+
+    Two constructions, and the second is the one that binds
+    -------------------------------------------------------
+    The runtime window is slightly wider than the two source files: the
+    instrument opens it at the driver's own call site, so a field the *driver*
+    reads while dispatching into the objective is attributed to this node too.
+    The raw comparison therefore reports such reads, and the raw numbers are
+    published.  But the routing rule only ever asks about fields **a model node
+    writes** — a field no node writes cannot make a node live, whatever reads it
+    — so the binding construction restricts both sides to the write census's own
+    field set, and every read excluded by that restriction is listed by name
+    rather than counted away.
     """
-    from .artifacts import predicate_read_fields  # noqa: PLC0415 - one direction
+    from .artifacts import compare_with_driver, predicate_read_fields  # noqa: PLC0415
 
     reads = census.get("reads_by_node") or {}
     if PREDICATE_NODE not in reads:
@@ -538,21 +554,33 @@ def compare_predicate_reads(
     observed = set(reads[PREDICATE_NODE])
     declared = set(predicate_read_fields(tree, i_figure_merit))
     unlisted = sorted(observed - declared)
+    routing = sorted((observed - declared) & written_fields)
+    not_written = sorted((observed - declared) - written_fields)
     return {
         "available": True,
         "i_figure_merit": i_figure_merit,
         "n_read_at_runtime": len(observed),
         "n_in_source_scan": len(declared),
         "n_read_and_listed": len(observed & declared),
+        "n_listed_but_not_read": len(declared - observed),
         "n_read_but_not_listed": len(unlisted),
         "read_but_not_listed": unlisted[:50],
-        "n_listed_but_not_read": len(declared - observed),
-        "containment_holds": not unlisted,
+        "containment_holds_over_every_field": not unlisted,
+        "n_written_by_some_node": len(written_fields),
+        "n_read_but_not_listed_and_written_by_some_node": len(routing),
+        "read_but_not_listed_and_written_by_some_node": routing,
+        "read_but_not_listed_and_written_by_no_node": not_written,
+        "containment_holds_where_it_binds": not routing,
+        "restatement_against_the_driver": compare_with_driver(tree, i_figure_merit),
         "caption": (
-            "The objective/constraint block's own read set, observed during "
-            "one run, against the read set the source scan derives for the "
-            "same figure of merit. Containment one way is expected — the scan "
-            "takes the whole constraint layer — and the other way is a finding."
+            "The objective/constraint block's own read set, observed during one "
+            "run, against the read set the source scan derives for the same "
+            "figure of merit. Two constructions: over every field the block "
+            "read, and over only those fields some model node writes — the "
+            "second is what the routing rule uses, and the fields the "
+            "restriction removes are listed by name. 'restatement against the "
+            "driver' compares this package's copy of the scan rule with the "
+            "driver's own, in a child process."
         ),
     }
 
@@ -608,8 +636,16 @@ def stage(
             load(config.coupling_state_path, role="coupling_state"),
             name,
         )
+        written_fields: set[str] = set()
+        for fields in committed_census["per_scenario"][name]["writes_by_node"].values():
+            written_fields |= set(fields)
+        for fields in census["writes_by_node"].values():
+            written_fields |= set(fields)
         reads = compare_predicate_reads(
-            census, Path(campaign.tree), config.figure_of_merit
+            census,
+            Path(campaign.tree),
+            config.figure_of_merit,
+            written_fields=written_fields,
         )
         check.n_compared += writes["n_nodes_compared"] + blocks["n_blocks_compared"]
         rows.append(
@@ -651,13 +687,39 @@ def stage(
                 f"and are not in the committed module node map, so their "
                 f"components belong to no block"
             )
-        if reads.get("available") and not reads["containment_holds"]:
-            check.fail(
+        if reads.get("available"):
+            check.note(
                 f"{name}: the predicate layer read "
-                f"{reads['n_read_but_not_listed']} field(s) the source scan "
-                f"does not list, e.g. {reads['read_but_not_listed'][:5]} — the "
-                f"routing rule would be derived from an incomplete read set"
+                f"{reads['n_read_at_runtime']} field(s) at run time; "
+                f"{reads['n_read_and_listed']} of them are in the "
+                f"{reads['n_in_source_scan']}-field source scan the routing "
+                f"rule uses, and "
+                f"{reads['n_read_but_not_listed_and_written_by_some_node']} of "
+                f"the {reads['n_read_but_not_listed']} that are not are "
+                f"written by some model node "
+                f"(not written by any node: "
+                f"{reads['read_but_not_listed_and_written_by_no_node']}); the "
+                f"restatement of the scan rule agrees with the driver's own on "
+                f"{reads['restatement_against_the_driver'].get('n_driver')} "
+                f"field(s): "
+                f"{reads['restatement_against_the_driver'].get('agrees')}"
             )
+            if not reads["containment_holds_where_it_binds"]:
+                check.fail(
+                    f"{name}: the predicate layer read "
+                    f"{reads['n_read_but_not_listed_and_written_by_some_node']} "
+                    f"field(s) that a model node writes and the source scan "
+                    f"does not list: "
+                    f"{reads['read_but_not_listed_and_written_by_some_node']} — "
+                    f"the routing rule would be derived from an incomplete "
+                    f"read set"
+                )
+            if reads["restatement_against_the_driver"].get("agrees") is not True:
+                check.fail(
+                    f"{name}: this package's restatement of the predicate read "
+                    f"rule does not agree with the driver's own: "
+                    f"{reads['restatement_against_the_driver']}"
+                )
     check.population = (
         f"{len(names)} configuration(s) ({', '.join(names)}); one "
         f"{entry} census each, taken with the read half of the instrument "
