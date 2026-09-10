@@ -91,31 +91,61 @@ REGIMES: tuple[str, ...] = ("unperturbed", "perturbed", "stencil")
 #: runs one evaluation and never reaches the output path, so its audit is taken
 #: at the state the evaluation terminated in.
 #:
-#: ``after_run`` is the optimisation phase's position **in this tree**: the
-#: sweep is taken after the run has finished, which is after the output path.
-#: The plan's declared position is ``entry_to_write_output_files``, and this
-#: tree cannot take it — see :data:`AUDIT_POSITION_NOT_AVAILABLE`.
+#: ``entry_to_write_output_files`` is the optimisation phase's position and the
+#: one the plan declares: the state the solve handed over, before the per-run
+#: deferred nodes and before any output-time sweep.  It is reached by a
+#: **snapshot** — see :data:`AUDIT_POSITION_HOW`.
+#:
+#: ``after_run`` is where the previous revision audited: after the run has
+#: finished, which is after the output path.  It survives for exactly one
+#: caller — see :data:`AUDIT_POSITION_AFTER_RUN_WHY`.
 AUDIT_POSITIONS: tuple[str, ...] = (
     "after_single_evaluation",
     "after_run",
     "entry_to_write_output_files",
 )
 
-#: Why the plan's declared audit position is not reachable here, quoted by the
-#: refusal that asking for it produces.  This is a **finding about the driver**,
-#: recorded rather than worked around (task A50 (harness-run)).
-AUDIT_POSITION_NOT_AVAILABLE = (
-    "the audit sweep mutates the state it measures, so taking it at the entry "
-    "to write_output_files would hand the output path a state the optimiser "
-    "never accepted: the output files, the MFILE exit code and the total node "
-    "count would all be of the audited state.  Taking it there also puts it "
-    "*before* the per-run deferred nodes, which the driver runs inside "
-    "write_output_files.  Reaching the declared position needs a driver-side "
-    "hook that audits a copy of the data structure, or that audits after "
-    "finalise on an output path which does not re-solve — approved driver "
-    "change DR2, task A57 (driver-output-path).  Until then the position "
-    "actually used is recorded and the output-time loop's own sweep count is "
-    "reported beside it."
+#: Positions an optimisation run may audit at.  The declared one is the
+#: default; the other is the reproduction gate's, and nothing else may ask for
+#: it.
+OPTIMISATION_AUDIT_POSITIONS: tuple[str, ...] = (
+    "entry_to_write_output_files",
+    "after_run",
+)
+
+#: How the declared position is reached, quoted into every record that uses it.
+#: The audit sweep mutates the state it measures, so it cannot be *run* at the
+#: entry to the output path without handing that path a state the optimiser
+#: never accepted — the output files, the exit code and the total node count
+#: would all be of the audited state.  The driver therefore **snapshots** the
+#: coupling state there (task A57 (driver-output-path); experiment plan §3.3)
+#: and the residual is computed after the run, from the restored snapshot, by
+#: the same one-sweep instrument every arm gets.
+AUDIT_POSITION_HOW = (
+    "the driver snapshots the coupling state at the entry to "
+    "write_output_files — before the per-run deferred nodes and before any "
+    "output-time sweep — and this run computed the residual afterwards, from "
+    "that snapshot restored into the data structure, with the same one-sweep "
+    "instrument every arm gets.  The restore is proved bit-exact component by "
+    "component before the sweep runs; a restore that is not bit-exact refuses "
+    "the audit rather than reporting a residual of a state nobody chose.  The "
+    "audit's own model calls are counted and never charged to the arm, and the "
+    "per-run deferred nodes' own components stay excluded from the restricted "
+    "statistic exactly as before."
+)
+
+#: Why ``after_run`` still exists, and the only thing that may ask for it.
+#: The reproduction gate reproduces the **previous revision**, which audited
+#: after the run; its recorded ``exit_audit.residual_max_hex`` values are among
+#: the values that gate compares, so reproducing them means auditing where they
+#: were audited.  Every campaign record uses the declared position.
+AUDIT_POSITION_AFTER_RUN_WHY = (
+    "the reproduction gate reproduces the previous revision's records, and "
+    "that revision audited after the run — its residual is one of the values "
+    "the gate compares bit for bit, so reproducing it means taking the audit "
+    "where it was taken.  This position is refused outside that gate: it is "
+    "recorded per run and stamped in the gate's own record as a reproduction "
+    "override."
 )
 
 
@@ -249,6 +279,7 @@ SCHEMA: tuple[Field, ...] = (
     # --- the audit --------------------------------------------------------
     _f("audit_position", "AB", "always", "where the audit sweep was taken"),
     _f("audit_position_declared", "AB", "always", "where the plan declares it should be taken"),
+    _f("audit_snapshot", "B", "always", "the driver's snapshots of the coupling state on the output path, or why there are none"),
     _f("exit_audit", "AB", "always", "the achieved accuracy: one further full sweep, uncharged"),
     # --- counters common to both phases -----------------------------------
     _f("node_calls_total", "AB", "always", "model executions, the whole run"),
@@ -259,9 +290,13 @@ SCHEMA: tuple[Field, ...] = (
     _f("exit_forensics", "AB", "always", "the five fields recorded at every exit"),
     _f("attempts", "AB", "always", "one entry per optimiser attempt, in order"),
     _f("attempts_node_calls_available", "AB", "always", "whether the driver supplies per-attempt node calls yet"),
-    # --- driver capabilities the plan asks for and this tree lacks --------
+    # --- the output path --------------------------------------------------
     _f("output_path", "B", "always", "which output path ran: mda_output | finalise_once"),
-    _f("output_loop_sweeps", "B", "always", "sweeps the output-time loop took, or null with the reason"),
+    _f("output_loop_sweeps", "B", "always", "sweeps the output-time loop ran; 0 under the finalise-once path"),
+    _f("output_path_entries", "B", "always", "entries to the output path: one per scan point"),
+    # --- how this run differed from the campaign, if it did ---------------
+    _f("reproduction_overrides", "AB", "always", "what the reproduction gate set differently, or null for a run that is not that gate's"),
+    # --- driver capabilities the plan asks for and this tree lacks --------
     _f("predicate_evaluations", "AB", "always", "predicate evaluations, or null with the reason"),
     _f("components_compared", "AB", "always", "components compared by the predicate, or null with the reason"),
     # --- the optimisation phase ------------------------------------------

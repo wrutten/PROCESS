@@ -131,6 +131,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stencil-sign", type=int, default=1, choices=(1, -1),
                         help="+1 the forward point, -1 the backward point")
     parser.add_argument("--pending-allowed", default="")
+    parser.add_argument("--reproduction-overrides", default="{}",
+                        help="JSON of what the reproduction gate set "
+                             "differently from the campaign, stamped into the "
+                             "record; empty for every other run")
     parser.add_argument("--switches-asked", default="{}")
     parser.add_argument("--node-census", action="store_true")
     return parser
@@ -169,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         switches_asked=json.loads(args.switches_asked),
     )
     record["outdir"] = str(outdir)
+    record["reproduction_overrides"] = json.loads(args.reproduction_overrides) or None
     record["coupling_state_artifact"] = str(args.coupling_state)
     record["per_run_artifact"] = args.per_run_artifact
     record["entry_state_argument"] = args.entry_state

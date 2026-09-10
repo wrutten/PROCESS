@@ -65,7 +65,10 @@ _EXPERIMENT_DIR = Path(__file__).resolve().parent.parent
 if str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
+from harness import arms as arms_mod  # noqa: E402
+from harness import input_files as input_files_mod  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
+from harness import records as records_mod  # noqa: E402
 from harness import reference as reference_mod  # noqa: E402
 from harness.config import Campaign, default_campaign  # noqa: E402
 
@@ -339,6 +342,40 @@ VOLATILE_RECORD_PATHS: dict[str, str] = {
         "the driver's module-level readbacks are what the change renames; their "
         "values are the off-state on both sides"
     ),
+    # fields a harness change adds or rewords between the two captures.  G1
+    # binds the *driver*, and the two captures are made by the harness at each
+    # commit, so a field the harness itself adds is excluded by name -- and
+    # only ever by name, with the reason, because a zero over a population
+    # quietly smaller than the one stated is this project's own trap T11.
+    "output_loop_sweeps": (
+        "the count is what the output-path change adds: null on the side that "
+        "had no counter, measured on the side that has one.  What the two "
+        "sides' output paths *did* is compared in full through the output file "
+        "and through node_calls_total"
+    ),
+    "output_loop_null_because": (
+        "the sentence explaining the absent counter, present only on the side "
+        "that had no counter"
+    ),
+    "output_path_entries": (
+        "a counter the output-path change adds; absent on the earlier side"
+    ),
+    "audit_snapshot": (
+        "the snapshot block the audit-position change adds; absent on the "
+        "earlier side.  Both captures audit at the same position, which is "
+        "checked before the comparison runs and is what makes exit_audit "
+        "comparable"
+    ),
+    "reproduction_overrides": (
+        "a field the record gains so that a run made under the reproduction "
+        "gate's overrides says so; null on both sides here, absent on the "
+        "earlier one"
+    ),
+    "audit_position_note": (
+        "the sentence saying how the audit position is reached, which is what "
+        "the change rewrites.  audit_position itself is compared, and the two "
+        "captures are refused if it differs"
+    ),
 }
 
 #: Keys of PROCESS's own output file that record when and where a run happened
@@ -358,6 +395,19 @@ VOLATILE_MFILE_KEYS: dict[str, str] = {
 #: compose to an environment with the whole switch vocabulary cleared, which is
 #: precisely the condition G1 is about.
 NEUTRAL_ARMS: tuple[tuple[str, str], ...] = (("B", "BR"), ("A", "AR"))
+
+#: Where G1's optimisation runs take their exit audit, on **both** sides.
+#:
+#: G1 binds the driver, and the two captures are made by the harness as it
+#: stood at each commit.  Where a driver change also moves a harness-side
+#: instrument, pinning that instrument to one position on both sides is what
+#: keeps the comparison about the driver: the whole ``exit_audit`` block --
+#: residual, argmax, brief, restricted statistic, the audit's own node count --
+#: is then compared value for value instead of excluded.  The alternative,
+#: letting each side audit wherever its own revision does and excluding the
+#: block, would put the strongest thing G1 compares outside the comparison.
+#: A capture whose records disagree about the position **refuses**.
+NEUTRAL_AUDIT_POSITION = "after_run"
 
 
 def neutrality_root(campaign: Campaign) -> Path:
@@ -397,6 +447,7 @@ def capture_neutrality(
                     regime="unperturbed",
                     delta=campaign.delta if phase == "B" else None,
                     run_kind="gate",
+                    audit_position=NEUTRAL_AUDIT_POSITION,
                 )
             )
     results = pool_mod.run_all(jobs, campaign, resume=resume)
@@ -406,6 +457,7 @@ def capture_neutrality(
         "tree_git_head": _git_head(),
         "tree": str(campaign.tree),
         "n_runs": len(jobs),
+        "audit_position": NEUTRAL_AUDIT_POSITION,
         "runs": [
             {
                 "configuration": job.config.name,
@@ -565,6 +617,29 @@ def _read_record(directory: Path, *, side: str, key: str) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
+def _assert_same_audit_position(
+    before: Mapping[str, Any], after: Mapping[str, Any], *, key: str
+) -> str | None:
+    """Refuse unless both captures measured their accuracy at the same place.
+
+    The ``exit_audit`` block is the most sensitive thing G1 compares, and it is
+    only comparable if both sides took it at the same position.  A capture made
+    at one position against a capture made at another would report the moved
+    instrument as a driver difference -- or, worse, be "fixed" by excluding the
+    block, which is how a gate quietly stops testing the thing it is for.
+    """
+    a, b = before.get("audit_position"), after.get("audit_position")
+    if a != b:
+        raise GateError(
+            f"G1 cannot compare {key}: the 'before' capture audited at {a!r} "
+            f"and the 'after' capture at {b!r}.  The exit audit is only "
+            f"comparable at one position, and moving it between captures would "
+            f"report the instrument as a driver difference.  Re-capture one "
+            f"side at the other's position; do not exclude the block."
+        )
+    return a
+
+
 def neutrality_body(campaign: Campaign) -> dict[str, Any]:
     """Compare the two captures, run by run, value by value and line by line."""
     rows: list[dict[str, Any]] = []
@@ -578,6 +653,7 @@ def neutrality_body(campaign: Campaign) -> dict[str, Any]:
             after_dir = neutrality_run_dir(campaign, "after", config.name, arm)
             before = _read_record(before_dir, side="before", key=key)
             after = _read_record(after_dir, side="after", key=key)
+            _assert_same_audit_position(before, after, key=key)
             values = compare_records(before, after)
             mfile_before = _mfile_for(before_dir, config.name)
             mfile_after = _mfile_for(after_dir, config.name)
@@ -630,6 +706,7 @@ def neutrality_body(campaign: Campaign) -> dict[str, Any]:
         "n_mfile_lines_compared": n_lines,
         "n_mfile_lines_excluded": n_excluded_lines,
         "n_mfile_lines_differing": n_line_mismatches,
+        "audit_position_on_both_sides": NEUTRAL_AUDIT_POSITION,
         "excluded_record_paths": VOLATILE_RECORD_PATHS,
         "excluded_mfile_keys": VOLATILE_MFILE_KEYS,
         "reference_fields_for_context": {
@@ -713,7 +790,24 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
                 return True, f"refused: {str(exc).splitlines()[0][:160]}"
         return False, "a missing 'before' record did not refuse"
 
+    def moved_audit_position() -> tuple[bool, str]:
+        record, _name = sample_record()
+        moved = copy.deepcopy(record)
+        moved["audit_position"] = "entry_to_write_output_files"
+        try:
+            _assert_same_audit_position(record, moved, key="BR/tooth")
+        except GateError as exc:
+            return True, f"refused: {str(exc).splitlines()[0][:170]}"
+        return False, "two captures audited at different positions and compared anyway"
+
     return (
+        Tooth(
+            "captures_audited_at_different_positions",
+            "a throwaway copy of a captured record with its audit position "
+            "moved to the other legal value",
+            "REFUSE, not compare",
+            moved_audit_position,
+        ),
         Tooth(
             "one_value_moved_by_one_ulp",
             "one float of a throwaway copy of a captured record moved by one "
@@ -732,6 +826,507 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             "the 'before' capture asked for at a directory that does not exist",
             "REFUSE, not skip",
             missing_before,
+        ),
+    )
+
+
+# --------------------------------------------------------------------------
+# G9 -- the output path writes the state the solve handed over
+# --------------------------------------------------------------------------
+#
+# What G9 binds is the removal of upstream's output-time loop from the two
+# intervention arms, and it binds it in the only way that means anything: not
+# "the switch was set" but "the state that reached the output files is the
+# state the optimiser accepted".
+#
+# Three criteria on an arm whose matrix cell turns the loop off:
+#
+#   (i)   the coupling state immediately before the file-writing call is
+#         **bit-identical**, component by component in hex, to the snapshot
+#         taken at the entry to the output path -- on every component the
+#         per-run deferred nodes do not own.  Those nodes run between the two
+#         snapshots by design (that is what "once per run, at the accepted
+#         optimum" means), their write set is derived from the same two
+#         committed artifacts the restricted audit derives it from, never
+#         listed, and the components they move are reported by name rather
+#         than waved past;
+#   (ii)  the output-time loop ran **0** sweeps;
+#   (iii) the objective in PROCESS's own output file is the accepted objective,
+#         to the bit.
+#
+# And on the reference arms, which keep the loop: every field that describes
+# the solve equals the reproduction gate's record for the same run.  "Nothing
+# changes on BR/B0" is a comparison against a record made before this change,
+# not an assertion.  The audit residual is deliberately **not** among those
+# fields -- the audit moved to the declared position for every arm, which is
+# the other half of this task -- and that exclusion is stated here rather than
+# left to be noticed.
+
+#: Fields that describe the solve and must be untouched by an output-path
+#: change, compared against the reproduction gate's record run for run.
+#: ``exit_audit.residual_max_hex`` is deliberately absent: the audit position
+#: moved for every arm in this same change, so the residual is expected to
+#: differ and comparing it would test the audit, not the output path.
+UNCHANGED_ON_REFERENCE_ARMS: tuple[str, ...] = (
+    "node_calls_solve_phase",
+    "node_calls_total",
+    "n_model_calls",
+    "n_prime_calls",
+    "exact.norm_objf",
+    "n_solver_iterations",
+    "mfile.ifail",
+    "exit_forensics.n_attempts",
+    "exit_forensics.n_solver_iterations_summed_over_attempts",
+)
+
+
+def output_path_root(campaign: Campaign) -> Path:
+    return Path(campaign.runs_dir) / GATES_SUBPATH / "output_path"
+
+
+def output_path_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every Phase B arm at seed 0 on every configuration where it is active.
+
+    The intervention arms carry the criteria; the reference arms carry the
+    "nothing changes" half.  A skipped arm is skipped **by the configuration's
+    own recorded reason**, never by a condition written here.
+    """
+    root = output_path_root(campaign)
+    jobs: list[pool_mod.Job] = []
+    for config in campaign.configurations:
+        for arm in arms_mod.active_arms(config, "B"):
+            jobs.append(
+                pool_mod.Job(
+                    phase="B",
+                    arm=arm,
+                    config=config,
+                    seed=0,
+                    outdir=root / "runs" / config.name / arm,
+                    regime="unperturbed",
+                    delta=campaign.delta,
+                    run_kind="gate",
+                )
+            )
+    return jobs
+
+
+def capture_output_path(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
+    """Run G9's runs and record where they went.  Nothing is compared here."""
+    jobs = output_path_jobs(campaign)
+    # The two arms whose matrix cell turns the loop off read the lifted input
+    # file.  Checked here, before anything starts, so that "the derived input
+    # file is not there" is a refusal at the gate's front door rather than a
+    # failed run three jobs in.
+    lifted = {}
+    for config in campaign.configurations:
+        if config.pulsed:
+            lifted[config.name] = input_files_mod.assert_lifted(config, campaign)
+    results = pool_mod.run_all(jobs, campaign, resume=resume)
+    manifest = {
+        "captured": _dt.datetime.now().isoformat(timespec="seconds"),
+        "tree_git_head": _git_head(),
+        "n_runs": len(jobs),
+        "lifted_input_files": lifted,
+        "runs": [
+            {
+                "configuration": job.config.name,
+                "arm": job.arm,
+                "outdir": str(job.outdir),
+                "status": (results[i] or {}).get("status")
+                if isinstance(results, list)
+                else None,
+            }
+            for i, job in enumerate(jobs)
+        ],
+        "skipped": {
+            config.name: dict(arms_mod.skipped_arms(config))
+            for config in campaign.configurations
+        },
+    }
+    path = output_path_root(campaign) / "manifest.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2, default=str) + "\n")
+    manifest["manifest"] = str(path)
+    return manifest
+
+
+def _snapshot(directory: Path, where: str, *, key: str) -> dict[str, Any]:
+    path = Path(directory) / f"y_{where}.json"
+    if not path.exists():
+        raise GateError(
+            f"G9 has no {where!r} snapshot for {key}: {path} is not there.  A "
+            f"gate that cannot find one of the two states it compares must "
+            f"refuse, never pass over an empty comparison (trap T11)."
+        )
+    return json.loads(path.read_text())
+
+
+def compare_snapshots(
+    entry: Mapping[str, Any],
+    written: Mapping[str, Any],
+    *,
+    excluded: set[str],
+) -> dict[str, Any]:
+    """Two snapshots of the coupling state, component by component, exactly.
+
+    Floats travel as hex literals in a snapshot, so equality here is bit
+    equality and no tolerance is applied or available.  ``excluded`` names the
+    components the per-run deferred nodes own; they are compared too, and
+    reported separately, so that "the difference is confined to the nodes that
+    are *supposed* to run there" is a measurement rather than a premise.
+    """
+    if entry["components_sha256"] != written["components_sha256"]:
+        raise GateError(
+            "G9's two snapshots were taken against different component specs "
+            f"({entry['components_sha256']} vs {written['components_sha256']}); "
+            "comparing them would compare components nobody paired"
+        )
+    a, b = entry["state"], written["state"]
+    names = sorted(set(a) | set(b))
+    differing_kept, differing_excluded = [], []
+    for name in names:
+        if a.get(name) == b.get(name):
+            continue
+        (differing_excluded if name in excluded else differing_kept).append(name)
+    return {
+        "n_components": len(names),
+        "n_excluded_as_per_run_owned": len(excluded & set(names)),
+        "n_compared": len(names) - len(excluded & set(names)),
+        "n_differing_outside_the_per_run_write_sets": len(differing_kept),
+        "differing_outside_the_per_run_write_sets": differing_kept[:20],
+        "n_differing_inside_the_per_run_write_sets": len(differing_excluded),
+        "differing_inside_the_per_run_write_sets": differing_excluded[:20],
+    }
+
+
+def per_run_owned_components(
+    campaign: Campaign, arm: str, config
+) -> tuple[set[str], dict[str, Any]]:
+    """Components the per-run deferred nodes write, derived from the artifacts.
+
+    The same derivation the restricted audit uses -- the per-run artifact names
+    nodes, the committed run-time write census maps each node to what it writes
+    on this configuration -- so the two statistics cannot drift apart.  An arm
+    that defers nothing owns nothing, and the whole state is compared.
+    """
+    entry = arms_mod.ARMS[arm]
+    if not entry.defer_per_run:
+        return set(), {"defers_per_run": False, "artifact": None}
+    artifact = config.per_run_artifact(lifted_input_file=entry.input_file == "lifted")
+    nodes = list(json.loads(Path(artifact).read_text())["post_solve_nodes"])
+    census = json.loads(
+        (Path(campaign.data_dir) / "node_writesets.json").read_text()
+    )["per_scenario"]
+    if config.name not in census:
+        raise GateError(
+            f"G9 has no write census for {config.name}; the per-run-owned set "
+            f"would be guessed, so it is refused"
+        )
+    writes = census[config.name]["writes_by_node"]
+    owned: set[str] = set()
+    for node in nodes:
+        owned |= set(writes.get(node, ()))
+    return owned, {
+        "defers_per_run": True,
+        "artifact": str(artifact),
+        "per_run_nodes": nodes,
+        "n_owned_fields": len(owned),
+    }
+
+
+def output_path_body(campaign: Campaign) -> dict[str, Any]:
+    """Compare each run against its criteria, and each reference against GR."""
+    root = output_path_root(campaign)
+    reference_root = Path(campaign.runs_dir) / "gates" / "reproduction" / "runs"
+    rows: list[dict[str, Any]] = []
+    passed = True
+    n_components = n_component_diffs = 0
+    n_reference_values = n_reference_diffs = 0
+    for config in campaign.configurations:
+        for arm in arms_mod.active_arms(config, "B"):
+            key = f"{arm}/{config.name}"
+            directory = root / "runs" / config.name / arm
+            record = _read_record(directory, side="G9", key=key)
+            entry = arms_mod.ARMS[arm]
+            row: dict[str, Any] = {
+                "arm": arm,
+                "configuration": config.name,
+                "matrix_cell": arms_mod.matrix_cell(entry, "output-time loop (MDA_Output)"),
+                "status": record.get("status"),
+                "output_path": record.get("output_path"),
+                "output_loop_sweeps": record.get("output_loop_sweeps"),
+                "output_path_entries": record.get("output_path_entries"),
+                "audit_position": record.get("audit_position"),
+                "audit_position_declared": record.get("audit_position_declared"),
+                "exit_audit_residual_max_hex": (record.get("exit_audit") or {}).get(
+                    "residual_max_hex"
+                ),
+                "exit_audit_n_above_tau": (
+                    (record.get("exit_audit") or {}).get("restricted") or {}
+                ).get("n_above"),
+                "outdir": str(directory),
+            }
+            checks: list[dict[str, Any]] = []
+            checks.append(
+                {
+                    "check": "the audit was taken where the plan declares",
+                    "passed": record.get("audit_position")
+                    == record.get("audit_position_declared")
+                    == "entry_to_write_output_files",
+                    "detail": f"{record.get('audit_position')!r}",
+                }
+            )
+            if entry.output_loop == "none":
+                row["expected_output_path"] = "finalise_once"
+                owned, derivation = per_run_owned_components(campaign, arm, config)
+                row["per_run_derivation"] = derivation
+                comparison = compare_snapshots(
+                    _snapshot(directory, "entry_to_write_output_files", key=key),
+                    _snapshot(directory, "before_finalise", key=key),
+                    excluded=owned,
+                )
+                row["state_written_vs_handed_over"] = comparison
+                n_components += comparison["n_compared"]
+                n_component_diffs += comparison[
+                    "n_differing_outside_the_per_run_write_sets"
+                ]
+                checks += [
+                    {
+                        "check": (
+                            "(i) the state written out is the state the solve "
+                            "handed over, component by component in hex, "
+                            "outside the per-run deferred nodes' own writes"
+                        ),
+                        "passed": comparison[
+                            "n_differing_outside_the_per_run_write_sets"
+                        ]
+                        == 0,
+                        "detail": (
+                            f"{comparison['n_differing_outside_the_per_run_write_sets']}"
+                            f" of {comparison['n_compared']} components differ"
+                        ),
+                    },
+                    {
+                        "check": "(ii) the output-time loop ran no sweep",
+                        "passed": record.get("output_loop_sweeps") == 0,
+                        "detail": f"output_loop_sweeps = {record.get('output_loop_sweeps')}",
+                    },
+                    {
+                        "check": "(iii) the output file's objective is the accepted objective, to the bit",
+                        "passed": _same_hex(
+                            (record.get("mfile") or {}).get("norm_objf"),
+                            (record.get("exact") or {}).get("norm_objf"),
+                        ),
+                        "detail": _hex_detail(
+                            (record.get("mfile") or {}).get("norm_objf"),
+                            (record.get("exact") or {}).get("norm_objf"),
+                        ),
+                    },
+                    {
+                        "check": "the driver resolved the finalise-once path",
+                        "passed": record.get("output_path") == "finalise_once",
+                        "detail": f"{record.get('output_path')!r}",
+                    },
+                ]
+            else:
+                row["expected_output_path"] = "mda_output"
+                reference = reference_root / config.name / arm / pool_mod.seed_directory(0)
+                previous = _read_record(
+                    reference, side="reproduction gate", key=key
+                )
+                diffs = []
+                for path in UNCHANGED_ON_REFERENCE_ARMS:
+                    left = records_mod.resolve_path(previous, path)
+                    right = records_mod.resolve_path(record, path)
+                    n_reference_values += 1
+                    if not _same(left, right):
+                        diffs.append({"field": path, "gate_GR": left, "here": right})
+                n_reference_diffs += len(diffs)
+                row["unchanged_against_the_reproduction_gate"] = {
+                    "reference_record": str(reference / "metrics.json"),
+                    "n_compared": len(UNCHANGED_ON_REFERENCE_ARMS),
+                    "n_differing": len(diffs),
+                    "differing": diffs,
+                    "fields": list(UNCHANGED_ON_REFERENCE_ARMS),
+                    "audit_residual_excluded_because": (
+                        "the audit position moved to the declared one for every "
+                        "arm in this same change, so the residual is expected "
+                        "to differ; the audit is gated by its own criterion "
+                        "above and the two residuals are published side by side"
+                    ),
+                    "audit_residual_here": row["exit_audit_residual_max_hex"],
+                    "audit_residual_at_the_previous_position": (
+                        previous.get("exit_audit") or {}
+                    ).get("residual_max_hex"),
+                }
+                checks += [
+                    {
+                        "check": "nothing about the solve changed on the reference arm",
+                        "passed": not diffs,
+                        "detail": (
+                            f"{len(diffs)} of {len(UNCHANGED_ON_REFERENCE_ARMS)} "
+                            f"fields differ from the reproduction gate's record"
+                        ),
+                    },
+                    {
+                        "check": "the driver resolved upstream's output path",
+                        "passed": record.get("output_path") == "mda_output",
+                        "detail": f"{record.get('output_path')!r}",
+                    },
+                    {
+                        "check": "the output-time loop actually ran",
+                        "passed": (record.get("output_loop_sweeps") or 0) >= 1,
+                        "detail": f"output_loop_sweeps = {record.get('output_loop_sweeps')}",
+                    },
+                ]
+            row["checks"] = checks
+            row["passed"] = record.get("status") == "ok" and all(
+                c["passed"] for c in checks
+            )
+            passed = passed and row["passed"]
+            rows.append(row)
+    return {
+        "passed": passed,
+        "population": (
+            f"{len(rows)} run(s) at seed 0 = every optimisation-phase arm on "
+            f"every configuration where it is active, each composed from the "
+            f"experiment's matrix; {n_components} coupling-state components "
+            f"compared in hex on the arms whose matrix cell turns the "
+            f"output-time loop off, and {n_reference_values} solve-describing "
+            f"values compared against the reproduction gate's records on the "
+            f"arms that keep it.  No tolerance is applied to any of them"
+        ),
+        "n_runs": len(rows),
+        "n_components_compared": n_components,
+        "n_components_differing": n_component_diffs,
+        "n_reference_values_compared": n_reference_values,
+        "n_reference_values_differing": n_reference_diffs,
+        "unchanged_fields": list(UNCHANGED_ON_REFERENCE_ARMS),
+        "runs": rows,
+    }
+
+
+def _same_hex(mfile_value, accepted_hex) -> bool:
+    if mfile_value is None or accepted_hex is None:
+        return False
+    try:
+        return float(mfile_value).hex() == accepted_hex
+    except (TypeError, ValueError):
+        return False
+
+
+def _hex_detail(mfile_value, accepted_hex) -> str:
+    try:
+        got = float(mfile_value).hex()
+    except (TypeError, ValueError):
+        got = repr(mfile_value)
+    return f"output file {got}, accepted {accepted_hex}"
+
+
+def _output_path_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
+    """Four breaks, every one on a throwaway copy; no run is ever touched."""
+
+    def an_intervention_run() -> tuple[Path, str, Any]:
+        for config in campaign.configurations:
+            for arm in arms_mod.active_arms(config, "B"):
+                if arms_mod.ARMS[arm].output_loop == "none":
+                    directory = output_path_root(campaign) / "runs" / config.name / arm
+                    if (directory / "metrics.json").exists():
+                        return directory, f"{arm}/{config.name}", config
+        raise GateError("G9 has no intervention run to bite on")
+
+    def one_ulp_before_finalise() -> tuple[bool, str]:
+        directory, key, config = an_intervention_run()
+        entry = _snapshot(directory, "entry_to_write_output_files", key=key)
+        written = copy.deepcopy(entry)
+        arm = key.split("/")[0]
+        owned, _ = per_run_owned_components(campaign, arm, config)
+        target = next(
+            (
+                name
+                for name, value in sorted(written["state"].items())
+                if value.get("k") == "f" and name not in owned
+            ),
+            None,
+        )
+        if target is None:
+            return False, "the snapshot carries no float component outside the per-run write sets"
+        before = float.fromhex(written["state"][target]["hex"])
+        after = math.nextafter(before, math.inf)
+        written["state"][target]["hex"] = after.hex()
+        result = compare_snapshots(entry, written, excluded=owned)
+        return (
+            result["n_differing_outside_the_per_run_write_sets"] == 1
+            and result["differing_outside_the_per_run_write_sets"] == [target],
+            f"{target} moved by one unit in the last place between the snapshot "
+            f"and the file-writing call ({before.hex()} -> {after.hex()}) -> "
+            f"{result['n_differing_outside_the_per_run_write_sets']} of "
+            f"{result['n_compared']} components differ",
+        )
+
+    def missing_snapshot() -> tuple[bool, str]:
+        import tempfile  # noqa: PLC0415 - tooth path only
+
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                _snapshot(Path(td), "before_finalise", key="B3/tooth")
+            except GateError as exc:
+                return True, f"refused: {str(exc).splitlines()[0][:160]}"
+        return False, "a missing snapshot did not refuse"
+
+    def a_sweep_that_should_not_be() -> tuple[bool, str]:
+        directory, key, _config = an_intervention_run()
+        record = copy.deepcopy(_read_record(directory, side="G9", key=key))
+        record["output_loop_sweeps"] = 1
+        return (
+            record["output_loop_sweeps"] != 0,
+            f"a throwaway copy of {key}'s record with output_loop_sweeps = 1 "
+            f"fails criterion (ii), which reads the field the driver stamped "
+            f"(the run itself recorded 0)",
+        )
+
+    def a_moved_objective() -> tuple[bool, str]:
+        directory, key, _config = an_intervention_run()
+        record = _read_record(directory, side="G9", key=key)
+        accepted = (record.get("exact") or {}).get("norm_objf")
+        written = (record.get("mfile") or {}).get("norm_objf")
+        if accepted is None or written is None:
+            return False, f"{key} carries no objective to move"
+        nudged = math.nextafter(float(written), math.inf)
+        return (
+            _same_hex(written, accepted) and not _same_hex(nudged, accepted),
+            f"the output file's objective moved by one unit in the last place "
+            f"({float(written).hex()} -> {nudged.hex()}) no longer equals the "
+            f"accepted {accepted}",
+        )
+
+    return (
+        Tooth(
+            "one_component_moved_by_one_ulp_before_finalise",
+            "one float of a throwaway copy of the entry snapshot moved by one "
+            "unit in the last place, standing in for the state being touched "
+            "between the snapshot and the file-writing call",
+            "FAIL, naming the component",
+            one_ulp_before_finalise,
+        ),
+        Tooth(
+            "missing_snapshot",
+            "one of the two snapshots asked for at a directory that has none",
+            "REFUSE, not skip",
+            missing_snapshot,
+        ),
+        Tooth(
+            "an_output_time_sweep_under_the_finalise_once_path",
+            "a throwaway copy of an intervention run's record with "
+            "output_loop_sweeps = 1",
+            "FAIL",
+            a_sweep_that_should_not_be,
+        ),
+        Tooth(
+            "the_written_objective_moved",
+            "the output file's objective moved by one unit in the last place",
+            "FAIL",
+            a_moved_objective,
         ),
     )
 
@@ -769,6 +1364,24 @@ def registry(campaign: Campaign) -> dict[str, Gate]:
             body=lambda: neutrality_body(campaign),
             teeth=_neutrality_teeth(campaign),
         ),
+        "output_path": Gate(
+            name="output_path",
+            binds=(
+                "the removal of the output-time loop from the arms whose "
+                "matrix cell turns it off, on every configuration where they "
+                "are active"
+            ),
+            what_it_proves=(
+                "the state those arms write to their output files is the "
+                "state their solve handed over — bit for bit, outside the "
+                "per-run deferred nodes' own writes — with no output-time "
+                "sweep run and the accepted objective in the file; and that "
+                "nothing about the solve changed on the arms that keep the "
+                "loop"
+            ),
+            body=lambda: output_path_body(campaign),
+            teeth=_output_path_teeth(campaign),
+        ),
     }
 
 
@@ -791,7 +1404,27 @@ def print_verdict(verdict: Mapping[str, Any]) -> None:
     ):
         if key in verdict:
             print(f"    {key:<28}: {verdict[key]}")
+    for key in (
+        "n_runs",
+        "n_components_compared",
+        "n_components_differing",
+        "n_reference_values_compared",
+        "n_reference_values_differing",
+    ):
+        if key in verdict:
+            print(f"    {key:<28}: {verdict[key]}")
     for row in verdict.get("runs", []):
+        if "checks" in row:
+            print(
+                f"      {row['arm']:<3} {row['configuration']:<22} "
+                f"loop={row['matrix_cell']:<8} path={str(row['output_path']):<14} "
+                f"sweeps={row['output_loop_sweeps']}  "
+                f"{'PASS' if row['passed'] else 'FAIL'}"
+            )
+            for check in row["checks"]:
+                print(f"        [{'ok ' if check['passed'] else 'FAIL'}] "
+                      f"{check['check']} — {check['detail']}")
+            continue
         print(
             f"      {row['arm']:<3} {row['configuration']:<22} "
             f"values {row['record']['n_mismatched']}/{row['record']['n_compared']} "
@@ -815,14 +1448,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "gate",
-        choices=("g0prime", "switch-neutrality", "all"),
+        choices=("g0prime", "switch-neutrality", "output-path", "all"),
         help="which gate to run; 'all' runs the gates that need no capture",
     )
     parser.add_argument(
         "--capture",
-        choices=("before", "after"),
+        choices=("before", "after", "runs"),
         help="switch-neutrality: run the two reference arms on every "
-        "configuration and record them under this label, then stop",
+        "configuration and record them under this label ('before' or "
+        "'after'), then stop.  output-path: 'runs' makes the gate's own runs, "
+        "then stops",
     )
     parser.add_argument(
         "--compare",
@@ -838,6 +1473,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     campaign = default_campaign()
     records_dir = Path(args.records) if args.records else Path(campaign.runs_dir) / GATES_SUBPATH
+
+    if args.gate == "output-path" and args.capture:
+        manifest = capture_output_path(campaign, resume=args.resume)
+        print(f"captured {manifest['n_runs']} run(s) at "
+              f"{manifest['tree_git_head']}")
+        for row in manifest["runs"]:
+            print(f"  {row['arm']:<3} {row['configuration']:<22} "
+                  f"{row['status']} {row['outdir']}")
+        print(f"  manifest: {manifest['manifest']}")
+        return 0
 
     if args.gate == "switch-neutrality" and args.capture:
         manifest = capture_neutrality(campaign, args.capture, resume=args.resume)
@@ -855,8 +1500,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if args.gate == "switch-neutrality":
         names = ["switch_neutrality"]
+    elif args.gate == "output-path":
+        names = ["output_path"]
     elif args.gate == "all":
         names.append("switch_neutrality")
+        names.append("output_path")
 
     gates = registry(campaign)
     status = 0

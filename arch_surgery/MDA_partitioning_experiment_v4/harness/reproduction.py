@@ -31,19 +31,35 @@ converged value.  ``AR`` — one evaluation with every architecture switch clear
 arm.  Both are stated in the gate's record, so a reader sees the coverage
 boundary rather than inferring it from an arm's absence.
 
-The gate-only allowance, stated rather than hidden
+The gate-only overrides, stated rather than hidden
 --------------------------------------------------
-Two arms declare a switch that selects an output path without upstream's
-output-time loop.  **No tree implements it yet** — it is approved driver change
-DR2, task A57 (driver-output-path) — and the run path refuses any arm asking for
-a switch the tree does not have, because running without it would be a
-successful run of a *different* arm under the right name.  But the previous
-revision's records for those two arms were made **before that switch existed**,
-so reproducing them means running them the way they were run.  The allowance is
-therefore: explicit, named in the gate's record and in every record it produces,
-checked to cover exactly the switches this tree cannot implement and no others,
-and **unavailable to the campaign** — the campaign composes through the same
-function with no allowance and is refused.
+The gate reproduces the **previous revision**, and in two places that revision
+did something the campaign no longer does.  Both are recorded as explicit
+**overrides**, not as omissions, and both are refused for a campaign run.
+
+*The output path.*  Two arms — the flat arm with the optimiser owning the burn
+time, and the partitioned arm — write their output files without upstream's
+output-time loop; that is a column of the matrix.  The previous revision's
+records for those arms were made before the switch that selects it existed, so
+reproducing them means running them with the loop **on**.  The gate therefore
+sets ``output_loop = upstream`` for exactly those two arms, explicitly rather
+than by leaving the variable unset, so that the driver reads the value back and
+the run record carries what it resolved.
+
+*Where the audit is taken.*  The previous revision took its exit audit **after
+the run**; the campaign takes it at the entry to the output path, which is the
+position the plan declares for every arm.  The residual is one of the values
+this gate compares bit for bit, so reproducing it means auditing where it was
+audited.  Every optimisation run of this gate therefore asks for the previous
+revision's position, and says so in its record.
+
+The guard is set equality against the matrix, not a list somebody maintains:
+the arms with an output-path override must be **exactly** the arms whose matrix
+cell says the loop is off.  An arm that gains that cell without gaining an
+override — or keeps an override after losing the cell — refuses the gate rather
+than running a comparison whose composition nobody checked.  The overrides are
+in the gate's own record and in every run record it produces, and the campaign
+composes through the same function with none and is refused if it carries one.
 
 Written by task **A50 (harness-run)**; the construction is the harness
 implementation plan's §7.  When task A52 (harness-gates) builds the gate
@@ -78,24 +94,75 @@ from harness.selfcheck import Check  # noqa: E402
 #: small and its content goes into the report's tables.
 RUNS_SUBPATH = Path("gates") / "reproduction"
 
-#: Switch terms this tree does not implement that the gate is allowed to omit,
-#: per arm, **with the reason recorded**.  Nothing else may be added here, and
-#: nothing outside this gate may use it.
-GATE_ALLOWANCE: dict[str, tuple[str, ...]] = {
-    "B1": ("output_loop",),
-    "B3": ("output_loop",),
-}
+#: Switch terms this gate sets **differently from the matrix**, per arm, with
+#: the reason recorded.  Derived from the matrix rather than listed: see
+#: :func:`reproduction_overrides` and :func:`assert_overrides_match_matrix`.
+#: Nothing outside this gate may use them, and a campaign run carrying one is
+#: refused by ``pool.environment_for``.
+OVERRIDDEN_TERM = "output_loop"
+OVERRIDDEN_VALUE = "upstream"
 
-GATE_ALLOWANCE_REASON = (
-    "the arm declares the switch that selects an output path without "
-    "upstream's output-time loop.  No tree implements it yet (approved driver "
-    "change DR2, task A57 (driver-output-path)), and the previous revision's "
-    "records for this arm were made before it existed — so reproducing them "
-    "means running the arm the way it was run.  The allowance is recorded in "
-    "this gate's record and in every run record it produces, is checked to "
-    "cover exactly the switches this tree cannot implement, and is not "
-    "available to the campaign."
+REPRODUCTION_OVERRIDE_REASON = (
+    "the arm's matrix cell says its output files are written without "
+    "upstream's output-time loop, and the previous revision's records for this "
+    "arm were made before the switch that selects that path existed — so "
+    "reproducing them means running the arm the way it was run, with the loop "
+    "on.  It is set explicitly rather than left unset so that the driver reads "
+    "the value back and the record carries what it resolved.  Recorded in this "
+    "gate's record and in every run record it produces; refused for a campaign "
+    "run."
 )
+
+#: Where this gate takes its exit audit, and why it is not the campaign's
+#: position.
+REPRODUCTION_AUDIT_POSITION = "after_run"
+
+
+def reproduction_overrides(arm: str) -> dict[str, str]:
+    """What this gate sets differently from the matrix, for one arm.
+
+    Derived from the arm itself: an arm whose matrix cell turns the output-time
+    loop off is run with it on, because that is what the records being
+    reproduced were made with.  Every other arm gets nothing.
+    """
+    entry = arms_mod.ARMS.get(arm)
+    if entry is None or entry.phase != "B":
+        return {}
+    if getattr(entry, OVERRIDDEN_TERM) == "none":
+        return {OVERRIDDEN_TERM: OVERRIDDEN_VALUE}
+    return {}
+
+
+def assert_overrides_match_matrix() -> dict[str, list[str]]:
+    """Set equality between the overridden arms and the matrix, or refuse.
+
+    The failure this prevents: an arm gains the matrix cell and nobody adds the
+    override, so the gate runs it under the campaign's composition against
+    records made under the previous revision's and reports a difference as the
+    harness's.  Or an arm loses the cell and keeps the override, so the gate
+    runs something the matrix no longer describes.  Both are silent; both are
+    refused here.
+    """
+    from_matrix = {
+        name
+        for name, entry in arms_mod.ARMS.items()
+        if entry.phase == "B" and getattr(entry, OVERRIDDEN_TERM) == "none"
+    }
+    overridden = {
+        name for name in arms_mod.ARMS if reproduction_overrides(name)
+    }
+    if from_matrix != overridden:
+        raise ReproductionError(
+            f"the arms this gate overrides {sorted(overridden)} are not the "
+            f"arms whose matrix cell turns the output-time loop off "
+            f"{sorted(from_matrix)}; a gate whose composition does not follow "
+            f"the matrix is refused rather than run"
+        )
+    return {
+        "arms": sorted(overridden),
+        "term": [OVERRIDDEN_TERM],
+        "value": [OVERRIDDEN_VALUE],
+    }
 
 #: The coupling component a constant owns when the burn time leaves the loop.
 PINNED_COMPONENT = "times.t_plant_pulse_burn"
@@ -180,7 +247,8 @@ def _job_for(
             regime="perturbed" if displaced else "unperturbed",
             delta=campaign.delta,
             run_kind="gate",
-            allow_pending=GATE_ALLOWANCE.get(run.arm, ()),
+            reproduction_overrides=reproduction_overrides(run.arm),
+            audit_position=REPRODUCTION_AUDIT_POSITION,
         )
     return pool_mod.Job(
         phase="A",
@@ -191,7 +259,6 @@ def _job_for(
         regime="perturbed" if displaced else "unperturbed",
         delta=campaign.delta,
         run_kind="gate",
-        allow_pending=GATE_ALLOWANCE.get(run.arm, ()),
     )
 
 
@@ -795,7 +862,8 @@ def _composition_tooth(
         regime="unperturbed",
         delta=campaign.delta,
         run_kind="gate",
-        allow_pending=GATE_ALLOWANCE.get("B3", ()),
+        reproduction_overrides=reproduction_overrides("B3"),
+        audit_position=REPRODUCTION_AUDIT_POSITION,
         override_env={switch: wrong_value},
     )
     pool_mod.run_all([job], campaign, resume=resume)
@@ -874,9 +942,16 @@ def stage(
         "tree": str(campaign.tree),
         "root": str(root),
         "workers": pool_mod.workers(campaign),
-        "allowance": {
-            "arms": {arm: list(terms) for arm, terms in GATE_ALLOWANCE.items()},
-            "why": GATE_ALLOWANCE_REASON,
+        "reproduction_overrides": {
+            "arms": {
+                arm: reproduction_overrides(arm)
+                for arm in arms_mod.ARMS
+                if reproduction_overrides(arm)
+            },
+            "why": REPRODUCTION_OVERRIDE_REASON,
+            "audit_position": REPRODUCTION_AUDIT_POSITION,
+            "audit_position_why": records_mod.AUDIT_POSITION_AFTER_RUN_WHY,
+            "matches_the_matrix": assert_overrides_match_matrix(),
             "available_to_the_campaign": False,
         },
         "coverage_boundary": dict(reference_mod.ARMS_WITHOUT_PREVIOUS_RECORDS),

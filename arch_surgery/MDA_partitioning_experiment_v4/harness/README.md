@@ -125,12 +125,26 @@ harness and in the driver both.*
 | deferral `per_call` | `PROCESS_ARCH_DEFER_PER_CALL` | `feedforward`, `feedforward_lifted` | yes | `…_HOIST` |
 | deferral `per_run` | `PROCESS_ARCH_DEFER_PER_RUN` | a file | yes | `…_POST_SOLVE` |
 | burn-time owner | `PROCESS_ARCH_BURN_TIME_OWNER` | `loop` (the default), `optimiser`, `constant:<hex float>` | yes | `…_LIFT`, `…_PIN_BURN_TIME` |
-| output-time loop | *not implemented* → `PROCESS_ARCH_OUTPUT_LOOP` | `none` | yes, once it exists | — |
+| output-time loop | `PROCESS_ARCH_OUTPUT_LOOP` | `upstream` (the default), `none` | yes, in the optimisation phase | — |
 | predicate mode | *not implemented* → `PROCESS_ARCH_PREDICATE` | `mixed` | only for the trial | — |
 | pass trace | `PROCESS_ARCH_PASS_TRACE` | a file | never; cleared | — |
 | pass trace detail | `PROCESS_ARCH_PASS_TRACE_FULL_FROM` | a number | never; cleared | — |
 
-**Three of those rows are worth a sentence, because a switch disappeared behind each.**
+**Four of those rows are worth a sentence: a switch disappeared behind three of them, and one
+of them is where the experiment's own intervention shows up in the driver.**
+
+*The output path is a choice.* Upstream writes its output files through a **second** loop. Having
+accepted a design, it evaluates the whole model set again, writes an output file to a scratch
+location, and repeats — up to ten times — until two successive files agree number for number; only
+then does it write the real ones. That loop belongs to the incumbent's stopping rule and not to the
+models: an arm whose solve has already converged the coupling state to the shared tolerance has
+nothing left for it to find, and re-solving the state before writing it means the numbers in the
+output files are not the numbers the optimiser accepted.
+`PROCESS_ARCH_OUTPUT_LOOP=none` therefore writes the files once, from the accepted state, and runs
+no output-time sweep at all. Unset, the loop is exactly where upstream put it. Either way the
+driver now **counts** what it did — how many sweeps that loop took, and how many times the output
+path was entered — so the second loop's cost is a column of a table rather than a term nobody
+measured, and `0` under the one-call path is a count rather than a claim.
 
 *How often the block schedule runs is no longer a setting.* Choosing `PROCESS_ARCH_MDA=partitioned`
 *is* choosing to run the block schedule exactly once. An earlier revision had a second switch that
@@ -493,11 +507,12 @@ checks one, but producing it is the artifacts task), the census stages, the rema
 their framework, the tally, and the analysis. The preflight names each missing piece and the stage
 that produces it rather than falling back to something that happens to be there.
 
-Three things the driver does not supply yet, which every record carries as an explicit null with
-the reason and the change that will fill it in: how many times the convergence test was evaluated
-and over how many components; how many sweeps the output-time loop took; and what each optimiser
-attempt cost on its own. A record says "the driver does not count this yet", never nothing at
-all.
+Two things the driver does not supply yet, which every record carries as an explicit null with the
+reason and the change that will fill it in: how many times the convergence test was evaluated and
+over how many components; and what each optimiser attempt cost on its own. A record says "the
+driver does not count this yet", never nothing at all. The output-time loop's sweep count is no
+longer among them — the driver counts it, and every optimisation record carries the number and
+which of the two output paths ran.
 
 ---
 

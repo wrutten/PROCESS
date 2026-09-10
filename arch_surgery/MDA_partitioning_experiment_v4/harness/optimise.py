@@ -48,12 +48,18 @@ from harness import failure as failure_mod  # noqa: E402
 from harness import perturb  # noqa: E402
 from harness import records as records_mod  # noqa: E402
 
-#: Where this phase's audit sweep is taken, and where the plan says it should
-#: be.  They differ, and the difference is recorded rather than papered over:
-#: see :data:`harness.records.AUDIT_POSITION_NOT_AVAILABLE` for what taking it
-#: at the declared position would need from the driver.
-AUDIT_POSITION = "after_run"
+#: Where the plan says this phase's audit sweep must be taken, in every arm:
+#: the entry to the output path, before any output-time sweep — the state the
+#: solve handed over.  It is reached by a snapshot the driver takes there, with
+#: the residual computed afterwards from the restored snapshot; see
+#: :data:`harness.records.AUDIT_POSITION_HOW`.
+#:
+#: A run may be asked for ``after_run`` instead, which is where the previous
+#: revision audited.  Exactly one caller may ask — the reproduction gate, whose
+#: whole purpose is to reproduce that revision's recorded residuals — and the
+#: run record says so; see :data:`harness.records.AUDIT_POSITION_AFTER_RUN_WHY`.
 AUDIT_POSITION_DECLARED = "entry_to_write_output_files"
+AUDIT_POSITION = AUDIT_POSITION_DECLARED
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -92,6 +98,18 @@ def build_parser() -> argparse.ArgumentParser:
                              "recorded in the record, never silent")
     parser.add_argument("--switches-asked", default="{}",
                         help="JSON of term -> value the arm asked for")
+    parser.add_argument("--audit-position",
+                        default=AUDIT_POSITION_DECLARED,
+                        choices=records_mod.OPTIMISATION_AUDIT_POSITIONS,
+                        help="where the exit audit is taken.  The default is "
+                             "the position the plan declares, reached by the "
+                             "driver's snapshot; 'after_run' is the previous "
+                             "revision's position and is the reproduction "
+                             "gate's alone")
+    parser.add_argument("--reproduction-overrides", default="{}",
+                        help="JSON of what the reproduction gate set "
+                             "differently from the campaign, stamped into the "
+                             "record; empty for every other run")
     parser.add_argument("--node-census", action="store_true",
                         help="count model executions per node name")
     parser.add_argument("--force-maxcal", type=int, default=None,
@@ -136,9 +154,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     record["outdir"] = str(outdir)
     record["force_maxcal"] = args.force_maxcal
-    record["audit_position"] = AUDIT_POSITION
+    overrides = json.loads(args.reproduction_overrides)
+    record["reproduction_overrides"] = overrides or None
+    record["audit_position"] = args.audit_position
     record["audit_position_declared"] = AUDIT_POSITION_DECLARED
-    record["audit_position_note"] = records_mod.AUDIT_POSITION_NOT_AVAILABLE
+    record["audit_position_note"] = (
+        records_mod.AUDIT_POSITION_HOW
+        if args.audit_position == AUDIT_POSITION_DECLARED
+        else records_mod.AUDIT_POSITION_AFTER_RUN_WHY
+    )
     child.stamp_capabilities_absent(record, phase="B")
 
     # ------------------------------------------------------------------
@@ -181,6 +205,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     call_census = child.install_call_models_census(caller_mod)
 
+    # The coupling-state snapshot the audit is taken from, when the audit is
+    # taken where the plan declares.  Installed before the run, because the
+    # position it is taken at is inside the run.
+    if args.audit_position == AUDIT_POSITION_DECLARED:
+        snapshot_state = child.install_exit_snapshot(
+            caller_mod,
+            module_solve_mod,
+            coupling_state_path=Path(args.coupling_state),
+        )
+    else:
+        snapshot_state = {
+            "installed": False,
+            "why": records_mod.AUDIT_POSITION_AFTER_RUN_WHY,
+        }
+
     try:
         from process.core.solver import solver as solver_mod
 
@@ -219,12 +258,26 @@ def main(argv: list[str] | None = None) -> int:
     # The counters, read BEFORE the audit takes its extra sweep.
     # ------------------------------------------------------------------
     record.update(child.harvest_counters(caller_mod, module_solve=module_solve_mod))
+    record.update(child.harvest_output_path(caller_mod))
     record["first_call_models"] = call_census["first_call_models"]
+    record["audit_snapshot"] = (
+        child.collect_exit_snapshots(caller_mod, snapshot_state, outdir)
+        if snapshot_state.get("installed")
+        else snapshot_state
+    )
 
     # ------------------------------------------------------------------
-    # The audit: the accuracy the arm achieved, on the same ruler in every arm.
+    # The audit: the accuracy the arm achieved, on the same ruler in every arm,
+    # at the same position in every arm.
     # ------------------------------------------------------------------
-    if single_run is not None:
+    from_snapshot = None
+    if args.audit_position == AUDIT_POSITION_DECLARED:
+        from_snapshot = (getattr(caller_mod, "EXIT_SNAPSHOTS", {}) or {}).get(
+            AUDIT_POSITION_DECLARED
+        )
+    if single_run is not None and (
+        args.audit_position != AUDIT_POSITION_DECLARED or from_snapshot is not None
+    ):
         n = int(single_run.data.numerics.n_iteration_variables)
         record["exit_audit"] = child.take_exit_audit(
             caller_mod,
@@ -234,13 +287,26 @@ def main(argv: list[str] | None = None) -> int:
             x=single_run.data.numerics.xcm[:n],
             coupling_state_path=Path(args.coupling_state),
             outdir=outdir,
-            position=AUDIT_POSITION,
+            position=args.audit_position,
             write_state=True,
+            from_snapshot=from_snapshot,
         )
+    elif single_run is not None:
+        record["exit_audit"] = {
+            "skipped": (
+                "the run reached no snapshot at "
+                f"{AUDIT_POSITION_DECLARED}: it never entered the output path, "
+                "so there is no handed-over state to audit"
+            ),
+            "audit_position": args.audit_position,
+            "positions_that_raised": dict(
+                getattr(caller_mod, "EXIT_SNAPSHOT_ERRORS", {}) or {}
+            ),
+        }
     else:
         record["exit_audit"] = {
             "skipped": f"status {record['status']!r}: there is no exit state",
-            "audit_position": AUDIT_POSITION,
+            "audit_position": args.audit_position,
         }
 
     # ------------------------------------------------------------------
