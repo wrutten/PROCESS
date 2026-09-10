@@ -616,3 +616,60 @@ python experiment_runner.py --gate reproduction \
 | `24652a72` | `PROCESS_diff.py --markdown` deduplicates a claim per file rather than per hunk, so the table is readable. |
 | — | G1 compared: **PASS**, 0/2 383 values, 0/51 319 lines, 3 teeth. GR re-run: **PASS**, 20/20 runs, 270/270 values, 7 teeth, both substitutes. |
 | *(this commit)* | this report. |
+
+---
+
+## 14. Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before merge, against the report at `a0c0526c` and the copy
+and harness on the same branch. Every gate was re-run by the orchestrator, not read off the report.*
+
+**Verified independently.** (1) **Gate GR re-run from scratch** against the renamed driver
+(`--gate reproduction`, fresh records directory): 20 of 20 runs reproduced, **270 of 270 compared
+values identical**, record contract 20 of 20, substitutes `A0p` and `AR` PASS, **seven teeth
+tripped** — the composition control now runs `B3` with `PROCESS_ARCH_MDA=flat` and does not
+reproduce. (2) **G1** through `harness/gates.py switch-neutrality --compare` on the branch's own
+before/after captures: 6 run pairs, **0 of 2 383** deterministic record values and **0 of 51 319**
+output-file lines differ; the three teeth trip (one ULP, one line, a missing before record refused).
+(3) **G0′** through `gates.py g0prime` and `PROCESS/copy_gates.py all`: 77 model files, 76 identical,
+`pulse.py` alone, all teeth; `copy-identity` PASS with five permitted-edit files and 0 unexplained;
+`PROCESS_diff.py` exit 0, 65 hunks, 0 unexplained. (4) `experiment_runner.py --selfcheck` against the
+copy: six checks PASS, the pending list still exactly the five `B1`/`B3` pairs. (5) Scope: eighteen
+files — the five driver files of the copy, the copy's provenance and diff tooling, the harness files
+the brief assigned, `gates.py`, the README's registry section and this report; `models/`, the
+repository-root `process/`, `experiment_runner.py` and every A51-owned file untouched. (6) No
+retired name is read anywhere in the copy outside the `RETIRED_SWITCHES` table that raises on it.
+
+**Endorsed.** Removing the verified-schedule path rather than leaving it unreachable, with GR as the
+check that removal moved nothing — the block-sweep, per-block and pass-histogram values of `A1` and
+`B3` reproduce V3 through code the repeated schedule has been deleted from, which is a stronger
+statement than "unreachable" and one the gate can make. The typed `ArchitectureRefusal` at 34 raise
+sites with the harness classifying by type. The burn-time owner as one switch whose `constant:<hex>`
+form makes pin-without-lift structurally impossible instead of refused. Comparing the driver's
+`RETIRED_SWITCHES` table with the harness registry rather than assuming them equal. Capturing G1's
+"before" at a commit verified byte-identical to the branch point.
+
+**Limits I hold it to.** (a) G1's exclusions (648 record values, 45 output-file lines) are named
+per item with a reason in the gate record; they are the non-deterministic and provenance fields, and
+A52 (harness-gates) inherits the list as the declared exclusion set, to be reviewed rather than
+extended. (b) The value vocabulary of the switches §11.2 does not name (`build_after_physics`,
+`fw_geometry`, `feedforward`, `feedforward_lifted`) is unchanged; `feedforward_lifted` keeps the
+mechanism word, as §11.2 permits. (c) `B1`/`B3` still run under the gate-only allowance for the
+output-time-loop switch until A57 lands.
+
+**Rulings and consequences drawn (orchestrator, today).** *Plan §3.2's "outer loop" row:* the
+switch is gone, so the row is renamed **"block schedule"** with cells `one pass` where it said
+`trust`, and the harness's transcription (`arms.PLAN_MATRIX`, `matrix_cell`) moves with it in the
+same commit, verified by the self-check's rungs check; the rung table's "+ trust" becomes "+ one pass
+over the block schedule"; the plan's switch list is restated in the §11.2 names. *Record fields
+carrying V3 mechanism words* (`module_solve_totals`, `outer_pass_hist`, `post_solve_totals`,
+`n_prime_calls`, `pin_intact_at_exit`): renamed by **A53 (harness-tally)** through a field-name map
+in `reference.py` (V3 path → V4 path) so the committed reproduction reference keeps its bytes and
+the comparator translates — the reference is not regenerated. *`process/models/pulse.py:246`'s
+comment naming the retired `PROCESS_ARCH_LIFT`:* a frozen model file; left as it is and put to the
+user in the final report as a D11 question (comment-only). *A52 (harness-gates)* wires
+`gates.registry` into `experiment_runner.py --gate <name>` and completes the gate set; A57
+(driver-output-path) is dispatched off the merged tip.
+
+**Verdict.** Fit to merge; nothing returned. The rename is a rename: the copy says what the
+experiment plan says, and every measured quantity is where it was.
