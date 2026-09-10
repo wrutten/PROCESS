@@ -2,7 +2,7 @@
   "task": "A44 transfer-gap",
   "provenance": {
     "tree": "/home/wrutten/projects/PROCESS_surgery_worktrees/A44-transfer-gap",
-    "git_head": "be075584d41e79451a915ea64f9fa83598b71ed4",
+    "git_head": "b72ac54a12ac62a7fd92c077b2fd46ab4d275384",
     "git_branch": "A44-transfer-gap",
     "git_dirty": false,
     "python": "/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python",
@@ -128,6 +128,41 @@
         "retry_accounting": {
           "retried_seeds_B0_or_B3": [],
           "note": "no retry in the set"
+        },
+        "per_seed_rho_inloop": {
+          "B0->B3": {
+            "n": 22,
+            "min": 0.5995803537018799,
+            "median": 0.615769570477697,
+            "max": 0.6175998020399378,
+            "mean_of_seed_ratios": 0.6143301535211393,
+            "ratio_of_sums": 0.6141526130750704,
+            "spread_max_minus_min": 0.01801944833805791,
+            "argmin_seed": 11,
+            "argmax_seed": 18
+          },
+          "B1->B3": {
+            "n": 22,
+            "min": 0.6202041769533596,
+            "median": 0.6354492357360362,
+            "max": 0.6368593238822248,
+            "mean_of_seed_ratios": 0.6345633071459857,
+            "ratio_of_sums": 0.6345294857838861,
+            "spread_max_minus_min": 0.01665514692886516,
+            "argmin_seed": 14,
+            "argmax_seed": 24
+          },
+          "B0->B1": {
+            "n": 22,
+            "min": 0.9522973493769538,
+            "median": 0.9693371845545758,
+            "max": 0.9721991532461722,
+            "mean_of_seed_ratios": 0.9681087809147225,
+            "ratio_of_sums": 0.9678866417316406,
+            "spread_max_minus_min": 0.01990180386921847,
+            "argmin_seed": 11,
+            "argmax_seed": 18
+          }
         },
         "st_rung_split": null,
         "B1_B2_B3_identical_on_all_converged_seeds": true,
@@ -283,6 +318,41 @@
           },
           "note": "the identical-converged construction COUNTS the failed attempts' evaluations in N and C (they are real cost to reach convergence) but check 2's n_solver_iterations is the final attempt's only"
         },
+        "per_seed_rho_inloop": {
+          "B0->B3": {
+            "n": 11,
+            "min": 0.6114468430457458,
+            "median": 0.6191801825021682,
+            "max": 0.6199974610355925,
+            "mean_of_seed_ratios": 0.6182583342236594,
+            "ratio_of_sums": 0.6161572583290476,
+            "spread_max_minus_min": 0.008550617989846687,
+            "argmin_seed": 1,
+            "argmax_seed": 18
+          },
+          "B1->B3": {
+            "n": 11,
+            "min": 0.6486992587090084,
+            "median": 0.6506746031746031,
+            "max": 0.6519488455327135,
+            "mean_of_seed_ratios": 0.6508342708108611,
+            "ratio_of_sums": 0.6509566415411386,
+            "spread_max_minus_min": 0.0032495868237051306,
+            "argmin_seed": 18,
+            "argmax_seed": 6
+          },
+          "B0->B1": {
+            "n": 11,
+            "min": 0.9401034272854922,
+            "median": 0.9510415971810758,
+            "max": 0.9557548474303238,
+            "mean_of_seed_ratios": 0.9499487050733215,
+            "ratio_of_sums": 0.9465411657377002,
+            "spread_max_minus_min": 0.015651420144831563,
+            "argmin_seed": 1,
+            "argmax_seed": 18
+          }
+        },
         "st_rung_split": null,
         "B1_B2_B3_identical_on_all_converged_seeds": true,
         "B0_B1_problem_calls_differ_seeds": [
@@ -406,6 +476,19 @@
             "iters_ratio_summed_attempts": 0.9529837251356239
           },
           "note": "the identical-converged construction COUNTS the failed attempts' evaluations in N and C (they are real cost to reach convergence) but check 2's n_solver_iterations is the final attempt's only"
+        },
+        "per_seed_rho_inloop": {
+          "B0->B3": {
+            "n": 22,
+            "min": 0.5336156460074248,
+            "median": 0.5816620112023257,
+            "max": 0.5961174713787954,
+            "mean_of_seed_ratios": 0.5721015647408645,
+            "ratio_of_sums": 0.5603885630848231,
+            "spread_max_minus_min": 0.06250182537137061,
+            "argmin_seed": 24,
+            "argmax_seed": 19
+          }
         },
         "st_rung_split": {
           "B0->B2_differ": [
@@ -653,13 +736,12 @@
           "False": 81
         },
         "runner_last_commit": "6ccffb81",
-        "commits_touching_measuring_code_since_runner_commit": [],
-        "measuring_code_unchanged_across_probe": true,
-        "tracked_tree_clean_now": true,
-        "untracked_now": [
-          "?? arch_surgery/docs/data/a44_transfer_gap_summary.json",
-          "?? arch_surgery/docs/reports/A44_transfer_gap.md"
+        "commits_touching_measuring_code_since_runner_commit": [
+          "b01fccec"
         ],
+        "measuring_code_unchanged_across_probe": false,
+        "tracked_tree_clean_now": true,
+        "untracked_now": [],
         "note": "tree_git_dirty in a record is git status --porcelain INCLUDING untracked files (run_one._provenance); the probe's records were stamped while the draft report and summary JSON were untracked"
       },
       "rho_A_0p10": 0.5217391304347826,
@@ -967,13 +1049,12 @@
           "False": 81
         },
         "runner_last_commit": "6ccffb81",
-        "commits_touching_measuring_code_since_runner_commit": [],
-        "measuring_code_unchanged_across_probe": true,
-        "tracked_tree_clean_now": true,
-        "untracked_now": [
-          "?? arch_surgery/docs/data/a44_transfer_gap_summary.json",
-          "?? arch_surgery/docs/reports/A44_transfer_gap.md"
+        "commits_touching_measuring_code_since_runner_commit": [
+          "b01fccec"
         ],
+        "measuring_code_unchanged_across_probe": false,
+        "tracked_tree_clean_now": true,
+        "untracked_now": [],
         "note": "tree_git_dirty in a record is git status --porcelain INCLUDING untracked files (run_one._provenance); the probe's records were stamped while the draft report and summary JSON were untracked"
       },
       "rho_A_0p10": 0.568,
@@ -1302,13 +1383,12 @@
           "False": 81
         },
         "runner_last_commit": "6ccffb81",
-        "commits_touching_measuring_code_since_runner_commit": [],
-        "measuring_code_unchanged_across_probe": true,
-        "tracked_tree_clean_now": true,
-        "untracked_now": [
-          "?? arch_surgery/docs/data/a44_transfer_gap_summary.json",
-          "?? arch_surgery/docs/reports/A44_transfer_gap.md"
+        "commits_touching_measuring_code_since_runner_commit": [
+          "b01fccec"
         ],
+        "measuring_code_unchanged_across_probe": false,
+        "tracked_tree_clean_now": true,
+        "untracked_now": [],
         "note": "tree_git_dirty in a record is git status --porcelain INCLUDING untracked files (run_one._provenance); the probe's records were stamped while the draft report and summary JSON were untracked"
       },
       "rho_A_0p10": 0.5016307893020222,

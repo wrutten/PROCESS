@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | **Question** | The V3 experiment measured the partitioned architecture twice: **Phase A** as the cost of one evaluation of the coupled models from a perturbed state, with no optimiser, and **Phase B** as the cost of whole optimisations. The plan's *transfer argument* said the two should agree: end-to-end saving ≈ Phase A's per-call saving × an unchanged number of optimiser iterations. Measured, they do not (I-17). What exactly stands between them, and can V4's method be changed so they agree? |
-| **Verdict, in one line** | The gap factorises exactly into two terms that the transfer argument never carried: an **evaluation-count** term, which is what Phase B's check 2 (iterations) cannot see, and a **per-evaluation** term, which is uniform in sign on every config and is the regime mismatch the original I-17 hypothesis named. **The preliminary experiment confirms the mechanism on all three configs**: a Phase A evaluation entered at a design-variable step of the optimiser's own size reproduces the in-loop cost per evaluation, the sweep counts and the per-evaluation ratio (within 0.003 of the in-loop value); with Phase A measured there and the multiplier carried in evaluations, the transfer closes to **+0.5 % / −0.3 % / +0.4 %** (nof / lad / st) from +22.6 % / −20.7 % / +6.3 %. A smaller coupling-state perturbation (V4 item 1a's δ = 0.001) does **not** do this. **Third structural result:** on both pulsed configs B1, B2 and B3 have identical evaluation and iteration counts on every converged seed — the partition and the trust step are invisible to the optimiser's trajectory; only the lift moves it. |
+| **Verdict, in one line** | The gap factorises exactly into two terms that the transfer argument never carried: an **evaluation-count** term, which is what Phase B's check 2 (iterations) cannot see, and a **per-evaluation** term, which is uniform in sign on every config and is the regime mismatch the original I-17 hypothesis named. **The preliminary experiment confirms the mechanism on all three configs**: a Phase A evaluation entered at a design-variable step of the optimiser's own size reproduces the in-loop cost per evaluation, the sweep counts and the per-evaluation ratio; with Phase A measured there and the multiplier carried in evaluations, **the transfer closes to within the E3/E3b bracket, ≤ 5 %, and to ≤ 1 % at E3b** (+0.5 % / −0.3 % / +0.4 % for nof / lad / st), from +22.6 % / −20.7 % / +6.3 %. The bracket is the probe's resolution; the ≤ 1 % figure is at the declared regime only. A smaller coupling-state perturbation (V4 item 1a's δ = 0.001) does **not** do this. **Third structural result:** on both pulsed configs B1, B2 and B3 have identical evaluation and iteration counts on every converged seed — the partition and the trust step are invisible to the optimiser's trajectory; only the lift moves it. |
 | **Report-level finding** | `low_aspect_ratio_DEMO`'s published headline B3/B0 = **0.450** (V3 report §5.5, n = 11) carries one seed on which the flat baseline **failed its first VMCON attempt after 100 iterations and converged on a retry**; the cost of the failed attempt is inside the node-call sum, but check 2 records only the 16 iterations of the retry. Over the ten seeds with no retry in either arm, lad's B3/B0 is **0.659**. Both readings are published here; which one V4 reports is a decision for V4 item 5b, not for this task. |
 | **What is not threatened** | Nothing in Phase A. The B3/B0 sign on every config (the block arm executes fewer model-node evaluations end to end). The V3 conclusion that the partition's per-call ratio must not be read as an end-to-end prediction — that stands, and now has a mechanism. |
 | **Recommendation for V4** | Worth doing, and small (§7): a stencil-regime entry set in Phase A beside δ = 0.10 (not a second δ amplitude); the A0p arm (item 1c); check 2 in evaluations with per-attempt node calls and both retry readings (item 5b); the transfer restated as ρ_A(stencil) × the evaluation multiplier, expected residual ≤ 5 %. |
@@ -168,6 +168,14 @@ converged on the epsfcn ×10 retry; the failed attempt's evaluations are in the 
 in check 2's iteration count. Over the ten seeds with no retry in either arm the ratio is 0.659. Both
 readings are valid answers to different questions and are published side by side in A44's report;
 the campaign-level figure stands as the cost including the flat arm's failed attempt."*
+
+**Proposed erratum note for V3 report §6, beside the §5.5 one, for the user to accept verbatim or
+amend:** *"Erratum (A44, 2026-09-10): the sentence 'The uniform sign is gone' rests on
+`low_aspect_ratio_DEMO`'s −20.7 %, which is the retry-accounting artefact of §5.5's erratum: with
+seed 1's failed first attempt carried as its own term the over-prediction is +22.6 % / +16.1 % /
++6.3 % (tok / lad / st), one sign on every config, and the per-evaluation mechanism I-17 originally
+named is confirmed by A44's probe. The sweep-unit test in this section under-stated the asymmetry
+because a block sweep is not a unit of cost."*
 
 **The uniform sign is restored.** V3 report §6 wrote: *"The uniform sign is gone. tok reproduces its
 V2 over-prediction to the decimal; st's shrinks from +41.8 % to +6.3 %; and lad reverses — Phase A
@@ -342,14 +350,49 @@ stencil regime every arm's cost per evaluation lands within 1–7 % of its in-lo
 per-block composition reproduced. The in-loop value lies between E3 (one coordinate moved by ε from
 the fixed point) and E3b (moved by 2 ε from the forward point's fixed point), as the stencil's own
 step sequence predicts, and closer to E3b. **A1/A0 at E3b is within 0.003 of ρ_B on every config**
-(0.611 / 0.618 / 0.558 against 0.614 / 0.616 / 0.560); **A1/A0p is within 0.02 of the in-loop
-B3/B1** on both pulsed configs (0.652 / 0.672 against 0.635 / 0.651), which is the one rung where
-the evaluation count is identical seed for seed, so its end-to-end ratio *is* its per-evaluation
-ratio.
+(0.611 / 0.618 / 0.558 against 0.614 / 0.616 / 0.560); **A1/A0p sits above the in-loop B3/B1 by +0.017 / +0.021 on both pulsed configs** (0.652 / 0.672
+against 0.635 / 0.651) — the one rung where the evaluation count is identical seed for seed, so its
+end-to-end ratio *is* its per-evaluation ratio. That residual has **one sign on both configs** (the
+probe shows slightly *less* saving than the optimiser realises), so it is a directional residual
+and not scatter. Two candidates, neither separated here: the block arm enters the probe from the
+flat arm's fixed point rather than from its own trust-mode exit; and the pinned arms hold the burn
+time as a **constant** where B3's optimiser owns it as a **design variable**, so A0p/A1 and B1/B3
+differ in the owner of one coupling even at the same switch settings.
 
 **Verdict under the pre-declared rule: SUPPORTED on all three configs**, on both E3b (declared)
 and E3, and on both ratio constructions. Distance of the E3b ratio from ρ_B: −0.003 / +0.002 /
 −0.002; from ρ_A(0.10): +0.09 / +0.05 / +0.06.
+
+**Is ρ_B a per-seed property or a pooled mean?** (Assessment addition ii; records only.) The
+probe agrees with a pooled ratio; whether that agreement is a mechanism depends on how tight the
+in-loop ratio is across seeds.
+
+*Caption: the in-loop per-evaluation ratio computed seed by seed over each config's
+identical-converged set — for seed s, ((N − P)/C)_b(s) ÷ ((N − P)/C)_a(s) — with its minimum,
+median, maximum and mean beside the pooled ratio of sums used everywhere else. Stage `factorise`
+at `b72ac54a`.*
+
+| config | rung | n | rho per seed: min | median | max | mean of seed ratios | ratio of sums | argmin seed | argmax seed |
+|---|---|---|---|---|---|---|---|---|---|
+| nof | B0->B3 | 22 | 0.5996 | 0.6158 | 0.6176 | 0.6143 | 0.6142 | 11 | 18 |
+| nof | B1->B3 | 22 | 0.6202 | 0.6354 | 0.6369 | 0.6346 | 0.6345 | 14 | 24 |
+| nof | B0->B1 | 22 | 0.9523 | 0.9693 | 0.9722 | 0.9681 | 0.9679 | 11 | 18 |
+| lad | B0->B3 | 11 | 0.6114 | 0.6192 | 0.6200 | 0.6183 | 0.6162 | 1 | 18 |
+| lad | B1->B3 | 11 | 0.6487 | 0.6507 | 0.6519 | 0.6508 | 0.6510 | 18 | 6 |
+| lad | B0->B1 | 11 | 0.9401 | 0.9510 | 0.9558 | 0.9499 | 0.9465 | 1 | 18 |
+| st | B0->B3 | 22 | 0.5336 | 0.5817 | 0.5961 | 0.5721 | 0.5604 | 24 | 19 |
+
+On **nof and lad the in-loop ratio is tight**: every seed lies within ±0.02 of the pooled value
+(spread 0.018 and 0.009 on B0→B3; 0.017 and 0.003 on B1→B3), so the probe's agreement to 0.003 is
+agreement with a property of the architecture, not with a mean — the sentence "the stencil regime
+reproduces the in-loop per-evaluation ratio" is licensed there. On **st the ratio is wide**: 0.534
+to 0.596 across 22 seeds, only 8 of them within ±0.02 of the pooled 0.560, and the pooled value sits
+*below* the per-seed median 0.582 because the long, expensive runs are the ones on which the block
+arm saves most. The probe's 0.558 lands at the pooled value and inside the seed spread; **on st the
+claim is weakened to that** — the stencil regime lands inside the in-loop spread, at its pooled
+value, and the agreement to 0.002 is not evidence of a per-seed constant. The verdict rule is
+unaffected (ρ_A(0.10) = 0.502 lies below the whole spread), and the per-seed variation on st is
+the partition changing the optimiser's path (§3c), which is A43's subject.
 
 ### 6.3 The transfer, closed
 
@@ -385,6 +428,9 @@ The ±5 % bracket between E3 and E3b is the probe's resolution, and three named 
   need not be a joint fixed point (task A43's question on st); the probe enters both arms from the
   flat arm's fixed point, so the pairing is exact but the block arm's entry is slightly kinder than
   in-loop.
+- **The pinned arms hold the burn time as a constant; B3's optimiser owns it as a design
+  variable.** Same switches, different owner of one coupling; the +0.017 / +0.021 directional
+  residual of A0p→A1 against B1→B3 (§6.2) is the place it would show.
 - **The problem-call factor** (0.994 / 1.014 / 0.951–0.966) is a Phase B measurement of the
   optimiser's trajectory, not a Phase A quantity; the transfer carries it, it cannot predict it.
 
@@ -474,10 +520,10 @@ entries per arm; st's B2→B3 trajectory changes untouched; no timing anywhere.
 
 | stage | what it produces | commit run at | output |
 |---|---|---|---|
-| `factorise` | §2–§4 tables; identity with the published sums; teeth | `be075584` (first run `6ccffb81`; numbers unchanged) | `runs/a44/factorisation.json`, `.md` |
+| `factorise` | §2–§4 tables; identity with the published sums; per-seed ρ_B spread; teeth | `b72ac54a` (first run `6ccffb81`; numbers unchanged, the per-seed table added) | `runs/a44/factorisation.json`, `.md` |
 | `prepare` | §5 gates | `127e3d8f` (runner `6ccffb81`) | `runs/a44/prepare.json` |
 | `regime` | the probe's 472 run records | launched at `127e3d8f`; runner `6ccffb81` throughout; record heads `127e3d8f`/`8bf24711`/`6aeaeece`/`6ccffb81` (§8 item 7) | `runs/a44/<config>/E*/` |
-| `tally` | §6 tables, verdicts, closure, probe provenance, committed summary | `be075584` | `runs/a44/tally.json`, `.md`; [`docs/data/a44_transfer_gap_summary.json`](../data/a44_transfer_gap_summary.json) |
+| `tally` | §6 tables, verdicts, closure, probe provenance, committed summary | `b72ac54a` (unchanged from `be075584` except the summary's per-seed block) | `runs/a44/tally.json`, `.md`; [`docs/data/a44_transfer_gap_summary.json`](../data/a44_transfer_gap_summary.json) |
 
 Reproduce with, from this tree under `PROCESS_surgery_env`:
 
@@ -500,3 +546,27 @@ The V3 records are read from the main checkout's untracked
 - 2026-09-10 — probe complete (472/472 ok), tally at `be075584`: SUPPORTED on all three configs;
   transfer closed to ≤ 1 % at E3b; §6–§7 written; ratio construction corrected (§8 item 6). Report
   complete, awaiting assessment.
+- 2026-09-10 — orchestrator's critical assessment appended verbatim below; its four required
+  additions made: (i) the verdict line leads with the E3/E3b bracket (≤ 5 %) and gives ≤ 1 % as the
+  declared-regime figure; (ii) per-seed spread of ρ_B from the records (§6.2, stage `factorise` at
+  `b72ac54a`), which licenses the mechanism reading on nof and lad and weakens it on st to "inside
+  the seed spread, at the pooled value"; (iii) a second erratum sentence, for V3 §6, beside the
+  §5.5 one (§3); (iv) the A0p→A1 residual against B1→B3 named as directional (+0.017 / +0.021, one
+  sign) with its two candidates (§6.2, §6.4). Task still provisional pending the user's
+  confirmation (§8); merge waits on that and on the user's ruling on the two errata.
+
+## Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Written by the orchestrating session against the report at `b01fccec`, script `be075584`, runner `6ccffb81`. Load-bearing claims re-checked in the tree, not taken from the report.*
+
+**Verified.** (1) The factorisation arithmetic reproduces from the published V3 sums to three digits on every row of §2, and the identity is stated as an identity. (2) The stencil construction is faithful: `process/core/solver/evaluators.py:136-143` builds `xfor[i] = x·(1+epsfcn)`, `xbac[i] = x·(1−epsfcn)` and calls `call_models` forward then backward in sequence, so E3 (forward from the fixed point) and E3b (backward entered from the forward exit — a 2ε step) are the solver's own stencil sequence; `a44_eval_one.py:611-615` does the same arithmetic on a copy. (3) The retry seeds and their attempt structure agree with the V3 records read independently by this session and by A43 (whose seed lists reconcile with yours, seed 10 aside, for the stated reason). (4) The gates in §5 are bit-comparisons with teeth, on a tree whose `process/` is the campaign's.
+
+**Endorsed.** The three structural results — the per-evaluation term uniform and the evaluation-count term carrying the config dependence; `B1 = B2 = B3` exact on 33/33 converged pulsed seeds; retry accounting as the mechanism of lad's reversed sign — are established from records alone and would stand without the probe. The probe's pre-declared rule was written before it ran and is met on both regimes and both ratio constructions; the E2 negative (δ = 0.001 is not an in-loop entry) is the most useful single measurement for V4's design, because it kills a proposal that was about to be adopted. §8 item 6 (ratio of per-evaluation means, sums published beside) is the correct construction and the correction is properly disclosed; §8 item 7 (the stage script edited mid-probe) is acceptable under §15 because the measuring code is shown unchanged and every record stamps its head — but it is a discipline to avoid, not a precedent.
+
+**Required before merge — four additions, none changing a verdict.** (i) The one-line verdict must lead with the bracket, not the point: "closes to within the E3/E3b bracket, ≤ 5 %, and to ≤ 1 % at E3b". The ≤ 1 % figure is at the regime you declared, but a reader who stops at the first line must not carry away a resolution the probe does not have. (ii) A per-seed distribution of `ρ_B` (min / median / max over the identical-converged seeds, from `sweeps_per_eval` and the censuses already in the records — records-only, no run): if the in-loop per-evaluation ratio is tight across seeds, the probe's agreement to 0.003 is a mechanism; if it is wide, the probe hit a mean and the claim must be weakened to that. State which. (iii) A second erratum sentence, for V3 report §6, beside the §5.5 one: the sentence "The uniform sign is gone" was itself the retry-accounting artefact on lad; propose it verbatim for the user as you did the first. (iv) The `A0p → A1` vs `B1 → B3` residual has one sign on both pulsed configs (+0.017 / +0.021 — the probe shows less saving than in-loop). Two candidates are named in §6.4 (the block arm entering from the flat fixed point rather than its own trust exit; a constant owner against an optimiser owner); name it as a directional residual with those candidates, not as "within 0.02".
+
+**Noted for the V4 harness, not for this task.** Every probe record stamps `tree_git_dirty = True` because the runner's stamp counts untracked files and the report draft sat beside it. A provenance stamp that cannot distinguish a modified tracked file from an untracked draft is weaker than it looks; the V4 harness's `provenance.py` should record tracked modifications and untracked paths separately. Carried to the harness plan.
+
+**Consequences taken by the orchestrator today, dated, pending this task's confirmation and merge.** The V4 experiment plan's §3.4 replaces the δ = 0.001 second amplitude with a stencil-regime entry set (E3 forward points from the reference fixed point; E3b backward points from each forward exit; the lifted column on pinned arms; deterministic, 2(nvar+1) evaluations per arm per configuration), its §3.5 restates the transfer as `ρ_A(stencil) × (nvar_B3+1)/(nvar_B0+1) × problem-call ratio` with E3/E3b as the published bracket and `ε = 1` pre-declared on `B1 → B2 → B3` for the pulsed configurations, and its decision (a) is reframed. Both erratum sentences go to the user for acceptance. At merge this report is archived to `deprecated/` (§7) and the run records under `idf_probe/runs/a44/` are relocated by the retire script before the worktree is removed.
+
+**Verdict.** Fit to merge once the four additions are in and the user has confirmed the task and ruled on the errata. I-17's mechanism is identified and measured; what remains of it is a Phase B quantity (the optimiser's response to the lift and, on st, to the partition) that Phase A was never going to predict, and the report says so.
