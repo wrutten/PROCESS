@@ -743,6 +743,132 @@ MDA_TOTALS: dict = {
 }
 
 
+# --------------------------------------------------------------------------
+# DR2 (task A57 (driver-output-path)) -- the output path: whether the accepted
+# state is re-solved before it is written out.  Switch:
+# ``PROCESS_ARCH_OUTPUT_LOOP``.
+#
+# Upstream writes its output files through a *second* flat idempotence loop:
+# ``call_models_and_write_output`` evaluates the whole model set, writes an
+# MFILE to a scratch file, and repeats -- up to ten times -- until two
+# successive MFILEs agree float by float at ``rtol = 1e-6``, then writes the
+# real files.  That loop is a property of the incumbent's stopping rule, not of
+# the models: an arm whose solve phase already converged the coupling state to
+# its own tolerance has nothing left for it to find, and re-solving the state
+# before writing it means the numbers in the output files are not the numbers
+# the optimiser accepted.
+#
+# ``upstream`` is the default and is upstream behaviour exactly: with the
+# variable unset the output path is the loop above, unchanged line for line.
+# ``none`` calls :func:`finalise` **once** on the accepted state and runs no
+# output-time sweep at all, so the output files are written from the state the
+# solve handed over.
+#
+# The counters below are the same discipline as :data:`NODE_CALLS`: plain
+# integer increments, touching no float and changing no branch a result depends
+# on.  ``OUTPUT_LOOP_SWEEPS`` is what the experiment publishes as the
+# output-time loop's own cost, and it is 0 under ``none`` by construction
+# rather than by assertion.
+_OUTPUT_LOOPS: dict[str, bool] = {"upstream": True, "none": False}
+
+OUTPUT_LOOP_NAME: str = (
+    os.environ.get("PROCESS_ARCH_OUTPUT_LOOP", "").strip() or "upstream"
+)
+
+if OUTPUT_LOOP_NAME not in _OUTPUT_LOOPS:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_OUTPUT_LOOP={OUTPUT_LOOP_NAME!r} is not a recognised "
+        f"output path; expected one of {tuple(_OUTPUT_LOOPS)} (or unset for "
+        f"{'upstream'!r})."
+    )
+
+#: True when the output path re-solves the accepted state through upstream's
+#: own output-time idempotence loop.
+OUTPUT_LOOP_UPSTREAM: bool = _OUTPUT_LOOPS[OUTPUT_LOOP_NAME]
+
+#: Which output path this run took, in the words the experiment's records use.
+OUTPUT_PATH_NAME: str = "mda_output" if OUTPUT_LOOP_UPSTREAM else "finalise_once"
+
+#: Sweeps of ``_call_models_once`` the output-time loop actually ran, summed
+#: over every entry to :func:`write_output_files`.  Exactly 0 under ``none``.
+OUTPUT_LOOP_SWEEPS: list[int] = [0]
+
+#: Entries to :func:`write_output_files`.  One per scan point; the
+#: configurations this experiment runs are single problems and enter once, and
+#: a record carrying more than one says so rather than silently describing its
+#: first point.
+OUTPUT_PATH_ENTRIES: list[int] = [0]
+
+
+# --------------------------------------------------------------------------
+# The exit-audit snapshot hook (task A57 (driver-output-path); the experiment
+# plan's section 3.3 implementation note).
+#
+# The experiment audits the accuracy each arm achieved by taking **one further
+# full sweep of the model set past termination** and measuring how far the
+# coupling state moved.  The plan declares that this must be measured at one
+# position in every arm: the **entry to** :func:`write_output_files`, before
+# any output-time sweep -- the state the solve handed over.
+#
+# The audit sweep mutates the state it measures, so it cannot simply be *run*
+# there: the output path would then write out an audited state the optimiser
+# never accepted.  What is done instead is to **snapshot** the coupling state
+# at that entry and compute the residual after the run has written its outputs,
+# from the restored snapshot.  The driver's part is the position; the shape of
+# a snapshot belongs to the harness's own coupling-state layer, so the driver
+# holds a **hook** rather than a serialiser, and the measurement subprocess
+# installs the callable.  Nothing here reads an environment variable, nothing
+# here calls a model, and with the hook uninstalled -- which is every run of
+# PROCESS that is not being measured -- the whole mechanism is two ``is None``
+# tests per run.
+#
+# The hook is called with ``(models, data, where)`` and its return value is
+# kept in :data:`EXIT_SNAPSHOTS` under ``where``.  Two positions are offered:
+#
+# ``entry_to_write_output_files``
+#     the declared audit position: the state the solve handed over, before the
+#     per-run deferred nodes and before any output-time sweep.
+# ``before_finalise``
+#     the state actually written to the output files, taken immediately before
+#     the single :func:`finalise` call that writes them.  Under ``none`` the
+#     two differ only by the per-run deferred nodes' own writes, which is what
+#     gate G9 checks; under ``upstream`` the difference is what the
+#     output-time loop moved.
+#
+# A hook that raises is recorded and does not stop the run: an instrument that
+# can change a measurement's outcome is not an instrument.  The harness refuses
+# to report an audit whose snapshot carries an error.
+EXIT_SNAPSHOT_POSITIONS: tuple[str, ...] = (
+    "entry_to_write_output_files",
+    "before_finalise",
+)
+
+#: The installed callable, or None.  A one-cell list so a reader holds the
+#: live cell and not a stale binding (the :data:`NODE_CALLS` pattern).
+EXIT_SNAPSHOT_HOOK: list = [None]
+
+#: ``where -> whatever the hook returned``, filled at most once per position.
+EXIT_SNAPSHOTS: dict = {}
+
+#: ``where -> the exception the hook raised``, for the same positions.
+EXIT_SNAPSHOT_ERRORS: dict = {}
+
+
+def _take_exit_snapshot(models, data, where: str) -> None:
+    """Call the installed snapshot hook at *where*, at most once per position.
+
+    Recorded rather than raised, deliberately: this is instrumentation on the
+    output path of a run whose numbers are the point of the run.
+    """
+    hook = EXIT_SNAPSHOT_HOOK[0]
+    if hook is None or where in EXIT_SNAPSHOTS or where in EXIT_SNAPSHOT_ERRORS:
+        return
+    try:
+        EXIT_SNAPSHOTS[where] = hook(models, data, where)
+    except Exception as exc:  # noqa: BLE001 - recorded, never raised
+        EXIT_SNAPSHOT_ERRORS[where] = f"{type(exc).__name__}: {exc}"
+
+
 def _resolve_node_modules() -> dict[str, str]:
     """``node -> DSM module`` from the committed node map.
 
@@ -1458,12 +1584,31 @@ class Caller:
         # is deferred here.
         self._pending = None
 
+        # DR2 (A57): the output path without the output-time loop.  The solve
+        # phase of this arm handed over a state it has already converged on the
+        # coupling state at the shared tolerance, so there is nothing for a
+        # second idempotence loop to find; re-solving that state before writing
+        # it out is a property of the incumbent's stopping rule and not of the
+        # architecture under test.  ``finalise`` is called **once**, on the
+        # accepted state, and no output-time sweep runs -- which is why
+        # ``OUTPUT_LOOP_SWEEPS`` is 0 here by construction and not by
+        # assertion.  Nothing is diverted to the idempotence scratch files,
+        # because nothing is compared.
+        if not OUTPUT_LOOP_UPSTREAM:
+            _take_exit_snapshot(self.models, self.data, "before_finalise")
+            finalise(self.models, self.data, ifail)
+            return
+
         try:  # noqa: PLW0717
             # Evaluate models up to 10 times; any more implies non-converging values
             for _ in range(10):
                 # Divert OUT.DAT and MFILE.DAT output to scratch files for
                 # idempotence checking
                 OutputFileManager.open_idempotence_files(self.data.globals.output_prefix)
+                # DR2 (A57): one integer per sweep of the output-time loop, so
+                # that what the incumbent's second loop costs is a measured
+                # column of the cost table rather than a term nobody counted.
+                OUTPUT_LOOP_SWEEPS[0] += 1
                 self._call_models_once(xc)
                 # Write mfile
                 finalise(self.models, self.data, ifail)
@@ -1508,6 +1653,7 @@ class Caller:
                         self.data.globals.output_prefix
                     )
                     # Write final output file and mfile
+                    _take_exit_snapshot(self.models, self.data, "before_finalise")
                     finalise(self.models, self.data, ifail)
                     return
 
@@ -1540,6 +1686,7 @@ class Caller:
             OutputFileManager.close_idempotence_files(self.data.globals.output_prefix)
             raise
         else:
+            _take_exit_snapshot(self.models, self.data, "before_finalise")
             finalise(
                 self.models,
                 self.data,
@@ -1853,6 +2000,15 @@ def write_output_files(
     # arms; see NODE_CALLS_AT_OUTPUT.
     if NODE_CALLS_AT_OUTPUT[0] is None:
         NODE_CALLS_AT_OUTPUT[0] = NODE_CALLS[0]
+    # A57: the exit audit's declared position (experiment plan section 3.3).
+    # HERE -- at the entry, before the per-run deferred nodes below and before
+    # any output-time sweep -- is the state the solve handed over, and it is
+    # the one position every arm's accuracy is compared at.  The snapshot is
+    # taken; the residual is computed after the run, from the restored
+    # snapshot, because the audit's own sweep would otherwise hand the output
+    # path a state the optimiser never accepted.
+    OUTPUT_PATH_ENTRIES[0] += 1
+    _take_exit_snapshot(models, data, "entry_to_write_output_files")
     n = data.numerics.n_iteration_variables
     x = data.numerics.xcm[:n]
     # Call models, ensuring output mfiles are fully idempotent
