@@ -92,6 +92,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
 from harness import arms as arms_mod  # noqa: E402
+from harness import records as records_mod  # noqa: E402
 from harness import switches as sw  # noqa: E402
 from harness.config import REPO_ROOT, Campaign, default_campaign  # noqa: E402
 from harness.selfcheck import Check  # noqa: E402
@@ -475,38 +476,17 @@ def assert_previous_arm_name(name: str) -> str:
 
 
 def _resolve(record: Mapping[str, Any], path: str) -> Any:
-    """The value at dotted *path*, or raise :class:`KeyError` naming what is missing.
+    """The value at dotted *path*, or :class:`KeyError` naming what is missing.
 
-    ``attempts[].n_solver_iterations`` maps over a list and takes the named
-    key from each element, so a per-attempt column is one field rather than a
-    variable number of them.
+    One line, deliberately: the implementation lives in
+    :func:`harness.records.resolve_path`, which the run path's comparator also
+    reads its records through.  Two copies of "how a dotted field name is
+    resolved" is the shape of defect D14(c) exists to prevent — a path that
+    resolved for the gate and not for the reference it is compared against
+    would report a mismatch that is neither side's number.  *(Delegated by task
+    A50 (harness-run); the implementation is A49's, moved unchanged.)*
     """
-    cursor: Any = record
-    walked: list[str] = []
-    for step in path.split("."):
-        if step.endswith("[]"):
-            name = step[:-2]
-            if not isinstance(cursor, Mapping) or name not in cursor:
-                raise KeyError(".".join([*walked, name]))
-            cursor = cursor[name]
-            if not isinstance(cursor, list):
-                raise KeyError(".".join([*walked, name]) + " (not a list)")
-            walked.append(step)
-            continue
-        if walked and walked[-1].endswith("[]"):
-            values = []
-            for index, element in enumerate(cursor):
-                if not isinstance(element, Mapping) or step not in element:
-                    raise KeyError(".".join([*walked, f"[{index}]", step]))
-                values.append(element[step])
-            walked.append(step)
-            cursor = values
-            continue
-        if not isinstance(cursor, Mapping) or step not in cursor:
-            raise KeyError(".".join([*walked, step]))
-        cursor = cursor[step]
-        walked.append(step)
-    return cursor
+    return records_mod.resolve_path(record, path)
 
 
 def sha256_of(path: Path) -> str:

@@ -30,7 +30,10 @@ if str(HERE) not in sys.path:
 
 from harness import arms as arms_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
+from harness import pool as pool_mod  # noqa: E402
+from harness import records as records_mod  # noqa: E402
 from harness import reference as reference_mod  # noqa: E402
+from harness import reproduction as reproduction_mod  # noqa: E402
 from harness import selfcheck as selfcheck_mod  # noqa: E402
 from harness.config import (  # noqa: E402
     EXECUTION_APPROVED,
@@ -278,8 +281,9 @@ def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
             "records the dated approval in EXPERIMENT_PLAN.md"
         )
     reasons.append(
-        "the run path is not built yet: the stages that start a PROCESS run, "
-        "read its record and tally it are separate tasks"
+        "the stages that summarise the records into the experiment's tables "
+        "are separate tasks; the run path itself is built and is reachable "
+        "from --run (one run) and --gate reproduction (the reproduction gate)"
     )
     for reason in reasons:
         print(f"  REFUSED — {reason}")
@@ -303,6 +307,90 @@ def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
         f"evaluations + {budget['phase_b']} optimisations"
     )
     return 3, {"refused": reasons, "budget": budget}
+
+
+def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
+    """One run, from the button: one arm, one configuration, one seed, one phase.
+
+    Not a campaign: the run kind is ``gate`` or ``smoke``, never ``campaign``,
+    and the record says so.  This is how a single arm is looked at without
+    inventing a command line for it — every stage of the experiment, successes
+    and refusals alike, is reachable from this entry point (protocol §15).
+    """
+    _rule("one run")
+    try:
+        config = campaign.configuration(args.configuration)
+    except KeyError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    arm = arms_mod.ARMS.get(args.arm)
+    if arm is None:
+        print(
+            f"  REFUSED — {args.arm!r} is not an arm of this experiment; the "
+            f"arms are {', '.join(arms_mod.MATRIX_ORDER)}"
+        )
+        return 3
+    phase = arm.phase
+    outdir = Path(args.outdir) if args.outdir else (
+        campaign.runs_dir
+        / "single"
+        / config.name
+        / arm.name
+        / pool_mod.seed_directory(args.seed)
+    )
+    job = pool_mod.Job(
+        phase=phase,
+        arm=arm.name,
+        config=config,
+        seed=args.seed,
+        outdir=outdir,
+        regime=args.regime,
+        delta=(None if args.delta is None else float(args.delta)),
+        pin_hex=args.pin_hex,
+        entry_state=(Path(args.entry_state) if args.entry_state else None),
+        stencil_column=args.stencil_column,
+        stencil_sign=args.stencil_sign,
+        run_kind=args.run_kind,
+        allow_pending=tuple(t for t in (args.allow_pending or "").split(",") if t),
+    )
+    print(
+        f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
+        f"regime {args.regime}, kind {args.run_kind}"
+    )
+    try:
+        result = pool_mod.run(job, campaign, resume=args.resume)
+    except (pool_mod.PoolError, Exception) as exc:  # noqa: BLE001
+        print(f"  REFUSED — {exc}")
+        return 3
+    record = records_mod.read(outdir)
+    print(f"  status {result['status']!r}  taxonomy {result['failure_class']!r}")
+    print(f"  record {outdir / 'metrics.json'}")
+    completeness = record.get("completeness") or {}
+    print(
+        "  record contract: "
+        + ("complete" if completeness.get("complete") else
+           f"INCOMPLETE — {completeness.get('refusal')}")
+    )
+    return 0 if result["status"] == "ok" else 1
+
+
+def stage_reproduction_gate(args: argparse.Namespace, campaign: Campaign) -> int:
+    """Gate GR: twenty runs against the previous revision's committed numbers."""
+    _rule("gate GR — reproduction")
+    code, verdict = reproduction_mod.stage(
+        campaign=campaign,
+        resume=args.resume,
+        lifted_from=args.lifted_from,
+        skip_runs=args.skip_runs,
+    )
+    for line in reproduction_mod.summary(verdict):
+        print(line)
+    print(f"\n  verdict: {verdict.get('verdict', 'REFUSED')}")
+    out = args.json or (campaign.runs_dir / reproduction_mod.RUNS_SUBPATH / "gate.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(verdict, indent=2, default=str))
+    print(f"  record: {out}")
+    return code
 
 
 # --------------------------------------------------------------------------
@@ -395,6 +483,51 @@ def main(argv: list[str] | None = None) -> int:
         "reference stages; they live in the main checkout, so a task worktree "
         "must be pointed at it",
     )
+    parser.add_argument(
+        "--gate",
+        choices=("reproduction",),
+        help="run one gate and stop.  'reproduction' is gate GR: the twenty "
+        "reference runs against the previous revision's committed numbers, "
+        "the seven teeth, and the two substitutes for the arms the reference "
+        "cannot cover",
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="run ONE run and stop: one arm, one configuration, one seed.  "
+        "Needs --arm and --configuration; the run kind is gate or smoke, "
+        "never campaign",
+    )
+    parser.add_argument("--arm", help="which arm, for --run")
+    parser.add_argument("--configuration", help="which configuration, for --run")
+    parser.add_argument("--seed", type=int, default=0, help="which start, for --run")
+    parser.add_argument("--delta", type=float, default=None,
+                        help="displacement size, for --run")
+    parser.add_argument("--regime", default="unperturbed",
+                        choices=records_mod.REGIMES, help="for --run")
+    parser.add_argument("--run-kind", default="smoke",
+                        choices=("gate", "smoke"),
+                        help="for --run; a campaign record is never made here")
+    parser.add_argument("--pin-hex", default=None, help="for --run")
+    parser.add_argument("--entry-state", default=None, help="for --run")
+    parser.add_argument("--stencil-column", type=int, default=None, help="for --run")
+    parser.add_argument("--stencil-sign", type=int, default=1, choices=(1, -1),
+                        help="for --run")
+    parser.add_argument("--allow-pending", default="",
+                        help="for --run: switch terms this tree does not "
+                        "implement that this run may omit, named explicitly "
+                        "and recorded.  Never available to a campaign stage")
+    parser.add_argument("--outdir", default=None, help="for --run")
+    parser.add_argument("--resume", action="store_true",
+                        help="keep a run whose directory already holds a "
+                        "complete record of the same job")
+    parser.add_argument("--lifted-from", type=Path, default=None,
+                        help="for --gate reproduction: a directory holding the "
+                        "derived lifted input files, staged after their bytes "
+                        "are checked against the recorded digests")
+    parser.add_argument("--skip-runs", action="store_true",
+                        help="for --gate reproduction: compare and run the "
+                        "cost-free teeth against records that already exist")
     parser.add_argument("--json", type=Path, help="write the preflight record here")
     args = parser.parse_args(argv)
 
@@ -410,6 +543,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.reference:
         return _run_reference_stage(args, campaign)
+
+    if args.gate:
+        return stage_reproduction_gate(args, campaign)
+
+    if args.run:
+        if not (args.arm and args.configuration):
+            print("--run needs --arm and --configuration")
+            return 2
+        return stage_single_run(args, campaign)
 
     print("=" * WIDTH)
     print("MDA partitioning experiment — plan: EXPERIMENT_PLAN.md")

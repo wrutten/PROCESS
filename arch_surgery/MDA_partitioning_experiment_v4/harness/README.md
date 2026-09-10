@@ -51,7 +51,7 @@ actually imported is exactly that one.
    code, and the two summaries are compared cell by cell. Twice, because a definition that reached
    one implementation and not the other has slipped past review here before.
 
-Steps 4–6 are built by later tasks. Steps 1–3 are this package as it stands.
+Steps 1–5 are built. Step 6 — the two summaries and the comparison between them — is a later task; the runner names it when you ask for it.
 
 ---
 
@@ -245,7 +245,19 @@ $PY harness/selfcheck.py --tree repository --json runs/selfcheck.json
 
 # quickly, without starting a child process per arm
 $PY experiment_runner.py --no-capability
+
+# ONE run: one arm, one configuration, one seed.  Never a campaign record.
+$PY experiment_runner.py --run --arm A0 --configuration st_regression --seed 0
+
+# gate GR: does the rewritten harness reproduce the previous revision's numbers?
+$PY experiment_runner.py --gate reproduction --lifted-from <dir with the derived input files>
 ```
+
+A single run writes its record, its exit state, its displacement, its audit residual vector and
+its entry-census series into its own directory under `../runs/`, and prints whether the record
+carries everything it declares. Gate GR is about twenty-five runs and takes on the order of an
+hour and a half at three workers; it writes one small verdict file whose contents are what the
+report's tables quote.
 
 Exit codes: `0` ready · `2` refused to start (wrong interpreter) · `3` not ready, with the missing
 thing and the stage that produces it named on the line above.
@@ -427,12 +439,23 @@ The record's schema and the code that reads it are a later task; this list is wh
 
 ## 10. What is not here yet
 
-`config.py`, `switches.py`, `arms.py`, `provenance.py`, `selfcheck.py` and the runner's preflight
-exist, and so do the committed data in `data/` and the coupling-state module `ystate.py`. The run
-path (the child process, the two entry points, the worker pool, the record schema), the derived
-input files and the census stages, the gates against the earlier revisions, the tally and the
-analysis are separate tasks. The preflight names each missing piece and the stage that produces it
-rather than falling back to something that happens to be there.
+What exists: the declarations (`config.py`), the switch vocabulary and the capability probe
+(`switches.py`), the arm matrix (`arms.py`), the provenance refusals (`provenance.py`), the
+committed data in `data/`, the coupling state and its predicate (`ystate.py`, `predicate.py`), the
+displacement streams (`perturb.py`), **the run path** (`child.py`, `optimise.py`, `evaluate.py`,
+`pool.py`, `records.py`, `failure.py`), the committed reproduction reference (`reference.py`) and
+**gate GR** (`reproduction.py`), plus the self-check and the runner's preflight.
+
+What is not here yet: the derivation of the lifted input file (`input_files.py` resolves and
+checks one, but producing it is the artifacts task), the census stages, the remaining gates in
+their framework, the tally, and the analysis. The preflight names each missing piece and the stage
+that produces it rather than falling back to something that happens to be there.
+
+Three things the driver does not supply yet, which every record carries as an explicit null with
+the reason and the change that will fill it in: how many times the convergence test was evaluated
+and over how many components; how many sweeps the output-time loop took; and what each optimiser
+attempt cost on its own. A record says "the driver does not count this yet", never nothing at
+all.
 
 ---
 
