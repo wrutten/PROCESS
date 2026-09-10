@@ -83,6 +83,49 @@ one `call_models` each; the pass census is all 25 seeds and every in-loop call.
 
 ---
 
+### 1.1 The D22 question, answered directly
+
+*Added after the brief. Decision **D22** (2026-09-10) removed arm B2 from V4 — citing this task's
+records-stage result, the zero third passes in 91 888 calls — and made one thing conditional:
+**"If A43 shows st's trust-mode `B3` unreliable, st is dropped from the analysis and likely from
+the experiment."** That is the decision this verdict feeds, so it is answered here rather than
+left to be inferred.*
+
+**B3 on `st_regression` is not unreliable, in the sense D22 is guarding against.** Three
+measurements say so directly:
+
+- **B3's handover state is converged by the predicate it declares.** 0 of 805 components at or
+  above τ, at every inner tolerance measured, on every seed (§6.2).
+- **B3 is not structurally short of a pass.** With the blocks solved exactly (inner τ = 1e-14) its
+  single pass reaches B2's two-pass state **bit for bit** — 0 components differ, maximum exactly
+  `0.0`, on all five seeds. There is no coupling B3 fails to close (§6.2).
+- **The iteration evidence for unreliability does not survive its own records.** The 7-of-23
+  difference reverses sign under the summed-attempt construction, two of the seven are
+  retry-contaminated attractor hops where B2 needed a second VMCON attempt and B3 did not, and no
+  construction establishes a direction (§4).
+
+**What B3 is, is less accurate below τ** — 3.28e-9 against B2's 1.12e-10 at the campaign's
+settings, a factor of about 30. That is a **tolerance setting, not a property of trust mode**, and
+§6.1 shows it is bought back by the inner tolerance at equal cost: B3 at inner τ = 1e-12 costs the
+same 21 block sweeps as B2 at inner τ = 1e-6 and achieves 6.46e-14. **So removing B2 does not
+require accepting a less accurate architecture; it requires setting the inner tolerance
+deliberately** (proposal P1). V4 shipping B3 at inner τ = 1e-6 *and* dropping B2 would ship the
+loosest handover of the two without having chosen to.
+
+**The risk D22 should actually weigh on st is not B3's reliability but st's own sensitivity.**
+`st_regression`'s optimiser path responds to sub-τ differences in the state it is handed: V3 §5.2.2
+measured that a change of **stopping rule alone** moves st's design point by p90 0.17 and max 1.00,
+and st's accepted optima fall into four clusters separated by about the acceptance floor. Any two
+arms that differ below τ — which is every pair of arms in this experiment — will move st's
+trajectory. That is a property of the configuration and no architectural choice controls it. If V4
+keeps st, it should either **pin the achieved handover accuracy across arms** (P1, which makes the
+arms comparable at matched accuracy rather than matched settings) or **state that st's iteration
+counts carry a config-driven variance that the architecture does not control**, and not read a
+per-seed iteration difference there as an architectural effect. Dropping st on the grounds that
+B3 is unreliable there would be dropping it for a reason this task does not find.
+
+---
+
 ## 2. What was measured, and with what
 
 | | |
@@ -762,5 +805,6 @@ corroboration and says so.
 | 2026-09-10 | **The discriminator changed shape before it ran.** The first design measured the handover gap indirectly, through the outer trace's pass-2 residual. It was replaced by the direct measurement — one `call_models` per arm from a common initialisation, then the two arms' recorded exit states compared component by component — because the indirect version is a proxy and the direct one is the quantity. An inner-tolerance ladder was added to it as the discriminator. Committed at `e2418cbc`. |
 | 2026-09-10 | **Two inputs from task A44 (transfer-gap), relayed by the orchestrator, changed the analysis** and are folded into §4: `n_solver_iterations` records the final VMCON attempt only, and B2 retried on `st_regression` seeds 1 and 15 while B3 did not. The retry split, the three constructions and the reconciliation of the two tasks' seed lists were added and committed at `e2418cbc` before any of those numbers were published. |
 | 2026-09-10 | **A gate was found not to bite and was replaced rather than deleted.** The plumbing tooth for the B3 control's zero is pre-empted by `module_solve`'s trust-mode guard, which is checked first. A standalone `tooth` stage was added with the guard order accounted for, and both cases are recorded (§5.4). Committed at `bf2214e3`. |
+| 2026-09-10 | **§1.1 added after the brief**, answering decision D22's conditional ("if A43 shows st's trust-mode B3 unreliable, st is dropped"). D22 was minted on 2026-09-10, after this task was dispatched, and already cites this task's records-stage result as its ground for removing B2. No new measurement: §1.1 draws only on figures §4 and §6 already publish. |
 | 2026-09-10 | **A `verify` stage was added** so the report's own figures are checked against the artifacts they claim to come from rather than transcribed by hand: 69 cells, floats by hex, with four teeth that perturb an artifact value by one ULP or one count and require the check to fail. 69/69 agree, 4/4 teeth trip. Committed at `6ab6a60a`. |
 | 2026-09-10 | **An argmax artifact was found and the census was split.** 39 % of pass-2 records have a residual of exactly zero, and `numpy.argmax` over an all-zero array returns index 0 — so the spec's first component was being reported as the mover on 18 720 records where nothing moved. The census is now published over the non-zero population only, with the artifact named (§5.3). Committed at `08792116`; stages `classify` and `tables` re-run at that commit, and `trace` re-run so its summaries come from the same commit. |
