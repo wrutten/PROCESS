@@ -568,3 +568,175 @@ says twenty.
 
 Finally, the reference says nothing about whether the architecture is *better*. It only says the
 harness that measures it is the same instrument. The experiment's own gates and checks do the rest.
+---
+
+## 12. The artifact stages — what is checked, what is derived, and what is only compared
+
+The experiment reads a handful of committed files it does not compute at run time. Three of them
+the **driver** reads directly, so they are not the harness's private business: getting one wrong
+does not produce an error, it produces a converged run of a slightly different problem. This
+section says what each file is, which stage looks at it, and — the part worth reading twice —
+which stages *derive* something and which only *compare*.
+
+Everything below is reachable from the one button:
+
+```bash
+# validate every committed artifact of every configuration
+python experiment_runner.py --artifacts check
+
+# derive the lifted input files (needs one PROCESS run per pulsed configuration)
+python experiment_runner.py --artifacts derive-inputs
+
+# take a runtime census and compare it with the committed one (one PROCESS run each)
+python experiment_runner.py --artifacts census --census-entry optimisation
+
+# re-derive the per-run deferral sets and compare them with the committed ones
+python experiment_runner.py --artifacts per-run
+
+# the deliberate breaks: every one must be caught
+python experiment_runner.py --artifacts teeth
+
+# all of the above, in order, stopping at the first failure
+python experiment_runner.py --artifacts all
+```
+
+Each writes its record under `runs/artifacts/`, which is untracked. `--artifacts check` is also
+the preflight's artifact half: the preflight used to ask whether each file existed and whether one
+count matched, and it now runs this instead.
+
+### 12.1 The files, and who reads them
+
+*Caption: one row per committed file the experiment reads. "Read by" matters because a file the
+driver reads cannot be corrected by the harness alone. "Stage" is the committed stage that looks
+at it; **derive** means the harness reproduces the file's content from first principles, **compare**
+means it reproduces something the file rests on and reports the difference, and **check** means it
+rebuilds the file's own stamps and cross-checks them against the files it must agree with.*
+
+| file | what it is | read by | stage |
+|---|---|---|---|
+| `<configuration>.IN.DAT` | the committed input file: one optimisation problem | the driver | check |
+| `<configuration>_lifted.IN.DAT` | the same problem with the burn time owned by the optimiser | the driver | **derive** |
+| `coupling_state_<configuration>.json` | which fields make up the state the analysis loop converges, and the measured scale of each | the driver and the harness | check |
+| `write_sets_<configuration>.json` | which components of that state each block writes | the driver | check + **compare** |
+| `defer_per_run_<configuration>.json` | which nodes run once per run instead of once per evaluation, for the committed input file | the driver | check + **derive** |
+| `defer_per_run_lifted_<configuration>.json` | the same, for the lifted input file | the driver | check + **derive** |
+| `node_writesets.json` | what every model node writes, measured | the driver | check + **compare** |
+| `dsm_node_map.json` | which block each node belongs to, and how each node is invoked | the driver | check |
+
+### 12.2 What is never derived, and why
+
+The coupling-state artifact carries the **scales** every residual in this experiment is measured
+against. They were measured once, from a file that is not committed, and they are the ruler: three
+earlier revisions' residual figures are quoted on them, and a fresh measurement would change what
+the tolerance means without changing any number's appearance.
+
+So **there is no stage in this package that derives one**. Not disabled, not guarded — absent.
+`--artifacts check` validates each from the artifact's **own harvest identity**: a hash of the file
+it was measured from, plus a content hash over the coupling-key set, the model sequence and every
+design point's exact design vector. An artifact carrying no such identity is **refused by name**,
+because a file that cannot say what produced it cannot be checked at all. A campaign that finds an
+artifact missing refuses; it does not make one.
+
+### 12.3 The lifted input file — the one thing that is derived from scratch
+
+Two arms hand the burn time to the optimiser. They read an input file that differs from the
+committed one in exactly three lines:
+
+1. the burn time becomes iteration variable 178;
+2. its consistency residual becomes equality constraint 93, **inserted inside the equality block**
+   with the count raised in the same edit;
+3. the variable's initial value is set to the burn time the incumbent's own loop settles on at the
+   configuration's own starting design vector.
+
+Line 2's *position* is the one that has already gone wrong once. PROCESS does not decide which
+constraints are equalities from the constraints themselves: it takes the first *n* entries of the
+constraint list in file order. Appending the new one at the end therefore turned an equality into
+the last inequality — a problem in which nothing forces the burn time onto its own consistency
+manifold — and the run still converged, with an objective that looked right. It was caught by
+reading an inequality count in a table, not by looking at the file.
+
+Line 3 is a **measurement**, taken by one evaluation of the model set under the reference arm
+(every architecture switch unset), through the pool like any other run. It is the reference arm and
+not the flat control because the rule asks for the value the *incumbent's* stopping rule leaves
+behind. The input file's own default is 1000 s and none of the pulsed configurations sets it, while
+the settled values are thousands of seconds — so a derivation that quietly fell back on the default
+would produce a file that looks right and starts the lifted arm at a design point the incumbent
+never visits. The derivation refuses rather than defaulting.
+
+**The gate is the bytes.** Each derived file's sha256 must equal the digest committed in
+`input_files.py`, which was measured from the previous revision's own derived files. A steady-state
+configuration records *not applicable* rather than deriving anything. The derived file's header and
+its three edit comments are reproduced verbatim from the script that first produced it, task token
+and all: the digest is the gate, and a tidier comment is a different file.
+
+### 12.4 The census — a direct observation, not an inference
+
+The driver carries an instrument that, while it is switched on, attributes every read and every
+write of a state field to the model node executing at the time. `--artifacts census` runs one
+PROCESS run with it on and compares what it saw with the committed per-node census, with the
+per-block subsets that census was mapped into, and with the read set the deferral routing rule is
+derived from.
+
+Two entries are available. `--census-entry optimisation` is one full optimisation — the same
+population of design points the committed census was measured over, and the only entry that can
+reproduce it. `--census-entry evaluation` is one evaluation of the model set: every node runs, so
+every node's write set is observed, but only at one point of the design space, and fields written
+only elsewhere will be missing.
+
+Two traps are handled structurally rather than carefully. Ten model objects call their own `run()`
+from inside their `output()` method, three times each per run, during the final output check — so
+an instrument that hooks `run()` alone attributes reporting traffic to the analysis loop and
+*invents* dependency edges. The driver's instrument closes the sweep at the boundary of one pass
+over the model sequence and refuses anything arriving afterwards; the census stage records the
+refusal count, so a reader can see the mechanism working instead of assuming it.
+
+### 12.5 The per-run deferral sets — derived, and compared node by node
+
+A node whose outputs nothing the optimiser decides on ever reads cannot change what the optimiser
+does, so it runs once per run at the accepted optimum instead of once per evaluation. Which nodes
+those are is derived in four steps: the **seeds** (what the active figure of merit's own branch of
+the objective reads, plus every active constraint's reads), a **backward closure** (a node is
+needed if anything it writes is consumed; a needed node's reads join the consumed set), the
+**candidates** (everything never needed), and a **confirmation** (every read site of every
+candidate's outputs, anywhere in the tree, classified).
+
+Reads are attributed **by enclosing class, not by file**. That correction is not cosmetic: one file
+holds both the vacuum pumping model, which is a candidate, and the vacuum vessel, which is a live
+plant node, and the file rule would have classified a read of a pumping output made inside the
+vessel class as "internal to the candidate" and marked the node dead, with no warning. The
+class-to-node map is derived from the driver's own model container rather than transcribed.
+
+Three kinds of read site are excluded from the closure, and each is counted and named:
+
+- a function reachable from a reporting entry point and from **no** node entry point — computed per
+  class from the call graph, which is the rule that was missing the three times this project
+  invented a dependency edge;
+- a file no configuration here executes;
+- a function this configuration's own switches make unreachable, such as the two plant-availability
+  models no configuration selects.
+
+Each is the direction in which a mistake marks a live node dead, which is why none is applied
+quietly. The stage then compares the derived set with the committed artifact **node by node**. A
+difference is a finding: either the derivation is wrong or the artifact is stale, and the task
+report says which it thinks and why. Nothing is edited to make the other side agree.
+
+### 12.6 The teeth
+
+Every stage above has to be shown capable of failing before its zeros mean anything. `--artifacts
+teeth` runs them all; each break is made on a throwaway copy in a temporary directory and the
+committed files are never written to.
+
+*Caption: one row per deliberate break; "must be caught by" names the check that has to notice it.*
+
+| stage | break | must be caught by |
+|---|---|---|
+| check | the recorded component digest set to zeros | the rebuild from the components the file lists |
+| check | the harvest identity removed | the refusal on an artifact that cannot say what produced it |
+| check | the figure of merit changed **and its own hash recomputed to match** | the comparison with the input file — an artifact that rebuilds its own hash can still be the wrong problem's |
+| input files | one byte of a derived file flipped | the digest |
+| input files | a baseline evaluation that crashed, and one that carries no burn time | the refusal to derive without the measurement |
+| input files | the constraint appended at the end of the file instead of inside the equality block | the digest |
+| census | one node's write removed | the per-node comparison's counts |
+| census | a node writing a field the committed census does not have | the this-run-only count, which fails the stage |
+| per-run | a node removed from the committed set | the node-by-node comparison |
+| per-run | a live node added to the committed set | the node-by-node comparison — the direction that would defer a node the optimiser consumes |
