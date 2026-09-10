@@ -133,3 +133,106 @@ scoping choice rather than a methodological one. "Reversal" is what it costs to 
   read-only and uncommitted from the main checkout. Plan and this report written and committed.
   Status: awaiting the orchestrator's critical assessment (protocol §5) and the user's decisions
   (1)–(11).
+
+---
+
+## Orchestrator's critical assessment (protocol §5) — 2026-09-10
+
+*Appended by the orchestrating session before any merge and before the plan goes to the user for
+approval. Written against the plan at `aeaf9eb7` and this report at `a3f3558a`, with every
+load-bearing claim re-checked in the tree, not taken from the report.*
+
+### Verified in the tree
+
+| claim in the plan | checked | result |
+|---|---|---|
+| `caller.py:245-251` hard-codes `arch_surgery/docs/data/node_writesets.json`; `:356-362` hard-codes `dsm_node_map.json` | read both blocks | **confirmed**, no environment override, no fallback |
+| `caller.py:583` reads `node_writesets.json` with no existence check while `:344-349` refuses with a named message | read both | **confirmed** — `per_scenario = json.loads(NODE_WRITESET_PATH.read_text())` unguarded on the `per_run` path |
+| `module_solve.py:529-534` loads `arch_surgery/fixedpoint/ystate.py` by path (code, not data) | read | **confirmed**, with the D14(c) rationale in the comment above it |
+| `v3_runner.py:35` imports `PULSED as A28_PULSED` and never uses it; `cfg.PULSED` is an independent copy | grep | **confirmed** — six uses of `cfg.PULSED`, zero of `A28_PULSED` |
+| the A18 harvest is 138 MB of untracked pickle | `find -size +1M` | **confirmed**: 35 / 69 / 34 MB for nof / lad / st under `idf_probe/runs/a18/`, plus A23 copies |
+| `run_one.py` 1 126 lines, `v2_eval_one.py` 996 | `wc -l` | **confirmed** |
+| the V3 stack measures 8 828 lines | not re-derived over the same file set | **not disputed** — the plan names its file set, which is what trap T11 asks; the 26 % figure is soft and the plan says so |
+
+### What I endorse without reservation
+
+The inventory's central finding — *the coupling is tiny; the convolution is inside the files* —
+is correct and reframes the user's request usefully: self-containment is cheap, and the real work
+is deduplication (`run_one.py` / `v2_eval_one.py`) and single composition. The four design ideas
+are the right ones: the matrix as data with `rung()` computed rather than asserted; capability
+measured by a probe child rather than declared in a hand-edited ledger (V3's `INSTRUMENTATION`
+was consulted on one side and not the other — a defect shape, found by this inventory); one
+child-side instrumentation module; and a reproduction gate with a `v3_compat` composition and a
+positive control. Decisions (3), (5), (6), (7), (8), (9), (11) I would take exactly as
+recommended. The retired-name refusal in decision (1) is the load-bearing half and must not be
+negotiated away. The A18-harvest finding (decision 4) is real and the plan is right not to
+resolve it unilaterally; I add one point below.
+
+### Required before the plan goes to the user — two additions
+
+**A. Per-attempt node-call accounting is missing from the record schema (§4.4) and from the
+driver list (§3.2).** Task A44 (transfer-gap) established today, from V3's records, that node
+calls are recorded only as run totals while `n_solver_iterations` and `ifail` are per VMCON
+attempt — and that this mismatch is most of `low_aspect_ratio_DEMO`'s published headline
+(`B3/B0 = 0.450` with one retried `B0` seed, 0.659 without). The V4 experiment plan §3.5 now
+requires node calls **per attempt** and ratios published with and without retried seeds; this
+amendment landed after A45 read the plan, so the omission is not the agent's error, but the plan
+cannot go to the user without it. Needed: **DR7** — a driver stamp of `NODE_CALLS` (and the
+sweep histogram) at each retry-ladder attempt boundary, in the shape of the existing
+`NODE_CALLS_AT_OUTPUT` freeze (integer-only, switch-neutral); record fields
+`attempts: [{stage, epsfcn, n_iterations, ifail, node_calls_solve_phase, sweeps}]`; and the
+`stats.py` constructions "retried seeds per arm", "ratio with / without retried seeds" and the
+failure table's per-attempt columns. GR must carry a tooth for it (a record whose attempts do not
+sum to the run total must be refused).
+
+**B. Gate GR does not exercise the Phase B perturbation path.** Every Phase B reference row in
+§7.1 is `start000` — the *unperturbed* start — so `perturb.py`'s Phase B stream (keyed on
+iteration-variable number, so that the lifted design vector's extra element leaves shared
+variables' factors bit-identical) is tested by nothing in GR. Add one perturbed Phase B seed per
+configuration (`B3 start001`, and `B1 start001` on the pulsed configurations since it is where
+the two vector lengths meet) → 18–20 runs. State explicitly what covers the two arms GR cannot:
+`A0p` (V3 never ran it) is covered by the V4 plan's G6 warm gate — pinned at the reference's
+converged burn time, it must reproduce the reference fixed point below τ with the pinned
+component bit-identical; `AR` (V3 had no Phase A reference) is covered by a G1-shape check that
+`evaluate.py` with every switch cleared reproduces the first `call_models` of `BR start000`
+on the counts that call records. A gate that names what it does not cover is honest; one that
+is silent about it is trap T11.
+
+### One further option the user should see on decision (2)
+
+The plan offers three homes for the predicate module: env-overridable move (i), leave in
+`fixedpoint/` (ii), copy (iii — rightly rejected). There is a fourth: **the predicate is driver
+code.** It is the convergence test `module_solve.py` executes on every sweep; its residence in
+the research tree is the anomaly, and both (i) and (ii) preserve the anomaly (a code module
+reached by filesystem path, in (i) selectable by environment variable — which means the run
+record must carry the loaded module's path *and hash* or two runs on different predicates are
+indistinguishable afterwards, the same trap improvement item 5a(i) names). **(iv): split
+`ystate.py` — the predicate and residual (what the driver needs) move to
+`process/core/solver/ystate.py` and are imported normally by both driver and harness; the spec
+generation (what only the harness needs) moves to `harness/`.** One implementation, no path hack,
+no env override for code, the harness self-contained because it imports the driver anyway, and
+nothing in `process/` depends on a version-numbered directory. Cost: a driver change with a
+bit-identity gate (the same gate (i) needs), and the split itself. `process/core/solver/` already
+holds this experiment's variant points (`module_solve.py`, `subsolve.py`), so it is the permitted
+surface. I recommend (iv) over (i); the user decides.
+
+### Secondary notes, none blocking
+
+- **Decision (4):** add to the recommendation that `artifacts --derive` must **never run inside
+  a campaign**. The a26 scales `s_i` are part of the frozen ruler; regenerating them from a new
+  harvest changes τ's meaning and breaks comparability with V2, V3 and A38. Derivation is a
+  provenance stage, and (b) — committing the harvest identity and scales — is the right minimum.
+- **DR6's data half becomes moot** if decision (3) is taken as recommended (artifacts stay in
+  `docs/data/`); its code half is replaced by (iv) if the user takes it. State DR6 conditionally.
+- **DR1 values** keep the word `feedforward` (`off | feedforward | feedforward_lifted`); semantics
+  are unchanged and the name says the level. Acceptable.
+- **`experiment_runner.py` basename collision** with the A18-era root script is flagged (AD5,
+  decision 11); acceptable since the two are never on one import path.
+- **Sequencing** (H2 → H3 → H4; DR1 after H3) is right. Fourteen tasks is the honest count.
+
+### Verdict
+
+The plan is fit to go to the user for the eleven decisions **once A and B are added**, which is
+returned to the task agent on its own branch (protocol §5). No code is to be written before the
+user approves. Nothing in this assessment changes the plan's recommendations except adding option
+(iv) to decision (2) and the conditional statement of DR6.
