@@ -1306,6 +1306,13 @@ of what looks like bulk is the instrument.
   with one named exclusion) and reviews G1's 33-name exclusion set; A53 states the audit position in every residual
   caption. Finding: `tfcoil.insstrain` ~7e-3 above τ at the accepted point on both pulsed configurations
   (improvement list item 11, for the user).
+- **2026-09-10 — amendment 10, at the merge of A58 (driver-predicate-counters): DR4 landed.** §4.4's counter
+  row is realised (`predicate_evaluations`, `components_compared`, plus block visits, empty visits, the sweeps they
+  cost, and dispatch sweeps) in both phases; the census instrument reports `reads_by_node` and `census.py` reads the
+  report. G0′, G1 (0/2 341, 0/51 319; exclusion set 43 names) and GR after DR4 (270/270) PASS, re-run by the
+  orchestrator. Measured: improvement item 3 closed in the negative; I-20(a) extended. One definition corrected on
+  the branch — an empty visit is one that executed no node, measured on the node counter, split from the sweeps it
+  cost — which is why the disclaimer quotes sweep shares. A52 wires the measurement stage; A53's captions follow.
 
 ---
 

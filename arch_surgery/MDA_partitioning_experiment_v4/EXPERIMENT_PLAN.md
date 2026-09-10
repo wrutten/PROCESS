@@ -319,7 +319,7 @@ purpose: the exit audit at the accepted point, per run, with the count of compon
 
 **Empty blocks and empty nodes are left as they are** *(user ruling 2026-09-10 on item 2)*. On
 `st_regression` the `PULSE` block survives in the schedule after its only member has left it and is
-swept 570–1131 times per run executing nothing (I-20a). V4 does **not** repair this: it is one of
+swept 570–1131 times per run executing nothing (I-20a). *Measured by the copy's own counters (A58 (driver-predicate-counters), 2026-09-10, gate GR's runs): 570 empty sweeps at seed 0 and 3 510 at seed 1 on `B3`, **10.84 % / 11.30 %** of the run's block sweeps. The empty `PULSE` visit occurs on **all three** configurations (40 % of block visits everywhere, `FF` and `PULSE`), but costs a sweep only on `st_regression`: on the pulsed configurations the per-call deferral has emptied the block of members and the visit is free. Every disclaimer therefore quotes the **sweep share** (0 / 0 / 10.84–11.30 %), never the visit share.* V4 does **not** repair this: it is one of
 PROCESS's oddities this experiment does not exist to fix, and it costs no model-node evaluation.
 It is **disclaimed** wherever it bears: the per-sweep-overhead table (§3.5 check 5) states the
 count of empty visits per run beside the dispatch-sweep count, and every caption that weights
@@ -1048,3 +1048,9 @@ implementation plan's.*
   fixed, reported), G9 (0/3 825 components) and GR after DR2 (270/270) all PASS, re-run by the orchestrator. §3.2's
   switch list and §3.3's audit note updated; the `tfcoil.insstrain` signal recorded in §3.3 and on the improvement
   list. `B1`/`B3` are now runnable in the campaign composition; GR keeps a recorded `upstream` override for them.
+- 2026-09-10 — **A58 (driver-predicate-counters) merged — DR4**: predicate evaluations, components compared, block visits,
+  empty visits and the sweeps they cost, and dispatch sweeps counted in the copy and recorded in both phases; G0′, G1 and
+  GR after DR4 PASS, re-run by the orchestrator. Improvement item 3's hypothesis closed in the negative on counts: the
+  partitioned arm compares 33–47 % fewer components than the flat control, tracking its node calls to within 0.02 — the
+  convergence test is not the per-sweep overhead; what that overhead is stays open (§3.5 check 5 will report the
+  remaining candidates). §3.3's empty-blocks paragraph gains the measured shares; I-20(a) extended in the register.

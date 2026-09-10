@@ -1,11 +1,9 @@
 # A58 (driver-predicate-counters) — what the convergence test costs, counted
 
-> **Document status** — **OPEN**. Task **A58 (driver-predicate-counters)**, driver change **DR4**
-> of the approved V4 harness plan, plus the one instrument line task **A51 (harness-artifacts)**
-> handed over. Branch `A58-driver-predicate-counters`, off `architecture_surgery` at `3fcf1697`.
-> Every number below was produced by a committed script, named per figure, at the commit named
-> beside it. Archived to `deprecated/` at merge; folder position records lifecycle, not validity
-> (trap T3).
+> **Document status** — **MERGED, archived.** Task **A58 (driver-predicate-counters)**, branch
+> `A58-driver-predicate-counters` (retired) off `architecture_surgery` at `3fcf1697`, merged on 2026-09-10
+> (`e73113a9`); the orchestrator's critical assessment (protocol §5) is §15. Folder position records lifecycle,
+> not validity (trap T3).
 
 ---
 

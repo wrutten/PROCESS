@@ -375,7 +375,17 @@ hoisting**, and **skip a post-solve node whose measured write set is empty**. Co
 evaluations, so no V3 number moves — but it feeds the per-sweep-overhead question (item 3),
 and it needs the user's approval as a driver change.
 
-### 3. Count what the per-sweep overhead actually is **[data gap]**
+### 3. Count what the per-sweep overhead actually is **[data gap — CLOSED IN THE NEGATIVE, A58 (driver-predicate-counters), 2026-09-10]**
+
+**Settled on counts (A58, gate GR's 20 runs, one seed per cell).** The counters exist in the copy (`PREDICATE_EVALUATIONS`,
+`COMPONENTS_COMPARED`, per block). At matched configuration and seed the partitioned arm evaluates the convergence test
+1.86–2.34× as often, each test is 0.284–0.285× as wide (its block's write set against the whole state), and the product is
+**0.530–0.666×** the flat control's — **33–47 % fewer components compared**, tracking the node-call ratio (0.524–0.650) to within
+0.02. A term that scales with node calls is not the non-node-proportional cost §8 requires, so **the convergence test is excluded**
+as the carrier of the per-sweep overhead. What that overhead *is* remains open; the candidates the counters cannot resolve are the
+dispatch body's own work per sweep (design-vector injection, switch dispatch through every call site, the arrangement method) and,
+on `st_regression` alone, the 570 sweeps per run that execute nothing (I-20(a), now measured on all three configurations: item 2).
+Also measured: upstream's stopping test is 30–59× narrower per evaluation than the experiment's (27 / 22 / 14 against 840 / 846 / 827).
 
 Report §7's central unexplained result: B3 executes 36–55 % fewer model-node evaluations than
 B0 and is **0–15 % slower in wall clock**, going backwards on nof. §8 proves a non-node-proportional
