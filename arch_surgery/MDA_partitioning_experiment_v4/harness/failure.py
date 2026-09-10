@@ -19,8 +19,25 @@ names the same variable twice, a deferral asked for without the artifact that
 says which nodes.  Those are the guards working, and a campaign that counted
 them as crashes would report the guards as failures.
 
-Written by task **A50 (harness-run)**; the taxonomy is the harness plan's §4.4
-and EXPERIMENT_PLAN.md §3.4.
+**How a refusal is recognised, and how it used to be.**  The driver raises a
+typed refusal — ``process.core.solver.ArchitectureRefusal`` — for every refusal
+of an architecture setting, and that **type** is what classifies a run here.
+Before it existed the only evidence was the text of the message, matched on
+distinctive fragments; that worked, and was checked, but it puts a *reworded*
+refusal in the wrong row of the failure table.  The text match is kept below as
+a **fallback, and is marked for removal**: it exists only for a record made by a
+tree that predates the typed refusal, and once no such record is read any more
+it and :data:`REFUSAL_MARKERS` go together.
+
+The type is matched **by name over the exception's inheritance chain**, not by
+``isinstance``.  The harness must be able to classify a run without importing
+the driver — it runs in the parent process, and the driver is only importable
+in the child with the right ``PYTHONPATH`` — and a name walk over
+``type(exc).__mro__`` needs neither the import nor the tree.
+
+Written by task **A50 (harness-run)**; the typed classification is
+**A56 (driver-renames)**'s.  The taxonomy is the harness plan's §4.4 and
+EXPERIMENT_PLAN.md §3.4.
 """
 
 from __future__ import annotations
@@ -34,8 +51,14 @@ UPSTREAM_PASS_CAP_MARKERS: tuple[str, ...] = (
     "don't produce idempotent values",
 )
 
-#: Fragments that mark a driver refusal — the driver declining a combination
-#: rather than failing at one.  Each is a sentence the driver itself writes.
+#: The driver's typed refusal, by name.  Matched over the exception's whole
+#: inheritance chain, so a future subclass of it lands in the same row.
+REFUSAL_TYPES: tuple[str, ...] = ("ArchitectureRefusal",)
+
+#: **Fallback, marked for removal.**  Fragments that mark a driver refusal in a
+#: record made before the typed refusal existed.  Each is a sentence the driver
+#: itself wrote.  Delete this tuple, and the branch that consults it, once no
+#: record from such a tree is read any more.
 REFUSAL_MARKERS: tuple[str, ...] = (
     "is not a recognised",
     "must refuse rather than",
@@ -65,12 +88,25 @@ def classify(exception: BaseException | None, *, status: str) -> str:
         return "machinery"
     if exception is None:
         return "crashed" if status == "crashed" else status
-    name = type(exception).__name__
+    chain = type_names(exception)
     text = str(exception)
-    if name == "ModuleSolveFailure":
+    if "ModuleSolveFailure" in chain:
         return "unconverged"
+    # The type first: a refusal is a refusal whatever it says.
+    if any(name in chain for name in REFUSAL_TYPES):
+        return "refused"
     if all(marker in text for marker in UPSTREAM_PASS_CAP_MARKERS):
         return "unconverged-at-cap"
+    # The fallback, for a record made before the typed refusal existed.
     if any(marker in text for marker in REFUSAL_MARKERS):
         return "refused"
     return "crashed"
+
+
+def type_names(exception: BaseException) -> tuple[str, ...]:
+    """The exception's class and every class it inherits from, by name.
+
+    Names rather than classes, because the harness classifies a run in the
+    parent process where the driver is not importable.
+    """
+    return tuple(cls.__name__ for cls in type(exception).__mro__)

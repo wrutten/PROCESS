@@ -190,7 +190,7 @@ def install_node_census(caller) -> dict[str, dict[str, int]]:
     """Count model executions per node name, harness-side.
 
     A node is counted only when the driver's own counter moved, so a suppressed
-    or deferred node is not miscounted.  ``_run_hoisted_tail`` calls each model
+    or deferred node is not miscounted.  ``_run_deferred_tail`` calls each model
     directly and does *not* go through the counted path, so it is counted
     separately: a cost figure quoted as net model evaluations must have nothing
     hiding in that column.
@@ -207,14 +207,14 @@ def install_node_census(caller) -> dict[str, dict[str, int]]:
 
     caller.Caller._node = censused
 
-    original_tail = caller.Caller._run_hoisted_tail
+    original_tail = caller.Caller._run_deferred_tail
 
     def tail_censused(self, pending):
         for name, _run in pending:
             tail[name] = tail.get(name, 0) + 1
         return original_tail(self, pending)
 
-    caller.Caller._run_hoisted_tail = tail_censused
+    caller.Caller._run_deferred_tail = tail_censused
     return {"counted": counted, "flat_tail": tail}
 
 
@@ -255,7 +255,7 @@ def install_call_models_census(caller) -> dict[str, Any]:
             return original(self, xc, m)
         nodes_before = caller.NODE_CALLS[0]
         sweeps_before = sweeps_cell[0] if sweeps_cell is not None else None
-        prime_cell = getattr(caller, "PRIME_CALLS", None)
+        prime_cell = getattr(caller, "ARRANGEMENT_METHOD_CALLS", None)
         prime_before = prime_cell[0] if prime_cell is not None else None
         census["first_call_models"] = {"in_progress": True}
         objf, conf = original(self, xc, m)
@@ -537,7 +537,7 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
         "node_calls_solve_phase": getattr(
             caller, "NODE_CALLS_AT_OUTPUT", [None]
         )[0],
-        "n_prime_calls": getattr(caller, "PRIME_CALLS", [None])[0],
+        "n_prime_calls": getattr(caller, "ARRANGEMENT_METHOD_CALLS", [None])[0],
     }
     histogram = getattr(caller, "SWEEPS_PER_EVAL_HIST", None)
     if histogram is not None:
@@ -557,17 +557,17 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
         }
     else:
         out["sweeps_per_eval"] = None
-    totals = getattr(caller, "MODULE_SOLVE_TOTALS", None)
+    totals = getattr(caller, "MDA_TOTALS", None)
     if totals is not None:
         totals = dict(totals)
         totals["moved_constants"] = sorted(totals.get("moved_constants", ()))
         out["module_solve_totals"] = totals
     else:
         out["module_solve_totals"] = None
-    per_run = getattr(caller, "POST_SOLVE_TOTALS", None)
+    per_run = getattr(caller, "DEFER_PER_RUN_TOTALS", None)
     out["post_solve_totals"] = (
         dict(per_run)
-        if (per_run is not None and getattr(caller, "POST_SOLVE_ENABLED", False))
+        if (per_run is not None and getattr(caller, "DEFER_PER_RUN_ENABLED", False))
         else None
     )
     _ = module_solve

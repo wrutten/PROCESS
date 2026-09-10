@@ -103,34 +103,62 @@ wording, kept only so that documents written before the rename remain readable. 
 
 ## 4. The switch registry
 
-Every switch is described once, in `switches.py`, as data. Three names matter for each: the word
-V4 uses, the environment variable the driver implements **today**, and the name it is intended to
-carry once the renaming change is made. When that change happens, `switches.py` is the only file
-that has to change.
+Every switch is described once, in `switches.py`, as data: the word this experiment uses for it,
+the environment variable the driver reads, its legal values, whether an arm ever sets it, and how
+to read back what the driver actually resolved. `switches.py` is the only file that has to change
+when a switch does.
 
-*Caption: one row per switch. "Composed" says whether an arm ever sets it or the harness only
-clears it before composing. "Intended name" is the name planned for it; a dash means the switch is
-meant to disappear rather than be renamed. "Not implemented" means no tree offers it yet and every
-arm that asks for it is refused.*
+*Caption: one row per switch the driver understands. "Composed" says whether an arm ever sets it or
+the harness only clears it before composing. "Not implemented" means no tree offers it yet and every
+arm that asks for it is refused rather than run without it. The last column names the variable a
+caller might still be setting from before the rename; **setting one of those raises**, in the
+harness and in the driver both.*
 
-| term | driver name today | intended name | values | composed |
+| term | variable | values | composed | raises if set instead |
 |---|---|---|---|---|
-| analysis loop | `PROCESS_ARCH_MODULE_SOLVE` | `PROCESS_ARCH_MDA` | `flat_state`, `per_module` (unset = upstream's own loop) | yes |
-| tolerance | `PROCESS_ARCH_TAU` | unchanged | a number | yes |
-| coupling state | `PROCESS_ARCH_YSTATE` | `PROCESS_ARCH_COUPLING_STATE` | a file | yes |
-| write sets | `PROCESS_ARCH_WRITESET` | `PROCESS_ARCH_WRITE_SETS` | a file | yes |
-| arrangement · node | `PROCESS_ARCH_SEQUENCE` | `PROCESS_ARCH_ARRANGEMENT_NODE` | `build_after_physics` | yes |
-| arrangement · method | `PROCESS_ARCH_PRIME` | `PROCESS_ARCH_ARRANGEMENT_METHOD` | `fw_geometry` | yes |
-| deferral `per_call` | `PROCESS_ARCH_HOIST` | `PROCESS_ARCH_DEFER_PER_CALL` | `feedforward`, `feedforward_lifted` | yes |
-| deferral `per_run` | `PROCESS_ARCH_POST_SOLVE` | `PROCESS_ARCH_DEFER_PER_RUN` | a file | yes |
-| burn time out of the loop | `PROCESS_ARCH_LIFT` | `PROCESS_ARCH_BURN_TIME_OWNER` | `burn_time` | yes |
-| burn time owned by a constant | `PROCESS_ARCH_PIN_BURN_TIME` | `PROCESS_ARCH_BURN_TIME_OWNER` | a hexadecimal float | yes |
-| schedule passes | `PROCESS_ARCH_OUTER` | — (folded into the analysis loop) | `trust` | yes, but never per arm |
-| output-time loop | *not implemented* | `PROCESS_ARCH_OUTPUT_LOOP` | `none` | yes, once it exists |
-| predicate mode | *not implemented* | `PROCESS_ARCH_PREDICATE` | `mixed` | only for the trial |
-| second tolerance | `PROCESS_ARCH_INNER_TAU` | — (**retired**) | — | never; **refused if present** |
-| pass trace | `PROCESS_ARCH_PASS_TRACE` | unchanged | a file | never; cleared |
-| pass trace detail | `PROCESS_ARCH_PASS_TRACE_FULL_FROM` | unchanged | a number | never; cleared |
+| analysis loop | `PROCESS_ARCH_MDA` | `flat`, `partitioned` (unset = upstream's own loop) | yes | `…_MODULE_SOLVE`, `…_OUTER` |
+| tolerance | `PROCESS_ARCH_TAU` | a number (default `1e-6`) | yes | `…_INNER_TAU` |
+| coupling state | `PROCESS_ARCH_COUPLING_STATE` | a file | yes | `…_YSTATE` |
+| write sets | `PROCESS_ARCH_WRITE_SETS` | a file | yes | `…_WRITESET` |
+| arrangement · node | `PROCESS_ARCH_ARRANGEMENT_NODE` | `build_after_physics` | yes | `…_SEQUENCE` |
+| arrangement · method | `PROCESS_ARCH_ARRANGEMENT_METHOD` | `fw_geometry` | yes | `…_PRIME` |
+| deferral `per_call` | `PROCESS_ARCH_DEFER_PER_CALL` | `feedforward`, `feedforward_lifted` | yes | `…_HOIST` |
+| deferral `per_run` | `PROCESS_ARCH_DEFER_PER_RUN` | a file | yes | `…_POST_SOLVE` |
+| burn-time owner | `PROCESS_ARCH_BURN_TIME_OWNER` | `loop` (the default), `optimiser`, `constant:<hex float>` | yes | `…_LIFT`, `…_PIN_BURN_TIME` |
+| output-time loop | *not implemented* → `PROCESS_ARCH_OUTPUT_LOOP` | `none` | yes, once it exists | — |
+| predicate mode | *not implemented* → `PROCESS_ARCH_PREDICATE` | `mixed` | only for the trial | — |
+| pass trace | `PROCESS_ARCH_PASS_TRACE` | a file | never; cleared | — |
+| pass trace detail | `PROCESS_ARCH_PASS_TRACE_FULL_FROM` | a number | never; cleared | — |
+
+**Three of those rows are worth a sentence, because a switch disappeared behind each.**
+
+*How often the block schedule runs is no longer a setting.* Choosing `PROCESS_ARCH_MDA=partitioned`
+*is* choosing to run the block schedule exactly once. An earlier revision had a second switch that
+chose between running it once and repeating it while a test over the whole coupling state still saw
+movement; that test was measured triggering a further pass **zero times in 91 888 evaluations**, the
+arm that used it was removed by a recorded decision, and the switch went with it. Setting
+`PROCESS_ARCH_OUTER` now raises.
+
+*There is one tolerance.* `PROCESS_ARCH_TAU` is the tolerance of every converger in every arm and
+both phases — the flat loop and each block loop alike. A second, "inner" one existed because arms
+used to be compared at matched *settings*; they are compared at matched *achieved* accuracy, which
+the exit audit records per run, so there is nothing for a second number to do. Setting
+`PROCESS_ARCH_INNER_TAU` raises.
+
+*One switch says who owns the burn time.* Taking the burn time out of the model and naming what
+holds it instead used to be two settings, and they could disagree: "a constant owns it, but the
+model still solves for it" had to be refused explicitly, because the model would overwrite the
+constant on the first sweep. `PROCESS_ARCH_BURN_TIME_OWNER` says it once — the loop, the optimiser,
+or a named constant, passed as a hexadecimal float so a measured value survives the round trip
+exactly — and the inconsistent pair can no longer be written down.
+
+**Why a retired name raises instead of being ignored.** Before the rename, a switch name the driver
+did not recognise was simply ignored. A script still setting an old name would therefore produce a
+*successful* run of a *different* arrangement under the right name, with no error anywhere — a wrong
+answer with no symptom, which is the shape of failure this whole package is built against. The
+eleven retired names are listed in the driver as well as in the registry, and the self-check
+compares the two lists rather than assuming they agree: a name on one list and not the other would
+mean the harness is describing a driver it is not running.
 
 ### 4.1 The names of the committed artifacts
 
@@ -313,6 +341,15 @@ implements, the intended name, the legal values, and **how to read back what the
 resolved**. The readback is the load-bearing part: it is what lets the harness tell "the tree did
 what I asked" from "the tree ignored me". Then set it from `Arm.terms()`.
 
+**Renaming or retiring one.** Put the old name in that `Switch`'s `retired_names`, with the reason,
+and add it to `RETIRED_SWITCHES` in the driver's `process/core/solver/__init__.py` with the same
+reason. Both are needed: the harness one stops an arm from composing it, the driver one stops a
+caller that never went through the harness. The self-check compares the two lists, so forgetting
+either half is a failed check rather than a quiet gap. If the rename means two switches become one —
+as the burn time's owner did — give `canonical_roles()` the folding, and give it a way to *fail*:
+the folding must drop the old switch only where its value is the one the new one implies, and any
+other value must survive as a role of its own so a real difference still reads as a difference.
+
 ---
 
 ## 7. Where this differs from the plan's terminology table, and why
@@ -325,18 +362,23 @@ changes and five additions were made; each is listed here so the plan can absorb
    derived copy — so the file still needs a word, and it is the plain one. A **configuration** is
    the problem; an **input file** is a file it is read from. **"Frozen" is reserved** for the
    physics freeze and the predicate mode, and names no file, field or matrix cell.
-2. **"outer loop" is gone, but the switch that expresses it is still composed.** §11.2 lists
-   `PROCESS_ARCH_OUTER` as retired. It is retired as something an *arm chooses*; the driver still
-   needs it to be told to run the schedule once, so the registry supplies it whenever the
-   partitioned loop is selected, and it disappears from the driver with the renaming change.
-3. **"retired" is made operational for the second tolerance.** `PROCESS_ARCH_INNER_TAU` is not
-   merely never set: an environment carrying it raises. A name that is only *not used* comes back.
-4. **Two intended names were missing and are supplied**: `PROCESS_ARCH_COUPLING_STATE` (today
-   `…_YSTATE`) and `PROCESS_ARCH_WRITE_SETS` (today `…_WRITESET`), so that the switch names follow
+2. **"outer loop" is gone, and so is the switch that expressed it** *(closed 2026-09-10 by the
+   rename)*. §11.2 lists `PROCESS_ARCH_OUTER` as retired. Until the rename it was retired only as
+   something an *arm chooses* — the driver still had to be told to run the schedule once, so the
+   registry supplied it whenever the partitioned loop was selected. The driver now takes
+   `PROCESS_ARCH_MDA=partitioned` to *mean* that, no arm composes anything for it, and setting the
+   old name raises.
+3. **"retired" is operational for every retired name, not only the second tolerance.** An
+   environment carrying any of the eleven raises — in the harness when an arm is composed, and in
+   the driver at import, so a caller that bypasses the harness is refused too. A name that is only
+   *not used* comes back.
+4. **Two intended names were missing and were supplied**: `PROCESS_ARCH_COUPLING_STATE` (was
+   `…_YSTATE`) and `PROCESS_ARCH_WRITE_SETS` (was `…_WRITESET`), so that the switch names follow
    the terms as §11.2 requires of the others.
-5. **The single burn-time-owner switch folds two of today's switches**, and that is exact only
-   because exactly one quantity is ever taken out of the loop. Today's "lift" switch takes a
-   *list*; if a second quantity is ever lifted, the general form is needed back.
+5. **The single burn-time-owner switch folds two of the earlier ones** *(done 2026-09-10)*, and
+   that is exact only because exactly one quantity is ever taken out of the loop. The earlier
+   "lift" switch took a *list*; if a second quantity is ever taken out, the general form is needed
+   back, and the driver's own docstring says so where a reader will meet it.
 6. **Five terms with no row in §11.2 are added**: rung, stopping rule, skip, capability probe,
    pending switch. Each is a thing the harness has to name in a refusal message.
 7. **The plan's matrix row "outer loop" is regenerated, not stored.** Four of the plan's eleven

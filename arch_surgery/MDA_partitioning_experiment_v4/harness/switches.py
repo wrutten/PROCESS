@@ -44,6 +44,9 @@ from typing import Callable, Mapping, MutableMapping
 CALLER = "process.core.caller"
 MODULE_SOLVE = "process.core.solver.module_solve"
 SUBSOLVE = "process.core.solver.subsolve"
+#: The solver package itself, which carries the typed refusal and the list of
+#: switch names this revision retired.
+SOLVER = "process.core.solver"
 
 
 # --------------------------------------------------------------------------
@@ -77,11 +80,11 @@ class Switch:
     resolved_as_asked: Callable[[Mapping[str, object], str], bool] = field(
         compare=False, repr=False, default=lambda resolved, value: True
     )
-    #: Names that must never appear in a composed environment, with the reason.
-    #: A stale caller setting a retired name would run the wrong arm under the
-    #: right name; this is the guard against that.
-    retired_names: tuple[str, ...] = ()
-    retired_because: str = ""
+    #: Names that must never appear in a composed environment, each with the
+    #: reason it was retired.  A stale caller setting a retired name would run
+    #: the wrong arm under the right name; this is the guard against that, and
+    #: the driver carries the same list so that the refusal happens there too.
+    retired_names: Mapping[str, str] = field(default_factory=dict)
     #: The driver change that will supply or rename it, for the refusal message.
     pending_change: str = ""
     note: str = ""
@@ -117,23 +120,38 @@ _MISSING = _Missing()
 REGISTRY: dict[str, Switch] = {
     "mda": Switch(
         term="mda",
-        driver_name="PROCESS_ARCH_MODULE_SOLVE",
+        driver_name="PROCESS_ARCH_MDA",
         intended_name="PROCESS_ARCH_MDA",
         value_kind="enum",
-        values=("flat_state", "per_module"),
+        values=("flat", "partitioned"),
         composed=True,
         readbacks=(
-            (MODULE_SOLVE, "MODULE_SOLVE_NAME"),
+            (MODULE_SOLVE, "MDA_MODE"),
             (MODULE_SOLVE, "ENABLED"),
-            (MODULE_SOLVE, "FLAT_STATE"),
+            (MODULE_SOLVE, "FLAT"),
         ),
-        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "MODULE_SOLVE_NAME") == v,
+        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "MDA_MODE") == v,
+        retired_names={
+            "PROCESS_ARCH_MODULE_SOLVE": (
+                "renamed: the shape of the analysis loop is PROCESS_ARCH_MDA, "
+                "and its values are flat and partitioned rather than "
+                "flat_state and per_module"
+            ),
+            "PROCESS_ARCH_OUTER": (
+                "folded: the partitioned loop runs its block schedule once, "
+                "which is what PROCESS_ARCH_MDA=partitioned now means.  The "
+                "repeated schedule left with the arm that used it (D22), after "
+                "its verification pass was measured triggering a further pass "
+                "0 times in 91 888 evaluations"
+            ),
+        },
         note=(
             "Shape of the analysis loop: one block over every in-loop node "
             "(flat) or three block solves in feed-forward order "
-            "(partitioned).  The driver spells these 'flat_state' and "
-            "'per_module'; V4 says flat and partitioned.  Unset is upstream's "
-            "own loop, which is what the reference arms run."
+            "(partitioned).  Unset is upstream's own loop, which is what the "
+            "reference arms run.  Choosing 'partitioned' *is* choosing to run "
+            "the block schedule once; there is no separate switch for that any "
+            "more and setting the old one raises."
         ),
     ),
     "tolerance": Switch(
@@ -145,6 +163,13 @@ REGISTRY: dict[str, Switch] = {
         composed=True,
         readbacks=((MODULE_SOLVE, "TAU"),),
         resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "TAU") == float(v),
+        retired_names={
+            "PROCESS_ARCH_INNER_TAU": (
+                "D23 (user, 2026-09-10): one tolerance for every converger, so "
+                "a second one cannot be set.  A run carrying it would report a "
+                "block accuracy the campaign never declared"
+            ),
+        },
         note=(
             "The one tolerance of every converger (D23, the user's ruling of "
             "2026-09-10): the flat loop and each block loop alike, both "
@@ -153,13 +178,14 @@ REGISTRY: dict[str, Switch] = {
     ),
     "coupling_state": Switch(
         term="coupling_state",
-        driver_name="PROCESS_ARCH_YSTATE",
+        driver_name="PROCESS_ARCH_COUPLING_STATE",
         intended_name="PROCESS_ARCH_COUPLING_STATE",
         value_kind="path",
         values=(),
         composed=True,
-        readbacks=((MODULE_SOLVE, "YSTATE_PATH"),),
-        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "YSTATE_PATH") == v,
+        readbacks=((MODULE_SOLVE, "COUPLING_STATE_PATH"),),
+        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "COUPLING_STATE_PATH") == v,
+        retired_names={"PROCESS_ARCH_YSTATE": "renamed to PROCESS_ARCH_COUPLING_STATE"},
         note=(
             "The committed artifact naming the fields that make up the "
             "coupling state and the measured scale of each.  No default: "
@@ -169,13 +195,14 @@ REGISTRY: dict[str, Switch] = {
     ),
     "write_sets": Switch(
         term="write_sets",
-        driver_name="PROCESS_ARCH_WRITESET",
+        driver_name="PROCESS_ARCH_WRITE_SETS",
         intended_name="PROCESS_ARCH_WRITE_SETS",
         value_kind="path",
         values=(),
         composed=True,
-        readbacks=((MODULE_SOLVE, "WRITESET_PATH"),),
-        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "WRITESET_PATH") == v,
+        readbacks=((MODULE_SOLVE, "WRITE_SETS_PATH"),),
+        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "WRITE_SETS_PATH") == v,
+        retired_names={"PROCESS_ARCH_WRITESET": "renamed to PROCESS_ARCH_WRITE_SETS"},
         note=(
             "The committed artifact naming which coupling-state components "
             "each block writes, so a block loop tests its own subset."
@@ -183,13 +210,17 @@ REGISTRY: dict[str, Switch] = {
     ),
     "arrangement_node": Switch(
         term="arrangement_node",
-        driver_name="PROCESS_ARCH_SEQUENCE",
+        driver_name="PROCESS_ARCH_ARRANGEMENT_NODE",
         intended_name="PROCESS_ARCH_ARRANGEMENT_NODE",
         value_kind="enum",
         values=("build_after_physics",),
         composed=True,
-        readbacks=((CALLER, "SEQUENCE_NAME"), (CALLER, "SEQUENCE_HEAD")),
-        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "SEQUENCE_NAME") == v,
+        readbacks=(
+            (CALLER, "ARRANGEMENT_NODE_NAME"),
+            (CALLER, "ARRANGEMENT_NODE_HEAD"),
+        ),
+        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "ARRANGEMENT_NODE_NAME") == v,
+        retired_names={"PROCESS_ARCH_SEQUENCE": "renamed to PROCESS_ARCH_ARRANGEMENT_NODE"},
         note=(
             "When a node runs: 'build' moved after 'physics' so the physics "
             "block is contiguous in the call order.  A permutation of three "
@@ -198,13 +229,17 @@ REGISTRY: dict[str, Switch] = {
     ),
     "arrangement_method": Switch(
         term="arrangement_method",
-        driver_name="PROCESS_ARCH_PRIME",
+        driver_name="PROCESS_ARCH_ARRANGEMENT_METHOD",
         intended_name="PROCESS_ARCH_ARRANGEMENT_METHOD",
         value_kind="enum",
         values=("fw_geometry",),
         composed=True,
-        readbacks=((CALLER, "PRIME_NAME"), (CALLER, "PRIME_FW_GEOMETRY")),
-        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "PRIME_NAME") == v,
+        readbacks=(
+            (CALLER, "ARRANGEMENT_METHOD_NAME"),
+            (CALLER, "ARRANGEMENT_METHOD_FW_GEOMETRY"),
+        ),
+        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "ARRANGEMENT_METHOD_NAME") == v,
+        retired_names={"PROCESS_ARCH_PRIME": "renamed to PROCESS_ARCH_ARRANGEMENT_METHOD"},
         note=(
             "When a method runs: the run-constant first-wall geometry method "
             "executed at the head of every sweep, so 'build' reads this "
@@ -213,34 +248,37 @@ REGISTRY: dict[str, Switch] = {
     ),
     "defer_per_call": Switch(
         term="defer_per_call",
-        driver_name="PROCESS_ARCH_HOIST",
+        driver_name="PROCESS_ARCH_DEFER_PER_CALL",
         intended_name="PROCESS_ARCH_DEFER_PER_CALL",
         value_kind="enum",
         values=("feedforward", "feedforward_lifted"),
         composed=True,
         readbacks=(
-            (CALLER, "HOIST_NAME"),
-            (CALLER, "HOIST_ENABLED"),
-            (CALLER, "HOIST_NODES"),
+            (CALLER, "DEFER_PER_CALL_NAME"),
+            (CALLER, "DEFER_PER_CALL_ENABLED"),
+            (CALLER, "DEFER_PER_CALL_NODES"),
         ),
-        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "HOIST_NAME") == v,
+        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "DEFER_PER_CALL_NAME") == v,
+        retired_names={"PROCESS_ARCH_HOIST": "renamed to PROCESS_ARCH_DEFER_PER_CALL"},
         note=(
             "How often a node runs: once per evaluation of the model set "
             "instead of once per sweep.  'feedforward_lifted' additionally "
             "defers the burn-time node, which is only correct once the burn "
             "time has left the loop — the driver refuses the combination "
-            "otherwise."
+            "otherwise.  The two value names are the driver's own and the "
+            "terminology table names no replacements for them, so they stay."
         ),
     ),
     "defer_per_run": Switch(
         term="defer_per_run",
-        driver_name="PROCESS_ARCH_POST_SOLVE",
+        driver_name="PROCESS_ARCH_DEFER_PER_RUN",
         intended_name="PROCESS_ARCH_DEFER_PER_RUN",
         value_kind="path",
         values=(),
         composed=True,
-        readbacks=((CALLER, "POST_SOLVE_PATH"), (CALLER, "POST_SOLVE_ENABLED")),
-        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "POST_SOLVE_PATH") == v,
+        readbacks=((CALLER, "DEFER_PER_RUN_PATH"), (CALLER, "DEFER_PER_RUN_ENABLED")),
+        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "DEFER_PER_RUN_PATH") == v,
+        retired_names={"PROCESS_ARCH_POST_SOLVE": "renamed to PROCESS_ARCH_DEFER_PER_RUN"},
         note=(
             "How often a node runs: once in total, at the accepted optimum.  "
             "The value is the committed artifact naming that node set; there "
@@ -248,68 +286,40 @@ REGISTRY: dict[str, Switch] = {
             "rather than quietly run all of them."
         ),
     ),
-    "burn_time_lift": Switch(
-        term="burn_time_lift",
-        driver_name="PROCESS_ARCH_LIFT",
+    "burn_time_owner": Switch(
+        term="burn_time_owner",
+        driver_name="PROCESS_ARCH_BURN_TIME_OWNER",
         intended_name="PROCESS_ARCH_BURN_TIME_OWNER",
-        value_kind="csv",
-        values=("burn_time",),
+        value_kind="owner",
+        values=("loop", "optimiser", "constant:<hex float>"),
         composed=True,
         readbacks=(
-            (SUBSOLVE, "LIFTED_SITES"),
-            (SUBSOLVE, "LIFT_ENABLED"),
+            (SUBSOLVE, "BURN_TIME_OWNER"),
+            (SUBSOLVE, "BURN_TIME_CONSTANT"),
+            (SUBSOLVE, "BURN_TIME_OUT_OF_LOOP"),
             (SUBSOLVE, "SITES"),
         ),
-        resolved_as_asked=lambda r, v: sorted(
-            _resolved(r, SUBSOLVE, "LIFTED_SITES") or []
-        )
-        == sorted(part for part in v.split(",") if part),
+        resolved_as_asked=lambda r, v: _owner_resolved_as_asked(r, v),
+        retired_names={
+            "PROCESS_ARCH_LIFT": (
+                "folded: taking the burn time out of the model is now said by "
+                "naming its new owner — PROCESS_ARCH_BURN_TIME_OWNER=optimiser "
+                "or =constant:<hex float>"
+            ),
+            "PROCESS_ARCH_PIN_BURN_TIME": (
+                "folded: PROCESS_ARCH_BURN_TIME_OWNER=constant:<hex float> "
+                "names the constant and takes the quantity out of the model in "
+                "one setting, so the pair that could disagree no longer exists"
+            ),
+        },
         note=(
-            "Takes the burn time out of the loop: the model stops solving for "
-            "it and reads it from wherever its new owner put it.  Today a "
-            "list of lifted sites with exactly one member; the intended "
-            "single switch states the owner instead."
-        ),
-    ),
-    "burn_time_pin": Switch(
-        term="burn_time_pin",
-        driver_name="PROCESS_ARCH_PIN_BURN_TIME",
-        intended_name="PROCESS_ARCH_BURN_TIME_OWNER",
-        value_kind="hexfloat",
-        values=(),
-        composed=True,
-        readbacks=((SUBSOLVE, "PIN_BURN_TIME"), (SUBSOLVE, "PIN_ENABLED")),
-        resolved_as_asked=lambda r, v: _resolved(r, SUBSOLVE, "PIN_BURN_TIME")
-        == float.fromhex(v),
-        note=(
-            "Names a constant as the burn time's owner, for the phase that "
-            "has no optimiser to own it.  Passed as a C99 hex float so a "
-            "measured value survives the round trip exactly.  The driver "
-            "refuses a pin without the lift (the model would overwrite it on "
-            "the first sweep) and refuses an input file that also names the "
-            "burn time as an optimiser variable (two owners is a refusal, "
-            "not a race)."
-        ),
-    ),
-    "schedule_passes": Switch(
-        term="schedule_passes",
-        driver_name="PROCESS_ARCH_OUTER",
-        intended_name=None,
-        value_kind="enum",
-        values=("trust",),
-        composed=True,
-        readbacks=((MODULE_SOLVE, "OUTER_MODE"), (MODULE_SOLVE, "TRUST_OUTER")),
-        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "OUTER_MODE") == v,
-        pending_change="folded into the partitioned setting of the analysis-loop switch",
-        note=(
-            "The partitioned arms run their block schedule once (D23).  The "
-            "driver still expresses that as a separate 'trust' mode because "
-            "its default is to repeat the whole schedule while anything is "
-            "still moving; V4 has no arm that repeats it, so the value is a "
-            "consequence of choosing the partitioned loop, not a choice of "
-            "its own.  It is composed by this registry, never declared per "
-            "arm, and it disappears when the driver stops offering the "
-            "repeat."
+            "Who owns the burn time: the model's own loop (the default, and "
+            "upstream's behaviour), the optimiser (a design variable), or a "
+            "named constant, for the phase that has no optimiser to own it.  "
+            "The constant is passed as a C99 hex float so a measured value "
+            "survives the round trip exactly.  The driver refuses an input "
+            "file that also names the burn time as an optimiser variable — two "
+            "owners is a refusal, not a race."
         ),
     ),
     "output_loop": Switch(
@@ -347,26 +357,6 @@ REGISTRY: dict[str, Switch] = {
             "is the trial and needs the switch."
         ),
     ),
-    "inner_tolerance": Switch(
-        term="inner_tolerance",
-        driver_name="PROCESS_ARCH_INNER_TAU",
-        intended_name=None,
-        value_kind="number",
-        values=(),
-        composed=False,
-        readbacks=((MODULE_SOLVE, "INNER_TAU"),),
-        retired_names=("PROCESS_ARCH_INNER_TAU",),
-        retired_because=(
-            "D23 (user, 2026-09-10): one tolerance for every converger, so a "
-            "second one cannot be set.  A run carrying it would report a "
-            "block accuracy the campaign never declared"
-        ),
-        note=(
-            "The driver still offers a separate tolerance for a block loop.  "
-            "V4 never sets it: an environment carrying it is refused, not "
-            "cleared and forgotten."
-        ),
-    ),
     "pass_trace": Switch(
         term="pass_trace",
         driver_name="PROCESS_ARCH_PASS_TRACE",
@@ -392,6 +382,23 @@ REGISTRY: dict[str, Switch] = {
         note="Companion of the trace above; same treatment.",
     ),
 }
+
+
+def _owner_resolved_as_asked(resolved: Mapping[str, object], value: str) -> bool:
+    """Did the driver resolve the burn time's owner exactly as asked?
+
+    ``constant:<hex>`` is checked on the **value** as well as the owner: a
+    driver that took the owner and dropped the number would otherwise pass.
+    """
+    owner = _resolved(resolved, SUBSOLVE, "BURN_TIME_OWNER")
+    if value.startswith("constant:"):
+        constant = _resolved(resolved, SUBSOLVE, "BURN_TIME_CONSTANT")
+        try:
+            wanted = float.fromhex(value.split(":", 1)[1])
+        except ValueError:
+            return False
+        return owner == "constant" and isinstance(constant, float) and constant == wanted
+    return owner == value
 
 
 #: Instrumentation variables that are not architecture switches: they select
@@ -446,12 +453,116 @@ def all_names() -> tuple[str, ...]:
 
 
 def retired_names() -> dict[str, str]:
-    """Names that must never appear in a composed environment, and why."""
+    """Names that must never appear in a composed environment, and why.
+
+    The driver carries the same list (``process.core.solver.RETIRED_SWITCHES``)
+    and refuses on it too.  The two are checked against each other by the
+    capability probe rather than assumed equal: a harness that cleared a name
+    the driver still honoured, or refused one the driver had never heard of,
+    would be describing a tree it is not running.
+    """
     return {
-        name: sw.retired_because
+        name: because
         for sw in REGISTRY.values()
-        for name in sw.retired_names
+        for name, because in sw.retired_names.items()
     }
+
+
+#: How the previous revision spelled each switch: its variable name -> V4's
+#: term for the same **role**.  Used only where a V4 environment has to be
+#: compared with one the previous revision composed (the self-check's
+#: composition comparison).  A name missing from this map is a name the
+#: previous revision did not have.
+PREVIOUS_SWITCH_NAMES: dict[str, str] = {
+    "PROCESS_ARCH_MODULE_SOLVE": "mda",
+    "PROCESS_ARCH_OUTER": "schedule_passes",
+    "PROCESS_ARCH_TAU": "tolerance",
+    "PROCESS_ARCH_INNER_TAU": "inner_tolerance",
+    "PROCESS_ARCH_YSTATE": "coupling_state",
+    "PROCESS_ARCH_WRITESET": "write_sets",
+    "PROCESS_ARCH_SEQUENCE": "arrangement_node",
+    "PROCESS_ARCH_PRIME": "arrangement_method",
+    "PROCESS_ARCH_HOIST": "defer_per_call",
+    "PROCESS_ARCH_POST_SOLVE": "defer_per_run",
+    "PROCESS_ARCH_LIFT": "burn_time_lift",
+    "PROCESS_ARCH_PIN_BURN_TIME": "burn_time_constant",
+    "PROCESS_ARCH_PASS_TRACE": "pass_trace",
+    "PROCESS_ARCH_PASS_TRACE_FULL_FROM": "pass_trace_full_from",
+}
+
+#: Values the previous revision spelled differently for the same role.
+PREVIOUS_VALUES: dict[str, dict[str, str]] = {
+    "mda": {"flat_state": "flat", "per_module": "partitioned"},
+}
+
+
+class RoleError(RuntimeError):
+    """An environment that cannot be read as a set of roles.  Never ignored."""
+
+
+def canonical_roles(
+    env: Mapping[str, str], *, revision: str = "current"
+) -> dict[str, str]:
+    """*env* as ``role -> value``, in the vocabulary of the current revision.
+
+    This is what makes two revisions' compositions comparable **by what they
+    ask the driver to do** rather than by how they spell it.  Equality of the
+    two results means the same role carries the same value on both sides, which
+    is the claim a rename has to support: ``OUTER=trust`` with
+    ``MODULE_SOLVE=per_module`` on the previous revision's side and
+    ``MDA=partitioned`` on ours are the *same request*, and comparing the raw
+    variable names would call them different.
+
+    Two foldings happen here, and both can fail rather than paper over a
+    difference:
+
+    * the previous revision's ``OUTER`` is dropped **only** where its value is
+      the one the partitioned loop now implies; any other combination becomes
+      an explicit ``schedule_passes`` role, so the comparison fails and says
+      why;
+    * its two burn-time settings become one ``burn_time_owner`` value, and a
+      pin without the lift -- which that revision refused at import -- is a
+      refusal here too rather than a silently different owner.
+    """
+    if revision not in ("current", "previous"):
+        raise RoleError(f"{revision!r} is neither 'current' nor 'previous'")
+    if revision == "current":
+        roles = {}
+        for term, sw in REGISTRY.items():
+            if sw.driver_name and sw.driver_name in env:
+                roles[term] = env[sw.driver_name]
+            elif sw.intended_name and sw.intended_name in env:
+                roles[term] = env[sw.intended_name]
+        return roles
+
+    roles: dict[str, str] = {}
+    for name, value in env.items():
+        term = PREVIOUS_SWITCH_NAMES.get(name)
+        if term is None:
+            continue
+        roles[term] = PREVIOUS_VALUES.get(term, {}).get(value, value)
+
+    # the burn time's owner, from the two settings that used to say it
+    lifted = roles.pop("burn_time_lift", None)
+    constant = roles.pop("burn_time_constant", None)
+    if constant is not None:
+        if lifted is None:
+            raise RoleError(
+                "the previous revision's environment names a constant burn "
+                "time without lifting the site, which that revision refused at "
+                "import; it has no reading as a burn-time owner"
+            )
+        roles["burn_time_owner"] = f"constant:{constant}"
+    elif lifted is not None:
+        roles["burn_time_owner"] = "optimiser"
+
+    # the schedule passes, which the partitioned loop now implies
+    passes = roles.pop("schedule_passes", None)
+    if passes is not None and not (
+        passes == "trust" and roles.get("mda") == "partitioned"
+    ):
+        roles["schedule_passes"] = passes
+    return roles
 
 
 def clear_all(env: MutableMapping[str, str]) -> MutableMapping[str, str]:

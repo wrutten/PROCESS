@@ -69,6 +69,7 @@ from harness import perturb  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
 from harness import predicate as predicate_mod  # noqa: E402
 from harness import records as records_mod  # noqa: E402
+from harness import switches as switches_mod  # noqa: E402
 from harness import reference as reference_mod  # noqa: E402
 from harness.config import Campaign, Config, default_campaign  # noqa: E402
 from harness.selfcheck import Check  # noqa: E402
@@ -744,13 +745,25 @@ def teeth(
 def _composition_tooth(
     planned: Sequence[PlannedRun], campaign: Campaign, root: Path, *, resume: bool
 ) -> dict[str, Any]:
-    """Run the partitioned arm with the schedule switch cleared.
+    """Run the partitioned arm with its analysis-loop switch set to ``flat``.
 
-    With that switch unset the driver runs its **default** schedule — the one
-    that repeats the block pass while anything is still moving — under the
-    partitioned arm's name.  It is a different arm, and the gate must say so.
-    This is the positive control: it proves the comparison is sensitive to
-    *which arm ran*, not merely to whether a run finished.
+    Every other switch of the arm stays as the arm declares it, so the run is
+    ``B3`` in name and in composition except for the one thing the arm is
+    *about*: the shape of the analysis loop.  It is a different arm, and the
+    gate must say so.  This is the positive control: it proves the comparison
+    is sensitive to *which arm ran*, not merely to whether a run finished.
+
+    **What this tooth used to be, and why it changed.**  It used to clear the
+    switch that chose between running the block schedule once and repeating it,
+    because with that switch unset the driver ran the repeated schedule under
+    the partitioned arm's name — a wrong arm with a right-looking name, which
+    is the failure this gate has to be able to see.  A56 (driver-renames)
+    folded that switch into the partitioned value, so the mis-composition it
+    perturbed **cannot be written down any more**: there is no setting that
+    makes the partitioned loop repeat its schedule, and the old switch name
+    raises.  That is a narrowing of what can go wrong, not a loss of coverage
+    — but it does mean the positive control now perturbs a different switch,
+    and this is where a reader is told so.
     """
     candidates = [
         item
@@ -771,7 +784,8 @@ def _composition_tooth(
             "what": "no B3 run at seed 0 is planned, so the tooth cannot run",
         }
     config = campaign.configuration(chosen.run.configuration)
-    switch = "PROCESS_ARCH_OUTER"
+    switch = switches_mod.REGISTRY["mda"].driver_name
+    wrong_value = "flat"
     job = pool_mod.Job(
         phase="B",
         arm="B3",
@@ -782,7 +796,7 @@ def _composition_tooth(
         delta=campaign.delta,
         run_kind="gate",
         allow_pending=GATE_ALLOWANCE.get("B3", ()),
-        override_env={switch: None},
+        override_env={switch: wrong_value},
     )
     pool_mod.run_all([job], campaign, resume=resume)
     result = compare_one(chosen.run, job.outdir)
@@ -791,17 +805,17 @@ def _composition_tooth(
         "tooth": "composition",
         "caught": not result["passed"],
         "what": (
-            f"B3 on {config.name} run with {switch} cleared — so the verified "
-            f"schedule ran under the partitioned arm's name — must not "
-            f"reproduce the previous revision's B3.  "
-            f"{result['n_mismatched']} of {result['n_fields']} compared values "
-            f"differ"
+            f"B3 on {config.name} run with {switch}={wrong_value} — so the "
+            f"flat loop ran under the partitioned arm's name, every other "
+            f"switch of the arm unchanged — must not reproduce the previous "
+            f"revision's B3.  {result['n_mismatched']} of "
+            f"{result['n_fields']} compared values differ"
         ),
         "outdir": str(job.outdir),
         "configuration": config.name,
-        "switch_cleared": switch,
-        "resolved_schedule": (record.get("resolved_switches") or {}).get(
-            "process.core.solver.module_solve.OUTER_MODE"
+        "switch_perturbed": f"{switch}={wrong_value}",
+        "resolved_mda": (record.get("resolved_switches") or {}).get(
+            "process.core.solver.module_solve.MDA_MODE"
         ),
         "n_fields": result["n_fields"],
         "n_mismatched": result["n_mismatched"],
