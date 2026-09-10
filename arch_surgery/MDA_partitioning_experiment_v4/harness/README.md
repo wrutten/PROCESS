@@ -404,3 +404,115 @@ two entry points, the worker pool, the record schema), the artifact and census s
 against the earlier revisions, the tally and the analysis are separate tasks. The preflight names
 each missing piece and the stage that produces it rather than falling back to something that
 happens to be there.
+
+---
+
+## 11. The reproduction reference — the previous revision's numbers, committed
+
+### What it is
+
+`harness/reference/reproduction_reference.json` holds the measured results of **twenty runs made by
+the previous revision of this experiment**: three configurations, six arms, both phases. It is the
+answer sheet for one question, asked once:
+
+> *We rewrote the harness. Did the rewrite change the measurement?*
+
+The way that question gets answered is **gate GR**. The experiment keeps its own copy of PROCESS
+(`../PROCESS/`). At the commit where that copy is taken — and **before any change is made to it** —
+the copy *is* the code the previous revision measured, character for character. So the rewritten
+harness is pointed at it, the twenty runs are made again, and every compared number must come out
+**exactly** the same: not close, not within a tolerance, the same. These are counts and hexadecimal
+floating-point strings, both of which reproduce bit for bit or do not reproduce at all. If a number
+moves, the only thing that changed is the harness, and that is precisely what the gate is for.
+
+Fifteen numbers are compared per optimisation and ten per evaluation — model executions during the
+solve, evaluations the optimiser asked for, sweeps per block, the objective at the exit as a hex
+float, how far the coupling state still was from converged, the optimiser's exit code and iteration
+count, and the per-attempt iteration counts the plan's second construction of check 2 needs. The
+list lives in `REFERENCE_FIELDS` in `harness/reference.py` and each field's one-line meaning is in
+the committed file itself, so a reader does not have to open the plan to know what a cell is.
+
+### Why it is committed rather than read from the records
+
+The previous revision's records sit in an untracked bulk directory in the main checkout. Untracked
+means git does not have them, and **this project has destroyed untracked run records three times** —
+once taking with it the evidence behind a correction to a published headline (queue issues I-14,
+I-15 and I-16; the trap is written up in `arch_surgery/docs/TRAPS.md`). A gate anchored on files
+that can be deleted by retiring a working tree is a gate that will one day quietly have nothing to
+compare against, and a check with no population is not a check.
+
+So the compared fields are extracted **once** into a small committed file (32 KB), and the gate reads
+that. The live records are used only to *re-derive* the file and confirm, byte for byte, that
+nothing has drifted. If the records vanish tomorrow, the gate still works; only the re-derivation
+becomes unavailable, and it says so rather than passing.
+
+### How to re-derive it and how to check it
+
+The records live in the **main checkout**, so a task working in its own worktree has to be pointed
+at them; there is no default that guesses at another checkout, because guessing would read numbers
+nobody asked for.
+
+```bash
+PY=/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
+cd arch_surgery/MDA_partitioning_experiment_v4
+RUNS=/home/wrutten/projects/PROCESS_surgery/arch_surgery/MDA_partitioning_experiment_v3/runs
+
+# what is committed, and what it does not cover — reads no records
+$PY experiment_runner.py --reference show
+
+# re-derive it from the records and require byte-for-byte equality
+$PY experiment_runner.py --reference verify --previous-runs $RUNS
+
+# the four deliberate breaks, each of which must make a stage refuse
+$PY experiment_runner.py --reference teeth --previous-runs $RUNS
+
+# rebuild the committed file (only when the reference set or the field list changes)
+$PY experiment_runner.py --reference extract --previous-runs $RUNS
+
+# the report's two tables, rendered from the committed file with their captions
+$PY experiment_runner.py --reference tables
+```
+
+Exit codes are the runner's: `0` pass, `3` fail. Each stage writes its own record under `../runs/`,
+which is untracked. `harness/reference.py` takes the same flags directly if you want the module on
+its own.
+
+**Everything that could stop the comparison is a failure, never a skip.** A record that is not
+there, a record that does not carry a field the plan names for its phase, a record made at a commit
+other than the previous revision's campaign commit, an absent committed file, an absent records
+directory — each one refuses and says which record and which field. The four **teeth** (a gate's
+demonstrated ability to fail — §8) exercise exactly that: one record deleted from a throwaway copy;
+one compared field deleted from a throwaway copy of a record; the arm-name map bypassed; one value
+changed in a throwaway copy of the committed file. All four must trip before the gate's zeros mean
+anything.
+
+**One thing to know about the arm names.** The previous revision called the optimisation-phase
+reference arm `R`; this revision calls it `BR`, because the phase belongs in the name. The map lives
+in `switches.PREVIOUS_ARM_NAMES` and is inverted, never written a second time. Asking the previous
+revision's records for `BR` **raises** rather than reporting a missing directory, and so does asking
+for either of the two arms this revision retired. A lookup that misses has to say so.
+
+### What it covers, and what it does not
+
+It covers the six arms both revisions run, on the three configurations, at the unperturbed seed and
+at the first perturbed one. **Two of this revision's arms are new and have no previous record at
+all**, so GR cannot say anything about them; each is covered by a different named gate instead, and
+the committed file states both rather than leaving a reader to notice an arm missing:
+
+| arm | why the reference cannot cover it | covered instead by |
+|---|---|---|
+| `AR` — the evaluation-phase reference | the previous revision had no such arm | one evaluation with every architecture switch cleared must reproduce the first `call_models` of `BR` at seed 0, on that call's node calls, sweeps and objective hex |
+| `A0p` — flat, with the burn time owned by a constant | the previous revision never ran that combination | the warm-equivalence gate: pinned at the reference's converged burn time it must reproduce the reference fixed point, with the cross-state residual below the tolerance and the pinned component bit-identical |
+
+*Caption: one row per arm outside the reference's reach; "covered instead by" names the check that
+does test the path. Neither substitute is a comparison against a prior record, because no prior
+record exists — both are internal consistency checks against a reference the run itself produces.*
+
+One row of the reference set is deliberately short. The arm where the optimiser owns the burn time
+is not run on `st_regression`: that configuration is steady-state, has no burn-time coupling, and
+the arm composes onto its predecessor there — so the previous revision never ran it and this file
+records the absence with the reason rather than quietly holding nineteen entries where the table
+says twenty.
+
+Finally, the reference says nothing about whether the architecture is *better*. It only says the
+harness that measures it is the same instrument. The experiment's own gates and checks do the rest.
