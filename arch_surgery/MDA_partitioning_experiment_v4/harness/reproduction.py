@@ -1042,6 +1042,162 @@ def summary(verdict: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def tables(verdict: Mapping[str, Any]) -> str:
+    """The gate's own tables, in the shape the task report prints them.
+
+    A formatter over the committed verdict record and nothing else: it starts
+    no run and recomputes no number, so a table in the report and the record it
+    came from cannot disagree.  Every table carries its caption, its population
+    and its construction (protocol §16).
+    """
+    out: list[str] = []
+    comparison = verdict.get("comparison") or {}
+    rows = comparison.get("rows", [])
+
+    out.append(
+        "*Caption: one row per reference run of gate GR.  \"Fields\" is how many "
+        "compared values that run's phase carries — 15 for an optimisation, 10 "
+        "for an evaluation — and \"mismatches\" how many of them differ from the "
+        "previous revision's recorded value.  No tolerance is applied to any of "
+        "them: every value is a count or a hex float.  \"Wall\" is the child "
+        "process's own elapsed time and is context only; no conclusion of this "
+        "experiment rests on a timing.  Population: "
+        + str(comparison.get("population", "")) + ".*"
+    )
+    out.append("")
+    out.append(
+        "| arm | previous name | configuration | seed | phase | fields | "
+        "mismatches | status | wall (s) |"
+    )
+    out.append("|---|---|---|---:|---|---:|---:|---|---:|")
+    for row in rows:
+        record = records_mod.read(Path(row["outdir"]))
+        wall = record.get("wall_s")
+        out.append(
+            f"| `{row['arm']}` | `{row['previous_arm']}` | "
+            f"{row['configuration']} | {row['seed']} | {row['phase']} | "
+            f"{row['n_fields']} | {row['n_mismatched']} | {row['status']} | "
+            + (f"{wall:.1f}" if isinstance(wall, (int, float)) else "—")
+            + " |"
+        )
+    by_phase: dict[str, list[int]] = {}
+    for row in rows:
+        entry = by_phase.setdefault(row["phase"], [0, 0, 0])
+        entry[0] += 1
+        entry[1] += row["n_fields"]
+        entry[2] += row["n_mismatched"]
+    out.append("")
+    out.append(
+        "*Caption: the same comparison summed by phase.  \"Values\" is runs x "
+        "fields; \"identical\" is values minus mismatches.  The two phases "
+        "compare different field lists because the evaluation phase's records "
+        "carry no optimiser fields — 15 fields per optimisation, 10 per "
+        "evaluation.*"
+    )
+    out.append("")
+    out.append("| phase | runs | fields each | values | identical | mismatched |")
+    out.append("|---|---:|---:|---:|---:|---:|")
+    for phase in sorted(by_phase):
+        n_runs, n_values, n_bad = by_phase[phase]
+        label = "B (one optimisation)" if phase == "B" else "A (one evaluation)"
+        out.append(
+            f"| {label} | {n_runs} | {n_values // n_runs} | {n_values} | "
+            f"{n_values - n_bad} | {n_bad} |"
+        )
+    out.append(
+        f"| **both** | **{comparison.get('n_runs')}** | — | "
+        f"**{comparison.get('n_values_compared')}** | "
+        f"**{comparison.get('n_values_matched')}** | "
+        f"**{comparison.get('n_values_mismatched')}** |"
+    )
+
+    out.append("")
+    out.append(
+        "*Caption: one row per tooth of gate GR (harness plan §7.3).  A tooth is "
+        "a deliberately broken input that the gate must refuse; a gate whose "
+        "teeth have never been shown to trip is an assertion rather than a "
+        "measurement (protocol §12).  Population: "
+        + str(len((verdict.get("teeth") or {}).get("teeth", [])))
+        + " teeth, all of which tripped.*"
+    )
+    out.append("")
+    out.append("| tooth | what was broken | tripped |")
+    out.append("|---|---|---|")
+    for tooth in (verdict.get("teeth") or {}).get("teeth", []):
+        what = str(tooth["what"]).replace("|", "\\|")
+        out.append(
+            f"| {tooth['tooth']} | {what} | "
+            + ("yes" if tooth["caught"] else "**NO**")
+            + " |"
+        )
+
+    substitutes = verdict.get("substitutes") or {}
+    if "A0p" in substitutes:
+        block = substitutes["A0p"]
+        out.append("")
+        out.append(
+            "*Caption: the substitute for `A0p`, the arm no earlier record "
+            "covers.  Each row is one configuration; the criterion is the one "
+            "quoted in the row above the table.  \"Cross-state max\" is the "
+            "largest scaled residual between the arm's exit state and the "
+            "reference's, over the coupling state's tested components; the "
+            "tolerance is 1e-6.  Population: "
+            + str(block.get("population", "")) + ".*"
+        )
+        out.append("")
+        out.append(
+            "| configuration | pin (hex) | cross-state max | as hex | argmax | "
+            "above τ | categorically clean | pinned component identical | "
+            "verdict |"
+        )
+        out.append("|---|---|---:|---|---|---:|---|---|---|")
+        for row in block.get("configurations", []):
+            if "skipped" in row:
+                out.append(
+                    f"| {row['configuration']} | — | — | — | — | — | — | — | "
+                    f"skipped: {row['skipped']} |"
+                )
+                continue
+            cross = row.get("cross_state_residual") or {}
+            out.append(
+                f"| {row['configuration']} | `{row.get('pin_hex')}` | "
+                f"{cross.get('max'):.3g} | `{cross.get('max_hex')}` | "
+                f"`{cross.get('argmax')}` | {cross.get('n_above_tau')} | "
+                f"{cross.get('categorically_clean')} | "
+                f"{row.get('pinned_component_bit_identical')} | "
+                + ("PASS" if row.get("passed") else "FAIL")
+                + " |"
+            )
+    if "AR" in substitutes:
+        block = substitutes["AR"]
+        out.append("")
+        out.append(
+            "*Caption: the substitute for `AR`, the arm no earlier record "
+            "covers.  Each row is one configuration; the anchor is this gate's "
+            "own `BR` run at seed 0 on that configuration, whose first "
+            "evaluation of the model set the arm must reproduce exactly.  Four "
+            "values per configuration, no tolerance.  Population: "
+            + str(block.get("population", "")) + ".*"
+        )
+        out.append("")
+        out.append(
+            "| configuration | node calls (AR / first call of BR) | sweeps | "
+            "prime calls | objective hex | mismatches |"
+        )
+        out.append("|---|---|---|---:|---|---:|")
+        for row in block.get("configurations", []):
+            compared = row.get("compared") or {}
+            anchor_values = row.get("anchor") or {}
+            out.append(
+                f"| {row['configuration']} | "
+                f"{compared.get('node_calls')} / {anchor_values.get('node_calls')} | "
+                f"{compared.get('sweeps')} / {anchor_values.get('sweeps')} | "
+                f"{compared.get('n_prime_calls')} | "
+                f"`{compared.get('objf_hex')}` | {row.get('n_mismatched')} |"
+            )
+    return "\n".join(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--resume", action="store_true",
@@ -1056,8 +1212,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-runs", action="store_true",
                         help="compare and run the cost-free teeth against "
                              "records that already exist, starting nothing")
+    parser.add_argument("--tables", action="store_true",
+                        help="emit the report's tables from the committed "
+                             "verdict record and stop; starts nothing and "
+                             "recomputes nothing")
     parser.add_argument("--json", type=Path, default=None)
     args = parser.parse_args(argv)
+    if args.tables:
+        campaign = default_campaign()
+        path = Path(campaign.runs_dir / RUNS_SUBPATH / "gate.json")
+        if not path.exists():
+            print(
+                f"there is no verdict record at {path}; run the gate first "
+                f"(experiment_runner.py --gate reproduction)"
+            )
+            return 3
+        print(tables(json.loads(path.read_text())))
+        return 0
     code, verdict = stage(
         resume=args.resume,
         lifted_from=args.lifted_from,
