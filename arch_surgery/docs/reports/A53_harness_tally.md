@@ -626,3 +626,35 @@ commits of the records it read.
   and after.
 - **An earlier press was discarded in full** (§10): it ran while `harness/child.py` was being
   edited, and gate G8 failed on a half-renamed record set. No number from it appears here.
+
+---
+
+## 15. Orchestrator's critical assessment (protocol §5)
+
+*Written by the orchestrating session on 2026-09-11, before the merge, by differing checks and without repeating the agent's press (harness plan amendments 13 and 15).*
+
+### 15.1 What was verified, and how
+
+- **Scope.** Eighteen files, +5 895 / −45, all under `harness/`, the runner and the report; nothing under `…_v4/PROCESS/`, the repository-root `process/`, the plans, `harness/data/` or `harness/reference/`. Merge dry-run against trunk (`f6c522ed`, after A61's merge and amendment 15): no conflict.
+- **The rename, read as one diff (`835b946e`).** Nine modules; the translation from the driver's dictionary keys happens at exactly one place, `child.BLOCK_LOOP_KEYS`, where the counters become record fields; `reference.FIELD_NAME_MAP` carries the reverse map with a reason per key; `REFERENCE_FIELDS` stays in the previous revision's spelling and the committed reference keeps its bytes. No retired name survives in executable harness code except the two maps and a display-label table keyed on the previous revision's paths. GR 270/270 on the branch is the agent's; the orchestrator did not repeat it — one GR runs at the tip after A62 merges, since both tasks touch the run path.
+- **The gate, pressed by the orchestrator.** `--gate tally_contracts` starts no PROCESS run. Without `--resume` on the branch's final state it **FAILS** by the framework's provenance rule — the population is 68 records at `cd62c510` (the press) and 6 at `de7e5a2b` (the output-path contrast runs `--measure all` made afterwards) — and with `--resume` it **PASSES**: 270/270 published cells over the twenty reference runs, 195/195 table-contract checks over 65 emitted tables, 10/10 teeth. §1's "22 PASS from nothing at `cd62c510`" is true of that press and predates the six contrast runs; the branch's final on-disk state passes under the stated provenance, which is the honest form, and the report should have said so itself.
+- **One published ratio recomputed by hand** from the records with an independent reader: `A1/A0` node calls per call at seed 1 — 60/126, 60/105, 62/126 — gives 0.4762 / 0.5714 / 0.4921 on the three configurations, the report's figures to four places.
+- **Record stamps surveyed**: 150 at `cd62c510`, 6 at `de7e5a2b`, 0 campaign, as the report states.
+
+### 15.2 Judgements
+
+1. **Accepted.** The constructions are functions whose docstrings are the declarations; a table cannot exist without its caption and denominator; the tally refuses a demonstration record, a pooled-predicate column, an unlabelled audit-position mix and a mixed-commit population — each shown by a tooth. That is what H6 asked for.
+2. **Decision 4 (two sibling keys renamed beyond the ruling) is endorsed**: a half-translated dictionary is worse than a wider rename, and the map records both.
+3. **Decision 7 (base-anchored tables not produced, named with reasons) stands**; an empty table with a denominator states a denominator for nothing.
+4. **The empty-visit sweep share is 0 / 0 / 6.67 % on this population, not A58's 10.84–11.30 %**, and the report says so rather than borrowing. A53's queue row had asked for A58's figures to be quoted in the disclaimers; the correct rule is the one the report applies — quote the share measured on the population the table is over — and the row is corrected at this merge.
+5. **§8.3 is the before picture of A62's change** and is worth keeping in the archived report: at `after_run` the restricted maximum is exactly 0 on all 14 reference records, at the declared position ~7e-3 on the same runs (A61). Position and instrument are columns; no argmax is hard-coded; the compared cell list is derived, so A62's drop of the audit residual lands here without an edit.
+6. **The agent's broken press.** Editing `child.py` while a press ran corrupted the population and cost a full press. Rule (vi), *no edit to any module a measurement child imports while runs execute*, is written into the harness plan at this merge.
+7. **A54 must not import `harness/stats.py`** — endorsed and carried into A54's brief; the second implementation exists to catch a definition that reached one and not the other.
+
+### 15.3 Consequences recorded at this merge
+
+A53 row MERGED with the corrected disclaimer rule; A54 dispatched on a worktree seeded with A53's relocated records (no new press); harness plan amendment 16 (H6 delivered; rule (vi)); experiment plan change log. The plan's §4 tables are filled once at the final tip by the smoke, not now, since A62 will move every audit cell.
+
+### 15.4 Limits
+
+One gate pressed and one ratio recomputed; the rest is the agent's own records, read with their commit stamps. No timing is evidence.
