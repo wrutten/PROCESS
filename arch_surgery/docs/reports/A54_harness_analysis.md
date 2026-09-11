@@ -5,7 +5,8 @@
 > (harness-tally)'s merge). Every number below was produced at **`09be001a`** — the tip after the
 > coordinator's three review fixes — by `--measure tally_evaluation`, `--measure tally_optimisation`,
 > `--gate tally_contracts --resume`, `--gate recomputation --resume` and
-> `--measure recomputed_tables --resume`, in that order, over run records made at **`cd62c510`**
+> `--measure recomputed_tables --resume`, in that order, and reproduce identically at the report's
+> own commit `886a7138`; over run records made at **`cd62c510`**
 > (A53's press, seeded into this worktree under amendment 15). **No PROCESS run was made by this
 > task.** Folder position records lifecycle, not validity (trap T3).
 
