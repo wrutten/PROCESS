@@ -1373,6 +1373,19 @@ of what looks like bulk is the instrument.
   "one component above τ" statements of A57 and A52 are withdrawn as convergence statements. The PROCESS findings
   went to `PROCESS_code_analysis/docs/bug_reports/` at the user's instruction.
 
+- **2026-09-11 — amendment 15 (user, after asking why the work was taking so long: *"try to reduce the number of
+  PROCESS runs for gates in general if it's not necessary"*): gate runs are re-made only when a change touches what
+  the gate reads.** A full press of `--gate all` is ~150 PROCESS runs; it was pressed seven times on 2026-09-11. Rule,
+  binding on every later task and on the orchestrator: a new task worktree is **seeded** with a copy of the latest
+  relocated gate records (`arch_surgery/idf_probe/runs/A<n>_runs/gates/`, resume-compatible, keeping any G1 `before`
+  capture) and the task runs `--gate all --resume`; a run is re-made only where the change alters what that gate reads
+  (a run-path change: the records that carry the changed field and the gates that read it; a driver change: G1's
+  after side, GR, and the gates that read the changed behaviour). The verdict's provenance line states the commit of
+  the records it read — that is what makes reuse honest. The orchestrator never repeats an agent's press; GR runs once
+  at a merged tip after a run-path change. The smoke (A55) presses once, with `--resume`; its second press from the
+  repository root is dropped — the capability gate's decoy tooth covers the working-directory property. Amendment 13's
+  rule (i) is unchanged: without `--resume` a press re-makes everything, and that remains the meaning of the flag.
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task
