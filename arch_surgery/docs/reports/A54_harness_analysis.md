@@ -427,3 +427,56 @@ rule `tables.py` enforces for the tally, implemented a second time, which is the
 | `33241c1d` | **review fix 1**: `Gate.reads_from` may name a measurement stage; `registry()` refuses an undeclared one; the button runs each declared stage before the gate that declares it |
 | `e9a8e277` | **review fix 3**: `stats.accuracy_population`, the one `n` construction (it counts runs), and `tables.cell_list`, the one cell separator; both tally tables use them and both gain a column |
 | `09be001a` | **review fix 1, second half**: the gate refuses a tally stage record computed over another run population, with teeth 8 and 9; the `n` construction and the separator re-derived in the analysis |
+
+---
+
+## 11. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-11 at `3a35b5f2`, before the merge. Verification by checks that differ from the
+agent's; no PROCESS run was made for this review, and the task itself made none.*
+
+**What was checked, and how it differed.**
+
+* **Scope.** `git diff --name-only 06a85fa0..3a35b5f2`: `analysis.py` (new), `gates.py`,
+  `experiment_runner.py`, `stats.py`, `tables.py`, the two tally stages, the README and this
+  report. Nothing under `…_v4/PROCESS/`, the repository-root `process/`, the plans or the queue.
+* **Independence, mechanically.** Every `import`/`from` line of `analysis.py` was listed: the module
+  imports `harness.framework`, `harness.arms` and `harness.config` and nothing else of the harness;
+  the only occurrences of the tally modules' names are the gate's own forbidden-import list and the
+  tooth that plants one. The claim in §2 is a property of the source, not of the docstring.
+* **The verdict record.** `runs/gates/recomputation/gate.json`: PASS, 9 teeth all tripped, at
+  `886a7138`, resumed over 33 records at `cd62c510`; population line as §1 states.
+* **The stale-stage refusal, read.** It compares the stage record's `runs_provenance` heads and
+  record count against the survey the gate makes itself and refuses naming both sides; paths are
+  deliberately not compared (decision 12), which is right for seeded worktrees. A stage record
+  carrying no provenance at all refuses too, since its empty heads cannot equal the survey's.
+* **The registry refusal, read.** `assert_declared_dependencies` runs as `registry()` is built, so
+  every consumer, including `--gates`, gets it.
+* **The merge.** A trial merge onto trunk `a3407d5d` (after A62 (exit-audit-restore), which also
+  changed `gates.py`) auto-merged without conflicts; the merged harness compiles, `--selfcheck`
+  passes, and `--gates` lists 23 gates and 9 stages with `recomputation` and `recomputed_tables`
+  present.
+
+**Assessment of the decisions.** Decisions 1–9 accepted as the agent states them. Decision 8 (do
+not edit the implementation under verification) was overridden by the orchestrator for the `n`
+column and the separator, with the condition that `analysis.py` re-derive the construction from the
+declaration rather than copy the fix; the 0 mismatches over 1 863 cells after the change is what
+makes that override safe — a copied fix would also give 0, so the reader relies on the source
+independence check above, not on the count alone. Decisions 10–12 (the measurement dependency, the
+stale refusal on commits and count, not paths) are accepted; they are the framework change I chose
+between the two forks the agent offered, and the reason is that a chain order is a convention
+nobody checks while a declared dependency is refused when broken.
+
+**What follows for the queue.** The TRAPS.md sentence of §8 is lifted at the merge. The `n`
+construction's second column (`with a restricted statistic`) is a new published column: the plan's
+§4 placeholder tables are filled at the final tip by the smoke and will carry it. A55
+(harness-smoke)'s chain stands as written; under the merged schema after A62 no existing record
+population is complete, so the smoke's one press re-makes every run and the declared dependency
+then re-makes the tally output over them before this gate reads it.
+
+**Limits that stand.** The 132 cells of the predicate-trial table are not recomputable from records
+and both sides read the same gate verdict (§9); the agreement on string-composed cells is partly
+agreement about a format and is reported apart.
+
+**Verdict: approved for merge at `3a35b5f2`**, to follow A62's merge. No records to relocate
+beyond the seeded copies; the retire script's path is written in the queue row after it prints.
