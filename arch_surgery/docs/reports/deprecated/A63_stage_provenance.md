@@ -1,15 +1,9 @@
 # A63 (stage-provenance) — what a stage read, and which tree took a census
 
-> **Document status** — **OPEN**. Task **A63 (stage-provenance)**, branch `A63-stage-provenance`,
-> off `architecture_surgery` at `29904573`. Code at `1f281529`; the experiment plan's §4 re-rendered
-> at `8cfbc153`. Scope is issue **I-22** plus the coordinator's two mid-task rulings.
-> `EXECUTION_APPROVED` is `False`. Nothing under
-> `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/` or the repository-root `process/` was
-> touched; the only edit to `EXPERIMENT_PLAN.md` is §4, written by `--plan-tables write` from the
-> records.
->
-> **Three PROCESS runs were made**, all after the coordinator's ruling and all of them evaluation
-> censuses: the re-take of §4.3. Every other stage in this report is zero-run.
+> **Document status** — **ARCHIVED (merged).** Task **A63 (stage-provenance)** merged into `architecture_surgery`
+> at `52264b53` (2026-09-11, `--no-ff`, branch tip `394423ab`). Orchestrator's assessment in §9. Issue I-22 closed.
+> Records relocated by the retire script to `arch_surgery/idf_probe/runs/A63_runs/` (`gates/`, `census/`,
+> `artifacts/`; untracked). Folder position records lifecycle, not validity (trap T3).
 
 ---
 

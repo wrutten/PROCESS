@@ -1453,6 +1453,20 @@ of what looks like bulk is the instrument.
   read `REFERENCE_FIELDS` where GR reads `compared_fields()` — was caught by `tally_contracts` at this press and
   fixed. **Open at completion:** D26 (the reference arm's Phase A entry, awaiting the user), I-21, I-22, I-20.
 
+- **2026-09-11 — amendment 20, at the merge of A63 (stage-provenance) (`52264b53`): I-22 closed; the implementation's
+  fix round ends.** A measurement stage **declares the records it reads** (`Measurement.reads_records`, glob
+  patterns), the framework stamps `records_read` (path, digest, time, commit, verdict per file) into the stage record,
+  and a consumer calls `assert_records_read_are_current` before it renders — `--plan-tables` refuses a `gate_table`
+  record the verdicts have outrun, naming the gate and both commits and times; `--plan-tables check` diffs the
+  committed §4 and writes nothing. Rule (ix) of amendment 19 is thereby mechanical. Census records carry the same
+  14 provenance fields as run records (`census-2`); an unstamped one is refused by every reader that cannot re-take
+  it and re-taken on the resume path, per amendment 17 (a). **Rule (x): a self-check builds its own fixture, always**
+  — the first version of `stage_provenance` read the tree's real records and failed on a tree with none, which is
+  what every new task worktree is before its first press; the orchestrator's trial merge caught it. Every
+  self-check now passes on an empty tree (7/7). Final press at the merged tip: **25 gates PASS, 147/147 teeth**.
+  What remains before the campaign is not implementation: D26 (the reference arm's Phase A entry) and the user's
+  approval commit; I-21 is a small declared gate if the user wants it measured.
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task

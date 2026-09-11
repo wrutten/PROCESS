@@ -204,3 +204,15 @@ A manifest, a directory's existence, a flag set by a caller — none of these is
 **How to catch it:** survey `tree_git_head` on every run record after any press and compare it
 with the commit the verdict names (harness plan amendment 13 (i), and rule (vii) of amendment 19). *(A52 and A55,
 2026-09-11; lifted here at A55's merge, `bfaee7ce`.)*
+
+## T14 — A record rendered from a record is only as current as the file it was made from
+
+The plan's §4 is rendered from the `gate_table` *stage record*, not from the verdict records. On
+2026-09-11 a gate was re-run and passed; the §4 re-render reproduced the failing table byte for byte,
+because the stage record predated the re-run and nothing said so. Any document or table built from
+a stage record inherits the staleness of that record, silently, unless the record says what it read
+and the consumer checks it. **The rule (harness plan amendment 20):** a stage declares the records it
+reads, the framework stamps them (path, digest, commit, time) into the stage record, and the consumer
+refuses when the files have moved. A related blind spot: a provenance block one level down in a
+record is invisible to a stamp survey that reads the top level — the census records carried their
+commit only inside a nested block and read as "no stamp" (I-22 (b)). *(A55 and A63, 2026-09-11.)*
