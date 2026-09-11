@@ -359,7 +359,7 @@ what `--resume` prints.*
 | gate | plan | re-made or reused | records | verdict | the number |
 |---|---|---|---|---|---|
 | `reproduction` | GR | **re-made** | 30 at `3d64625c` | **PASS** | 20/20 runs; 270 in the reference, 14 excluded, **256 compared, 0 mismatched**; 8/8 teeth |
-| `switch_neutrality` | G1 | **re-made** (after capture) | 6 at `3d64625c`, 6 at `fd480aff` | **PASS** | straddles `fd480aff` → `3d64625c`; **0 of 2 831** record values, **0 of 51 319** output-file lines; 1 626 excluded, 957 of them by the instrument change; 7/7 teeth |
+| `switch_neutrality` | G1 | **re-made** (after capture) | 6 at `3d64625c`, 6 at `fd480aff` | **PASS** | straddles `fd480aff` → `3d64625c`; **0 of 2 831** record values, **0 of 51 319** output-file lines; 1 626 excluded, 957 of them by the instrument change; 7/7 teeth. Re-taken after the §7.2 correction, on the same two captures and with **no run made**: the same numbers |
 | `audit_restriction` | G4 | **re-made** | 18 at `3d64625c` | **PASS** | 13 doctored runs over 3 configurations; 12 compared, 0 mismatched; **6/6 teeth**, including the restore's boundary |
 | `output_path` | G9 | **re-made** | 17 at `3d64625c` | **PASS** | 11 runs; **0 of 3 825** coupling-state components, **0 of 54** solve-describing values; 4/4 teeth |
 | `predicate_mode` | G8 | **re-made** | 27 at `3d64625c` | **PASS** | 12 pairs; **0 of 7 852** record values, 0 of 84 output-file lines; 4/4 teeth |
@@ -413,7 +413,7 @@ of that claim rather than the assertion. From `--measure exclusion_review`.*
 | `exit_audit.instrument` | 510 |
 | `exit_audit.` (the residual and what it determines) | 438 |
 | `audit_position_note` | 6 |
-| `audit_snapshot` | 3 |
+| `audit_snapshot.installed` | 3 |
 | **anywhere else** | **0** |
 | **total** | **957** |
 
@@ -423,6 +423,35 @@ excluding the blocks that hold them — which would have taken a further **75 le
 optimisation record** out of the comparison (the tolerance, the ruler's name, the restriction's
 population and digest), none of which the instrument moves. Measured: 2 831 values compared with
 the leaves named against 2 609 with the blocks excluded.
+
+**The same rule applied to `audit_snapshot`, on review.** The group first named the whole
+`audit_snapshot` block. The orchestrator re-compared the six pairs with that name and
+`audit_position_note` lifted out and found that **only two leaves differ across this straddle**:
+`audit_position_note` (the rewritten sentence, 3 pairs) and `audit_snapshot.installed`
+(`False` → `True`, 3 pairs). So the block exclusion hid nothing here — but it is a block exclusion
+of exactly the kind decision 5 rejects, and on a later straddle it would hide
+`audit_snapshot.positions.*.components_sha256`, the coupling-state digest at each snapshot
+position, which is a **behaviour witness**: it says the driver snapshotted the same state at the
+same places. The group now names **`audit_snapshot.installed`** alone, for the one reason that
+flips it — the hook is installed at every audit position now, because the whole-structure snapshot
+is needed even where the coupling-state one is not — and the positions, their component counts and
+their digests stay in the comparison. The leaf counts above are unchanged by the correction, which
+is the point: it costs this pairing nothing and buys every later one the digests.
+
+*Caption: the same two names as the exclusion review tabulates them after the correction, over
+G1's 6 pairs. "Group" is which condition excludes the name; "leaves" is how many record leaves it
+covers on each side.*
+
+| name | group | leaves before | leaves after | verdict at this pairing |
+|---|---|---:|---:|---|
+| `audit_snapshot` | excluded only where one side lacks the field | 6 | 75 | EXCLUDED — one side lacks them |
+| `audit_snapshot.installed` | excluded only where the instruments differ | 3 | 3 | EXCLUDED — the two captures' instruments differ |
+
+The first row is the pre-existing conditional exclusion doing its own work: the 69 leaves the
+after side has and the before side does not are one-sided, and they return to the comparison of
+their own accord the moment both sides carry them. The tooth shows the effect directly — in its
+synthetic comparison, where both sides carry the whole block, the instrument rule now removes
+**234 leaves instead of 258**, and **24 more values are compared**.
 
 ---
 
@@ -511,10 +540,10 @@ would have to be re-run.*
 
 | # | decision | why | reversal |
 |---|---|---|---|
-| 1 | The audit position **after the run** gets the restore too, so its sweep is the loop's map as well | ruling D25 says the audit's sweep must evaluate the loop's own map, and it says "both audit positions". The position's *state* is still the state the run ended in — only what the models read around it is put back | pass `restore_from_position=None` for that position in `optimise.py`. Its residual returns to `0x0.0p+0` on the reference arm and the finding of §6.3 disappears with it |
+| 1 | The audit position **after the run** gets the restore too, so its sweep is the loop's map as well | ruling D25 says the audit's sweep must evaluate the loop's own map, and it says "both audit positions". The position's *state* is still the state the run ended in — only what the models read around it is put back | pass `restore_from_position=None` for that position in `optimise.py`. Its residual returns to `0x0.0p+0` on the reference arm and the finding of §5.3 disappears with it |
 | 2 | The derived set **excludes the coupling state's own components**, whose restore the audit position governs | restoring them at `after_run` would silently turn that position into the declared one | drop the `coupling_names` filter. The two audit positions then measure the same thing and one of them stops meaning anything |
 | 3 | **One namespace** — `numerics` — is held back from the restore, by a named rule with its reason, and what it holds back is reported per run | the gate measured the alternative: restoring it rewound PROCESS's own call counter and moved `n_model_calls`, a value gate GR compares, by two (§3.4) | delete `NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE`. `n_model_calls` then differs from the previous revision's on every optimisation record and gate GR fails on it |
-| 4 | Gate GR keeps the **evaluation phase's** audit residual and drops only the **optimisation phase's** | the ruling's own reason — "the previous revision's instrument did not restore the output path's mesh" — does not apply to a phase that never enters the output path, and the six evaluation-phase residuals reproduce bit for bit after the change (measured, §6.2). Dropping a comparison that works would weaken the gate for a reason that is not about it | add `exit_audit.residual_max_hex` to `reference.FIELDS_NOT_COMPARED["A"]`. GR's compared set falls 256 → 250 and six bit-comparisons of the evaluation phase's accuracy leave the gate |
+| 4 | Gate GR keeps the **evaluation phase's** audit residual and drops only the **optimisation phase's** | the ruling's own reason — "the previous revision's instrument did not restore the output path's mesh" — does not apply to a phase that never enters the output path, and the six evaluation-phase residuals reproduce bit for bit after the change (measured, §6). Dropping a comparison that works would weaken the gate for a reason that is not about it | add `exit_audit.residual_max_hex` to `reference.FIELDS_NOT_COMPARED["A"]`. GR's compared set falls 256 → 250 and six bit-comparisons of the evaluation phase's accuracy leave the gate |
 | 5 | G1's instrument exclusion names the **leaves the residual determines**, generated per ruler, rather than the audit blocks that hold them | excluding the blocks hid 75 further leaves per optimisation record — the tolerance, the ruler's name, the restriction's population and digest — none of which the instrument moves. Measured: 2 609 compared values with the blocks excluded against 2 831 with the leaves named | replace the generated table with `exit_audit.frozen` / `exit_audit.mixed` / `exit_audit.brief` / `exit_audit.restricted`. G1 then compares 222 fewer values and says so |
 | 6 | The whole-structure snapshots stay **in memory** and never enter the run record | two positions × 2 288 fields per record is a file every gate would walk value by value, and the record already carries the restore's counts and names | write them beside `y_<position>.json`. Every gate's denominator grows by some thousands of leaves that are a copy of the state, not a measurement of it |
 | 7 | The diagnosis trace's "as found" mark moved **inside** the audit, to the moment its sweep starts | otherwise A61's leave-one-out pair would keep diagnosing the *old* instrument, and the check the ruling asks for — that the pair has nothing left to attribute — could not be made | revert the `on_ready_to_sweep` callback. The diagnosis stage then measures a state the record's audit no longer sweeps |
@@ -548,7 +577,7 @@ would have to be re-run.*
 
 * **G9's claim and I-21.** The `after_run` audit now measures something it did not measure before:
   how far the state PROCESS *writes out* is from a fixed point of the loop's own map. On the
-  reference arm on `large_tokamak_nof` that is §6.3's number, and its argmax is `tfcoil.insstrain`.
+  reference arm on `large_tokamak_nof` that is §5.3's number, and its argmax is `tfcoil.insstrain`.
   That is a direct handle on issue **I-21** — what else the output pass leaves inconsistent in the
   written file — and it is now a per-run record field rather than a special study.
 * The instrument is inert where there is no output path: the evaluation phase's records carry
@@ -598,7 +627,8 @@ Not edited here — those documents are shared. The exact text they should take:
   The evaluation phase's six are kept and reproduce bit for bit. The reference is not regenerated;
   `harness/reference.py` exports the exclusion as `FIELDS_NOT_COMPARED`."*
 * **Harness plan, Appendix A, amendment 15**, at this merge: D25 implemented; G1's exclusion set is
-  **127 names in three groups** — 36 structural, 34 conditional on the field's own presence, 57
+  **127 declared entries in three groups over 126 distinct names** (`audit_position_note` is in
+  two) — 36 structural, 34 conditional on the field's own presence, 57
   conditional on the two records' instrument stamps — with the third group's leaves measured by
   prefix (957 leaves, 0 outside the exit audit and its stamp); the record contract now makes a
   record from the previous instrument **incomplete**, which is why `--resume` cannot reuse one
@@ -624,4 +654,5 @@ Not edited here — those documents are shared. The exact text they should take:
 |---|---|
 | 2026-09-11 | Created. `harness/data_structure.py` added (the three functions moved out of A61's gate instrument); the exit audit snapshots and restores the whole data structure at both audit positions, with a derived set and a named namespace rule; `records.SCHEMA` gains four fields; gate G1 gains a third exclusion kind conditional on the two records' instrument stamps, with a tooth and a prefix census; gate GR's compared set loses the optimisation phase's audit residual with its reason and a tooth; gate G4 gains a tooth that measures and flips the restore's boundary; A61's diagnosis stage gains the "nothing left to attribute" check. Gates re-made at `3d64625c`: GR, G1, G4, G7, G8, G9 and the no-run gates, all PASS; G2, G3/G3c, G5, G6 and the artifact stages reuse A52's verdicts at `eb38c34a`. |
 | 2026-09-11 | **A defect gate G1 caught, fixed on the branch**: restoring every field outside the coupling state rewound `numerics.n_model_calls`, moving `n_model_calls` — a value gate GR compares — by two on the reference arm. `child.NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE` holds that namespace back by a named rule; what it holds back is named per run and a G4 tooth measures the boundary. |
+| 2026-09-11 | **Correction at the orchestrator's review, no run made.** Gate G1's instrument-change group named the whole `audit_snapshot` block; it now names `audit_snapshot.installed` alone. The block exclusion hid nothing on this straddle — measured by the orchestrator, only `audit_position_note` and `audit_snapshot.installed` differ once it is lifted — but it would have hidden `audit_snapshot.positions.*.components_sha256`, a behaviour witness, on a later one. `--gate switch_neutrality --resume` (both captures reused, 0 runs) PASS, 0 of 2 831 values and 0 of 51 319 lines, 7/7 teeth; `--measure exclusion_review` PASS with the two names tabulated separately. The leaf census is unchanged at 957 with the `audit_snapshot` line reading 3, which are the `installed` leaves; the tooth's own comparison excludes 234 leaves instead of 258. |
 | 2026-09-11 | **Run budget reduced by the user mid-task.** The from-scratch `--gate all` press was stopped and replaced by re-making only the gates this change can reach, reusing A52's verdicts for the rest. Measured and reported: `--resume` could not have reused A52's records, because the record contract makes them incomplete (§7.1). |
