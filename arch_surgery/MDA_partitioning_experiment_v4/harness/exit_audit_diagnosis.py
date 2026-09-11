@@ -211,6 +211,39 @@ def census(campaign: Campaign) -> dict[str, Any]:
             "a key absent from the input file takes the data structure's own "
             "default, which the source census below reports with its line"
         )
+        # -- what runs between the loop's exit and the output path's entry --
+        #
+        # The coupling-state predicate is evaluated immediately after a sweep,
+        # so the loop's exit state is the state that sweep left.  What happens
+        # after it and before the audit's declared position is the objective
+        # and constraint layer, which the write census covers as its own node,
+        # and — on an arm that defers nodes to once per run — those nodes,
+        # which run INSIDE the output path and therefore after the snapshot.
+        layer_writes = by_node.get("objective_constraints") or []
+        spec_keys = {c["key"] for c in spec_record["components"]}
+        row["between_the_loop_exit_and_the_output_path"] = {
+            "objective_and_constraint_layer": {
+                "census_node": "objective_constraints",
+                "n_writes": len(layer_writes),
+                "writes": sorted(layer_writes),
+                "writes_in_the_coupling_state": sorted(
+                    set(layer_writes) & spec_keys
+                ),
+            },
+            "per_run_deferred_nodes": {
+                "note": (
+                    "they run inside write_output_files, after the snapshot "
+                    "the audit is taken from, and only on an arm whose matrix "
+                    "cell sets the per-run deferral"
+                ),
+                "artifact": str(config.per_run_artifact(lifted_input_file=False)),
+                "nodes": json.loads(
+                    Path(
+                        config.per_run_artifact(lifted_input_file=False)
+                    ).read_text()
+                )["post_solve_nodes"],
+            },
+        }
         result["configurations"][config.name] = row
 
     # -- the code, with line numbers ---------------------------------------
@@ -510,6 +543,36 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
             "n_kept": restricted.get("n_kept"),
             "n_excluded": restricted.get("n_excluded"),
         },
+        "node_calls_solve_phase": record.get("node_calls_solve_phase"),
+        "output_path": record.get("output_path"),
+        "output_loop_sweeps": record.get("output_loop_sweeps"),
+        "sweeps_per_eval": record.get("sweeps_per_eval"),
+        "candidate_field": audit_map_mod.CANDIDATE_FIELD,
+        "candidate_before_after": (
+            (
+                observation.get("data_structure_comparisons", {})
+                .get(
+                    "entry_to_write_output_files__vs__before_the_record_audit",
+                    {},
+                )
+                .get("detail")
+                or {}
+            ).get(audit_map_mod.CANDIDATE_FIELD)
+        ),
+        "design_vector_identity": {
+            "last_evaluation_is_the_audited_point": (
+                (observation.get("design_vectors") or {}).get("last_evaluation")
+                == (observation.get("design_vectors") or {}).get("audit_x_xcm")
+            ),
+            "last_sweep_is_the_audited_point": (
+                (observation.get("design_vectors") or {}).get("last_sweep")
+                == (observation.get("design_vectors") or {}).get("audit_x_xcm")
+            ),
+            "n_iteration_variables": len(
+                (observation.get("design_vectors") or {}).get("audit_x_xcm") or []
+            ),
+        },
+        "restore_diagnostics": _restore_diagnostics(observation),
         "sweeps_seen": observation.get("n_sweeps_seen"),
         "evaluations_seen": observation.get("n_evaluations_seen"),
         "trace_errors": observation.get("errors"),
@@ -585,6 +648,41 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
         == row["record_audit"]["residual_max_hex"]
     )
     return row
+
+
+def _restore_diagnostics(observation: Mapping[str, Any]) -> dict[str, Any]:
+    """What the whole-data-structure restore could not put back, by name.
+
+    Two fields cannot be written back exactly, and both are named rather than
+    counted away: one is serialised as a bare ``repr`` and cannot be rebuilt,
+    the other does not read back equal.  Neither is read by a model, and the
+    coupling-state restore — the one the residual is measured against — is
+    bit-exact on every sweep, which is the property the audit depends on.
+    """
+    skipped: set[str] = set()
+    mismatch: set[str] = set()
+    coupling_bitexact = []
+    settings_bitexact = []
+    for sweep in observation.get("sweeps", []):
+        structure = sweep.get("data_structure_restore") or {}
+        skipped |= set(structure.get("skipped_repr") or ())
+        mismatch |= set(structure.get("readback_mismatch_first") or ())
+        coupling = sweep.get("coupling_state_restore")
+        if coupling is not None:
+            coupling_bitexact.append(bool(coupling.get("readback_bitexact")))
+        settings = sweep.get("settings_restore")
+        if settings is not None:
+            settings_bitexact.append(bool(settings.get("readback_bitexact")))
+    return {
+        "data_structure_skipped_repr": sorted(skipped),
+        "data_structure_readback_mismatch": sorted(mismatch),
+        "coupling_state_restores_bitexact": (
+            f"{sum(coupling_bitexact)}/{len(coupling_bitexact)}"
+        ),
+        "settings_restores_bitexact": (
+            f"{sum(settings_bitexact)}/{len(settings_bitexact)}"
+        ),
+    }
 
 
 def _restricted(audit, job, campaign, directory) -> dict[str, Any]:
@@ -705,6 +803,45 @@ def render(summary: Mapping[str, Any]) -> str:
             )
         lines.append("| " + " | ".join(cells) + " |")
 
+    lines.append("\n## The component, and the setting the output path changes\n")
+    lines.append(
+        "*Caption: one row per run. `at the output entry` is the value of "
+        f"`{COMPONENT}` in the state the solve handed over; `after one sweep "
+        "as found` is what the audit's sweep makes of it. The last two columns "
+        f"are the value of `{audit_map_mod.CANDIDATE_FIELD}` at those two "
+        "moments — the radial-discretisation setting of the TF-coil stress "
+        "calculation, which is not a coupling-state component and so is "
+        "neither snapshotted nor restored.*\n"
+    )
+    lines.append(
+        f"| run | `{COMPONENT}` at the output entry | after one sweep as found "
+        "| relative change | scaled residual | setting at the entry | setting "
+        "at the audit |"
+    )
+    lines.append("|---|---|---|---|---|---|---|")
+    for row in summary["rows"]:
+        sweep = row["sweeps"].get("output_entry_as_found", {})
+        before_hex = sweep.get("component_before_hex")
+        after_hex = sweep.get("component_after_hex")
+        before = float.fromhex(before_hex) if before_hex else None
+        after = float.fromhex(after_hex) if after_hex else None
+        relative = (
+            None
+            if not before or after is None
+            else abs(after - before) / abs(before)
+        )
+        setting = row.get("candidate_before_after") or {}
+        lines.append(
+            f"| `{row['key']}` | "
+            + (f"{before:.10e} (`{before_hex}`)" if before is not None else "—")
+            + " | "
+            + (f"{after:.10e} (`{after_hex}`)" if after is not None else "—")
+            + " | "
+            + (f"{relative:.3%}" if relative is not None else "—")
+            + f" | {sweep.get('residual_max_hex')} | {setting.get('before')} "
+            f"| {setting.get('after')} |"
+        )
+
     lines.append("\n## Is the audited state the loop's exit state?\n")
     lines.append(
         "*Caption: one row per run. Each cell is the number of coupling-state "
@@ -767,6 +904,73 @@ def render(summary: Mapping[str, Any]) -> str:
                 else "—"
             )
             + f" | {audit_map_mod.CANDIDATE_FIELD in which} |"
+        )
+
+    lines.append("\n## What the instrument could and could not put back\n")
+    lines.append(
+        "*Caption: one row per run. The coupling-state restore is the one the "
+        "residual is measured against and is proved bit-exact on every sweep "
+        "that takes one; the two named data-structure fields are what a whole-"
+        "structure restore cannot reproduce, and neither is read by a model.*\n"
+    )
+    lines.append(
+        "| run | coupling-state restores bit-exact | put-back restores "
+        "bit-exact | not rebuildable | not equal on readback | last evaluation "
+        "at the audited design point |"
+    )
+    lines.append("|---|---|---|---|---|---|")
+    for row in summary["rows"]:
+        diagnostics = row.get("restore_diagnostics") or {}
+        identity = row.get("design_vector_identity") or {}
+        lines.append(
+            f"| `{row['key']}` | "
+            f"{diagnostics.get('coupling_state_restores_bitexact')} | "
+            f"{diagnostics.get('settings_restores_bitexact')} | "
+            + (
+                ", ".join(
+                    f"`{n}`"
+                    for n in diagnostics.get("data_structure_skipped_repr") or []
+                )
+                or "—"
+            )
+            + " | "
+            + (
+                ", ".join(
+                    f"`{n}`"
+                    for n in diagnostics.get("data_structure_readback_mismatch")
+                    or []
+                )
+                or "—"
+            )
+            + f" | {identity.get('last_evaluation_is_the_audited_point')} "
+            f"({identity.get('n_iteration_variables')} variables) |"
+        )
+
+    lines.append("\n## What the loop itself did\n")
+    lines.append(
+        "*Caption: one row per run, from the run record. The sweep histogram "
+        "is sweeps of the node sequence per evaluation of the model set, over "
+        "the solve phase only; its range is what the loop needed to reach the "
+        "tolerance on every evaluation. Node calls are the solve phase's, the "
+        "cost unit. The output-time loop's sweeps are counted separately and "
+        "happen after the audit's declared position.*\n"
+    )
+    lines.append(
+        "| run | ifail | optimiser iterations | evaluations | sweeps per "
+        "evaluation | node calls, solve phase | output path | output-time "
+        "sweeps |"
+    )
+    lines.append("|---|---|---|---|---|---|---|---|")
+    for row in summary["rows"]:
+        histogram = (row.get("sweeps_per_eval") or {}).get("hist") or {}
+        bins = sorted(int(k) for k in histogram)
+        lines.append(
+            f"| `{row['key']}` | {row.get('ifail')} | "
+            f"{row.get('n_solver_iterations')} | "
+            f"{(row.get('sweeps_per_eval') or {}).get('n_evaluations')} | "
+            + (f"{bins[0]}–{bins[-1]}" if bins else "—")
+            + f" | {row.get('node_calls_solve_phase')} | "
+            f"`{row.get('output_path')}` | {row.get('output_loop_sweeps')} |"
         )
     return "\n".join(lines) + "\n"
 
