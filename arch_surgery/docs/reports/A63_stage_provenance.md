@@ -389,3 +389,38 @@ is not where `survey_heads` looks — so they read as "no stamp" in exactly the 
 | `1f281529` | the self-check says so when a tree holds no records at all |
 | `8cfbc153` | **documents only** — `EXPERIMENT_PLAN.md` §4 re-rendered by `--measure gate_table --resume` then `--plan-tables write`: 5 lines changed, all in §4.1 |
 | *(this commit)* | the report brought to the rulings: §3.4, §3.5, §4.3, §4.4, the decisions, the limits and this log |
+
+---
+
+## 9. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-11 at `2fe669ee`, before the merge. Verification by checks that differ from the
+agent's; no PROCESS run was made for this review.*
+
+* **Scope.** `git diff --name-only 29904573..2fe669ee`: `framework.py`, `census.py`, `gates.py`,
+  `plan_tables.py`, `selfcheck.py`, the runner, the README, the experiment plan (hunks inside §4
+  only, as permitted after the census ruling) and this report. Nothing under `…_v4/PROCESS/`, the
+  repository-root `process/`, the queue or the harness plan; `EXECUTION_APPROVED` untouched.
+* **The check the agent did not make first, and the defect it found.** A trial merge of the
+  branch (at `cf113470`) onto trunk `47d934b7`, in a detached worktree with no `runs/` at all —
+  the state of every new task worktree — gave `--selfcheck` 6 PASS and **FAIL (stage
+  provenance)**: "there is no gate_table stage record to check". A self-check that depends on real
+  records existing is the shape A52's rule for self-checks forbids. Reported to the agent, fixed at
+  `b691c5bf` by synthesising the fixture always. **Re-checked at `2fe669ee` the same way: 7 of 7
+  PASS** on the merged tree with no records.
+* **The mechanism, read.** `records_read_disagreements` names three cases separately — written
+  after the stage, read and gone, changed bytes with both commits and both times — and
+  `assert_records_read_are_current` raises on any. One mechanism in the framework, declared by a
+  tuple per stage; the tally stages' `runs_provenance` (a population comparison) is left as the
+  other half of one question. Accepted.
+* **The ruling on the census fork.** Re-take on the resume path, as amendment 17 (a) says; refusal
+  for every reader that cannot re-take. The three optimisation-entry census records stay `census-1`
+  until a press asks for `--census-entry optimisation`; the gate names them every run.
+* **The merge.** Clean; the merged harness compiles.
+
+**Decisions accepted** as the agent states them, including synthesise-always for the self-check
+(one tooth path; it also removed the press-order dependence of the first version) and the
+`population_marker` fix (the marker follows `records_dir`).
+
+**Verdict: approved for merge at `2fe669ee`.** I-22 closed. Records to be relocated by the retire
+script; the path is written in the queue row after it prints.
