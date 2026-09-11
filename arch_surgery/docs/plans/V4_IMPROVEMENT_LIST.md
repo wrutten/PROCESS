@@ -473,7 +473,7 @@ short list spanning more than 10×:
 |---|---|---|
 | nof | 2 | `power.e_plant_net_electric_pulse_{mj,kwh}`, 1.3 |
 | lad | 2 | `tfcoil.m_tf_coil_superconductor`, **70** |
-| st | 9 | `costs.{coe,coecap,coefuelt}`, 10¹⁶–10¹⁸; `power.e_plant_net_electric_pulse_{mj,kwh}`, 50; `heat_transport.p_plant_electric_net_mw`, 13; `physics.nd_plasma_electron_max_array`, 10 |
+| st | 9 | `costs.{coe,coecap,coefuelt}`, 10¹⁶–10¹⁸; `power.e_plant_net_electric_pulse_{mj,kwh}`, **54.6** *(measured at a run-time state by A59 (driver-predicate-mode)'s gate G8, 2026-09-11; this table's other entries are the ad-hoc artifact read)*; `heat_transport.p_plant_electric_net_mw`, 13.8 *(measured, same stage)*; `physics.nd_plasma_electron_max_array`, 10 |
 
 The lad entry is not incidental. `tfcoil.m_tf_coil_superconductor` is the argmax of lad's
 restricted A1 residual in 21 of 25 A38 runs and the one similarity term no linear image of the

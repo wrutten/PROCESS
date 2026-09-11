@@ -1313,6 +1313,15 @@ of what looks like bulk is the instrument.
   orchestrator. Measured: improvement item 3 closed in the negative; I-20(a) extended. One definition corrected on
   the branch — an empty visit is one that executed no node, measured on the node counter, split from the sweeps it
   cost — which is why the disclaimer quotes sweep shares. A52 wires the measurement stage; A53's captions follow.
+- **2026-09-11 — amendment 11, at the merge of A59 (driver-predicate-mode): DR5 landed.** §4.2's "the
+  convergence predicate, in both modes" is realised in `harness/ystate.py` (one `residual`, ruler argument,
+  `frozen` bit-for-bit unchanged, `mixed` never tighter); the copy selects it by `PROCESS_ARCH_PREDICATE`; the
+  exit audit is on both rulers with a refusal of a one-ruler record. §4.4's `predicate_mode` row is realised at the
+  record's top level and in every **run-written** artifact preamble — the committed coupling-state artifacts are
+  mode-independent and stay byte-identical (orchestrator ruling). The predicate module's identity in the `data`
+  check is re-based on recorded hunks, not relaxed. G8 exists in `gates.py` with an independent decisive-pass
+  detector (a harness-side wrapper, refused for campaign runs, shown inert against the reference). G1's exclusion
+  set is 48 names; A52 reviews it as one table. G0′, G1, G8 and GR after DR5 PASS.
 
 ---
 

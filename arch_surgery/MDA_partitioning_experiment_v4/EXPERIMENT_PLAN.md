@@ -811,6 +811,8 @@ per-seed spread (given in 4.4) while the δ = 0.10 ratio does not.*
 
 #### 4.2.5 The predicate trial (`frozen` vs `mixed`)
 
+*Caption rule added 2026-09-11 (A59 (driver-predicate-mode)): "decisive passes" is published as **two counts** — evaluations at which some component crossed τ between the rulers, and evaluations whose **verdict changed** (the crossing component was the one holding the evaluation open). Only the second can make two runs differ; G8 binds on it. A59's 24 gate runs: 13 crossings, 0 verdicts changed, 48 distinct components, `|y|/s` up to 54.6.*
+
 *Caption: per configuration and arm at δ = 0.10, the runs under each predicate mode: decisive
 passes (a component at or above τ on `frozen` and below it on `mixed`) as a count over runs; the
 components that made passes decisive, with `|y_i| / s_i` there; node calls per evaluation under each
@@ -1054,3 +1056,8 @@ implementation plan's.*
   partitioned arm compares 33–47 % fewer components than the flat control, tracking its node calls to within 0.02 — the
   convergence test is not the per-sweep overhead; what that overhead is stays open (§3.5 check 5 will report the
   remaining candidates). §3.3's empty-blocks paragraph gains the measured shares; I-20(a) extended in the register.
+- 2026-09-11 — **A59 (driver-predicate-mode) merged — DR5**: the `frozen | mixed` rulers of §3.6 in the harness's predicate module,
+  selected in the copy by `PROCESS_ARCH_PREDICATE` (campaign default `frozen`); the exit audit on both rulers, never one; gate G8
+  built and passing (12/12 pairs bit-identical with an independent detector; doctored-component tooth); G0′, G1 and GR after DR5
+  PASS, all re-run by the orchestrator. §4.2.5 gains the two-counts caption rule. Adoption of `mixed` is the campaign's decision
+  by the adoption rule, not made here.

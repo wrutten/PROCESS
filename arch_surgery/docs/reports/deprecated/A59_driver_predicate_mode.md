@@ -1,10 +1,9 @@
 # A59 (driver-predicate-mode) — the convergence predicate's two rulers
 
-> **Document status** — **OPEN.** Task **A59 (driver-predicate-mode)**, branch
-> `A59-driver-predicate-mode` off `architecture_surgery` at `01afc009`. Driver change **DR5** of the
-> V4 harness implementation plan; the pre-declared trial of improvement list item 5a; gate **G8** of
-> the experiment plan §3.9. Awaiting the orchestrator's critical assessment (protocol §5). Folder
-> position records lifecycle, not validity (trap T3).
+> **Document status** — **MERGED, archived.** Task **A59 (driver-predicate-mode)**, branch
+> `A59-driver-predicate-mode` (retired) off `architecture_surgery` at `01afc009`, merged on 2026-09-11
+> (`71f105c2`); the orchestrator's critical assessment (protocol §5) is §13. Folder position records lifecycle,
+> not validity (trap T3).
 
 ---
 
