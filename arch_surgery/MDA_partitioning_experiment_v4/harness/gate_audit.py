@@ -55,15 +55,20 @@ had to be recomputed from the committed residual vector afterwards.  Task
 ``optimise.py``, so the statistic is now **in the record**, derived by the same
 code in both phases.
 
-One consequence is deliberate and is reported rather than smoothed: on both
-pulsed configurations the restricted maximum at the accepted point is dominated
-by a single component, ``tfcoil.insstrain``, at roughly 7e-3 scaled — far above
-the tolerance, identical between the flat and the partitioned arm on the same
-seed, and therefore a property of the handed-over state rather than of the
-partition (improvement list item 11).  This gate **names it** wherever it is the
-argmax.  A statistic that reported only "the restricted maximum" without saying
-which component carries it would average away the one thing worth deciding
-about.
+Whichever component carries the maximum, this gate **names it**.  A statistic
+that reported only "the restricted maximum" without saying which component
+carries it would average away the one thing worth deciding about, and the
+reason that rule is here is a measured one: for two revisions the maximum on
+both pulsed configurations was carried by ``tfcoil.insstrain`` at roughly 7e-3
+scaled, in every arm including the reference arm, and was read as a convergence
+result.  It was not.  Task **A61 (insstrain-diagnosis)** showed it was the exit
+audit's own doing — PROCESS's output path raises the TF-coil stress mesh before
+the snapshot is taken, and the audit's sweep then ran the stress model on a
+different discretisation than the loop had — and ruling **D25** made the audit
+restore the whole data structure before its sweep, so the statistic now
+measures the map the loop iterated.  The argmax this gate reports is therefore
+the argmax of a convergence statistic again, and the number it carries is what
+the handed-over state is actually worth.
 
 Criterion inherited, and its source
 -----------------------------------

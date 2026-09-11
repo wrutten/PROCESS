@@ -581,6 +581,139 @@ CONDITIONAL_WITNESS: dict[str, str] = {
     ),
 }
 
+#: The record path that says **which instrument** made a record's exit-audit
+#: residual.  A record written before the instrument existed carries nothing
+#: there, which counts as a different instrument: that is the case this gate
+#: has to straddle, not a special case of it.
+EXIT_AUDIT_INSTRUMENT_PATH = "exit_audit.instrument.restores"
+
+
+def exit_audit_instrument(record: Mapping[str, Any]) -> str | None:
+    """Which exit-audit instrument wrote this record, or None if it says none."""
+    if not records_mod.has_path(record, EXIT_AUDIT_INSTRUMENT_PATH):
+        return None
+    value = records_mod.resolve_path(record, EXIT_AUDIT_INSTRUMENT_PATH)
+    return None if value is None else str(value)
+
+
+#: The leaves of an exit-audit block that the residual **determines**: the
+#: maximum, which component carries it, how many components are above the
+#: tolerance, and the counts of components that moved in a way the residual
+#: classifies.  Everything else in the block — the tolerance, the ruler's name,
+#: the file the vector went to, and the restriction's own population and digest
+#: — is a declared constant of the measurement and is compared across any
+#: pairing whatever.  The split is the difference between excluding a number
+#: and excluding the block it sits in.
+_RESIDUAL_DERIVED_LEAVES: tuple[str, ...] = (
+    "residual_max",
+    "residual_max_hex",
+    "brief.max",
+    "brief.argmax",
+    "brief.n_above",
+    "brief.n_discrete_mismatch",
+    "brief.n_constant_moved",
+    "brief.n_nan_new",
+    "restricted.max",
+    "restricted.max_hex",
+    "restricted.argmax",
+    "restricted.n_above",
+)
+
+#: The same, for the per-ruler blocks, which carry a fuller account of the
+#: residual than the unprefixed fields do.  ``detail.ruler`` and
+#: ``detail.n_continuous_tested`` are deliberately **not** here: the ruler's
+#: name and the size of the tested population are not the residual.
+_RESIDUAL_DERIVED_RULER_LEAVES: tuple[str, ...] = (
+    "detail.max",
+    "detail.argmax",
+    "detail.n_above",
+    "detail.argmax_value_over_scale",
+    "detail.n_bound_by_the_current_value",
+    "detail.binding_components",
+    "detail.n_discrete_mismatch",
+    "detail.n_constant_moved",
+    "detail.n_nan_new",
+)
+
+_INSTRUMENT_RESIDUAL_REASON = (
+    "a value the exit audit's residual determines, and the two captures' "
+    "residuals were measured by different instruments: the earlier capture's "
+    "sweep ran on the state PROCESS's output path left, this one's on the "
+    "state the loop handed over.  The sweep, the ruler, the tolerance and the "
+    "restriction are unchanged and are compared across this pairing like "
+    "anything else; what changed is what the audit puts back before it sweeps"
+)
+
+#: Record leaves that **an instrument change between the two captures** moves,
+#: with both sides carrying the leaf and neither side wrong.  A third kind of
+#: exclusion, and the reason it is not one of the other two:
+#:
+#: * :data:`ALWAYS_EXCLUDED` is for leaves *no* pair of runs could compare — a
+#:   path, a timing, the commit.  These are comparable, and are compared
+#:   wherever the two sides were measured the same way.
+#: * :data:`FIELDS_ADDED_BY_A_DRIVER_CHANGE` is for leaves one side **lacks**.
+#:   These are present on both sides and non-null on both; the condition there
+#:   cannot decide them, and comparing them would report a changed *instrument*
+#:   as changed *behaviour* — which is the one thing G1 must not do, in either
+#:   direction.
+#:
+#: So each name here is excluded exactly when the two records' instrument
+#: stamps differ (:data:`EXIT_AUDIT_INSTRUMENT_PATH`), and compared whenever
+#: they agree.  The condition is intrinsic to the pair rather than set by the
+#: caller, so a later gate cannot forget it, and **a tooth shows the other
+#: half**: a residual moved by one unit in the last place between two records
+#: made by the *same* instrument is still caught and named.
+#:
+#: The live case is ruling **D25**: the exit audit now puts the data structure
+#: back to its solve-phase state before its sweep, so the sweep evaluates the
+#: map the loop iterated rather than the one PROCESS's output path left behind.
+#: Every residual moves, on both sides of the audit's two positions, and
+#: nothing about the driver moved with it — which is exactly what the rest of
+#: this gate's several thousand values, and all 51 thousand output-file lines,
+#: are there to say.
+FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE: dict[str, str] = {
+    **{
+        f"exit_audit.{leaf}": _INSTRUMENT_RESIDUAL_REASON
+        for leaf in _RESIDUAL_DERIVED_LEAVES
+    },
+    **{
+        f"exit_audit.{ruler}.{leaf}": _INSTRUMENT_RESIDUAL_REASON
+        for ruler in records_mod.AUDIT_RULERS
+        for leaf in _RESIDUAL_DERIVED_LEAVES + _RESIDUAL_DERIVED_RULER_LEAVES
+    },
+    "exit_audit.instrument": (
+        "the instrument's own account of itself: which positions it "
+        "snapshotted, what it put back and what it could not.  Absent before "
+        "the mechanism existed, a block after"
+    ),
+    "audit_snapshot": (
+        "what the driver's hook was asked to take: the coupling state alone, "
+        "and only where the audit position needed it, before; the coupling "
+        "state and the whole data structure at every position the driver "
+        "offers, after.  The positions themselves are unchanged"
+    ),
+    "audit_position_note": (
+        "the sentence saying how the audit position is reached, which the "
+        "instrument change rewrites.  audit_position itself is compared, and "
+        "two captures that disagree on it are refused before any value is"
+    ),
+}
+
+#: What kind of thing each instrument-change name is, on the same rule as
+#: :data:`ALWAYS_EXCLUDED_KIND`: a name nobody classified is a name nobody
+#: reviewed, and the import refuses one.
+INSTRUMENT_CHANGE_KIND: dict[str, str] = {
+    **{
+        name: "a value the audit's residual determines"
+        for name in FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE
+        if name.startswith("exit_audit.") and name != "exit_audit.instrument"
+    },
+    "exit_audit.instrument": "the instrument's own description of itself",
+    "audit_snapshot": "what the instrument was asked to take",
+    "audit_position_note": "prose the instrument change rewrites",
+}
+
+
 #: Every name either group holds, which is what a reader looking for "is this
 #: excluded?" wants and what :func:`is_volatile` matches against by default.
 #: The *gate* uses the two groups separately, so that the conditional ones are
@@ -588,6 +721,7 @@ CONDITIONAL_WITNESS: dict[str, str] = {
 VOLATILE_RECORD_PATHS: dict[str, str] = {
     **ALWAYS_EXCLUDED,
     **FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+    **FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
 }
 
 #: Keys of PROCESS's own output file that record when and where a run happened
@@ -788,6 +922,7 @@ def compare_records(
     *,
     excluded: Mapping[str, str] | None = None,
     conditional: Mapping[str, str] | None = None,
+    instrument_changed: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Every deterministic leaf of two records, compared without tolerance.
 
@@ -797,18 +932,42 @@ def compare_records(
     it.  That distinction is task **A52 (harness-gates)**'s, and it is the
     difference between an exclusion that applies to the pair of commits it was
     written for and one that hides a field for ever.
+
+    ``instrument_changed`` names leaves that **a change to the measuring
+    instrument** moves, with both sides carrying them.  Each is excluded
+    exactly where the two records say they were measured by different
+    instruments — the stamp at :data:`EXIT_AUDIT_INSTRUMENT_PATH`, a record
+    that carries none counting as a different one — and compared wherever the
+    stamps agree.  The condition is read off the pair here rather than decided
+    by the caller, so a gate cannot pass the table and forget the condition,
+    and a residual that moves between two records made the same way is still a
+    mismatch.
     """
     a, b = leaves(dict(before)), leaves(dict(after))
     every = sorted(set(a) | set(b))
     missing = object()
+    instruments = (exit_audit_instrument(before), exit_audit_instrument(after))
+    instrument_moved = instruments[0] != instruments[1]
     compared, excluded_paths, mismatches = 0, [], []
     conditionally_excluded: list[str] = []
     conditionally_compared: list[str] = []
+    instrument_excluded: list[str] = []
+    instrument_compared: list[str] = []
     for path in every:
         reason = is_volatile(path, excluded)
         if reason is not None:
             excluded_paths.append(path)
             continue
+        if (
+            instrument_changed is not None
+            and is_volatile(path, instrument_changed) is not None
+            and (conditional is None or is_volatile(path, conditional) is None)
+        ):
+            if instrument_moved:
+                excluded_paths.append(path)
+                instrument_excluded.append(path)
+                continue
+            instrument_compared.append(path)
         if conditional is not None and is_volatile(path, conditional) is not None:
             witness = _conditional_witness(path, conditional)
             if witness is not None:
@@ -825,6 +984,16 @@ def compare_records(
                 conditionally_excluded.append(path)
                 continue
             conditionally_compared.append(path)
+            if (
+                instrument_changed is not None
+                and is_volatile(path, instrument_changed) is not None
+            ):
+                if instrument_moved:
+                    excluded_paths.append(path)
+                    conditionally_compared.pop()
+                    instrument_excluded.append(path)
+                    continue
+                instrument_compared.append(path)
         compared += 1
         va, vb = a.get(path, missing), b.get(path, missing)
         if va is missing or vb is missing:
@@ -846,6 +1015,25 @@ def compare_records(
         "n_conditionally_excluded": len(conditionally_excluded),
         "conditionally_excluded": conditionally_excluded,
         "n_conditionally_compared": len(conditionally_compared),
+        "exit_audit_instrument": {
+            "before": instruments[0],
+            "after": instruments[1],
+            "differs": instrument_moved,
+            "what_it_means": (
+                "the two records were measured by different exit-audit "
+                "instruments, so the leaves the instrument moves are excluded "
+                "by name below and everything else is compared as usual"
+                if instrument_moved
+                else "the two records were measured by the same exit-audit "
+                "instrument, so nothing is excluded on that ground and a "
+                "residual that moved would be a mismatch"
+            ),
+        },
+        "n_excluded_by_the_instrument_change": len(instrument_excluded),
+        "excluded_by_the_instrument_change": instrument_excluded,
+        "n_compared_although_the_instrument_table_names_them": len(
+            instrument_compared
+        ),
         "n_mismatched": len(mismatches),
         "mismatches": mismatches,
     }
@@ -967,6 +1155,8 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
     rows: list[dict[str, Any]] = []
     n_values = n_excluded_values = n_value_mismatches = 0
     n_lines = n_excluded_lines = n_line_mismatches = 0
+    n_instrument_excluded = 0
+    instruments: list[dict[str, Any]] = []
     passed = True
     for config in campaign.configurations:
         for phase, arm in NEUTRAL_ARMS:
@@ -981,6 +1171,7 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
                 after,
                 excluded=ALWAYS_EXCLUDED,
                 conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+                instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
             )
             mfile_before = _mfile_for(before_dir, config.name)
             mfile_after = _mfile_for(after_dir, config.name)
@@ -1010,6 +1201,10 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
             passed = passed and row["passed"]
             n_values += values["n_compared"]
             n_excluded_values += values["n_excluded"]
+            n_instrument_excluded += values["n_excluded_by_the_instrument_change"]
+            instruments.append(
+                {"pair": key, **values["exit_audit_instrument"]}
+            )
             n_value_mismatches += values["n_mismatched"]
             n_lines += mfile["n_lines_compared"]
             n_excluded_lines += mfile["n_lines_excluded"]
@@ -1027,17 +1222,24 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
             f"{n_values} deterministic record values and {n_lines} output-file "
             f"lines compared without tolerance, {n_excluded_values} record "
             f"values and {n_excluded_lines} lines excluded as run metadata "
-            f"(each named, with its reason, in this record)"
+            f"(each named, with its reason, in this record), of which "
+            f"{n_instrument_excluded} are excluded because the two captures' "
+            f"exit audits were taken by different instruments — named one by "
+            f"one, and compared again the moment the two stamps agree"
         ),
         "n_pairs": len(rows),
         "n_values_compared": n_values,
         "n_values_excluded": n_excluded_values,
+        "n_values_excluded_by_the_instrument_change": n_instrument_excluded,
+        "exit_audit_instruments": instruments,
+        "instrument_change_straddled": any(row["differs"] for row in instruments),
         "n_values_differing": n_value_mismatches,
         "n_mfile_lines_compared": n_lines,
         "n_mfile_lines_excluded": n_excluded_lines,
         "n_mfile_lines_differing": n_line_mismatches,
         "audit_position_on_both_sides": NEUTRAL_AUDIT_POSITION,
         "excluded_record_paths": VOLATILE_RECORD_PATHS,
+        "excluded_across_an_instrument_change": FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
         "excluded_mfile_keys": VOLATILE_MFILE_KEYS,
         "reference_fields_for_context": {
             phase: list(fields) for phase, fields in reference_mod.REFERENCE_FIELDS.items()
@@ -1309,7 +1511,93 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"count only where the block is absent, never where it is there"
         )
 
+    def sample_carrying_the_instrument_stamp() -> tuple[dict[str, Any], str, str]:
+        """A captured record whose exit audit says which instrument made it."""
+        for side in ("after", "before"):
+            for config in campaign.configurations:
+                directory = neutrality_run_dir(campaign, side, config.name, "BR")
+                if not (Path(directory) / "metrics.json").exists():
+                    continue
+                record = _read_record(
+                    directory, side=side, key=f"BR/{config.name}"
+                )
+                if exit_audit_instrument(record) is not None:
+                    return record, config.name, side
+        raise GateError(
+            "no capture carries an exit-audit instrument stamp, so the "
+            "condition that excludes a residual across an instrument change "
+            "cannot be shown to have another half"
+        )
+
+    def the_same_instrument_still_catches_a_moved_residual() -> tuple[bool, str]:
+        """The instrument exclusion must fire on the instrument, not on the field.
+
+        The leaves an instrument change moves are excluded **while the two
+        records say they were measured differently**.  Two records made by the
+        same instrument must still be compared on every one of them — otherwise
+        the new condition would be a blanket exclusion of the exit audit
+        wearing a condition's clothes, and the most sensitive thing this gate
+        compares would quietly stop being compared.
+
+        So: one residual moved by a unit in the last place on a copy of a
+        record, against the record itself.  Both carry the same stamp.  The
+        comparison has to report it and name the field.  The second half of the
+        tooth moves the *stamp* as well and requires the same difference to be
+        excluded instead — the two halves together are the condition.
+        """
+        record, name, side = sample_carrying_the_instrument_stamp()
+        path = "exit_audit.residual_max_hex"
+        value = (record.get("exit_audit") or {}).get("residual_max_hex")
+        if not isinstance(value, str):
+            return False, f"the sample record carries no {path}"
+        moved = copy.deepcopy(record)
+        nudged = math.nextafter(float.fromhex(value), math.inf).hex()
+        moved["exit_audit"]["residual_max_hex"] = nudged
+        same_instrument = compare_records(
+            record,
+            moved,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+        )
+        other_instrument = copy.deepcopy(moved)
+        other_instrument["exit_audit"]["instrument"]["restores"] = (
+            str(exit_audit_instrument(record)) + "_something_else"
+        )
+        across = compare_records(
+            record,
+            other_instrument,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+        )
+        caught = any(m["field"] == path for m in same_instrument["mismatches"])
+        hidden = (
+            path in across["excluded_by_the_instrument_change"]
+            and not any(m["field"] == path for m in across["mismatches"])
+        )
+        return caught and hidden, (
+            f"on BR/{name} ({side} side), {path} moved {value} -> {nudged}: "
+            f"between two records carrying the same instrument stamp the "
+            f"comparison reports {same_instrument['n_mismatched']} of "
+            f"{same_instrument['n_compared']} values differing and names the "
+            f"field; with the stamp itself changed on one side the same "
+            f"difference is excluded by name, "
+            f"{across['n_excluded_by_the_instrument_change']} leaves in all, "
+            f"and {across['n_mismatched']} of {across['n_compared']} values "
+            f"differ"
+        )
+
     return (
+        Tooth(
+            "the_same_instrument_still_catches_a_moved_residual",
+            "one exit-audit residual moved by a unit in the last place between "
+            "two records carrying the same instrument stamp, and again with "
+            "the stamp changed",
+            "be caught and named where the instrument is the same, and "
+            "excluded by name only where it is not",
+            the_same_instrument_still_catches_a_moved_residual,
+        ),
         Tooth(
             "a_real_count_difference_with_the_block_on_both_sides",
             "one per-ruler count of excluded components moved by one on a "
@@ -4186,6 +4474,11 @@ def _with_capture(
 REPRODUCTION_TEETH: tuple[str, ...] = (
     "count",
     "hex",
+    # The one tooth here that must **not** end in a refusal: a reference value
+    # the gate no longer compares, doctored, has to be reported as excluded by
+    # name — neither as a mismatch (the exclusion would not be in force) nor as
+    # a match (a doctored value would have passed).
+    "excluded field",
     "missing reference",
     "missing key",
     "bad name map",
@@ -4263,7 +4556,11 @@ def _reproduction_teeth() -> tuple[Tooth, ...]:
         Tooth(
             name=name,
             what="gate GR's own deliberate break, by name",
-            must="FAIL, REFUSE or RAISE — never skip",
+            must=(
+                "FAIL, REFUSE or RAISE — never skip; the 'excluded field' "
+                "tooth instead requires the doctored value to be reported as "
+                "excluded by name"
+            ),
             check=read(name),
         )
         for name in REPRODUCTION_TEETH
@@ -4652,6 +4949,21 @@ def _assert_every_name_is_classified() -> None:
             f"{len(missing)} of gate G8's excluded name(s) carry no declared "
             f"kind: {missing}"
         )
+    missing = sorted(
+        set(FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE) - set(INSTRUMENT_CHANGE_KIND)
+    )
+    if missing:
+        raise GateError(
+            f"{len(missing)} name(s) excluded across an instrument change "
+            f"carry no declared kind: {missing}"
+        )
+    spare = sorted(
+        set(INSTRUMENT_CHANGE_KIND) - set(FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE)
+    )
+    if spare:
+        raise GateError(
+            f"{len(spare)} classified name(s) are not excluded at all: {spare}"
+        )
 
 
 _assert_every_name_is_classified()
@@ -4807,6 +5119,45 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             }
         )
 
+    # Whether the pairing this review measures over actually straddles an
+    # instrument change decides what the rows below mean, exactly as the
+    # commit pairing does for the two groups above.  It is read off the
+    # captured records, not assumed.
+    instruments_differ = any(
+        exit_audit_instrument(before) != exit_audit_instrument(after)
+        for before, after in g1_pairs
+    )
+    for name, reason in FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE.items():
+        coverage = _coverage(name, g1_pairs, also_excluded=ALWAYS_EXCLUDED)
+        g1_rows.append(
+            {
+                "name": name,
+                "group": (
+                    "excluded only where the two records' exit-audit "
+                    "instruments differ"
+                ),
+                "kind": INSTRUMENT_CHANGE_KIND[name],
+                "reason": reason,
+                **coverage,
+                "could_be_compared_instead": not instruments_differ,
+                "verdict": (
+                    "EXCLUDED at this pairing — the two captures' exit audits "
+                    "were taken by different instruments, so this leaf is a "
+                    "measurement by two rulers and not a difference in "
+                    "behaviour"
+                    if instruments_differ
+                    else (
+                        "COMPARED at this pairing — both captures name the "
+                        "same instrument, so the condition does not fire and "
+                        "the leaf is in the comparison"
+                        if coverage["leaves_on_both_sides"]
+                        else "INERT at this pairing — the name matches no leaf "
+                        "on either side"
+                    )
+                ),
+            }
+        )
+
     g8_rows: list[dict[str, Any]] = []
     for name, reason in PREDICATE_PAIR_EXCLUSIONS.items():
         coverage = _coverage(name, g8_pairs)
@@ -4887,10 +5238,31 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             "reason."
         ),
         "G1_pairing": g1_straddle,
+        "G1_instrument_pairing": {
+            "instruments": sorted(
+                {
+                    str(exit_audit_instrument(record))
+                    for pair in g1_pairs
+                    for record in pair
+                }
+            ),
+            "straddles_an_instrument_change": instruments_differ,
+            "says": (
+                "the two captures' exit audits were taken by different "
+                "instruments, so the third group's names are excluded here "
+                "and compared at any pairing where the stamps agree"
+                if instruments_differ
+                else "both captures name the same exit-audit instrument, so "
+                "the third group excludes nothing here"
+            ),
+        },
         "sizes": {
             "G1_before_this_review": len(VOLATILE_RECORD_PATHS),
             "G1_after_this_review": len(ALWAYS_EXCLUDED),
             "G1_conditional": len(FIELDS_ADDED_BY_A_DRIVER_CHANGE),
+            "G1_conditional_on_the_instrument": len(
+                FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE
+            ),
             "G1_output_file_keys": len(VOLATILE_MFILE_KEYS),
             "G8_before_this_review": len(PREDICATE_PAIR_EXCLUSIONS),
             "G8_after_this_review": len(PREDICATE_PAIR_EXCLUSIONS),
