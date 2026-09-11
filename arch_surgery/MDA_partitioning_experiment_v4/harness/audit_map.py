@@ -457,6 +457,21 @@ SWEEP_SERIES: tuple[dict[str, Any], ...] = (
             "it, the attribution is exact"
         ),
     },
+    *(
+        {
+            "name": f"output_entry_with_the_candidate_at_{value}",
+            "from": "entry_to_write_output_files",
+            "restore": "set_candidate",
+            "value": value,
+            "what": (
+                f"the same state, swept with the candidate field set to "
+                f"{value}.  The series is a dose response: if the residual is "
+                f"a function of this one setting, the attribution is not an "
+                f"argument but a curve"
+            ),
+        }
+        for value in (100, 200, 300, 400, 500)
+    ),
     {
         "name": "loop_exit_as_found",
         "from": "last_sweep",
@@ -706,6 +721,12 @@ def _one_sweep(
                 put_back = [n for n in differing if n == CANDIDATE_FIELD]
             elif row["restore"] == "differing_except_the_candidate":
                 put_back = [n for n in differing if n != CANDIDATE_FIELD]
+            elif row["restore"] == "set_candidate":
+                namespace_name, _, field = CANDIDATE_FIELD.partition(".")
+                setattr(getattr(data, namespace_name), field, row["value"])
+                result["candidate_set_to"] = getattr(
+                    getattr(data, namespace_name), field
+                )
             if put_back is not None:
                 if entry_structure is None:
                     result["skipped"] = (

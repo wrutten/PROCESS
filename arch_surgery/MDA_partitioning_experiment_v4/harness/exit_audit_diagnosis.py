@@ -638,6 +638,7 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
                 "candidate_among_the_changed_fields": sweep.get(
                     "candidate_among_the_changed_fields"
                 ),
+                "candidate_set_to": sweep.get("candidate_set_to"),
             }
             for name, sweep in sweeps.items()
         },
@@ -841,6 +842,38 @@ def render(summary: Mapping[str, Any]) -> str:
             + f" | {sweep.get('residual_max_hex')} | {setting.get('before')} "
             f"| {setting.get('after')} |"
         )
+
+    lines.append("\n## The dose response\n")
+    lines.append(
+        "*Caption: one row per run. Each column is one further sweep from the "
+        "state the solve handed over, with "
+        f"`{audit_map_mod.CANDIDATE_FIELD}` set to the named value and "
+        "everything else as the run left it. The cell is the value of "
+        f"`{COMPONENT}` after that sweep; the last row of each cell is the "
+        "scaled residual the sweep reports. The solve ran at 100 throughout "
+        "and the output path sets 500.*\n"
+    )
+    doses = (100, 200, 300, 400, 500)
+    lines.append(
+        "| run | " + " | ".join(f"at {value}" for value in doses) + " |"
+    )
+    lines.append("|---" * (1 + len(doses)) + "|")
+    for row in summary["rows"]:
+        cells = [f"`{row['key']}`"]
+        for value in doses:
+            sweep = row["sweeps"].get(
+                f"output_entry_with_the_candidate_at_{value}", {}
+            )
+            after = sweep.get("component_after_hex")
+            cells.append(
+                (
+                    f"{float.fromhex(after):.10e}<br>"
+                    if after
+                    else "component absent<br>"
+                )
+                + f"max {sweep.get('residual_max_hex')}"
+            )
+        lines.append("| " + " | ".join(cells) + " |")
 
     lines.append("\n## Is the audited state the loop's exit state?\n")
     lines.append(
