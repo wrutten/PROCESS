@@ -3,7 +3,7 @@
   "task": "A48 (harness-data)",
   "decision": "D20, 2026-09-10 -- the experiment runs its own copy of PROCESS and owns its own inputs; harness implementation plan sections 5.2 and 5.3, ruled the same day",
   "generated_by": "harness/data_provenance.py copy",
-  "copy_date": "2026-09-10",
+  "copy_date": "2026-09-11",
   "source": {
     "repository": "PROCESS_surgery (this repository), branch architecture_surgery",
     "artifact_path": "arch_surgery/docs/data/",
