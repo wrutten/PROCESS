@@ -430,6 +430,11 @@ $PY experiment_runner.py --measure all
 
 # the tally's own gate: the cells it must land on, and what a table may not be
 $PY experiment_runner.py --gate tally_contracts
+
+# the analysis: the same cells recomputed by a second implementation, compared
+$PY experiment_runner.py --gate recomputation --resume   # the verdict, with six teeth
+$PY experiment_runner.py --measure recomputed_tables     # its own tables, beside the tally's
+$PY -m harness.analysis --teeth                          # the six deliberate breaks alone
 ```
 
 **Every gate makes its own runs, and `--resume` is what decides whether it re-makes them.** Without
@@ -701,14 +706,15 @@ displacement streams (`perturb.py`), **the run path** (`child.py`, `optimise.py`
 
 The **tally** is here too (§13): the declared constructions in `stats.py`, the table module that
 refuses a table without a caption or a denominator, and the two stages that emit the experiment
-plan's §4.2 and §4.3 tables from the records.
+plan's §4.2 and §4.3 tables from the records.  So is the **analysis** (§14): the second, independent
+recomputation the tally's cells are verified against, in `analysis.py`.
 
-What is not here yet: the **analysis** — the second, independent recomputation that the tally's
-cells are verified against. Everything above it is built: the artifact stages, the census, the
-derivation of the lifted input file, **every gate of the experiment plan inside this package** in
-one registry with the harness's own checks promoted beside them (§8), and the tally. The preflight
-names each missing piece and the stage that produces it rather than falling back to something that
-happens to be there.
+What is not here yet: the **one-seed smoke** — the end-to-end pass that reaches the analysis from
+one button press on the cheapest configuration.  Everything below it is built: the artifact stages,
+the census, the derivation of the lifted input file, **every gate of the experiment plan inside this
+package** in one registry with the harness's own checks promoted beside them (§8), the tally, and
+the analysis.  The preflight names each missing piece and the stage that produces it rather than
+falling back to something that happens to be there.
 
 Nothing in a record is a placeholder any more. The driver chain is closed: the convergence test's
 evaluations and the components it walked, what each optimiser attempt cost on its own, the
@@ -1084,3 +1090,92 @@ renamed to the vocabulary's word for it, `reference.FIELD_NAME_MAP` translates t
 revision's path to this revision's. The compared cell list is **derived** — the compared-field list
 for the phase intersected with what that entry actually published — so a later task that drops a
 field from the compared set drops it here too.
+
+---
+
+## 14. The analysis — the same cells, computed a second time
+
+### Why a second implementation exists
+
+Two implementations of one declared definition drifted apart **twice** in this project (queue issues
+**I-18** and **I-19**): a rule was written down once, and the two places that computed it stopped
+agreeing without anything failing. The tally is one implementation. `analysis.py` is the other, and
+`--gate recomputation` is the only thing that can catch the drift.
+
+What makes it a second implementation and not a second copy: **`analysis.py` imports no part of the
+tally** — not `stats.py`, not either `tally*` module, not `tables.py`. Every construction in it is
+re-derived from the declaration (the docstring in `stats.py`, which the experiment plan's §3.4–§3.6
+wrote) and from the record fields `records.py` declares; the populations — the two declared sources,
+the `force_maxcal` filter, the seed-complete arm groups, `retried` from `attempts[]` — are re-derived
+the same way, and a population the two derive differently is reported as a **finding**, never
+reconciled silently. What the analysis *reads* from the tally is its **output**: the two stage
+records `runs/gates/tally_evaluation/measurements.json` and `…/tally_optimisation/measurements.json`,
+cell by cell over `rows` keyed by `columns`.
+
+### The gate, and what its denominator counts
+
+`recomputation` reports three denominators rather than one, because they answer different questions:
+how many **cells** were compared, how many **tables** they came from, and how many **run records**
+were read — with the commits those records were made at, from `framework.survey_heads`. The cell
+count is split again into cells produced by a **construction** and cells **composed as a string**
+(`"3/3"`, `"[18, 68]"`, `"BR 0 · B0 0 · B3 0"`): agreement on a rendered string is weaker evidence
+than agreement on a computed quantity, so the two are reported apart rather than added into one
+number.
+
+The tables are not the whole of what the tally publishes. The two stage records also carry the
+**similarity verdict** of each evaluation-phase arm pair on each ruler and the **seed set** each
+optimisation-phase arm group is over; a comparison that read only the tables would leave them
+unverified, so they are compared beside the cells and counted in the same denominator.
+
+Four refusals, each a way the comparison could pass over nothing:
+
+| refused | why |
+|---|---|
+| an **empty comparison** — no table, or no cell in the tables there are | a gate that cannot find what it compares must refuse, never pass over nothing (trap T11) |
+| a **budget-capped demonstration** (`force_maxcal`) in a population | such a record demonstrates a decomposition and is not a measurement of anything |
+| a population **straddling two commits** without `--resume` | without it every run is re-made, so a record from another commit means one was kept that should not have been |
+| the tally's **stage records absent** | `--verify` compares against the tally's output and never against its code, so the output has to be on disk |
+| a tally stage record **computed over another run population** | a stage record left from before a change that moves cells produces mismatches that look exactly like a drift; each record's own `runs_provenance` is compared with this module's own survey, on the commits and the count, and a disagreement refuses with both sides named |
+
+**A gate may declare that it reads a measurement stage.** `Gate.reads_from` names either kind:
+`gates.assert_declared_dependencies` refuses, as the registry is built, a dependency naming something
+nobody runs; `ordered_gate_names` orders the *gate* dependencies among themselves; and the button runs
+each declared *stage* immediately before the gate that declares it, once per press, with the same
+`--resume`. `recomputation` declares `reproduction`, `entry_and_warm`, `tally_evaluation` and
+`tally_optimisation`, so `--gate all` makes what it reads and no chain needs reordering.
+
+### The independence check, and the nine teeth
+
+The property the whole gate rests on — *this module borrowed no construction* — is itself a
+**checked criterion** and not a comment: the gate parses `analysis.py`'s own source and fails if it
+imports `stats`, either `tally` module or `tables`. It is one more thing compared, so it is in the
+denominator beside the cells.
+
+
+| tooth | the deliberate break | what the gate must do |
+|---|---|---|
+| a tally cell moved by one | one integer cell of the tally's published output raised by 1 | report the mismatch — this half proves the comparison reads the tally |
+| a construction altered in the analysis | the pooled ratio recomputed against **Σ arm** instead of **Σ reference**, for a whole recomputation | report the mismatches — this half proves the comparison reads the records through the analysis's own rules |
+| an empty comparison | no table on either side | refuse |
+| a demonstration record in a population | a record stamped `force_maxcal` | refuse |
+| a retried flag trusted from a stored field | a record whose `attempt_accounting.retried` disagrees with `attempts[]`, in both directions | follow `attempts[]` and never the stored flag |
+| a population straddling two commits | two records carrying different `tree_git_head` values | refuse without `--resume`; state the straddle with it |
+| a construction imported from the tally | a source importing `harness.stats`, `harness.tally_optimisation` and `harness.tables` | name all three, and name nothing in a source that imports only the framework |
+| a tally stage record over another run population | a stage record doctored to another commit, and one doctored to a smaller record count | refuse both, and accept one that agrees |
+| a gate declaring a stage the registry does not hold | a gate whose `reads_from` names `a_stage_nobody_runs` | refuse as the registry is built |
+
+### What cannot be recomputed from records
+
+One emitted table — *the predicate trial* — is not built from run records at all. Its decisive-pass
+counts come from an observer that watches each predicate evaluation **while the run happens** and
+reads it again on the other ruler; nothing in a record afterwards reconstructs them. The analysis
+recomputes that table's *shaping* from the same gate verdict the tally read
+(`gates/predicate_mode/gate.json`) and the verdict names it, so a reader can see that those cells are
+a check on the table and not on the measurement.
+
+### The measurement stage
+
+`recomputed_tables` emits the analysis's own markdown tables, with its own captions and its own
+denominators, to be read beside the tally's. It has nothing to pass — the verdict on whether the two
+agree is the gate's — and it refuses a table of its own built without a caption or without an integer
+denominator, which is the same rule `tables.py` enforces for the tally, implemented a second time.

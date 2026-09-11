@@ -58,6 +58,8 @@ __all__ = [
     "Table",
     "PLACEHOLDER_DENOMINATORS",
     "TIMING_WORDS",
+    "CELL_SEPARATOR",
+    "cell_list",
 ]
 
 
@@ -100,6 +102,26 @@ TIMING_WORDS: frozenset[str] = frozenset(
         "throughput",
     }
 )
+
+#: How a cell that carries several values joins them.  **One separator, in one
+#: place**: the two accuracy tables joined their audit-instrument column with
+#: two different spellings of the same idea (``";"`` and ``"; "``), which task
+#: **A54 (harness-analysis)** found by having to reproduce both.  A separator
+#: that lives beside each cell is a separator that drifts.
+CELL_SEPARATOR = "; "
+
+
+def cell_list(
+    values: Sequence[Any], *, separator: str = CELL_SEPARATOR, empty: str = "—"
+) -> str:
+    """Several values in one cell, joined one way.
+
+    ``empty`` is what an empty list reads as, and it is a dash rather than an
+    empty string so that a cell with nothing in it is visibly a cell with
+    nothing in it.
+    """
+    return separator.join(str(value) for value in values) if values else empty
+
 
 _WORD = re.compile(r"[a-zA-Z_µ/]+")
 

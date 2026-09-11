@@ -47,7 +47,7 @@ from harness import stats as stats_mod
 from harness import tally as tally_mod
 from harness import tables as tables_mod
 from harness.config import Campaign
-from harness.tables import Caption, Column, Table
+from harness.tables import Caption, Column, Table, cell_list
 
 __all__ = ["tally", "print_tally", "PHASE"]
 
@@ -327,17 +327,19 @@ def matched_accuracy(
     base, why_base = reference_arm(config.pulsed, set(by_arm))
     rows: list[dict[str, Any]] = []
     distributions: dict[str, dict[str, list[float]]] = {}
+    reasons: set[str] = set()
     for arm in _arm_order(by_arm):
         records = [r for r in by_arm[arm] if stats_mod.finished(r)]
         for ruler in campaign.predicate_modes:
-            restricted = [
-                stats_mod.restricted_statistic(r, ruler=ruler) for r in records
-            ]
+            # One construction for n, declared in stats.accuracy_population: it
+            # counts the **runs** this row is over, and the column beside it
+            # says how many of them carried a restricted statistic.
+            block = stats_mod.accuracy_population(records, ruler=ruler)
+            restricted = block["statistics"]
+            restricted_values = block["values"]
+            reasons.update(block["reasons"])
             whole = [
                 stats_mod.whole_state_statistic(r, ruler=ruler) for r in records
-            ]
-            restricted_values = [
-                s["max"] for s in restricted if s.get("present") and s.get("max") is not None
             ]
             whole_values = [
                 s["max"] for s in whole if s.get("present") and s.get("max") is not None
@@ -363,7 +365,8 @@ def matched_accuracy(
                 {
                     "arm": arm,
                     "ruler": ruler,
-                    "n": len(restricted_values),
+                    "n": block["n"],
+                    "n_with_the_statistic": block["n_with_the_statistic"],
                     "restricted_median": stats_mod.median(restricted_values),
                     "restricted_p90": stats_mod.p90(restricted_values),
                     "argmax": ", ".join(argmaxes) if argmaxes else "—",
@@ -375,7 +378,7 @@ def matched_accuracy(
                     "audit_position": positions[0] if len(positions) == 1 else (
                         "/".join(positions) if positions else None
                     ),
-                    "instrument": ";".join(instruments) if instruments else "—",
+                    "instrument": cell_list(instruments),
                 }
             )
     verdicts = []
@@ -449,6 +452,16 @@ def matched_accuracy(
                 "the two rulers' exclusion counts are listed per row and are "
                 "never pooled; a run whose restricted block is null carries no "
                 "count at all and reads —",
+                "**n counts runs, not values** (stats.accuracy_population): a "
+                "run whose audit carries no restricted block is counted in n "
+                "and shows in the column beside it, rather than vanishing from "
+                "the denominator of a median, which is trap T11.  Over this "
+                "population "
+                + (
+                    "every run carried the statistic"
+                    if not reasons
+                    else "some did not: " + "; ".join(sorted(reasons))
+                ),
             ),
             how_to_read=(
                 "the restricted column is the declared statistic; the "
@@ -461,7 +474,8 @@ def matched_accuracy(
         columns=(
             Column("arm", "arm"),
             Column("ruler", "ruler"),
-            Column("n", "n", fmt=_fmt_int),
+            Column("n", "n (runs)", fmt=_fmt_int),
+            Column("n_with_the_statistic", "with a restricted statistic", fmt=_fmt_int),
             Column("restricted_median", "restricted median", fmt=_fmt_exp),
             Column("restricted_p90", "restricted p90", fmt=_fmt_exp),
             Column("argmax", "restricted argmax"),
