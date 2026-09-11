@@ -1357,6 +1357,22 @@ of what looks like bulk is the instrument.
   snapshot must restore the whole data structure (a new task once A61 is verified), which changes `exit_audit.*` on every
   record and therefore G1's exclusions and GR's compared set.
 
+- **2026-09-11 — amendment 14, at the merge of A61 (insstrain-diagnosis) (`fd480aff`): the exit-audit instrument
+  restores the whole data structure (ruling D25).** A61 classified the 7e-3 residual on `tfcoil.insstrain` at the
+  declared audit position as an artefact of the instrument: PROCESS's output path raises `tfcoil.n_rad_per_layer`
+  100 → 500 through four latching writes before the snapshot, the field is not a coupling-state component, and the
+  restore did not put it back, so the audit's sweep ran the TF-coil stress model on a different mesh than the loop
+  (0 of 840/846/827 coupling components differ between the loop's exit and the audited state; putting back that one
+  field gives exactly `0x0.0p+0`). **Rule, binding on every instrument that evaluates the model set after an output
+  call:** snapshot the whole data structure and restore a *derived* difference set before the sweep; count and name
+  what cannot be restored. §7.1's GR compared set loses the exit-audit residual inherited from the previous
+  revision's records, which carried the same artefact — A62 (exit-audit-restore) states the reason and the new
+  count; the reference is not regenerated. G1 across that instrument change is a straddle against the
+  orchestrator's before capture at `fd480aff` with one named exclusion of a new kind. A61's trace
+  (`harness/audit_map.py`, refused on campaign runs) and diagnosis stage join the harness as A62's gate. The
+  "one component above τ" statements of A57 and A52 are withdrawn as convergence statements. The PROCESS findings
+  went to `PROCESS_code_analysis/docs/bug_reports/` at the user's instruction.
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task

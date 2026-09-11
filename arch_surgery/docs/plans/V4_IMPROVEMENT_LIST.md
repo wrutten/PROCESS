@@ -702,3 +702,11 @@ PROCESS findings for `PROCESS_code_analysis`'s bug file: the MFILE's `insstrain`
 including as shipped), and the `None` latch. **Consequence if verified:** the exit audit's snapshot must restore the whole data structure
 (harness-side, a new task), which changes `exit_audit.*` on every record — G1 needs one more named exclusion and GR's compared set must drop the
 audit residual with its reason; the "one component above τ" statements of A57 and A52 are then withdrawn as convergence statements.
+
+**Verified and closed as a convergence finding, 2026-09-11 (A61 merged, `fd480aff`; orchestrator's assessment §12).** The classification
+stands: the code lines were confirmed at `c0ae5b28` and one record spot-checked with an independent reader. `B0` and `B3` converged
+to τ; the residual was the instrument's. **Ruling D25** carries the fix (A62 (exit-audit-restore)): the snapshot and restore cover the
+whole data structure with a derived restored set; G1 straddles the instrument change against the orchestrator's before capture at
+`fd480aff`; GR's compared set loses the inherited audit residual with its reason. What stays open is **I-21** (what else the output
+pass leaves inconsistent in the written file). The three PROCESS findings were filed directly in
+`PROCESS_code_analysis/docs/bug_reports/2026-09-11_tfcoil_output_mesh_written_insstrain_and_none_latch.md` at the user's instruction (uncommitted there; copy in `docs/reports/outgoing/`).

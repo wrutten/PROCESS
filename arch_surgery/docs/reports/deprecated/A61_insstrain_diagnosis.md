@@ -1,12 +1,11 @@
 # A61 (insstrain-diagnosis) — why one component sits above the tolerance at the accepted point, and what it is actually measuring
 
-> **Document status** — **OPEN**. Task **A61 (insstrain-diagnosis)**, branch `A61-insstrain-diagnosis`,
-> off `architecture_surgery` at `0a023d63`. Every number below was produced by running
-> `arch_surgery/MDA_partitioning_experiment_v4/harness/exit_audit_diagnosis.py` at commit
-> `2ae57064`; the eleven PROCESS runs it made are stamped with that commit, a clean tree and the
-> experiment's own copy of PROCESS, each asserted inside the run. The
-> physics is unchanged: nothing under `PROCESS/process/models/` was edited, read-only throughout
-> (D5). Numbers from the superseded study at `710a75c9` are not cited (D4).
+> **Document status** — **ARCHIVED 2026-09-11 — merged into `architecture_surgery` at `fd480aff`.** Task
+> **A61 (insstrain-diagnosis)**, branch `A61-insstrain-diagnosis` off `0a023d63`; every run at `2ae57064`. Run
+> records relocated to `arch_surgery/idf_probe/runs/A61_runs/gates/exit_audit_diagnosis/` (untracked). The orchestrator's critical assessment (protocol §5) is §12;
+> its ruling D25 (the exit audit restores the whole data structure) is carried by A62 (exit-audit-restore). The
+> PROCESS findings of §9.4 were filed by the orchestrator at the user's instruction in `PROCESS_code_analysis/docs/bug_reports/2026-09-11_tfcoil_output_mesh_written_insstrain_and_none_latch.md`.
+> Folder position records lifecycle, not validity (trap T3).
 
 ---
 
