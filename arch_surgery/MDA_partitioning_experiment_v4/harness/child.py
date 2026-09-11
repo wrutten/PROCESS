@@ -1241,6 +1241,7 @@ def take_exit_audit(
         # who wants one has to see the other beside it.  It costs one further
         # pass over the residual vector -- no model call, no sweep.
         rulers: dict[str, Any] = {}
+        vectors: dict[str, Any] = {}
         for ruler in ystate_rulers(spec):
             residual_r = spec.residual(y_before, y_after, ruler=ruler)
             keys_r = [spec.name(int(i)) for i in residual_r.idx_c]
@@ -1257,6 +1258,23 @@ def take_exit_audit(
                     tau,
                 )
             ratios = residual_r.value_over_scale()
+            vectors[ruler] = {
+                "scaled_hex": {k: hexf(v) for k, v in zip(keys_r, values_r)},
+                "value_over_scale": {
+                    k: (None if not _finite(r) else float(r))
+                    for k, r in zip(keys_r, ratios)
+                },
+            }
+            # The **summary** goes in the record; the per-component vectors go
+            # in audit_residual.json beside it.  Both rulers' vectors together
+            # are some 3 400 further leaves per record, which is a file a tally
+            # reads and a gate walks value by value -- and the vector is already
+            # written, exactly, to its own file.  Which ruler the run's own
+            # loops stopped on is stamped ONCE, at exit_audit.predicate_mode;
+            # the block's key says which ruler the block is.  It was briefly
+            # stamped inside each block as well, and gate G8 caught that as two
+            # differing values per pair, which is what a stamp of the setting
+            # being varied looks like when it is written twice.
             rulers[ruler] = {
                 "ruler": ruler,
                 "tau": tau,
@@ -1266,19 +1284,7 @@ def take_exit_audit(
                 "detail": residual_r.ruler_detail(tau),
                 "restricted": restricted_r,
                 "n_excluded_from_the_restricted_statistic": len(excluded_r),
-                # Which ruler the run's own loops stopped on is stamped ONCE,
-                # at exit_audit.predicate_mode, and the block's key says which
-                # ruler the block is.  It was briefly stamped inside each block
-                # as well; gate G8 caught it as two differing values per pair,
-                # which is what a stamp of the setting being varied looks like
-                # when it is written twice.
-                "scaled_hex": {
-                    k: hexf(v) for k, v in zip(keys_r, values_r)
-                },
-                "value_over_scale": {
-                    k: (None if not _finite(r) else float(r))
-                    for k, r in zip(keys_r, ratios)
-                },
+                "vector_written_to": "audit_residual.json",
             }
 
         # The unprefixed fields below are the **frozen** ruler's, unchanged in
@@ -1305,13 +1311,12 @@ def take_exit_audit(
             "vector_ruler": ystate_frozen(spec),
             "rulers": {
                 name: {
-                    "residual_max_hex": block["residual_max_hex"],
-                    "scaled_hex": block["scaled_hex"],
-                    "value_over_scale": block["value_over_scale"],
-                    "n_above": block["brief"]["n_above"],
-                    "argmax": block["brief"]["argmax"],
+                    "residual_max_hex": rulers[name]["residual_max_hex"],
+                    "n_above": rulers[name]["brief"]["n_above"],
+                    "argmax": rulers[name]["brief"]["argmax"],
+                    **vectors[name],
                 }
-                for name, block in rulers.items()
+                for name in rulers
             },
             "scaled": dict(zip(keys, values)),
             "scaled_hex": {k: hexf(v) for k, v in zip(keys, values)},

@@ -448,6 +448,40 @@ VOLATILE_RECORD_PATHS: dict[str, str] = {
         "the sentence explaining the absent counters, present only on the "
         "side that had none"
     ),
+    # The predicate's ruler (DR5).  Five names, and the reason they are here
+    # is the same for all five: the field is **absent** on the earlier side
+    # because the choice did not exist, not because the two sides behave
+    # differently.  The load-bearing point is what is NOT here: the exit
+    # audit's unprefixed fields -- residual_max, residual_max_hex, the whole
+    # brief block, the whole restricted block -- keep their names and their
+    # values as the frozen ruler's and are compared value for value on both
+    # sides.  So the strongest thing this gate compares is still inside the
+    # comparison; what is excluded is a second presentation of it and a
+    # stamp saying which ruler was asked for.
+    "exit_audit.predicate_mode": (
+        "the ruler stamp: absent before the choice existed, 'frozen' after.  "
+        "It is the name of the default, not a behaviour"
+    ),
+    "exit_audit.frozen": (
+        "the frozen ruler's audit under its own name, absent on the earlier "
+        "side.  Its numbers are compared in full through exit_audit's "
+        "unprefixed residual_max / brief / restricted fields, which are the "
+        "same computation and are on both sides"
+    ),
+    "exit_audit.mixed": (
+        "the second ruler's audit, which the earlier side had no way to take.  "
+        "It is a second measurement of the same exit state, not a difference "
+        "in it: the exit state itself is compared through the fields above and "
+        "through every output-file line"
+    ),
+    "exit_audit.rulers_note": (
+        "the sentence saying that the two rulers are published together, "
+        "present only on the side that has two"
+    ),
+    "coupling_state_provenance.predicate_mode": (
+        "the loaded spec's stamp of the ruler, beside the tolerance it already "
+        "carried; absent on the earlier side"
+    ),
 }
 
 #: Keys of PROCESS's own output file that record when and where a run happened
@@ -2650,10 +2684,12 @@ def _neutrality_from_reproduction(campaign: Campaign) -> dict[str, Any]:
         "passed": verdict.get("verdict") == "PASS",
         "verdict": verdict.get("verdict"),
         "record": str(path),
-        "tree_git_head": verdict.get("tree_git_head"),
-        "n_records_reproduced": comparison.get("n_records"),
-        "n_values_compared": comparison.get("n_values"),
-        "n_values_differing": comparison.get("n_differing"),
+        "tree": verdict.get("tree"),
+        "n_runs_reproduced": comparison.get("n_runs_reproduced"),
+        "n_runs": comparison.get("n_runs"),
+        "n_values_compared": comparison.get("n_values_compared"),
+        "n_values_differing": comparison.get("n_values_mismatched"),
+        "gr_population": comparison.get("population"),
         "covers": (
             "every run gate GR makes is composed under the default ruler, so "
             "GR's bit-for-bit reproduction of the previous revision's records "
@@ -3139,11 +3175,12 @@ def print_predicate_mode(verdict: Mapping[str, Any]) -> None:
         print(f"      {neutrality['why']}")
     else:
         print(
-            f"      {neutrality.get('n_records_reproduced')} record(s), "
-            f"{neutrality.get('n_values_compared')} value(s), "
-            f"{neutrality.get('n_values_differing')} differing, at "
-            f"{str(neutrality.get('tree_git_head'))[:8]}"
+            f"      {neutrality.get('n_runs_reproduced')}/"
+            f"{neutrality.get('n_runs')} run(s) reproduced; "
+            f"{neutrality.get('n_values_differing')} of "
+            f"{neutrality.get('n_values_compared')} compared value(s) differ"
         )
+        print(f"      population : {neutrality.get('gr_population')}")
     print(f"      record     : {neutrality.get('record')}")
 
     print(
