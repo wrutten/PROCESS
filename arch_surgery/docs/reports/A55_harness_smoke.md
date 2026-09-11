@@ -710,3 +710,66 @@ decision should rest on it.
 | `d6f0fdf4` | G1's comparator translates the earlier capture's leaf paths through `reference.FIELD_NAME_MAP`, segment-aware, and compares the renamed leaves as values; the verdict states the translation; two new teeth. No exclusion added, no capture made. G1 PASS 0 / 2 831, 9/9 |
 | `2f0ad599` | the report's §6.3, §1, §5, §8, §9, §11 and change log brought to the fixed gate |
 | `14d3abdd` | the experiment plan's §4 re-rendered by `--measure gate_table` then `--plan-tables write`, zero PROCESS runs: §4.1 now reads **24 PASS, 0 FAIL, 139 of 139 teeth** with G1 PASS on the straddle `fd480aff → d6f0fdf4`, and the population marker names every commit the records carry. Documents only |
+
+---
+
+## 12. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-11 at `611f4527`, before the merge. Verification by checks that differ from the
+agent's; no PROCESS run was made for this review.*
+
+**What was checked, and how it differed.**
+
+* **Scope.** `git diff --name-only c919f4c8..611f4527`: `harness/chain.py` and `plan_tables.py`
+  (new), `gates.py`, `pool.py`, `records.py`, `stats.py`, `tally.py`, `analysis.py`, the runner,
+  the README, the experiment plan (46 hunks, every one inside §4) and this report. Nothing under
+  `…_v4/PROCESS/`, the repository-root `process/`, the queue or the harness plan;
+  `harness/config.py` untouched, `EXECUTION_APPROVED = False`.
+* **Record kinds, read from every record.** 188 records under `runs/`: `campaign_run_kind` is
+  `gate` on 173 and `smoke` on 15; **0 `campaign`**. Stamps: 140 at `f8bce151`, 25 at `b784158c`,
+  11 at `3d64625c` (the diagnosis stage, which `--gate all` does not run), 6 at `fd480aff` (G1's
+  before capture), 6 with no stamp (the census records — the agent's finding, recorded below).
+* **Verdicts.** 28 verdict records, all PASS; G1's at `d6f0fdf4`, 9 teeth, its provenance naming
+  the after capture at `b784158c`.
+* **The translation, read.** `translate_path` matches a run of whole bare segments anywhere in the
+  path, longest entry first, one replacement at the leftmost match, list index kept;
+  `translate_leaves` refuses two paths translating onto one. The renamed leaves are compared, and
+  the verdict counts them (72 renamed, 0 differing). The arithmetic the agent gives holds: 144
+  one-sided leaves = 72 × 2; the compared denominator fell by exactly 72; `n_values_excluded`
+  unchanged at 1 632. No exclusion table changed.
+* **The merge.** A trial merge onto trunk `3173b23d` auto-merged without conflicts; the merged
+  harness compiles, `--selfcheck` passes, and the preflight at the merged tree refuses the campaign
+  for exactly two reasons (approval off; a campaign record may not be made while it is off) and
+  prints the budget: 3 + 275 + 396 + 275 = **949 runs**.
+
+**Assessment of the decisions.** Accepted: the one chain parameterised by run kind and seed count
+(my scope addition; the campaign stage was a refusal stub naming stages that did not exist); the
+two separations as refusals with teeth, in both directions; `is_complete_for` comparing the run
+kind so `--resume` cannot launder a stamp; the two wiring defects fixed on the branch (the tally
+consulting `REFERENCE_FIELDS` instead of `compared_fields()`, and `_capture_after` trusting a
+manifest); the G1 translation as ruled. **Not ruled here, put to the user:** the reference arm's
+entry in Phase A — the chain enters `AR` from the same displaced snapshot as `A0`/`A0p`/`A1`, and
+`gate_entry.PAIRED_ARMS`'s comment says the opposite; one line reverses it and the `AR → A0` ratio
+changes meaning. Recorded as a proposed decision awaiting the user's ruling.
+
+**Three standing consequences, recorded at the merge.**
+
+1. **A `--resume` that consults anything but the record is not a resume** (TRAPS T13): the
+   manifest defect is the second instance of this shape (the first was the hard-coded
+   `resume=True` A52 found), and both passed a press before a stamp survey caught them.
+2. **A record-field rename is a change of vocabulary, not of behaviour**: a gate comparing across
+   one translates the earlier side through `reference.FIELD_NAME_MAP` and keeps comparing the
+   field; a rename that does not reach the map reads as a difference, which is the loud failure.
+3. **§4 is rendered from the `gate_table` stage record, not from the verdicts**: a gate re-run
+   after a `--measure` press needs `--measure gate_table` again before `--plan-tables`, or the
+   section silently keeps the older verdicts. The agent's first re-render reproduced the failing
+   table byte for byte for that reason. This is the stale-stage shape A54 closed for the tally
+   with a provenance check, and `gate_table` / `plan_tables` do not have that check yet —
+   recorded as an issue, with the census records' missing stamps.
+
+**Limits that stand.** The §4 tables are the gate population at the commits the marker names,
+not the campaign; the smoke is 13 runs on one configuration at one seed and is summarised by
+nothing; the campaign's first press is 949 runs with records stamped `campaign`.
+
+**Verdict: approved for merge at `611f4527`.** H8 done; the implementation is complete pending the
+`AR` ruling and the whole-implementation assessment.
