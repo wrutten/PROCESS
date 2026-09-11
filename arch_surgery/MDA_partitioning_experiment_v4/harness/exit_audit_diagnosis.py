@@ -573,6 +573,7 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
             ),
         },
         "restore_diagnostics": _restore_diagnostics(observation),
+        "output_file": _output_file_value(directory, job),
         "sweeps_seen": observation.get("n_sweeps_seen"),
         "evaluations_seen": observation.get("n_evaluations_seen"),
         "trace_errors": observation.get("errors"),
@@ -649,6 +650,48 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
         == row["record_audit"]["residual_max_hex"]
     )
     return row
+
+
+def _output_file_value(directory: Path, job) -> dict[str, Any]:
+    """What the run's own output file reports for the component.
+
+    Read from the file this run wrote, never from a document.  It is the third
+    value in the story — beside what the loop converged and what one further
+    sweep makes of it — and it is the one a user of PROCESS sees.
+    """
+    path = child_mod.find_mfile(Path(directory), job.config.name)
+    if path is None:
+        return {"present": False, "why": "no output file"}
+    field = COMPONENT.split(".", 1)[1]
+    raw = child_mod._raw_mfile_fields(path, [field]).get(field)
+    snapshot = Path(directory) / "y_entry_to_write_output_files.json"
+    handed_over = None
+    if snapshot.exists():
+        entry = json.loads(snapshot.read_text())["state"].get(COMPONENT)
+        if entry and entry.get("k") == "f":
+            handed_over = float.fromhex(entry["hex"])
+    value = None
+    if raw is not None:
+        try:
+            value = float(raw)
+        except ValueError:
+            value = None
+    return {
+        "present": raw is not None,
+        "file": str(path),
+        "raw": raw,
+        "value": value,
+        "value_hex": None if value is None else float(value).hex(),
+        "handed_over_by_the_solve": handed_over,
+        "handed_over_hex": (
+            None if handed_over is None else float(handed_over).hex()
+        ),
+        "identical": (
+            None
+            if value is None or handed_over is None
+            else float(value).hex() == float(handed_over).hex()
+        ),
+    }
 
 
 def _restore_diagnostics(observation: Mapping[str, Any]) -> dict[str, Any]:
@@ -841,6 +884,39 @@ def render(summary: Mapping[str, Any]) -> str:
             + (f"{relative:.3%}" if relative is not None else "—")
             + f" | {sweep.get('residual_max_hex')} | {setting.get('before')} "
             f"| {setting.get('after')} |"
+        )
+
+    lines.append("\n## What the output file reports\n")
+    lines.append(
+        f"*Caption: one row per run. `converged by the solve` is `{COMPONENT}` "
+        "in the state at the audit's declared position, read from that run's "
+        "own snapshot; `written to the output file` is the value the same run "
+        "put in its MFILE, read from that file. They are compared as "
+        "hexadecimal floats.*\n"
+    )
+    lines.append(
+        "| run | converged by the solve | written to the output file | "
+        "identical |"
+    )
+    lines.append("|---|---|---|---|")
+    for row in summary["rows"]:
+        output = row.get("output_file") or {}
+        handed = output.get("handed_over_by_the_solve")
+        written = output.get("value")
+        lines.append(
+            f"| `{row['key']}` | "
+            + (
+                f"{handed:.10e} (`{output.get('handed_over_hex')}`)"
+                if handed is not None
+                else "—"
+            )
+            + " | "
+            + (
+                f"{written:.10e} (`{output.get('value_hex')}`)"
+                if written is not None
+                else "—"
+            )
+            + f" | {output.get('identical')} |"
         )
 
     lines.append("\n## The dose response\n")
