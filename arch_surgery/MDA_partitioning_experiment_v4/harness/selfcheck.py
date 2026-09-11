@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -899,6 +900,54 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
         "that bypasses the harness is refused too: the tree must fail to "
         f"import with a retired name set ({refused_by_driver.error})",
     )
+
+    # The probe must import the tree PYTHONPATH names, whatever directory the
+    # button was pressed from.  This is a *measured* property, not a claim:
+    # the child is started with its working directory inside a scratch tree
+    # that contains a decoy `process/` package, which is exactly the shape the
+    # repository root has.  Without the safe-path flag Python puts the cwd at
+    # the head of sys.path and the decoy wins; with it, the copy does.
+    #
+    # The defect this tooth exists for was live: pressing the button from the
+    # repository root made this check fail with 25 of 54 mismatched, because
+    # the probe imported the repository's own `process/` while the environment
+    # named the experiment's copy.  A verdict that depends on where the button
+    # is pressed is not a verdict.
+    decoy = Path(tempfile.mkdtemp(prefix="capability_decoy_"))
+    try:
+        package = decoy / "process"
+        package.mkdir()
+        (package / "__init__.py").write_text(
+            '__file__ = "a decoy that must never be imported"\n'
+            'raise ImportError("the decoy process package was imported: the '
+            'working directory shadowed PYTHONPATH")\n'
+        )
+        here = Path.cwd()
+        try:
+            os.chdir(decoy)
+            from_decoy = sw.probe(campaign.tree, reference_env, timeout=timeout)
+        finally:
+            os.chdir(here)
+        imported = Path(from_decoy.process_file or "").resolve()
+        expected = (Path(campaign.tree) / "process" / "__init__.py").resolve()
+        check.n_compared += 1
+        if not (from_decoy.ok and imported == expected):
+            check.fail(
+                f"the probe started from a directory holding a decoy process "
+                f"package imported {from_decoy.process_file!r}, not "
+                f"{expected}: the working directory shadows PYTHONPATH and the "
+                f"check's verdict depends on where the button was pressed"
+            )
+        check.tooth(
+            "the working directory holds a package that shadows the tree",
+            from_decoy.ok and imported == expected,
+            f"the probe run with its working directory inside a scratch tree "
+            f"containing a decoy process/__init__.py still imported "
+            f"{imported}, the tree under test — so the button's verdict does "
+            f"not depend on where it is pressed",
+        )
+    finally:
+        shutil.rmtree(decoy, ignore_errors=True)
     return check
 
 
@@ -1241,11 +1290,20 @@ def crosscheck_previous(campaign: Campaign) -> Check:
     if not v3.exists():
         check.note(f"no previous revision at {v3}; not run")
         return check
+    # ``-P`` and PYTHONSAFEPATH for the same reason the capability probe
+    # carries them: with ``-c``, Python puts the current working directory at
+    # the head of ``sys.path``, ahead of everything PYTHONPATH names, so a
+    # child started from a directory that happens to hold a ``process/``
+    # package would import that one instead of the tree this check is about.
     proc = subprocess.run(
-        [sys.executable, "-c", _CROSSCHECK_SOURCE, str(v3)],
+        [sys.executable, "-P", "-c", _CROSSCHECK_SOURCE, str(v3)],
         capture_output=True,
         text=True,
-        env={**dict(__import__("os").environ), "PYTHONPATH": str(campaign.tree)},
+        env={
+            **dict(__import__("os").environ),
+            "PYTHONPATH": str(campaign.tree),
+            "PYTHONSAFEPATH": "1",
+        },
         timeout=600,
     )
     body = proc.stdout.split("@@X@@")

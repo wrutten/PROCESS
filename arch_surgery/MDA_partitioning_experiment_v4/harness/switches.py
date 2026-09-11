@@ -762,8 +762,22 @@ def probe(
         spec.setdefault(module, []).append(attr)
     child_env = dict(env)
     child_env["PYTHONPATH"] = str(tree)
+    # **The current working directory must not be able to shadow PYTHONPATH.**
+    # With ``-c``, Python puts the cwd at the head of ``sys.path``, ahead of
+    # everything PYTHONPATH names -- so pressing the button from the repository
+    # root made the probe import the *repository's* ``process/`` package while
+    # the environment named the experiment's copy, and the check failed
+    # honestly with a verdict that depended on where it was pressed.  Found by
+    # the orchestrator at review.
+    #
+    # ``-P`` (Python 3.11+) is the fix: it stops the cwd being prepended and
+    # leaves PYTHONPATH alone.  ``PYTHONSAFEPATH`` says the same thing through
+    # the environment, for a child started some other way, and the two together
+    # cost nothing.  ``-I`` would be wrong: it isolates the interpreter and
+    # drops PYTHONPATH, which is the one thing this child needs.
+    child_env["PYTHONSAFEPATH"] = "1"
     proc = subprocess.run(
-        [sys.executable, "-c", _PROBE_SOURCE],
+        [sys.executable, "-P", "-c", _PROBE_SOURCE],
         input=json.dumps(spec),
         env=child_env,
         capture_output=True,

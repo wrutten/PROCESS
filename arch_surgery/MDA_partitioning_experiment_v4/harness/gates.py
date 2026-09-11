@@ -247,6 +247,47 @@ ALWAYS_EXCLUDED: dict[str, str] = {
     "exit_audit.coupling_state": "an absolute path; the file is the same file",
     "exit_audit.restricted.artifact": "an absolute path; the file is the same file",
     "exit_audit.restricted.census": "an absolute path; the file is the same file",
+    # --- the cross-tree paths ------------------------------------------
+    #
+    # Nine names found by the orchestrator making the **real** straddle: a
+    # "before" capture in the main checkout at the trunk commit against an
+    # "after" capture in a task worktree.  Every earlier run of this gate made
+    # both captures inside **one** worktree, where these agree by accident of
+    # location, so nothing named them.  They are all a path or the working
+    # tree's own state, so no pair of captures could ever compare them, and the
+    # two ways of straddling -- one tree at two commits, or two trees -- must
+    # give the same answer.
+    #
+    # What still carries the artifacts' identity: `excluded_sha256` on the
+    # restricted block and `components_sha256` on the coupling state are
+    # compared, so the *file* each path points at is still checked to be the
+    # same file, by content rather than by location.
+    "per_run_artifact": (
+        "an absolute path to the per-run deferral artifact, which is a "
+        "different path in a worktree than in the main checkout.  Its identity "
+        "is compared through the restricted block's excluded_sha256"
+    ),
+    "process_copy_provenance.path": (
+        "an absolute path to the copied driver; its commit and its per-file "
+        "digests are compared beside it"
+    ),
+    "coupling_state_artifact": (
+        "an absolute path to the coupling-state artifact.  Its identity is "
+        "compared through coupling_state_provenance.components_sha256"
+    ),
+    "coupling_state_provenance.path": "the same absolute path, inside the provenance block",
+    "exit_audit.frozen.restricted.artifact": (
+        "an absolute path; the per-ruler copy of the leaf above, which DR5 "
+        "added when the audit began publishing both rulers"
+    ),
+    "exit_audit.frozen.restricted.census": "an absolute path; the per-ruler copy",
+    "exit_audit.mixed.restricted.artifact": "an absolute path; the per-ruler copy",
+    "exit_audit.mixed.restricted.census": "an absolute path; the per-ruler copy",
+    "tree_git_branch": (
+        "the branch the tree is on: the working tree's state, not the "
+        "driver's behaviour, and different by construction when the two "
+        "captures are made in two trees"
+    ),
     "pythonpath": "an absolute path; the tree is the same tree",
     "tree": "an absolute path; the tree is the same tree",
     "repository": "an absolute path",
@@ -318,6 +359,23 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "handed the per-run artifact and the write census, a block after: the "
         "statistic is the change.  The residual it restricts is compared in "
         "full, maximum, hex and brief alike"
+    ),
+    # The per-ruler count of components the restriction excluded.  On a record
+    # where the restricted statistic was never computed the count reads **0**,
+    # and 0 there does not mean "excluded nothing" -- it means "not computed".
+    # So these two cannot be decided by looking at the leaf: both sides carry a
+    # number and both are non-null.  They are conditional on a **witness**, the
+    # restricted block itself (:data:`CONDITIONAL_WITNESS`): where the block is
+    # null on one side the count there was not computed and the pair is out;
+    # where both sides carry the block the counts are compared like anything
+    # else, and a genuine difference is caught.  A tooth shows exactly that.
+    "exit_audit.frozen.n_excluded_from_the_restricted_statistic": (
+        "0 on a record whose restricted statistic was never computed, and 0 "
+        "there stands for 'not computed' rather than 'excluded nothing'.  "
+        "Excluded only while the restricted block is null on one side"
+    ),
+    "exit_audit.mixed.n_excluded_from_the_restricted_statistic": (
+        "the same count on the second ruler, on the same condition"
     ),
     # fields a harness change adds or rewords between the two captures.  G1
     # binds the *driver*, and the two captures are made by the harness at each
@@ -502,6 +560,27 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
     ),
 }
 
+#: A conditional name whose presence cannot be decided from its own leaf, and
+#: the path whose presence decides it instead.  The default -- a name absent
+#: from this map -- is the name's own leaf: excluded where it is absent on one
+#: side, or null against a value.  A name **in** this map is excluded where the
+#: *witness* is null or absent on exactly one side, whatever the name's own
+#: leaves read.
+#:
+#: The live case, and why the default is not enough: the count of components
+#: the restriction excluded reads ``0`` on a record where the statistic was
+#: never computed.  Both sides then carry a number, both non-null, and the
+#: default condition would compare 0 against 122 and fail -- reporting the
+#: absence of a computation as a difference in behaviour.
+CONDITIONAL_WITNESS: dict[str, str] = {
+    "exit_audit.frozen.n_excluded_from_the_restricted_statistic": (
+        "exit_audit.frozen.restricted"
+    ),
+    "exit_audit.mixed.n_excluded_from_the_restricted_statistic": (
+        "exit_audit.mixed.restricted"
+    ),
+}
+
 #: Every name either group holds, which is what a reader looking for "is this
 #: excluded?" wants and what :func:`is_volatile` matches against by default.
 #: The *gate* uses the two groups separately, so that the conditional ones are
@@ -678,6 +757,31 @@ def is_volatile(
     return None
 
 
+def _block_present(document: Mapping[str, Any], path: str) -> bool:
+    """Is *path* there and not null in *document*?"""
+    return records_mod.has_path(document, path) and (
+        records_mod.resolve_path(document, path) is not None
+    )
+
+
+def _conditional_witness(
+    path: str, conditional: Mapping[str, str]
+) -> str | None:
+    """The path whose presence decides whether *path* is excluded, or None.
+
+    Only names the caller's own conditional table holds can have a witness, so
+    a gate that passes its own table is never surprised by one written for
+    another gate.
+    """
+    bare = path.split("[")[0]
+    for name, witness in CONDITIONAL_WITNESS.items():
+        if name not in conditional:
+            continue
+        if bare == name or bare.startswith(name + "."):
+            return witness
+    return None
+
+
 def compare_records(
     before: Mapping[str, Any],
     after: Mapping[str, Any],
@@ -706,10 +810,16 @@ def compare_records(
             excluded_paths.append(path)
             continue
         if conditional is not None and is_volatile(path, conditional) is not None:
-            va, vb = a.get(path, missing), b.get(path, missing)
-            one_sided = ((va is missing) != (vb is missing)) or (
-                (va is None) != (vb is None)
-            )
+            witness = _conditional_witness(path, conditional)
+            if witness is not None:
+                one_sided = _block_present(before, witness) != _block_present(
+                    after, witness
+                )
+            else:
+                va, vb = a.get(path, missing), b.get(path, missing)
+                one_sided = ((va is missing) != (vb is missing)) or (
+                    (va is None) != (vb is None)
+                )
             if one_sided:
                 excluded_paths.append(path)
                 conditionally_excluded.append(path)
@@ -834,7 +944,25 @@ def _assert_same_audit_position(
 
 
 def neutrality_body(campaign: Campaign) -> dict[str, Any]:
-    """Compare the two captures, run by run, value by value and line by line."""
+    """Compare the two captures, run by run, value by value and line by line.
+
+    **The "before" capture is never re-made.**  If one is already there it is
+    read and nothing is run; only when there is none at all does the gate make
+    one, at the current commit, so that pressing the one button on a fresh tree
+    gets an answer rather than a refusal — an answer the verdict then labels as
+    a self-comparison rather than a neutrality result (:func:`_straddle`).
+
+    That guard is load-bearing, and the reason is measured rather than assumed:
+    a "before" capture made at an earlier commit carries records written by an
+    earlier record schema, and ``pool.run``'s resume consults the **current**
+    completeness contract — so it judges those records incomplete and would
+    re-run them.  Measured at this commit: the trunk capture's optimisation
+    records lack ``per_run_artifact``, which this task declared, so resume keeps
+    the evaluation records and rejects the optimisation ones.  A capture that
+    can only be made at a commit already behind us must therefore never be
+    handed to resume, and this function does not hand it to anything.
+    """
+    _capture_before_if_there_is_none(campaign)
     rows: list[dict[str, Any]] = []
     n_values = n_excluded_values = n_value_mismatches = 0
     n_lines = n_excluded_lines = n_line_mismatches = 0
@@ -887,9 +1015,12 @@ def neutrality_body(campaign: Campaign) -> dict[str, Any]:
             n_line_mismatches += mfile["n_lines_differing"]
     before_manifest = neutrality_root(campaign) / "before" / "manifest.json"
     after_manifest = neutrality_root(campaign) / "after" / "manifest.json"
+    straddle = _straddle(before_manifest, after_manifest)
     return {
         "passed": passed,
+        "straddle": straddle,
         "population": (
+            f"{straddle['says']}  "
             f"{len(rows)} run pair(s) = {len(campaign.configurations)} "
             f"configuration(s) x {len(NEUTRAL_ARMS)} reference arm(s); "
             f"{n_values} deterministic record values and {n_lines} output-file "
@@ -920,13 +1051,103 @@ def neutrality_body(campaign: Campaign) -> dict[str, Any]:
     }
 
 
+def _capture_before_if_there_is_none(campaign: Campaign) -> None:
+    """Make a "before" capture only where there is not one already."""
+    manifest = neutrality_root(campaign) / "before" / "manifest.json"
+    if manifest.exists():
+        return
+    print(
+        "  gate G1 has no 'before' capture; making one at this commit.  Both "
+        "sides will then be the same code, which the verdict says out loud: "
+        "it is a determinism and exclusion-coverage result, not a "
+        "driver-change one.",
+        flush=True,
+    )
+    capture_neutrality(campaign, "before", resume=False)
+
+
+def _straddle(before_manifest: Path, after_manifest: Path) -> dict[str, Any]:
+    """What this run of G1 actually straddles, said out loud.
+
+    G1's claim is that a **driver change** is inert when its switches are unset,
+    and that claim needs two captures at two commits.  Made at one commit the
+    same comparison is still worth running — it shows the run path is
+    deterministic and that the exclusion set covers what it claims — but it is
+    **not** a neutrality result, and a PASS from it must not read like one in
+    the plan's gate table.  So the verdict record, the printed population and
+    the table row all say which of the two this run was.
+    """
+    heads = {}
+    for label, path in (("before", before_manifest), ("after", after_manifest)):
+        heads[label] = (
+            (json.loads(path.read_text()).get("tree_git_head") or None)
+            if path.exists()
+            else None
+        )
+    if heads["before"] and heads["before"] == heads["after"]:
+        return {
+            "straddles_a_change": False,
+            "before_commit": heads["before"],
+            "after_commit": heads["after"],
+            "says": (
+                f"BOTH CAPTURES AT {heads['before'][:8]}: determinism and "
+                f"exclusion coverage, NOT a driver-change result."
+            ),
+        }
+    if heads["before"] and heads["after"]:
+        return {
+            "straddles_a_change": True,
+            "before_commit": heads["before"],
+            "after_commit": heads["after"],
+            "says": (
+                f"straddles {heads['before'][:8]} -> {heads['after'][:8]}: a "
+                f"neutrality result."
+            ),
+        }
+    return {
+        "straddles_a_change": None,
+        "before_commit": heads["before"],
+        "after_commit": heads["after"],
+        "says": (
+            "one capture names no commit, so what this run straddles cannot "
+            "be stated:"
+        ),
+    }
+
+
 def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
-    """Three breaks, on throwaway copies; neither capture is ever touched."""
+    """Breaks on throwaway copies; neither capture is ever touched."""
 
     def sample_record() -> tuple[dict[str, Any], str]:
         config = campaign.configurations[0]
         directory = neutrality_run_dir(campaign, "before", config.name, "BR")
         return _read_record(directory, side="before", key=f"BR/{config.name}"), config.name
+
+    def sample_carrying_the_restricted_block() -> tuple[dict[str, Any], str, str]:
+        """A captured record that **has** the restricted statistic, and which side.
+
+        The tooth below builds the *earlier* shape by nulling that block, so it
+        needs a record that carries one.  Taking the "before" side
+        unconditionally was a defect: in a genuine straddle the earlier commit
+        never computed the statistic, the block is null there, and the tooth
+        could not be built at all — it reported "no restricted statistic" and
+        did not trip, in exactly the run where it matters most.
+        """
+        for side in ("after", "before"):
+            for config in campaign.configurations:
+                directory = neutrality_run_dir(campaign, side, config.name, "BR")
+                if not (Path(directory) / "metrics.json").exists():
+                    continue
+                record = _read_record(
+                    directory, side=side, key=f"BR/{config.name}"
+                )
+                if (record.get("exit_audit") or {}).get("restricted") is not None:
+                    return record, config.name, side
+        raise GateError(
+            "neither capture carries a restricted statistic on any "
+            "configuration, so the exclusion that covers it cannot be shown to "
+            "cover anything"
+        )
 
     def one_ulp() -> tuple[bool, str]:
         record, _name = sample_record()
@@ -1011,12 +1232,7 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         with the exclusion in place it reports none, which is the whole of what
         the exclusion costs.
         """
-        record, name = sample_record()
-        if (record.get("exit_audit") or {}).get("restricted") is None:
-            return False, (
-                "the sample record carries no restricted statistic, so the "
-                "exclusion covers nothing here and cannot be shown to"
-            )
+        record, name, side = sample_carrying_the_restricted_block()
         earlier = copy.deepcopy(record)
         earlier["exit_audit"]["restricted"] = None
         without = {
@@ -1034,7 +1250,7 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
         )
         return uncovered["n_mismatched"] > 0 and covered["n_mismatched"] == 0, (
-            f"on BR/{name}, nulling exit_audit.restricted — the shape the "
+            f"on BR/{name} ({side} side), nulling exit_audit.restricted — the shape the "
             f"record had before the optimisation phase was handed the per-run "
             f"artifact and the write census — makes "
             f"{uncovered['n_mismatched']} of {uncovered['n_compared']} values "
@@ -1043,7 +1259,50 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"That count is exactly what the exclusion hides"
         )
 
+    def a_real_count_difference_is_still_caught() -> tuple[bool, str]:
+        """The witness condition must not hide a difference it does not cover.
+
+        The two per-ruler counts of excluded components are excluded **while
+        the restricted block is null on one side**, because a 0 there means
+        "not computed".  Where both sides carry the block the counts must be
+        compared like anything else — otherwise the condition would be a
+        blanket exclusion wearing a condition's clothes.  This moves one count
+        by one on a record that carries the block on both sides, and the
+        comparison has to catch it.
+        """
+        record, name, side = sample_carrying_the_restricted_block()
+        path = "exit_audit.frozen.n_excluded_from_the_restricted_statistic"
+        before_value = records_mod.resolve_path(record, path) if records_mod.has_path(record, path) else None
+        if before_value is None:
+            return False, f"the sample record carries no {path}"
+        moved = copy.deepcopy(record)
+        moved["exit_audit"]["frozen"][
+            "n_excluded_from_the_restricted_statistic"
+        ] = before_value + 1
+        result = compare_records(
+            record,
+            moved,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+        )
+        caught = any(m["field"] == path for m in result["mismatches"])
+        return caught, (
+            f"on BR/{name} ({side} side), which carries the restricted block on "
+            f"both sides of this comparison, {path} moved from {before_value} "
+            f"to {before_value + 1}: the comparison reports "
+            f"{result['n_mismatched']} of {result['n_compared']} values "
+            f"differing and names the field — so the condition excludes the "
+            f"count only where the block is absent, never where it is there"
+        )
+
     return (
+        Tooth(
+            "a_real_count_difference_with_the_block_on_both_sides",
+            "one per-ruler count of excluded components moved by one on a "
+            "record that carries the restricted block",
+            "still be caught: the condition covers 'not computed', not the count",
+            a_real_count_difference_is_still_caught,
+        ),
         Tooth(
             "the_new_exclusion_is_load_bearing",
             "the restricted statistic nulled on a throwaway copy of a captured "
@@ -4029,6 +4288,7 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "the driver resolves a switch differently from what was asked",
             *retired,
             "the driver's own refusal of a retired name",
+            "the working directory holds a package that shadows the tree",
         ),
         "provenance": (
             "a tracked file modified",
@@ -4279,6 +4539,15 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "exit_audit.coupling_state": "a path",
     "exit_audit.restricted.artifact": "a path",
     "exit_audit.restricted.census": "a path",
+    "per_run_artifact": "a path",
+    "process_copy_provenance.path": "a path",
+    "coupling_state_artifact": "a path",
+    "coupling_state_provenance.path": "a path",
+    "exit_audit.frozen.restricted.artifact": "a path",
+    "exit_audit.frozen.restricted.census": "a path",
+    "exit_audit.mixed.restricted.artifact": "a path",
+    "exit_audit.mixed.restricted.census": "a path",
+    "tree_git_branch": "the commit, or the working tree's state",
     "pythonpath": "a path",
     "tree": "a path",
     "repository": "a path",
