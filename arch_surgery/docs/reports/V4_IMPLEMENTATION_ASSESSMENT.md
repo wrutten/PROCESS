@@ -13,8 +13,8 @@
 
 ## 0. In one paragraph
 
-The V4 measurement harness is built and gated. At `d6f0fdf4`/`f8bce151` the one button, pressed
-once from the repository root, reports **24 gates PASS, 0 FAIL, 139 of 139 teeth tripped**; the
+The V4 measurement harness is built and gated. At the one press from the repository root (`f8bce151`, G1 at `d6f0fdf4`, the last gate and
+teeth added at `52264b53`) the button reports **25 gates PASS, 0 FAIL, 147 of 147 teeth tripped**; the
 reproduction gate reproduces the previous revision's twenty runs bit for bit on 256 of its 270
 reference values, the 14 excluded by name with their reason; the smoke runs the campaign's own chain
 at one seed on one configuration and reaches the independent recomputation with 0 mismatches over
