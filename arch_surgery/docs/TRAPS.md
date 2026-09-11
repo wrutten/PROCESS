@@ -190,3 +190,17 @@ gate-relative path from the source declaration rather than retyping it, and read
 own `runs_provenance.n_records` in its first verdict — a 0 there is a bug, not a clean tree.
 *(Found by A54 (harness-analysis), 2026-09-11, on the gate it was itself adding; lifted here at its
 merge, `72c343d1`.)*
+
+## T13 — A `--resume` that consults anything but the record is not a resume
+
+Twice in one day a gate kept old runs while its verdict said it had made new ones. A52
+(harness-gates)'s `--gate all` carried sixteen hard-coded `resume=True`; A55 (harness-smoke) found
+`gates._capture_after` returning early whenever `--resume` was given and a *manifest* existed, so
+G1 passed a press over a capture made at a commit the tree had not measured. In both cases the
+verdict's own `runs read … at <commit>` line was the only thing that gave it away. **The rule:** the
+one thing that may decide whether a run is kept is `pool.run`'s comparison of the existing record
+with the job (arm, configuration, seed, phase, regime, run kind, and the current record contract).
+A manifest, a directory's existence, a flag set by a caller — none of these is evidence.
+**How to catch it:** survey `tree_git_head` on every run record after any press and compare it
+with the commit the verdict names (harness plan amendment 13 (i), and rule (vii) of amendment 19). *(A52 and A55,
+2026-09-11; lifted here at A55's merge, `bfaee7ce`.)*

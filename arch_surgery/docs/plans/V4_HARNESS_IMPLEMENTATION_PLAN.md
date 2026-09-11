@@ -1436,6 +1436,23 @@ of what looks like bulk is the instrument.
   named beside it, never dropped from a median's denominator), and one cell separator. Trap T12 recorded
   (`runs_under` is relative to `runs/gates/`). Remaining: H8 (A55).
 
+- **2026-09-11 — amendment 19, at the merge of A55 (harness-smoke) (`bfaee7ce`): H8 delivered; the implementation
+  is complete.** `harness/chain.py` is the campaign's chain written once — entry references, the displaced-entry
+  regime, the stencil regime, the optimisations, then `tally_evaluation`, `tally_optimisation`, `tally_contracts`,
+  `recomputed_tables`, `recomputation` — parameterised by run kind, seeds and configurations; `--smoke` runs it as
+  `smoke` on one seed and the cheapest configuration (13 runs, 1 901/0 at the verify) and `stage_campaign` runs it as
+  `campaign` (949 runs) only with `EXECUTION_APPROVED` and the experiment's copy; gate `run_kind_separation`
+  refuses a smoke record as a measurement and a campaign record without approval, with teeth. §7.2's "once is
+  enough" holds: the one press at `f8bce151` gave 24/24 gates, 139/139 teeth, GR 20/20 at 256 of 270. **Three
+  standing rules:** (vii) a `--resume` that consults anything but the record is not a resume (T13; A55 found
+  `_capture_after` trusting a manifest); (viii) a record-field rename is a change of vocabulary, not of behaviour —
+  a gate comparing across one translates the earlier side through `reference.FIELD_NAME_MAP` and keeps comparing
+  the field, never excludes it, and a rename that does not reach the map reads as a difference; (ix) the plan's §4
+  is rendered from the `gate_table` stage record, so a gate re-run needs `--measure gate_table` before
+  `--plan-tables` (I-22 asks for the refusal). A wiring defect A62 and A53 could not see between them — the tally
+  read `REFERENCE_FIELDS` where GR reads `compared_fields()` — was caught by `tally_contracts` at this press and
+  fixed. **Open at completion:** D26 (the reference arm's Phase A entry, awaiting the user), I-21, I-22, I-20.
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task

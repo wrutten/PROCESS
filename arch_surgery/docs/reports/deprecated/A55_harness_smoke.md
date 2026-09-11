@@ -1,19 +1,11 @@
 # A55 (harness-smoke) — the chain, as the smoke and as the campaign
 
-> **Document status** — **OPEN.** Task **A55 (harness-smoke)**, harness implementation plan item
-> **H8**. Branch `A55-harness-smoke`, based on `architecture_surgery` at `c919f4c8` (the tip after
-> A62 (exit-audit-restore) and A54 (harness-analysis) merged). Commits on the branch:
-> `f8bce151` (the chain), `b784158c` (two defects the press found), `87951248` (this
-> report and the experiment plan's filled §4), `d6f0fdf4` (G1's comparator, on the
-> orchestrator's ruling).
-> **`EXECUTION_APPROVED` is `False` and no campaign record exists.** Nothing under
-> `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/` or the repository-root `process/` was
-> changed.
->
-> **Every registered gate passes.** One failed on the press — G1 (`switch_neutrality`), 144 of
-> 2 903 record values — and was reported with its numbers, not worked around; on the
-> orchestrator's ruling its comparator now translates the earlier capture's vocabulary and it
-> reads **0 of 2 831, 9/9 teeth**. §6.3 has both runs.
+> **Document status** — **ARCHIVED (merged).** Task **A55 (harness-smoke)**, plan item **H8**, merged into
+> `architecture_surgery` at `bfaee7ce` (2026-09-11, `--no-ff`, branch tip `85ca4d3c`). Orchestrator's
+> assessment in §12. Run records relocated by the retire script to
+> `arch_surgery/idf_probe/runs/A55_runs/` (`gates/`, `smoke/`, `census/`, `input_files/`, `artifacts/`; untracked).
+> The `AR` entry question (§8 decision 3) is proposed decision **D26**, awaiting the user's ruling.
+> Folder position records lifecycle, not validity (trap T3).
 
 ---
 
