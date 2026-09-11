@@ -64,8 +64,10 @@ RUNS: tuple[dict[str, Any], ...] = (
     {"configuration": "large_tokamak_nof", "arm": "BR", "seed": 0},
     {"configuration": "large_tokamak_nof", "arm": "B0", "seed": 1},
     {"configuration": "large_tokamak_nof", "arm": "B1", "seed": 0},
+    {"configuration": "large_tokamak_nof", "arm": "B3", "seed": 0},
     {"configuration": "low_aspect_ratio_DEMO", "arm": "B0", "seed": 0},
     {"configuration": "low_aspect_ratio_DEMO", "arm": "BR", "seed": 0},
+    {"configuration": "low_aspect_ratio_DEMO", "arm": "B3", "seed": 0},
     {"configuration": "st_regression", "arm": "B0", "seed": 0},
 )
 
@@ -821,10 +823,13 @@ def _grid_convergence(row: Mapping[str, Any]) -> dict[str, Any]:
         }
     settings = sorted(values)
     constants = [
-        (values[b] - values[a]) / (1.0 / a - 1.0 / b)
+        (values[a] - values[b]) / (1.0 / a - 1.0 / b)
         for a, b in zip(settings, settings[1:])
     ]
-    limits = [values[n] - c / n for n, c in zip(settings, constants)]
+    # v_inf = v(n) - C/n, taken at the finest setting the series reached,
+    # which is the most accurate of the five points it could be taken at.
+    finest = settings[-1]
+    limits = [values[finest] - constants[-1] / finest] if constants else []
     spread = (
         None
         if not constants
@@ -838,6 +843,7 @@ def _grid_convergence(row: Mapping[str, Any]) -> dict[str, Any]:
         "constant_per_consecutive_pair": constants,
         "constant_relative_spread": spread,
         "extrapolated_limit": limits[-1] if limits else None,
+        "extrapolated_from_setting": settings[-1],
         "extrapolated_limit_hex": (
             float(limits[-1]).hex() if limits else None
         ),
@@ -1031,7 +1037,7 @@ def render(summary: Mapping[str, Any]) -> str:
     lines.append("\n## Is the component a first-order grid sample?\n")
     lines.append(
         "*Caption: one row per run, derived from the dose series above. "
-        f"`C` is `(v(b) - v(a)) / (1/a - 1/b)` for each consecutive pair of "
+        f"`C` is `(v(a) - v(b)) / (1/a - 1/b)` for each consecutive pair of "
         "settings; four estimates that agree say the value carries a `C/n` "
         "error, which is what a sample taken one grid step short of a layer "
         "boundary has. The limit is the last pair's extrapolation, and the "
