@@ -4920,6 +4920,17 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             body=lambda: attempt_measurements(campaign),
             printer=print_attempts,
         ),
+        "gate_table": Measurement(
+            name="gate_table",
+            reports=(
+                "the experiment plan §4.1's gate table, filled in from the "
+                "verdict records: one row per registered gate with its "
+                "population, its denominator, its mismatches and its teeth"
+            ),
+            guarded_by="each gate is its own guard; this reads what they wrote",
+            body=lambda: gate_table(campaign),
+            printer=print_gate_table,
+        ),
         "self_containment": Measurement(
             name="self_containment",
             reports=(
@@ -4986,6 +4997,191 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_artifact_gates(campaign))
     entries.update(measurements(campaign))
     return entries
+
+
+# --------------------------------------------------------------------------
+# the gate table the experiment plan's §4.1 asks for
+# --------------------------------------------------------------------------
+#
+# The plan carries a placeholder table — one row per gate, with its verdict, its
+# tooth and its record — and says that no number in the results section is cited
+# unless every row is PASS with its tooth tripped.  This stage fills it in from
+# the verdict records themselves, so the table in the report and the files on
+# disk cannot drift apart: there is no hand-copied cell in it.
+#
+# It is a measurement and not a gate.  It has nothing to pass: what passes is
+# each gate, and this reads what they wrote.
+
+
+#: The pairs of (compared, differing) fields a gate's verdict can carry.  A gate
+#: whose criterion is a count of compared values writes one of these pairs;
+#: three of them write more than one, because they compare more than one kind of
+#: thing — coupling-state components, record values, output-file lines — and a
+#: denominator that silently added them together without saying which is which
+#: would be a count over a population nobody can state.  The table sums them and
+#: names the pairs it summed.
+COUNT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("n_compared", "n_mismatched"),
+    ("n_values_compared", "n_values_differing"),
+    ("n_components_compared", "n_components_differing"),
+    ("n_reference_values_compared", "n_reference_values_differing"),
+    ("n_mfile_lines_compared", "n_mfile_lines_differing"),
+)
+
+
+def _counts(verdict: Mapping[str, Any]) -> tuple[int | None, int | None, list[str]]:
+    compared = differing = None
+    named: list[str] = []
+    for compared_field, differing_field in COUNT_FIELDS:
+        value = verdict.get(compared_field)
+        if not isinstance(value, int):
+            continue
+        compared = (compared or 0) + value
+        differing = (differing or 0) + int(verdict.get(differing_field) or 0)
+        named.append(f"{compared_field} = {value}")
+    return compared, differing, named
+
+
+def gate_table(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any]:
+    """Every gate's verdict record, as the plan's §4.1 table."""
+    root = Path(records_dir or (Path(campaign.runs_dir) / GATES_SUBPATH))
+    entries = registry(campaign)
+    rows: list[dict[str, Any]] = []
+    for name in ordered_gate_names(campaign):
+        gate = entries[name]
+        path = root / name / "gate.json"
+        if not path.exists():
+            rows.append(
+                {
+                    "gate": name,
+                    "plan_name": gate.plan_name,
+                    "binds": gate.binds,
+                    "verdict": "NOT RUN",
+                    "population": "—",
+                    "n_compared": None,
+                    "n_mismatched": None,
+                    "n_teeth": len(gate.teeth),
+                    "n_teeth_tripped": None,
+                    "record": str(path),
+                }
+            )
+            continue
+        verdict = json.loads(path.read_text())
+        teeth = verdict.get("teeth") or []
+        compared, differing, named = _counts(verdict)
+        rows.append(
+            {
+                "gate": name,
+                "plan_name": gate.plan_name,
+                "binds": gate.binds,
+                "verdict": verdict.get("verdict"),
+                "population": verdict.get("population") or "—",
+                "n_compared": compared,
+                "n_mismatched": differing,
+                "denominators_summed": named,
+                "n_teeth": len(teeth),
+                "n_teeth_tripped": sum(1 for t in teeth if t.get("caught")),
+                "teeth": [t.get("tooth") for t in teeth],
+                "generated": verdict.get("generated"),
+                "tree_git_head": verdict.get("tree_git_head"),
+                "record": str(path.relative_to(Path(campaign.runs_dir).parent)),
+            }
+        )
+    plan_rows = [row for row in rows if row["plan_name"]]
+    harness_rows = [row for row in rows if not row["plan_name"]]
+    return {
+        "what_this_is": (
+            "the experiment plan §4.1's gate table, filled in from the verdict "
+            "records rather than by hand"
+        ),
+        "caption": (
+            "One row per registered gate. 'plan' is the label the experiment "
+            "plan's §3.9 table uses, empty where the gate is one of the "
+            "harness's own checks rather than one of the plan's. 'verdict' is "
+            "PASS/FAIL on the gate's criterion **and** on every tooth "
+            "tripping. 'population' is what the gate compared, in its own "
+            "words; 'compared' is the denominator and 'mismatched' the count "
+            "of things that differed — both are the gate's own headline pair, "
+            "and a gate whose criterion is not a count of compared values "
+            "leaves them empty and states its population in words instead. "
+            "Where a gate compares more than one kind of thing — coupling-state "
+            "components, record values, output-file lines — the denominator is "
+            "their sum and the row's 'denominators summed' names each. "
+            "'teeth' is tripped / declared. A gate whose tooth did not trip is "
+            "not accepted whatever its verdict. One row reads 1 mismatched and "
+            "PASS: the frozen-physics gate counts the single model file the "
+            "user approved as differing, by name, and passes because it is the "
+            "approved one."
+        ),
+        "population": (
+            f"{len(rows)} registered gate(s): {len(plan_rows)} of the "
+            f"experiment plan's §3.9 table and {len(harness_rows)} of the "
+            f"harness's own checks, promoted"
+        ),
+        "n_gates": len(rows),
+        "n_pass": sum(1 for row in rows if row["verdict"] == "PASS"),
+        "n_fail": sum(1 for row in rows if row["verdict"] not in ("PASS", "NOT RUN")),
+        "n_not_run": sum(1 for row in rows if row["verdict"] == "NOT RUN"),
+        "n_teeth": sum(row["n_teeth"] for row in rows),
+        "n_teeth_tripped": sum(row["n_teeth_tripped"] or 0 for row in rows),
+        "rows": rows,
+        "markdown": _gate_table_markdown(rows),
+    }
+
+
+def _gate_table_markdown(rows: Sequence[Mapping[str, Any]]) -> str:
+    lines = [
+        "| gate | plan | binds | verdict | population | compared | mismatched "
+        "| teeth | record |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for row in rows:
+        teeth = (
+            f"{row['n_teeth_tripped']}/{row['n_teeth']}"
+            if row["n_teeth_tripped"] is not None
+            else f"—/{row['n_teeth']}"
+        )
+        population = str(row["population"]).replace("|", "/")
+        if len(population) > 150:
+            population = population[:147] + "…"
+        lines.append(
+            f"| `{row['gate']}` | {row['plan_name'] or '—'} | "
+            f"{str(row['binds'])[:90]} | **{row['verdict']}** | {population} | "
+            f"{row['n_compared'] if row['n_compared'] is not None else '—'} | "
+            f"{row['n_mismatched'] if row['n_mismatched'] is not None else '—'} | "
+            f"{teeth} | `{row['record']}` |"
+        )
+    return "\n".join(lines)
+
+
+def print_gate_table(block: Mapping[str, Any]) -> None:
+    print(f"\n  {block['what_this_is']}")
+    print(f"\n  {block['caption']}\n")
+    print(f"  population: {block['population']}\n")
+    print(
+        f"    {'gate':<24} {'plan':<10} {'verdict':<8} {'compared':>9} "
+        f"{'mismatch':>9}  teeth"
+    )
+    for row in block["rows"]:
+        teeth = (
+            f"{row['n_teeth_tripped']}/{row['n_teeth']}"
+            if row["n_teeth_tripped"] is not None
+            else f"—/{row['n_teeth']}"
+        )
+        print(
+            f"    {row['gate']:<24} {str(row['plan_name'] or '—'):<10} "
+            f"{str(row['verdict']):<8} "
+            f"{str(row['n_compared'] if row['n_compared'] is not None else '—'):>9} "
+            f"{str(row['n_mismatched'] if row['n_mismatched'] is not None else '—'):>9}"
+            f"  {teeth}"
+        )
+    print(
+        f"\n    {block['n_pass']} PASS, {block['n_fail']} FAIL, "
+        f"{block['n_not_run']} not run; "
+        f"{block['n_teeth_tripped']} of {block['n_teeth']} teeth tripped"
+    )
+    print("\n  as markdown:\n")
+    print(block["markdown"])
 
 
 def gates_only(campaign: Campaign) -> dict[str, Gate]:
