@@ -37,7 +37,13 @@ This module imports nothing from the rest of the package, on purpose: every
 other module may import it, and a framework that depends on what it frames
 cannot be imported by all of it.
 
-Written by task **A52 (harness-gates)**.  :class:`Gate` and :class:`Tooth` are
+:func:`survey_records` and :func:`assert_records_read_are_current` are the same
+idea one level up from :func:`survey_heads`: a stage that reads other records
+declares them, the framework stamps what it found, and a consumer refuses the
+stage record when those files have moved under it.
+
+Written by task **A52 (harness-gates)**; the stage-provenance block and its
+refusal by task **A63 (stage-provenance)**.  :class:`Gate` and :class:`Tooth` are
 moved verbatim from ``harness/gates.py``, where task **A56 (driver-renames)**
 wrote them; :class:`Check` is moved verbatim from ``harness/selfcheck.py``
 (task **A47 (harness-skeleton)**), which ``harness/artifacts.py`` (task **A51
@@ -47,6 +53,7 @@ wrote them; :class:`Check` is moved verbatim from ``harness/selfcheck.py``
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import subprocess
 from dataclasses import dataclass, field
@@ -61,6 +68,10 @@ GATES_SUBPATH = Path("gates")
 
 class GateError(RuntimeError):
     """A refusal to run or to compare.  Never downgraded into a warning."""
+
+
+class StaleRecordError(GateError):
+    """What a stage record says it read is not what is on disk any more."""
 
 
 # --------------------------------------------------------------------------
@@ -221,9 +232,24 @@ class Measurement:
         default=None, compare=False, repr=False
     )
     kind: str = "measurement"
+    #: Glob patterns, relative to ``records_dir``, naming the **records this
+    #: stage reads** — another stage's record, or a gate's verdict.  Declared
+    #: here rather than left to the body, because what the stamp is for is a
+    #: consumer re-reading those same paths later and refusing when they have
+    #: moved: a declaration the framework can re-survey is the whole mechanism,
+    #: and a body that stamped its own sources would have to be trusted about
+    #: what it left out.  Run records are **not** named here; a stage over runs
+    #: carries ``runs_provenance`` instead, which compares populations
+    #: (commits and count) rather than files.
+    reads_records: tuple[str, ...] = ()
 
     def run(self, *, records_dir: Path, resume: bool = False) -> dict[str, Any]:
         block = self.body(resume=resume)
+        if self.reads_records:
+            block = dict(block)
+            block["records_read"] = survey_records(
+                Path(records_dir), self.reads_records
+            )
         out = Path(records_dir) / self.name / "measurements.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(block, indent=2, default=str) + "\n")
@@ -260,6 +286,208 @@ def survey_heads(paths: Sequence[Path]) -> dict[str, Any]:
         "heads": sorted(by_head),
         "records_by_head": by_head,
     }
+
+
+# --------------------------------------------------------------------------
+# what a stage read, and whether it is still what is on disk
+# --------------------------------------------------------------------------
+#
+# :func:`survey_heads` above answers "which commit were the **runs** made at".
+# The three functions below answer a different question about a different kind
+# of record: a stage that reads **other records** — a gate's verdict, another
+# stage's own record — publishes numbers that are only as current as the files
+# it read, and nothing in a stage record said which files those were.  The
+# failure is silent by construction: the plan's results section is rendered
+# from the ``gate_table`` stage record, so a gate re-run after that stage
+# leaves the section reproducing the older verdict, byte for byte, with no
+# mark anywhere that it is doing so (issue I-22 (a); it happened).
+#
+# This is the same shape ``analysis.assert_the_tally_read_these_runs`` closed
+# for the tally, one level down: there a stage record declares the **run
+# population** it summarised and the consumer compares it with its own survey;
+# here a stage record declares the **files** it read and the consumer compares
+# digests.  It lives in the framework rather than beside either consumer so
+# that it is one mechanism and not two — a stage inherits it by declaring
+# ``reads_records``, and any reader of any stage record can call the assertion.
+
+
+def describe_record(path: Path, root: Path) -> dict[str, Any]:
+    """One record as a stage read it: which file, which bytes, whose verdict.
+
+    The digest is what the comparison actually turns on — it moves for any
+    change, including one a clock and a commit would both miss.  The commit
+    and the time are what a refusal *names*, because "this verdict was made at
+    another commit" is a sentence a reader can act on and a changed hash is
+    not.
+    """
+    path = Path(path)
+    raw = path.read_bytes()
+    try:
+        record = json.loads(raw)
+    except Exception:  # noqa: BLE001 - a half-written record still has bytes
+        record = {}
+    try:
+        relative = str(path.relative_to(Path(root)))
+    except ValueError:
+        relative = str(path)
+    return {
+        "path": relative,
+        "name": path.parent.name,
+        "digest_sha256": hashlib.sha256(raw).hexdigest(),
+        "generated": record.get("generated"),
+        "tree_git_head": record.get("tree_git_head"),
+        "verdict": record.get("verdict"),
+    }
+
+
+def survey_records(root: Path, patterns: Sequence[str]) -> dict[str, Any]:
+    """Every record under *root* matching *patterns*, as a stampable block.
+
+    The **patterns** travel with the block, not only the files they matched.
+    A survey that carried its matches alone could not tell a consumer that a
+    gate has been run *since* — the new verdict would simply be a file nobody
+    had ever mentioned.
+    """
+    root = Path(root)
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for pattern in patterns:
+        for path in sorted(root.glob(pattern)):
+            if str(path) in seen or not path.is_file():
+                continue
+            seen.add(str(path))
+            records.append(describe_record(path, root))
+    return {
+        "what_this_is": (
+            "the records this stage read: one entry per file, with the bytes "
+            "it had, the commit it was made at and its verdict.  A consumer "
+            "re-surveys these same patterns and refuses when they have moved"
+        ),
+        "under": str(root),
+        "patterns": list(patterns),
+        "n_records": len(records),
+        "heads": sorted({str(entry["tree_git_head"]) for entry in records}),
+        "records": sorted(records, key=lambda entry: entry["path"]),
+    }
+
+
+def records_read_disagreements(
+    block: Mapping[str, Any], root: Path
+) -> list[dict[str, Any]]:
+    """Where the block's account of what it read differs from what is there.
+
+    Three ways, each named rather than merged into one count: a record that
+    exists now and was never read (a gate run since the stage), a record the
+    stage read that is gone, and a record whose bytes have changed — the last
+    reported with both commits and both times, because *why* it changed is the
+    thing a reader needs.
+    """
+    now = survey_records(Path(root), tuple(block.get("patterns") or ()))
+    then = {entry["path"]: entry for entry in (block.get("records") or ())}
+    current = {entry["path"]: entry for entry in now["records"]}
+    rows: list[dict[str, Any]] = []
+    for path in sorted(set(then) | set(current)):
+        was, is_now = then.get(path), current.get(path)
+        if was is None:
+            rows.append(
+                {
+                    "path": path,
+                    "name": is_now["name"],
+                    "how": "written after the stage record",
+                    "read_commit": None,
+                    "read_generated": None,
+                    "disk_commit": is_now["tree_git_head"],
+                    "disk_generated": is_now["generated"],
+                    "disk_verdict": is_now["verdict"],
+                }
+            )
+            continue
+        if is_now is None:
+            rows.append(
+                {
+                    "path": path,
+                    "name": was["name"],
+                    "how": "read by the stage and no longer on disk",
+                    "read_commit": was["tree_git_head"],
+                    "read_generated": was["generated"],
+                    "disk_commit": None,
+                    "disk_generated": None,
+                    "disk_verdict": None,
+                }
+            )
+            continue
+        if was["digest_sha256"] == is_now["digest_sha256"]:
+            continue
+        how: list[str] = []
+        if str(was["tree_git_head"]) != str(is_now["tree_git_head"]):
+            how.append("at a different commit from the one the stage read")
+        if str(is_now["generated"] or "") > str(was["generated"] or ""):
+            how.append("newer than the one the stage read")
+        rows.append(
+            {
+                "path": path,
+                "name": is_now["name"],
+                "how": " and ".join(how) or "different bytes at the same commit and time",
+                "read_commit": was["tree_git_head"],
+                "read_generated": was["generated"],
+                "read_verdict": was["verdict"],
+                "disk_commit": is_now["tree_git_head"],
+                "disk_generated": is_now["generated"],
+                "disk_verdict": is_now["verdict"],
+            }
+        )
+    return rows
+
+
+def assert_records_read_are_current(
+    stage_record: Mapping[str, Any],
+    root: Path,
+    *,
+    stage: str,
+    remedy: str = "",
+) -> str:
+    """Refuse to use a stage record whose sources have moved under it.
+
+    Returns the sentence a caller prints when they agree, so that the agreeing
+    case is stated rather than left to be assumed — the same convention
+    ``Gate.run`` follows for its runs.
+    """
+    block = stage_record.get("records_read")
+    if not block:
+        raise StaleRecordError(
+            f"the {stage} stage record does not say which records it read, so "
+            f"nothing can tell whether they are the ones on disk now.  It was "
+            f"written before the stage declared its sources: re-run "
+            f"`experiment_runner.py --measure {stage}`."
+        )
+    rows = records_read_disagreements(block, Path(root))
+    if rows:
+        lines = [
+            f"  {row['name']}: {row['how']} — the stage read "
+            f"{str(row['read_commit'])[:8] or 'nothing'} generated "
+            f"{row['read_generated']}, disk has "
+            f"{str(row['disk_commit'])[:8] or 'nothing'} generated "
+            f"{row['disk_generated']}"
+            + (
+                f" (verdict {row.get('read_verdict')} → {row.get('disk_verdict')})"
+                if row.get("read_verdict") != row.get("disk_verdict")
+                else ""
+            )
+            for row in rows
+        ]
+        raise StaleRecordError(
+            f"the {stage} stage record does not describe the records on disk: "
+            f"{len(rows)} disagreement(s) against the {block['n_records']} "
+            f"record(s) it read.\n"
+            + "\n".join(lines)
+            + "\n  Using it would publish the older record without saying so.  "
+            + (remedy or f"Re-run `experiment_runner.py --measure {stage}`.")
+        )
+    return (
+        f"the {stage} stage record read {block['n_records']} record(s) at "
+        f"{block['heads']}, and every one of them is byte-identical to what is "
+        f"on disk now"
+    )
 
 
 def git_head() -> str | None:

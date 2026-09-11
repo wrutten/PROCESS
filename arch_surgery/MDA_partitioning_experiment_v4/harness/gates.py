@@ -4955,6 +4955,13 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "an unrecorded edit to the predicate module",
             "an edited predicate module whose recorded sha256 was updated to match",
         ),
+        "stage_provenance": (
+            "a verdict re-made at a later commit after the stage record was "
+            "written",
+            "a verdict record written after the stage record",
+            "a verdict record the stage read and that is gone",
+            "a stage record that does not say what it read",
+        ),
         "run_path": (
             "a declared field removed",
             "an exit audit carrying one convergence ruler and not both",
@@ -4980,6 +4987,9 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
         "provenance": lambda *, resume=False: selfcheck_mod.check_provenance(campaign),
         "data": lambda *, resume=False: selfcheck_mod.check_data(campaign),
         "run_path": lambda *, resume=False: selfcheck_mod.check_run_path(campaign),
+        "stage_provenance": lambda *, resume=False: (
+            selfcheck_mod.check_stage_provenance(campaign)
+        ),
     }
     proves = {
         "composition": (
@@ -5008,6 +5018,14 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "a finished record carries every field it declares, both rulers "
             "included; the two displacement streams key on what they say they "
             "key on; and a run against the wrong tree is refused, not made"
+        ),
+        "stage_provenance": (
+            "a stage record names the records it read, and the renderer of "
+            "the plan's results section refuses one whose verdicts have since "
+            "been re-made, removed or added to — so a section can no longer "
+            "reproduce an older verdict without saying so; and every census "
+            "record on disk is placed by its own commit or named as one a "
+            "stamp survey cannot place"
         ),
     }
     return {
@@ -5042,6 +5060,8 @@ ARTIFACT_GATE_TEETH: dict[str, tuple[str, ...]] = {
     "artifacts_census": (
         "one node's write removed from the census",
         "a node writing a field the committed census does not have",
+        "a census record carrying no tree stamp",
+        "a census with no run record beside it",
     ),
     "artifacts_per_run": (
         "a node removed from the committed set",
@@ -6118,6 +6138,12 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             guarded_by="each gate is its own guard; this reads what they wrote",
             body=lambda *, resume=False: gate_table(campaign),
             printer=print_gate_table,
+            # The verdict records this table is made of, declared so that the
+            # framework stamps what it read and the plan's renderer can refuse
+            # a section built from verdicts that have since been re-made
+            # (I-22 (a)).  The pattern, not the list: a gate run *after* this
+            # stage leaves a verdict nobody read, and only the pattern finds it.
+            reads_records=("*/gate.json",),
         ),
         "self_containment": Measurement(
             name="self_containment",
