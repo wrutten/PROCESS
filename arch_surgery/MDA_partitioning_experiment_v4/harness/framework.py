@@ -115,11 +115,17 @@ class Gate:
     name: str
     binds: str
     what_it_proves: str
-    body: Callable[[], dict[str, Any]] = field(compare=False, repr=False)
+    body: Callable[..., dict[str, Any]] = field(compare=False, repr=False)
     teeth: tuple[Tooth, ...] = ()
     plan_name: str | None = None
     needs_runs: bool = False
     kind: str = "gate"
+    #: Where this gate's own runs live, relative to the records directory.  The
+    #: default is a directory named for the gate; a gate that also reads a
+    #: shared set of runs names that too.  :meth:`run` surveys the commit every
+    #: record under these paths was made at, so that a verdict says **which
+    #: runs it read** rather than leaving a reader to assume they are current.
+    runs_under: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.teeth:
@@ -129,9 +135,40 @@ class Gate:
                 f"measurement (protocol §12): give it at least one Tooth."
             )
 
-    def run(self, *, records_dir: Path, teeth: bool = True) -> dict[str, Any]:
-        """Run the gate, run its teeth, write the verdict, return it."""
-        outcome = self.body()
+    def run(
+        self, *, records_dir: Path, teeth: bool = True, resume: bool = False
+    ) -> dict[str, Any]:
+        """Run the gate, run its teeth, write the verdict, return it.
+
+        ``resume`` reaches the gate's **runs**, not only its comparison.  That
+        distinction was a defect: every body hard-coded ``resume=True``, so a
+        verdict computed after a change silently read runs made before it while
+        the option that was supposed to control that reached nothing.  A gate
+        that compares fresh records to stale runs is a zero over a population
+        that is not the one named, one level up.
+        """
+        outcome = self.body(resume=resume)
+        provenance = survey_heads(
+            [Path(records_dir) / sub for sub in (self.runs_under or (self.name,))]
+        )
+        stale = provenance["n_records"] > 0 and provenance["heads"] != [git_head()]
+        outcome.setdefault("runs_provenance", provenance)
+        if stale and not resume:
+            outcome["passed"] = False
+            outcome["runs_are_not_this_commit's"] = (
+                f"the gate read {provenance['n_records']} run record(s) made at "
+                f"{provenance['heads']} while this verdict is at {git_head()}, "
+                f"and --resume was not asked for.  Without it every run is "
+                f"re-made, so a record from another commit means one was kept "
+                f"that should not have been"
+            )
+        elif stale:
+            outcome["runs_are_not_this_commit's"] = (
+                f"the gate read {provenance['n_records']} run record(s) made at "
+                f"{provenance['heads']}, not all at this verdict's "
+                f"{git_head()} — which is what --resume asks for, and is "
+                f"stated here rather than left to be assumed"
+            )
         tooth_records = [t.run() for t in self.teeth] if teeth else []
         all_tripped = all(t["caught"] for t in tooth_records)
         verdict = {
@@ -143,6 +180,7 @@ class Gate:
                 "PASS" if (outcome.get("passed") and (all_tripped or not teeth)) else "FAIL"
             ),
             "criterion_passed": bool(outcome.get("passed")),
+            "resumed": bool(resume),
             "teeth_all_tripped": all_tripped if teeth else None,
             "teeth_run": teeth,
             "generated": _dt.datetime.now().isoformat(timespec="seconds"),
@@ -171,7 +209,7 @@ class Measurement:
 
     name: str
     reports: str
-    body: Callable[[], dict[str, Any]] = field(compare=False, repr=False)
+    body: Callable[..., dict[str, Any]] = field(compare=False, repr=False)
     guarded_by: str = ""
     needs_runs: bool = False
     printer: Callable[[Mapping[str, Any]], None] | None = field(
@@ -179,8 +217,8 @@ class Measurement:
     )
     kind: str = "measurement"
 
-    def run(self, *, records_dir: Path) -> dict[str, Any]:
-        block = self.body()
+    def run(self, *, records_dir: Path, resume: bool = False) -> dict[str, Any]:
+        block = self.body(resume=resume)
         out = Path(records_dir) / self.name / "measurements.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(block, indent=2, default=str) + "\n")
@@ -190,6 +228,33 @@ class Measurement:
         block = dict(block)
         block["record"] = str(out)
         return block
+
+
+def survey_heads(paths: Sequence[Path]) -> dict[str, Any]:
+    """Which commit every run record under *paths* was made at.
+
+    A gate's verdict is about the runs it read, and a reader cannot tell from a
+    count whether those runs are the ones this commit would produce.  So the
+    verdict carries the distinct ``tree_git_head`` values of the records under
+    the gate's own run directories, with how many records sit at each.
+    """
+    by_head: dict[str, int] = {}
+    total = 0
+    for root in paths:
+        for record in sorted(Path(root).rglob("metrics.json")):
+            try:
+                head = json.loads(record.read_text()).get("tree_git_head")
+            except Exception:  # noqa: BLE001 - a half-written record is not a row
+                continue
+            total += 1
+            key = str(head)
+            by_head[key] = by_head.get(key, 0) + 1
+    return {
+        "paths": [str(path) for path in paths],
+        "n_records": total,
+        "heads": sorted(by_head),
+        "records_by_head": by_head,
+    }
 
 
 def git_head() -> str | None:
@@ -280,9 +345,10 @@ def gate_from_check(
     name: str,
     binds: str,
     what_it_proves: str,
-    run: Callable[[], Check],
+    run: Callable[..., Check],
     teeth: Sequence[str],
     needs_runs: bool = False,
+    runs_under: tuple[str, ...] = (),
 ) -> Gate:
     """Promote a ``Check``-shaped criterion into the gate framework, unchanged.
 
@@ -309,8 +375,8 @@ def gate_from_check(
     held: dict[str, Check] = {}
     declared = tuple(teeth)
 
-    def body() -> dict[str, Any]:
-        check = run()
+    def body(*, resume: bool = False) -> dict[str, Any]:
+        check = run(resume=resume)
         held["check"] = check
         ran = {t["tooth"] for t in check.teeth}
         undeclared = sorted(ran - set(declared))
@@ -358,6 +424,7 @@ def gate_from_check(
         what_it_proves=what_it_proves,
         body=body,
         needs_runs=needs_runs,
+        runs_under=runs_under,
         teeth=tuple(
             Tooth(
                 name=tooth_name,

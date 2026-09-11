@@ -152,7 +152,9 @@ def _refuses(call) -> tuple[bool, str]:
     return False, "the contract accepted the doctored record"
 
 
-def record_completeness_body(campaign: Campaign) -> dict[str, Any]:
+def record_completeness_body(
+    campaign: Campaign, *, resume: bool = False
+) -> dict[str, Any]:
     """G7: the declared fields are there, and a missing one is refused."""
     config = cheapest_configuration(campaign)
     root = record_root(campaign)
@@ -177,7 +179,7 @@ def record_completeness_body(campaign: Campaign) -> dict[str, Any]:
         delta=None,
         run_kind="smoke",
     )
-    pool_mod.run_all([forced, evaluation], campaign, resume=True)
+    pool_mod.run_all([forced, evaluation], campaign, resume=resume)
 
     rows: list[dict[str, Any]] = []
     passed = True
@@ -361,7 +363,63 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             + (f" — {why}" if refused else "")
         )
 
-    teeth = tuple(
+    def a_stale_run_is_re_made_without_resume() -> tuple[bool, str]:
+        """``--resume`` must reach the **runs**, not only the comparison.
+
+        The defect this exists for was live and invisible: every gate body
+        hard-coded ``resume=True``, so a verdict computed after a change read
+        runs made before it while the option that was supposed to control that
+        reached nothing but the reproduction gate.  A gate that compares fresh
+        records to stale runs reports a zero over a population that is not the
+        one it names.
+
+        The tooth stamps a run's record with a commit that is not this one and
+        then asks for the run twice: with ``--resume`` the stamp must survive,
+        because resume keeps a complete record of the same job; without it the
+        stamp must be gone, because the run was re-made.
+        """
+        config = cheapest_configuration(campaign)
+        directory = record_root(campaign) / config.name / "evaluation"
+        path = directory / "metrics.json"
+        if not path.exists():
+            return False, "the gate made no evaluation run to stale"
+        job = pool_mod.Job(
+            phase="A",
+            arm=EVALUATION_ARM,
+            config=config,
+            seed=0,
+            outdir=directory,
+            regime="unperturbed",
+            delta=None,
+            run_kind="smoke",
+        )
+        stale = "0000000000000000000000000000000000000000"
+        record = json.loads(path.read_text())
+        record["tree_git_head"] = stale
+        path.write_text(json.dumps(record))
+        pool_mod.run_all([job], campaign, resume=True)
+        kept = json.loads(path.read_text()).get("tree_git_head") == stale
+        pool_mod.run_all([job], campaign, resume=False)
+        re_made = json.loads(path.read_text()).get("tree_git_head") != stale
+        return kept and re_made, (
+            f"one run's record stamped with a commit that is not this tree's: "
+            f"asked for again with resume it was "
+            f"{'KEPT' if kept else 'RE-MADE'} (it must be kept), and without "
+            f"resume it was {'RE-MADE' if re_made else 'KEPT'} (it must be "
+            f"re-made).  So --resume reaches the runs, not only the comparison"
+        )
+
+    teeth = (
+        Tooth(
+            name="a stale run is re-made without --resume",
+            what=(
+                "one run's record stamped with a commit that is not this "
+                "tree's, then asked for again with and without resume"
+            ),
+            must="be kept under --resume and re-made without it",
+            check=a_stale_run_is_re_made_without_resume,
+        ),
+    ) + tuple(
         Tooth(
             name=f"the field {path} removed",
             what="one declared field deleted from a copy of the record",
@@ -410,6 +468,6 @@ def record_completeness_gate(campaign: Campaign) -> Gate:
             "rulers and the per-attempt costs — and a record with one missing "
             "is refused by name rather than summarised over"
         ),
-        body=lambda: record_completeness_body(campaign),
+        body=lambda *, resume=False: record_completeness_body(campaign, resume=resume),
         teeth=_teeth(campaign),
     )

@@ -255,14 +255,14 @@ def _warm_row(
     return row
 
 
-def entry_and_warm_body(campaign: Campaign) -> dict[str, Any]:
+def entry_and_warm_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     """G6: the entries pair, and the block arms land on the fixed point."""
-    references = gates_mod.entry_references(campaign, resume=True)
+    references = gates_mod.entry_references(campaign, resume=resume)
     pairing, warm = entry_and_warm_jobs(campaign, references)
     pool_mod.run_all(
         [job for *_r, job in pairing] + [job for *_r, job in warm],
         campaign,
-        resume=True,
+        resume=resume,
     )
 
     passed = True
@@ -535,6 +535,7 @@ def entry_and_warm_gate(campaign: Campaign) -> Gate:
             "not the entry — and each block arm lands back on the reference "
             "fixed point when entered warm and pinned"
         ),
-        body=lambda: entry_and_warm_body(campaign),
+        body=lambda *, resume=False: entry_and_warm_body(campaign, resume=resume),
+        runs_under=("entry_and_warm", "entry_references"),
         teeth=_teeth(campaign),
     )

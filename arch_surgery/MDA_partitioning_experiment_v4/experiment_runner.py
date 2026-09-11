@@ -388,8 +388,14 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
     # so moving those runs would break a cross-reference between two gates in
     # order to relocate a small JSON file.
     gates_mod.REPRODUCTION_LIFTED_FROM["path"] = args.lifted_from
-    gates_mod.REPRODUCTION_RESUME["resume"] = args.resume
     gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
+    if not args.resume:
+        print(
+            "  --resume was not asked for, so every gate re-makes its own "
+            "runs.  Gate G1's 'before' capture is the one exception and says "
+            "why; the shared cold-flat references are made once per invocation "
+            "and shared by the gates anchored on them."
+        )
 
     if args.capture:
         if args.gate != "switch_neutrality":
@@ -431,7 +437,11 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
         gate = available[name]
         _rule(f"gate {name}" + (f" ({gate.plan_name})" if gate.plan_name else ""))
         try:
-            verdict = gate.run(records_dir=records_dir, teeth=not args.no_teeth)
+            verdict = gate.run(
+                records_dir=records_dir,
+                teeth=not args.no_teeth,
+                resume=args.resume,
+            )
         except gates_mod.GateError as exc:
             print(f"  REFUSED TO RUN — {exc}")
             status = 3
@@ -480,7 +490,7 @@ def stage_measure(args: argparse.Namespace, campaign: Campaign) -> int:
         print(f"  reports: {stage.reports}")
         print(f"  guarded by gate: {stage.guarded_by}")
         try:
-            stage.run(records_dir=records_dir)
+            stage.run(records_dir=records_dir, resume=args.resume)
         except (gates_mod.GateError, FileNotFoundError, KeyError) as exc:
             print(f"  REFUSED — {type(exc).__name__}: {exc}")
             status = 3
@@ -828,7 +838,11 @@ def main(argv: list[str] | None = None) -> int:
                              "directory")
     parser.add_argument("--resume", action="store_true",
                         help="keep a run whose directory already holds a "
-                        "complete record of the same job")
+                        "complete record of the same job.  It reaches the "
+                        "gates' own runs as well as --run: without it every "
+                        "gate re-makes the runs it reads, so a verdict is "
+                        "never computed over records made before the change "
+                        "it is checking")
     parser.add_argument("--lifted-from", type=Path, default=None,
                         help="for --gate reproduction: a directory holding the "
                         "derived lifted input files, staged after their bytes "

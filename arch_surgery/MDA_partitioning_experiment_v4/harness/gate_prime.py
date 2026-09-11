@@ -253,11 +253,11 @@ def _exit_state(directory: Path, *, key: str) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
-def prime_map_body(campaign: Campaign) -> dict[str, Any]:
+def prime_map_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     """G2: the prime is inert once the first-wall model has run."""
-    references = gates_mod.entry_references(campaign, resume=True)
+    references = gates_mod.entry_references(campaign, resume=resume)
     plan = prime_map_jobs(campaign, references)
-    pool_mod.run_all([job for *_rest, job in plan], campaign, resume=True)
+    pool_mod.run_all([job for *_rest, job in plan], campaign, resume=resume)
 
     by_key = {(c, a, on): job for c, a, on, job in plan}
     rows: list[dict[str, Any]] = []
@@ -453,7 +453,8 @@ def prime_map_gate(campaign: Campaign) -> Gate:
             "call_models leave the coupling state bit-identical whether the "
             "method runs at the head of every sweep or not at all"
         ),
-        body=lambda: prime_map_body(campaign),
+        body=lambda *, resume=False: prime_map_body(campaign, resume=resume),
+        runs_under=("prime_map", "entry_references"),
         teeth=_prime_map_teeth(campaign),
     )
 
@@ -671,11 +672,11 @@ def _mantissa(literal: str | None) -> str:
     return (literal or "").split("p")[0]
 
 
-def cold_chain_body(campaign: Campaign) -> dict[str, Any]:
+def cold_chain_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     """G3 / G3c: with the prime on, no cut edge carries anything."""
-    references = gates_mod.entry_references(campaign, resume=True)
+    references = gates_mod.entry_references(campaign, resume=resume)
     plan = cold_chain_jobs(campaign, references)
-    pool_mod.run_all([job for *_rest, job in plan], campaign, resume=True)
+    pool_mod.run_all([job for *_rest, job in plan], campaign, resume=resume)
 
     by_key = {(c, e, comp, on): job for c, e, comp, on, job in plan}
     rows: list[dict[str, Any]] = []
@@ -986,6 +987,7 @@ def cold_chain_gate(campaign: Campaign) -> Gate:
             "maximum to the bit — where the same chain without the move does "
             "not, by the count that revision measured"
         ),
-        body=lambda: cold_chain_body(campaign),
+        body=lambda *, resume=False: cold_chain_body(campaign, resume=resume),
+        runs_under=("cold_chain", "entry_references"),
         teeth=_cold_chain_teeth(campaign),
     )

@@ -195,7 +195,9 @@ def composition_root(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "switch_composition"
 
 
-def switch_composition_body(campaign: Campaign) -> dict[str, Any]:
+def switch_composition_body(
+    campaign: Campaign, *, resume: bool = False
+) -> dict[str, Any]:
     """G5: the matrix and the plan's own column compose the same arm."""
     rows: list[dict[str, Any]] = []
     jobs: list[tuple[str, str, pool_mod.Job]] = []
@@ -270,7 +272,7 @@ def switch_composition_body(campaign: Campaign) -> dict[str, Any]:
             )
         )
 
-    pool_mod.run_all([job for *_r, job in jobs], campaign, resume=True)
+    pool_mod.run_all([job for *_r, job in jobs], campaign, resume=resume)
 
     by_key = {(c, label): job for c, label, job in jobs}
     for row in rows:
@@ -417,6 +419,6 @@ def switch_composition_gate(campaign: Campaign) -> Gate:
             "from the plan's own column give the same environment and the same "
             "run, to the bit"
         ),
-        body=lambda: switch_composition_body(campaign),
+        body=lambda *, resume=False: switch_composition_body(campaign, resume=resume),
         teeth=_teeth(campaign),
     )

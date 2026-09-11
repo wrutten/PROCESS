@@ -146,7 +146,7 @@ def excluded_namespaces(campaign: Campaign, config: Config) -> dict[str, Any]:
         campaign,
         entry=gates_mod.CENSUS_ENTRY["entry"],
         read_census=True,
-        resume=True,
+        resume=True,  # the census is an input to the derivation, not a run of this gate
     )
     writes_by_node = census["writes_by_node"]
     node_map = json.loads(
@@ -287,9 +287,9 @@ def _restricted(record: Mapping[str, Any]) -> dict[str, Any]:
     return block
 
 
-def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
+def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     """G4: blind where it must be blind, sighted where it must be sighted."""
-    references = gates_mod.entry_references(campaign, resume=True)
+    references = gates_mod.entry_references(campaign, resume=resume)
     rows: list[dict[str, Any]] = []
     passed = True
     n_compared = 0
@@ -310,7 +310,7 @@ def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
         baseline_job = _job(
             campaign, config, "baseline", Path(reference["snapshot"]), pin
         )
-        pool_mod.run_all([baseline_job], campaign, resume=True)
+        pool_mod.run_all([baseline_job], campaign, resume=resume)
         baseline = records_mod.read(baseline_job.outdir)
         if baseline.get("status") != "ok":
             rows.append(
@@ -523,7 +523,7 @@ def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
 
     _HELD["rows"] = rows
     _HELD["namespaces"] = namespaces_seen
-    optimisation = optimisation_phase_statistic(campaign)
+    optimisation = optimisation_phase_statistic(campaign, resume=resume)
     _HELD["optimisation"] = optimisation
     return {
         "passed": passed and optimisation["passed"],
@@ -562,7 +562,9 @@ def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
 OPTIMISATION_ARM = "B3"
 
 
-def optimisation_phase_statistic(campaign: Campaign) -> dict[str, Any]:
+def optimisation_phase_statistic(
+    campaign: Campaign, *, resume: bool = False
+) -> dict[str, Any]:
     """Is the restricted statistic in the optimisation records, and what is it?
 
     The gate makes **one optimisation per configuration** of its own, so that
@@ -597,7 +599,7 @@ def optimisation_phase_statistic(campaign: Campaign) -> dict[str, Any]:
         for config in campaign.configurations
         if OPTIMISATION_ARM not in config.skips
     ]
-    pool_mod.run_all(own, campaign, resume=True)
+    pool_mod.run_all(own, campaign, resume=resume)
     rows: list[dict[str, Any]] = []
     for path in sorted(root.rglob("metrics.json")):
         try:
@@ -809,6 +811,7 @@ def audit_restriction_gate(campaign: Campaign) -> Gate:
             "nodes own; and that the statistic is in the optimisation record "
             "with the component that carries it named"
         ),
-        body=lambda: audit_restriction_body(campaign),
+        body=lambda *, resume=False: audit_restriction_body(campaign, resume=resume),
+        runs_under=("audit_restriction", "entry_references"),
         teeth=_teeth(campaign),
     )

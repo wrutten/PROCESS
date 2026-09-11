@@ -943,7 +943,7 @@ def _assert_same_audit_position(
     return a
 
 
-def neutrality_body(campaign: Campaign) -> dict[str, Any]:
+def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     """Compare the two captures, run by run, value by value and line by line.
 
     **The "before" capture is never re-made.**  If one is already there it is
@@ -963,6 +963,7 @@ def neutrality_body(campaign: Campaign) -> dict[str, Any]:
     handed to resume, and this function does not hand it to anything.
     """
     _capture_before_if_there_is_none(campaign)
+    _capture_after(campaign, resume=resume)
     rows: list[dict[str, Any]] = []
     n_values = n_excluded_values = n_value_mismatches = 0
     n_lines = n_excluded_lines = n_line_mismatches = 0
@@ -1064,6 +1065,19 @@ def _capture_before_if_there_is_none(campaign: Campaign) -> None:
         flush=True,
     )
     capture_neutrality(campaign, "before", resume=False)
+
+
+def _capture_after(campaign: Campaign, *, resume: bool) -> None:
+    """The "after" capture: this tree, this commit, re-made unless resuming.
+
+    Unlike the "before" capture it is always re-makeable — it is a capture of
+    the tree the gate is being run in — so it follows the ordinary rule: kept
+    when ``--resume`` asks for it, re-made when it does not.
+    """
+    manifest = neutrality_root(campaign) / "after" / "manifest.json"
+    if resume and manifest.exists():
+        return
+    capture_neutrality(campaign, "after", resume=resume)
 
 
 def _straddle(before_manifest: Path, after_manifest: Path) -> dict[str, Any]:
@@ -3958,7 +3972,7 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 "so the rewrite changed the measurement in no respect this "
                 "experiment compares on"
             ),
-            body=lambda: _reproduction_body(campaign),
+            body=lambda *, resume=False: _reproduction_body(campaign, resume=resume),
             teeth=_reproduction_teeth(),
         ),
         "g0prime": Gate(
@@ -3970,7 +3984,7 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 "copy of PROCESS are byte-identical to the frozen base commit, "
                 "bar the one structural edit the user approved"
             ),
-            body=lambda: g0prime_body(campaign),
+            body=lambda *, resume=False: g0prime_body(campaign),
             teeth=_g0prime_teeth(campaign),
         ),
         "switch_neutrality": Gate(
@@ -3982,7 +3996,8 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 "with every architecture switch unset, the copy after the "
                 "change behaves byte-identically to the copy before it"
             ),
-            body=lambda: neutrality_body(campaign),
+            body=lambda *, resume=False: neutrality_body(campaign, resume=resume),
+            runs_under=("switch_neutrality/after",),
             teeth=_neutrality_teeth(campaign),
         ),
         "prime_map": gate_prime.prime_map_gate(campaign),
@@ -4006,8 +4021,8 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 "which the two rulers do disagree are named with |y| / s "
                 "there, or their absence is stated with its population"
             ),
-            body=lambda: _with_capture(
-                capture_predicate_mode, predicate_mode_body, campaign
+            body=lambda *, resume=False: _with_capture(
+                capture_predicate_mode, predicate_mode_body, campaign, resume=resume
             ),
             teeth=_predicate_mode_teeth(campaign),
         ),
@@ -4028,9 +4043,10 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 "nothing about the solve changed on the arms that keep the "
                 "loop"
             ),
-            body=lambda: _with_capture(
-                capture_output_path, output_path_body, campaign
+            body=lambda *, resume=False: _with_capture(
+                capture_output_path, output_path_body, campaign, resume=resume
             ),
+            runs_under=("output_path/runs",),
             teeth=_output_path_teeth(campaign),
         ),
     }
@@ -4055,6 +4071,15 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
 
 def entry_reference_root(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir) / GATES_SUBPATH / "entry_references"
+
+
+#: Which run roots this process has already made its shared cold-flat
+#: references under.  Three gates are anchored on them, and without this the
+#: second and third gate of one ``--gate all`` would re-make what the first just
+#: made — so the references are made **once per invocation** and shared, which
+#: is what they were for.  The memo is per process: a new invocation makes them
+#: again unless ``--resume`` says otherwise.
+_ENTRY_REFERENCES_MADE: set[str] = set()
 
 
 def entry_references(
@@ -4084,7 +4109,9 @@ def entry_references(
         )
         for config in campaign.configurations
     ]
-    pool_mod.run_all(jobs, campaign, resume=resume)
+    already = str(root) in _ENTRY_REFERENCES_MADE
+    pool_mod.run_all(jobs, campaign, resume=resume or already)
+    _ENTRY_REFERENCES_MADE.add(str(root))
     references: dict[str, dict[str, Any]] = {}
     for job in jobs:
         record = records_mod.read(job.outdir)
@@ -4109,7 +4136,9 @@ def entry_references(
     return references
 
 
-def _with_capture(capture, body, campaign: Campaign) -> dict[str, Any]:
+def _with_capture(
+    capture, body, campaign: Campaign, *, resume: bool = False
+) -> dict[str, Any]:
     """Make the gate's own runs, then compare them.
 
     Two gates were built as two shell steps — capture, then compare — because
@@ -4125,7 +4154,7 @@ def _with_capture(capture, body, campaign: Campaign) -> dict[str, Any]:
     different commits by construction, and a gate that made its own "before"
     would be comparing the tree with itself.
     """
-    manifest = capture(campaign, resume=True)
+    manifest = capture(campaign, resume=resume)
     outcome = body(campaign)
     outcome["capture"] = {
         "n_runs": manifest.get("n_runs"),
@@ -4170,19 +4199,13 @@ REPRODUCTION_ROOT: dict[str, Any] = {"root": None}
 #: the same reason: the gate needs them and the runner has the flag.
 REPRODUCTION_LIFTED_FROM: dict[str, Any] = {"path": None}
 
-#: Whether GR reuses runs already on disk.  A gate never retries a run with
-#: different settings; resuming a *complete record of the same job* is not a
-#: retry, and ``pool.run`` checks that it is the same job before it keeps one.
-REPRODUCTION_RESUME: dict[str, bool] = {"resume": False}
-
-
-def _reproduction_body(campaign: Campaign) -> dict[str, Any]:
+def _reproduction_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     from . import reproduction as reproduction_mod
 
     code, verdict = reproduction_mod.stage(
         campaign=campaign,
         root=REPRODUCTION_ROOT["root"],
-        resume=REPRODUCTION_RESUME["resume"],
+        resume=resume,
         lifted_from=REPRODUCTION_LIFTED_FROM["path"],
     )
     _REPRODUCTION_HELD["verdict"] = verdict
@@ -4319,13 +4342,16 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "a reproduction override that changes nothing",
         ),
     }
+    # None of the six starts a PROCESS run through the pool -- the capability
+    # check starts import-only probe children -- so ``resume`` reaches them and
+    # has nothing to do, which is why each signature swallows it.
     bodies: dict[str, Any] = {
-        "composition": lambda: selfcheck_mod.check_composition(campaign),
-        "rungs": selfcheck_mod.check_rungs,
-        "capability": lambda: selfcheck_mod.check_capability(campaign),
-        "provenance": lambda: selfcheck_mod.check_provenance(campaign),
-        "data": lambda: selfcheck_mod.check_data(campaign),
-        "run_path": lambda: selfcheck_mod.check_run_path(campaign),
+        "composition": lambda *, resume=False: selfcheck_mod.check_composition(campaign),
+        "rungs": lambda *, resume=False: selfcheck_mod.check_rungs(),
+        "capability": lambda *, resume=False: selfcheck_mod.check_capability(campaign),
+        "provenance": lambda *, resume=False: selfcheck_mod.check_provenance(campaign),
+        "data": lambda *, resume=False: selfcheck_mod.check_data(campaign),
+        "run_path": lambda *, resume=False: selfcheck_mod.check_run_path(campaign),
     }
     proves = {
         "composition": (
@@ -4417,8 +4443,8 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
         stage_teeth,
         needs_runs: bool,
     ) -> Gate:
-        def run() -> Check:
-            _code, record = stage()
+        def run(*, resume: bool = False) -> Check:
+            _code, record = stage(resume)
             check = Check(
                 name=name,
                 binds=binds,
@@ -4455,7 +4481,7 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
                 "they must agree with, so an artifact built for a different "
                 "configuration or component set is refused by name"
             ),
-            stage=lambda: artifacts_mod.check(campaign),
+            stage=lambda resume: artifacts_mod.check(campaign),
             stage_teeth=lambda: artifacts_mod.stage_teeth(campaign),
             needs_runs=False,
         ),
@@ -4467,7 +4493,7 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
                 "a derivation with no measurement behind its third line "
                 "refuses rather than falling back on a default"
             ),
-            stage=lambda: input_files_mod.stage_derive(campaign, resume=True),
+            stage=lambda resume: input_files_mod.stage_derive(campaign, resume=resume),
             stage_teeth=lambda: input_files_mod.stage_teeth(campaign),
             needs_runs=True,
         ),
@@ -4478,8 +4504,8 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
                 "what the models write at run time is what the committed "
                 "census says they write, node by node and field by field"
             ),
-            stage=lambda: census_mod.stage(
-                campaign, entry=CENSUS_ENTRY["entry"], resume=True
+            stage=lambda resume: census_mod.stage(
+                campaign, entry=CENSUS_ENTRY["entry"], resume=resume
             ),
             stage_teeth=lambda: census_mod.stage_teeth(campaign),
             needs_runs=True,
@@ -4492,8 +4518,8 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
                 "deferral set from a source scan of the tree under test, node "
                 "for node and in the same order"
             ),
-            stage=lambda: postsolve_mod.stage(
-                campaign, census_entry=CENSUS_ENTRY["entry"], resume=True
+            stage=lambda resume: postsolve_mod.stage(
+                campaign, census_entry=CENSUS_ENTRY["entry"], resume=resume
             ),
             stage_teeth=lambda: postsolve_mod.stage_teeth(campaign),
             # It takes a write census of its own, so it starts PROCESS.
@@ -5189,7 +5215,7 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
                 "sweeps they cost beside it (plan §3.5 check 5)"
             ),
             guarded_by="switch_neutrality",
-            body=lambda: predicate_counter_measurements(campaign),
+            body=lambda *, resume=False: predicate_counter_measurements(campaign),
             printer=print_predicate_counters,
         ),
         "attempts": Measurement(
@@ -5200,7 +5226,7 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
                 "retries)"
             ),
             guarded_by="reproduction",
-            body=lambda: attempt_measurements(campaign),
+            body=lambda *, resume=False: attempt_measurements(campaign),
             printer=print_attempts,
         ),
         "gate_table": Measurement(
@@ -5211,7 +5237,7 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
                 "population, its denominator, its mismatches and its teeth"
             ),
             guarded_by="each gate is its own guard; this reads what they wrote",
-            body=lambda: gate_table(campaign),
+            body=lambda *, resume=False: gate_table(campaign),
             printer=print_gate_table,
         ),
         "self_containment": Measurement(
@@ -5223,7 +5249,7 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
                 "invoked as a subprocess into, idf_probe/ or fixedpoint/'"
             ),
             guarded_by="the user's requirement in the harness plan §6",
-            body=lambda: self_containment(campaign),
+            body=lambda *, resume=False: self_containment(campaign),
             printer=print_self_containment,
         ),
         "exclusion_review": Measurement(
@@ -5236,7 +5262,7 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
                 "did with the name"
             ),
             guarded_by="switch_neutrality",
-            body=lambda: exclusion_review(campaign),
+            body=lambda *, resume=False: exclusion_review(campaign),
             printer=print_exclusion_review,
         ),
         "output_path_measurements": Measurement(
@@ -5247,8 +5273,8 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
                 "tolerance at the declared audit position"
             ),
             guarded_by="output_path",
-            body=lambda: _with_capture(
-                capture_contrast, output_path_measurements, campaign
+            body=lambda *, resume=False: _with_capture(
+                capture_contrast, output_path_measurements, campaign, resume=resume
             ),
             printer=print_measurements,
         ),
@@ -5636,6 +5662,20 @@ def print_verdict(verdict: Mapping[str, Any]) -> None:
     print(f"    binds        : {verdict['binds']}")
     print(f"    verdict      : {verdict['verdict']}")
     print(f"    population   : {verdict.get('population', '(none stated)')}")
+    provenance = verdict.get("runs_provenance") or {}
+    if provenance.get("n_records"):
+        own = verdict.get("tree_git_head")
+        heads = provenance["records_by_head"]
+        summary = ", ".join(
+            f"{count} at {head[:8]}" + (" (this commit)" if head == own else "")
+            for head, count in sorted(heads.items(), key=lambda kv: -kv[1])
+        )
+        print(
+            f"    runs read    : {provenance['n_records']} record(s) — {summary}"
+            + ("  [resumed]" if verdict.get("resumed") else "")
+        )
+    if verdict.get("runs_are_not_this_commit's"):
+        print(f"    NOTE         : {verdict["runs_are_not_this_commit's"]}")
     for key in (
         "n_compared",
         "n_identical",
