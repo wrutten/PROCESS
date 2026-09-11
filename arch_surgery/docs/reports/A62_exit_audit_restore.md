@@ -656,3 +656,87 @@ Not edited here — those documents are shared. The exact text they should take:
 | 2026-09-11 | **A defect gate G1 caught, fixed on the branch**: restoring every field outside the coupling state rewound `numerics.n_model_calls`, moving `n_model_calls` — a value gate GR compares — by two on the reference arm. `child.NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE` holds that namespace back by a named rule; what it holds back is named per run and a G4 tooth measures the boundary. |
 | 2026-09-11 | **Correction at the orchestrator's review, no run made.** Gate G1's instrument-change group named the whole `audit_snapshot` block; it now names `audit_snapshot.installed` alone. The block exclusion hid nothing on this straddle — measured by the orchestrator, only `audit_position_note` and `audit_snapshot.installed` differ once it is lifted — but it would have hidden `audit_snapshot.positions.*.components_sha256`, a behaviour witness, on a later one. `--gate switch_neutrality --resume` (both captures reused, 0 runs) PASS, 0 of 2 831 values and 0 of 51 319 lines, 7/7 teeth; `--measure exclusion_review` PASS with the two names tabulated separately. The leaf census is unchanged at 957 with the `audit_snapshot` line reading 3, which are the `installed` leaves; the tooth's own comparison excludes 234 leaves instead of 258. |
 | 2026-09-11 | **Run budget reduced by the user mid-task.** The from-scratch `--gate all` press was stopped and replaced by re-making only the gates this change can reach, reusing A52's verdicts for the rest. Measured and reported: `--resume` could not have reused A52's records, because the record contract makes them incomplete (§7.1). |
+
+---
+
+## 15. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-11 at `56e66fe1`, before the merge. Verification by checks that differ from the
+agent's, not by repeating its presses (no PROCESS run was made for this review).*
+
+**What was checked, and how it differed.**
+
+* **Scope.** `git diff --name-only fb0a7130..56e66fe1`: 12 files, all under `harness/` plus this
+  report. Nothing under `…_v4/PROCESS/`, the repository-root `process/`, the plans, the queue or
+  the improvement list. D25's "harness only" holds.
+* **The mechanism, read from the records rather than the report.** The reference-arm GR record
+  on `large_tokamak_nof` at `after_run`: instrument stamp `whole_data_structure_derived_set`,
+  snapshot position `entry_to_write_output_files`, 85 derived fields with `tfcoil.n_rad_per_layer`
+  among them, 1 held back (`numerics.n_model_calls`), 0 not restorable, sweep-start census 1
+  outside the coupling state and 13 inside (the output path's own work, which that position
+  keeps), 0 asked-for-and-missed; round-trip census names `globals.fileprefix` and
+  `numerics.name_xc`. The evaluation-phase G1 record: stamp present, no snapshot position, 0
+  derived — the instrument is inert where there is no output path, as §11 claims.
+* **Verdicts and stamps.** 25 of 25 `gate.json` read PASS. Run-record survey under `runs/gates/`:
+  114 at `3d64625c`, 47 at `eb38c34a` (the reused G2/G3/G5/G6 runs), 6 at `fd480aff` (the before
+  capture); the report's 116 adds the two lifted baselines outside the gate tree. Consistent with §9.
+* **The merge.** A trial merge into trunk `06a85fa0` (A53 (harness-tally) landed after this branch's
+  base) auto-merged without conflicts; the merged harness compiles and `--selfcheck` passes.
+* **The check the agent did not make.** The six G1 pairs were re-compared with the two block-level
+  entries (`audit_snapshot`, `audit_position_note`) removed from the instrument table. Only two
+  leaves then differ: `audit_position_note` (rewritten prose) and `audit_snapshot.installed`
+  (False → True). So the block exclusion of `audit_snapshot` hid nothing on this straddle — and
+  would have hidden the coupling-state digests `audit_snapshot.positions.*.components_sha256` on
+  any later one. **Correction requested and made at `8efa4805`**, zero runs: the entry names the
+  leaf. The agent's re-take reproduces 957 excluded with the census unchanged, and quantifies the
+  block exclusion's cost on the tooth's synthetic pair (234 excluded instead of 258; 24 more
+  values compared).
+
+**Assessment of the autonomous decisions (§10).** All eight accepted.
+
+* Decision 1 (restore at `after_run` too) is what D25 says, and it is what turns the reproduction
+  gate's position into a measurement of I-21 (§5.3). Decision 2 (the coupling state excluded from
+  the derived set) is what keeps the two positions distinct; without it the finding of §5.3 would
+  be impossible to make.
+* Decision 3 (`numerics` held back) is the right response to what G1 caught, and it is the one
+  place where the instrument's claim is a rule rather than a measurement. Two things make it safe
+  enough to accept: the held-back fields are named per run and the sweep-start census counts them
+  as still differing; and `exit_audit.instrument` — including `namespaces_not_restored` — is
+  compared by G1 whenever the two stamps agree, so a change to the rule without a change to the
+  stamp is a G1 mismatch, not a silent drift. **Rule for later tasks:** a change to what the audit
+  restores or holds back changes the instrument and must change `EXIT_AUDIT_RESTORE`.
+* Decision 4 (the evaluation phase's six residuals stay in GR) is correct: the ruling's reason
+  does not apply to a phase that never enters the output path, and the six reproduce.
+* Decision 5 (leaves, not blocks) is the principle the correction above extends to the one entry
+  that had not followed it.
+
+**What the agent found that the brief did not ask for, and what follows.**
+
+1. **`--resume` cannot cross a schema change** (§7.1), measured on all 156 of A52's records. This
+   is the record contract working, not a defect, and it goes into the harness plan as a standing
+   property. Its consequence for the queue is immediate: A53 (harness-tally) renamed three record
+   fields with no read-side alias while this task ran, so **under the merged schema no existing
+   record population is complete** — this branch's records lack the new names, A53's lack the
+   instrument block. A55 (harness-smoke)'s one `--resume` press will therefore re-make every run.
+   That is accepted: it is the honest consequence of two parallel schema changes, it costs one
+   press, and it is where the one GR at the merged tip comes from. No press is made by the
+   orchestrator.
+2. **The `after_run` residual on the reference arm** (§5.3: 6.99e-03 / 7.02e-03, argmax
+   `tfcoil.insstrain`, on PROCESS as shipped) is the distance between the written state and a
+   fixed point of the loop's own map. It is the same 0.7 % A61 measured, now a per-run field. It
+   goes into I-21 as a handle; whether it goes to the sibling study is the user's call, and the
+   filed bug report there already states the mechanism.
+3. **Four gates on reused verdicts** (G2, G3/G3c, G5, G6) — accepted; none reads the audit, and
+   A55's press re-makes them at the final tip anyway (point 1).
+
+**Limits the report states that stand.** The before columns of §5 are quoted; the restore is not
+provably total and says so per run; one seed per row.
+
+**Two small things not corrected.** The report's §12 says the before columns' runs "no longer
+exist in this worktree" — they exist relocated under `idf_probe/runs/A52_runs/gates/`, made by the
+old instrument, which is a stronger statement than the one made. The sweep-start census is
+truncated to 200 names inside the coupling state, which on `B3` (112 deferred-node components) is
+enough today and is a bound a later reader should know.
+
+**Verdict: approved for merge at `56e66fe1`.** D25 discharged. Records to be relocated by the
+retire script; the path is written in the queue row after it prints.
