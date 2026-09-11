@@ -5061,6 +5061,7 @@ ARTIFACT_GATE_TEETH: dict[str, tuple[str, ...]] = {
         "one node's write removed from the census",
         "a node writing a field the committed census does not have",
         "a census record carrying no tree stamp",
+        "an unstamped census record offered to --resume",
         "a census with no run record beside it",
     ),
     "artifacts_per_run": (

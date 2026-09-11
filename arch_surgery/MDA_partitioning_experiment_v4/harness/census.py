@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -214,6 +215,70 @@ def tree_stamp(
         # old record with a new one should find the same block in both.
         "provenance": stamp,
     }
+
+
+def resume_keeps(
+    directory: Path,
+    *,
+    configuration: str,
+    entry: str,
+    read_census: bool,
+) -> tuple[bool, str]:
+    """Whether a census on disk may be kept under ``--resume``, and why not.
+
+    What ``--resume`` consults, and the **only** thing it consults: the census
+    and the record beside it.  A directory is never evidence, a census taken
+    with the read half off cannot stand in for one that needs it (trap T13) —
+    and a record that does not carry the current contract's tree stamp is
+    **incomplete under that contract and is re-taken**, exactly as
+    ``pool.run`` re-runs an incomplete run record (harness plan amendment 17's
+    standing property (a)).  It is the contract working, not a defect.
+
+    The refusal in :func:`assert_stamped` is not weakened by this: it applies
+    to every reader that is not the stage doing the taking — a comparison over
+    a census this call did not just make, and any survey placing records by
+    their commit.  A stage that *can* re-make the measurement re-makes it; a
+    stage that can only read it refuses.
+    """
+    census_path = Path(directory) / "census.json"
+    if not census_path.exists():
+        return False, f"there is no census at {directory}"
+    try:
+        previous = json.loads(census_path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{census_path} is not readable JSON: {exc}"
+    if previous.get("configuration") != configuration:
+        return False, (
+            f"the census on disk is {previous.get('configuration')!r}, not "
+            f"{configuration!r}"
+        )
+    if previous.get("entry") != entry:
+        return False, (
+            f"the census on disk was taken at entry {previous.get('entry')!r}, "
+            f"not {entry!r}"
+        )
+    if read_census and not previous.get("read_census"):
+        return False, (
+            "the census on disk was taken with the read half of the "
+            "instrument off and this call needs it"
+        )
+    try:
+        record = run_record(Path(directory))
+    except CensusError as exc:
+        return False, str(exc).splitlines()[0]
+    missing = missing_stamp_fields(record)
+    if missing:
+        return False, (
+            f"the record beside it is {record.get('record_format')!r} and "
+            f"carries {len(missing)} of {len(STAMP_FIELDS)} declared "
+            f"provenance field(s): {', '.join(missing)}.  A record incomplete "
+            f"under the current contract is re-taken, not kept — the stamp is "
+            f"what a survey places the record by (trap T13)"
+        )
+    return True, (
+        f"a matching census is already on disk, its record {RECORD_FORMAT} at "
+        f"{str(record.get('tree_git_head'))[:8]}"
+    )
 
 
 def run_record(directory: Path) -> dict[str, Any]:
@@ -439,30 +504,44 @@ def take(
         outdir or (Path(campaign.runs_dir) / RUNS_SUBPATH / config.name / entry)
     )
     existing = directory / "census.json"
+    superseded: dict[str, Any] | None = None
     if resume and existing.exists():
-        previous = json.loads(existing.read_text())
-        matches = (
-            previous.get("configuration") == config.name
-            and previous.get("entry") == entry
-            and (previous.get("read_census") or not read_census)
+        keep, why = resume_keeps(
+            directory,
+            configuration=config.name,
+            entry=entry,
+            read_census=read_census,
         )
-        if matches:
-            # A census already on disk for exactly this configuration and entry,
-            # carrying at least the halves this call asks for.  Resume means
-            # *this*: a directory alone is never evidence, and a census taken
-            # with the read half off cannot stand in for one that needs it.
-            # And the record beside it must say which tree took it: a kept
-            # census whose commit nothing can read is the resume that cannot be
-            # told from a re-make (trap T13).
-            assert_stamped(run_record(directory), where=f"{config.name} ({entry})")
+        if keep:
             print(
                 f"  {config.name:24s} census   entry={entry:<12s} resumed "
-                f"(a matching census is already on disk)",
+                f"({why})",
                 flush=True,
             )
+            previous = json.loads(existing.read_text())
             previous.setdefault("run", {})["resumed"] = True
             previous["run"]["outdir"] = str(directory)
             return previous
+        # Not kept, and named before it is replaced: the pool clears the
+        # directory, so what the superseded record said has to be read out
+        # here or it is gone without a trace.
+        was = {}
+        try:
+            was = run_record(directory)
+        except CensusError:
+            was = {}
+        superseded = {
+            "why": why,
+            "record_format": was.get("record_format"),
+            "tree_git_head": was.get("tree_git_head")
+            or (was.get("provenance") or {}).get("tree_git_head"),
+            "outdir": str(directory),
+        }
+        print(
+            f"  {config.name:24s} census   entry={entry:<12s} RE-TAKEN — "
+            f"{why}",
+            flush=True,
+        )
     job = pool_mod.Job(
         phase="census",
         arm=CENSUS_ARM[entry],
@@ -485,13 +564,17 @@ def take(
             f"Refused rather than compared against nothing: a comparison over "
             f"an empty census reports zero differences and means nothing."
         )
-    assert_stamped(run_record(directory), where=f"{config.name} ({entry})")
+    taken = run_record(directory)
+    assert_stamped(taken, where=f"{config.name} ({entry})")
     census = json.loads(path.read_text())
     census["run"] = {
         "outdir": str(directory),
         "status": result.get("status"),
         "wall_s": result.get("wall_s"),
         "resumed": result.get("resumed", False),
+        "record_format": taken.get("record_format"),
+        "tree_git_head": taken.get("tree_git_head"),
+        "superseded": superseded,
     }
     return census
 
@@ -970,6 +1053,51 @@ def stage_teeth(
         + "; the same record with the fields present is "
         + ("accepted" if not accepted else "REFUSED TOO, so the check does not "
            "discriminate"),
+    )
+
+    # 3b. the other half of the same contract: a census whose record is
+    #     unstamped is not *kept* by --resume — it is re-taken, exactly as
+    #     pool.run re-runs an incomplete run record.  The decision is what the
+    #     tooth exercises; the re-take itself is a PROCESS run and belongs to
+    #     the press, not to a tooth.  Both cases are built in a scratch
+    #     directory from a real census, so the tooth reads the same whether or
+    #     not the records on disk have been re-taken yet.
+    with tempfile.TemporaryDirectory(prefix="census_resume_") as scratch:
+        directory = Path(scratch)
+        (directory / "census.json").write_text(json.dumps(census))
+        stripped = {
+            name: value
+            for name, value in unstamped.items()
+            if name not in STAMP_FIELDS
+        }
+        (directory / "metrics.json").write_text(json.dumps(stripped))
+        kept_unstamped, why_unstamped = resume_keeps(
+            directory,
+            configuration=configuration,
+            entry=census["entry"],
+            read_census=bool(census.get("read_census")),
+        )
+        complete = dict(stripped)
+        complete.update({name: None for name in STAMP_FIELDS})
+        complete["record_format"] = RECORD_FORMAT
+        (directory / "metrics.json").write_text(json.dumps(complete))
+        kept_stamped, why_stamped = resume_keeps(
+            directory,
+            configuration=configuration,
+            entry=census["entry"],
+            read_census=bool(census.get("read_census")),
+        )
+    check.tooth(
+        "an unstamped census record offered to --resume",
+        (not kept_unstamped) and kept_stamped,
+        "a scratch copy of this census beside an unstamped record: "
+        + (
+            f"not kept, so it is re-taken — {why_unstamped[:150]}"
+            if not kept_unstamped
+            else "KEPT, so a resume would carry a record no survey can place"
+        )
+        + "; the same census beside a stamped record: "
+        + ("kept" if kept_stamped else f"NOT KEPT either — {why_stamped[:120]}"),
     )
 
     # 4. a census sitting beside no run record at all — a directory somebody
