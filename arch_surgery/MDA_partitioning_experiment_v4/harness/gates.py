@@ -44,6 +44,7 @@ Usage
     python -m harness.gates switch-neutrality --compare
     python -m harness.gates all            # every gate that needs no capture
     python -m harness.gates predicate-counters   # a measurement, not a gate
+    python -m harness.gates attempts --capture runs  # the ladder, made to retry
     python -m harness.gates attempts             # a measurement, not a gate
     python -m harness.gates predicate-mode --capture runs
     python -m harness.gates predicate-mode
@@ -525,8 +526,12 @@ VOLATILE_RECORD_PATHS: dict[str, str] = {
         "the side that had none"
     ),
     "attempts_node_calls_available": (
-        "false before, true after: the field says whether the driver stamped "
-        "the boundaries, and the change is that it does"
+        "the field says whether the driver stamped the boundaries of this "
+        "run's attempts.  False before, because it stamped none; true after on "
+        "the optimisation arm, and still false on the evaluation arm, which "
+        "runs no optimiser and therefore has no attempt to stamp — so on that "
+        "arm the two sides agree and the exclusion costs the comparison "
+        "nothing"
     ),
     "attempt_accounting": (
         "the block the decomposition and its residual are published in: absent "
@@ -2454,6 +2459,95 @@ def print_predicate_counters(block: Mapping[str, Any]) -> None:
 # statistic and none is quoted as one.
 
 
+#: The demonstration runs, and why they exist.
+#:
+#: Every run of the reproduction gate converges on its **first** attempt, so
+#: that population exercises the retry ladder's first rung and no other: the
+#: per-attempt decomposition is there checked with exactly one term in each
+#: sum.  A decomposition that has only ever been checked with one term is not
+#: a decomposition, so the stage makes three runs that *must* retry.
+#:
+#: They retry because the optimiser's iteration budget is capped at two, which
+#: makes its first attempt exit on "maximum iterations" and the driver try the
+#: next rung -- a larger finite-difference step, then a smaller one.  The cap
+#: is the harness's own gate-only switch: it is stamped into the record as
+#: ``force_maxcal``, so a record made this way can never be mistaken for a
+#: measurement, and **nothing in this block is a measurement of the models**.
+#: What it measures is the accounting: three attempts, three sets of costs,
+#: and the same identity.
+LADDER_DEMONSTRATION_ARM = "BR"
+LADDER_DEMONSTRATION_MAXCAL = 2
+
+
+def ladder_root(campaign: Campaign) -> Path:
+    return Path(campaign.runs_dir) / GATES_SUBPATH / "attempts" / "ladder"
+
+
+def ladder_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    return [
+        pool_mod.Job(
+            phase="B",
+            arm=LADDER_DEMONSTRATION_ARM,
+            config=config,
+            seed=0,
+            outdir=ladder_root(campaign) / config.name,
+            regime="unperturbed",
+            delta=campaign.delta,
+            run_kind="gate",
+            audit_position=NEUTRAL_AUDIT_POSITION,
+            force_maxcal=LADDER_DEMONSTRATION_MAXCAL,
+        )
+        for config in campaign.configurations
+    ]
+
+
+def capture_ladder(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
+    """Run the three deliberately budget-capped runs that must retry."""
+    jobs = ladder_jobs(campaign)
+    results = pool_mod.run_all(jobs, campaign, resume=resume)
+    manifest = {
+        "captured": _dt.datetime.now().isoformat(timespec="seconds"),
+        "tree_git_head": _git_head(),
+        "n_runs": len(jobs),
+        "arm": LADDER_DEMONSTRATION_ARM,
+        "force_maxcal": LADDER_DEMONSTRATION_MAXCAL,
+        "what": (
+            "deliberately budget-capped runs whose only purpose is to make the "
+            "retry ladder run more than one attempt.  Stamped force_maxcal in "
+            "every record: NOT a measurement of the models"
+        ),
+        "runs": [
+            {
+                "configuration": job.config.name,
+                "outdir": str(job.outdir),
+                "status": (results[i] or {}).get("status")
+                if isinstance(results, list)
+                else None,
+            }
+            for i, job in enumerate(jobs)
+        ],
+    }
+    path = ladder_root(campaign) / "manifest.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2, default=str) + "\n")
+    manifest["manifest"] = str(path)
+    return manifest
+
+
+def ladder_rows(campaign: Campaign) -> list[dict[str, Any]]:
+    """One row per demonstration run, in the same shape as the gate's rows."""
+    rows = []
+    for config in campaign.configurations:
+        directory = ladder_root(campaign) / config.name
+        record = records_mod.read(directory)
+        row = _attempt_row(
+            LADDER_DEMONSTRATION_ARM, config.name, 0, record
+        )
+        row["force_maxcal"] = record.get("force_maxcal")
+        rows.append(row)
+    return rows
+
+
 def attempt_rows(campaign: Campaign, root: Path | None = None) -> list[dict[str, Any]]:
     """One row per optimisation run of the reproduction gate, per attempt.
 
@@ -2606,6 +2700,7 @@ def attempt_measurements(
                 "whose parts do not add up is REFUSED, not rounded"
             ),
         },
+        "ladder_demonstration": _ladder_block(campaign),
         "check_2_constructions": (
             "the final attempt's iteration count (the previous revision's, "
             "kept for comparability) and the count summed over every attempt, "
@@ -2613,6 +2708,50 @@ def attempt_measurements(
             "only on a retried run, which is the whole reason both are "
             "published"
         ),
+        "rows": rows,
+    }
+
+
+def _ladder_block(campaign: Campaign) -> dict[str, Any]:
+    """The demonstration runs, or a statement that they have not been made.
+
+    Absent runs are reported as absent, never as an empty success: a
+    decomposition checked only with one term per sum is the thing this block
+    exists to stop being claimed.
+    """
+    try:
+        rows = ladder_rows(campaign)
+    except Exception as exc:  # noqa: BLE001 - reported, never raised
+        return {"made": False, "why": f"{type(exc).__name__}: {exc}", "rows": []}
+    made = [r for r in rows if r["status"] == "ok"]
+    if not made:
+        return {
+            "made": False,
+            "why": (
+                "the demonstration runs have not been made; run "
+                "'python -m harness.gates attempts --capture runs'.  Until "
+                "they are, every run in this block converged on its first "
+                "attempt and the decomposition has been checked with one term "
+                "per sum only"
+            ),
+            "rows": rows,
+        }
+    return {
+        "made": True,
+        "what": (
+            f"{len(made)} deliberately budget-capped run(s) whose optimiser "
+            f"iteration budget is {LADDER_DEMONSTRATION_MAXCAL}, so the first "
+            f"attempt exits on 'maximum iterations' and the driver climbs the "
+            f"ladder.  Stamped force_maxcal in every record: NOT a measurement "
+            f"of the models, and no cost figure here is comparable with any "
+            f"campaign number"
+        ),
+        "population": (
+            f"{len(rows)} run(s), the reference arm at seed 0 on each "
+            f"configuration, one run each"
+        ),
+        "n_with_more_than_one_attempt": sum(1 for r in made if r["n_attempts"] > 1),
+        "n_that_decompose": sum(1 for r in made if r["decomposes"]),
         "rows": rows,
     }
 
@@ -2677,6 +2816,43 @@ def print_attempts(block: Mapping[str, Any]) -> None:
             f"{_n(row['iterations_summed_over_attempts']):>7} "
             f"{str(row['iterations_per_attempt']):<18} "
             f"{_n(row['evaluations_over_all_attempts']):>12}"
+        )
+    print()
+    ladder = block["ladder_demonstration"]
+    print("    the ladder exercised — the decomposition with more than one term:")
+    if not ladder["made"]:
+        print(f"      NOT MADE — {ladder['why']}")
+    else:
+        print(f"      {ladder['what']}")
+        print(f"      population : {ladder['population']}")
+        lhead = (
+            f"      {'configuration':<22} {'att':>4} "
+            f"{'stages (ifail)':<52} {'node calls / attempt':<30} "
+            f"{'not accepted':>13} {'share':>8} {'residual':>9}"
+        )
+        print(lhead)
+        print("      " + "-" * (len(lhead) - 6))
+        for row in ladder["rows"]:
+            if row["status"] != "ok":
+                print(f"      {row['configuration']:<22} NO RECORD ({row['status']})")
+                continue
+            stages = ", ".join(
+                f"{stage} ({ifail})"
+                for stage, ifail in zip(row["stages"], row["ifail_per_attempt"])
+            )
+            per_attempt = " + ".join(_n(v) for v in row["node_calls_per_attempt"])
+            share = row["share_not_accepted"]
+            print(
+                f"      {row['configuration']:<22} {row['n_attempts']:>4} "
+                f"{stages:<52} {per_attempt:<30} "
+                f"{_n(row['node_calls_not_accepted']):>13} "
+                f"{(f'{share * 100:.2f} %' if share is not None else '—'):>8} "
+                f"{_n(row['node_calls_residual']):>9}"
+            )
+        print(
+            f"      {ladder['n_with_more_than_one_attempt']} of "
+            f"{len(ladder['rows'])} run(s) made more than one attempt; "
+            f"{ladder['n_that_decompose']} decompose with residual 0"
         )
     print()
     identity = block["summation_identity"]
@@ -3757,6 +3933,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         out.write_text(json.dumps(block, indent=2, default=str) + "\n")
         print_predicate_counters(block)
         print(f"\n  record: {out}")
+        return 0
+
+    if args.gate == "attempts" and args.capture:
+        manifest = capture_ladder(campaign, resume=args.resume)
+        print(f"captured {manifest['n_runs']} ladder run(s) at "
+              f"{manifest['tree_git_head']}")
+        print(f"  {manifest['what']}")
+        for row in manifest["runs"]:
+            print(f"  {row['configuration']:<22} {row['status']} {row['outdir']}")
+        print(f"  manifest: {manifest['manifest']}")
         return 0
 
     if args.gate == "attempts":
