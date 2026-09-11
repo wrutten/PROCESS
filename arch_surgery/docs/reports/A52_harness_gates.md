@@ -161,7 +161,8 @@ each carrying the experiment plan's own label where it has one. `experiment_runn
 |---|---|
 | `--gates` | list every gate and measurement stage, what each binds, its teeth, and whether it starts PROCESS |
 | `--gate <name>` | run one gate and stop |
-| `--gate all` | run every gate, **cheapest first**, stopping at the first failure — so a repository-state failure is reported in seconds rather than after an hour of runs |
+| `--gate all` | run every gate, cheapest first **and after whatever it reads**, stopping at the first failure — so a repository-state failure is reported in seconds rather than after an hour of runs |
+| `--resume` | keep a run whose directory already holds a *complete record of the same job*. **It reaches the gates' own runs**, not only `--run`: without it every gate re-makes the runs it reads |
 | `--measure <name>` / `--measure all` | run the measurement stages. Gates never run here and measurements never run under `--gate`: the two cannot be confused |
 | `--no-teeth` | skip the teeth; the verdict records that it did, and a gate whose teeth were not run is not an accepted gate |
 | `--capture before\|after` | gate G1 only (§4.3) |
@@ -173,9 +174,19 @@ nothing about the solve changed on the arms that keep the output-time loop, and 
 would break a cross-reference between two gates in order to relocate a small JSON file. That is
 stated in the option's own help text.
 
-Every gate makes its own runs, with `--resume` keeping a *complete record of the same job* rather
-than re-making it — which is not a retry: `pool.run` checks that the job matches before it keeps
-anything. Gate G1 is the one exception and §4.3 says why.
+**Every gate makes its own runs, and `--resume` decides whether it re-makes them.** Without the
+flag every run a gate reads is made again, so a verdict is never computed over records made before
+the change it is checking; with it, a directory already holding a *complete record of the same job*
+is kept — not a retry, because `pool.run` checks the job matches first. Every verdict record carries
+`runs_provenance`, the distinct commits its records were made at, and the printed verdict carries a
+`runs read` line; records from another commit are expected under `--resume`, **stated either way**,
+and a failure without it. Two exceptions, both stated where they happen: the shared cold-flat
+reference evaluations are made once per invocation and shared, and gate G1's "before" capture is
+never re-made (§4.3).
+
+**The order is derived, not written down.** `GATE_ORDER` is a preference; a gate's `reads_from`
+declares which other gates' runs or verdicts it reads, and where the two conflict the dependency
+wins.
 
 ---
 
@@ -821,7 +832,8 @@ $PY experiment_runner.py                       # preflight: READY
 $PY experiment_runner.py --gates               # what exists and what each binds
 $PY experiment_runner.py --selfcheck           # the six promoted self-checks, with teeth
 $PY experiment_runner.py --artifacts all --census-entry evaluation
-$PY experiment_runner.py --gate all --resume --census-entry evaluation
+$PY experiment_runner.py --gate all --census-entry evaluation   # every run re-made
+$PY experiment_runner.py --gate all --resume --census-entry evaluation   # keep what matches
 $PY experiment_runner.py --measure all
 $PY PROCESS/copy_gates.py all                  # the copy is still the copy
 $PY PROCESS_diff.py                            # seven changed files, none unexplained
@@ -841,6 +853,18 @@ $PY experiment_runner.py --gate switch_neutrality                    # compare, 
 from an earlier commit was written by an earlier record schema, and resume judges it against the
 current one (§4.3). Move a "before" capture into place by copying the directory, not by re-running
 it.
+
+**To run the gates from nothing**, which is what the figures in this report are:
+
+```bash
+cd arch_surgery/MDA_partitioning_experiment_v4
+# keep the one artifact that cannot be re-made, and delete the rest
+mv runs/gates/switch_neutrality/before /somewhere/safe
+rm -rf runs/gates
+mkdir -p runs/gates/switch_neutrality && cp -r /somewhere/safe runs/gates/switch_neutrality/before
+cd ../.. && $PY arch_surgery/MDA_partitioning_experiment_v4/experiment_runner.py \
+    --gate all --census-entry evaluation      # no --resume: every run is made again
+```
 
 The reproduction gate reads the committed reference and needs the lifted input files, which
 `--gate artifacts_derive_inputs` produces; if they are wanted from the previous revision's own
@@ -874,6 +898,9 @@ refused (a missing prerequisite, an unknown gate name, or a failed stage).
 | 14 | the nine cross-tree names go in **always-excluded**, not in the conditional group | they are a path or the working tree's state: no pair of captures could compare them, whether or not a change added them | move them; a two-tree straddle then fails on locations |
 | 15 | the two per-ruler counts are conditional on a **witness** rather than on their own leaf | a `0` that means "not computed" cannot be told from a `0` that means "excluded nothing" by looking at it | exclude them unconditionally; the gate then stops comparing a count that is worth comparing, and the new tooth fails |
 | 16 | `--gate all` makes a "before" capture when there is none, and the verdict labels it | a button that refuses on a fresh tree is not a button; a PASS that reads like a neutrality verdict when it is not is worse | refuse instead, and require the two captures to be made by hand |
+| 17 | the shared cold-flat reference evaluations are made **once per invocation** and shared, through a per-process memo | three gates are anchored on them; without the memo the second and third gate of one `--gate all` would re-make what the first had just made, and the three would be anchored on three different fixed points | drop the memo and let each gate make its own; the cost is nine evaluations instead of three, and the gates stop sharing an anchor |
+| 18 | a verdict **fails** when it read runs from another commit and `--resume` was not asked for | that is exactly the defect this fixes: the flag must mean something, and a gate that silently reads stale runs reports a zero over a population that is not the one it names | make it a note instead of a failure; the button then cannot tell a fresh run from a resumed one |
+| 19 | the `--gate all` order is **derived** from declared `reads_from` dependencies, with `GATE_ORDER` as a preference | cheapest-first is a preference, not a correctness order, and treating it as one hid a real dependency until the first from-scratch run | hand-sort `GATE_ORDER` and drop `reads_from`; the order is then correct only as long as nobody edits it |
 
 ---
 
@@ -978,8 +1005,16 @@ refused (a missing prerequisite, an unknown gate name, or a failed stage).
 ## 13. The orchestrator's review, and what it changed
 
 The orchestrator reproduced every number in the first version of this report independently and
-found five defects. All five are fixed on this branch, every gate was re-run afterwards, and gate GR
-was re-run **from scratch** because `records.py` is on the run path.
+found **six** defects across two rounds; a seventh surfaced only when the sixth's fix made a
+from-scratch run possible. All are fixed on this branch, and the figures in this report come from a
+run of every gate **from nothing** — `runs/gates/` deleted but for gate G1's trunk capture, which
+cannot be re-made — with no `--resume`.
+
+The sixth is the one worth reading twice. Every gate body hard-coded `resume=True`, so `--gate all`
+without the flag re-made nothing and a verdict computed after a change silently read runs made
+before it. The gates had been passing on runs at five different commits. It is trap T11 one level
+up: not a count over a population smaller than the one named, but a *verdict* over runs other than
+the ones named — and the flag that was supposed to control it reached nothing but gate GR.
 
 *Caption: one row per defect, what it was, and what it now does. "Found by" says how it surfaced —
 three of the five were invisible to the way this task had been running the gates.*
@@ -991,6 +1026,8 @@ three of the five were invisible to the way this task had been running the gates
 | 3 | the load-bearing tooth took its sample from the "before" side, which at trunk carries no restricted block, so it could not be built in the one run where it matters | the straddle, where it DID NOT TRIP | the sampler takes the side that carries the block | TRIPPED in the straddle: 13 of 683 values differ without the exclusion, 0 of 670 with it |
 | 4 | a same-commit G1 PASS read like a neutrality verdict in the plan's gate table | review | `_straddle` reads both manifests and prefixes the population, the verdict and the table row | the row now opens "straddles `5e64ce0e` → `3f50d9b5`: a neutrality result", or says both captures are at one commit and what that does and does not show |
 | 5 | `per_run_artifact` was written on both phases' records and declared in neither | review | declared `("AB", "always")` in `records.SCHEMA` | G7 covers it: 85 declared fields in the optimisation phase, 78 in the evaluation phase |
+| 6 | `--gate all` without `--resume` re-made nothing: every gate body hard-coded `resume=True` in sixteen places and the runner's flag reached gate GR and `--run` only, so a verdict computed after a change silently read runs made before it | the orchestrator surveying `tree_git_head` on every record under `runs/gates/` after pressing the button with no flag — runs at five different commits, only GR's re-made | `resume` threaded from the runner through `Gate.run` and `Measurement.run` into every body, every `pool.run_all`, every capture and `entry_references`; `Gate.runs_under` and `framework.survey_heads` put the commits of the records a gate read into its verdict | every run at the new commit; a verdict that reads records from another commit says so, and fails when `--resume` was not asked for. A tooth stales one record and shows it kept with the flag and re-made without it |
+| 6a | the `--gate all` order was hand-sorted cheapest-first, and gate G9 reads gate GR's own records — so from nothing, G9 refused for want of records that were about to be made | the from-scratch run, on its first attempt | `Gate.reads_from` declares the dependency and `ordered_gate_names` derives the order, with cheapest-first as the preference between gates that do not depend on each other | GR and the two gates that read it run in that order; an unknown dependency or a cycle raises |
 
 *Caption: the figures that moved between the two versions of this report, and why. Everything not
 listed is unchanged.*

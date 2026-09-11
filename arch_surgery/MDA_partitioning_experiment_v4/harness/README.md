@@ -419,16 +419,31 @@ $PY experiment_runner.py --measure gate_table       # the plan's §4.1 table
 $PY experiment_runner.py --measure all
 ```
 
-Every gate makes its own runs, with `--resume` keeping a complete record of the
-same job rather than re-making it — **except one**. Gate G1, switch neutrality,
-compares the copy *before* a driver change with the copy *after* it, so its two
-sides are at two commits by construction and it cannot make its own "before":
+**Every gate makes its own runs, and `--resume` is what decides whether it re-makes them.** Without
+the flag every run a gate reads is made again, so a verdict is never computed over records made
+before the change it is checking; with it, a directory already holding a *complete record of the
+same job* is kept, which is not a retry — `pool.run` checks the job matches before keeping anything.
+Every verdict says which commit the records it read were made at: records from another commit are
+expected under `--resume`, stated either way, and a **failure** without it.
+
+Two exceptions, both stated where they happen. The shared cold-flat reference evaluations are made
+**once per invocation** and shared by the three gates anchored on them. And gate G1, switch
+neutrality, compares the copy *before* a driver change with the copy *after* it, so its two sides
+are at two commits by construction: it cannot make its own "before", and **never re-makes one that
+is there**. Move a "before" capture between trees by copying the directory, never by re-running the
+stage — it was written by an earlier record schema, and resume judges it against the current one.
 
 ```bash
-$PY experiment_runner.py --gate switch_neutrality --capture before  # at the commit before
-$PY experiment_runner.py --gate switch_neutrality --capture after   # at the commit after
+$PY experiment_runner.py --gate switch_neutrality --capture before  # in a tree at the commit before
+$PY experiment_runner.py --gate switch_neutrality --capture after   # in the tree at the commit after
 $PY experiment_runner.py --gate switch_neutrality                   # compare, with teeth
 ```
+
+**The order `--gate all` runs in is derived, not written down.** `GATE_ORDER` is a preference —
+the repository-state checks before the hour of runs, so a failure is reported in seconds — and a
+gate's `reads_from` declares which other gates' runs or verdicts it reads. Where the two conflict
+the dependency wins: G9 compares its reference arms against gate GR's own records, so it follows
+GR however much GR costs. A dependency on a gate the registry does not hold, or a cycle, raises.
 
 `--outdir` sends a gate's verdict somewhere other than the campaign's records
 directory; the gates' own runs stay where they are, because one gate reads
