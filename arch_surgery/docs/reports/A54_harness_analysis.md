@@ -5,8 +5,9 @@
 > (harness-tally)'s merge). Code at `9f29757f` and `12ba1054`; every number below was produced by
 > `experiment_runner.py --gate recomputation --resume` and
 > `experiment_runner.py --measure recomputed_tables --resume` at **`12ba1054`**, over run records
-> made at **`cd62c510`** (A53's press, seeded into this worktree under amendment 15). **No PROCESS
-> run was made by this task.** Folder position records lifecycle, not validity (trap T3).
+> made at **`cd62c510`** (A53's press, seeded into this worktree under amendment 15), and reproduce
+> identically at the report's own commit `25ddad47`, which adds no code. **No PROCESS run was made
+> by this task.** Folder position records lifecycle, not validity (trap T3).
 
 ---
 
