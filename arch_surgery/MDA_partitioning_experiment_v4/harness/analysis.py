@@ -535,6 +535,17 @@ def audit_instrument(record: Mapping[str, Any]) -> str:
     return "; ".join(parts)
 
 
+#: How a cell that carries several values joins them.  One spelling, because
+#: the two accuracy tables once carried two — the defect this module found by
+#: having to reproduce both.
+CELL_SEPARATOR = "; "
+
+
+def joined(values: Sequence[Any], *, empty: str = "—") -> str:
+    """Several values in one cell, joined one way; a dash for none."""
+    return CELL_SEPARATOR.join(str(value) for value in values) if values else empty
+
+
 def restricted_audit(record: Mapping[str, Any], *, ruler: str) -> dict[str, Any]:
     """The restricted audit maximum on one named ruler, with its **argmax**.
 
@@ -558,6 +569,37 @@ def restricted_audit(record: Mapping[str, Any], *, ruler: str) -> dict[str, Any]
         "argmax": restricted.get("argmax"),
         "n_above_tau": restricted.get("n_above"),
         "n_excluded": block.get("n_excluded_from_the_restricted_statistic"),
+    }
+
+
+def accuracy_population(
+    records: Sequence[Mapping[str, Any]], *, ruler: str
+) -> dict[str, Any]:
+    """**The n of an accuracy table's row: the runs it is over.**
+
+    One reading, declared: ``n`` counts the **runs**.  A row of either accuracy
+    table is one arm on one ruler over a set of runs, and the denominator of a
+    median must be the set the row names — so a run whose exit audit carries no
+    restricted block is counted in ``n`` and named in the column beside it,
+    which reads the smaller number.  A denominator that quietly shrank to the
+    values that happened to exist would be trap T11.
+
+    Re-derived here from that declaration, not from the tally's code: the two
+    tables built this column two different ways until this module had to
+    reproduce both, and a second implementation that borrowed the fix would not
+    be able to tell whether the fix had reached the first.
+    """
+    statistics = [restricted_audit(record, ruler=ruler) for record in records]
+    values = [
+        statistic["max"]
+        for statistic in statistics
+        if statistic.get("present") and statistic.get("max") is not None
+    ]
+    return {
+        "n": len(records),
+        "statistics": statistics,
+        "values": values,
+        "n_with_the_statistic": len(values),
     }
 
 
@@ -1133,12 +1175,10 @@ def _accuracy_rows(
     for arm in arm_order(grouped):
         finished = [r for r in grouped[arm] if completed(r)]
         for ruler in campaign.predicate_modes:
-            restricted = [restricted_audit(r, ruler=ruler) for r in finished]
+            block = accuracy_population(finished, ruler=ruler)
+            restricted = block["statistics"]
+            restricted_values = block["values"]
             whole = [whole_state_audit(r, ruler=ruler) for r in finished]
-            restricted_values = [
-                s["max"] for s in restricted
-                if s.get("present") and s.get("max") is not None
-            ]
             whole_values = [
                 s["max"] for s in whole
                 if s.get("present") and s.get("max") is not None
@@ -1157,7 +1197,8 @@ def _accuracy_rows(
             row: dict[str, Any] = {
                 "arm": arm,
                 "ruler": ruler,
-                "n": len(finished) if optimisation else len(restricted_values),
+                "n": block["n"],
+                "n_with_the_statistic": block["n_with_the_statistic"],
                 "restricted_median": middle(restricted_values),
                 "argmax": (
                     (", ".join(argmaxes)
@@ -1176,11 +1217,7 @@ def _accuracy_rows(
                     if len(positions) == 1
                     else ("/".join(positions) if positions else None)
                 ),
-                "instrument": (
-                    ("; " if optimisation else ";").join(instruments)
-                    if instruments
-                    else "—"
-                ),
+                "instrument": joined(instruments),
             }
             if optimisation:
                 row["restricted_max"] = (
@@ -1251,9 +1288,10 @@ def _matched_accuracy(
                 f"rulers or neither."
             ),
             columns=(
-                "arm", "ruler", "n", "restricted_median", "restricted_p90",
-                "argmax", "whole_median", "whole_p90", "n_excluded",
-                "audit_position", "instrument",
+                "arm", "ruler", "n", "n_with_the_statistic",
+                "restricted_median", "restricted_p90", "argmax",
+                "whole_median", "whole_p90", "n_excluded", "audit_position",
+                "instrument",
             ),
             key_columns=("arm", "ruler"),
             rows=tuple(rows),
@@ -2091,9 +2129,9 @@ def _achieved_accuracy(
             f"identical tables apart.  Both rulers or neither."
         ),
         columns=(
-            "arm", "ruler", "n", "restricted_median", "restricted_max",
-            "argmax", "n_above_tau", "whole_median", "n_excluded",
-            "audit_position", "instrument",
+            "arm", "ruler", "n", "n_with_the_statistic", "restricted_median",
+            "restricted_max", "argmax", "n_above_tau", "whole_median",
+            "n_excluded", "audit_position", "instrument",
         ),
         key_columns=("arm", "ruler"),
         rows=tuple(rows),
@@ -2626,6 +2664,47 @@ def assert_one_commit(provenance: Mapping[str, Any], *, resume: bool) -> str | N
     )
 
 
+def assert_the_tally_read_these_runs(
+    stages: Sequence[Mapping[str, Any]], provenance: Mapping[str, Any]
+) -> None:
+    """Refuse a tally stage record made over a different run population.
+
+    The straddle refusal above is about the **run records**: were they all made
+    at one commit.  This one is about the **stage records**: were the tally's
+    tables computed over the runs this recomputation is reading.  Nothing else
+    checks it — a stage record left on disk from before a change that moves
+    cells would be compared, cell by cell, against a recomputation of the new
+    records, and every mismatch reported would be a stale file rather than a
+    drift.  Worse, the two failures look identical in the verdict.
+
+    So each stage record's own ``runs_provenance`` — the commits its runs were
+    made at, and how many records it read — is compared with the survey this
+    module made of the same declared sources, and a disagreement is a refusal
+    naming **both** sides.  The paths themselves are not compared: a relocated
+    or seeded worktree legitimately carries records written under another
+    tree's path, and it is the commits and the count that say whether the two
+    populations are the same one.
+    """
+    here_heads = sorted(provenance.get("heads") or [])
+    here_count = int(provenance.get("n_records") or 0)
+    for stage in stages:
+        theirs = stage.get("runs_provenance") or {}
+        their_heads = sorted(theirs.get("heads") or [])
+        their_count = int(theirs.get("n_records") or 0)
+        if their_heads == here_heads and their_count == here_count:
+            continue
+        raise AnalysisError(
+            f"the tally stage record {stage['record']} was computed over "
+            f"{their_count} run record(s) made at {their_heads}, and this "
+            f"recomputation reads {here_count} run record(s) made at "
+            f"{here_heads}.  The two are not the same population, so every "
+            f"cell compared would be a cell of one population against a cell "
+            f"of another and a mismatch would say nothing about either.  "
+            f"Re-run `experiment_runner.py --measure {stage['stage']}` over "
+            f"these runs."
+        )
+
+
 def assert_not_empty(result: Mapping[str, Any]) -> None:
     """Refuse a comparison with nothing in it.
 
@@ -2698,6 +2777,12 @@ def verify(campaign: Campaign, *, resume: bool = False) -> framework.Check:
         )
 
     published = read_tally_output(records_dir)
+    assert_the_tally_read_these_runs(published["stages"], provenance)
+    check.note(
+        "the tally's stage records were computed over the same run "
+        f"population this recomputation reads: {provenance['n_records']} "
+        f"record(s) at {heads}, stage record by stage record"
+    )
     recomputed = recompute(campaign)
     result = compare(recomputed["tables"], published["tables"])
 
@@ -2818,6 +2903,8 @@ TEETH: tuple[str, ...] = (
     "a retried flag trusted from a stored field",
     "a population straddling two commits",
     "a construction imported from the tally",
+    "a tally stage record over another run population",
+    "a gate declaring a stage the registry does not hold",
 )
 
 
@@ -3086,6 +3173,100 @@ def _tooth_an_imported_construction(
     )
 
 
+def _tooth_a_stale_stage_record(
+    campaign: Campaign,
+    published: Mapping[str, Mapping[str, Any]],
+    recomputed: Mapping[str, Recomputed],
+) -> tuple[str, bool, str]:
+    """A tally stage record made over another run population must be refused.
+
+    The failure this catches is silent by nature: a stale stage record produces
+    mismatches that look exactly like a drift, so the comparison would report a
+    finding about the tally that is really a finding about a file's age.
+    """
+    survey = {"n_records": 33, "heads": ["a" * 40]}
+    stale = [
+        {
+            "stage": "tally_evaluation",
+            "record": "<the tooth's own>",
+            "runs_provenance": {"n_records": 33, "heads": ["b" * 40]},
+        }
+    ]
+    fewer = [
+        {
+            "stage": "tally_optimisation",
+            "record": "<the tooth's own>",
+            "runs_provenance": {"n_records": 20, "heads": ["a" * 40]},
+        }
+    ]
+    caught: list[str] = []
+    for name, stages in (("another commit", stale), ("fewer runs", fewer)):
+        try:
+            assert_the_tally_read_these_runs(stages, survey)
+        except AnalysisError:
+            caught.append(name)
+    agreeing = [
+        {
+            "stage": "tally_evaluation",
+            "record": "<the tooth's own>",
+            "runs_provenance": {"n_records": 33, "heads": ["a" * 40]},
+        }
+    ]
+    try:
+        assert_the_tally_read_these_runs(agreeing, survey)
+        accepts = True
+    except AnalysisError:
+        accepts = False
+    return (
+        TEETH[7],
+        len(caught) == 2 and accepts,
+        f"a stage record doctored to {', '.join(caught) or 'nothing'}: refused; "
+        + (
+            "a stage record naming the same commit and the same count is "
+            "accepted"
+            if accepts
+            else "and a stage record that agrees was refused too, so the check "
+            "is not discriminating.  It must be."
+        ),
+    )
+
+
+def _tooth_an_undeclared_stage(
+    campaign: Campaign,
+    published: Mapping[str, Mapping[str, Any]],
+    recomputed: Mapping[str, Recomputed],
+) -> tuple[str, bool, str]:
+    """A gate declaring a stage the registry does not hold must be refused.
+
+    The other half of the dependency this gate now relies on: declaring that a
+    gate reads a measurement stage is only worth anything if declaring a stage
+    that does not exist fails loudly, rather than ordering the gate after
+    nothing and letting it read whatever is on disk.
+    """
+    import dataclasses  # noqa: PLC0415 - the tooth's own doctored entry
+    from harness import gates as gates_mod  # noqa: PLC0415 - the registry
+
+    entries = dict(gates_mod.registry(campaign))
+    entries["recomputation"] = dataclasses.replace(
+        entries["recomputation"], reads_from=("a_stage_nobody_runs",)
+    )
+    try:
+        gates_mod.assert_declared_dependencies(entries)
+    except gates_mod.GateError as exc:
+        return (
+            TEETH[8],
+            True,
+            f"a gate declaring the stage 'a_stage_nobody_runs': refused — "
+            f"{str(exc).splitlines()[0]}",
+        )
+    return (
+        TEETH[8],
+        False,
+        "a gate declaring a stage the registry does not hold was accepted.  "
+        "It must not be.",
+    )
+
+
 #: The teeth, in the order the criterion runs them.
 TOOTH_BODIES: tuple[Callable[..., tuple[str, bool, str]], ...] = (
     _tooth_a_moved_cell,
@@ -3095,6 +3276,8 @@ TOOTH_BODIES: tuple[Callable[..., tuple[str, bool, str]], ...] = (
     _tooth_a_stored_retried_flag,
     _tooth_a_mixed_commit_population,
     _tooth_an_imported_construction,
+    _tooth_a_stale_stage_record,
+    _tooth_an_undeclared_stage,
 )
 
 
