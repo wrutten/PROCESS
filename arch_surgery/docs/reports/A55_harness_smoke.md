@@ -709,4 +709,4 @@ decision should rest on it.
 | `87951248` | this report, and the experiment plan's §4 rendered by `--plan-tables write` |
 | `d6f0fdf4` | G1's comparator translates the earlier capture's leaf paths through `reference.FIELD_NAME_MAP`, segment-aware, and compares the renamed leaves as values; the verdict states the translation; two new teeth. No exclusion added, no capture made. G1 PASS 0 / 2 831, 9/9 |
 | `2f0ad599` | the report's §6.3, §1, §5, §8, §9, §11 and change log brought to the fixed gate |
-| *(this commit)* | the experiment plan's §4 re-rendered by `--measure gate_table` then `--plan-tables write`, zero PROCESS runs: §4.1 now reads **24 PASS, 0 FAIL, 139 of 139 teeth** with G1 PASS on the straddle `fd480aff → d6f0fdf4`, and the population marker names every commit the records carry. Documents only |
+| `14d3abdd` | the experiment plan's §4 re-rendered by `--measure gate_table` then `--plan-tables write`, zero PROCESS runs: §4.1 now reads **24 PASS, 0 FAIL, 139 of 139 teeth** with G1 PASS on the straddle `fd480aff → d6f0fdf4`, and the population marker names every commit the records carry. Documents only |
