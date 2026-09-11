@@ -2358,6 +2358,8 @@ def read_tally_output(records_dir: Path) -> dict[str, Any]:
         stages.append(
             {
                 "stage": stage,
+                "similarity_verdicts": block.get("similarity_verdicts") or [],
+                "seed_sets": block.get("seed_sets") or {},
                 "record": str(path),
                 "phase": block.get("phase"),
                 "n_tables": block.get("n_tables"),
@@ -2476,6 +2478,72 @@ def compare(
 # --------------------------------------------------------------------------
 # the criterion
 # --------------------------------------------------------------------------
+
+
+def _compare_beside(
+    recomputed: Mapping[str, Any], stages: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """The published values that are not table cells, compared.
+
+    The two stage records carry two more things the report will quote: the
+    similarity verdict of each evaluation-phase arm pair on each ruler, and the
+    seed set each optimisation-phase arm group is over.  A comparison that read
+    only the tables would leave them unverified, so they are compared here and
+    counted in the same denominator.
+    """
+    mismatches: list[str] = []
+
+    def verdict_key(entry: Mapping[str, Any]) -> tuple[Any, ...]:
+        return (
+            entry.get("source"),
+            entry.get("configuration"),
+            entry.get("pair"),
+            entry.get("ruler"),
+        )
+
+    theirs_verdicts: dict[tuple[Any, ...], Mapping[str, Any]] = {}
+    theirs_seed_sets: dict[str, Any] = {}
+    for stage in stages:
+        for entry in stage.get("similarity_verdicts") or []:
+            theirs_verdicts[verdict_key(entry)] = entry
+        theirs_seed_sets.update(stage.get("seed_sets") or {})
+    mine_verdicts = {
+        verdict_key(entry): entry for entry in recomputed["similarity_verdicts"]
+    }
+    for key in sorted(set(theirs_verdicts) ^ set(mine_verdicts), key=repr):
+        where = "the tally" if key in theirs_verdicts else "the analysis"
+        mismatches.append(
+            f"similarity verdict {key!r} is published by {where} alone"
+        )
+    n_compared = 0
+    for key in sorted(set(theirs_verdicts) & set(mine_verdicts), key=repr):
+        for part in ("median", "p90"):
+            n_compared += 1
+            found = mine_verdicts[key].get(part)
+            expected = theirs_verdicts[key].get(part)
+            if found != expected:
+                mismatches.append(
+                    f"similarity verdict {key!r} {part}: the analysis computes "
+                    f"{found!r}, the tally published {expected!r}"
+                )
+    mine_seed_sets = recomputed["seed_sets"]
+    for key in sorted(set(theirs_seed_sets) ^ set(mine_seed_sets)):
+        where = "the tally" if key in theirs_seed_sets else "the analysis"
+        mismatches.append(f"seed set {key!r} is published by {where} alone")
+    for key in sorted(set(theirs_seed_sets) & set(mine_seed_sets)):
+        n_compared += 1
+        if list(theirs_seed_sets[key]) != list(mine_seed_sets[key]):
+            mismatches.append(
+                f"seed set {key!r}: the analysis derives "
+                f"{mine_seed_sets[key]!r}, the tally published "
+                f"{theirs_seed_sets[key]!r}"
+            )
+    return {
+        "n_compared": n_compared,
+        "n_verdicts": len(mine_verdicts),
+        "n_seed_sets": len(mine_seed_sets),
+        "mismatches": mismatches,
+    }
 
 
 #: Modules this one may not import, because importing any of them would make
@@ -2681,6 +2749,21 @@ def verify(campaign: Campaign, *, resume: bool = False) -> framework.Check:
     check.n_compared = result["n_cells_compared"] + 1
 
     assert_not_empty(result)
+
+    # The stage records publish two things besides the tables: the similarity
+    # verdicts of the evaluation phase, and the seed set each optimisation-phase
+    # arm group is over.  They are published numbers, so they are compared and
+    # they are in the denominator.
+    beside = _compare_beside(recomputed, published["stages"])
+    check.n_compared += beside["n_compared"]
+    for line in beside["mismatches"]:
+        check.fail(line)
+    check.note(
+        f"{beside['n_compared']} published value(s) beside the tables — "
+        f"{beside['n_verdicts']} similarity verdict(s) and "
+        f"{beside['n_seed_sets']} seed set(s) — compared with "
+        f"{len(beside['mismatches'])} mismatch(es)"
+    )
 
     check.note(
         f"{result['n_cells_compared']} cell(s) compared over "

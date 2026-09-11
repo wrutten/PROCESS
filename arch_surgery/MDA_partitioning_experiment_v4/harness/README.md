@@ -1108,6 +1108,11 @@ count is split again into cells produced by a **construction** and cells **compo
 than agreement on a computed quantity, so the two are reported apart rather than added into one
 number.
 
+The tables are not the whole of what the tally publishes. The two stage records also carry the
+**similarity verdict** of each evaluation-phase arm pair on each ruler and the **seed set** each
+optimisation-phase arm group is over; a comparison that read only the tables would leave them
+unverified, so they are compared beside the cells and counted in the same denominator.
+
 Four refusals, each a way the comparison could pass over nothing:
 
 | refused | why |
