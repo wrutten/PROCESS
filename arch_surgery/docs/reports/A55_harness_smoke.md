@@ -3,8 +3,8 @@
 > **Document status** — **OPEN.** Task **A55 (harness-smoke)**, harness implementation plan item
 > **H8**. Branch `A55-harness-smoke`, based on `architecture_surgery` at `c919f4c8` (the tip after
 > A62 (exit-audit-restore) and A54 (harness-analysis) merged). Commits on the branch:
-> `f8bce151` (the chain), `b784158c` (two defects the press found), and the commit carrying this
-> report and the experiment plan's filled §4.
+> `f8bce151` (the chain), `b784158c` (two defects the press found), `87951248` (this
+> report and the experiment plan's filled §4).
 > **`EXECUTION_APPROVED` is `False` and no campaign record exists.** Nothing under
 > `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/` or the repository-root `process/` was
 > changed.
@@ -618,4 +618,4 @@ decision should rest on it.
 |---|---|
 | `f8bce151` | `harness/chain.py` (the chain, both plans, the stencil stage, gate `run_kind_separation`); `harness/plan_tables.py`; the run-kind refusals in `stats.py` and, independently, `analysis.py`; the run kind in `records.is_complete_for` and `pool.run`; `--smoke` and `--plan-tables`; `stage_campaign` rewritten; README §10, §15, §16 |
 | `b784158c` | defect 1 — `tally.cells_for` reads `reference.compared_fields()` and `reference_cells` names every excluded field; defect 2 — `gates._capture_after` hands its capture to the pool |
-| *(this commit)* | this report, and the experiment plan's §4 rendered by `--plan-tables write` |
+| `87951248` | this report, and the experiment plan's §4 rendered by `--plan-tables write` |
