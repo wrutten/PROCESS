@@ -4964,7 +4964,9 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
                 "tolerance at the declared audit position"
             ),
             guarded_by="output_path",
-            body=lambda: output_path_measurements(campaign),
+            body=lambda: _with_capture(
+                capture_contrast, output_path_measurements, campaign
+            ),
             printer=print_measurements,
         ),
     }
