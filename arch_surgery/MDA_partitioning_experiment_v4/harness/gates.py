@@ -1288,12 +1288,22 @@ def _capture_after(campaign: Campaign, *, resume: bool) -> None:
     """The "after" capture: this tree, this commit, re-made unless resuming.
 
     Unlike the "before" capture it is always re-makeable — it is a capture of
-    the tree the gate is being run in — so it follows the ordinary rule: kept
-    when ``--resume`` asks for it, re-made when it does not.
+    the tree the gate is being run in — so it follows the ordinary rule, and
+    the ordinary rule is ``pool.run``'s, not this function's: a run is kept
+    only where its directory holds a **complete record of the same job**, and
+    re-made otherwise.
+
+    It used to return early whenever ``--resume`` was given and a manifest
+    existed, which made the *manifest's existence* the evidence — precisely
+    what ``pool.run`` says a directory may never be.  Task **A55
+    (harness-smoke)** found it: under the merged schema every record of the
+    previous capture is incomplete, and the gate kept all six anyway, so a
+    press that should have re-made them reported a straddle ending at a commit
+    it had not measured.  Handing the whole capture to the pool puts the
+    completeness contract back in the path, which is the standing property of
+    harness plan amendment 17 — ``--resume`` cannot cross a schema change, and
+    that is not to be weakened for a cheaper press.
     """
-    manifest = neutrality_root(campaign) / "after" / "manifest.json"
-    if resume and manifest.exists():
-        return
     capture_neutrality(campaign, "after", resume=resume)
 
 

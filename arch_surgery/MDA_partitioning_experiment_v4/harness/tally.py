@@ -394,16 +394,27 @@ CONSTRUCTION_NOTES: dict[str, str] = {
 def cells_for(phase: str, published: Mapping[str, Any]) -> list[str]:
     """The previous revision's published cells this tally compares, in order.
 
-    Derived: the compared-field list for the phase, restricted to the fields
-    the entry actually published.  A field named by the list and absent from
-    the entry is **not** silently skipped — :func:`reference_cells` reports it
-    — and a field the entry publishes that the list no longer names is
+    Derived: :func:`harness.reference.compared_fields` — the reference's own
+    field list **less what the reproduction gate excludes by name** — restricted
+    to the fields the entry actually published.  A field named by the list and
+    absent from the entry is **not** silently skipped (:func:`reference_cells`
+    reports it) and a field the entry publishes that the list no longer names is
     reported too, because both are the compared set drifting away from what is
     on disk.
+
+    It reads ``compared_fields`` and not ``REFERENCE_FIELDS`` because the two
+    comparisons are one criterion implemented twice: the reproduction gate
+    compares the reference entry against the record, and this compares the same
+    cells recomputed through this revision's constructions.  A field the project
+    has ruled not comparable — the optimisation phase's exit-audit residual,
+    whose two sides were measured by **two instruments** (ruling D25, harness
+    plan §7.1) — is not comparable in either of them.  Excluding it here is not
+    a smaller comparison: :func:`reference_cells` names every excluded field with
+    the reason the reference file records, exactly as the gate does.
     """
     return [
         path
-        for path in reference_mod.REFERENCE_FIELDS[phase]
+        for path in reference_mod.compared_fields(phase)
         if path in published
     ]
 
@@ -455,7 +466,7 @@ def reference_cells(
         compared = cells_for(run.phase, published)
         declared_but_absent = [
             path
-            for path in reference_mod.REFERENCE_FIELDS[run.phase]
+            for path in reference_mod.compared_fields(run.phase)
             if path not in published
         ]
         published_but_not_compared = [
@@ -463,6 +474,21 @@ def reference_cells(
             for path in published
             if path not in set(reference_mod.REFERENCE_FIELDS[run.phase])
         ]
+        # The fields the project has ruled not comparable, named one by one
+        # with the value the reference holds and the reason recorded for the
+        # exclusion.  Never dropped silently, and never counted as a match:
+        # the gate's own practice, in the second implementation of the same
+        # criterion.
+        excluded_by_name = {
+            path: {
+                "in_the_reference": published[path],
+                "why": why,
+            }
+            for path, why in reference_mod.FIELDS_NOT_COMPARED.get(
+                run.phase, {}
+            ).items()
+            if path in published
+        }
         cells: list[dict[str, Any]] = []
         for previous_path in compared:
             name = CELL_NAMES.get(previous_path, previous_path)
@@ -520,6 +546,8 @@ def reference_cells(
                 "n_matched": sum(1 for c in cells if c["matched"]),
                 "declared_but_not_published": declared_but_absent,
                 "published_but_not_compared": published_but_not_compared,
+                "n_excluded_by_name": len(excluded_by_name),
+                "excluded_by_name": excluded_by_name,
                 "cells": cells,
             }
         )
@@ -552,10 +580,19 @@ def reference_cells(
         ),
         "cells_by_construction": constructed,
         "compared_set_drift": drift,
+        "n_cells_excluded_by_name": sum(
+            row["n_excluded_by_name"] for row in rows
+        ),
+        "cells_excluded_by_name": sorted(
+            {path for row in rows for path in row["excluded_by_name"]}
+        ),
         "compared_set_is": (
-            "derived per run as reference.REFERENCE_FIELDS[phase] intersected "
-            "with the fields that run's entry published, so a field a later "
-            "task drops from the compared set is dropped here too"
+            "derived per run as reference.compared_fields(phase) — the "
+            "reference's own field list less what the reproduction gate "
+            "excludes by name — intersected with the fields that run's entry "
+            "published, so a field a later task drops from the compared set is "
+            "dropped here too, and is named with its reason rather than "
+            "silently lost"
         ),
         "reference": str(reference_mod.REFERENCE_PATH),
         "reference_source": (document.get("provenance") or {}).get("source"),
