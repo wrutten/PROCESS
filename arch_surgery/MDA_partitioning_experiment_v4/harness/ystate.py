@@ -205,7 +205,7 @@ class RulerError(ValueError):
     """
 
 
-def _assert_ruler(ruler: str) -> str:
+def assert_ruler(ruler: str) -> str:
     if ruler not in RULERS:
         raise RulerError(
             f"{ruler!r} is not a convergence ruler; expected one of {RULERS}.  "
@@ -871,7 +871,7 @@ class YSpec:
         computed**: the frozen path costs exactly what it cost before, which
         gate G1 is what proves.
         """
-        _assert_ruler(ruler)
+        assert_ruler(ruler)
         mixed = ruler == RULER_MIXED
         idx_c: list[int] = []
         scaled_l: list[float] = []
