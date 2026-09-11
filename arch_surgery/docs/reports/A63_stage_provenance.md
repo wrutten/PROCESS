@@ -1,37 +1,42 @@
 # A63 (stage-provenance) — what a stage read, and which tree took a census
 
 > **Document status** — **OPEN**. Task **A63 (stage-provenance)**, branch `A63-stage-provenance`,
-> off `architecture_surgery` at `29904573`. Reports at `81bd6090`. Scope is issue **I-22** and
-> nothing else: no PROCESS run was made, `EXECUTION_APPROVED` is `False`, and nothing under
+> off `architecture_surgery` at `29904573`. Code at `1f281529`; the experiment plan's §4 re-rendered
+> at `8cfbc153`. Scope is issue **I-22** plus the coordinator's two mid-task rulings.
+> `EXECUTION_APPROVED` is `False`. Nothing under
 > `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/` or the repository-root `process/` was
-> touched.
+> touched; the only edit to `EXPERIMENT_PLAN.md` is §4, written by `--plan-tables write` from the
+> records.
+>
+> **Three PROCESS runs were made**, all after the coordinator's ruling and all of them evaluation
+> censuses: the re-take of §4.3. Every other stage in this report is zero-run.
 
 ---
 
 ## 1. Verdict
 
 Both halves of **I-22** are closed, each with a refusal and a tooth, and each demonstrated on this
-tree's own records rather than on an invented one.
+tree's own records as well as on a fixture.
 
 | | what it now does | shown by |
 |---|---|---|
-| **(a)** | the `gate_table` stage record carries `records_read` — path, sha256, commit, time and verdict for every verdict record it read, with the glob pattern beside the matches — and `--plan-tables` **refuses** when any of them has been re-made, removed or added to since, naming the gate, both commits and both times | gate `stage_provenance`, 4/4 teeth; and a live refusal on the real records (§4.2) |
-| **(b)** | a census record stamps `tree_git_head` and the other thirteen fields the run records stamp for provenance (`record_format` `census-2`); an unstamped one is **refused by name** by the stage that reads a census, and the self-check names every one on disk | gate `artifacts_census`'s two new teeth, run without a PROCESS run via `--artifacts teeth` (13/13); the survey in gate `stage_provenance` |
+| **(a)** | the `gate_table` stage record carries `records_read` — path, sha256, commit, time and verdict for every verdict record it read, with the glob pattern beside the matches — and `--plan-tables` **refuses** when any of them has been re-made, removed or added to since, naming the gate, both commits and both times | gate `stage_provenance`, 5/5 teeth; and a live refusal on the real records (§4.2) |
+| **(b)** | a census record stamps `tree_git_head` and the other thirteen fields the run records stamp (`record_format` `census-2`); an unstamped one is **not kept by `--resume`** — it is re-taken, as `pool.run` re-runs an incomplete run record — and is **refused by name** by every reader that cannot re-take it | the re-take of three censuses (§4.3); gate `artifacts_census`, 5/5 teeth |
 
-**Every zero-run stage re-run, at `81bd6090`:**
+**Every stage re-run after the rulings, at `1f281529` (plan at `8cfbc153`):**
 
 | stage | result |
 |---|---|
-| `--gate stage_provenance --resume` | **PASS** — 46 compared, 0 mismatched, **4/4 teeth** |
+| `--gate artifacts_census --resume --census-entry evaluation`, from the repository root | **PASS** — 81 compared, 0 mismatched, **5/5 teeth**; three censuses re-taken, `census-1` → `census-2` |
 | `--gate artifacts_check --resume` | **PASS** — 93 compared, 0 mismatched, 3/3 teeth |
-| `--artifacts teeth` | **13/13 teeth tripped**, including the two new census teeth |
-| `--selfcheck` | **PASS**, 7 of 7 checks |
-| `--measure gate_table --resume` | 25 registered gates: **25 PASS, 0 FAIL, 0 not run; 143 of 143 teeth tripped** |
-| `--plan-tables check` | freshness **agrees** (29 verdict records, all byte-identical to disk); the document's §4 against the records: **1 758 lines identical**, 3 only in the document, 4 only from the records, **4 hunks** — exit 3, nothing written |
+| `--gate stage_provenance --resume` | **PASS** — 17 compared, 0 mismatched, **5/5 teeth** |
+| `--artifacts teeth` | **14/14 teeth tripped** (three of them this task's) |
+| `--selfcheck`, this tree | **PASS**, 7 of 7 checks |
+| `--selfcheck`, a tree with no `runs/` at all | **PASS**, 7 of 7 — it was **FAIL (stage provenance)** before the fix of §3.5 |
+| `--measure gate_table --resume` | 25 registered gates: **25 PASS, 0 FAIL, 0 not run; 147 of 147 teeth tripped** |
+| `--plan-tables write` | 1 762 lines replacing 1 762; **5 lines changed, every one inside §4.1** |
+| `--plan-tables check` (after) | **IDENTICAL** — 1 762 of 1 762 lines, 0 hunks, exit 0 |
 | `--gates` | 25 gates, 9 measurement stages |
-
-The four hunks are §1's own consequence and are listed with their reasons in §4.3. **The plan was
-not edited**: `--plan-tables check` is a new mode that compares and writes nothing.
 
 ---
 
@@ -69,22 +74,20 @@ there.** Three pieces, all in `harness/framework.py`:
 
 Why the framework and not `plan_tables.py`: the declaration, the stamp and the assertion are one
 idea, and the next stage that reads verdicts or another stage's record inherits all three by adding
-one tuple. Putting the survey in the framework also keeps it beside `survey_heads`, which answers
-the same question one level down (*which commit were the runs made at*), so a reader finds both
-kinds of provenance in one file. `plan_tables.assert_stage_read_what_is_there` is a five-line
-adapter that translates the framework's refusal into the renderer's own error type.
+one tuple. Putting the survey there also keeps it beside `survey_heads`, which answers the same
+question one level down (*which commit were the runs made at*), so a reader finds both kinds of
+provenance in one file. `plan_tables.assert_stage_read_what_is_there` is a five-line adapter that
+translates the framework's refusal into the renderer's own error type.
 
 **What is deliberately *not* routed through it.** The tally stages and `recomputed_tables` read
 **run** records, and their provenance is `runs_provenance` — commits and count, compared by
 `analysis.py` against its own survey. That comparison is about a *population*; `records_read` is
-about *files*. Declaring both for one stage would be two mechanisms answering one question, and the
-run-record one is already gated. So `reads_records` is declared by exactly one stage today.
+about *files*. Declaring both for one stage would be two mechanisms answering one question.
 
 The stamped block is named `records_read`, not `verdicts_read` as the brief wrote it: the mechanism
 is not about verdicts, and a name that says "verdict" on a block that will also hold stage records
-would have to be renamed the first time it is reused (the standing rule: name a thing for what it
-does). The block's contents are as the brief asked, per record: path, digest, `generated`,
-`tree_git_head`, verdict.
+would have to be renamed on first reuse. Its contents are as the brief asked, per record: path,
+digest, `generated`, `tree_git_head`, verdict.
 
 ### 3.2 The refusal in `--plan-tables`, and a check mode
 
@@ -93,19 +96,17 @@ agreeing sentence is printed as `freshness :`. A stage record written *before* t
 block at all) is refused too — otherwise the silent path would simply move.
 
 `--plan-tables` gained **`check`** beside `show` and `write`: it renders, compares with the section
-the document already carries, prints the differences and **writes nothing**, exiting 3 when they
-differ. It exists because this task must report the state of a shared document it may not edit.
+the document carries, prints the differences and **writes nothing**, exiting 3 when they differ.
 
 The comparison is a **diff**, not a line-for-line comparison against position. The first
-implementation was positional and reported *1 724 of 1 762 lines differing* for what is one inserted
-table row — a count over a population no reader would recognise, which is trap T11's shape. With
-`difflib` the same state reads **1 758 identical, 4 hunks**.
+implementation was positional and reported *1 724 of 1 762 lines differing* for what was one
+inserted table row — a count over a population no reader would recognise, which is trap T11's shape.
+With `difflib` the same state read **1 758 identical, 4 hunks**.
 
-**One defect found and fixed in passing.** `plan_tables.population_marker` surveyed
-`campaign.runs_dir/gates` while the tables were rendered from `records_dir`. They are the same
-directory in every ordinary press and different whenever `--outdir` redirects the records — a
-population marker describing one set of runs above tables computed from another. It now surveys the
-directory it renders from.
+**One defect found in passing.** `plan_tables.population_marker` surveyed `campaign.runs_dir/gates`
+while the tables were rendered from `records_dir` — the same directory in every ordinary press, and
+different whenever `--outdir` redirects the records: a population marker describing one set of runs
+above tables computed from another. It now surveys the directory it renders from.
 
 ### 3.3 Census records carry the tree's commit
 
@@ -113,61 +114,107 @@ directory it renders from.
 group declares for a run record — `tree`, `tree_git_head`, `tree_git_branch`, `tree_git_describe`,
 the two dirt counts, `tree_git_dirty`, `tree_contains_base_commit`, `base_commit`, `process_file`,
 `process_copy_provenance`, `python`, `python_version`, `pythonpath` — and keeps the nested
-`provenance` block beside them so that a reader comparing an old record with a new one finds the
-same block in both. `record_format` moves `census-1` → `census-2`; the bump is the convention here
+`provenance` block beside them so a reader comparing an old record with a new one finds the same
+block in both. `record_format` moves `census-1` → `census-2`; the bump is the convention here
 (`records.FORMAT` is `run-record-1`, `reference.FORMAT` is `reproduction-reference-1`).
-
-`census.assert_stamped` refuses a record missing any of them, by name, with its format, the count
-missing and the command that re-takes it. It is called in `take()` **on both paths** — after a fresh
-run and on the resume path — so the stage that reads a census (gate `artifacts_census`) refuses
-rather than comparing a census nothing can place. `run_record()` refuses a census sitting beside no
-record at all.
 
 `tree_stamp` is a function rather than four lines inside the child so that the self-check can run
 **that code** and report whether a census taken now would be complete; a restatement beside it would
 pass while the child stamped nothing.
 
-### 3.4 A seventh self-check, `stage_provenance`
+### 3.4 The fork, as the coordinator ruled it
 
-`selfcheck.check_stage_provenance`, promoted to a gate by the existing machinery (`--gate
-stage_provenance`, `--selfcheck`, `--gates`). It copies this tree's own verdict and stage records
-into a scratch directory — only `gate.json` and `measurements.json`, never the runs — and breaks the
-copy four ways, each of which `plan_tables.render` must refuse while the unmodified copy renders.
-Nothing on disk is written.
+I had made an unstamped census a **refusal on every path**, including `--resume`, and put the
+alternative to the coordinator. **The ruling: follow harness plan amendment 17's standing property
+(a).** A record incomplete under the current contract is re-taken, exactly as `pool.run` re-runs an
+incomplete run record; the refusal stays for every reader that cannot re-take the measurement.
+Implemented as `census.resume_keeps(directory, configuration=…, entry=…, read_census=…) →
+(keep, why)`:
+
+* it is **what `--resume` consults and the only thing it consults** — the census and the record
+  beside it, never a directory's existence (trap T13);
+* an unstamped record is not kept, and the reason names the format and the missing fields;
+* before the pool clears the directory, the superseded record is **read out and named** — its
+  format and its commit — into the stage record (`run.superseded`) and onto the terminal, so what
+  it said is not lost with it;
+* `assert_stamped` is unchanged and still refuses, after a fresh run and for every other reader.
+
+The decision is a pure function of two files, so the tooth for it starts no PROCESS run: it builds
+both cases in a scratch directory.
+
+### 3.5 The self-check writes its own fixture (the coordinator's second finding)
+
+On a tree with no `runs/` directory at all — a fresh worktree, or a trial merge of this branch onto
+trunk, which is what every new task worktree looks like before its first press — `--selfcheck`
+reported **FAIL (stage provenance)** while the other six checks passed, because the check read the
+tree's real records and there were none. A self-check may not depend on a press having happened
+(A52's rule: the self-checks build their own scratch fixtures).
+
+`selfcheck._scratch_records` now **synthesises** the fixture instead of copying the live records:
+three verdict records and the four stage records §4 is rendered from, each with the least content
+the renderer accepts, so the four breaks still run through `plan_tables.render` itself rather than
+through a function beside it. A fifth tooth writes a scratch census record and shows the reader
+refusing it and `--resume` declining to keep it unstamped, and both accepting it once stamped. The
+live records are still read — their freshness and their stamps are **noted** — and a tree holding
+none says so in one sentence.
+
+This also removed a second-order defect I had introduced: the earlier version copied the live
+records, so a gate run after the last `--measure gate_table` made the unmodified copy legitimately
+stale and the check failed for a reason unrelated to what it binds. With a synthesised fixture the
+check binds the mechanism and nothing else, on every tree.
+
+Reproduced before and after, in a throwaway detached worktree of this branch's own tip
+(`git worktree add --detach`, removed with `git worktree remove --force` when done; it held no
+artifacts):
+
+| tree | before the fix (`47be2b0d`) | after (`1f281529`) |
+|---|---|---|
+| no `runs/` directory at all | 6 PASS, **FAIL (stage provenance)** — *"there is no gate_table stage record to check"* | **7 PASS**; stage provenance 10 compared, 0 mismatched, **5/5 teeth**, noting *"this tree holds no verdict record, no stage record and no census record"* |
+| this worktree, seeded | 7 PASS | 7 PASS |
+
+### 3.6 A seventh self-check, `stage_provenance`
+
+Promoted to a gate by the existing machinery (`--gate stage_provenance`, `--selfcheck`, `--gates`),
+five declared teeth. Nothing on disk is written; no PROCESS run.
 
 ---
 
 ## 4. The numbers, with their denominators
 
-### 4.1 Gate `stage_provenance` — PASS, 46 compared, 0 mismatched, 4/4 teeth
+### 4.1 Gate `stage_provenance` — PASS, 17 compared, 0 mismatched, 5/5 teeth
 
-*Caption: the population is this tree's records at `81bd6090`. "Compared" sums four kinds and names
-each: a record is one file on disk except for the two path checks. Nothing here starts PROCESS.*
+*Caption: the population, at `1f281529` in this worktree. "Compared" sums six kinds and names each;
+a record is one file. Nothing here starts PROCESS.*
 
 | what | how many |
 |---|---|
-| verdict records copied and surveyed | 29 |
-| stage records copied | 9 |
+| verdict records, written by the check into its scratch directory | 3 |
+| stage records, likewise | 4 |
+| a scratch census record, read unstamped and stamped | 2 |
 | the live `gate_table` record's freshness, read | 1 |
 | the census stamping path, run | 1 |
-| census records on disk, surveyed by name | 6 |
-| **total compared** | **46** |
+| live census records, surveyed and named | 6 |
+| **total compared** | **17** |
+
+On a tree with no records the same check compares **10** — the first three rows plus the stamping
+path — and passes.
 
 | tooth | what it breaks | result |
 |---|---|---|
-| a verdict re-made at a later commit after the stage record was written | `artifacts_census`'s verdict moved from `f8bce151` at `2026-09-11T17:44:47` to `eeeeeeee` at `2099-01-01T00:00:00` in the scratch copy | **TRIPPED** — refused, naming the gate, both commits and both times; the same records unmodified rendered |
+| a verdict re-made at a later commit after the stage record was written | one scratch verdict moved to commit `eeee…` at `2099-01-01` | **TRIPPED** — refused, naming the gate, both commits and both times; the unmodified fixture rendered |
 | a verdict record written after the stage record | a `gate.json` no stage ever read, added | **TRIPPED** — refused ("written after the stage record"); only the declared *pattern* can find this one, which is why the block carries the pattern and not just its matches |
-| a verdict record the stage read and that is gone | one verdict deleted from the copy | **TRIPPED** — refused ("read by the stage and no longer on disk") |
-| a stage record that does not say what it read | the `records_read` block removed from the copy | **TRIPPED** — refused, with the instruction to re-run `--measure gate_table` |
+| a verdict record the stage read and that is gone | one verdict deleted | **TRIPPED** — refused ("read by the stage and no longer on disk") |
+| a stage record that does not say what it read | the `records_read` block removed | **TRIPPED** — refused, with the instruction to re-run `--measure gate_table` |
+| a scratch census record with no tree stamp | a census record written without the stamp, then with it | **TRIPPED** — the reader refused it and `--resume` did not keep it (so it is re-taken); stamped, the reader accepted it and `--resume` kept it |
 
-The refusal, as the button prints it (from the first tooth):
+The refusal, as the button prints it:
 
 > `the gate_table stage record does not describe the records on disk: 1 disagreement(s) against the
-> 29 record(s) it read.` / `artifacts_census: at a different commit from the one the stage read and
-> newer than the one the stage read — the stage read f8bce151 generated 2026-09-11T17:44:47, disk
-> has eeeeeeee generated 2099-01-01T00:00:00`
+> 3 record(s) it read.` / `a_first_gate: at a different commit from the one the stage read and newer
+> than the one the stage read — the stage read 00000000 generated 2026-09-11T19:07:02, disk has
+> eeeeeeee generated 2099-01-01T00:00:00`
 
-### 4.2 The same refusal on the real records, not a copy
+### 4.2 The same refusal on the real records, not a fixture
 
 Between `--gate stage_provenance` and the next `--measure gate_table`, the gate's own verdict is
 newer than the stage record that summarises it. `--plan-tables check` then refuses, exit 3:
@@ -180,85 +227,86 @@ newer than the stage record that summarises it. `--plan-tables check` then refus
 This is amendment 19's rule (ix) made mechanical: the order is `--gate …`, then `--measure
 gate_table`, then `--plan-tables`; pressed the other way round the renderer stops instead of
 publishing the older table. After `--measure gate_table --resume` the same command reports
-`freshness : … every one of them is byte-identical to what is on disk now`.
+`freshness : … every one of them is byte-identical to what is on disk now`, which is the state this
+report closes in.
 
-**This is also why the self-check re-stamps its scratch baseline.** The first version inherited the
-press order: because the check copies the *real* records, a gate run after the last `--measure`
-made the unmodified copy legitimately stale and the check failed for a reason that has nothing to do
-with what it binds. The four breaks now measure the mechanism against a baseline re-surveyed inside
-the scratch directory, and the live state is **read and noted** — including the refusal the renderer
-would print — rather than failed on. (Caught by running `--selfcheck` immediately after `--gate
-stage_provenance`; it failed, correctly and for the wrong reason.)
+### 4.3 The census re-take — the only PROCESS runs of this task
 
-### 4.3 `--plan-tables check`: the document against the records
+`--gate artifacts_census --resume --census-entry evaluation`, pressed once from the repository root:
+**PASS**, 81 compared, 0 mismatched, 5/5 teeth. Each of the three configurations printed
 
-131 tables, 3 621 cells; 1 761 lines in the document against 1 762 from the records; **1 758
-identical**, 3 only in the document, 4 only from the records, in **4 hunks**:
+> `RE-TAKEN — the record beside it is 'census-1' and carries 13 of 14 declared provenance field(s):
+> … A record incomplete under the current contract is re-taken, not kept — the stamp is what a
+> survey places the record by (trap T13)`
 
-*Caption: one row per hunk of the diff between `EXPERIMENT_PLAN.md` §4 as committed and §4 as these
-stage records render it now. Nothing was written.*
+*Caption: one row per census record under `runs/census/`, before and after the press. "Entry" is
+what the census was taken over: the evaluation entry is one design point and seconds long, the
+optimisation entry is a full optimisation. Wall clock is progress information, not a measurement
+(I-10).*
 
-| hunk | document | records | why |
+| record | before | after | wall clock |
 |---|---|---|---|
-| §4.1 caption, line 13 | "24 registered gate(s) … 13 of the harness's own checks" | "25 … 14" | this task's new gate |
-| §4.1 row, line 24 | `artifacts_check` … 95 compared | 93 compared | **not this task's doing**: the two `input_file_lifted` rows are PENDING in this worktree because `artifacts_derive_inputs` (a PROCESS-running stage) has never run here. The gate PASSes at 93/93 and names both pending rows |
-| §4.1, line 41 | — | one row, `stage_provenance` … PASS, 46, 0, 4/4 | this task's new gate |
-| §4.1 summary, line 42 | 24 PASS, 139 of 139 teeth | 25 PASS, 143 of 143 teeth | this task's new gate and its four teeth |
+| `large_tokamak_nof/evaluation` | census-1, no top-level stamp | **census-2 at `47be2b0d`**, branch `A63-stage-provenance`, not dirty | 45.9 s (first run; numba JIT dominates it) |
+| `low_aspect_ratio_DEMO/evaluation` | census-1 | **census-2 at `47be2b0d`** | 5.0 s |
+| `st_regression/evaluation` | census-1 | **census-2 at `47be2b0d`** | 5.4 s |
+| `large_tokamak_nof/optimisation` | census-1 | **census-1, unchanged** | — |
+| `low_aspect_ratio_DEMO/optimisation` | census-1 | **census-1, unchanged** | — |
+| `st_regression/optimisation` | census-1 | **census-1, unchanged** | — |
 
-Every other line of §4 — the whole of §4.2, §4.3, §4.4, 1 758 lines — is identical, which is also a
-check on the renderer: the same records rendered at a different commit in a different worktree
+**Three of six are stamped.** The three optimisation-entry records were not touched, because the
+press asked for the evaluation entry; they are re-taken the first time a stage asks for that entry
+(`--census-entry optimisation`, one full optimisation each). Gate `stage_provenance` names all six
+every time it runs — *"3 carry the tree stamp …; 3 do not"* — so the remainder is visible rather
+than assumed.
+
+### 4.4 `--plan-tables write`: §4 re-rendered from the records
+
+1 762 lines replacing 1 762, of which **five changed, every one inside §4.1**; `--plan-tables check`
+afterwards reports **1 762 of 1 762 identical, 0 hunks**, exit 0.
+
+*Caption: one row per changed line of `EXPERIMENT_PLAN.md` §4. No cell was typed by hand; the
+section is the `gate_table` stage record's output.*
+
+| line | before | after | why |
+|---|---|---|---|
+| §4.1 caption | "24 registered gate(s) … 13 of the harness's own checks" | "25 … 14" | this task's new gate |
+| `artifacts_check` row | 95 compared | 93 compared | **not this task's doing**: the two `input_file_lifted` rows are PENDING in this worktree because `artifacts_derive_inputs` (a PROCESS-running stage) has never run here. The gate PASSes at 93/93 and names both pending rows |
+| `artifacts_census` row | 81 compared, 2/2 teeth | 81 compared, **5/5 teeth** | three more teeth; the denominator is unchanged, the re-taken census comparing against the same committed artifacts |
+| new row | — | `stage_provenance` … PASS, 17, 0, 5/5 | this task's new gate |
+| summary | 24 PASS, 139 of 139 teeth | **25 PASS, 147 of 147 teeth** | +5 (the new gate) +3 (`artifacts_census`) |
+
+Everything else in §4 — 1 757 lines, the whole of §4.2, §4.3 and §4.4 — is unchanged, which is also
+a check on the renderer: the same records rendered at a different commit in a different worktree
 reproduce the committed section exactly.
 
-### 4.4 The census records: the "before", named
+### 4.5 `--artifacts teeth` — 14/14, three of them this task's
 
-Gate `stage_provenance` surveys `runs/census/` and reports, without failing:
-
-> `census records: 0 carry the tree stamp (none); 6 do not` — each named with its format, its
-> missing count and where its commit can still be read:
-
-*Caption: the six census records as seeded into this worktree, one per configuration and entry.
-"Missing" is of the 14 declared provenance fields; `process_file` is the one they carry. The
-commit column is `provenance.tree_git_head` — present in the record, but one level below where a
-stamp survey looks.*
-
-| record | format | missing | commit, reachable only as `provenance.tree_git_head` |
-|---|---|---|---|
-| `large_tokamak_nof/evaluation` | census-1 | 13 of 14 | `3d64625c` |
-| `large_tokamak_nof/optimisation` | census-1 | 13 of 14 | `3347169c` |
-| `low_aspect_ratio_DEMO/evaluation` | census-1 | 13 of 14 | `3d64625c` |
-| `low_aspect_ratio_DEMO/optimisation` | census-1 | 13 of 14 | `3347169c` |
-| `st_regression/evaluation` | census-1 | 13 of 14 | `3d64625c` |
-| `st_regression/optimisation` | census-1 | 13 of 14 | `3347169c` |
-
-They were **not** re-made — that is a PROCESS run, and they are the "before". The same check runs
-`census.tree_stamp` itself and reports that a census taken now would carry all 14 fields.
-
-### 4.5 The two new census teeth — `--artifacts teeth`, 13/13
-
-*Caption: the four artifact stages' deliberate breaks in one press; no PROCESS run. The last two
-rows are this task's.*
+*Caption: the four artifact stages' deliberate breaks in one press; no PROCESS run.*
 
 | tooth | evidence |
 |---|---|
-| a census record carrying no tree stamp | the real record at `runs/census/large_tokamak_nof/evaluation/metrics.json` (`census-1`, 13 of 14 fields missing): **refused**; the same record with the fields present (null counts as carried): **accepted** |
+| a census record carrying no tree stamp | an on-disk `census-1` record (13 of 14 fields missing): **refused**; the same record with the fields present (null counts as carried): **accepted** |
+| an unstamped census record offered to `--resume` | a scratch copy of a real census beside an unstamped record: **not kept**, so it is re-taken; beside a stamped record: **kept** |
 | a census with no run record beside it | a directory holding no `metrics.json`: **refused** |
 
-The discriminating half matters: a check that refuses everything is not a check.
+The discriminating half matters in each: a check that refuses everything is not a check.
 
 ---
 
 ## 5. Autonomous decisions, each with its reversal
 
-*Caption: one row per decision taken without asking, what it rests on, and the edit that reverses it.*
+*Caption: one row per decision taken without asking, what it rests on, and the edit that reverses
+it. The fork that was **not** taken autonomously — the resume path — is §3.4, ruled by the
+coordinator.*
 
 | # | decision | why | reversal |
 |---|---|---|---|
 | 1 | the freshness mechanism lives in `framework.py` (declaration, stamp, assertion), not beside the renderer | the brief's own test: it is one mechanism, and the next stage inherits it by declaring one tuple | move the three functions into `plan_tables.py` and drop `Measurement.reads_records`; the call sites are two |
-| 2 | the block is `records_read`, not `verdicts_read` | it holds whatever a stage read; naming it for today's only content would force a rename on first reuse | rename the key in `framework.survey_records` and its two readers |
+| 2 | the block is `records_read`, not `verdicts_read` | it holds whatever a stage read; naming it for today's only content forces a rename on first reuse | rename the key in `framework.survey_records` and its two readers |
 | 3 | the survey is by **glob pattern**, so it includes four legacy verdict records (`copy_identity`, `edit_behaviour`, `frozen_physics`, `smoke_import`) that the registry does not name and that carry no `generated` and no `tree_git_head` | only a re-glob can find a verdict written *after* the stage; over-inclusion refuses too often and loudly, under-inclusion is the silent defect I-22 is about | restrict `gate_table`'s stamp to the rows it rendered — one line in `Measurement.run` — and accept that a new verdict goes unnoticed |
-| 4 | an unstamped census is **refused**, not silently re-taken, on the resume path | the brief asks for a refusal; and a stage asked to *compare* a census should not decide on its own to start a measurement | in `census.take`, replace the `assert_stamped` call on the resume path with `if missing_stamp_fields(...)`: fall through to the run. Then `--gate artifacts_census --resume` re-takes the three censuses (~4 s each) instead of failing. **This is the one thing I would put to the user** — see §7 |
-| 5 | the six unstamped census records are **named** by the self-check, not failed on | what consumes them refuses; failing here would block a merge for a condition the brief told me to leave in place | turn the `check.note` into `check.fail` — one line |
-| 6 | the self-check re-stamps its scratch baseline and *notes* the live record's freshness | otherwise the check's verdict depends on the press order rather than on the mechanism (§4.2) | drop the re-survey in `_scratch_records`' caller and the check fails whenever a gate was run after `--measure gate_table` |
+| 4 | the superseded census record is read out and **named** before the pool clears its directory | otherwise a re-take is silent about what it replaced, which is the shape of the defect this task exists to close | drop the `superseded` block in `census.take` |
+| 5 | the self-check's fixture is **synthesised**, always, rather than copied when records exist | one code path, so the empty-tree case is the exercised case and not the rare one; and a fixture that changes shape with the tree gives a check whose meaning varies (§3.5) | branch in `_scratch_records`: copy when the live directory has records, synthesise otherwise — two tooth paths, one of them rarely run |
+| 6 | the unstamped census records are **named** by the self-check, not failed on | what consumes them refuses, and `--resume` re-takes them; failing here would block a merge for a condition the press resolves | turn the `check.note` into `check.fail` — one line |
 | 7 | `--plan-tables check` compares as a **diff** | positional comparison reported 1 724 differences for one inserted row (trap T11) | revert to the positional comparator in `plan_tables.check` |
 | 8 | `population_marker` follows `records_dir` | a marker describing one population above tables from another is the failure this module exists to prevent | restore `campaign.runs_dir` |
 
@@ -266,54 +314,45 @@ The discriminating half matters: a check that refuses everything is not a check.
 
 ## 6. Limits
 
-* **No PROCESS run was made**, so the `census-2` record shape has never been written by an actual
-  census. What is measured is that the stamping path (`census.tree_stamp`, the function the child
-  calls) produces all 14 declared fields when run against the copy — the code itself, not a
-  restatement. The first real census is what proves the child writes them.
 * **The refusals are one-directional.** They catch a stage record older than its sources; they do
-  not catch a stage record built from records that were *themselves* wrong, and they say nothing
-  about whether a verdict is correct.
+  not catch a stage record built from records that were themselves wrong, and they say nothing about
+  whether a verdict is correct.
 * **The digest is decisive, the commit and the time are narrative.** Two verdicts with different
   bytes at the same commit and the same second are refused as "different bytes at the same commit
   and time"; the message cannot say more because there is no more in the records.
-* **The `artifacts_census` gate could not be run here** — it starts PROCESS. Its two new teeth were
-  run through `--artifacts teeth`, which does not. Until a census is re-taken, `--gate
-  artifacts_census --resume` **will refuse** on all three configurations, naming the six records.
-  That is the intended behaviour of decision 4 and the thing needing a ruling (§7).
-* **§4.1's row count and teeth total move with this task** (24 → 25 gates, 139 → 143 teeth). The
-  plan's §4 was not re-rendered here; whoever merges presses `--measure gate_table` then
-  `--plan-tables write`.
+* **Three census records are still `census-1`** — the optimisation-entry ones (§4.3). They are
+  re-taken by the first press that asks for that entry, which is a full optimisation per
+  configuration; until then the survey names them and any reader of them refuses.
+* **The re-take was measured at the evaluation entry only.** That an optimisation-entry census
+  stamps identically follows from the code path being the same one; it has not been observed.
 * **`artifacts_check` reports 93, not A55's 95**, because this worktree has no derived input files —
   a property of the seed, not a regression. The gate names both pending rows.
-* The population of every number above is this worktree's seeded records (167 run records under
-  `runs/gates`, 6 census records), not the campaign, which has not run.
+* **The three timings in §4.3 are context, not evidence** (I-10): one sample each, on a shared
+  machine, the first dominated by numba JIT.
+* The population of every number above is this worktree's records — 170 run records under
+  `runs/gates` and `runs/census` — not the campaign, which has not run.
 
 ---
 
-## 7. What needs a ruling, and what the plan and TRAPS should gain
+## 7. What the harness plan and TRAPS should gain
 
-**The one fork.** Decision 4: an unstamped census is refused rather than re-taken. The alternative
-is the standing property recorded in harness plan amendment 17 (a) — *a record made before a schema
-field existed is incomplete under the current contract and is re-run; this is the contract working,
-not a defect* — which would make `--gate artifacts_census --resume` re-take the three evaluation
-censuses (seconds each) and self-heal. I chose the refusal because the brief asks for one and
-because a comparison stage should not start a measurement on its own; the two differ by one line.
-**Whoever rules should also decide when the six records are re-taken**, since until then that gate
-fails by design.
-
-**The harness plan (Appendix A) should gain, at the merge:**
+**The harness plan (Appendix A), at the merge:**
 
 1. *A stage that reads records declares them; the framework stamps them; a consumer refuses when
    they have moved.* `runs_provenance` compares a **population** (commits, count) and `records_read`
    compares **files** (path, digest, commit, time, verdict); a stage uses whichever its sources are,
-   and never both for one question.
+   never both for one question.
 2. *The order is a mechanism, not a convention:* `--gate …`, then `--measure gate_table`, then
    `--plan-tables`. Rule (ix) of amendment 19 is now enforced by a refusal rather than by memory,
    and `--plan-tables check` reports the document's state without editing it.
 3. *A census record is a run record for provenance purposes* (`census-2`): it stamps the same
-   "where it ran" group, because that is the key a stamp survey reads.
-4. *A check that copies live records must re-stamp its own baseline*, or its verdict becomes a
-   statement about the press order (§4.2).
+   "where it ran" group, because that is the key a stamp survey reads. Amendment 17's standing
+   property (a) extends to it — an unstamped census is incomplete under the contract, so `--resume`
+   re-takes it — and the superseded record is named before it is replaced.
+4. *A self-check builds its own fixture, always.* A check that reads the tree's real records reports
+   the state of a directory, not the health of a mechanism, and fails on every tree that has not
+   been pressed — a fresh worktree, a trial merge (§3.5). Corollary: a check that *copies* live
+   records inherits the press order and fails for reasons unrelated to what it binds.
 
 **TRAPS should gain one entry** — the shape is new and it has already misled once:
 
@@ -341,6 +380,12 @@ is not where `survey_heads` looks — so they read as "no stamp" in exactly the 
 | `dd6fd80b` | `framework.Measurement.reads_records`, `survey_records`, `describe_record`, `records_read_disagreements`, `assert_records_read_are_current`, `StaleRecordError`; `gate_table` declares `*/gate.json` |
 | `c5d604d7` | `plan_tables`: `Section.records_read_required`, the refusal in `render`, `section_span`, `check()` as a diff, the `population_marker` fix; `--plan-tables check` on the runner |
 | `b316bff5` | `census`: `RECORD_FORMAT = "census-2"`, `STAMP_FIELDS`, `tree_stamp`, `missing_stamp_fields`, `assert_stamped`, `run_record`, the two calls in `take()`, two new teeth |
-| `4fb5b57d` | `selfcheck.check_stage_provenance` and its four teeth; the census survey and the stamping-path check; the gate registered in `gates.py` with its declared teeth |
-| `015908f9` | `harness/README.md`: the self-check table's seventh row, the census record shape, the `--plan-tables` order and check mode, the two new teeth rows |
-| `81bd6090` | the self-check re-stamps its scratch baseline and notes the live record's freshness instead of failing on it (§4.2) |
+| `4fb5b57d` | `selfcheck.check_stage_provenance` and its four teeth; the census survey and the stamping-path check; the gate registered in `gates.py` |
+| `015908f9` | `harness/README.md`: the self-check table's seventh row, the census record shape, the `--plan-tables` order and check mode |
+| `81bd6090` | the self-check re-stamps its scratch baseline and notes the live record's freshness instead of failing on it |
+| `cf113470` | the report, first version |
+| `47be2b0d` | **the coordinator's ruling on the fork**: `census.resume_keeps` — an unstamped record is not kept by `--resume` but re-taken, the superseded one named; `assert_stamped` unchanged for every other reader; the fifth census tooth |
+| `b691c5bf` | **the coordinator's second finding**: `selfcheck._scratch_records` synthesises the fixture, so a tree with no `runs/` no longer fails; a scratch census tooth |
+| `1f281529` | the self-check says so when a tree holds no records at all |
+| `8cfbc153` | **documents only** — `EXPERIMENT_PLAN.md` §4 re-rendered by `--measure gate_table --resume` then `--plan-tables write`: 5 lines changed, all in §4.1 |
+| *(this commit)* | the report brought to the rulings: §3.4, §3.5, §4.3, §4.4, the decisions, the limits and this log |
