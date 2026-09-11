@@ -1394,7 +1394,7 @@ UNCHANGED_ON_REFERENCE_ARMS: tuple[str, ...] = (
     "node_calls_solve_phase",
     "node_calls_total",
     "n_model_calls",
-    "n_prime_calls",
+    "n_arrangement_method_calls",
     "exact.norm_objf",
     "n_solver_iterations",
     "mfile.ifail",
@@ -2374,7 +2374,7 @@ def _counter_row(
     block_visits = record.get("block_visits") or {}
     empty_visits = record.get("empty_block_visits") or {}
     empty_sweeps = record.get("empty_block_sweeps") or {}
-    totals = record.get("module_solve_totals") or {}
+    totals = record.get("block_loop_totals") or {}
     evaluations = record.get("predicate_evaluations")
     components = record.get("components_compared")
     upstream_evaluations = record.get("upstream_predicate_evaluations")
@@ -2442,7 +2442,7 @@ def _reconcile_sweeps(record: Mapping[str, Any], row: Mapping[str, Any]) -> dict
     total = row["dispatch_sweeps"]
     if total is None:
         return {"checked": False, "why": "the record carries no sweep total"}
-    per_run = record.get("post_solve_totals") or {}
+    per_run = record.get("defer_per_run_totals") or {}
     per_run_sweep = 1 if (per_run.get("executed_once") or []) else 0
     output = row["output_loop_sweeps"] or 0
     if row["block_sweeps"]:
@@ -5201,6 +5201,59 @@ def print_self_containment(block: Mapping[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------------
+# the tally: two measurement stages and one gate  (task A53 (harness-tally))
+# --------------------------------------------------------------------------
+#
+# Kept as one contiguous block so that the registry's other entries and this
+# one can be merged past each other without a conflict in the middle of a
+# dictionary.  The two stages publish the experiment plan's section 4 tables
+# and have nothing to pass; the gate is the set of things a table may not be,
+# plus the previous revision's published cells.
+
+
+def _tally_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The tally's own gate, with its ten teeth."""
+    from harness import gate_tally as gate_tally_mod  # noqa: PLC0415
+
+    return {"tally_contracts": gate_tally_mod.gate(campaign)}
+
+
+def _tally_measurements(campaign: Campaign) -> dict[str, Measurement]:
+    """The two tally stages: one per phase, each with nothing to pass."""
+    from harness import tally_evaluation as tally_a_mod  # noqa: PLC0415
+    from harness import tally_optimisation as tally_b_mod  # noqa: PLC0415
+
+    return {
+        "tally_evaluation": Measurement(
+            name="tally_evaluation",
+            reports=(
+                "the evaluation phase's tables of the experiment plan's "
+                "section 4.2 -- cost per call, matched accuracy on both "
+                "rulers, the ownership rung, the per-sweep overhead and the "
+                "failure taxonomy -- each with its caption, its denominator "
+                "and the audit position it was measured at"
+            ),
+            guarded_by="tally_contracts",
+            body=lambda *, resume=False: tally_a_mod.tally(campaign, resume=resume),
+            printer=tally_a_mod.print_tally,
+        ),
+        "tally_optimisation": Measurement(
+            name="tally_optimisation",
+            reports=(
+                "the optimisation phase's tables of the experiment plan's "
+                "section 4.3 -- the one seed set and the failure table, the "
+                "same-optimum check, check 2 in both iteration constructions, "
+                "the attempt summation identity, the cost with and without "
+                "the retried seeds, and the lift's residual"
+            ),
+            guarded_by="tally_contracts",
+            body=lambda *, resume=False: tally_b_mod.tally(campaign, resume=resume),
+            printer=tally_b_mod.print_tally,
+        ),
+    }
+
+
+# --------------------------------------------------------------------------
 # the measurement stages
 # --------------------------------------------------------------------------
 
@@ -5284,6 +5337,7 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             ),
             printer=print_measurements,
         ),
+        **_tally_measurements(campaign),
     }
 
 
@@ -5312,6 +5366,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_plan_gates(campaign))
     entries.update(_selfcheck_gates(campaign))
     entries.update(_artifact_gates(campaign))
+    entries.update(_tally_gates(campaign))
     entries.update(measurements(campaign))
     return entries
 
@@ -5536,6 +5591,7 @@ GATE_ORDER: tuple[str, ...] = (
     "predicate_mode",
     "switch_neutrality",
     "reproduction",
+    "tally_contracts",
 )
 
 

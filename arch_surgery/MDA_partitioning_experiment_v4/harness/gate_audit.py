@@ -452,11 +452,11 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
                     "restricted_argmax_baseline": baseline_restricted.get("argmax"),
                     "n_excluded": restricted.get("n_excluded"),
                     "n_kept": restricted.get("n_kept"),
-                    "block_sweeps": (record.get("module_solve_totals") or {}).get(
+                    "block_sweeps": (record.get("block_loop_totals") or {}).get(
                         "block_sweeps"
                     ),
                     "block_sweeps_baseline": (
-                        baseline.get("module_solve_totals") or {}
+                        baseline.get("block_loop_totals") or {}
                     ).get("block_sweeps"),
                 }
             )

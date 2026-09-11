@@ -183,6 +183,88 @@ REFERENCE_FIELDS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# --------------------------------------------------------------------------
+# the field-name map (orchestrator ruling at A56 (driver-renames)'s merge)
+# --------------------------------------------------------------------------
+#
+# The driver change that renamed the switches to the harness plan's §11.2
+# vocabulary renamed the *driver's* own counters with them — the prime became
+# ``ARRANGEMENT_METHOD_CALLS``, the post-solve deferral became
+# ``DEFER_PER_RUN_TOTALS`` — but the **record fields** carrying those counters
+# kept the previous revision's mechanism words.  The ruling at that merge: the
+# record fields are renamed by this task, through a map here, and the committed
+# reference is **never regenerated** — its bytes are the previous revision's
+# numbers, and a comparison that rewrote them would be a comparison with
+# itself.
+#
+# So :data:`REFERENCE_FIELDS` above stays in the previous revision's spelling,
+# because that is what the previous revision's records carry and what the
+# committed file's keys are; every reader of that file that then reaches into a
+# **this-revision** record goes through :func:`field_name_map`.
+
+#: Previous-revision record path → this revision's path, for the fields whose
+#: names carried a mechanism word the vocabulary retired.  A path absent from
+#: this map is spelt the same in both revisions.
+#:
+#: *Why each*:
+#:
+#: ``module_solve_totals``
+#:     named the driver module that produced it.  What it counts is the **block
+#:     loop**, the vocabulary's word for V3's "inner loop / outer loop".
+#: ``…outer_pass_hist``
+#:     "outer pass" is the retired arm's word.  The matrix row is **block
+#:     schedule**, and since that rename the schedule runs once, so what the
+#:     histogram records is the schedule's passes per evaluation.
+#: ``…inner_sweeps_by_block`` / ``…inner_solves_by_block``
+#:     the sibling keys of the same dictionary, carrying the other half of the
+#:     retired inner/outer pair.  Renamed with it rather than left behind,
+#:     which would have made one dictionary half-translated.  *(This task's own
+#:     decision; the ruling names ``outer_pass_hist`` alone.)*
+#: ``post_solve_totals``
+#:     "post-solve" is the mechanism; the vocabulary's term is the deferral's
+#:     **frequency**, ``defer_per_run``.
+#: ``n_prime_calls``
+#:     "the prime" is the mechanism name for a method-level reorder; the matrix
+#:     row is **arrangement · method**, and the driver's own counter has been
+#:     called ``ARRANGEMENT_METHOD_CALLS`` since that change.
+#: ``pin_intact_at_exit``
+#:     "pin" survives only as a mechanism word in docstrings; the matrix row is
+#:     the **burn-time owner**, and this field reports whether the constant
+#:     that owns it was still that constant at exit.
+FIELD_NAME_MAP: dict[str, str] = {
+    "module_solve_totals": "block_loop_totals",
+    "module_solve_totals.n_call_models": "block_loop_totals.n_call_models",
+    "module_solve_totals.block_sweeps": "block_loop_totals.block_sweeps",
+    "module_solve_totals.outer_pass_hist": (
+        "block_loop_totals.schedule_passes_per_evaluation"
+    ),
+    "module_solve_totals.inner_sweeps_by_block": (
+        "block_loop_totals.sweeps_by_block"
+    ),
+    "module_solve_totals.inner_solves_by_block": (
+        "block_loop_totals.solves_by_block"
+    ),
+    "post_solve_totals": "defer_per_run_totals",
+    "n_prime_calls": "n_arrangement_method_calls",
+    "pin_intact_at_exit": "burn_time_constant_intact_at_exit",
+}
+
+
+def field_name_map() -> dict[str, str]:
+    """Previous-revision record path → this revision's path.
+
+    A function rather than a bare dict so that every caller is visible in one
+    grep, and so that a path the map does not carry is answered the same way
+    everywhere: unchanged.  Callers write ``field_name_map().get(path, path)``.
+    """
+    return dict(FIELD_NAME_MAP)
+
+
+def this_revisions_path(previous_path: str) -> str:
+    """Where a previous-revision path lives in a record of this revision."""
+    return FIELD_NAME_MAP.get(previous_path, previous_path)
+
+
 #: Why each field is compared, in one line.  Kept beside the list so that a
 #: reader of the committed file does not have to open the plan to know what
 #: a cell means.

@@ -303,9 +303,9 @@ SCHEMA: tuple[Field, ...] = (
     _f("exit_audit.mixed", "AB", "finished", "the audit on the scale-as-a-floor ruler; published beside the other, never alone"),
     # --- counters common to both phases -----------------------------------
     _f("node_calls_total", "AB", "always", "model executions, the whole run"),
-    _f("n_prime_calls", "AB", "always", "executions of the run-constant geometry method; stamped, never pooled"),
-    _f("module_solve_totals", "AB", "finished", "the block solver's own totals"),
-    _f("post_solve_totals", "AB", "always", "the per-run deferral's own counts, or null when it is off"),
+    _f("n_arrangement_method_calls", "AB", "always", "executions of the run-constant geometry method; stamped, never pooled"),
+    _f("block_loop_totals", "AB", "finished", "the block solver's own totals"),
+    _f("defer_per_run_totals", "AB", "always", "the per-run deferral's own counts, or null when it is off"),
     _f("node_census", "AB", "always", "model executions per node name"),
     _f("exit_forensics", "AB", "always", "the five fields recorded at every exit"),
     _f("attempts", "AB", "always", "one entry per optimiser attempt, in order"),

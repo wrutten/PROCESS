@@ -271,7 +271,7 @@ def install_call_models_census(caller) -> dict[str, Any]:
                 if sweeps_cell is None
                 else sweeps_cell[0] - sweeps_before
             ),
-            "n_prime_calls": (
+            "n_arrangement_method_calls": (
                 None if prime_cell is None else prime_cell[0] - prime_before
             ),
             "objf_hex": hexf(objf),
@@ -526,6 +526,22 @@ def install_design_vector_perturbation(
 # --------------------------------------------------------------------------
 
 
+#: The block loop's own totals reach the record under the vocabulary's names.
+#: The driver's dictionary still spells three of its keys with the retired
+#: inner/outer pair, and that dictionary belongs to the copied tree, which this
+#: task does not touch: the translation therefore happens **here**, at the one
+#: place the driver's counters become a record field.  The map back to the
+#: previous revision's spelling is ``reference.FIELD_NAME_MAP``, which is what
+#: lets the committed reproduction reference keep its bytes.
+#: (Orchestrator ruling at A56 (driver-renames)'s merge; task A53
+#: (harness-tally).)
+BLOCK_LOOP_KEYS: dict[str, str] = {
+    "outer_pass_hist": "schedule_passes_per_evaluation",
+    "inner_sweeps_by_block": "sweeps_by_block",
+    "inner_solves_by_block": "solves_by_block",
+}
+
+
 def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
     """The driver's own counters, read from the imported modules.
 
@@ -541,7 +557,7 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
         "dispatch_sweeps_solve_phase": getattr(
             caller, "DISPATCH_SWEEPS_AT_OUTPUT", [None]
         )[0],
-        "n_prime_calls": getattr(caller, "ARRANGEMENT_METHOD_CALLS", [None])[0],
+        "n_arrangement_method_calls": getattr(caller, "ARRANGEMENT_METHOD_CALLS", [None])[0],
     }
     histogram = getattr(caller, "SWEEPS_PER_EVAL_HIST", None)
     if histogram is not None:
@@ -563,13 +579,13 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
         out["sweeps_per_eval"] = None
     totals = getattr(caller, "MDA_TOTALS", None)
     if totals is not None:
-        totals = dict(totals)
+        totals = {BLOCK_LOOP_KEYS.get(k, k): v for k, v in dict(totals).items()}
         totals["moved_constants"] = sorted(totals.get("moved_constants", ()))
-        out["module_solve_totals"] = totals
+        out["block_loop_totals"] = totals
     else:
-        out["module_solve_totals"] = None
+        out["block_loop_totals"] = None
     per_run = getattr(caller, "DEFER_PER_RUN_TOTALS", None)
-    out["post_solve_totals"] = (
+    out["defer_per_run_totals"] = (
         dict(per_run)
         if (per_run is not None and getattr(caller, "DEFER_PER_RUN_ENABLED", False))
         else None

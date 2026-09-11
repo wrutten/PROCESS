@@ -326,14 +326,14 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     # ------------------------------------------------------------------
     record["node_calls_single_eval"] = caller_mod.NODE_CALLS[0] - nodes_before
     record["n_model_calls_sweeps"] = int(numerics.n_model_calls)
-    record["n_prime_calls"] = (
+    record["n_arrangement_method_calls"] = (
         prime_cell[0] - prime_before if prime_cell is not None else None
     )
     shared = child.harvest_counters(caller_mod, module_solve=module_solve_mod)
     # The shared harvest reports the prime over the whole process and the cost
     # frozen at the output path; this phase wants the measured call's own
     # counts, which were taken above, and never reaches an output path.
-    shared.pop("n_prime_calls", None)
+    shared.pop("n_arrangement_method_calls", None)
     shared.pop("node_calls_solve_phase", None)
     record.update(shared)
     record.update(child.harvest_predicate_counters(caller_mod))
@@ -361,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     pinned = record["resolved_switches"].get(
         "process.core.solver.subsolve.CONSTANT_OWNS_BURN_TIME"
     )
-    record["pin_intact_at_exit"] = (
+    record["burn_time_constant_intact_at_exit"] = (
         (
             float(data.times.t_plant_pulse_burn)
             == float(
