@@ -4715,6 +4715,15 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
     """
     g1_pairs = _neutrality_pairs(campaign)
     g8_pairs = _predicate_pairs(campaign)
+    # **Which pair of commits gate G1's captures straddle changes the answer**,
+    # and a leaf count published without it is a number without its condition
+    # (trap T11).  A name that is one-sided across a real straddle is excluded
+    # there and compared in a self-comparison, so "how many leaves did making
+    # these conditional put back?" has one answer per pairing.
+    g1_straddle = _straddle(
+        neutrality_root(campaign) / "before" / "manifest.json",
+        neutrality_root(campaign) / "after" / "manifest.json",
+    )
 
     g1_rows: list[dict[str, Any]] = []
     for name, reason in ALWAYS_EXCLUDED.items():
@@ -4838,11 +4847,14 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             "on each side of the gate's captured pairs, summed over every "
             "pair; 'equal where both have them' is how many of those agree. "
             "The verdict is what this review did with the name. Populations: "
-            f"gate G1 over {len(g1_pairs)} run pair(s), gate G8 over "
+            f"gate G1 over {len(g1_pairs)} run pair(s) which {g1_straddle['says']} "
+            f"— the leaf counts below hold for that pairing and no other — "
+            f"gate G8 over "
             f"{len(g8_pairs)} run pair(s); gate G9's list is a list of fields "
             "it compares, not of fields it excludes, and is shown for the same "
             "reason."
         ),
+        "G1_pairing": g1_straddle,
         "sizes": {
             "G1_before_this_review": len(VOLATILE_RECORD_PATHS),
             "G1_after_this_review": len(ALWAYS_EXCLUDED),
@@ -4863,8 +4875,10 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             f"**one particular pair of commits** straddled the change that "
             f"added the field; they are now excluded only where one side "
             f"actually lacks the field, and compared wherever both sides carry "
-            f"it.  At this commit that puts {conditional_compared} further "
-            f"leaves back into the comparison.  Nothing was removed from the "
+            f"it.  Over the pairing measured here — {g1_straddle['says']} — "
+            f"that puts {conditional_compared} further leaves back into the "
+            f"comparison, and the count is a property of the pairing, not of "
+            f"the table.  Nothing was removed from the "
             f"table: a name that stops being needed is worth more visible than "
             f"deleted, and the condition is what makes it inert."
         ),
