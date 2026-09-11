@@ -295,12 +295,12 @@ def prime_map_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any
                 "n_components_declared": declared,
                 "n_differing": comparison["n_differing"],
                 "differing": comparison["differing"],
-                "prime_calls_off": off.get("n_prime_calls"),
-                "prime_calls_on": on.get("n_prime_calls"),
-                "block_sweeps_off": (off.get("module_solve_totals") or {}).get(
+                "prime_calls_off": off.get("n_arrangement_method_calls"),
+                "prime_calls_on": on.get("n_arrangement_method_calls"),
+                "block_sweeps_off": (off.get("block_loop_totals") or {}).get(
                     "block_sweeps"
                 ),
-                "block_sweeps_on": (on.get("module_solve_totals") or {}).get(
+                "block_sweeps_on": (on.get("block_loop_totals") or {}).get(
                     "block_sweeps"
                 ),
             }
@@ -742,9 +742,9 @@ def cold_chain_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
             "residual_movers_prime_on": sorted(on_above),
             "prime_on_whole_state_n_above_tau": len(on_whole),
             "prime_off_whole_state_n_above_tau": len(off_whole),
-            "prime_calls_off": off.get("n_prime_calls"),
-            "prime_calls_on": on_record.get("n_prime_calls"),
-            "block_sweeps_on": (on_record.get("module_solve_totals") or {}).get(
+            "prime_calls_off": off.get("n_arrangement_method_calls"),
+            "prime_calls_on": on_record.get("n_arrangement_method_calls"),
+            "block_sweeps_on": (on_record.get("block_loop_totals") or {}).get(
                 "block_sweeps"
             ),
             "carrier_components_above_tau_prime_off": {

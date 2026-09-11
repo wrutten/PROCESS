@@ -37,7 +37,7 @@ reference's converged burn time, reproduces the reference fixed point below τ
 with the pinned component bit-identical"*, teeth *"as V3"*.  The previous
 revision's warm gate states the criterion as *"categorically clean AND
 cross-state max residual vs the reference < τ"*, pre-declared, with
-``pin_intact_at_exit`` required on the pulsed configurations; its two teeth are
+``burn_time_constant_intact_at_exit`` required on the pulsed configurations; its two teeth are
 a continuous component bumped by ``3 τ × scale`` and a discrete component
 flipped, each of which must make the criterion stop holding.  Both are restated
 here; nothing is imported from the previous revision's directories.
@@ -219,7 +219,7 @@ def _warm_row(
         "arm": arm,
         "status": record.get("status"),
         "pin_hex": record.get("campaign_pin_hex"),
-        "pin_intact_at_exit": record.get("pin_intact_at_exit"),
+        "burn_time_constant_intact_at_exit": record.get("burn_time_constant_intact_at_exit"),
         "node_calls_single_eval": record.get("node_calls_single_eval"),
         "n_model_calls_sweeps": record.get("n_model_calls_sweeps"),
         "own_audit_residual_max_hex": (record.get("exit_audit") or {}).get(
@@ -249,7 +249,7 @@ def _warm_row(
         "cross_state_maximum_below_tau": cross["max"] < campaign.tau,
         "categorically_clean": bool(cross["categorically_clean"]),
         "pinned_component_bit_identical": pin_identical is not False,
-        "pin_intact_at_exit": record.get("pin_intact_at_exit") is not False,
+        "burn_time_constant_intact_at_exit": record.get("burn_time_constant_intact_at_exit") is not False,
     }
     row["passed"] = all(row["checks"].values())
     return row

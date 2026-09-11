@@ -371,13 +371,26 @@ def compare_one(
         result["n_mismatched"] = len(expected)
         result["passed"] = False
         return result
+    # The committed reference keeps the **previous revision's** spelling of
+    # every compared field, because its bytes are that revision's numbers and
+    # regenerating them would make this a comparison with itself.  Where this
+    # revision has renamed a record field to the vocabulary's word for it, the
+    # map translates the path -- and the translation is recorded per mismatch,
+    # so a "missing field" can never be a name error read as a moved number
+    # (the orchestrator's ruling at A56 (driver-renames)'s merge; task A53
+    # (harness-tally) made the renames).
+    name_map = reference_mod.field_name_map()
+    renamed = {f: name_map[f] for f in expected if f in name_map}
+    result["renamed_fields"] = renamed
     for field, value in expected.items():
+        path = name_map.get(field, field)
         try:
-            found = records_mod.resolve_path(record, field)
+            found = records_mod.resolve_path(record, path)
         except KeyError as exc:
             result["mismatches"].append(
                 {
                     "field": field,
+                    "this_revisions_path": path,
                     "expected": value,
                     "found": f"<missing at {exc.args[0]}>",
                 }
@@ -385,7 +398,12 @@ def compare_one(
             continue
         if found != value:
             result["mismatches"].append(
-                {"field": field, "expected": value, "found": found}
+                {
+                    "field": field,
+                    "this_revisions_path": path,
+                    "expected": value,
+                    "found": found,
+                }
             )
     result["n_mismatched"] = len(result["mismatches"])
     result["passed"] = not result["mismatches"]
@@ -506,7 +524,7 @@ def _fixed_point_row(
         "outdir": str(job.outdir),
         "status": run_record.get("status"),
         "pin_hex": job.pin_hex,
-        "pin_intact_at_exit": run_record.get("pin_intact_at_exit"),
+        "burn_time_constant_intact_at_exit": run_record.get("burn_time_constant_intact_at_exit"),
         "node_calls_single_eval": run_record.get("node_calls_single_eval"),
         "n_model_calls_sweeps": run_record.get("n_model_calls_sweeps"),
         "own_audit_residual_max_hex": (run_record.get("exit_audit") or {}).get(
@@ -536,7 +554,7 @@ def _fixed_point_row(
         cross["max"] < campaign.tau
         and cross["categorically_clean"]
         and (pin_identical is not False)
-        and run_record.get("pin_intact_at_exit") is not False
+        and run_record.get("burn_time_constant_intact_at_exit") is not False
     )
     return row
 
@@ -587,7 +605,7 @@ def substitute_reference_evaluation(
         "compared_fields": [
             "node_calls / node_calls_single_eval",
             "sweeps / n_model_calls_sweeps",
-            "n_prime_calls",
+            "n_arrangement_method_calls",
             "objf hex",
         ],
         "configurations": [],
@@ -623,8 +641,8 @@ def substitute_reference_evaluation(
              evaluation.get("node_calls_single_eval")),
             ("sweeps", first.get("sweeps"),
              evaluation.get("n_model_calls_sweeps")),
-            ("n_prime_calls", first.get("n_prime_calls"),
-             evaluation.get("n_prime_calls")),
+            ("n_arrangement_method_calls", first.get("n_arrangement_method_calls"),
+             evaluation.get("n_arrangement_method_calls")),
             ("objf_hex", first.get("objf_hex"),
              (evaluation.get("exact") or {}).get("objf")),
         ]
@@ -1281,7 +1299,7 @@ def tables(verdict: Mapping[str, Any]) -> str:
                 f"| {row['configuration']} | "
                 f"{compared.get('node_calls')} / {anchor_values.get('node_calls')} | "
                 f"{compared.get('sweeps')} / {anchor_values.get('sweeps')} | "
-                f"{compared.get('n_prime_calls')} | "
+                f"{compared.get('n_arrangement_method_calls')} | "
                 f"`{compared.get('objf_hex')}` | {row.get('n_mismatched')} |"
             )
     return "\n".join(out)
