@@ -329,8 +329,8 @@ coordinator.*
   a property of the seed, not a regression. The gate names both pending rows.
 * **The three timings in §4.3 are context, not evidence** (I-10): one sample each, on a shared
   machine, the first dominated by numba JIT.
-* The population of every number above is this worktree's records — 170 run records under
-  `runs/gates` and `runs/census` — not the campaign, which has not run.
+* The population of every number above is this worktree's records — 173 run records, 167 under
+  `runs/gates` and 6 under `runs/census` — not the campaign, which has not run.
 
 ---
 
