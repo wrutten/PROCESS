@@ -804,12 +804,19 @@ def is_complete_for(
     seed: int,
     phase: str,
     regime: str,
+    run_kind: str | None = None,
 ) -> bool:
     """Whether *record* is a finished record of exactly this job.
 
     What ``resume`` consults.  A directory is never evidence of a completed
     run: an interrupted one leaves a directory behind, and re-using it would
     put a half-written record into a population.
+
+    ``run_kind`` is compared when the caller names it.  A record's kind is the
+    only thing that afterwards says what it may be used for — a gate's, a
+    campaign's, or a one-seed smoke's — so keeping a record of one kind for a
+    job of another would launder that stamp by moving a directory.  A caller
+    that does not name one gets the earlier behaviour.
     """
     if record.get("status") != "ok":
         return False
@@ -822,6 +829,8 @@ def is_complete_for(
     ):
         if record.get(key) != value:
             return False
+    if run_kind is not None and record.get("campaign_run_kind") != run_kind:
+        return False
     return not missing_fields(record)
 
 

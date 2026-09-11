@@ -5745,6 +5745,25 @@ def _analysis_measurements(campaign: Campaign) -> dict[str, Measurement]:
 
 
 # --------------------------------------------------------------------------
+# the chain: one gate  (task A55 (harness-smoke))
+# --------------------------------------------------------------------------
+#
+# Its own contiguous block, for the same merge reason as the two above.  The
+# chain is not itself a gate — it is what the button runs, as the smoke and as
+# the campaign — and what it registers here is the one thing about it that can
+# be checked without running it: that the two parameterisations stay apart, so
+# that a one-seed test of the machinery is never summarised as a measurement
+# and a campaign record is never made by a path the user has not approved.
+
+
+def _chain_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The run-kind separation gate, with its six teeth."""
+    from harness import chain as chain_mod  # noqa: PLC0415
+
+    return {"run_kind_separation": chain_mod.gate(campaign)}
+
+
+# --------------------------------------------------------------------------
 # the measurement stages
 # --------------------------------------------------------------------------
 
@@ -5906,6 +5925,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_artifact_gates(campaign))
     entries.update(_tally_gates(campaign))
     entries.update(_analysis_gates(campaign))
+    entries.update(_chain_gates(campaign))
     entries.update(measurements(campaign))
     assert_declared_dependencies(entries)
     return entries
@@ -6133,6 +6153,10 @@ GATE_ORDER: tuple[str, ...] = (
     "reproduction",
     "tally_contracts",
     "recomputation",
+    # Last by preference and not by dependency: it reads every record the press
+    # made, so running it after the press is what makes its denominator the
+    # whole tree rather than whatever existed when it started.
+    "run_kind_separation",
 )
 
 

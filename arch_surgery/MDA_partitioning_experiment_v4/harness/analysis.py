@@ -109,6 +109,16 @@ PREDICATE_TRIAL_VERDICT = Path("predicate_mode") / "gate.json"
 #: anything; a population carrying one is refused rather than quietly shrunk.
 FORCED_BUDGET_STAMP = "force_maxcal"
 
+#: The run kinds a published cell may be computed over.  Declared here and not
+#: imported, like every other declaration this module re-derives: a
+#: recomputation that borrows the tally's constant agrees with it by
+#: construction.  ``campaign`` is the experiment's own population and ``gate``
+#: is what a verification gate made; a ``smoke`` record is one run of the
+#: campaign's chain made to show the chain runs end to end, on one seed and one
+#: configuration, and is refused rather than filtered — a population that
+#: shrinks quietly is the failure this project has made three times.
+MEASURABLE_RUN_KINDS: tuple[str, ...] = ("campaign", "gate")
+
 #: The arm every optimisation-phase ratio and pair is stated against: the flat
 #: control, which differs from the shipped reference by the stopping rule alone
 #: (experiment plan §3.5).
@@ -728,6 +738,11 @@ class Population:
     ) -> "Population":
         """Build a population, naming what may not be in one.
 
+        A record whose run kind is not one of :data:`MEASURABLE_RUN_KINDS` is
+        refused outright: a ``smoke`` record is one run of the campaign's own
+        chain, made to show the chain runs, and a cell computed over it would
+        carry a caption naming a population it is not over.
+
         A record stamped ``force_maxcal`` is a budget-capped demonstration of
         the retry ladder and never a measurement; it is excluded **by name**
         rather than dropped silently, and :meth:`assert_no_demonstration`
@@ -736,6 +751,19 @@ class Population:
         record the same quantities and a table over both is a table over a
         population nobody can state.
         """
+        unsummarisable = [
+            (label_of(record), str(record.get("campaign_run_kind")))
+            for record in records
+            if record.get("campaign_run_kind") is not None
+            and record.get("campaign_run_kind") not in MEASURABLE_RUN_KINDS
+        ]
+        if unsummarisable:
+            raise AnalysisError(
+                f"{len(unsummarisable)} record(s) of a run kind no published "
+                f"cell may be computed over reached a population: "
+                f"{unsummarisable[:5]}.  The kinds allowed are "
+                f"{list(MEASURABLE_RUN_KINDS)}."
+            )
         kept: list[Mapping[str, Any]] = []
         excluded: list[str] = []
         for record in records:
