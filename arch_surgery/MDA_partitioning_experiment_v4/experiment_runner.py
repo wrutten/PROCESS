@@ -432,9 +432,29 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
             f"--measure, not --gate, because it has no verdict."
         )
         return 3
+    stages = gates_mod.measurements(campaign)
+    made: set[str] = set()
     status = 0
     for name in names:
         gate = available[name]
+        # A gate may declare that it reads a **measurement stage's output**, not
+        # only another gate's runs.  Such a stage is run here, immediately
+        # before the gate and with the same --resume, so the gate is never
+        # compared against a stage record nobody made — and, once made in this
+        # press, not re-made for a second gate that declares it.
+        for dependency in gates_mod.measurement_dependencies(campaign, name):
+            if dependency in made:
+                continue
+            _rule(f"measurement {dependency} — declared by gate {name}")
+            print(f"  {stages[dependency].reports}")
+            try:
+                stages[dependency].run(
+                    records_dir=records_dir, resume=args.resume
+                )
+            except (gates_mod.GateError, FileNotFoundError, KeyError) as exc:
+                print(f"  REFUSED TO RUN — {exc}")
+                return 3
+            made.add(dependency)
         _rule(f"gate {name}" + (f" ({gate.plan_name})" if gate.plan_name else ""))
         try:
             verdict = gate.run(

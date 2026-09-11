@@ -5278,12 +5278,19 @@ def _analysis_gates(campaign: Campaign) -> dict[str, Gate]:
     from harness import analysis as analysis_mod  # noqa: PLC0415
 
     gate = analysis_mod.gate(campaign)
-    # Declared so ``--gate all`` runs this after the gates whose runs it
-    # summarises.  The two tally *measurement* stages it compares against
-    # cannot be declared: ``reads_from`` names gates only.
+    # Declared so the button runs this after the gates whose runs it summarises
+    # **and** after the two measurement stages whose output it compares against.
+    # A dependency may name either kind; the button runs the stages first and
+    # orders the gates among themselves.
     return {
         "recomputation": dataclasses.replace(
-            gate, reads_from=("reproduction", "entry_and_warm")
+            gate,
+            reads_from=(
+                "reproduction",
+                "entry_and_warm",
+                "tally_evaluation",
+                "tally_optimisation",
+            ),
         )
     }
 
@@ -5389,6 +5396,52 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
 # --------------------------------------------------------------------------
 
 
+def assert_declared_dependencies(entries: Mapping[str, Any]) -> None:
+    """Refuse a gate whose ``reads_from`` names something the registry lacks.
+
+    A dependency may name **either** a gate or a measurement stage: a gate that
+    reads another gate's runs has to follow it, and a gate that reads a
+    measurement stage's *output* has to follow that stage — gate
+    ``recomputation`` compares the tally's emitted tables, which only
+    ``--measure tally_evaluation`` and ``--measure tally_optimisation``
+    produce.  What may not be named is something nobody runs: a gate declaring
+    one would be ordered after nothing and would read whatever happened to be
+    on disk, which is the failure the declaration exists to prevent.
+
+    Called by :func:`registry` so the refusal happens as the registry is built,
+    not later at ordering time, and so every consumer of the registry gets it.
+    """
+    unknown = {
+        name: sorted(set(entry.reads_from) - set(entries))
+        for name, entry in entries.items()
+        if isinstance(entry, Gate) and set(entry.reads_from) - set(entries)
+    }
+    if unknown:
+        raise GateError(
+            f"gate(s) declare a dependency on something the registry does not "
+            f"hold: {unknown}.  A dependency may name a gate or a measurement "
+            f"stage; it may not name something nobody runs, because such a "
+            f"gate is ordered after nothing and reads whatever happened to be "
+            f"on disk."
+        )
+
+
+def measurement_dependencies(campaign: Campaign, name: str) -> tuple[str, ...]:
+    """The measurement stages gate *name* declares it reads, in declared order.
+
+    The button runs these **before** the gate, so a gate that compares a
+    stage's output is never run against a stage record that was never made.
+    """
+    entries = registry(campaign)
+    gate = entries.get(name)
+    if not isinstance(gate, Gate):
+        return ()
+    stages = measurements(campaign)
+    return tuple(
+        dependency for dependency in gate.reads_from if dependency in stages
+    )
+
+
 def registry(campaign: Campaign) -> dict[str, Any]:
     """**Every** gate and every measurement stage this package runs, by name.
 
@@ -5412,6 +5465,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_tally_gates(campaign))
     entries.update(_analysis_gates(campaign))
     entries.update(measurements(campaign))
+    assert_declared_dependencies(entries)
     return entries
 
 
@@ -5656,9 +5710,15 @@ def ordered_gate_names(campaign: Campaign) -> list[str]:
     do.  A dependency naming a gate that does not exist, or a cycle, raises —
     an order nobody can compute is not an order.
     """
-    available = gates_only(campaign)
+    entries = registry(campaign)          # refuses an undeclared dependency
+    available = {n: e for n, e in entries.items() if isinstance(e, Gate)}
     preference = {name: i for i, name in enumerate(GATE_ORDER)}
     rank = sorted(available, key=lambda n: (preference.get(n, len(GATE_ORDER)), n))
+    # Only a **gate** dependency takes part in this order.  A measurement
+    # dependency is not ordered here because a stage has no verdict and no
+    # place in the gate sequence: the button runs it immediately before the
+    # gate that declares it (``measurement_dependencies``), which is what makes
+    # "the gate never reads a stage record nobody made" true.
     pending = {
         name: {
             dependency
@@ -5667,18 +5727,6 @@ def ordered_gate_names(campaign: Campaign) -> list[str]:
         }
         for name in rank
     }
-    unknown = {
-        name: sorted(set(available[name].reads_from) - set(available))
-        for name in rank
-        if set(available[name].reads_from) - set(available)
-    }
-    if unknown:
-        raise GateError(
-            f"gate(s) declare a dependency on something the registry does not "
-            f"hold: {unknown}.  A gate that reads a gate nobody runs cannot be "
-            f"ordered, and running it anyway would read whatever happened to "
-            f"be on disk"
-        )
     ordered: list[str] = []
     while pending:
         ready = [name for name in rank if name in pending and not pending[name]]
