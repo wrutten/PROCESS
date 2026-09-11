@@ -876,6 +876,104 @@ def leaves(document: Any, prefix: str = "") -> dict[str, Any]:
 _LIST_INDEX = re.compile(r"\[\d+\]")
 
 
+# --------------------------------------------------------------------------
+# the earlier capture's vocabulary
+# --------------------------------------------------------------------------
+#
+# G1 is about **behaviour**: with every architecture switch unset, does the copy
+# after a change do what it did before?  A record-field **rename** is a change
+# of the record's vocabulary and not of its behaviour, so a straddle that
+# contains one must not report the rename as a difference — and must not stop
+# comparing the renamed fields either, which is what excluding them by name
+# would do.  The earlier capture's leaf paths are therefore **translated** into
+# this revision's vocabulary through the one map the project keeps for it,
+# ``reference.FIELD_NAME_MAP``, and the translated leaves are then compared as
+# values like any other.
+#
+# Found by task **A55 (harness-smoke)**: the first press in which G1's two
+# captures genuinely straddled task A53's record-field rename reported **144 of
+# 2 903** values differing, every one of them "present on one side only" and
+# every one a name that rename changed.
+
+
+def _segments(path: str) -> list[str]:
+    """A dotted leaf path as segments, each keeping its own list index."""
+    return path.split(".")
+
+
+def _bare(segment: str) -> str:
+    """A segment without its list index: ``moved_constants[2]`` -> the name."""
+    return segment.split("[", 1)[0]
+
+
+def _index(segment: str) -> str:
+    """A segment's list index, ``[2]`` or ``[]``, or the empty string."""
+    name = _bare(segment)
+    return segment[len(name):]
+
+
+def translate_path(path: str, name_map: Mapping[str, str]) -> str:
+    """*path* with one run of whole segments renamed through *name_map*.
+
+    **Segment-aware, not prefix-aware.**  A map entry names a dotted run of
+    segments, and the run is matched anywhere in the path, not only at its
+    head: ``n_prime_calls -> n_arrangement_method_calls`` has to reach
+    ``first_call_models.n_prime_calls`` as well as the bare field, and
+    ``module_solve_totals -> block_loop_totals`` has to carry every leaf under
+    the block with it.  A run is matched on the segments' **bare** names and the
+    list index of the last segment replaced is kept, so
+    ``module_solve_totals.moved_constants[2]`` translates and stays element 2.
+
+    Longest run first, so ``module_solve_totals.outer_pass_hist`` is renamed by
+    the entry that names both segments rather than by the entry that names the
+    block; at most one run is replaced, at the leftmost match, so the result
+    does not depend on the order two entries happen to be written in.
+    """
+    segments = _segments(path)
+    bare = [_bare(segment) for segment in segments]
+    for old in sorted(name_map, key=lambda name: (-len(_segments(name)), name)):
+        wanted = _segments(old)
+        width = len(wanted)
+        for start in range(len(segments) - width + 1):
+            if bare[start:start + width] != wanted:
+                continue
+            replacement = _segments(name_map[old])
+            replacement[-1] += _index(segments[start + width - 1])
+            return ".".join(
+                segments[:start] + replacement + segments[start + width:]
+            )
+    return path
+
+
+def translate_leaves(
+    earlier: Mapping[str, Any], name_map: Mapping[str, str]
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """The earlier capture's leaves in this revision's vocabulary.
+
+    Returns the translated leaves and the renamings that were applied, so the
+    verdict can say how many leaves it renamed and which — a translation nobody
+    counts is indistinguishable from an exclusion nobody declared.
+
+    Two paths translating onto one is a **refusal**: it would silently drop one
+    of them, which is the shape of every quiet population shrink this project
+    has published (trap T11).
+    """
+    translated: dict[str, Any] = {}
+    renamed: list[dict[str, str]] = []
+    for path, value in earlier.items():
+        new = translate_path(path, name_map)
+        if new in translated:
+            raise GateError(
+                f"two leaves of the earlier capture translate onto {new!r} "
+                f"through the record-field name map; keeping one would drop "
+                f"the other silently.  The map is reference.FIELD_NAME_MAP."
+            )
+        translated[new] = value
+        if new != path:
+            renamed.append({"from": path, "to": new})
+    return translated, renamed
+
+
 def is_volatile(
     path: str, excluded: Mapping[str, str] | None = None
 ) -> str | None:
@@ -938,6 +1036,7 @@ def compare_records(
     excluded: Mapping[str, str] | None = None,
     conditional: Mapping[str, str] | None = None,
     instrument_changed: Mapping[str, str] | None = None,
+    name_map: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Every deterministic leaf of two records, compared without tolerance.
 
@@ -957,13 +1056,29 @@ def compare_records(
     by the caller, so a gate cannot pass the table and forget the condition,
     and a residual that moves between two records made the same way is still a
     mismatch.
+
+    ``name_map`` translates the **earlier** record's leaf paths into this
+    revision's vocabulary before anything is compared
+    (:func:`translate_leaves`).  A record-field rename is a change of the
+    record's vocabulary and not of the copy's behaviour, so the renamed leaves
+    are **compared as values** under their new names and are never excluded.  A
+    leaf present on one side only that the map does not cover is still a
+    mismatch, which is what keeps the translation from becoming an exclusion
+    under a friendlier name.
     """
-    a, b = leaves(dict(before)), leaves(dict(after))
+    a = leaves(dict(before))
+    renamed: list[dict[str, str]] = []
+    if name_map:
+        a, renamed = translate_leaves(a, name_map)
+    renamed_paths = {row["to"] for row in renamed}
+    b = leaves(dict(after))
     every = sorted(set(a) | set(b))
     missing = object()
     instruments = (exit_audit_instrument(before), exit_audit_instrument(after))
     instrument_moved = instruments[0] != instruments[1]
     compared, excluded_paths, mismatches = 0, [], []
+    renamed_compared: list[str] = []
+    renamed_differing: list[str] = []
     conditionally_excluded: list[str] = []
     conditionally_compared: list[str] = []
     instrument_excluded: list[str] = []
@@ -1010,6 +1125,8 @@ def compare_records(
                     continue
                 instrument_compared.append(path)
         compared += 1
+        if path in renamed_paths:
+            renamed_compared.append(path)
         va, vb = a.get(path, missing), b.get(path, missing)
         if va is missing or vb is missing:
             mismatches.append(
@@ -1018,13 +1135,44 @@ def compare_records(
                     "before": "<absent>" if va is missing else va,
                     "after": "<absent>" if vb is missing else vb,
                     "why": "the field is present on one side only",
+                    "renamed_from_the_earlier_vocabulary": path in renamed_paths,
                 }
             )
+            if path in renamed_paths:
+                renamed_differing.append(path)
             continue
         if not _same(va, vb):
-            mismatches.append({"field": path, "before": va, "after": vb})
+            mismatches.append(
+                {
+                    "field": path,
+                    "before": va,
+                    "after": vb,
+                    "renamed_from_the_earlier_vocabulary": path in renamed_paths,
+                }
+            )
+            if path in renamed_paths:
+                renamed_differing.append(path)
     return {
         "n_compared": compared,
+        "n_leaves_renamed_from_the_earlier_vocabulary": len(renamed),
+        "renamed_from_the_earlier_vocabulary": renamed,
+        "n_renamed_leaves_compared": len(renamed_compared),
+        "n_renamed_leaves_differing": len(renamed_differing),
+        "renamed_leaves_differing": renamed_differing,
+        "name_map_used": (
+            "harness.reference.FIELD_NAME_MAP"
+            if name_map
+            else "none: the two captures share one record vocabulary"
+        ),
+        "n_entries_in_the_name_map": len(name_map or {}),
+        "what_the_translation_means": (
+            "the earlier capture's leaf paths were renamed into this "
+            "revision's vocabulary and then compared as values, never "
+            "excluded: a record-field rename is a change of the record's "
+            "vocabulary and not of the copy's behaviour, and a leaf the map "
+            "does not cover that is present on one side only is still a "
+            "mismatch"
+        ),
         "n_excluded": len(excluded_paths),
         "excluded": excluded_paths,
         "n_conditionally_excluded": len(conditionally_excluded),
@@ -1171,6 +1319,8 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
     n_values = n_excluded_values = n_value_mismatches = 0
     n_lines = n_excluded_lines = n_line_mismatches = 0
     n_instrument_excluded = 0
+    n_renamed = n_renamed_compared = n_renamed_differing = 0
+    renamed_differing: list[str] = []
     instruments: list[dict[str, Any]] = []
     passed = True
     for config in campaign.configurations:
@@ -1187,6 +1337,12 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
                 excluded=ALWAYS_EXCLUDED,
                 conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
                 instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+                # The earlier capture may have been made before a record-field
+                # rename.  Translate its vocabulary rather than excluding the
+                # renamed fields: the rename is a change of what the record
+                # calls a quantity, not of what the copy did, so the quantity
+                # stays compared.
+                name_map=reference_mod.FIELD_NAME_MAP,
             )
             mfile_before = _mfile_for(before_dir, config.name)
             mfile_after = _mfile_for(after_dir, config.name)
@@ -1217,6 +1373,12 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
             n_values += values["n_compared"]
             n_excluded_values += values["n_excluded"]
             n_instrument_excluded += values["n_excluded_by_the_instrument_change"]
+            n_renamed += values["n_leaves_renamed_from_the_earlier_vocabulary"]
+            n_renamed_compared += values["n_renamed_leaves_compared"]
+            n_renamed_differing += values["n_renamed_leaves_differing"]
+            renamed_differing.extend(
+                f"{key}: {path}" for path in values["renamed_leaves_differing"]
+            )
             instruments.append(
                 {"pair": key, **values["exit_audit_instrument"]}
             )
@@ -1240,9 +1402,29 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
             f"(each named, with its reason, in this record), of which "
             f"{n_instrument_excluded} are excluded because the two captures' "
             f"exit audits were taken by different instruments — named one by "
-            f"one, and compared again the moment the two stamps agree"
+            f"one, and compared again the moment the two stamps agree.  "
+            f"{n_renamed} leaf/leaves of the earlier capture were **renamed** "
+            f"into this revision's vocabulary through "
+            f"harness.reference.FIELD_NAME_MAP "
+            f"({len(reference_mod.FIELD_NAME_MAP)} entries) and then compared "
+            f"as values, never excluded: {n_renamed_compared} compared, "
+            f"{n_renamed_differing} differing"
         ),
         "n_pairs": len(rows),
+        "n_leaves_renamed_from_the_earlier_vocabulary": n_renamed,
+        "n_renamed_leaves_compared": n_renamed_compared,
+        "n_renamed_leaves_differing": n_renamed_differing,
+        "renamed_leaves_differing": renamed_differing,
+        "record_field_name_map": dict(reference_mod.FIELD_NAME_MAP),
+        "what_the_translation_means": (
+            "gate G1 is about behaviour.  A record-field rename changes what "
+            "the record calls a quantity and not what the copy did with it, so "
+            "the earlier capture's leaf paths are translated into this "
+            "revision's vocabulary and the renamed leaves are compared as "
+            "values under their new names.  They are never excluded, and a "
+            "leaf present on one side only that the map does not cover is "
+            "still a mismatch"
+        ),
         "n_values_compared": n_values,
         "n_values_excluded": n_excluded_values,
         "n_values_excluded_by_the_instrument_change": n_instrument_excluded,
@@ -1613,7 +1795,125 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"differ"
         )
 
+    def _earlier_vocabulary(record: Mapping[str, Any]) -> tuple[dict, str, Any]:
+        """A copy of *record* rewritten into the earlier capture's vocabulary.
+
+        The map runs forwards everywhere else, so here it is inverted: a block
+        the rename gave a new name is put back under the old one, which is what
+        an earlier capture actually holds.  Returns the copy, the old path of a
+        renamed scalar leaf, and that leaf's value.
+        """
+        earlier = copy.deepcopy(dict(record))
+        renamed_leaf = renamed_value = None
+        for old, new in reference_mod.FIELD_NAME_MAP.items():
+            if "." in old or "." in new:
+                continue
+            if new in earlier:
+                earlier[old] = earlier.pop(new)
+                if isinstance(earlier[old], int) and renamed_leaf is None:
+                    renamed_leaf, renamed_value = old, earlier[old]
+        return earlier, renamed_leaf, renamed_value
+
+    def a_renamed_field_moved_by_one() -> tuple[bool, str]:
+        """A genuine difference in a renamed field must still be caught.
+
+        The translation exists so that a rename does not read as a difference.
+        It must not also stop a *difference* in a renamed field from reading as
+        one — otherwise it would be the exclusion it was chosen instead of,
+        with a friendlier name.  So: a record rewritten into the earlier
+        vocabulary, one renamed integer moved by one under its **old** name,
+        compared against the record itself.  The comparison has to report it
+        and name it under its **new** name.
+        """
+        record, name, side = sample_carrying_the_instrument_stamp()
+        earlier, old_path, value = _earlier_vocabulary(record)
+        if old_path is None:
+            return False, (
+                "no renamed scalar leaf is present on the sample record, so "
+                "the tooth could not be built"
+            )
+        new_path = reference_mod.FIELD_NAME_MAP[old_path]
+        clean = compare_records(
+            earlier,
+            record,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+            name_map=reference_mod.FIELD_NAME_MAP,
+        )
+        broken = copy.deepcopy(earlier)
+        broken[old_path] = value + 1
+        result = compare_records(
+            broken,
+            record,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+            name_map=reference_mod.FIELD_NAME_MAP,
+        )
+        named = [m for m in result["mismatches"] if m["field"] == new_path]
+        return (
+            clean["n_mismatched"] == 0
+            and len(named) == 1
+            and bool(named[0].get("renamed_from_the_earlier_vocabulary"))
+        ), (
+            f"on BR/{name} ({side} side) rewritten into the earlier "
+            f"vocabulary, {old_path} moved {value} -> {value + 1}: untouched "
+            f"the translated comparison reports "
+            f"{clean['n_mismatched']} of {clean['n_compared']} differing with "
+            f"{clean['n_leaves_renamed_from_the_earlier_vocabulary']} leaves "
+            f"renamed, and with the one value moved it reports "
+            f"{result['n_mismatched']} and names it under its new name "
+            f"{new_path!r} — so the translation renames the field and still "
+            f"compares its value"
+        )
+
+    def a_one_sided_leaf_the_map_does_not_cover() -> tuple[bool, str]:
+        """The translation must not swallow a field the map does not name.
+
+        A leaf present on one side only is a mismatch unless something declared
+        covers it.  The name map covers renames and nothing else, so a field
+        that simply appears on one side has to keep failing — which is what
+        stops "translate the vocabulary" from becoming "excuse any absence".
+        """
+        record, name, side = sample_carrying_the_instrument_stamp()
+        earlier = copy.deepcopy(dict(record))
+        invented = "a_field_the_name_map_does_not_name"
+        earlier[invented] = 1
+        result = compare_records(
+            earlier,
+            record,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+            name_map=reference_mod.FIELD_NAME_MAP,
+        )
+        named = [m for m in result["mismatches"] if m["field"] == invented]
+        return len(named) == 1 and not named[0].get(
+            "renamed_from_the_earlier_vocabulary"
+        ), (
+            f"on BR/{name} ({side} side), {invented!r} added to the earlier "
+            f"side alone: the translated comparison reports "
+            f"{result['n_mismatched']} of {result['n_compared']} values "
+            f"differing and names it as present on one side only, not as a "
+            f"rename — the map covers renames and nothing else"
+        )
+
     return (
+        Tooth(
+            "a_renamed_field_moved_by_one",
+            "one renamed integer moved by one on a record rewritten into the "
+            "earlier capture's vocabulary",
+            "still be caught, and be named under its NEW name",
+            a_renamed_field_moved_by_one,
+        ),
+        Tooth(
+            "a_one_sided_leaf_the_name_map_does_not_cover",
+            "a field the name map does not name, added to the earlier side "
+            "alone",
+            "still be a mismatch: the translation covers renames and nothing else",
+            a_one_sided_leaf_the_map_does_not_cover,
+        ),
         Tooth(
             "the_same_instrument_still_catches_a_moved_residual",
             "one exit-audit residual moved by a unit in the last place between "
