@@ -115,7 +115,11 @@ REGIMES: tuple[str, ...] = ("unperturbed", "perturbed", "stencil")
 #:
 #: ``after_run`` is where the previous revision audited: after the run has
 #: finished, which is after the output path.  It survives for exactly one
-#: caller — see :data:`AUDIT_POSITION_AFTER_RUN_WHY`.
+#: caller — see :data:`AUDIT_POSITION_AFTER_RUN_WHY`.  Its sweep is the loop's
+#: own map there too: the data structure is put back to the snapshot taken at
+#: the entry to the output path for every field that changed outside the
+#: coupling state, and the coupling state itself is left as the run ended it,
+#: which is what distinguishes the position from the declared one.
 AUDIT_POSITIONS: tuple[str, ...] = (
     "after_single_evaluation",
     "after_run",
@@ -139,8 +143,8 @@ OPTIMISATION_AUDIT_POSITIONS: tuple[str, ...] = (
 #: and the residual is computed after the run, from the restored snapshot, by
 #: the same one-sweep instrument every arm gets.
 AUDIT_POSITION_HOW = (
-    "the driver snapshots the coupling state at the entry to "
-    "write_output_files — before the per-run deferred nodes and before any "
+    "the driver snapshots the coupling state and the whole data structure at "
+    "the entry to write_output_files — before the per-run deferred nodes and before any "
     "output-time sweep — and this run computed the residual afterwards, from "
     "that snapshot restored into the data structure, with the same one-sweep "
     "instrument every arm gets.  The restore is proved bit-exact component by "
@@ -148,7 +152,10 @@ AUDIT_POSITION_HOW = (
     "the audit rather than reporting a residual of a state nobody chose.  The "
     "audit's own model calls are counted and never charged to the arm, and the "
     "per-run deferred nodes' own components stay excluded from the restricted "
-    "statistic exactly as before."
+    "statistic exactly as before.  Everything outside the coupling state that "
+    "the output path changed before the snapshot is put back too — a derived "
+    "set, counted and named per run — so the sweep evaluates the map the loop "
+    "iterated rather than the one the output path left behind."
 )
 
 #: Why ``after_run`` still exists, and the only thing that may ask for it.
@@ -158,11 +165,14 @@ AUDIT_POSITION_HOW = (
 #: were audited.  Every campaign record uses the declared position.
 AUDIT_POSITION_AFTER_RUN_WHY = (
     "the reproduction gate reproduces the previous revision's records, and "
-    "that revision audited after the run — its residual is one of the values "
-    "the gate compares bit for bit, so reproducing it means taking the audit "
-    "where it was taken.  This position is refused outside that gate: it is "
-    "recorded per run and stamped in the gate's own record as a reproduction "
-    "override."
+    "that revision audited after the run, so this gate's runs audit where "
+    "those were audited.  The residual itself is no longer among the values "
+    "that gate compares: this revision's audit restores the data structure to "
+    "its solve-phase state before its sweep, and the previous revision's did "
+    "not, so the two numbers are measurements by two instruments and the "
+    "reference names the difference rather than absorbing it.  This position "
+    "is refused outside that gate: it is recorded per run and stamped in the "
+    "gate's own record as a reproduction override."
 )
 
 
@@ -296,8 +306,12 @@ SCHEMA: tuple[Field, ...] = (
     # --- the audit --------------------------------------------------------
     _f("audit_position", "AB", "always", "where the audit sweep was taken"),
     _f("audit_position_declared", "AB", "always", "where the plan declares it should be taken"),
-    _f("audit_snapshot", "B", "always", "the driver's snapshots of the coupling state on the output path, or why there are none"),
+    _f("audit_snapshot", "B", "always", "the driver's snapshots on the output path — the coupling state and the whole data structure, per position — or why there are none"),
     _f("exit_audit", "AB", "always", "the achieved accuracy: one further full sweep, uncharged"),
+    _f("exit_audit.instrument", "AB", "finished", "what the audit put back before its sweep: the positions snapshotted, the derived restored set, and what could not be restored, by name"),
+    _f("exit_audit.instrument.restores", "AB", "finished", "the instrument's own version: which mechanism made this residual"),
+    _f("exit_audit.instrument.n_restored", "AB", "finished", "fields put back and read back equal before the sweep"),
+    _f("exit_audit.instrument.n_not_restorable", "AB", "finished", "fields the restore asked for and could not put back; their names are beside the count"),
     _f("exit_audit.predicate_mode", "AB", "finished", "which ruler the run's own loops stopped on"),
     _f("exit_audit.frozen", "AB", "finished", "the audit on the measured-scale ruler"),
     _f("exit_audit.mixed", "AB", "finished", "the audit on the scale-as-a-floor ruler; published beside the other, never alone"),
