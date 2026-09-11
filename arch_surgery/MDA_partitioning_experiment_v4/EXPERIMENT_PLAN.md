@@ -1102,3 +1102,11 @@ implementation plan's.*
   above τ" statements are withdrawn as convergence statements. PROCESS findings (the mesh change; the MFILE `insstrain`
   0.70–0.72 % off the solved value in every arm as shipped; the `None` latch) filed in `PROCESS_code_analysis` at the
   user's instruction. Open: I-21, what else the output pass leaves inconsistent in the written file.
+- 2026-09-11 — **A53 (harness-tally) merged — H6** (`d98f602a`): every declared construction of §3.4–§3.6 is one documented
+  function; no table without a caption and a denominator; the tally reproduces the previous revision's 270 published cells
+  over the twenty reference runs; the record fields carrying retired mechanism words renamed (the committed reference keeps
+  its bytes). §4's placeholder tables are fillable by `--measure tally_evaluation` / `--measure tally_optimisation` and are
+  filled once at the final tip. The empty-visit sweep share on the gate population is 0 / 0 / 6.67 %; disclaimers quote the
+  share measured on their own population. At `after_run` the restricted audit maximum is exactly 0 on all 14 reference
+  records against ~7e-3 at the declared position — the A61 instrument artefact seen from the other side.
+

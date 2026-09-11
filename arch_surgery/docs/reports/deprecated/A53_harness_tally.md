@@ -1,11 +1,9 @@
 # A53 (harness-tally) — the experiment's tables, from the records, with the four things a table cannot be emitted without
 
-> **Document status** — **OPEN.** Task **A53 (harness-tally)**, plan task **H6** of the approved V4
-> harness plan. Branch `A53-harness-tally`, base `d13a54c7` (the merge of A52 (harness-gates)).
-> Every gate run in this report was made in this worktree at `cd62c510`; the verdicts and tables
-> were computed afterwards and each states, in its own provenance line, the commits of the records
-> it read. No campaign record exists: `EXECUTION_APPROVED` is `False` and every run here is stamped
-> `gate` or `smoke`.
+> **Document status** — **ARCHIVED 2026-09-11 — merged into `architecture_surgery` at `d98f602a`.** Task
+> **A53 (harness-tally)**, branch `A53-harness-tally` off `d13a54c7`; press at `cd62c510`, contrast runs at `de7e5a2b`.
+> Run records relocated to `arch_surgery/idf_probe/runs/A53_runs/gates/` (untracked). The orchestrator's critical assessment (protocol §5) is §15.
+> Folder position records lifecycle, not validity (trap T3).
 
 ---
 

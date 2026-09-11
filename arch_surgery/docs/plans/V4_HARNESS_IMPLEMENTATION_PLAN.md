@@ -1386,6 +1386,22 @@ of what looks like bulk is the instrument.
   repository root is dropped — the capability gate's decoy tooth covers the working-directory property. Amendment 13's
   rule (i) is unchanged: without `--resume` a press re-makes everything, and that remains the meaning of the flag.
 
+- **2026-09-11 — amendment 16, at the merge of A53 (harness-tally) (`d98f602a`): H6 delivered, and rule (vi).**
+  §4.2's `stats.py` (every declared construction of the experiment plan's §3.4–§3.6 as one documented function whose
+  docstring is the declaration a caption quotes; `Population`, `retried`, `attempt_summation` as refusals) and
+  `tables.py` (a `Table` cannot exist without a `Caption`; refusals for no caption, no denominator, a placeholder
+  denominator, a timing column in an acceptance table, a pooled-predicates column, an unlabelled audit-position mix)
+  are realised; §4.1's `phase_a.py` / `phase_b.py` are delivered as `harness/tally_evaluation.py` and
+  `harness/tally_optimisation.py` (named for what they do), as measurement stages over declared sources in
+  seed-complete arm groups; gate `tally_contracts` reproduces the previous revision's 270 published cells over the
+  twenty GR reference runs and checks every emitted table (195/195 over 65). The A56 ruling's record-field rename is
+  carried out (seven keys, `reference.FIELD_NAME_MAP`; the committed reference keeps its bytes; GR 270/270). The
+  compared cell list is derived from `REFERENCE_FIELDS` ∩ what the entry published, so A62's drop of the audit residual
+  lands in the tally without an edit. **Rule (vi), added to amendment 13's list: no edit to any module a measurement
+  child imports while runs execute** — the commit was already forbidden (rule v); A53 showed the edit alone corrupts
+  the population (G8 failed on a half-renamed record set) and cost a full press. The plan's §4 tables are filled once,
+  at the final tip, by the smoke (A55), because A62 moves every audit cell. Remaining: H7 (A54, dispatched), H8 (A55).
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task
