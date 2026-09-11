@@ -2,9 +2,10 @@
 
 > **Document status** — **OPEN.** Task **A52 (harness-gates)**, branch `A52-harness-gates` off
 > `architecture_surgery` at `5e64ce0e`. Delivers plan task **H5** of the approved V4 harness plan.
-> Numbers in this report were taken at commit `36bc2a08`, the branch's last code commit; this
-> report is the only thing committed after it. Folder position records lifecycle, not validity
-> (trap T3).
+> **Revised 2026-09-11** after the orchestrator's review found five defects; all five are fixed on
+> the branch and §13 is the change log. Numbers in this report were taken at commit `41194bef`, the
+> branch's last code commit; this report is the only thing committed after it. Folder position
+> records lifecycle, not validity (trap T3).
 
 ---
 
@@ -48,8 +49,15 @@ without the condition that limits it; the recurring error this project gates aga
 **Every gate passes, and every tooth trips.** One command, `experiment_runner.py --gate all`, runs
 **21 gates** — eleven of the experiment plan's own (GR, G0/G0′, G1 through G9) and ten of the
 harness's own checks promoted into the same framework — and returns 0 with **21 PASS, 0 FAIL, and
-106 of 106 teeth tripped**. `--measure all` runs six measurement stages and returns 0.
-`--selfcheck` passes. `--artifacts all --census-entry evaluation` passes. The preflight is READY.
+108 of 108 teeth tripped**, **from the repository root and from the experiment directory alike**.
+`--measure all` runs seven measurement stages and returns 0. `--selfcheck` passes.
+`--artifacts all --census-entry evaluation` passes. The preflight is READY. `copy_gates.py all`
+passes and `PROCESS_diff.py` exits 0 with the same seven files.
+
+**Gate G1 is a real straddle.** Its "before" capture was made at trunk `5e64ce0e` in the main
+checkout and its "after" at this branch's last code commit, so the two sides are two commits **and
+two trees**. It PASSES: **0 of 3 164** record values and **0 of 51 319** output-file lines differ,
+714 values and 45 lines excluded, each named with its reason. §4.3.
 
 **Six gates that did not exist are built** — G2, G3/G3c, G4, G5, G6, G7 — each inside `harness/`,
 each with its runs through the pool, its denominator and its teeth. Where a criterion is inherited
@@ -62,8 +70,8 @@ files, all of them in `harness/` or the runner. `copy_gates.py all` passes; `PRO
 0 with the same **seven** changed files and no unexplained hunk; G0′ passes with `pulse.py` as the
 one approved difference.
 
-**Three things were found by gates failing before they passed**, and all three are reported rather
-than tuned away:
+**Three things were found by gates failing before they passed** during the build, and all three are
+reported rather than tuned away:
 
 1. **The cold-chain gate cannot be a single comparison.** This revision's partitioned arm defers
    three nodes to once per run; the previous revision's chain did not. Read on the whole-state
@@ -73,11 +81,18 @@ than tuned away:
 2. **A switch left unset and a switch set to its default compose different environments and the
    same arm.** The composition gate compares what the driver *resolved*, not only what the harness
    asked for, because of it.
-3. **G1's exclusion set had stopped describing itself.** 32 of its 59 names were excluded because
-   *one particular pair of commits* straddled the change that added a field; excluded
-   unconditionally they went on hiding those fields for ever. Made conditional, they put **1 040
-   leaves** back into the comparison — G1 compares 2 289 values before and **3 329** after, still 0
-   differing.
+3. **G1's exclusion set had stopped describing itself.** The names excluded because *one particular
+   pair of commits* straddled the change that added a field were excluded unconditionally, and so
+   went on hiding those fields for ever. Made conditional, they put leaves back into the comparison
+   — **416** over the straddle this task ran, and the count is a property of the pairing rather than
+   of the table, which the review now says (§5).
+
+Five further defects were found by the orchestrator's review and fixed on the branch; §13 lists
+them. Two are worth the verdict's space: **the capability probe's result depended on which
+directory the button was pressed from** (the working directory shadowed `PYTHONPATH`, and the
+repository's own `process/` package won), and **a genuine two-tree straddle of G1 failed on nine
+cross-tree paths that no exclusion named**, because every earlier run of that gate made both
+captures inside one worktree.
 
 **One measured item is for the user**, and it is stronger than when it was filed: `tfcoil.insstrain`
 sits ~7e-3 above τ in the restricted audit at the accepted point on both pulsed configurations —
@@ -175,25 +190,25 @@ than one kind of thing — coupling-state components, record values, output-file
 denominator is their sum and the record names each part. "Teeth" is tripped / declared. **One row
 reads 1 mismatched and PASS**: the frozen-physics gate counts the single model file the user
 approved under D11 as differing, by name, and passes because it is the approved one. Taken at commit
-`36bc2a08`; records under `arch_surgery/MDA_partitioning_experiment_v4/runs/gates/`, which is
+`41194bef`; records under `arch_surgery/MDA_partitioning_experiment_v4/runs/gates/`, which is
 untracked by design.*
 
 | gate | plan | verdict | population | compared | mismatched | teeth |
 |---|---|---|---|---|---|---|
 | `reproduction` | GR | **PASS** | 20 runs (14 optimisations + 6 evaluations) over 3 configurations; no tolerance on any value | 270 | 0 | 7/7 |
 | `g0prime` | G0 / G0′ | **PASS** | 77 files under `PROCESS/process/models/` against `c0ae5b28` by `git cat-file`, plus the file set | 77 | 1 (approved) | 4/4 |
-| `switch_neutrality` | G1 | **PASS** | 6 run pairs = 3 configurations × 2 reference arms; 3 329 record values + 51 319 output-file lines | 54 648 | 0 | 5/5 |
+| `switch_neutrality` | G1 | **PASS** | straddles `5e64ce0e` → `3f50d9b5`, a neutrality result; 6 run pairs = 3 configurations × 2 reference arms; 3 164 record values + 51 319 output-file lines | 54 483 | 0 | 6/6 |
 | `prime_map` | G2 | **PASS** | 6 arrangement/configuration pairs; 12 evaluations | 5 026 | 0 | 2/2 |
 | `cold_chain` | G3 / G3c | **PASS** | 8 chain/composition pairs over 4 chains; 16 evaluations; 60 individual checks | 60 | 0 | 4/4 |
 | `audit_restriction` | G4 | **PASS** | 13 doctored runs over 3 configurations, each against that configuration's undoctored run | 12 | 0 | 5/5 |
 | `switch_composition` | G5 | **PASS** | 3 configurations; 6 optimisations; 37 switch names + 10 run values each | 141 | 0 | 3/3 |
 | `entry_and_warm` | G6 | **PASS** | 5 entry pairs at seed 1; 5 warm runs; 13 evaluations | 4 204 | 0 | 3/3 |
-| `record_completeness` | G7 | **PASS** | 2 runs on `st_regression`; 84 declared fields in the optimisation phase, 77 in the evaluation phase | 161 | 0 | 8/8 |
+| `record_completeness` | G7 | **PASS** | 2 runs on `st_regression`; 85 declared fields in the optimisation phase, 78 in the evaluation phase | 163 | 0 | 8/8 |
 | `predicate_mode` | G8 | **PASS** | 12 pairs × 2 rulers = 24 runs; 7 600 record values + 84 output-file lines | 7 684 | 0 | 4/4 |
 | `output_path` | G9 | **PASS** | 11 runs at seed 0; 3 825 coupling-state components + 54 solve-describing values | 3 879 | 0 | 4/4 |
 | `composition` | — | **PASS** | 8 arms × 3 configurations = 24 pairs, compared by role | 42 | 0 | 7/7 |
 | `rungs` | — | **PASS** | 11 matrix rows × 8 arms = 88 cells; 6 rung steps | 98 | 0 | 3/3 |
-| `capability` | — | **PASS** | every arm/configuration pair whose arm is active | 54 | 0 | 14/14 |
+| `capability` | — | **PASS** | every arm/configuration pair whose arm is active, plus the probe started from a directory that shadows the tree | 55 | 0 | 15/15 |
 | `provenance` | — | **PASS** | one scratch repository, three states | 4 | 0 | 4/4 |
 | `data` | — | **PASS** | 16 committed files + the moved predicate module; 9 declared counts | 17 | 0 | 6/6 |
 | `run_path` | — | **PASS** | 2 phases × the declared field list; 2 displacement streams; 4 refusals | 9 | 0 | 12/12 |
@@ -202,7 +217,8 @@ untracked by design.*
 | `artifacts_census` | — | **PASS** | 3 configurations, one evaluation census each, read half on | 81 | 0 | 2/2 |
 | `artifacts_per_run` | — | **PASS** | 5 (configuration, input file) pairs over 3 configurations | 16 | 0 | 2/2 |
 
-**21 PASS, 0 FAIL, 0 not run; 106 of 106 teeth tripped.**
+**21 PASS, 0 FAIL, 0 not run; 108 of 108 teeth tripped** — identical whether the button is pressed
+from the repository root or from the experiment directory.
 
 *How to read: no number in the experiment's results section is cited unless every row here is PASS
 with its teeth tripped. A FAIL is a result and the dependent tables are marked "not produced — gate
@@ -249,24 +265,89 @@ removed, a file added, and a further change to the approved file.
 The plan lists G0 and G0′ as two rows; in V4 they state the same criterion, so they are **one
 gate** with the label `G0 / G0'`. Two entries for one criterion is how two implementations start.
 
-### 4.3 G1 — switch neutrality *(re-run; exclusion set reviewed)*
+### 4.3 G1 — switch neutrality, as a real straddle
 
 **Criterion** (plan §3.9): with every architecture switch unset, the copy after a change behaves
 byte-identically to the copy before it — every deterministic leaf of the run record and every line
 of PROCESS's own output file.
 
-**Result: PASS.** 6 run pairs; **0 of 3 329** record values and **0 of 51 319** output-file lines
-differ; 546 values and 45 lines excluded, each named with its reason. 5 teeth: a 1-ULP move, one
-changed output line, a missing "before" record refused, two captures audited at different positions
-refused, and a new fifth — §5.
+**This run is a genuine straddle, and that took the orchestrator's capture.** G1's two sides are
+meant to be two commits, and this task makes no driver change, so the version of this report before
+review ran it with both captures at one commit and said so. The orchestrator then made the real
+"before" capture at trunk `5e64ce0e` in the main checkout and put it in this worktree. The two
+sides are therefore **two commits and two trees**, which is the harder of the two ways to straddle
+and the one no earlier run of this gate had ever done.
 
-**A limitation to state plainly.** G1's two sides are meant to straddle a *driver* change, and this
-task makes none: the driver chain closed at A60 (driver-attempts). Both captures here were therefore
-made at **the same commit**, so what this run of G1 shows is that the run path is deterministic and
-that the exclusion set covers what it claims — **not** that a driver change is inert, because there
-is no driver change between them. Making a genuine "before" capture would need a tree checked out at
-`5e64ce0e`, which only the orchestrator can stand up. What *is* measured about the change this task
-makes to the record is the fifth tooth, §5.
+**It failed first, on 42 of 3 206 values, and the failure was worth having.** The 42 were exactly
+two things.
+
+*(a) Nine names that no exclusion named, because every earlier G1 made both captures inside one
+worktree*, where a path in one is a path in the other. All are a path or the working tree's own
+state, so no pair of captures could ever compare them, and they now sit in the always-excluded
+group with their reasons:
+
+| name | leaves | what it is |
+|---|---|---|
+| `per_run_artifact` | 6 | an absolute path to the per-run deferral artifact — absent on the trunk optimisation records, a path here |
+| `process_copy_provenance.path` | 6 | an absolute path to the copied driver |
+| `tree_git_branch` | 6 | the branch the tree is on: the working tree's state, different by construction across two trees |
+| `coupling_state_artifact` | 3 | an absolute path to the coupling-state artifact |
+| `coupling_state_provenance.path` | 3 | the same path inside the provenance block |
+| `exit_audit.frozen.restricted.artifact` / `.census` | 6 | absolute paths; DR5's **per-ruler copies** of two leaves that were excluded only under their unprefixed names |
+| `exit_audit.mixed.restricted.artifact` / `.census` | 6 | the same, on the second ruler |
+
+**What still carries the artifacts' identity**: `excluded_sha256` on the restricted block and
+`components_sha256` on the coupling state are compared, so each file is still checked to be the
+*same file*, by content rather than by location. The two ways of straddling — one tree at two
+commits, or two trees — now give the same answer, which is the property the fix is for.
+
+*(b) Six leaves that are the record change itself*, and they needed a new kind of condition.
+`exit_audit.frozen.n_excluded_from_the_restricted_statistic` and its `mixed` twin read **0** on the
+trunk records, because the statistic was never computed there and 0 stood for "not computed"; they
+read 122 / 123 here. Both sides carry a number and both are non-null, so the existing condition —
+"excluded where one side lacks the leaf" — cannot decide. They are now conditional on a **witness**:
+`CONDITIONAL_WITNESS` names the restricted block itself, and the count is excluded exactly where
+that block is null on one side. Where both sides carry the block the count is compared like
+anything else, and **a tooth shows it**: moving one count by one on a record that carries the block
+on both sides is caught and the field is named.
+
+**Result: PASS.** 6 run pairs; **0 of 3 164** record values and **0 of 51 319** output-file lines
+differ; **714** values and 45 lines excluded, each named with its reason in the verdict record.
+
+*Caption: one row per run pair. "Values" is that pair's compared record leaves; "lines" its compared
+output-file lines. Population: `BR` (one optimisation) and `AR` (one evaluation) on each of the
+three configurations, every architecture switch cleared — which is the condition G1 is about.*
+
+| arm | configuration | values | lines |
+|---|---|---|---|
+| `BR` | `large_tokamak_nof` | 0 / 644 | 0 / 16 173 |
+| `AR` | `large_tokamak_nof` | 0 / 461 | 0 / 7 |
+| `BR` | `low_aspect_ratio_DEMO` | 0 / 637 | 0 / 16 434 |
+| `AR` | `low_aspect_ratio_DEMO` | 0 / 448 | 0 / 7 |
+| `BR` | `st_regression` | 0 / 551 | 0 / 18 691 |
+| `AR` | `st_regression` | 0 / 423 | 0 / 7 |
+
+**Teeth (6/6).** A 1-ULP move; one changed output line; a missing "before" record refused; two
+captures audited at different positions refused; the exclusion this task added shown to be
+load-bearing — nulling `exit_audit.restricted` on a record that **carries** it makes 13 of 683
+values differ without the exclusion and 0 of 670 with it; and the new witness tooth above. The
+load-bearing tooth used to take its sample from the "before" side, which at trunk carries no
+restricted block at all — so it could not be built in exactly the run where it matters. It now
+takes the side that carries the block.
+
+**A verdict now says which of the two it is.** `_straddle` reads both captures' manifests and
+prefixes the population, the verdict record and therefore the plan's gate-table row with either
+*"straddles A → B: a neutrality result"* or *"BOTH CAPTURES AT `<commit>`: determinism and exclusion
+coverage, NOT a driver-change result"*. A PASS from a self-comparison can no longer read like a
+neutrality verdict.
+
+**The "before" capture is never re-made, and the reason is measured.** The gate makes one only when
+there is none at all. `pool.run`'s resume consults the **current** completeness contract, and this
+task declared `per_run_artifact` in the record schema — so resume judges the trunk capture's
+*optimisation* records incomplete (they predate the field) and would re-run them, replacing a
+capture that cannot be re-made. Measured here: resume keeps the trunk `AR` records and rejects the
+trunk `BR` ones. The evaluation records survive, the optimisation ones would not, and the guard is
+that nothing hands that capture to resume.
 
 ### 4.4 G2 — the prime's fixed-point map *(new)*
 
@@ -512,31 +593,39 @@ they agree. The measurement alone cannot decide, and the report says why: `tree_
 equal whenever two captures happen to be at one commit and differs the moment they are not. So each
 name also carries a declared *kind*, and the verdict rests on both.
 
-### 5.1 G1 — 59 names, split into 27 and 32
+### 5.1 G1 — 70 names, split into 36 and 34
 
-*Caption: gate G1's exclusions grouped by kind, measured over its 6 run pairs. "Leaves" is how many
-record leaves the group covers, summed over the pairs, counting each leaf once. A structural name is
-excluded however equal it reads; a "field a change adds" is excluded only where one side actually
-lacks it.*
+*Caption: gate G1's exclusions grouped by kind, measured over its 6 run pairs, which straddle
+`5e64ce0e` → `3f50d9b5`. "Leaves" is how many record leaves the group covers over that pairing,
+counting each leaf once. **The leaf count is a property of the pairing, not of the table**: a name
+that is one-sided across a real straddle is excluded there and compared in a self-comparison, so
+the same table gives a different count against a different pair of captures. The review says which
+pairing it measured. A structural name is excluded however equal it reads; a "field a change adds"
+is excluded only where one side actually lacks it — or, for two names, where the block that would
+have computed it is null on one side.*
 
-| kind | names | leaves covered | verdict |
-|---|---|---|---|
-| a path into a run's own directory or the tree | 10 | — | **KEPT unconditional** |
-| a timing or the machine's state | 7 | — | **KEPT unconditional** |
-| the commit, or the working tree's state | 8 | — | **KEPT unconditional** |
-| the switch vocabulary a rename changes | 2 | 384 | **KEPT unconditional** |
-| **a field a change adds** (null or absent before, a value after) | **32** | **1 040** | **MADE CONDITIONAL** |
+| kind | names | verdict |
+|---|---|---|
+| a path into a run's own directory, the tree, or an artifact | 18 | **KEPT unconditional** |
+| a timing or the machine's state | 7 | **KEPT unconditional** |
+| the commit, or the working tree's state | 9 | **KEPT unconditional** |
+| the switch vocabulary a rename changes | 2 | **KEPT unconditional** |
+| **a field a change adds** (null or absent before, a value after) | **32** | **MADE CONDITIONAL** on the field's own leaf |
+| **a count whose zero means "not computed"** | **2** | **MADE CONDITIONAL** on a *witness* — the restricted block |
 
-**Sizes: 59 names before, 27 always-excluded after, with 32 conditional.** `compare_records` now
-takes a conditional set: a name in it is excluded only where one side lacks the leaf — absent, or
-null against a value — and compared wherever both sides carry it.
+**Sizes: 59 names before this review, 70 after** — 9 structural names the two-tree straddle exposed
+and 2 conditional counts the witness mechanism needed — of which **36 are always excluded** and
+**34 conditional**. The set grew because the review found things that were being compared and should
+not have been; what shrank is the number of names excluded *unconditionally*, from 59 to 36.
 
-**What that recovered, measured:** G1 compared **2 289** record values before the condition and
-**3 329** after — **1 040 leaves** put back, still 0 differing. The largest contributors are
-`exit_audit.mixed` (338 leaves), `exit_audit.frozen` (224), `predicate_counters` (156),
-`attempt_accounting` (114) and `exit_audit.restricted` (74, this task's own — 74 and not 86, because the two absolute paths inside that block are covered by a structural exclusion already and are not counted twice).
+**What the condition recovered, over this pairing:** **416 leaves**. It was 1 040 against a
+same-commit pairing, and both numbers are right for the pair they were measured over — which is
+exactly why the count now travels with its pairing. The largest contributors over this straddle are
+`predicate_counters` (156 leaves), `attempt_accounting` (114) and `attempts[].sweeps_per_eval` (20);
+the two witness-conditioned counts recover 6 leaves each, on the evaluation arm, where both commits
+computed the restricted statistic and only the optimisation arm did not.
 
-**Three names are inert at this commit** — `output_loop_null_because`,
+**Three names are inert over this pairing** — `output_loop_null_because`,
 `predicate_counters_null_because`, `attempts[].cost_null_because` — matching no leaf on either side.
 They are the sentences a record carries *instead of* a counter the driver does not stamp, so they
 appear exactly in the case they exist for. **Nothing was deleted from the table**: a name that has
@@ -548,10 +637,10 @@ code, the iteration count, the finite-difference step, the rung name — compare
 Excluding `attempts` by its bare name would have taken all of them out.
 
 **The one name this task added, and what it hides, measured.** `exit_audit.restricted` on an
-optimisation record is null before this task and a block after (§6.3). The fifth G1 tooth builds the
+optimisation record is null before this task and a block after (§6.3). The G1 tooth builds the
 earlier shape — the same record with the block nulled — and compares it with and without the
-exclusion: **13 of 690 values differ without it and 0 of 677 with it**. That count is exactly what
-the exclusion hides, and it is now recovered anyway wherever both sides carry the field.
+exclusion: **13 of 683 values differ without it and 0 of 670 with it**. That count is exactly what
+the exclusion hides, and it is recovered anyway wherever both sides carry the field.
 
 ### 5.2 G8 — 17 names, all kept
 
@@ -568,7 +657,7 @@ differ and the set is small for that reason.*
 | prose, identical on both sides | 1 | KEPT |
 
 **Sizes: 17 before, 17 after.** None is a "field a change adds", because there is no change between
-the two sides — which is precisely why the set is 17 against G1's 59 and why the same review reaches
+the two sides — which is precisely why the set is 17 against G1's 70 and why the same review reaches
 a different answer.
 
 ### 5.3 G9 — a list of what it compares, and one deliberate absence
@@ -697,22 +786,25 @@ still the user's.
 
 ## 7. The runs this task made
 
-*Caption: PROCESS runs started through `harness/pool.py`, counted from the records on disk. Every
-run is a fresh subprocess in its own working directory with `PYTHONPATH` naming the experiment's own
-copy of PROCESS, and asserts the exact tree it imported before doing any work. Wall clock is the sum
-of the children's own timings and is **context, never evidence** (I-10: identical work has varied by
-up to 35 % in CPU-seconds on this machine).*
+*Caption: PROCESS runs started through `harness/pool.py`, counted from the records on disk at the
+final commit. Every run is a fresh subprocess in its own working directory with `PYTHONPATH` naming
+the experiment's own copy of PROCESS, and asserts the exact tree it imported before doing any work.
+Wall clock is the sum of the children's own timings and is **context, never evidence** (I-10:
+identical work has varied by up to 35 % in CPU-seconds on this machine). The six runs of gate G1's
+"before" capture were made by the orchestrator at trunk in the main checkout and are counted
+separately, because they are the one artifact here that cannot be re-made in this tree.*
 
 | | count |
 |---|---|
 | evaluation-phase runs (one `call_models` each) | 117 |
-| optimisation-phase runs | 43 |
+| optimisation-phase runs | 49 |
 | census runs | 6 |
-| **total records on disk** | **172** |
+| **total records on disk, made in this worktree** | **172** |
+| gate G1's "before" capture, made at trunk in the main checkout | 6 (3 optimisations, 3 evaluations) |
 | of which stamped `campaign_run_kind = gate` | 170 |
 | of which stamped `smoke` | 2 |
 | of which stamped `force_maxcal` (demonstrations, never a population) | 1 |
-| summed in-child wall clock, all runs | ≈ 2 030 s (≈ 34 min), at 3 workers — context only |
+| summed in-child wall clock, all runs | ≈ 2 150 s (≈ 36 min), at 3 workers — context only |
 
 No record made by this task is a campaign record; `EXECUTION_APPROVED` is still `False` and every
 campaign stage refuses.
@@ -738,10 +830,17 @@ $PY PROCESS_diff.py                            # seven changed files, none unexp
 Gate G1 alone is two steps, and a genuine run of it needs two commits:
 
 ```bash
-$PY experiment_runner.py --gate switch_neutrality --capture before   # at the commit before a driver change
-$PY experiment_runner.py --gate switch_neutrality --capture after    # at the commit after it
+# in a tree at the commit BEFORE the change — the main checkout at trunk, say
+$PY experiment_runner.py --gate switch_neutrality --capture before
+# then in the tree at the commit after it
+$PY experiment_runner.py --gate switch_neutrality --capture after
 $PY experiment_runner.py --gate switch_neutrality                    # compare, with teeth
 ```
+
+`--gate all` makes a "before" capture only if there is **none**, and never re-makes one: a capture
+from an earlier commit was written by an earlier record schema, and resume judges it against the
+current one (§4.3). Move a "before" capture into place by copying the directory, not by re-running
+it.
 
 The reproduction gate reads the committed reference and needs the lifted input files, which
 `--gate artifacts_derive_inputs` produces; if they are wanted from the previous revision's own
@@ -765,12 +864,16 @@ refused (a missing prerequisite, an unknown gate name, or a failed stage).
 | 4 | `registry(campaign)` holds gates **and** measurements, with `gates_only()` filtering | a reader looking for "what does this package run?" should find one answer, and the queue asked for one registry listing both | split into two functions; every caller then has to know which group a name is in |
 | 5 | the cold-chain gate runs **two compositions** rather than choosing one | this revision's arm and the previous revision's chain differ by one switch, and on the whole-state audit that is not a comparable measurement. Choosing either alone would have hidden something | run only the arm as composed and report the previous revision's figures as not reproducible — which would be true and much weaker |
 | 6 | G3c's carrier **coefficients** are not reproduced; its verdict is | the coefficients were read from a per-pass residual trace the V4 plan drops from composition | implement a trace parser and run the trace instrument; the plan would need amending first, since it says nothing V4 publishes reads it |
-| 7 | G1's change-added exclusions are made **conditional** rather than deleted | deleting them would break a future G1 that legitimately straddles an older commit; keeping them unconditional hides 1 040 leaves for ever | pass `conditional=None` in `neutrality_body`; the gate then compares 2 289 values again |
+| 7 | G1's change-added exclusions are made **conditional** rather than deleted | deleting them would break a future G1 that legitimately straddles an older commit; keeping them unconditional hides leaves for ever — 416 over this task's straddle | pass `conditional=None` in `neutrality_body`; the gate then compares 416 fewer values |
 | 8 | G8 and G9 make their own runs with resume, instead of a separate capture command | a stage that exists only as a shell invocation is not reproducible (protocol §15), and both sides are the same commit | wrap their bodies back to the comparison alone; `python -m harness.gates <name> --capture runs` still works |
 | 9 | `--outdir` redirects a gate's **verdict** but not the gates' runs | one gate reads another's runs; moving them to relocate a small JSON would break that | pass the root through as well and give the output-path gate a second option for where to look |
 | 10 | the **experiment plan's §4.1 table is not edited** | that file is not on this task's owned list and the plan's amendments are the orchestrator's | §3's table and `--measure gate_table` are ready to paste |
 | 11 | the G4 namespaces come from the **run-time** census, taken with resume | the committed census records what a node writes; the crawl needs what a node ran, and the difference is a whole namespace on the steady-state configuration | pass the committed census; `pulse` silently leaves the set |
 | 12 | the G7 configuration is chosen as the one with the fewest iteration variables, **derived** | a gate that named a configuration would need editing when the configuration list changes, and the list is allowed to change by a recorded decision | name it |
+| 13 | the probe and cross-check children run with `-P` **and** `PYTHONSAFEPATH=1` | either alone would do; together they cover a child started some other way, and neither costs anything. `-I` would be wrong — it drops `PYTHONPATH`, which is the one thing these children need | drop one or both; the decoy tooth then fails, which is the point |
+| 14 | the nine cross-tree names go in **always-excluded**, not in the conditional group | they are a path or the working tree's state: no pair of captures could compare them, whether or not a change added them | move them; a two-tree straddle then fails on locations |
+| 15 | the two per-ruler counts are conditional on a **witness** rather than on their own leaf | a `0` that means "not computed" cannot be told from a `0` that means "excluded nothing" by looking at it | exclude them unconditionally; the gate then stops comparing a count that is worth comparing, and the new tooth fails |
+| 16 | `--gate all` makes a "before" capture when there is none, and the verdict labels it | a button that refuses on a fresh tree is not a button; a PASS that reads like a neutrality verdict when it is not is worse | refuse instead, and require the two captures to be made by hand |
 
 ---
 
@@ -781,10 +884,14 @@ refused (a missing prerequisite, an unknown gate name, or a failed stage).
 - **The experiment plan's §4.1 table** can be filled from §3 above, or regenerated with
   `experiment_runner.py --measure gate_table`, which also emits it as markdown. This task did not
   edit the plan.
-- **Gate G1's re-run here is a self-comparison** (§4.3): both captures are at one commit, because
-  this task makes no driver change. A genuine before/after straddling this task's record change
-  needs a tree at `5e64ce0e`. What the change costs G1 is measured by its fifth tooth (13 of 690
-  values), and the exclusion is conditional, so a future G1 across a real driver change compares it.
+- **Gate G1 now straddles trunk `5e64ce0e` → this branch, across two trees**, using the "before"
+  capture you made. It PASSES 0 of 3 164 values and 0 of 51 319 lines with 714 values excluded. The
+  capture is kept and was never handed to resume — and the reason matters: because this task
+  declared `per_run_artifact`, resume judges that capture's *optimisation* records incomplete and
+  would re-run them. Anyone moving a "before" capture between trees should copy the directory, not
+  re-run the stage.
+- **The same-commit capture is kept beside it** as `before_same_commit/` and is not read by anything;
+  delete it whenever you like.
 - **`tfcoil.insstrain` is above τ on `BR`, PROCESS as shipped** (§6.4), not only on the intervention
   arms. That strengthens improvement item 11 and is a statement about PROCESS rather than about this
   experiment. The user's decision on it is still open.
@@ -833,8 +940,12 @@ refused (a missing prerequisite, an unknown gate name, or a failed stage).
 
 ## 11. Limits of what is reported here
 
-- **G1's two captures are at one commit** (§4.3). Its zero is a statement about determinism and
-  about the exclusion set's coverage, not about a driver change being inert.
+- **G1's straddle covers a *harness* change, not a driver change** (§4.3). The driver chain closed
+  at A60 (driver-attempts) and this task edits no driver file, so what the gate shows is that the
+  harness change between trunk and here moved no measured value — which is the strongest claim
+  available at this commit, and not the same claim as "a driver change is inert".
+- **The leaf counts in §5.1 hold for one pairing.** 416 over this straddle, 1 040 over a same-commit
+  pairing; the review names the pairing it measured and the number does not travel without it.
 - **The 26 optimisation records carrying the restricted statistic are records, not design points**
   (§6.3): several gates run the same arm, configuration and seed under their own roots.
 - **G3c's carrier coefficients are not reproduced** (§4.5), by decision 6. The claim the gate binds
@@ -857,5 +968,47 @@ refused (a missing prerequisite, an unknown gate name, or a failed stage).
   the restricted statistic on optimisation records), `b1d56fc7` (G2, G3/G3c, G4), `acdeb450`
   (G5, G6), `9d4d04ab` (GR, G1, G8, G9 wired and run), `6a2b49d0` (the exclusion review and the
   self-containment measurement), `fe9284f1` (the gate table), `8c70f01c` (the README), `36bc2a08`
-  (the output-path measurement's own contrast runs). All numbers in this report were taken at
-  `36bc2a08`.
+  (the output-path measurement's own contrast runs).
+- **2026-09-11, revised** after the orchestrator's review (§13): `3f50d9b5` (the five defects),
+  `41194bef` (the exclusion review names its pairing). **All numbers in this report were re-taken at
+  `41194bef`**; the figures that moved are listed in §13.
+
+---
+
+## 13. The orchestrator's review, and what it changed
+
+The orchestrator reproduced every number in the first version of this report independently and
+found five defects. All five are fixed on this branch, every gate was re-run afterwards, and gate GR
+was re-run **from scratch** because `records.py` is on the run path.
+
+*Caption: one row per defect, what it was, and what it now does. "Found by" says how it surfaced —
+three of the five were invisible to the way this task had been running the gates.*
+
+| # | defect | found by | fix | now |
+|---|---|---|---|---|
+| 1 | the capability probe's verdict depended on the working directory: with `-c`, Python puts the cwd ahead of `PYTHONPATH`, so pressing the button from the repository root imported the repository's `process/` instead of the copy — 25 of 54 mismatched | pressing the button from the worktree root | `-P` and `PYTHONSAFEPATH=1` on the probe child and on the cross-check child | PASS from both directories; a new tooth runs the probe from a scratch tree holding a decoy `process/__init__.py` and it still imports the copy |
+| 2 | a genuine two-tree straddle of G1 failed on 42 of 3 206 values: 36 cross-tree paths and tree state that no exclusion named, and 6 leaves that are the record change itself | the orchestrator making the real "before" capture at trunk | nine structural names into always-excluded; two counts made conditional on a **witness** | G1 PASS: 0 of 3 164 values, 0 of 51 319 lines, 714 excluded (§4.3) |
+| 3 | the load-bearing tooth took its sample from the "before" side, which at trunk carries no restricted block, so it could not be built in the one run where it matters | the straddle, where it DID NOT TRIP | the sampler takes the side that carries the block | TRIPPED in the straddle: 13 of 683 values differ without the exclusion, 0 of 670 with it |
+| 4 | a same-commit G1 PASS read like a neutrality verdict in the plan's gate table | review | `_straddle` reads both manifests and prefixes the population, the verdict and the table row | the row now opens "straddles `5e64ce0e` → `3f50d9b5`: a neutrality result", or says both captures are at one commit and what that does and does not show |
+| 5 | `per_run_artifact` was written on both phases' records and declared in neither | review | declared `("AB", "always")` in `records.SCHEMA` | G7 covers it: 85 declared fields in the optimisation phase, 78 in the evaluation phase |
+
+*Caption: the figures that moved between the two versions of this report, and why. Everything not
+listed is unchanged.*
+
+| figure | before review | after | why |
+|---|---|---|---|
+| teeth, total | 106 | **108** | the decoy-package tooth and the witness tooth |
+| capability: compared / teeth | 54 / 14 | **55 / 15** | the decoy check and its tooth |
+| G7: compared | 161 | **163** | `per_run_artifact` declared in both phases |
+| G1: compared / excluded / teeth | 2 289 / 546 / 5 | **3 164 / 714 / 6** | a different and harder pairing — two commits and two trees — with eleven more names in the set |
+| G1: what it straddles | one commit | **`5e64ce0e` → `3f50d9b5`** | the orchestrator's trunk capture |
+| exclusion set: names | 59 | **70** | 9 cross-tree structural names, 2 witness-conditioned counts |
+| exclusion set: always / conditional | 27 / 32 | **36 / 34** | the same |
+| leaves recovered by the condition | 1 040 | **416** | measured over a different pairing; both are right for their pair, which is why the review now names it |
+| PROCESS runs made | 166 | **172** in this worktree, + 6 at trunk | the re-captured "after", GR from scratch |
+
+**One thing the review did not change, and it is worth saying.** The promotion's rule that *an
+undeclared tooth fails the gate* caught the new decoy tooth the moment it was added: the capability
+gate went FAIL with `undeclared_teeth: ['the working directory holds a package that shadows the
+tree']` until the name was declared. The mechanism designed to stop a check's declaration drifting
+from the check did exactly that, on its first real opportunity.
