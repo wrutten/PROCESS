@@ -89,7 +89,7 @@ _PREDICATE_COUNT = "DR4 counters: how often a convergence test was evaluated in 
 _BLOCK_VISITS = "DR4 counters: the block schedule's visits to each block, and the visits that executed no node (issue I-20a: counted and disclaimed, never repaired)"
 _SWEEP_COUNT = "DISPATCH_SWEEPS: the run's count of sweeps of the dispatch body, under a public name (was _SWEEP_CALLS)"
 _READS_BY_NODE = "the census instrument reports each node's read set by name, beside the write set it already reported"
-_PREDICATE_RULER = "switch PROCESS_ARCH_PREDICATE: which denominator the coupling-state convergence test scales a step by (frozen = the measured scale alone; mixed = that scale as a floor under the current magnitude)"
+_PREDICATE_RULER = "switch PROCESS_ARCH_PREDICATE: which denominator the coupling-state convergence test scales a step by -- the measured scale alone, or that scale as a floor under the current magnitude"
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
