@@ -3,7 +3,7 @@
 > **Document status** — **OPEN**. Task **A61 (insstrain-diagnosis)**, branch `A61-insstrain-diagnosis`,
 > off `architecture_surgery` at `0a023d63`. Every number below was produced by running
 > `arch_surgery/MDA_partitioning_experiment_v4/harness/exit_audit_diagnosis.py` at commit
-> `f9626bc9`; the nine PROCESS runs it made are stamped with that commit and a clean tree. The
+> `ebf243ed`; the eleven PROCESS runs it made are stamped with that commit and a clean tree. The
 > physics is unchanged: nothing under `PROCESS/process/models/` was edited, read-only throughout
 > (D5). Numbers from the superseded study at `710a75c9` are not cited (D4).
 
@@ -76,7 +76,7 @@ reading the audit residual as evidence against them.
 
 ## 2. How to re-run everything in this report
 
-Every number comes from one committed entry point, in three stages, with no shell invocation in
+Every number comes from one committed entry point, in four stages, with no shell invocation in
 between. From `arch_surgery/MDA_partitioning_experiment_v4`:
 
 ```bash
@@ -88,10 +88,13 @@ PYTHONPATH=PROCESS $PY -m harness.exit_audit_diagnosis census
 # the nine runs, through harness/pool.py, every one --run-kind gate
 HARNESS_WORKERS=3 PYTHONPATH=PROCESS $PY -m harness.exit_audit_diagnosis runs
 
+# the same job with the trace and without it, compared leaf by leaf
+HARNESS_WORKERS=1 PYTHONPATH=PROCESS $PY -m harness.exit_audit_diagnosis inertness
+
 # the tables
 PYTHONPATH=PROCESS $PY -m harness.exit_audit_diagnosis report
 
-# all three, in order
+# all four, in order
 HARNESS_WORKERS=3 PYTHONPATH=PROCESS $PY -m harness.exit_audit_diagnosis all
 ```
 
@@ -100,7 +103,8 @@ run, and the report stage applies the same filter and names what it is missing r
 shrinking its own denominator. A missing observation is a **refusal** (exit code 1 with the runs
 named), not a quietly shorter table.
 
-The stage writes `census.json`, `manifest.json`, `summary.json` and `summary.md`. **The tables in
+The stage writes `census.json`, `manifest.json`, `inertness.json`, `summary.json` and
+`summary.md`. **The tables in
 this report are that `summary.md`**, quoted; nothing here was computed by hand.
 
 **Where the artifacts are.** Live, in this worktree:
@@ -110,6 +114,34 @@ that script's own namespacing rule (`${BRANCH%%-*}_<entry>`) they will land at
 `arch_surgery/idf_probe/runs/A61_gates/exit_audit_diagnosis/`. **The orchestrator should confirm
 that path against what the script prints** — this project has written the wrong recorded path
 twice (I-14, I-15, I-16).
+
+### 2.1 The instrument is shown inert, not asserted to be
+
+The trace only reads: it wraps three calls and each returns exactly what the unwrapped call
+returns. That is a claim about code, and this project gates such claims. So the same job —
+`B0` / `st_regression` / seed 0 — runs **twice at the same commit**, differing in one environment
+variable, and every deterministic leaf of the two run records is compared without tolerance.
+
+*Caption: the inertness check, from the `inertness` stage. "Compared" is the number of record
+leaves actually compared; "excluded" names the eleven that cannot be equal between two runs in two
+directories (paths, timings, the two wall-clock stamps) with a reason each. "Declared leaves" is a
+list of thirteen the claim depends on — the objective and its hexadecimal form, the four cost
+counters, the iteration count, the two predicate counters and the exit audit on both rulers — each
+asserted to be present on both sides and not excluded, rather than assumed to be in the population.
+The tooth adds one to a single leaf of a copy of the traced record and requires the comparison to
+report it.*
+
+| quantity | result |
+|---|---|
+| leaves compared | 672 |
+| mismatches | **0** |
+| leaves excluded, each with a reason | 11 |
+| declared leaves confirmed in the compared population | **13 of 13** |
+| tooth (`node_calls_total` + 1 on a copy) | **bit** |
+| observation file written with the trace / absent without it | yes / yes |
+
+The check **fails** on any mismatch and names the leaves; nothing is retried and no exclusion was
+added to make it pass.
 
 ---
 
@@ -157,10 +189,11 @@ Four facts follow from that table alone, and each is checked by a measurement la
   `rad[ii] + ((rad[ii+1] - rad[ii]) / n) * (jj - n·ii)` — so the last point of a layer sits one
   step *short* of that layer's outer edge, at a radius that depends on `n`. Change `n` and the
   value changes.
-* **`n_rad_per_layer` is a persistent field with a latching write.** Its default is 100. Three of
-  the four TF-coil nodes raise it to 500 when called with `output=True`, and
-  `run_and_output_stress` — which every superconducting TF `output()` calls — raises it
-  unconditionally. **Nothing anywhere puts it back.**
+* **`n_rad_per_layer` is a persistent field with a latching write.** Its default is 100. Three
+  `run` methods raise it to 500 under `if output` — the cable-in-conduit, the cross-conductor and
+  the resistive TF-coil models — and `run_and_output_stress`, which every superconducting TF
+  `output()` calls, raises it **unconditionally**. The census finds four assignments of `500` in
+  the whole tree and **no assignment anywhere that puts it back**.
 * **It is not a coupling-state component.** It appears in none of the three committed artifacts, so
   the audit's snapshot does not capture it and the audit's restore does not restore it.
 * **The `None` latch explains `st_regression`.** `insstrain` is computed only under
@@ -215,9 +248,11 @@ used: `numerics.xcm` equals the last evaluation's `xc` element for element, 9 of
 
 **What runs between the loop's exit and the audit's declared position, named with the census.**
 
-* **The objective and constraint layer.** After the predicate breaks the loop,
-  `_call_models_partitioned` (the flat arms' single block) evaluates `objective_function` and
-  `constraints.constraint_eqns` before returning. The write census carries that layer as its own
+* **The objective and constraint layer.** On the arms that stop on the coupling state (`B0`, `B1`,
+  `B3`), `_call_models_partitioned` evaluates `objective_function` and
+  `constraints.constraint_eqns` once **after** the predicate has broken the loop, before returning;
+  on the reference arm `BR` those two *are* the predicate's inputs and are computed inside the
+  loop, so nothing runs after it at all. Either way the write census carries that layer as its own
   node, `objective_constraints`: it writes **nothing** on `large_tokamak_nof` and on
   `st_regression`, and **one field** on `low_aspect_ratio_DEMO` — `cs_fatigue.n_cycle_min`, which
   is **not** in that configuration's coupling state. Consistent with the 0 measured above.
@@ -368,16 +403,18 @@ value the same run put in its MFILE, read from that file. Compared as hexadecima
 | `st_regression/B0/seed000` | the component is `None`; the output file carries no `(insstrain)` line | — | — |
 
 This is a property of **PROCESS as shipped** — the reference arm `BR` shows it with every
-architecture switch unset — and it is the same 0.70–0.72 % as the audit residual, because it is the
-same difference. The MFILE's `insstrain` is the 500-point value; the state the optimiser accepted
+architecture switch unset — and it is the **same difference** the audit reports, expressed on a
+different denominator: the audit divides by the component's frozen measured scale and gets
+6.990984e-03 on `B0` / `large_tokamak_nof` / seed 0, while dividing by the value itself gives
+0.720 %. The MFILE's `insstrain` is the 500-point value; the state the optimiser accepted
 carries the 100-point value; nothing reconciles them, because the output path never re-enters the
 MDA at the coarse grid and the coarse grid is never restored.
 
-Under upstream's output-time loop (`BR`, `B0`) the *rest* of the state is re-swept at 500 before the
-files are written, so the file is internally consistent at 500. Under the one-call output path
-(`B1`, `B3`) `finalise` is called once and the ten models that re-enter their own `run()` from
-`output()` (trap T7) recompute at 500 while nothing else does. **How much else that moves in the
-written file was not measured here** and is named in §10 as a limit.
+Under upstream's output-time loop (`BR`, `B0`) the *rest* of the state is re-swept twice at 500
+before the files are written. Under the one-call output path (`B1`, `B3`) `finalise` is called once
+and only the models that re-enter their own `run()` from `output()` (trap T7) recompute — among
+them the TF-coil stress block, which is the one thing the discretisation reaches. **What else those
+re-entries change in the written file was not measured here** and is named in §10 as a limit.
 
 ---
 
@@ -410,10 +447,29 @@ arm's handed-over state is converged to five orders below τ.
 
 ### 9.2 The captions
 
-`B0` and `B3` converged to τ on every evaluation: 630 / 660 / 1 240 / 1 050 evaluations per run in
-1–6, 1–6, 1–5 and 4–13 sweeps, `ifail = 1` throughout. Those captions stand. What must **not** be
-written is "one component of the accepted state is still above τ", because on the evidence above
-that sentence is about `n_rad_per_layer` and not about the fixed point.
+Every arm converged to τ on every evaluation it made.
+
+*Caption: one row per run, from the run record. "Sweeps per evaluation" is the range of the
+solve-phase histogram — what the loop needed to reach τ on its hardest and easiest evaluation;
+every evaluation is inside it, none hit a cap. "Node calls" is the solve phase's, the cost unit.
+The output-time loop's sweeps are counted separately and happen **after** the audit's declared
+position.*
+
+| run | `ifail` | optimiser iterations | evaluations | sweeps per evaluation | node calls, solve phase | output path | output-time sweeps |
+|---|---|---|---|---|---|---|---|
+| `large_tokamak_nof/B0/seed000` | 1 | 8 | 630 | 1–6 | 43 449 | `mda_output` | 2 |
+| `large_tokamak_nof/BR/seed000` | 1 | 8 | 630 | 2–6 | 42 567 | `mda_output` | 2 |
+| `large_tokamak_nof/B0/seed001` | 1 | 8 | 630 | 1–7 | 43 491 | `mda_output` | 2 |
+| `large_tokamak_nof/B1/seed000` | 1 | 8 | 660 | 1–6 | 44 142 | `finalise_once` | 0 |
+| `large_tokamak_nof/B3/seed000` | 1 | 8 | 660 | 4–14 | 28 055 | `finalise_once` | 0 |
+| `low_aspect_ratio_DEMO/B0/seed000` | 1 | 16 | 1 240 | 1–5 | 86 877 | `mda_output` | 2 |
+| `low_aspect_ratio_DEMO/BR/seed000` | 1 | 16 | 1 240 | 2–5 | 89 964 | `mda_output` | 2 |
+| `low_aspect_ratio_DEMO/B3/seed000` | 1 | 13 | 1 050 | 4–13 | 45 496 | `finalise_once` | 0 |
+| `st_regression/B0/seed000` | 1 | 10 | 570 | 1–12 | 42 756 | `mda_output` | 2 |
+
+Those captions stand. What must **not** be written is "one component of the accepted state is still
+above τ", because on the evidence above that sentence is about `n_rad_per_layer` and not about the
+fixed point.
 
 ### 9.3 Recommendation, with what it costs
 
@@ -422,9 +478,9 @@ coupling state to the whole data structure, and restore both before the audit sw
 fields restored is then **derived** (what differs between the two positions), not a list, so it
 survives any future model that latches another output-mode setting.
 
-* *Cost.* The snapshot hook gains one whole-structure snapshot per position (2 288 fields, twice
-  per run) and `child.take_exit_audit` gains a restore. Both are harness-side; **no driver change
-  and no model change.**
+* *Cost.* The snapshot hook gains one whole-structure snapshot per position — 2 288 fields over 36
+  namespaces, at the two positions the driver offers — and `child.take_exit_audit` gains a
+  restore. Both are harness-side; **no driver change and no model change.**
 * *Consequence to plan for.* It changes `exit_audit.*` on **every** record, so gate **G1** must be
   re-run at that commit with one more named exclusion, and any reference value that quotes an exit
   audit — gate GR's 270 compared values include one — has to be re-taken or excluded explicitly.
@@ -469,10 +525,10 @@ measurement shows Y", and none is sent without the user's word.
 
 ## 10. Limits
 
-* **Nine runs, not a distribution.** One seed on eight of the nine (seed 0), with `B0` on
-  `large_tokamak_nof` also at seed 1. Every count and every hexadecimal float reproduced exactly
-  across the three separate full runs of the chain made during this task, so the quantities are
-  deterministic; they are not a sample of anything.
+* **Nine diagnosis runs, not a distribution** (plus the two the inertness check makes). One seed
+  on eight of the nine (seed 0), with `B0` on `large_tokamak_nof` also at seed 1. Every count and
+  every hexadecimal float reproduced exactly across each repeated full run of the chain made during
+  this task, so the quantities are deterministic; they are not a sample of anything.
 * **`B3` was measured on the two pulsed configurations only**, and `B1` on `large_tokamak_nof`
   only. `B1` is inactive on `st_regression` by that configuration's own recorded reason.
 * **The dose response varies one setting over five values.** It is not a grid-convergence study of
@@ -480,9 +536,11 @@ measurement shows Y", and none is sent without the user's word.
   last pair, not a fit. It is used only to separate "grid sample" from "discontinuity", which it
   does at a spread of 0.116–0.140 % across four estimates.
 * **What else the one-call output path leaves inconsistent in the written file was not measured.**
-  §8 shows the difference for this one component; the general question — what the ten models that
-  re-enter `run()` from `output()` recompute at 500 while the rest of the state stays at 100 — is
-  open and is a question for whoever owns gate G9.
+  §8 shows the difference for this one component. The general question — what the models that
+  re-enter their own `run()` from `output()` (trap T7) recompute on the finer grid while the rest
+  of the state stays on the coarse one — is open, and is a question for whoever owns gate G9. This
+  report measured only that the two positions the driver snapshots differ in 0 components on `B1`
+  and 114 on `B3`, and that the written `insstrain` differs from the handed-over one in every arm.
 * **The residual is reported on the frozen ruler.** The observation carries the mixed ruler beside
   it on every sweep; the two are not published in one column here because this report's question is
   not about rulers. Wherever `|y| ≤ s` the two are bit-identical, which is the case for this
@@ -490,7 +548,7 @@ measurement shows Y", and none is sent without the user's word.
 * **Two data-structure fields cannot be restored exactly** (§9.3). Neither is read by a model, but
   a whole-structure restore is therefore *not* provably total, and the report says so rather than
   claiming 2 288 of 2 288.
-* **The instrument is refused on campaign runs and was never run as one.** All nine runs are
+* **The instrument is refused on campaign runs and was never run as one.** All eleven runs are
   `--run-kind gate`. Its per-sweep cost — one further read of the coupling state — would otherwise
   contaminate a per-sweep cost measurement.
 * **No conclusion here rests on a timing**, and none is quoted.
@@ -503,4 +561,4 @@ measurement shows Y", and none is sent without the user's word.
 
 | date | change |
 |---|---|
-| 2026-09-11 | Created. `harness/audit_map.py` (the trace and the sweep series), `harness/exit_audit_diagnosis.py` (the stage), three lines in `harness/optimise.py`. Nine runs at `f9626bc9`; classification (d), output-mode branch, attributed to `tfcoil.n_rad_per_layer` by a leave-one-out pair and a dose response. |
+| 2026-09-11 | Created. `harness/audit_map.py` (the trace and the sweep series), `harness/exit_audit_diagnosis.py` (the stage), three lines in `harness/optimise.py`. Nine diagnosis runs plus two inertness runs at `ebf243ed`; classification (d), output-mode branch, attributed to `tfcoil.n_rad_per_layer` by a leave-one-out pair and a dose response. |
