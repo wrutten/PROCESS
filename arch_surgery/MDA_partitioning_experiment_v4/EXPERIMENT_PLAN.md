@@ -707,7 +707,7 @@ neutrality is not claimed. No timing is evidence.
 | `audit_restriction` | G4 | the similarity statistic, on every configuration | **PASS** | 13 doctored run(s) over 3 configuration(s), each against that configuration's undoctored run; namespaces derived per configuration | 12 | 0 | 6/6 | `runs/gates/audit_restriction/gate.json` |
 | `entry_and_warm` | G6 | the evaluation phase, on every configuration | **PASS** | 5 entry pair(s) at seed 1; 5 warm run(s); 13 evaluations | 4204 | 0 | 3/3 | `runs/gates/entry_and_warm/gate.json` |
 | `switch_composition` | G5 | B3, on every configuration where it is active | **PASS** | 3 configuration(s) where B3 is active; 6 optimisations; 37 switch names and 10 run values per configuration | 141 | 0 | 3/3 | `runs/gates/switch_composition/gate.json` |
-| `switch_neutrality` | G1 | each driver change, run per change and never batched | **FAIL** | straddles fd480aff -> b784158c: a neutrality result.  6 run pair(s) = 3 configuration(s) x 2 reference arm(s); 2903 deterministic record values and… | 54222 | 144 | 7/7 | `runs/gates/switch_neutrality/gate.json` |
+| `switch_neutrality` | G1 | each driver change, run per change and never batched | **PASS** | straddles fd480aff -> d6f0fdf4: a neutrality result.  6 run pair(s) = 3 configuration(s) x 2 reference arm(s); 2831 deterministic record values and… | 54150 | 0 | 9/9 | `runs/gates/switch_neutrality/gate.json` |
 | `reproduction` | GR | the harness rewrite and the experiment's copy of PROCESS, once, at the copy commit before  | **PASS** | 20 runs (14 optimisations + 6 evaluations) over 3 configurations; 270 values in the committed reference, 14 of them excluded by name with their rea… | 256 | 0 | 8/8 | `runs/gates/reproduction/gate.json` |
 | `output_path` | G9 | the removal of the output-time loop from the arms whose matrix cell turns it off, on every | **PASS** | 11 run(s) at seed 0 = every optimisation-phase arm on every configuration where it is active, each composed from the experiment's matrix; 3825 coup… | 3879 | 0 | 4/4 | `runs/gates/output_path/gate.json` |
 | `predicate_mode` | G8 | the convergence predicate's second ruler, on the evaluation-phase arms of every configurat | **PASS** | 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A1) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.… | 7936 | 0 | 4/4 | `runs/gates/predicate_mode/gate.json` |
@@ -715,7 +715,7 @@ neutrality is not claimed. No timing is evidence.
 | `recomputation` | — | every cell the tally publishes, recomputed from the run records by a second implementation | **PASS** | 65 table(s) emitted by the two tally stages, recomputed cell by cell from 33 run record(s) under 2 declared source(s), plus this module's own impor… | 1901 | 0 | 9/9 | `runs/gates/recomputation/gate.json` |
 | `run_kind_separation` | — | every record this package makes, and every population the tally and the analysis build | **PASS** | 175 run record(s) under runs/, of which 28 are covered by one of the tally's 2 declared source(s); run kinds counted on every one | 203 | 0 | 6/6 | `runs/gates/run_kind_separation/gate.json` |
 
-**23 PASS, 1 FAIL, 0 not run; 137 of 137 teeth tripped.**
+**24 PASS, 0 FAIL, 0 not run; 139 of 139 teeth tripped.**
 
 *How to read: no number in §4.2–§4.4 is cited unless every row here is PASS with its tooth tripped; a FAIL is a result and the dependent tables are marked "not produced — gate X failed".*
 

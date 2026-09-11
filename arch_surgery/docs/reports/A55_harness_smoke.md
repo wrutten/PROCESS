@@ -292,11 +292,16 @@ Every `metrics.json` under `runs/`, by the commit its child stamped.
 The full table, with every population, denominator and tooth count, is the experiment plan's §4.1,
 rendered there by `--measure gate_table` from the verdict records. The summary line reads:
 
-> **23 PASS, 1 FAIL, 0 not run; 137 of 137 teeth tripped.**
+> **24 PASS, 0 FAIL, 0 not run; 139 of 139 teeth tripped.**
 
-That table was rendered from the verdict records as the press left them. G1 has since passed at
-`d6f0fdf4` with two teeth more (§6.3), so the standing count is **24 PASS, 0 FAIL, 139 of 139
-teeth**; §4 of the plan is re-rendered at the merge, from the records, and will read so.
+The press itself left that table reading **23 PASS, 1 FAIL, 137 of 137**: G1 failed on it and passed
+afterwards at `d6f0fdf4` with two teeth more (§6.3). The section was re-rendered from the records as
+they now stand, so the plan reads the standing count, and its population marker names **every**
+commit those records carry — `3d64625c`, `b784158c`, `f8bce151`, `fd480aff` — which is what the
+marker is for. One ordering property is worth recording: `--plan-tables` renders §4.1 from the
+`gate_table` **stage** record, not from the verdict records directly, so a gate re-run after a
+`--measure` press needs `--measure gate_table` again before the section is re-rendered. Both are
+zero-run stages.
 
 *Caption: the gates whose numbers moved at this tip, or that are new. Every other gate's verdict and
 denominator is unchanged from A62's and is in the plan's §4.1. "Compared" is the gate's own headline
@@ -704,3 +709,4 @@ decision should rest on it.
 | `87951248` | this report, and the experiment plan's §4 rendered by `--plan-tables write` |
 | `d6f0fdf4` | G1's comparator translates the earlier capture's leaf paths through `reference.FIELD_NAME_MAP`, segment-aware, and compares the renamed leaves as values; the verdict states the translation; two new teeth. No exclusion added, no capture made. G1 PASS 0 / 2 831, 9/9 |
 | `2f0ad599` | the report's §6.3, §1, §5, §8, §9, §11 and change log brought to the fixed gate |
+| *(this commit)* | the experiment plan's §4 re-rendered by `--measure gate_table` then `--plan-tables write`, zero PROCESS runs: §4.1 now reads **24 PASS, 0 FAIL, 139 of 139 teeth** with G1 PASS on the straddle `fd480aff → d6f0fdf4`, and the population marker names every commit the records carry. Documents only |
