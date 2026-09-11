@@ -1332,6 +1332,31 @@ of what looks like bulk is the instrument.
   one table. What remains is H5–H8: the gate framework completed (G2–G7, wiring), the tally, the analysis, the
   smoke — harness only, the copy untouched from here.
 
+- **2026-09-11 — amendment 13, at the merge of A52 (harness-gates) (`d13a54c7`): H5 done — every gate of the
+  experiment plan inside `harness/`, in one framework, on one button.** `harness/framework.py` holds `Gate`, `Tooth`,
+  `Check` and `Measurement`; a gate without a tooth is a `TypeError` at import; the six self-checks and four artifact
+  stages are promoted by running the same function with a *declared* tooth list (an undeclared or missing tooth fails
+  the gate). G2, G3/G3c, G4, G5, G6, G7 built (`gate_prime.py`, `gate_audit.py`, `gate_composition.py`, `gate_entry.py`,
+  `gate_records.py`); GR, G1, G8, G9 registered; `--gate <name>|all`, `--gates`, `--measure <name>|all` on
+  `experiment_runner.py`. §6's self-containment requirement is a measurement stage (30 files, 0 imports of and 0
+  subprocesses into `idf_probe/` or `fixedpoint/`). **Rules added by the review, binding on every later task:** (i)
+  `--resume` reaches every run — without it every gate re-makes its runs, and a verdict records the commits of the run
+  records it read, failing when they are not its own commit and `--resume` was not given; (ii) G1's "before" capture is
+  made explicitly in a tree at the earlier commit and is never re-made by the gate; a same-commit G1 labels itself
+  determinism-and-coverage, not neutrality; (iii) every child that imports the copy runs with `-P` and
+  `PYTHONSAFEPATH=1`, so the working directory cannot shadow `PYTHONPATH` (the capability probe imported the
+  repository-root `process/` when the button was pressed from the repository root); (iv) the `--gate all` order is
+  derived from declared `reads_from` dependencies, cheapest-first only among independent gates (GR before G9 and G8);
+  (v) **do not commit while measurement runs are executing** — the commit stamp is per child, and a mid-run commit
+  splits a population across two trees (the campaign's Phase B is hours of runs). G1's exclusion set is 70 names — 36
+  structural, 32 conditional on the field's own presence, 2 conditional on a witness block — reviewed as one table by
+  `--measure exclusion_review`, whose leaf counts travel with the pairing they were measured over. §7.1's GR after every
+  run-path change: PASS (20/20, 270/270), re-made from nothing. The cold-chain criterion's figures are 244 (nof) / 124
+  (st) for G3 and 240 / 218 (lad) for G3c; the queue row's "on lad" was the orchestrator's transcription error.
+  Remaining: H6 (A53, dispatched), H7 (A54), H8 (A55); and, from A61 (insstrain-diagnosis), the exit-audit instrument's
+  snapshot must restore the whole data structure (a new task once A61 is verified), which changes `exit_audit.*` on every
+  record and therefore G1's exclusions and GR's compared set.
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task

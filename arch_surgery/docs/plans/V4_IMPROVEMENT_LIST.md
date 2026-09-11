@@ -686,3 +686,19 @@ frozen ruler); a discontinuity in the TF-coil insulation-strain model at the acc
 diagnose before the campaign (one task: which node writes it, what it depends on, its scale in the coupling-state
 artifact, its behaviour over seeds), or let the campaign measure it and report it as the dominant term of the restricted
 statistic on those configurations. Until decided, G4 (A52) and the tally (A53) make it visible rather than average it away.
+
+**Extended 2026-09-11 (A52 (harness-gates); confirmed from the orchestrator's own records).** The same component is above τ on the
+**reference arm `BR`** — PROCESS as shipped, every switch unset — at 6.991e-3 (`large_tokamak_nof`) and 7.021e-3 (`low_aspect_ratio_DEMO`),
+and on `B0` at the same values; `B1`/`B3` read 7.119e-3 / 7.021e-3. Its measured scale (6.05e-3) is its own magnitude (5.9e-3–7.7e-3), so
+this is a ~0.7 % change of the value in one further sweep, not a scale artefact; `B0`'s flat loop converged every evaluation in 1–6 sweeps at τ.
+The user asked why `B0` is then not converged, and **A61 (insstrain-diagnosis)** was dispatched (2026-09-11). **Its classification (verification
+pending at its merge):** (d) in its output-mode form, and an artefact of the exit audit rather than of convergence — PROCESS's output path
+permanently raises `tfcoil.n_rad_per_layer` from 100 to 500 before the snapshot; the field is not a coupling-state component, so the snapshot
+neither captures nor restores it, and the audit's sweep runs the TF-coil stress model on a different grid than the loop did. Evidence: 0 of
+840/846/827 components differ between the loop's last sweep and the audited state (9/9 runs); restoring that one field alone gives a residual of
+exactly `0x0.0p+0` in every arm, restoring the other 85 changed fields and not it leaves it unchanged; a second sweep moves nothing; the grid
+dependence is `v(n) = v_∞ + C/n`. On `st_regression` the stress model returns `None`, the component latches and is classified discrete. Two
+PROCESS findings for `PROCESS_code_analysis`'s bug file: the MFILE's `insstrain` is not the value the solve converged (0.70–0.72 % off, every arm
+including as shipped), and the `None` latch. **Consequence if verified:** the exit audit's snapshot must restore the whole data structure
+(harness-side, a new task), which changes `exit_audit.*` on every record — G1 needs one more named exclusion and GR's compared set must drop the
+audit residual with its reason; the "one component above τ" statements of A57 and A52 are then withdrawn as convergence statements.

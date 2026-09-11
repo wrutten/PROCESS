@@ -626,7 +626,7 @@ with different settings. Component counts by configuration: 840 / 846 / 827.*
 | **G0** the copy's physics is frozen | every V4 commit | `PROCESS/process/models/` byte-identical to `c0ae5b28`'s | a 1-byte change to one model file is caught |
 | **G1** every new switch off ⇒ byte identity | all V4 driver changes (decision (d)) | MFILE hex floats identical to a run at the pre-change commit, 3 configurations, both stamps recorded | a 1-ULP change to one float is caught |
 | **G2** prime on, fixed-point map | the prime's inertness after call 1 | from each reference exit snapshot, one flat and one partitioned call, prime on vs off, exit states bit-identical on N/N components | a doctored snapshot component trips |
-| **G3 / G3c** prime on, cold chain; lad carrier census | "no cut edge carries anything" | as V3, **re-run at the campaign commit** (item 7) | prime-off run reproduces A35's 3 passes and 244 / 124 |
+| **G3 / G3c** prime on, cold chain; lad carrier census | "no cut edge carries anything" | as V3, **re-run at the campaign commit** (item 7) | prime-off chain reproduces A35's counts — 244 (`large_tokamak_nof`) / 124 (`st_regression`) for G3, 240 cold / 218 displaced (`low_aspect_ratio_DEMO`) for G3c — and every residual maximum to the bit; the "3 outer passes → 2" half has nothing to count since DR1 removed the repeated schedule (A52) |
 | **G4** audit restriction | the similarity statistic | a doctored `per_run`-owned component trips the whole-state audit and not the restricted one; a doctored in-loop component trips both; **one doctored component from each excluded namespace** (`costs`, `water_use`, `vacuum`, …) | both directions, every namespace |
 | **G5** combined-switch equivalence | `B3` | the arm composed from the matrix equals the arm composed switch by switch: `norm_objf` hex, `ifail`, iterations, outer-pass histogram, exit audit hex | `norm_objf` hex and `n_call_models` teeth |
 | **G6** Phase A entry and warm equivalence | Phase A | seed-paired entries bit-identical across arms per configuration; each block arm from the reference snapshot, pinned at the reference's converged burn time, reproduces the reference fixed point below τ with the pinned component bit-identical | as V3 |
@@ -698,23 +698,41 @@ calls, never inside them (D19). Node-call ratios are the acceptance quantities; 
 
 ### 4.1 Gates
 
-*Caption: one row per gate of §3.9. "Verdict" is PASS/FAIL on the gate's criterion; "tooth" names
-the deliberately broken input and whether it tripped the gate; "record" is the committed path. A
-gate whose tooth did not trip is not accepted whatever its verdict.*
+*Caption: one row per registered gate, emitted by `experiment_runner.py --measure gate_table` from the verdict
+records of one from-scratch press of `--gate all --census-entry evaluation` from the repository root at commit
+`eb38c34a` (A52 (harness-gates); records under `runs/gates/`, untracked, relocated to `arch_surgery/idf_probe/runs/A52_runs/gates/` at the task's
+retirement). "Plan" is the §3.9 label, empty for the harness's own checks promoted into the same framework. "Verdict"
+is PASS on the criterion **and** on every tooth. "Compared" is the denominator and "mismatched" the count that
+differed; where a gate compares more than one kind of thing the record names each part. The frozen-physics row reads
+1 mismatched and PASS: the one model file the user approved under D11, by name. G1's row states what it straddles; a
+same-commit G1 says so and is not a neutrality result. Every verdict also records the commit of every run record it
+read — all at one commit here. Re-taken by the button at every later commit; this is the state at A52's merge.*
 
-| gate | binds | verdict | tooth tripped | record |
-|---|---|---|---|---|
-| GR rewrite reproduces V3 | harness + PROCESS copy, once | PASS/FAIL | `n`/`n` teeth: count +1 · hex 1 ULP · missing record · missing key · bad map | `runs/gates/GR/gate.json` |
-| G0 physics frozen | every commit | PASS/FAIL | 1-byte model change caught | `…/G0/gate.json` |
-| G1 switch unset ⇒ byte identity | each driver change | PASS/FAIL ×3 configs | 1-ULP float caught | `…/G1/<change>/gate.json` |
-| G2 prime inertness | prime | PASS/FAIL | doctored snapshot component | … |
-| G3 / G3c cold chain | cut edges | PASS/FAIL | prime-off reproduces 3 passes, 244/124 | … |
-| G4 audit restriction | similarity statistic | PASS/FAIL ×3 | one doctored component per excluded namespace | … |
-| G5 matrix = switch-by-switch | `B3` | PASS/FAIL ×3 | `norm_objf` hex, `n_call_models` | … |
-| G6 entries & warm equivalence | Phase A | PASS/FAIL ×3 | as V3 | … |
-| G7 record completeness | pairing & forensics | PASS/FAIL | 5/5 field teeth | … |
-| G8 predicate trial | `mixed` mode | PASS/FAIL | doctored-component tooth | … |
-| G9 output path | `MDA_Output` removal | PASS/FAIL ×3 | 1-ULP before `finalise` | … |
+| gate | plan | binds | verdict | population | compared | mismatched | teeth | record |
+|---|---|---|---|---|---|---|---|---|
+| `g0prime` | G0 / G0' | every V4 commit, every arm, both phases | **PASS** | 77 files under PROCESS/process/models/ compared byte for byte against c0ae5b28 (git cat-file, never a working tree), plus the file set | 77 | 1 | 4/4 | `runs/gates/g0prime/gate.json` |
+| `composition` | — | the harness itself, before any PROCESS run | **PASS** | 8 arms x 3 configurations = 24 pairs | 42 | 0 | 7/7 | `runs/gates/composition/gate.json` |
+| `rungs` | — | the harness itself, before any PROCESS run | **PASS** | 11 matrix rows x 8 arms = 88 cells; 6 rung steps | 98 | 0 | 3/3 | `runs/gates/rungs/gate.json` |
+| `provenance` | — | the harness itself, before any PROCESS run | **PASS** | one scratch repository, three states | 4 | 0 | 4/4 | `runs/gates/provenance/gate.json` |
+| `data` | — | the harness itself, before any PROCESS run | **PASS** | 16 committed file(s) in harness/data/ + the moved predicate module = 17 comparisons; and 9 declared counts (3 configurations x coupling-state compo… | 17 | 0 | 6/6 | `runs/gates/data/gate.json` |
+| `run_path` | — | the harness itself, before any PROCESS run | **PASS** | 2 phases x the declared field list; 2 displacement streams; 4 refusals | 9 | 0 | 12/12 | `runs/gates/run_path/gate.json` |
+| `capability` | — | the harness itself, before any PROCESS run | **PASS** | every arm/configuration pair whose arms are active | 55 | 0 | 15/15 | `runs/gates/capability/gate.json` |
+| `artifacts_check` | — | every committed artifact of every configuration | **PASS** | 19 artifact row(s) over 3 configuration(s) (large_tokamak_nof, low_aspect_ratio_DEMO, st_regression); 95 individual check(s) | 95 | 0 | 3/3 | `runs/gates/artifacts_check/gate.json` |
+| `artifacts_derive_inputs` | — | the lifted input file of each pulsed configuration | **PASS** | 3 configuration(s) (large_tokamak_nof, low_aspect_ratio_DEMO, st_regression); the digest gate applies to the 2 pulsed one(s) | 2 | 0 | 4/4 | `runs/gates/artifacts_derive_inputs/gate.json` |
+| `artifacts_census` | — | the committed run-time write census, per configuration | **PASS** | 3 configuration(s) (large_tokamak_nof, low_aspect_ratio_DEMO, st_regression); one evaluation census each, taken with the read half of the instrumen… | 81 | 0 | 2/2 | `runs/gates/artifacts_census/gate.json` |
+| `artifacts_per_run` | — | each configuration's per-run deferral set | **PASS** | 5 (configuration, input file) pair(s) over 3 configuration(s) (large_tokamak_nof, low_aspect_ratio_DEMO, st_regression); the write census is measur… | 16 | 0 | 2/2 | `runs/gates/artifacts_per_run/gate.json` |
+| `record_completeness` | G7 | the declared pairing and the failure forensics, in both phases | **PASS** | 2 runs on st_regression (the configuration with the fewest iteration variables, derived); 85 declared field(s) in the optimisation phase and 78 in … | 163 | 0 | 9/9 | `runs/gates/record_completeness/gate.json` |
+| `prime_map` | G2 | the claim that the arrangement's method-level move changes nothing once the first-wall mod | **PASS** | 6 arrangement/configuration pair(s); 12 evaluations; 5026 components compared | 5026 | 0 | 2/2 | `runs/gates/prime_map/gate.json` |
+| `cold_chain` | G3 / G3c | the claim that with the method-level move in place no cut edge carries a stale value into  | **PASS** | 8 chain/composition pair(s) over 4 chain(s); 16 evaluations | 60 | 0 | 4/4 | `runs/gates/cold_chain/gate.json` |
+| `audit_restriction` | G4 | the similarity statistic, on every configuration | **PASS** | 13 doctored run(s) over 3 configuration(s), each against that configuration's undoctored run; namespaces derived per configuration | 12 | 0 | 5/5 | `runs/gates/audit_restriction/gate.json` |
+| `entry_and_warm` | G6 | the evaluation phase, on every configuration | **PASS** | 5 entry pair(s) at seed 1; 5 warm run(s); 13 evaluations | 4204 | 0 | 3/3 | `runs/gates/entry_and_warm/gate.json` |
+| `switch_composition` | G5 | B3, on every configuration where it is active | **PASS** | 3 configuration(s) where B3 is active; 6 optimisations; 37 switch names and 10 run values per configuration | 141 | 0 | 3/3 | `runs/gates/switch_composition/gate.json` |
+| `switch_neutrality` | G1 | each driver change, run per change and never batched | **PASS** | straddles 5e64ce0e -> eb38c34a: a neutrality result.  6 run pair(s) = 3 configuration(s) x 2 reference arm(s); 3164 deterministic record values and… | 54483 | 0 | 6/6 | `runs/gates/switch_neutrality/gate.json` |
+| `reproduction` | GR | the harness rewrite and the experiment's copy of PROCESS, once, at the copy commit before  | **PASS** | 20 runs (14 optimisations + 6 evaluations) over 3 configurations; 270 compared values, no tolerance on any of them | 270 | 0 | 7/7 | `runs/gates/reproduction/gate.json` |
+| `output_path` | G9 | the removal of the output-time loop from the arms whose matrix cell turns it off, on every | **PASS** | 11 run(s) at seed 0 = every optimisation-phase arm on every configuration where it is active, each composed from the experiment's matrix; 3825 coup… | 3879 | 0 | 4/4 | `runs/gates/output_path/gate.json` |
+| `predicate_mode` | G8 | the convergence predicate's second ruler, on the evaluation-phase arms of every configurat | **PASS** | 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A1) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.… | 7684 | 0 | 4/4 | `runs/gates/predicate_mode/gate.json` |
+
+**21 PASS, 0 FAIL, 0 not run; 109 of 109 teeth tripped** (at `eb38c34a`).
 
 *How to read: no number in §4.2–§4.4 is cited unless every row here is PASS with its tooth tripped;
 a FAIL is a result and the dependent tables are marked "not produced — gate X failed".*
@@ -1065,3 +1083,14 @@ implementation plan's.*
   cost of each retry-ladder attempt with the summation identity enforced (§3.5 check 2's two constructions and the
   with/without-retried-seeds ratios are now computable from the record); G0′, G1 and GR after DR7 PASS, re-run by the
   orchestrator. The five driver changes of §3.8 have all landed in the copy; from here only the harness changes.
+- 2026-09-11 — **A52 (harness-gates) merged — H5; every gate inside the harness, on one button** (`d13a54c7`). G2–G7 built, GR/G1/G8/G9 registered, the self-checks and artifact stages promoted; `--gate all` 21 PASS,
+  109/109 teeth, from the repository root and from the experiment directory, every run re-made at one commit; GR 270/270;
+  G1 run as a genuine two-tree straddle `5e64ce0e → eb38c34a` (0 of 3 164 values, 0 of 51 319 lines; 70-name exclusion
+  set reviewed). §4.1 filled from the verdict records; §3.9's G3 tooth cell corrected (244 nof / 124 st; 240 / 218 lad).
+  Six defects found at the orchestrator's review and fixed on the branch, among them `--resume` not reaching the gates'
+  runs (verdicts now name the commits of the runs they read) and the capability probe's working-directory dependence.
+  Rule: no commit while measurement runs execute. Finding: `tfcoil.insstrain` above τ at the accepted point on the
+  reference arm too (item 11); **A61 (insstrain-diagnosis)**, dispatched in parallel, classifies it as an artefact of the
+  exit-audit instrument — the output path raises `tfcoil.n_rad_per_layer` from 100 to 500 before the snapshot and the
+  snapshot does not restore it — to be verified at A61's merge; if it holds, §3.3's audit restores the whole data
+  structure and the "one component above τ" statements of A57/A52 are withdrawn as convergence statements.

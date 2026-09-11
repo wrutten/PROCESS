@@ -1,12 +1,10 @@
 # A52 (harness-gates) — every verification gate inside the harness, in one framework, on one button
 
-> **Document status** — **OPEN.** Task **A52 (harness-gates)**, branch `A52-harness-gates` off
-> `architecture_surgery` at `5e64ce0e`. Delivers plan task **H5** of the approved V4 harness plan.
-> **Revised twice on 2026-09-11** after the orchestrator's review found six defects; all are fixed
-> on the branch and §13 is the change log. **Every number in this report comes from one run of every
-> gate from nothing** — `runs/gates/` deleted but for gate G1's trunk capture — at commit
-> `5aa83db9`, with no `--resume` and nothing committed while it ran. This report and the change-log
-> commit are all that follow it. Folder position records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED 2026-09-11 — merged into `architecture_surgery` at `d13a54c7`.** Task
+> **A52 (harness-gates)**, branch `A52-harness-gates` off `5e64ce0e`; the figures in §1–§13 were taken at
+> `5aa83db9` (the agent's from-scratch press) and those in §14 at `eb38c34a` (the orchestrator's press from the
+> repository root). Run records relocated to `arch_surgery/idf_probe/runs/A52_runs/gates/` (untracked). The orchestrator's
+> critical assessment (protocol §5) is §14. Folder position records lifecycle, not validity (trap T3).
 
 ---
 
