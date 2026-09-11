@@ -703,4 +703,4 @@ decision should rest on it.
 | `b784158c` | defect 1 — `tally.cells_for` reads `reference.compared_fields()` and `reference_cells` names every excluded field; defect 2 — `gates._capture_after` hands its capture to the pool |
 | `87951248` | this report, and the experiment plan's §4 rendered by `--plan-tables write` |
 | `d6f0fdf4` | G1's comparator translates the earlier capture's leaf paths through `reference.FIELD_NAME_MAP`, segment-aware, and compares the renamed leaves as values; the verdict states the translation; two new teeth. No exclusion added, no capture made. G1 PASS 0 / 2 831, 9/9 |
-| *(this commit)* | the report's §6.3, §1, §5, §8, §9, §11 and change log brought to the fixed gate |
+| `2f0ad599` | the report's §6.3, §1, §5, §8, §9, §11 and change log brought to the fixed gate |
