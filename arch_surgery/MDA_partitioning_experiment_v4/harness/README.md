@@ -407,17 +407,48 @@ $PY experiment_runner.py --no-capability
 # ONE run: one arm, one configuration, one seed.  Never a campaign record.
 $PY experiment_runner.py --run --arm A0 --configuration st_regression --seed 0
 
-# gate GR: does the rewritten harness reproduce the previous revision's numbers?
-$PY experiment_runner.py --gate reproduction --lifted-from <dir with the derived input files>
+# what gates and measurement stages exist, what each binds, how many teeth
+$PY experiment_runner.py --gates
 
-# the driver gates, each in two steps: make the runs, then compare them
-$PY -m harness.gates g0prime                      # the physics is still frozen
-$PY -m harness.gates switch-neutrality --capture before   # at the commit before the change
-$PY -m harness.gates switch-neutrality --capture after    # at the commit after it
-$PY -m harness.gates switch-neutrality                    # compare, with teeth
-$PY -m harness.gates predicate-mode --capture runs # the convergence ruler's trial
-$PY -m harness.gates predicate-mode                # compare, with teeth
+# ONE gate, by its registry name; or every gate, cheapest first
+$PY experiment_runner.py --gate reproduction        # gate GR
+$PY experiment_runner.py --gate all --resume        # all of them, one button
+
+# a measurement stage: it publishes numbers and has nothing to pass
+$PY experiment_runner.py --measure gate_table       # the plan's §4.1 table
+$PY experiment_runner.py --measure all
 ```
+
+**Every gate makes its own runs, and `--resume` is what decides whether it re-makes them.** Without
+the flag every run a gate reads is made again, so a verdict is never computed over records made
+before the change it is checking; with it, a directory already holding a *complete record of the
+same job* is kept, which is not a retry — `pool.run` checks the job matches before keeping anything.
+Every verdict says which commit the records it read were made at: records from another commit are
+expected under `--resume`, stated either way, and a **failure** without it.
+
+Two exceptions, both stated where they happen. The shared cold-flat reference evaluations are made
+**once per invocation** and shared by the three gates anchored on them. And gate G1, switch
+neutrality, compares the copy *before* a driver change with the copy *after* it, so its two sides
+are at two commits by construction: it cannot make its own "before", and **never re-makes one that
+is there**. Move a "before" capture between trees by copying the directory, never by re-running the
+stage — it was written by an earlier record schema, and resume judges it against the current one.
+
+```bash
+$PY experiment_runner.py --gate switch_neutrality --capture before  # in a tree at the commit before
+$PY experiment_runner.py --gate switch_neutrality --capture after   # in the tree at the commit after
+$PY experiment_runner.py --gate switch_neutrality                   # compare, with teeth
+```
+
+**The order `--gate all` runs in is derived, not written down.** `GATE_ORDER` is a preference —
+the repository-state checks before the hour of runs, so a failure is reported in seconds — and a
+gate's `reads_from` declares which other gates' runs or verdicts it reads. Where the two conflict
+the dependency wins: G9 compares its reference arms against gate GR's own records, so it follows
+GR however much GR costs. A dependency on a gate the registry does not hold, or a cycle, raises.
+
+`--outdir` sends a gate's verdict somewhere other than the campaign's records
+directory; the gates' own runs stay where they are, because one gate reads
+another's runs. `--no-teeth` skips the teeth and the verdict says so — a gate
+whose teeth were not run is not an accepted gate.
 
 A single run writes its record, its exit state, its displacement, its audit residual vector and
 its entry-census series into its own directory under `../runs/`, and prints whether the record
@@ -645,17 +676,17 @@ displacement streams (`perturb.py`), **the run path** (`child.py`, `optimise.py`
 `pool.py`, `records.py`, `failure.py`), the committed reproduction reference (`reference.py`) and
 **gate GR** (`reproduction.py`), plus the self-check and the runner's preflight.
 
-What is not here yet: the derivation of the lifted input file (`input_files.py` resolves and
-checks one, but producing it is the artifacts task), the census stages, the remaining gates in
-their framework, the tally, and the analysis. The preflight names each missing piece and the stage
-that produces it rather than falling back to something that happens to be there.
+What is not here yet: the **tally** and the **analysis**. Everything above them is built — the
+artifact stages, the census, the derivation of the lifted input file, and **every gate of the
+experiment plan, inside this package**, in one registry with the harness's own checks promoted
+beside them (§8). The preflight names each missing piece and the stage that produces it rather than
+falling back to something that happens to be there.
 
-Two things the driver does not supply yet, which every record carries as an explicit null with the
-reason and the change that will fill it in: how many times the convergence test was evaluated and
-over how many components; and what each optimiser attempt cost on its own. A record says "the
-driver does not count this yet", never nothing at all. The output-time loop's sweep count is no
-longer among them — the driver counts it, and every optimisation record carries the number and
-which of the two output paths ran.
+Nothing in a record is a placeholder any more. The driver chain is closed: the convergence test's
+evaluations and the components it walked, what each optimiser attempt cost on its own, the
+output-time loop's sweep count and which of the two output paths ran, and the exit audit on both
+convergence rulers are all measured and stamped. Where a quantity does not apply — an evaluation
+has no optimiser attempt to cost — the record says so explicitly rather than leaving the key out.
 
 ---
 

@@ -36,13 +36,14 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+# dataclasses are no longer used here: the check record moved to harness/framework.py
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
 
 from harness import arms as arms_mod  # noqa: E402
 from harness import data_provenance as data_mod  # noqa: E402
+from harness import framework  # noqa: E402
 from harness import input_files as input_files_mod  # noqa: E402
 from harness import perturb as perturb_mod  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
@@ -72,45 +74,11 @@ from harness.config import (  # noqa: E402
 # --------------------------------------------------------------------------
 
 
-@dataclass
-class Check:
-    """One gate: what it binds, over how many things, and its teeth."""
-
-    name: str
-    binds: str
-    passed: bool = True
-    population: str = ""
-    n_compared: int = 0
-    n_mismatched: int = 0
-    detail: list[str] = field(default_factory=list)
-    teeth: list[dict[str, Any]] = field(default_factory=list)
-
-    def fail(self, message: str) -> None:
-        self.passed = False
-        self.n_mismatched += 1
-        self.detail.append(message)
-
-    def note(self, message: str) -> None:
-        self.detail.append(message)
-
-    def tooth(self, name: str, caught: bool, message: str) -> None:
-        """Record a deliberate break and whether the check caught it."""
-        self.teeth.append({"tooth": name, "caught": bool(caught), "what": message})
-        if not caught:
-            self.passed = False
-            self.detail.append(f"TOOTH DID NOT TRIP: {name} — {message}")
-
-    def as_record(self) -> dict[str, Any]:
-        return {
-            "check": self.name,
-            "binds": self.binds,
-            "verdict": "PASS" if self.passed else "FAIL",
-            "population": self.population,
-            "n_compared": self.n_compared,
-            "n_mismatched": self.n_mismatched,
-            "detail": self.detail,
-            "teeth": self.teeth,
-        }
+#: The check record's shape, defined once in ``harness/framework.py`` and named
+#: here because this module's six checks are written against it.  It was defined
+#: in this file until task **A52 (harness-gates)** promoted it: the class moved,
+#: field for field, and nothing about what a check computes changed.
+Check = framework.Check
 
 
 # --------------------------------------------------------------------------
@@ -932,6 +900,54 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
         "that bypasses the harness is refused too: the tree must fail to "
         f"import with a retired name set ({refused_by_driver.error})",
     )
+
+    # The probe must import the tree PYTHONPATH names, whatever directory the
+    # button was pressed from.  This is a *measured* property, not a claim:
+    # the child is started with its working directory inside a scratch tree
+    # that contains a decoy `process/` package, which is exactly the shape the
+    # repository root has.  Without the safe-path flag Python puts the cwd at
+    # the head of sys.path and the decoy wins; with it, the copy does.
+    #
+    # The defect this tooth exists for was live: pressing the button from the
+    # repository root made this check fail with 25 of 54 mismatched, because
+    # the probe imported the repository's own `process/` while the environment
+    # named the experiment's copy.  A verdict that depends on where the button
+    # is pressed is not a verdict.
+    decoy = Path(tempfile.mkdtemp(prefix="capability_decoy_"))
+    try:
+        package = decoy / "process"
+        package.mkdir()
+        (package / "__init__.py").write_text(
+            '__file__ = "a decoy that must never be imported"\n'
+            'raise ImportError("the decoy process package was imported: the '
+            'working directory shadowed PYTHONPATH")\n'
+        )
+        here = Path.cwd()
+        try:
+            os.chdir(decoy)
+            from_decoy = sw.probe(campaign.tree, reference_env, timeout=timeout)
+        finally:
+            os.chdir(here)
+        imported = Path(from_decoy.process_file or "").resolve()
+        expected = (Path(campaign.tree) / "process" / "__init__.py").resolve()
+        check.n_compared += 1
+        if not (from_decoy.ok and imported == expected):
+            check.fail(
+                f"the probe started from a directory holding a decoy process "
+                f"package imported {from_decoy.process_file!r}, not "
+                f"{expected}: the working directory shadows PYTHONPATH and the "
+                f"check's verdict depends on where the button was pressed"
+            )
+        check.tooth(
+            "the working directory holds a package that shadows the tree",
+            from_decoy.ok and imported == expected,
+            f"the probe run with its working directory inside a scratch tree "
+            f"containing a decoy process/__init__.py still imported "
+            f"{imported}, the tree under test — so the button's verdict does "
+            f"not depend on where it is pressed",
+        )
+    finally:
+        shutil.rmtree(decoy, ignore_errors=True)
     return check
 
 
@@ -1274,11 +1290,20 @@ def crosscheck_previous(campaign: Campaign) -> Check:
     if not v3.exists():
         check.note(f"no previous revision at {v3}; not run")
         return check
+    # ``-P`` and PYTHONSAFEPATH for the same reason the capability probe
+    # carries them: with ``-c``, Python puts the current working directory at
+    # the head of ``sys.path``, ahead of everything PYTHONPATH names, so a
+    # child started from a directory that happens to hold a ``process/``
+    # package would import that one instead of the tree this check is about.
     proc = subprocess.run(
-        [sys.executable, "-c", _CROSSCHECK_SOURCE, str(v3)],
+        [sys.executable, "-P", "-c", _CROSSCHECK_SOURCE, str(v3)],
         capture_output=True,
         text=True,
-        env={**dict(__import__("os").environ), "PYTHONPATH": str(campaign.tree)},
+        env={
+            **dict(__import__("os").environ),
+            "PYTHONPATH": str(campaign.tree),
+            "PYTHONSAFEPATH": "1",
+        },
         timeout=600,
     )
     body = proc.stdout.split("@@X@@")

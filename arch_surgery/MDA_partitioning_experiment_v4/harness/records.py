@@ -317,6 +317,7 @@ SCHEMA: tuple[Field, ...] = (
     _f("output_path_entries", "B", "always", "entries to the output path: one per scan point"),
     # --- how this run differed from the campaign, if it did ---------------
     _f("reproduction_overrides", "AB", "always", "what the reproduction gate set differently, or null for a run that is not that gate's"),
+    _f("per_run_artifact", "AB", "always", "the per-run deferral artifact the exit audit's restricted statistic derived its excluded set from, or null where none was handed to it"),
     # --- what the convergence tests cost -----------------------------------
     _f("predicate_evaluations", "AB", "always", "evaluations of the coupling-state convergence test in the solve phase"),
     _f("components_compared", "AB", "always", "components those evaluations walked, summed"),
