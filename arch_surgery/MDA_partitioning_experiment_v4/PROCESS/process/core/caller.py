@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -737,6 +738,15 @@ DISPATCH_SWEEPS: list[int] = [0]
 #: pooling it into the cost would dilute the very quantity being compared.
 NODE_CALLS_AT_OUTPUT: list[int | None] = [None]
 
+#: :data:`DISPATCH_SWEEPS` at the same moment, frozen by the same statement.
+#: The sweep total's solve-phase half, and the total the per-attempt sweep
+#: counts of :data:`ATTEMPT_STAMPS` must add up to -- exactly as the
+#: per-attempt node calls add up to :data:`NODE_CALLS_AT_OUTPUT`.  Without it
+#: a per-attempt sweep count would have no whole to decompose: the run total
+#: includes the output-time loop and the exit audit, neither of which belongs
+#: to any attempt.
+DISPATCH_SWEEPS_AT_OUTPUT: list[int | None] = [None]
+
 #: Roll-up of the block schedule's own counts across every ``call_models`` of a
 #: run.  Diagnostics: reported beside the cost figure, never gated on.
 MDA_TOTALS: dict = {
@@ -925,6 +935,102 @@ UPSTREAM_PREDICATE_EVALUATIONS: list[int] = [0]
 #: count published wider than the comparison it describes is this project's own
 #: trap T11.
 UPSTREAM_COMPONENTS_COMPARED: list[int] = [0]
+
+
+# --------------------------------------------------------------------------
+# DR7 (task A60 (driver-attempts)) -- what each optimiser attempt cost.
+#
+# The optimiser is not tried once.  ``SolverHandler.run`` runs a **retry
+# ladder**: it calls the optimiser, and on an exit code other than "converged"
+# it calls it again with a larger finite-difference step, then again with a
+# smaller one, and finally -- on exit code 5 with fewer than two iterations --
+# once more from a reset second-derivative matrix.  Every one of those attempts
+# evaluates the model set, and every one of those evaluations is in the run's
+# node-call total.
+#
+# Until this change the record could say **how many** attempts there were, what
+# each one's exit code was and how many optimiser iterations each took -- the
+# solver-owned half, which a measurement harness can get by wrapping ``solve``
+# -- but the **cost** half was a single run total.  So a run that failed its
+# first attempt and converged on the retry charged both attempts' evaluations
+# to one number while reporting the iterations of the last attempt only.  That
+# mismatch is not hypothetical: it is most of one configuration's published
+# cost ratio in the previous revision (0.450 with the one retried seed, 0.659
+# without it), and the experiment plan now requires the ratio to be published
+# with and without retried seeds -- which cannot be done from a run total.
+#
+# What is added here is the cost half, at the only place it can be taken: the
+# **attempt boundary**, inside the ladder.  At the entry to and the exit from
+# every attempt the run's cost counters are read and appended to
+# :data:`ATTEMPT_STAMPS`.  The measurement harness differences consecutive
+# stamps to get each attempt's own cost and refuses a record whose parts do not
+# add up to the whole they decompose.
+#
+# Same discipline as every counter above, and it is the discipline that makes
+# the change switch-neutral: four integer reads and two dict copies per
+# boundary, at most eight boundaries in a run; no float is touched, no
+# arithmetic a result depends on is done, and nothing here is reachable from a
+# branch any model or solver takes.  Gate G1 is what proves that rather than
+# this comment.
+#
+# The ladder itself is untouched: which attempts run, in which order, with
+# which settings, is exactly what it was.  The stage names live beside the
+# ladder in ``process/core/solver/solver_handler.py``; this module only records
+# what it is told, so that a ladder that gains a rung cannot silently keep the
+# old vocabulary here.
+
+#: Ladders entered: one per call of ``SolverHandler.run``.  A single problem
+#: enters one; a parameter scan enters one per scan point, and a record whose
+#: stamps span more than one says so rather than describing its first point as
+#: if it were the run.
+ATTEMPT_LADDERS: list[int] = [0]
+
+#: The boundary stamps themselves, in the order they were taken: two per
+#: attempt -- ``entry`` and ``exit`` -- each carrying the cost counters as they
+#: stood at that instant.  Read back by the measurement harness; never read by
+#: the driver, and never acted on.
+ATTEMPT_STAMPS: list[dict] = []
+
+
+def open_ladder() -> int:
+    """Begin a retry ladder, and return its number.  One integer increment."""
+    ATTEMPT_LADDERS[0] += 1
+    return ATTEMPT_LADDERS[0]
+
+
+def _stamp_attempt(boundary: str, ladder: int, index: int, stage: str) -> None:
+    """Read the cost counters at one attempt boundary and record them."""
+    ATTEMPT_STAMPS.append({
+        "boundary": boundary,
+        "ladder": ladder,
+        "attempt": index,
+        "stage": stage,
+        "node_calls": NODE_CALLS[0],
+        "dispatch_sweeps": DISPATCH_SWEEPS[0],
+        "sweeps_per_eval_hist": dict(SWEEPS_PER_EVAL_HIST),
+        "sweeps_by_block": dict(MDA_TOTALS["inner_sweeps_by_block"]),
+    })
+
+
+@contextmanager
+def attempt(stage: str):
+    """One attempt of the retry ladder, stamped at both of its boundaries.
+
+    The exit stamp is taken in a ``finally``, so an attempt that **raises** is
+    still bounded: a decomposition missing its last attempt would be a partial
+    one, and a partial decomposition cannot be summed.
+    """
+    ladder = ATTEMPT_LADDERS[0]
+    index = 1 + sum(
+        1
+        for stamp in ATTEMPT_STAMPS
+        if stamp["ladder"] == ladder and stamp["boundary"] == "exit"
+    )
+    _stamp_attempt("entry", ladder, index, stage)
+    try:
+        yield
+    finally:
+        _stamp_attempt("exit", ladder, index, stage)
 
 
 # --------------------------------------------------------------------------
@@ -2182,9 +2288,13 @@ def write_output_files(
         solver return code
     """
     # VP4 accounting: the solve phase ends here.  One integer read, on both
-    # arms; see NODE_CALLS_AT_OUTPUT.
+    # arms; see NODE_CALLS_AT_OUTPUT.  DR7 (A60) freezes the sweep counter in
+    # the same statement and for the same reason: the per-attempt sweep counts
+    # need a solve-phase whole to add up to, and the run total contains the
+    # output-time loop and the exit audit, which belong to no attempt.
     if NODE_CALLS_AT_OUTPUT[0] is None:
         NODE_CALLS_AT_OUTPUT[0] = NODE_CALLS[0]
+        DISPATCH_SWEEPS_AT_OUTPUT[0] = DISPATCH_SWEEPS[0]
     # A57: the exit audit's declared position (experiment plan section 3.3).
     # HERE -- at the entry, before the per-run deferred nodes below and before
     # any output-time sweep -- is the state the solve handed over, and it is
