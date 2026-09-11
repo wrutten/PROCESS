@@ -670,3 +670,53 @@ previous revision's headline unreadable"* — and neither reading can be constru
 That is what this task supplies: the cost, per attempt, with the arithmetic that proves the parts
 are the whole's parts.
 
+
+---
+
+## 14. Orchestrator's critical assessment (protocol §5) — 2026-09-11
+
+*Appended by the orchestrating session before merge, against the report at `aaa981f9` and the copy
+and harness on the same branch. Every gate was re-run by the orchestrator, and the identity checked
+by hand on the regenerated records.*
+
+**Verified independently.** (1) **Gate GR after DR7**, re-run from scratch: 20 of 20 runs, **270 of
+270 values identical**, both substitutes PASS, seven teeth tripped. (2) **The summation identity**,
+checked by my own script over the 14 regenerated optimisation records: `Σ attempts.node_calls_solve_phase
+== node_calls_solve_phase` and `Σ attempts.sweeps == dispatch_sweeps_solve_phase` on 14 of 14,
+`attempts_node_calls_available` true on all, **0 of 14 retried** — as the report says. (3) **G1**
+(`switch-neutrality --compare`): 6 pairs, 0 of 2 326 values, 0 of 51 319 output-file lines, four teeth;
+the exclusion set 48 → 58 and the compared population 2 341 → 2 326, exactly the fifteen
+previously-present leaves the new attempt fields replace. (4) **G0′** PASS; `copy_gates.py all` ALL
+GATES PASS (224 files, 217 identical, 0 unexplained); `PROCESS_diff.py` exit 0 over seven files, 0
+unexplained; `--selfcheck` six checks PASS. (5) The stamped ladder read in the copy
+(`solver_handler.py:95–136`): four rungs unchanged in order, trigger and setting, each bracketed by
+a stamp and nothing else. (6) Scope: thirteen files; `models/`, the repository-root `process/` and
+`experiment_runner.py` untouched; no conflict with trunk.
+
+**Endorsed.** The stamp placed in the ladder, where the rung is known, rather than guessed from a
+counter around the optimiser; the driver's own rung name recorded and the harness's positional
+guess demoted to a second field and *compared*. The premise measured rather than argued: 0 node
+calls and 0 sweeps of the solve phase fall outside every attempt. Refusing to publish fourteen zeros
+alone — the three budget-capped demonstration runs, stamped `force_maxcal` so they can never be read
+as measurements, show the decomposition with three terms each and residual 0. The `[]` matching
+rule in the exclusion matcher, so that four new per-attempt fields could be excluded without taking
+every attempt's exit code and iteration count out of G1.
+
+**Limits I hold it to.** (a) The fourth rung (`hessian_reset_b2`, `ifail == 5` with fewer than two
+iterations) is exercised by nothing here; the campaign may never trigger it either, and the record
+would show it if it did. (b) The demonstration runs are not measurements and must never enter a
+tally; the stamp is the guard, and A53 must filter on it. (c) The exclusion set is 58 names and now
+has a matcher with a rule; A52 reviews both as one thing. (d) At seeds 0 and 1 no reference run
+retried, so the check-2 constructions coincide on all fourteen; A44 measured that they do not
+coincide in the campaign (`lad`), which is why the two constructions exist.
+
+**Consequences drawn (orchestrator, today).** **The driver chain is closed**: DR1, DR2, DR4, DR5 and
+DR7 have all landed in V4's copy, each with G0′, G1 and GR passing at its own commit and re-run by
+the orchestrator; the copy differs from its source commit in seven driver files and in nothing under
+`models/`. A52 (harness-gates) is dispatched off the merged tip: wire every existing gate and
+measurement stage into the runner, build G2–G7 inside the harness, promote `Check`/`StageCheck` into
+`Gate`/`Tooth`, and review the 58-name exclusion set and its matcher. A53 computes `retried` from
+`attempts[]`, filters on `force_maxcal`, and publishes check 2's two constructions from the record.
+
+**Verdict.** Fit to merge; nothing returned. The last driver change lands with neutrality and
+reproduction intact, and the cost of a retry is now a number in the record rather than a run total.
