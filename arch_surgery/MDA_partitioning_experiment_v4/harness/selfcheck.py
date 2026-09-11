@@ -1476,11 +1476,21 @@ def check_stage_provenance(campaign: Campaign) -> Check:
             )
         else:
             stamped.append(f"{where} at {str(record.get('tree_git_head'))[:8]}")
-    check.note(
-        f"census records: {len(stamped)} carry the tree stamp "
-        f"({', '.join(stamped) or 'none'}); {len(unstamped)} do not "
-        f"({'; '.join(unstamped) or 'none'})"
-    )
+    if not stamped and not unstamped and not live_record.exists():
+        check.note(
+            "this tree holds no verdict record, no stage record and no census "
+            "record — a fresh worktree, or a trial merge, before its first "
+            "press.  The scratch fixture above is the whole population of the "
+            "breaks, which is why it is written here rather than read: a "
+            "self-check that needed a press to pass would fail on every tree "
+            "that has not had one."
+        )
+    else:
+        check.note(
+            f"census records: {len(stamped)} carry the tree stamp "
+            f"({', '.join(stamped) or 'none'}); {len(unstamped)} do not "
+            f"({'; '.join(unstamped) or 'none'})"
+        )
     if unstamped:
         check.note(
             f"the {len(unstamped)} unstamped record(s) are named rather than "
