@@ -391,6 +391,27 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
     gates_mod.REPRODUCTION_RESUME["resume"] = args.resume
     gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
 
+    if args.capture:
+        if args.gate != "switch_neutrality":
+            print(
+                f"  REFUSED — --capture is gate switch_neutrality's; "
+                f"{args.gate!r} makes its own runs.  Two steps exist there "
+                f"because its two sides are at two commits, which is a "
+                f"property of that gate and of no other."
+            )
+            return 3
+        manifest = gates_mod.capture_neutrality(
+            campaign, args.capture, resume=args.resume
+        )
+        print(
+            f"  captured {manifest['n_runs']} run(s) as {args.capture!r} at "
+            f"{manifest['tree_git_head']}"
+        )
+        for row in manifest["runs"]:
+            print(f"    {row['arm']:<3} {row['configuration']:<22} {row['outdir']}")
+        print(f"    manifest: {manifest['manifest']}")
+        return 0
+
     available = gates_mod.gates_only(campaign)
     names = (
         gates_mod.ordered_gate_names(campaign)
@@ -759,6 +780,14 @@ def main(argv: list[str] | None = None) -> int:
         help="run one measurement stage and stop, or 'all'.  A measurement "
         "publishes numbers and has nothing to pass; the gate that guards the "
         "same records is named beside it",
+    )
+    parser.add_argument(
+        "--capture",
+        choices=("before", "after"),
+        help="for --gate switch_neutrality: make that gate's two reference "
+        "runs on every configuration and record them under this label, then "
+        "stop.  That gate alone has two steps, because its two sides are at "
+        "two commits by construction; every other gate makes its own runs",
     )
     parser.add_argument(
         "--no-teeth",

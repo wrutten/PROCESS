@@ -933,7 +933,52 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             return True, f"refused: {str(exc).splitlines()[0][:170]}"
         return False, "two captures audited at different positions and compared anyway"
 
+    def the_new_exclusion_is_load_bearing() -> tuple[bool, str]:
+        """What excluding ``exit_audit.restricted`` actually covers.
+
+        Task A52 (harness-gates) handed the optimisation phase the two
+        artifacts the restricted statistic is derived from, so the block is a
+        block on an optimisation record where it used to be null.  An exclusion
+        added without measuring what it hides is an exclusion nobody checked,
+        so this tooth builds the *earlier* shape — the same record with the
+        block nulled — and compares it against the record itself **without**
+        the exclusion.  The comparison must report the leaves the block holds;
+        with the exclusion in place it reports none, which is the whole of what
+        the exclusion costs.
+        """
+        record, name = sample_record()
+        if (record.get("exit_audit") or {}).get("restricted") is None:
+            return False, (
+                "the sample record carries no restricted statistic, so the "
+                "exclusion covers nothing here and cannot be shown to"
+            )
+        earlier = copy.deepcopy(record)
+        earlier["exit_audit"]["restricted"] = None
+        without = {
+            k: v
+            for k, v in VOLATILE_RECORD_PATHS.items()
+            if k != "exit_audit.restricted"
+        }
+        uncovered = compare_records(earlier, record, excluded=without)
+        covered = compare_records(earlier, record)
+        return uncovered["n_mismatched"] > 0 and covered["n_mismatched"] == 0, (
+            f"on BR/{name}, nulling exit_audit.restricted — the shape the "
+            f"record had before the optimisation phase was handed the per-run "
+            f"artifact and the write census — makes "
+            f"{uncovered['n_mismatched']} of {uncovered['n_compared']} values "
+            f"differ without the exclusion and "
+            f"{covered['n_mismatched']} of {covered['n_compared']} with it.  "
+            f"That count is exactly what the exclusion hides"
+        )
+
     return (
+        Tooth(
+            "the_new_exclusion_is_load_bearing",
+            "the restricted statistic nulled on a throwaway copy of a captured "
+            "record, compared with and without the exclusion that covers it",
+            "differ without the exclusion and not with it, and say by how much",
+            the_new_exclusion_is_load_bearing,
+        ),
         Tooth(
             "captures_audited_at_different_positions",
             "a throwaway copy of a captured record with its audit position "
@@ -3138,12 +3183,18 @@ def _neutrality_from_reproduction(campaign: Campaign) -> dict[str, Any]:
             ),
         }
     verdict = json.loads(path.read_text())
-    comparison = verdict.get("comparison") or {}
+    # The file holds the framework's verdict for the gate, which carries the
+    # stage's own verdict inside it under 'reproduction'; older files are the
+    # stage's verdict alone.  Both shapes are read, because a gate that could
+    # not read its own evidence would report NO EVIDENCE over a file that has
+    # it.
+    inner = verdict.get("reproduction") or verdict
+    comparison = inner.get("comparison") or {}
     return {
         "passed": verdict.get("verdict") == "PASS",
         "verdict": verdict.get("verdict"),
         "record": str(path),
-        "tree": verdict.get("tree"),
+        "tree": inner.get("tree"),
         "n_runs_reproduced": comparison.get("n_runs_reproduced"),
         "n_runs": comparison.get("n_runs"),
         "n_values_compared": comparison.get("n_values_compared"),
@@ -3624,7 +3675,9 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 "which the two rulers do disagree are named with |y| / s "
                 "there, or their absence is stated with its population"
             ),
-            body=lambda: predicate_mode_body(campaign),
+            body=lambda: _with_capture(
+                capture_predicate_mode, predicate_mode_body, campaign
+            ),
             teeth=_predicate_mode_teeth(campaign),
         ),
         "output_path": Gate(
@@ -3644,7 +3697,9 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 "nothing about the solve changed on the arms that keep the "
                 "loop"
             ),
-            body=lambda: output_path_body(campaign),
+            body=lambda: _with_capture(
+                capture_output_path, output_path_body, campaign
+            ),
             teeth=_output_path_teeth(campaign),
         ),
     }
@@ -3723,6 +3778,32 @@ def entry_references(
     return references
 
 
+def _with_capture(capture, body, campaign: Campaign) -> dict[str, Any]:
+    """Make the gate's own runs, then compare them.
+
+    Two gates were built as two shell steps — capture, then compare — because
+    the driver task that wrote them was straddling a commit.  Nothing about
+    **these** two needs two commits: both sides are the same code at the same
+    commit, so the gate makes its runs itself and the button really is one
+    button (protocol §15: no stage exists only as a shell invocation).  The
+    capture resumes, so a complete record of the same job is kept rather than
+    re-made; that is not a retry, and ``pool.run`` checks the job matches
+    before it keeps anything.
+
+    Gate G1 is deliberately **not** wrapped this way: its two sides are at
+    different commits by construction, and a gate that made its own "before"
+    would be comparing the tree with itself.
+    """
+    manifest = capture(campaign, resume=True)
+    outcome = body(campaign)
+    outcome["capture"] = {
+        "n_runs": manifest.get("n_runs"),
+        "manifest": manifest.get("manifest"),
+        "tree_git_head": manifest.get("tree_git_head"),
+    }
+    return outcome
+
+
 # --------------------------------------------------------------------------
 # gate GR, wrapped into the framework
 # --------------------------------------------------------------------------
@@ -3775,18 +3856,22 @@ def _reproduction_body(campaign: Campaign) -> dict[str, Any]:
     )
     _REPRODUCTION_HELD["verdict"] = verdict
     comparison = verdict.get("comparison") or {}
+    # The gate writes its verdict to the same path the stage writes its own, so
+    # the stage's whole verdict is carried inside this one rather than
+    # overwritten: a reader who opens the file must find everything, not the
+    # framework's summary where the detail used to be.
     return {
         "passed": code == 0,
         "criterion": (
             "twenty runs against the previous revision's committed numbers, "
             "every compared value exact — counts and hex floats, no tolerance"
         ),
-        "population": (
-            f"{verdict.get('n_planned')} reference runs; "
-            f"{comparison.get('n_compared')} compared values"
-        ),
-        "n_compared": comparison.get("n_compared"),
-        "n_mismatched": comparison.get("n_mismatched"),
+        "population": comparison.get("population")
+        or f"{verdict.get('n_planned')} reference runs",
+        "n_compared": comparison.get("n_values_compared"),
+        "n_mismatched": comparison.get("n_values_mismatched"),
+        "n_runs": comparison.get("n_runs"),
+        "n_runs_reproduced": comparison.get("n_runs_reproduced"),
         "refused": verdict.get("refused"),
         "coverage_boundary": verdict.get("coverage_boundary"),
         "substitutes": {
@@ -3794,7 +3879,7 @@ def _reproduction_body(campaign: Campaign) -> dict[str, Any]:
             for name, block in (verdict.get("substitutes") or {}).items()
         },
         "record_contract_passed": (verdict.get("record_contract") or {}).get("passed"),
-        "gate_record": verdict.get("root"),
+        "reproduction": verdict,
     }
 
 
