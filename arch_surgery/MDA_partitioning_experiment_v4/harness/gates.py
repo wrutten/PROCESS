@@ -4961,6 +4961,7 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "a verdict record written after the stage record",
             "a verdict record the stage read and that is gone",
             "a stage record that does not say what it read",
+            "a scratch census record with no tree stamp",
         ),
         "run_path": (
             "a declared field removed",

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import datetime as _dt
 import json
 import os
 import shutil
@@ -1086,28 +1087,104 @@ def _stage_data(source: Path, destination: Path) -> Path:
     return destination
 
 
-def _scratch_records(campaign: Campaign, destination: Path) -> tuple[int, int]:
-    """Copy the verdict and stage records into a scratch directory.
+#: The scratch fixture's own verdict records: three gates, since one is enough
+#: for a break but three make "1 of 3 disagree" a count rather than a tautology.
+_SCRATCH_GATES: tuple[str, ...] = ("a_first_gate", "a_second_gate", "a_third_gate")
 
-    Only the two small kinds — a gate's ``gate.json`` and a stage's
-    ``measurements.json``.  The run records are left where they are: what the
-    breaks below doctor is *what a stage says it read*, and copying several
-    megabytes of runs to break one line of one verdict would make the check
-    expensive for nothing.  The scratch copy is why nothing on disk is touched.
+
+def _scratch_records(destination: Path) -> tuple[int, int]:
+    """Write a records directory this check owns: verdicts and stage records.
+
+    **Synthesised, never copied.**  A self-check builds its own fixtures: one
+    that read the tree's real records would report FAIL on a tree that has not
+    been pressed yet — a fresh worktree, or a trial merge — which is a
+    statement about the directory and not about the mechanism this check
+    binds.  (It did exactly that, and this is the fix.)  The real records are
+    still read, further down, where their freshness is *noted*.
+
+    The four stage records are the four the plan's §4 is rendered from, each
+    with the least content the renderer accepts, so that the breaks below run
+    through the renderer itself rather than through a function beside it.
     """
-    source = Path(campaign.runs_dir) / framework.GATES_SUBPATH
-    verdicts = stages = 0
-    for path in sorted(source.glob("*/*.json")):
-        if path.name not in ("gate.json", "measurements.json"):
-            continue
-        target = Path(destination) / path.parent.name / path.name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(path.read_bytes())
-        if path.name == "gate.json":
-            verdicts += 1
-        else:
-            stages += 1
-    return verdicts, stages
+    destination = Path(destination)
+    now = _dt.datetime.now().isoformat(timespec="seconds")
+    for index, name in enumerate(_SCRATCH_GATES):
+        path = destination / name / "gate.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "gate": name,
+                    "plan_name": None,
+                    "binds": "a scratch fixture, owned by the self-check",
+                    "verdict": "PASS",
+                    "population": f"{index + 1} scratch thing(s)",
+                    "n_compared": index + 1,
+                    "n_mismatched": 0,
+                    "generated": now,
+                    "tree_git_head": "0" * 40,
+                    "teeth": [{"tooth": "a scratch tooth", "caught": True}],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+    rows = [
+        {
+            "gate": name,
+            "plan_name": None,
+            "binds": "a scratch fixture",
+            "verdict": "PASS",
+            "population": "scratch",
+            "n_compared": index + 1,
+            "n_mismatched": 0,
+            "n_teeth": 1,
+            "n_teeth_tripped": 1,
+            "record": f"{name}/gate.json",
+        }
+        for index, name in enumerate(_SCRATCH_GATES)
+    ]
+    stage_records = {
+        "gate_table": {
+            "what_this_is": "a scratch gate table, owned by the self-check",
+            "caption": "One row per scratch gate.",
+            "population": f"{len(rows)} scratch gate(s)",
+            "n_gates": len(rows),
+            "n_pass": len(rows),
+            "n_fail": 0,
+            "n_not_run": 0,
+            "n_teeth": len(rows),
+            "n_teeth_tripped": len(rows),
+            "rows": rows,
+            "markdown": "| gate | verdict |\n|---|---|\n"
+            + "\n".join(f"| `{row['gate']}` | **PASS** |" for row in rows),
+        }
+    }
+    for stage in ("tally_evaluation", "tally_optimisation", "recomputed_tables"):
+        stage_records[stage] = {
+            "population": "a scratch population of 1",
+            "runs_provenance": {"n_records": 0, "heads": []},
+            "tables": [
+                {
+                    "table": f"a_scratch_table_of_{stage}",
+                    "caption": "a scratch table, owned by the self-check.",
+                    "denominator": 1,
+                    "denominator_is": "one scratch row",
+                    "columns": ["a"],
+                    "rows": [{"a": 1}],
+                    "markdown": "| a |\n|---|\n| 1 |",
+                }
+            ],
+        }
+    for stage, record in stage_records.items():
+        path = destination / stage / "measurements.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if stage == "gate_table":
+            record["records_read"] = framework.survey_records(
+                destination, ("*/gate.json",)
+            )
+        path.write_text(json.dumps(record, indent=2) + "\n")
+    return len(_SCRATCH_GATES), len(stage_records)
 
 
 def check_stage_provenance(campaign: Campaign) -> Check:
@@ -1144,49 +1221,22 @@ def check_stage_provenance(campaign: Campaign) -> Check:
     section = plan_tables_mod.SECTIONS[0]
     with tempfile.TemporaryDirectory(prefix="stage_provenance_") as scratch:
         root = Path(scratch)
-        n_verdicts, n_stages = _scratch_records(campaign, root)
+        n_verdicts, n_stages = _scratch_records(root)
         check.n_compared += n_verdicts + n_stages
         check.population = (
-            f"{n_verdicts} verdict record(s) and {n_stages} stage record(s), "
-            f"copied into a scratch directory; 4 deliberate breaks on the "
-            f"copy; the census stamping path, run; and every census record "
-            f"under "
-            f"{Path(campaign.runs_dir) / census_mod.RUNS_SUBPATH}"
+            f"a scratch records directory this check writes itself — "
+            f"{n_verdicts} verdict record(s) and {n_stages} stage record(s) — "
+            f"broken 4 ways; a scratch census record, stamped and unstamped; "
+            f"the census stamping path, run; and whatever live records this "
+            f"tree holds, surveyed and named"
         )
         stage_path = root / section.stage / "measurements.json"
-        if not stage_path.exists():
-            check.fail(
-                f"there is no {section.stage} stage record to check: run "
-                f"`experiment_runner.py --measure {section.stage}` first.  A "
-                f"check that runs over nothing proves nothing."
-            )
-            return check
-        as_copied = json.loads(stage_path.read_text())
-        block = as_copied.get("records_read") or {}
-        if not block:
-            check.fail(
-                f"the {section.stage} stage record carries no `records_read` "
-                f"block, so nothing says which verdicts it summarised"
-            )
-            return check
+        original = json.loads(stage_path.read_text())
+        block = original["records_read"]
         check.note(
-            f"the {section.stage} stage record names {block['n_records']} "
-            f"verdict record(s) it read, matched by {block['patterns']}, at "
-            f"commit(s) {block['heads']}"
+            f"the scratch {section.stage} record names {block['n_records']} "
+            f"verdict record(s) it read, matched by {block['patterns']}"
         )
-
-        # The scratch baseline is re-stamped against the scratch copy before
-        # anything is broken.  What this check binds is the **mechanism** —
-        # does a moved record get refused, and does an unmoved one render —
-        # and not the press order of whoever ran the button last: a gate run
-        # after `--measure gate_table` leaves the real stage record legitimately
-        # behind its verdicts, which is the renderer's refusal to make and not
-        # this check's to fail on.  That state is read below and *noted*.
-        original = dict(as_copied)
-        original["records_read"] = framework.survey_records(
-            root, tuple(block.get("patterns") or ())
-        )
-        stage_path.write_text(json.dumps(original, indent=2) + "\n")
 
         def renders() -> tuple[bool, str]:
             """Whether the renderer accepts the scratch records, and why not."""
@@ -1284,6 +1334,74 @@ def check_stage_provenance(campaign: Campaign) -> Check:
             + (f"refused — {why}" if not rendered else "NOT refused"),
         )
         stage_path.write_text(json.dumps(original, indent=2) + "\n")
+
+    # --- a census record the check writes itself, stamped and unstamped ---
+    # The census contract, exercised without a census on disk and without
+    # starting PROCESS: the reader refuses an unstamped record, --resume does
+    # not keep one (it is re-taken, as pool.run re-runs an incomplete run
+    # record), and both accept the same record once the fields are there.
+    with tempfile.TemporaryDirectory(prefix="scratch_census_") as scratch:
+        directory = Path(scratch)
+        (directory / "census.json").write_text(
+            json.dumps(
+                {
+                    "configuration": "a_scratch_configuration",
+                    "entry": "evaluation",
+                    "read_census": True,
+                    "writes_by_node": {},
+                }
+            )
+        )
+        bare = {"record_format": "census-1", "campaign_phase": "census"}
+        (directory / "metrics.json").write_text(json.dumps(bare))
+        reader_refused, reader_said = _must_refuse_here(
+            lambda: census_mod.assert_stamped(
+                json.loads((directory / "metrics.json").read_text()),
+                where="the self-check's scratch census",
+            )
+        )
+        kept_unstamped, why_unstamped = census_mod.resume_keeps(
+            directory,
+            configuration="a_scratch_configuration",
+            entry="evaluation",
+            read_census=True,
+        )
+        stamped = dict(bare)
+        stamped["record_format"] = census_mod.RECORD_FORMAT
+        stamped.update({name: None for name in census_mod.STAMP_FIELDS})
+        (directory / "metrics.json").write_text(json.dumps(stamped))
+        reader_accepted, _ = _must_refuse_here(
+            lambda: census_mod.assert_stamped(
+                json.loads((directory / "metrics.json").read_text()),
+                where="the self-check's scratch census",
+            )
+        )
+        kept_stamped, why_stamped = census_mod.resume_keeps(
+            directory,
+            configuration="a_scratch_configuration",
+            entry="evaluation",
+            read_census=True,
+        )
+    check.n_compared += 2
+    check.tooth(
+        "a scratch census record with no tree stamp",
+        reader_refused
+        and not reader_accepted
+        and not kept_unstamped
+        and kept_stamped,
+        "a census record this check wrote, without the stamp: the reader "
+        + (f"refused ({reader_said})" if reader_refused else "DID NOT refuse")
+        + " and --resume "
+        + (
+            f"did not keep it, so it is re-taken — {why_unstamped[:110]}"
+            if not kept_unstamped
+            else "KEPT it"
+        )
+        + "; with the stamp: the reader "
+        + ("accepted" if not reader_accepted else "REFUSED it too")
+        + " and --resume "
+        + ("kept it" if kept_stamped else f"did NOT keep it — {why_stamped[:110]}"),
+    )
 
     # --- and the state of the real records, read rather than failed on ---
     live = Path(campaign.runs_dir) / framework.GATES_SUBPATH / section.stage
