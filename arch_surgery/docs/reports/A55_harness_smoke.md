@@ -4,14 +4,16 @@
 > **H8**. Branch `A55-harness-smoke`, based on `architecture_surgery` at `c919f4c8` (the tip after
 > A62 (exit-audit-restore) and A54 (harness-analysis) merged). Commits on the branch:
 > `f8bce151` (the chain), `b784158c` (two defects the press found), `87951248` (this
-> report and the experiment plan's filled §4).
+> report and the experiment plan's filled §4), `d6f0fdf4` (G1's comparator, on the
+> orchestrator's ruling).
 > **`EXECUTION_APPROVED` is `False` and no campaign record exists.** Nothing under
 > `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/` or the repository-root `process/` was
 > changed.
 >
-> **One gate fails and blocks the merge: G1 (`switch_neutrality`), 144 of 2 903 record values.**
-> It is a result, not an obstacle, and it is not worked around. §6 has the numbers and the
-> diagnosis; §11 hands it to the orchestrator.
+> **Every registered gate passes.** One failed on the press — G1 (`switch_neutrality`), 144 of
+> 2 903 record values — and was reported with its numbers, not worked around; on the
+> orchestrator's ruling its comparator now translates the earlier capture's vocabulary and it
+> reads **0 of 2 831, 9/9 teeth**. §6.3 has both runs.
 
 ---
 
@@ -38,14 +40,18 @@ FAILED on **260 of 270 published cells, 10 moved**. Every one of the ten was
 **by name** under ruling D25. That is defect 1 of §6. With it fixed the gate reads **256 compared,
 0 mismatched, 10/10 teeth**.
 
-**Gate G1 passed that press over a stale capture, and fails once it does not.** `_capture_after`
+**Gate G1 passed that press over a stale capture, and failed once it did not.** `_capture_after`
 returned early whenever `--resume` was given and a manifest existed, so the "after" side never
 reached the completeness contract and A62's six incomplete records were kept: G1 reported a
 straddle ending at `3d64625c`, a commit it had not measured. That is defect 2. With it fixed G1
-re-makes its after capture at this tree and becomes a genuine straddle `fd480aff → b784158c` —
-and **FAILS, 144 of 2 903 record values, 0 of 51 319 output-file lines, 7/7 teeth**. All 144 are
-"the field is present on one side only" and every one is a name **A53's record-field rename**
-changed. §6.3 says why this is the gate being right and what the fix is.
+re-made its after capture and became a genuine straddle for the first time — and **FAILED, 144 of
+2 903, 7/7 teeth**, every one of the 144 "present on one side only" and every one a name **A53's
+record-field rename** changed. On the orchestrator's ruling the comparator now **translates** the
+earlier capture's leaf paths through `reference.FIELD_NAME_MAP`, segment-aware, and compares the
+renamed leaves as values under their new names — never excludes them. Re-run at `d6f0fdf4`:
+**PASS, 0 of 2 831 record values, 0 of 51 319 output-file lines, 9/9 teeth, 72 leaves renamed and
+0 differing, 0 PROCESS runs.** The excluded count is unchanged, so nothing was excluded to make it
+pass. §6.3.
 
 *Caption: the press's headline numbers. "Compared" is the denominator of things actually compared
 and "mismatched" the count that differed; "teeth" is tripped / declared. Every row is over the gate
@@ -53,9 +59,9 @@ population — one or two seeds per arm — at the commit named, never over a ca
 
 | what | verdict | compared | mismatched | teeth | commit of the records |
 |---|---|---|---|---|---|
-| `--gate all --resume` (24 gates) | **23 PASS, 1 FAIL** | — | — | 137/137 | `f8bce151`, G1 at `fd480aff`→`b784158c` |
+| `--gate all --resume` (24 gates) | 23 PASS, 1 FAIL **on the press**; **24 PASS after `d6f0fdf4`** | — | — | 137/137, then 139/139 | `f8bce151`; G1 at `fd480aff`→`d6f0fdf4` |
 | `reproduction` (GR) | PASS | 256 | 0 | 8/8 | 30 records, all `f8bce151` |
-| `switch_neutrality` (G1) | **FAIL** | 2 903 values + 51 319 lines | **144** + 0 | 7/7 | `fd480aff` (6) → `b784158c` (6) |
+| `switch_neutrality` (G1) | FAIL on the press, **PASS** at `d6f0fdf4` | 2 831 values + 51 319 lines | **0** + 0 | 9/9 | `fd480aff` (6) → `b784158c` (6), resumed |
 | `tally_contracts` | PASS | 451 | 0 | 10/10 | 74 records |
 | `recomputation` (`--verify`) | PASS | 1 901 | 0 | 9/9 | 33 records, all `f8bce151` |
 | `run_kind_separation` (new) | PASS | 203 | 0 | 6/6 | 33 records |
@@ -288,6 +294,10 @@ rendered there by `--measure gate_table` from the verdict records. The summary l
 
 > **23 PASS, 1 FAIL, 0 not run; 137 of 137 teeth tripped.**
 
+That table was rendered from the verdict records as the press left them. G1 has since passed at
+`d6f0fdf4` with two teeth more (§6.3), so the standing count is **24 PASS, 0 FAIL, 139 of 139
+teeth**; §4 of the plan is re-rendered at the merge, from the records, and will read so.
+
 *Caption: the gates whose numbers moved at this tip, or that are new. Every other gate's verdict and
 denominator is unchanged from A62's and is in the plan's §4.1. "Compared" is the gate's own headline
 denominator, summed where it compares more than one kind of thing, with the parts named in its
@@ -296,7 +306,7 @@ record.*
 | gate | plan | verdict | compared | mismatched | teeth | what changed at this tip |
 |---|---|---|---|---|---|---|
 | `reproduction` | GR | **PASS** | 256 | 0 | 8/8 | 20/20 runs re-made at `f8bce151`; 270 in the reference, 14 excluded by name, 256 compared. **This is the one GR at the merged tip** |
-| `switch_neutrality` | G1 | **FAIL** | 2 903 values, 51 319 lines | **144**, 0 | 7/7 | a genuine straddle `fd480aff → b784158c` for the first time; §6.3 |
+| `switch_neutrality` | G1 | **PASS** at `d6f0fdf4` (FAIL on the press) | 2 831 values, 51 319 lines | **0**, 0 | 9/9 | a genuine straddle for the first time; the earlier capture's vocabulary is translated, 72 leaves renamed and compared, 0 differing; §6.3 |
 | `tally_contracts` | — | **PASS** | 451 | 0 | 10/10 | 256 published cells (was comparing 270 and failing on 10); 195/195 table checks over 65 tables |
 | `recomputation` | — | **PASS** | 1 901 | 0 | 9/9 | 1 863 table cells + 37 values beside them + 1 independence check, over 33 records all at `f8bce151` |
 | `run_kind_separation` | — | **PASS** | 203 | 0 | 6/6 | **new** (§3.4) |
@@ -308,9 +318,9 @@ record.*
 
 ## 6. What failed, and what was found
 
-Three things. Two were defects with mechanical fixes, made on this branch and committed at
-`b784158c`; the third is a **failing gate that blocks the merge** and is reported, not worked
-around.
+Three things, all fixed on this branch. Two were wiring defects, committed at `b784158c`. The
+third was a **gate that failed** — reported with its numbers and not worked around — and the
+orchestrator then ruled how it should be fixed; that fix is `d6f0fdf4` and the gate now passes.
 
 ### 6.1 Defect 1 — the tally's compared set did not follow the reproduction gate's exclusion
 
@@ -369,14 +379,15 @@ standing property — *`--resume` cannot cross a schema change, and it is not to
 cheaper press* — applies to this capture again. Re-run, G1 re-made all six after-side runs at
 `b784158c`: the fix works.
 
-### 6.3 The failing gate — G1 cannot see through a record-field rename
+### 6.3 The gate that failed — G1 could not see through a record-field rename
 
-**The result.** With the after capture re-made, G1 is a genuine straddle for the first time and
-**FAILS**:
+**What failed.** With the after capture re-made, G1 became a genuine straddle for the first time
+and **FAILED**:
 
-*Caption: gate G1 at `b784158c`, straddling `fd480aff → b784158c`. Population: 6 run pairs = 3
-configurations × 2 reference arms, every architecture switch unset. "Values" are deterministic
-record leaves, "lines" output-file lines; 1 632 values and 45 lines are excluded as run metadata,
+*Caption: gate G1 at `b784158c`, straddling `fd480aff → b784158c` — **the failing run**, before the
+fix. Population: 6 run pairs = 3 configurations × 2 reference arms, every architecture switch unset.
+"Values" are deterministic record leaves, "lines" output-file lines; 1 632 values and 45 lines are
+excluded as run metadata,
 957 of them because the two captures' exit audits were taken by different instruments.*
 
 | arm | configuration | values differing | lines differing |
@@ -399,29 +410,84 @@ sweeps_by_block}` and `module_solve_totals.{…}`; `defer_per_run_totals` and `p
 `n_arrangement_method_calls` and `n_prime_calls`; `first_call_models.n_arrangement_method_calls` and
 `first_call_models.n_prime_calls`; `burn_time_constant_intact_at_exit` and `pin_intact_at_exit`.
 
-**This is the gate being right.** The two captures genuinely disagree about field names, and G1 is
-refusing to call that agreement. Two separate things are true and both belong to the orchestrator:
+**Every one of the 144 had the same reason: "the field is present on one side only."** Not one
+value differed where both sides carried the field. The 26 distinct names were exactly A53's
+record-field rename and its two sides: `module_solve_totals.{block_sweeps, moved_constants[],
+n_call_models, n_call_models_single_block, n_call_models_with_moved_constant, n_failed,
+outer_pass_hist, inner_solves_by_block, inner_sweeps_by_block}` against
+`block_loop_totals.{…, schedule_passes_per_evaluation, solves_by_block, sweeps_by_block}`;
+`post_solve_totals` against `defer_per_run_totals`; `n_prime_calls` and
+`first_call_models.n_prime_calls` against `n_arrangement_method_calls` and
+`first_call_models.n_arrangement_method_calls`; `pin_intact_at_exit` against
+`burn_time_constant_intact_at_exit`.
 
-1. **The before capture is not this task's.** It was made at `fd480aff` for **A62's** driver-
-   instrument change. A55 changes no driver file — nothing under `PROCESS/`. The before capture that
-   would bind A55 is one made in a tree at A55's base `c919f4c8`, and amendment 13's rule (ii) says
-   that capture is made explicitly in a tree at the earlier commit and never by the gate. **I cannot
-   make it**: it needs a tree at `c919f4c8`, and creating one is the orchestrator's (I must not
-   write in the main checkout). Against such a capture the rename would be on both sides and would
-   not arise.
-2. **Independently, G1's comparator does not see through a record-field rename.** Any straddle
-   containing A53's rename reports the rename as differences. The fix is to translate the earlier
-   record's leaf paths through `reference.FIELD_NAME_MAP`, which exists for exactly this and holds
-   every one of these names — **segment-aware**, because `first_call_models.n_prime_calls` needs the
-   map applied to a path segment and not only to a prefix — with a tooth that a genuine difference in
-   a renamed field is still caught. That is strictly stronger than the alternative of adding the
-   twelve names to the conditional exclusion table, which would also make the gate pass and would
-   **stop comparing the block-loop totals across the straddle altogether**. I did not do either: the
-   first is a change to a load-bearing comparator that is not this task's and wants its own tooth,
-   and the second would be working around a gate.
+**The orchestrator's ruling, and the fix.** G1 is about **behaviour**, and a record-field rename is
+a change of the record's *vocabulary*, not of behaviour. So the earlier capture's leaf paths are
+**translated** through `harness.reference.FIELD_NAME_MAP` before anything is compared, and the
+translated leaves are then **compared as values** under their new names. No new capture, no
+exclusion. Adding the twelve names to the conditional exclusion table would also have made the gate
+pass and would have **stopped comparing the block-loop totals across the straddle altogether**;
+translation keeps every one of them compared.
 
-**Consequence:** protocol §6 — a failed gate blocks the merge. A55 is not mergeable until this is
-resolved.
+The translation is **segment-aware, not prefix-aware**: a map entry names a dotted run of whole
+segments and the run is matched anywhere in the path, so `n_prime_calls` reaches
+`first_call_models.n_prime_calls` as well as the bare field, and `module_solve_totals` carries its
+nine leaves with it. Runs are tried longest first (so `module_solve_totals.outer_pass_hist` is
+renamed by the entry that names both segments, not by the entry that names the block), one
+replacement is made at the leftmost match, list indices are kept
+(`module_solve_totals.moved_constants[2]` stays element 2), and two paths translating onto one is a
+**refusal** rather than a silent drop.
+
+**The result.** `--gate switch_neutrality --resume`, from the repository root at `d6f0fdf4`, **0
+PROCESS runs** — both captures exist and were resumed:
+
+*Caption: gate G1 at `d6f0fdf4`, a genuine straddle `fd480aff → d6f0fdf4`. Population: 6 run pairs =
+3 configurations × 2 reference arms, every architecture switch unset. "Values" are deterministic
+record leaves, "lines" output-file lines.*
+
+| arm | configuration | values differing | lines differing |
+|---|---|---|---|
+| `BR` | `large_tokamak_nof` | 0 / 606 | 0 / 16 173 |
+| `AR` | `large_tokamak_nof` | 0 / 387 | 0 / 7 |
+| `BR` | `low_aspect_ratio_DEMO` | 0 / 599 | 0 / 16 434 |
+| `AR` | `low_aspect_ratio_DEMO` | 0 / 374 | 0 / 7 |
+| `BR` | `st_regression` | 0 / 516 | 0 / 18 691 |
+| `AR` | `st_regression` | 0 / 349 | 0 / 7 |
+| **total** | | **0 / 2 831** | **0 / 51 319** |
+
+**PASS. 9/9 teeth.** The verdict states the translation, as required: **72 leaves of the earlier
+capture were renamed** through `harness.reference.FIELD_NAME_MAP` (**9 entries**) and then compared
+as values, never excluded — **72 compared, 0 differing**. Every renamed leaf and every mismatch
+carries `renamed_from_the_earlier_vocabulary`, so a reader can tell a translated comparison from an
+untranslated one without leaving the record.
+
+**All 144 disappeared through the map and none through a new exclusion**, and the arithmetic says
+so on its face: each rename produced *two* one-sided leaves (the old name absent on the after side,
+the new name absent on the before side), so 72 renames × 2 = **144**; and the compared denominator
+fell by exactly 72, **2 903 → 2 831**, because each pair of one-sided paths became one compared
+path. The excluded count is **1 632, unchanged** from the failing run — not one leaf was excluded to
+make this pass. `--measure exclusion_review` at the same tip reports G1's set as **126 names, 36
+structural and unconditional, 34 conditional on the field's own presence and 57 conditional on the
+instrument stamps**, and puts **1 022 further leaves back into the comparison** over this pairing.
+
+**The two new teeth.**
+
+*Caption: one row per tooth added with the translation; each is a deliberate break the translated
+comparison must catch.*
+
+| tooth | the break | must | result |
+|---|---|---|---|
+| `a_renamed_field_moved_by_one` | a record rewritten into the earlier vocabulary compares clean (0 of 864 differing, 11 leaves renamed); then one renamed integer, `n_prime_calls`, moved 0 → 1 under its **old** name | be caught and **named under its new name** `n_arrangement_method_calls`, flagged as renamed | **tripped**, 1 of 864 |
+| `a_one_sided_leaf_the_name_map_does_not_cover` | a field the map does not name, added to the earlier side alone | still be a mismatch, and **not** be reported as a rename | **tripped**, 1 of 865 |
+
+Together they are the load-bearing pair: the first says the translation renames the field and still
+compares its value, the second says it covers renames and nothing else.
+
+**Two things the ruling did not close, recorded rather than acted on.** The before capture is still
+A62's, made at `fd480aff` for A62's driver-instrument change, while A55 changes no driver file; and
+the straddle therefore spans four merges. G1's claim at this tip is exactly what its population
+sentence says it is — a neutrality result across `fd480aff → d6f0fdf4` — and not a statement about
+A55's harness changes alone.
 
 ---
 
@@ -471,14 +537,14 @@ reviewer changes to reverse it.*
 |---|---|---|---|
 | 1 | The smoke and the campaign are **one** chain, parameterised | the orchestrator's instruction, and a smoke written separately reports on code the campaign does not run | split `chain.run`; one line at each of two call sites |
 | 2 | The chain's records live under `runs/<plan name>/`, never under `runs/gates/` | the tally reads declared sources under `runs/gates/`; putting the chain's records there would make the smoke refusal depend on a directory layout instead of a decision | `chain.chain_root`, one line |
-| 3 | **`AR` is entered from the same displaced snapshot as every other evaluation-phase arm** | plan §3.4 (*"campaign entries are … perturbations of that snapshot … each is evaluated by one `call_models` under each arm"*) and §3.3's binding rule that `AR → A0`'s ratio is published only beside both audit residuals — a ratio between a cold-entered arm and a warm-entered one would be a mixture of the entry and the arm. **Note the contrary comment in `gate_entry.PAIRED_ARMS`** (§10) | `chain.stage_evaluation_displaced`: `entry_state=None` for `AR` |
+| 3 | **`AR` is entered from the same displaced snapshot as every other evaluation-phase arm** — **awaiting the user's ruling**; the orchestrator is putting this reading and the `PAIRED_ARMS` comment to the user side by side, and the code is unchanged meanwhile | plan §3.4 (*"campaign entries are … perturbations of that snapshot … each is evaluated by one `call_models` under each arm"*) and §3.3's binding rule that `AR → A0`'s ratio is published only beside both audit residuals — a ratio between a cold-entered arm and a warm-entered one would be a mixture of the entry and the arm. **Note the contrary comment in `gate_entry.PAIRED_ARMS`** (§10) | `chain.stage_evaluation_displaced`: `entry_state=None` for `AR` |
 | 4 | An unsummarisable run kind **raises** at population construction rather than being excluded and counted like `force_maxcal` | a budget-capped demonstration is a member of the population that must be named; a smoke record is not a member at all | the one branch in each of `stats.Population.of` and `analysis.Population.of` |
 | 5 | The run kind joins `records.is_complete_for`'s job identity | a record's kind is the only thing that says what it may be used for, so keeping one across kinds launders the stamp by moving a directory | drop the parameter; `pool.run` stops passing it |
 | 6 | The smoke runs the stencil regime at **one column per arm** rather than skipping it | a stage no smoke presses is the stage the campaign's first press discovers. The restriction is recorded in the stage record and printed, so no table can be computed over it as the regime | `ChainPlan.stencil_columns`, one field |
 | 7 | Campaign evaluation-phase seeds are 1–25 (all displaced); optimisation-phase starts are 0–24 (`seed000` unperturbed) | plan §3.4 and §3.5 respectively | `chain.campaign_plan`, two lines |
 | 8 | `--plan-tables` is a stage of the runner, not a separate script | protocol §15: no stage may exist only as a shell invocation | the two options |
 | 9 | The renderer refuses a plan document whose §4 or §5 heading has moved | a renderer that writes into the wrong part of a shared document is worse than one that does nothing | `plan_tables.write` |
-| 10 | Both defects of §6 were **fixed on this branch**; the failing gate of §6.3 was **not** | protocol §6 puts the fix on the same branch; §6.3's fix is a change to a comparator that is not this task's and would need its own tooth, and the cheap alternative would be working around a gate | — |
+| 10 | The two wiring defects of §6 were **fixed on this branch**; G1's failure was **reported and referred**, and fixed only after the orchestrator ruled how | protocol §6 puts the fix on the same branch, but the choice between translating a rename and excluding it changes what G1 compares for ever, which is a ruling and not a preference. The ruling: translate, never exclude | `compare_records(name_map=…)`; passing `None` restores the untranslated comparison and the 144 |
 | 11 | After the failed chain, the four gates it never completed were re-run individually rather than pressing `--gate all` again | the brief forbids a second press; neither fix changes what any run computes, so the 20 verdicts at `f8bce151` stand over records that did not change | — |
 
 ---
@@ -497,8 +563,12 @@ reviewer changes to reverse it.*
 - **The chain has never been pressed with `run_kind = "campaign"`.** What is exercised is the
   refusal, not the campaign path's behaviour at 949 runs. §11 lists what its first press will do
   differently.
-- **G1's verdict at this tip is FAIL** and the population it straddles spans four merges, two of
-  them record-schema changes. Read §6.3 before quoting any G1 number from this tip.
+- **G1's straddle spans four merges**, two of them record-schema changes, and its before capture is
+  A62's rather than one made at A55's base. It passes, and what it certifies is neutrality across
+  `fd480aff → d6f0fdf4` — not a statement about A55's harness changes alone. Read §6.3 before
+  quoting any G1 number from this tip.
+- **The translation is only as good as the map.** `reference.FIELD_NAME_MAP` has 9 entries; a rename
+  that never reaches it would read as 144 did. The second tooth is what keeps that failure loud.
 - The 20 gate verdicts from the one press are at `f8bce151` while four are at `b784158c`. Neither
   fix changes what a run computes, but no single commit carries every verdict, and each verdict
   records its own.
@@ -512,9 +582,9 @@ reviewer changes to reverse it.*
    That is true of G6's own population, and false of the campaign: plan §3.4 enters every
    evaluation-phase arm from the same displaced snapshot, and §3.3's binding rule on `AR → A0`
    requires it. I did not edit the comment (it is G6's), and decision 3 of §8 records the reading I
-   implemented. **If the orchestrator reads it the other way, `chain.stage_evaluation_displaced` is
-   the one line to change** — and the ratio it produces changes meaning, so this is worth a ruling
-   rather than a preference.
+   implemented. **The orchestrator is putting both readings to the user**; whichever way it is
+   ruled, `chain.stage_evaluation_displaced` is the one line, and the ratio it produces changes
+   meaning, which is why it is a ruling and not a preference.
 2. **The census record carries no commit stamp.** `runs/census/*/metrics.json` has
    `record_format: census-1` with `tree`, `tree_git_head` and `tree_git_branch` all `null`. Six such
    records exist. They are not run records a tally reads, but a record a survey cannot place at a
@@ -540,7 +610,8 @@ run against the wrong tree, a switch the tree does not implement.
 
 ### 11.2 What it cannot yet say
 
-- **That the driver is neutral across this tip.** G1 fails (§6.3) and its before capture is A62's.
+- **That A55's own changes are neutral.** G1 passes across `fd480aff → d6f0fdf4`, but its before
+  capture is A62's; a capture at A55's base `c919f4c8` is what would bind this task alone.
 - **Anything about the campaign's numbers.** Every cell is a gate figure over one or two seeds.
 - **That the campaign path works at scale.** 949 runs, 3 configurations, 25 seeds and a `campaign`
   record kind have never been executed; only the 13-run parameterisation has.
@@ -603,10 +674,22 @@ decision should rest on it.
   anything but the record is not a resume.* Defect 2 is its measured instance — six incomplete
   records kept, a straddle reported against a commit the tree had not measured, and the only reason
   it surfaced was that the verdict prints the commits of the records it read.
-- **The A55 row:** H8 delivered; **one gate failing (G1, 144/2 903, §6.3) blocks the merge**; records
-  to be relocated by the retire script.
-- **I-21** gains: the `after_run` audit on a campaign-composed `B1` is now cheap to reach because the
-  chain makes such runs, and it needs a declared gate — a new task.
+- **A standing rule, from §6.3:** a **record-field rename is a change of the record's vocabulary and
+  not of the copy's behaviour.** A gate that compares two records across one translates the earlier
+  side through `reference.FIELD_NAME_MAP` and keeps comparing the field; it never excludes it. The
+  map is the one place a rename is written down, and a rename that does not reach it will read as a
+  difference — which is the loud failure, and is what the second new tooth protects.
+- **The A55 row:** H8 delivered; 24/24 gates PASS, 139/139 teeth; G1 failed on the press (144 of
+  2 903, all of them A53's rename) and passes at `d6f0fdf4` with the vocabulary translated, 72
+  leaves renamed and 0 differing; two wiring defects fixed; records to be relocated by the retire
+  script.
+- **The AR entry (§8 decision 3) is a methodology question the orchestrator is putting to the
+  user**, with this task's reading and the `PAIRED_ARMS` comment side by side. Nothing in the code
+  was changed for it and nothing waits on it: the chain runs either way, and the one line that
+  reverses it is named.
+- **I-21 stays open** (the orchestrator's ruling): the `after_run` audit on a campaign-composed `B1`
+  is now cheap to reach because the chain makes such runs, but the position is refused outside GR,
+  so it needs a declared gate — a new task, and the user decides.
 
 ---
 
@@ -619,3 +702,5 @@ decision should rest on it.
 | `f8bce151` | `harness/chain.py` (the chain, both plans, the stencil stage, gate `run_kind_separation`); `harness/plan_tables.py`; the run-kind refusals in `stats.py` and, independently, `analysis.py`; the run kind in `records.is_complete_for` and `pool.run`; `--smoke` and `--plan-tables`; `stage_campaign` rewritten; README §10, §15, §16 |
 | `b784158c` | defect 1 — `tally.cells_for` reads `reference.compared_fields()` and `reference_cells` names every excluded field; defect 2 — `gates._capture_after` hands its capture to the pool |
 | `87951248` | this report, and the experiment plan's §4 rendered by `--plan-tables write` |
+| `d6f0fdf4` | G1's comparator translates the earlier capture's leaf paths through `reference.FIELD_NAME_MAP`, segment-aware, and compares the renamed leaves as values; the verdict states the translation; two new teeth. No exclusion added, no capture made. G1 PASS 0 / 2 831, 9/9 |
+| *(this commit)* | the report's §6.3, §1, §5, §8, §9, §11 and change log brought to the fixed gate |
