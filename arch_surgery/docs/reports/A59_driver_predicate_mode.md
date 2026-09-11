@@ -522,3 +522,59 @@ Per-run ruler observations:
 | 2026-09-11 | `053300be` | the predicate module's hunks re-recorded after that rename — the data check had already caught it |
 | 2026-09-11 | `4528d3e4` | the DR5 annotation string carries no semicolon, which `PROCESS_diff.py --markdown` splits on |
 | 2026-09-11 | this commit | the report |
+
+---
+
+## 13. Orchestrator's critical assessment (protocol §5) — 2026-09-11
+
+*Appended by the orchestrating session before merge, against the report at `103fff3e` and the copy
+and harness on the same branch. Every gate was re-run by the orchestrator, plus one check the gate
+cannot make about itself.*
+
+**Verified independently.** (1) **Gate GR after DR5**, re-run from scratch: 20 of 20 runs, **270 of
+270 values identical**, both substitutes PASS, seven teeth tripped. (2) **G8**
+(`gates.py predicate-mode`) on the branch's 24 runs: 12 of 12 pairs bit-identical on 0 of 7 564 record
+values and 0 of 84 output-file lines; four teeth tripped, the plan's doctored component among them
+(5.0e-5 `frozen` versus 5.0e-7 `mixed` at `y = 100 s`; identical below the scale). (3) **The observer
+is inert** — the gate infers "no decisive pass" from a wrapper installed on the spec's `residual`, so
+I compared G8's six `frozen` runs at seed 1, made *with* the observer, against the committed
+reproduction reference, made by the previous revision *without* it: **60 of 60 Phase A values
+identical** (`node_calls_single_eval`, `n_model_calls_sweeps`, `exact.objf`, the audit residual hex,
+the block-solver totals, `n_attempts`). (4) **G1**: 6 pairs, 0 of 2 341 values, 0 of 51 319 lines,
+four teeth; the exclusion set 43 → 48 by the ruler-block fields, and the per-component vectors that
+first inflated the excluded count (20 829) are trimmed to 1 277 excluded leaves. (5) **G0′** PASS;
+`copy_gates.py all` ALL GATES PASS; `PROCESS_diff.py` exit 0 over six files, 0 unexplained; the
+self-check's `data` check accepts `harness/ystate.py` through 22 recorded hunks and its two teeth trip
+on an unrecorded edit and on a re-hashed one. (6) Scope: eighteen files; the copy's `models/`, the
+repository-root `process/`, `experiment_runner.py` and every committed data file except
+`harness/data/PROVENANCE.json` untouched; no conflict with trunk.
+
+**Endorsed.** The two rulers implemented in one module with one `residual`, the `frozen` path
+bit-for-bit unchanged and `mixed` never tighter, exactly as §3.6 declares. The independent detector
+of the decisive pass instead of the circular inference — and the two events kept apart: 13
+evaluations had a component cross τ between rulers, 0 had the crossing component holding the
+evaluation open, so 0 verdicts changed and all 12 pairs are identical; reporting the wider event as
+the narrower would have hidden a defect, the reverse would have understated the binding set. The
+exit audit on both rulers with a refusal of a record carrying one and not both — item 5a's trap (ii)
+made structurally hard. The readback of the ruler checked before any pair is concluded. The two
+defects the gates caught (the stamp written twice; the per-component vectors in the record) fixed and
+reported. The predicate module's identity re-based on recorded hunks rather than relaxed, with teeth.
+
+**Limits I hold it to.** (a) G8's part (3) is two seeds and two arms at δ = 0.10; §3.6's measurement
+is 25 seeds, both phases as declared, and belongs to the campaign — nothing here adopts `mixed`; the
+campaign default stays `frozen` and the adoption rule is the plan's. (b) The binding set is real and
+substantial (48 components; `|y|/s` up to 54.6 on the pulsed-energy fields of `st_regression`), so
+the campaign's decisive-pass count will not be zero by construction — the tally must carry both
+counts (§4.2.5's caption). (c) The observer doubles the predicate's cost and refuses a campaign run;
+its inertness is shown here on the compared fields, not on every field. (d) `tfcoil.insstrain` is in
+the binding set at 1.27× and shrinks by 21 % under `mixed`; that does not resolve item 11.
+
+**Rulings and consequences drawn (orchestrator, today).** Improvement item 5a's ad-hoc 50× for
+`power.e_plant_net_electric_pulse_{mj,kwh}` on `st_regression` is corrected to the measured 54.6×,
+labelled as measured from a committed stage. §4.2.5's "decisive passes" column is split into two
+counts in the caption — components crossing τ between rulers, and verdicts changed — A53's row. A52
+wires `predicate-mode` beside the other gates and reviews the 48-name exclusion set. A60
+(driver-attempts), the last driver change, is dispatched off the merged tip.
+
+**Verdict.** Fit to merge; nothing returned. The trial the plan pre-declared is now something the
+harness can run, and its gates have been shown able to fail.
