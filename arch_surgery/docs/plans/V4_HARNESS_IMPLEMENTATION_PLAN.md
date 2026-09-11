@@ -930,8 +930,8 @@ twenty entries would have had no objective bit-comparison), `n_prime_calls`,
 there, compared as a value); and the block-solver totals are present on **every** record, the
 reference arm's in the never-entered shape (0 calls, empty histograms), and are compared as values
 rather than marked not applicable — so a harness that entered the block solver under `BR`'s name
-would move that zero. **20 entries, 270 compared values** (15 × 14 + 10 × 6);
-`harness/reference.py` exports the list as `REFERENCE_FIELDS`.
+would move that zero. **20 entries, 270 values in the committed reference, of which 256 are compared** (15 × 14 + 10 × 6, less the optimisation phase's `exit_audit.residual_max_hex`, 14 values, excluded by name with its reason from A62 (exit-audit-restore) onward — an instrument value, and the previous revision's instrument did not restore the output path's mesh; the evaluation phase's six are kept and reproduce bit for bit; the reference is not regenerated);
+`harness/reference.py` exports the list as `REFERENCE_FIELDS` and the exclusion as `FIELDS_NOT_COMPARED`.
 
 ### 7.2 When GR runs, and why once is enough *(restated 2026-09-10)*
 
@@ -1401,6 +1401,24 @@ of what looks like bulk is the instrument.
   child imports while runs execute** — the commit was already forbidden (rule v); A53 showed the edit alone corrupts
   the population (G8 failed on a half-renamed record set) and cost a full press. The plan's §4 tables are filled once,
   at the final tip, by the smoke (A55), because A62 moves every audit cell. Remaining: H7 (A54, dispatched), H8 (A55).
+
+- **2026-09-11 — amendment 17, at the merge of A62 (exit-audit-restore) (`a3407d5d`): D25 implemented.** *(D25 was minted by the orchestrator and implemented before the user saw it; approved by the user 2026-09-11 "for now". Rule from it: a decision-worthy item is written as a proposal and stamped by the user before the implementing task is dispatched.)* The exit
+  audit snapshots the whole data structure at both of the driver's positions (`harness/data_structure.py`) and
+  restores a derived set before its sweep at both audit positions; the coupling state's own components are governed by
+  the audit position, not by the derived set; one namespace, `numerics` (the optimiser's own accounting), is held back
+  by a named rule with a G4 tooth on its boundary and what it holds back is named per run; every record stamps the
+  instrument at `exit_audit.instrument.restores` with counts and names (four `SCHEMA` fields, G7). §7.1's compared set is
+  270 → 256 by name (`reference.FIELDS_NOT_COMPARED`, a tooth that a doctored excluded value reads as excluded). G1's
+  exclusion set is 127 declared entries in three groups over 126 names — structural, conditional on a field's own
+  presence, and **conditional on the two records' instrument stamps** (the third kind; its leaves counted by prefix,
+  957 on the straddle `fd480aff` → `3d64625c`, 0 outside the exit audit and its stamp) — and names leaves, never blocks
+  (the one block entry was narrowed at review). **Two standing properties:** (a) **`--resume` cannot cross a schema
+  change** — a record made before a `SCHEMA` field existed is incomplete under the current contract and is re-run;
+  this is the contract working, not a defect, and it is not to be weakened for a cheaper press; two schema changes
+  landing in parallel (A53's rename, A62's fields) leave no complete population, which is why A55's one press re-makes
+  every run; (b) a change to what the audit restores or holds back changes the instrument and must change
+  `child.EXIT_AUDIT_RESTORE`. Measured: `tfcoil.insstrain` at exactly `0x0.0p+0` wherever continuous, 0 above τ on
+  31/31 declared-position records; the `after_run` residual on the reference arm is 6.99e-03 / 7.02e-03 (I-21's handle).
 
 ---
 
