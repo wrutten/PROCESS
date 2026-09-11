@@ -34,7 +34,10 @@ works is how a failure stops being reported.
 
 ``resume`` skips a run only where the directory holds a **complete record of the
 same job**.  A directory alone is never evidence: an interrupted run leaves one
-behind.
+behind.  "The same job" includes the **run kind**: a campaign record is never
+kept for a gate's job nor a gate record for a one-seed smoke's, because the kind
+is the only thing that afterwards says what a record may be used for, and
+keeping one across kinds would launder that stamp by moving a directory.
 """
 
 from __future__ import annotations
@@ -410,6 +413,7 @@ def run(job: Job, campaign: Campaign, *, resume: bool = False) -> dict[str, Any]
             seed=job.seed,
             phase=job.phase,
             regime=job.regime,
+            run_kind=job.run_kind,
         ):
             print(
                 f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "

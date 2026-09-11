@@ -98,6 +98,21 @@ class StatsError(RuntimeError):
 #: population rather than left to a reader to notice.
 FORCED_BUDGET_STAMP = "force_maxcal"
 
+#: The run kinds a published table may be computed over.  ``campaign`` is the
+#: experiment's own population; ``gate`` is what a verification gate made, and
+#: is what every table in this package is over while ``EXECUTION_APPROVED`` is
+#: False.  Each of those is a set somebody declared and can state in a caption.
+#:
+#: A ``smoke`` record is neither: it is one run of the campaign's own chain,
+#: made to prove the chain runs end to end on one seed and one configuration,
+#: and deliberately not a population.  Summarising one beside measurements
+#: would print a median over a single run under the same caption as a median
+#: over twenty-five — trap T11 with the denominator supplied.  So a record of
+#: any kind not named here is **refused** at construction rather than filtered
+#: out: a filter shrinks a population quietly, which is the error this project
+#: has already made three times.
+MEASURABLE_RUN_KINDS: tuple[str, ...] = ("campaign", "gate")
+
 
 @dataclass(frozen=True)
 class Population:
@@ -109,8 +124,13 @@ class Population:
     count whose population cannot be stated in one clause is not ready to be
     published (trap T11).
 
-    **Three refusals, all at construction:**
+    **Four refusals, all at construction:**
 
+    * a record whose run kind is not one of :data:`MEASURABLE_RUN_KINDS` — a
+      ``smoke`` record, one run of the campaign's chain made to prove the chain
+      runs — is refused outright.  It is not excluded and counted, because
+      unlike a budget-capped demonstration it is not a run of the population at
+      all;
     * a record stamped ``force_maxcal`` — a budget-capped demonstration — is
       refused by name.  It is not dropped silently, because a population that
       quietly shrinks is the error this project has made three times;
@@ -150,6 +170,22 @@ class Population:
         offered = list(records)
         kept: list[Mapping[str, Any]] = []
         excluded: list[tuple[str, str]] = []
+        unsummarisable = [
+            (_label(record), str(record.get("campaign_run_kind")))
+            for record in offered
+            if record.get("campaign_run_kind") is not None
+            and record.get("campaign_run_kind") not in MEASURABLE_RUN_KINDS
+        ]
+        if unsummarisable:
+            raise StatsError(
+                f"{len(unsummarisable)} record(s) of a run kind this table may "
+                f"not be computed over reached a population: "
+                f"{unsummarisable[:5]}.  The kinds a published table may "
+                f"summarise are {list(MEASURABLE_RUN_KINDS)}; a 'smoke' record "
+                f"is one run of the campaign's own chain, made to show the "
+                f"chain runs, and a table over it would carry a caption naming "
+                f"a population it is not over."
+            )
         for record in offered:
             if record.get(FORCED_BUDGET_STAMP) is not None:
                 excluded.append(

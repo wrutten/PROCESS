@@ -435,6 +435,15 @@ $PY experiment_runner.py --gate tally_contracts
 $PY experiment_runner.py --gate recomputation --resume   # the verdict, with six teeth
 $PY experiment_runner.py --measure recomputed_tables     # its own tables, beside the tally's
 $PY -m harness.analysis --teeth                          # the six deliberate breaks alone
+
+# THE CHAIN, once, on one seed and the cheapest configuration: both phases,
+# every arm, then the tally, the analysis and its --verify.  Records stamped
+# 'smoke'; no approval needed and no campaign record made
+$PY experiment_runner.py --smoke --resume --census-entry evaluation
+
+# the plan's results section, rendered from the measurement stages' records
+$PY experiment_runner.py --plan-tables show
+$PY experiment_runner.py --plan-tables write
 ```
 
 **Every gate makes its own runs, and `--resume` is what decides whether it re-makes them.** Without
@@ -695,7 +704,7 @@ The record's schema and the code that reads it are a later task; this list is wh
 
 ---
 
-## 10. What is not here yet
+## 10. What is here, and what is not
 
 What exists: the declarations (`config.py`), the switch vocabulary and the capability probe
 (`switches.py`), the arm matrix (`arms.py`), the provenance refusals (`provenance.py`), the
@@ -707,14 +716,13 @@ displacement streams (`perturb.py`), **the run path** (`child.py`, `optimise.py`
 The **tally** is here too (§13): the declared constructions in `stats.py`, the table module that
 refuses a table without a caption or a denominator, and the two stages that emit the experiment
 plan's §4.2 and §4.3 tables from the records.  So is the **analysis** (§14): the second, independent
-recomputation the tally's cells are verified against, in `analysis.py`.
+recomputation the tally's cells are verified against, in `analysis.py`.  And so is **the chain**
+(§15): the sequence the campaign runs, which the one-seed smoke runs too.
 
-What is not here yet: the **one-seed smoke** — the end-to-end pass that reaches the analysis from
-one button press on the cheapest configuration.  Everything below it is built: the artifact stages,
-the census, the derivation of the lifted input file, **every gate of the experiment plan inside this
-package** in one registry with the harness's own checks promoted beside them (§8), the tally, and
-the analysis.  The preflight names each missing piece and the stage that produces it rather than
-falling back to something that happens to be there.
+What is not here: **a campaign record**.  `EXECUTION_APPROVED` is `False`, every campaign stage
+refuses and says why, and the refusal is reachable from the same button as the successes.  The
+chain that will run the campaign is built and pressed — as the smoke — so what waits on the user's
+approval is the press, not the code.
 
 Nothing in a record is a placeholder any more. The driver chain is closed: the convergence test's
 evaluations and the components it walked, what each optimiser attempt cost on its own, the
@@ -1179,3 +1187,136 @@ a check on the table and not on the measurement.
 denominators, to be read beside the tally's. It has nothing to pass — the verdict on whether the two
 agree is the gate's — and it refuses a table of its own built without a caption or without an integer
 denominator, which is the same rule `tables.py` enforces for the tally, implemented a second time.
+
+---
+
+## 15. The chain — one sequence, two parameterisations
+
+### What a "chain" is here
+
+The campaign is not a single thing the harness does at the end; it is a **sequence of stages**, and
+that sequence is written once, in `harness/chain.py`. A **plan** says how to run it: which
+configurations, how many seeds, which entry regimes, and what kind of record the runs are stamped
+with. Two plans exist.
+
+| | the smoke | the campaign |
+|---|---|---|
+| configurations | the cheapest one, chosen from the records | every one |
+| evaluation-phase seeds | one, undisplaced | 1–25, all displaced |
+| optimisation-phase starts | one, unperturbed | `seed000` plus 24 displaced |
+| stencil columns per arm | one | every column of the design vector |
+| records stamped | `smoke` | `campaign` |
+| needs the user's approval | no | **yes** — `EXECUTION_APPROVED` |
+
+*Caption: one row per parameter the two plans differ in; everything not listed — the stage list, the
+job construction, the pool, the record schema, the tally and the analysis — is the same code.*
+
+They are one chain on purpose. A smoke written separately from the campaign exercises its own code
+and reports on the campaign's; when the campaign's first press then fails, the smoke has said
+nothing about it. Here the smoke's press *is* a press of the campaign's stages.
+
+### The stages, in order
+
+1. **`entry_references`** — one flat evaluation per configuration from the input file's own design
+   point. Every evaluation-phase entry is a displacement of its exit state and the constant the
+   pinned arms own is its converged burn time, so a reference that does not finish stops the chain
+   rather than being entered from somewhere else.
+2. **`evaluation_displaced`** — the plan's δ regime: every arm active on the configuration, every
+   seed, one `call_models` each, all entered from the *same* displaced state at the same seed. The
+   reference arm included — the published ratios are paired differences, and an arm entered
+   somewhere else would make the difference partly the entry.
+3. **`evaluation_stencil`** — the plan's stencil regime: the forward point `x_i (1 + epsfcn)` from
+   the reference fixed point and the backward point `x_i (1 − epsfcn)` from **that forward point's
+   exit**, which is the order the optimiser's own evaluator executes. The pair runs serially for
+   that reason; different columns are independent and go through the pool. The column set is
+   *derived* — the committed input file's variable count, plus the one column the lifted input file
+   adds where an arm reads it — and then checked against the `nvar` each run stamped.
+4. **`optimisation`** — every arm active on the configuration, one full optimisation per start.
+5. **`tally_evaluation`**, 6. **`tally_optimisation`** — the two tally stages (§13).
+7. **`tally_contracts`** — the tally's gate (§13).
+8. **`recomputed_tables`**, 9. **`recomputation`** — the analysis's tables and its `--verify` (§14).
+
+Stages 5–9 are the registry's. The chain names them and **refuses if the registry does not hold
+one**, naming which and in which of the two registries it was looked for: a stage that is silently
+skipped turns a chain that ran nine stages into a chain that reports on nine and ran eight.
+
+Every stage prints a `runs read` line — how many records it read and at which commits — so a reader
+never has to assume that the population a stage summarised is the one the press just made.
+
+### Which configuration the smoke runs, and how it is chosen
+
+Measured, not assumed. For each configuration the smoke's own job set is priced from the gate
+records already on disk — the median **model-node executions** of one run of each arm it would run,
+summed — and the cheapest wins. Node calls are exact and reproduce bit for bit; the wall clock
+printed beside them is progress information and chooses nothing (I-10). A configuration the records
+say nothing about falls back to a declared proxy and the row says so, so a reader can tell a
+measurement from a derivation.
+
+### The two separations, each a refusal with a tooth
+
+**A smoke record is never summarised as a measurement.** A one-seed pass is a test of the machinery;
+a median over one run published under a caption naming a population of twenty-five is trap T11 with
+the denominator supplied. So the run kinds a published population may contain are *declared* —
+`stats.MEASURABLE_RUN_KINDS` and, independently, `analysis.MEASURABLE_RUN_KINDS`, because the
+analysis re-derives every declaration rather than importing it — and a record of any other kind is
+**refused** where a population is built, not filtered out of it. A filter shrinks a population
+quietly, which is the error this project has made three times.
+
+**A campaign record is never made by the smoke.** The campaign plan refuses to compose while
+`EXECUTION_APPROVED` is `False` or while the tree is not the experiment's own copy, and the smoke
+asks for the smoke plan by name — there is no argument it could pass that would produce a campaign
+record. Resume is closed the same way: `records.is_complete_for` compares the run kind, so a record
+of one kind is never kept for a job of another, and a stamp cannot be laundered by moving a
+directory.
+
+Both directions are gate **`run_kind_separation`**, whose criterion is a survey of every record
+under `runs/` by kind — including the positive statement that no record a declared tally source
+covers is of an unsummarisable kind, and that no campaign record exists at all.
+
+| tooth | the deliberate break | what the gate must do |
+|---|---|---|
+| a smoke record offered to the tally | a record stamped `smoke` handed to `stats.Population.of` | refuse |
+| a smoke record offered to the analysis | the same record handed to `analysis.Population.of` | refuse |
+| a gate record is still summarised | a record stamped `gate` handed to the same population | **keep it** — the positive control, so the refusal cannot pass by refusing everything |
+| a campaign plan without approval | the campaign plan composed while `EXECUTION_APPROVED` is `False` | refuse |
+| the smoke's plan forged into a campaign | the smoke plan with its run kind changed to `campaign` | refuse |
+| resume across run kinds | a record stamped `campaign` offered to a smoke run's resume | not keep it |
+
+### Where its records go
+
+Under `runs/<plan name>/` — `runs/smoke/`, and `runs/campaign/` once there is one — never under
+`runs/gates/`. The tally reads *declared sources* under `runs/gates/`; putting the chain's own
+records anywhere under that tree would offer them to a stage that must refuse them, which would make
+the refusal depend on a directory layout rather than on a decision. The chain also surveys its own
+tree at the end of a press and refuses if it holds two run kinds.
+
+---
+
+## 16. The plan's results section, rendered rather than typed
+
+`EXPERIMENT_PLAN.md` §4 carried a template — every cell a *format*, `0.xxx` where a ratio belongs
+and `n` where a count belongs — so the shape could be reviewed before anything was measured.
+`harness/plan_tables.py` replaces that template with the tables the measurement stages actually
+emitted, by reading their records under `runs/gates/<stage>/measurements.json`:
+
+| §4 subsection | rendered from |
+|---|---|
+| 4.1 Gates | `--measure gate_table` |
+| 4.2 The evaluation phase | `--measure tally_evaluation` |
+| 4.3 The optimisation phase | `--measure tally_optimisation` |
+| 4.4 The same cells, computed a second time | `--measure recomputed_tables` |
+
+*Caption: one row per subsection; the right column is the stage whose own record fills it. No cell
+is typed by hand and nothing in the renderer computes a number.*
+
+It refuses rather than guessing: a stage that has written no record, a stage that emitted no table
+(a section with no population is not a section), and a plan document in which §4's heading or §5's
+has moved or been reworded — a renderer that writes into the wrong part of a shared document is
+worse than one that does nothing.
+
+**What the cells are over is stamped on the section and on every caption.** While
+`EXECUTION_APPROVED` is `False` there is no campaign, so every cell in §4 is over the **gate
+population** — one or two seeds per arm — with the commit(s) those records were made at, the audit
+position, the convergence ruler and the exit-audit instrument version, all read back from the
+records themselves rather than written down. The campaign fills the section again, over its own
+seeds, after the user approves execution.

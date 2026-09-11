@@ -4,14 +4,25 @@
 Derived from ``arch_surgery/MDA_partitioning_experiment_v3/run_experiment.py``
 at ``f2dc9243`` (task A47).  Press Run: no arguments are needed.
 
-Only the preflight exists at this point.  It refuses to start under an
-interpreter that cannot import PROCESS, names the tree it will measure and
-the commit it is at, resolves every configuration and every artifact, asks
-the tree itself which switches it implements, and prints the switch matrix
-and the rung table with the check that they agree with the plan.  Every
-campaign stage refuses while the plan is not approved, and the refusal is
-reachable from this same entry point — a failure path that can only be
-reached by retyping a command line is not reproducible.
+The **preflight** refuses to start under an interpreter that cannot import
+PROCESS, names the tree it will measure and the commit it is at, resolves every
+configuration and every artifact, asks the tree itself which switches it
+implements, prints the switch matrix and the rung table with the check that they
+agree with the plan, and lists the chain one press runs — the smoke's and the
+campaign's, which are the same chain.  Every campaign stage refuses while the
+plan is not approved, and the refusal is reachable from this same entry point —
+a failure path that can only be reached by retyping a command line is not
+reproducible.
+
+Everything else is here too, each as a stage of this one script: the gates
+(``--gate``), the measurement stages (``--measure``), the artifact stages
+(``--artifacts``), the reproduction reference (``--reference``), one run
+(``--run``), the harness's own checks (``--selfcheck``), the plan's results
+section rendered from the stage records (``--plan-tables``), and **the chain**
+— ``--smoke`` runs it once on one seed and the cheapest configuration with every
+record stamped ``smoke``; the campaign runs the same stages over every
+configuration and the plan's seed count, and is refused until the user approves
+execution.
 
 Exit codes: 0 ready · 2 refused to start · 3 not ready.
 """
@@ -31,10 +42,12 @@ if str(HERE) not in sys.path:
 from harness import arms as arms_mod  # noqa: E402
 from harness import artifacts as artifacts_mod  # noqa: E402
 from harness import census as census_mod  # noqa: E402
+from harness import chain as chain_mod  # noqa: E402
 from harness import gates as gates_mod  # noqa: E402
 from harness import input_files as input_files_mod  # noqa: E402
 from harness import postsolve as postsolve_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
+from harness import plan_tables as plan_tables_mod  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
 from harness import records as records_mod  # noqa: E402
 from harness import reference as reference_mod  # noqa: E402
@@ -246,53 +259,135 @@ def stage_reference(campaign: Campaign) -> tuple[int, dict[str, Any]]:
 
 
 def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
-    """Every campaign stage, and why it refuses.
+    """The campaign: the chain it runs, what it would cost, and why it refuses.
+
+    The campaign and the smoke are **one chain with two parameterisations**
+    (``harness/chain.py``), so this stage prints the stage list the smoke also
+    runs rather than describing a second thing.  What separates them is the
+    plan: the campaign's asks for every configuration, the plan's seed count
+    and records stamped ``campaign``, and it is refused unless the user has
+    approved execution and the tree is the experiment's own copy.
 
     Reachable from the button so that the refusal is as reproducible as a
-    result would be.
+    result would be (protocol §15).
     """
     _rule("campaign")
-    reasons = []
-    if not campaign.is_experiment_copy:
-        reasons.append(
-            f"the tree is not the experiment's copy ({campaign.tree}); records "
-            f"are only ever made against "
-            f"{Path(__file__).resolve().parent / 'PROCESS'}.  Pointing the "
-            f"campaign elsewhere is for preflight and the self-check"
-        )
-    if not EXECUTION_APPROVED:
-        reasons.append(
-            "the plan's execution is not approved: the user flips "
-            "EXECUTION_APPROVED in harness/config.py in the same commit that "
-            "records the dated approval in EXPERIMENT_PLAN.md"
-        )
-    reasons.append(
-        "the stages that summarise the records into the experiment's tables "
-        "are separate tasks; the run path itself is built and is reachable "
-        "from --run (one run) and --gate reproduction (the reproduction gate)"
-    )
+    plan = chain_mod.campaign_plan(campaign)
+    reasons = chain_mod.refusals(plan, campaign)
     for reason in reasons:
         print(f"  REFUSED — {reason}")
-    budget = {
-        "phase_a_delta_regime": sum(
-            len(arms_mod.active_arms(c, "A")) * campaign.n_seeds
-            for c in campaign.configurations
-        ),
-        "phase_a_stencil_regime": sum(
-            len(arms_mod.active_arms(c, "A")) * campaign.stencil_runs(c)
-            for c in campaign.configurations
-        ),
-        "phase_b": sum(
-            len(arms_mod.active_arms(c, "B")) * campaign.n_seeds
-            for c in campaign.configurations
-        ),
-    }
-    print(
-        f"  would run: {budget['phase_a_delta_regime']} displaced-entry "
-        f"evaluations + {budget['phase_a_stencil_regime']} stencil-point "
-        f"evaluations + {budget['phase_b']} optimisations"
+    print("\n  the chain one press runs, in order:")
+    for stage in chain_mod.stage_names(plan):
+        skipped = stage.get("skipped")
+        mark = f"  — SKIPPED: {skipped}" if skipped else ""
+        print(f"    {stage['stage']:<24} [{stage['kind']:<11}] "
+              f"{stage['what']}{mark}")
+    try:
+        registry_check = chain_mod.assert_stages_exist(campaign)
+        print(
+            f"\n  every one of the {registry_check['n_reading_stages']} stages "
+            f"that read the records is in the registry"
+        )
+    except chain_mod.ChainError as exc:
+        print(f"\n  REFUSED — {exc}")
+        reasons.append(str(exc))
+        registry_check = {"missing": str(exc)}
+    budget = plan.budget(campaign)
+    # The plan's own declared count, kept beside the derived one: the plan says
+    # 2 (nvar + 1) stencil evaluations per arm, which is an upper bound that
+    # covers the lifted column, and the chain derives the columns per arm from
+    # the input file that arm actually reads.  Both are printed rather than one
+    # silently replacing the other.
+    budget["stencil_upper_bound_from_the_plan"] = sum(
+        len(arms_mod.active_arms(c, "A")) * campaign.stencil_runs(c)
+        for c in campaign.configurations
     )
-    return 3, {"refused": reasons, "budget": budget}
+    print(
+        f"\n  would run: {budget['entry_references']} entry reference(s) + "
+        f"{budget['evaluation_displaced']} displaced-entry evaluations + "
+        f"{budget['evaluation_stencil']} stencil evaluations + "
+        f"{budget['optimisation']} optimisations = {budget['total']} runs"
+    )
+    print(
+        f"             the plan's own stencil upper bound, 2 (nvar + 1) per "
+        f"arm, is {budget['stencil_upper_bound_from_the_plan']}; the chain "
+        f"derives the columns from the input file each arm reads"
+    )
+    smoke = chain_mod.smoke_plan(campaign)
+    smoke_budget = smoke.budget(campaign)
+    print(
+        f"\n  the smoke is the same chain, available now: "
+        f"--smoke runs {smoke_budget['total']} run(s) on "
+        f"{smoke.configurations[0].name}, records stamped "
+        f"{smoke.run_kind!r}, then the tally, the analysis and its --verify"
+    )
+    return 3, {
+        "refused": reasons,
+        "budget": budget,
+        "stages": chain_mod.stage_names(plan),
+        "registry": registry_check,
+        "smoke": {
+            "configuration": smoke.configurations[0].name,
+            "budget": smoke_budget,
+            "run_kind": smoke.run_kind,
+        },
+    }
+
+
+def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The one-seed pass: the whole chain, from this entry point, once.
+
+    It runs the **campaign's** stages — the same functions, with one seed, one
+    configuration and records stamped ``smoke`` — then the two tally stages,
+    the tally's contract gate, the analysis's own tables and the analysis's
+    ``--verify``.  Nothing here is a measurement: the tally and the analysis
+    refuse to summarise a smoke record, and gate ``run_kind_separation`` has a
+    tooth for each direction of that refusal.
+    """
+    _rule("smoke — the campaign's chain, one seed")
+    chosen = chain_mod.cheapest_configuration(campaign)
+    print(f"  cheapest configuration, chosen from {chosen['basis']}:")
+    print(
+        f"    {'configuration':24}{'runs':>6}{'node calls':>12}"
+        f"{'wall s':>9}  route"
+    )
+    for row in chosen["rows"]:
+        print(
+            f"    {row['configuration']:24}{row['n_runs_in_the_smoke']:>6}"
+            f"{row['node_calls']:>12}{row['wall_s']:>9}  {row['route']}"
+            + (
+                f"  (no record for {row['arms_without_a_record']})"
+                if row["arms_without_a_record"]
+                else ""
+            )
+        )
+    print(
+        f"    chosen: {chosen['chosen']['configuration']}.  Node-call counts "
+        f"are exact; the wall clock beside them is progress information and "
+        f"chooses nothing (I-10)"
+    )
+    try:
+        plan = chain_mod.plan_for(
+            "smoke", campaign, configuration=args.configuration or None
+        )
+    except chain_mod.ChainError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    gates_mod.REPRODUCTION_LIFTED_FROM["path"] = args.lifted_from
+    gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
+    press = chain_mod.run(
+        campaign,
+        plan,
+        resume=args.resume,
+        records_dir=_gate_records_dir(args, campaign),
+        teeth=not args.no_teeth,
+    )
+    chain_mod.print_press(press)
+    out = args.json or (campaign.runs_dir / plan.root_name / "press.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(press, indent=2, default=str) + "\n")
+    print(f"\n  record: {out}")
+    return 3 if press.get("refused") else 0
 
 
 def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
@@ -515,6 +610,35 @@ def stage_measure(args: argparse.Namespace, campaign: Campaign) -> int:
             print(f"  REFUSED — {type(exc).__name__}: {exc}")
             status = 3
     return status
+
+
+def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The plan's §4, rendered from the measurement stages' own records.
+
+    ``show`` prints it, ``write`` puts it into ``EXPERIMENT_PLAN.md`` in place
+    of the section it replaces.  Neither computes a number: every table,
+    caption and denominator here is a stage's, read from
+    ``runs/gates/<stage>/measurements.json``, so the document and the records
+    on disk cannot drift apart (protocol §15).
+    """
+    _rule("the plan's results section")
+    try:
+        if args.plan_tables == "write":
+            result = plan_tables_mod.write(
+                campaign, _gate_records_dir(args, campaign)
+            )
+        else:
+            result = plan_tables_mod.render(
+                campaign, _gate_records_dir(args, campaign)
+            )
+    except plan_tables_mod.PlanTablesError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    plan_tables_mod.report(result)
+    if args.plan_tables == "show":
+        print()
+        print(result["markdown"])
+    return 0
 
 
 def stage_gate_catalogue(campaign: Campaign) -> int:
@@ -743,6 +867,23 @@ def main(argv: list[str] | None = None) -> int:
         help="preflight and gates only, even once execution is approved",
     )
     parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="run the campaign's own chain once, end to end, on one seed and "
+        "the cheapest configuration, with every record stamped 'smoke': both "
+        "phases, every arm of the matrix active on it, then the two tally "
+        "stages, the tally's contract gate, the analysis's tables and the "
+        "analysis's --verify.  Needs no approval and makes no campaign record",
+    )
+    parser.add_argument(
+        "--plan-tables",
+        choices=("show", "write"),
+        help="render the experiment plan's section 4 from the measurement "
+        "stages' own records — the gate table, the two tally stages and the "
+        "recomputed tables — and either print it or write it into "
+        "EXPERIMENT_PLAN.md.  No cell is typed by hand",
+    )
+    parser.add_argument(
         "--selfcheck",
         action="store_true",
         help="run the harness's own gates with their teeth, and stop",
@@ -888,6 +1029,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.artifacts:
         return stage_artifacts(args, campaign)
+
+    if args.smoke:
+        return stage_smoke(args, campaign)
+
+    if args.plan_tables:
+        return stage_plan_tables(args, campaign)
 
     if args.gates:
         return stage_gate_catalogue(campaign)
