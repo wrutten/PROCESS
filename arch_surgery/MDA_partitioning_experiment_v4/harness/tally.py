@@ -321,109 +321,47 @@ def records_outside_every_source(campaign: Campaign) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-#: The cells the previous revision published for each of its reference runs,
-#: as (the tally's own name for the cell, how this revision computes it, the
-#: **previous revision's** dotted path into its record).
+#: What each published cell **is**, in one phrase, keyed by the previous
+#: revision's own dotted path.  Presentation only: the list of cells actually
+#: compared is **derived**, per run, as the intersection of
+#: ``reference.REFERENCE_FIELDS[phase]`` with the fields that run's entry
+#: published.  Deriving it rather than writing it out means a later task that
+#: drops a field from the compared set — task **A62 (exit-audit-restore)** will
+#: drop the inherited audit residual when the audit instrument changes — drops
+#: it here too, instead of leaving this module comparing a cell nobody compares
+#: any more.
+CELL_NAMES: dict[str, str] = {
+    "node_calls_solve_phase": "node calls, solve phase",
+    "node_calls_total": "node calls, whole run",
+    "n_model_calls": "call_models evaluations",
+    "node_calls_single_eval": "node calls, the one evaluation",
+    "n_model_calls_sweeps": "sweeps of the one evaluation",
+    "n_prime_calls": "arrangement-method calls",
+    "exact.norm_objf": "objective at the optimum (hex)",
+    "exact.objf": "objective at exit (hex)",
+    "exit_audit.residual_max_hex": "exit-audit maximum (hex)",
+    "module_solve_totals.n_call_models": "block-loop call_models",
+    "module_solve_totals.block_sweeps": "block sweeps",
+    "module_solve_totals.outer_pass_hist": "schedule passes per evaluation",
+    "module_solve_totals.inner_sweeps_by_block": "sweeps by block",
+    "n_solver_iterations": "iterations, final attempt",
+    "mfile.ifail": "optimiser exit code",
+    "exit_forensics.n_solver_iterations_summed_over_attempts": (
+        "iterations, summed over attempts"
+    ),
+    "exit_forensics.n_attempts": "attempts",
+    "exit_forensics.attempts[].n_solver_iterations": "iterations per attempt",
+}
+
+#: Cells this revision computes with **one of its own constructions** rather
+#: than by reading the field the previous revision published.  Keyed by the
+#: previous revision's path.
 #:
-#: The third element is a path into the *committed reference*, which keeps the
-#: previous revision's spelling; ``reference.FIELD_NAME_MAP`` translates it to
-#: this revision's path where the two differ.  The reference is never
-#: regenerated: its bytes are the previous revision's numbers, and a comparison
-#: that rewrote them would be a comparison with itself.
-CELLS_B: tuple[tuple[str, str, str], ...] = (
-    ("node calls, solve phase", "record field", "node_calls_solve_phase"),
-    ("node calls, whole run", "record field", "node_calls_total"),
-    ("call_models evaluations", "record field", "n_model_calls"),
-    (
-        "arrangement-method calls",
-        "record field, published beside node calls and never pooled into them",
-        "n_prime_calls",
-    ),
-    ("objective at the optimum (hex)", "bit comparison", "exact.norm_objf"),
-    (
-        "exit-audit maximum (hex)",
-        "bit comparison, on the frozen ruler, at the previous revision's own "
-        "audit position",
-        "exit_audit.residual_max_hex",
-    ),
-    (
-        "block-solver call_models",
-        "record field",
-        "module_solve_totals.n_call_models",
-    ),
-    ("block sweeps", "record field", "module_solve_totals.block_sweeps"),
-    (
-        "schedule passes per evaluation",
-        "record field",
-        "module_solve_totals.outer_pass_hist",
-    ),
-    (
-        "sweeps by block",
-        "record field",
-        "module_solve_totals.inner_sweeps_by_block",
-    ),
-    (
-        "iterations, final attempt",
-        "stats.iterations_final_attempt — the last element of attempts[]",
-        "n_solver_iterations",
-    ),
-    ("optimiser exit code", "PROCESS's own output file", "mfile.ifail"),
-    (
-        "iterations, summed over attempts",
-        "stats.iterations_summed_over_attempts — the sum over attempts[]",
-        "exit_forensics.n_solver_iterations_summed_over_attempts",
-    ),
-    ("attempts", "stats.n_attempts — the length of attempts[]", "exit_forensics.n_attempts"),
-    (
-        "iterations per attempt",
-        "attempts[].n_iterations, in order",
-        "exit_forensics.attempts[].n_solver_iterations",
-    ),
-)
-
-CELLS_A: tuple[tuple[str, str, str], ...] = (
-    ("node calls, the one evaluation", "record field", "node_calls_single_eval"),
-    ("sweeps of the one evaluation", "record field", "n_model_calls_sweeps"),
-    (
-        "arrangement-method calls",
-        "record field, published beside node calls and never pooled into them",
-        "n_prime_calls",
-    ),
-    ("objective at exit (hex)", "bit comparison", "exact.objf"),
-    (
-        "exit-audit maximum (hex)",
-        "bit comparison, on the frozen ruler",
-        "exit_audit.residual_max_hex",
-    ),
-    (
-        "block-solver call_models",
-        "record field",
-        "module_solve_totals.n_call_models",
-    ),
-    ("block sweeps", "record field", "module_solve_totals.block_sweeps"),
-    (
-        "schedule passes per evaluation",
-        "record field",
-        "module_solve_totals.outer_pass_hist",
-    ),
-    (
-        "sweeps by block",
-        "record field",
-        "module_solve_totals.inner_sweeps_by_block",
-    ),
-    ("attempts", "stats.n_attempts — the length of attempts[]", "exit_forensics.n_attempts"),
-)
-
-CELLS: dict[str, tuple[tuple[str, str, str], ...]] = {"A": CELLS_A, "B": CELLS_B}
-
-#: Cells this revision computes with one of its own constructions rather than
-#: by reading the field the previous revision published.  Keyed by the previous
-#: revision's path; the value is the function that produces this revision's
-#: value from this revision's record.  Everything not named here is read
-#: straight out of the record at the mapped path, which is what the
-#: reproduction gate does — the point of the two being different is that a
-#: *construction* landing on the previous revision's published number is a
-#: stronger statement than a field matching a field.
+#: This is what makes the comparison a stronger statement than the
+#: reproduction gate's.  That gate asks *does this field equal that field*;
+#: this asks *does the rule this revision declares, applied to this revision's
+#: record, land on the number the previous revision published* — which is a
+#: statement about the rule and not about a copy.
 CONSTRUCTED: dict[str, Any] = {
     "n_solver_iterations": stats_mod.iterations_final_attempt,
     "exit_forensics.n_solver_iterations_summed_over_attempts": (
@@ -431,6 +369,37 @@ CONSTRUCTED: dict[str, Any] = {
     ),
     "exit_forensics.n_attempts": stats_mod.n_attempts,
 }
+
+#: How each constructed cell is built, for the record and the report.
+CONSTRUCTION_NOTES: dict[str, str] = {
+    "n_solver_iterations": (
+        "stats.iterations_final_attempt — the last element of attempts[]"
+    ),
+    "exit_forensics.n_solver_iterations_summed_over_attempts": (
+        "stats.iterations_summed_over_attempts — the sum over attempts[], "
+        "failed attempts included"
+    ),
+    "exit_forensics.n_attempts": (
+        "stats.n_attempts — the length of attempts[]"
+    ),
+}
+
+
+def cells_for(phase: str, published: Mapping[str, Any]) -> list[str]:
+    """The previous revision's published cells this tally compares, in order.
+
+    Derived: the compared-field list for the phase, restricted to the fields
+    the entry actually published.  A field named by the list and absent from
+    the entry is **not** silently skipped — :func:`reference_cells` reports it
+    — and a field the entry publishes that the list no longer names is
+    reported too, because both are the compared set drifting away from what is
+    on disk.
+    """
+    return [
+        path
+        for path in reference_mod.REFERENCE_FIELDS[phase]
+        if path in published
+    ]
 
 
 def reproduction_runs_root(campaign: Campaign) -> Path:
@@ -477,18 +446,21 @@ def reference_cells(
         )
         record = records_mod.read(directory)
         published = entry["fields"]
+        compared = cells_for(run.phase, published)
+        declared_but_absent = [
+            path
+            for path in reference_mod.REFERENCE_FIELDS[run.phase]
+            if path not in published
+        ]
+        published_but_not_compared = [
+            path
+            for path in published
+            if path not in set(reference_mod.REFERENCE_FIELDS[run.phase])
+        ]
         cells: list[dict[str, Any]] = []
-        for name, how, previous_path in CELLS[run.phase]:
-            if previous_path not in published:
-                cells.append(
-                    {
-                        "cell": name,
-                        "previous_path": previous_path,
-                        "matched": False,
-                        "why": "the committed reference carries no such cell",
-                    }
-                )
-                continue
+        for previous_path in compared:
+            name = CELL_NAMES.get(previous_path, previous_path)
+            how = CONSTRUCTION_NOTES.get(previous_path, "record field")
             expected = published[previous_path]
             this_path = reference_mod.field_name_map().get(
                 previous_path, previous_path
@@ -540,6 +512,8 @@ def reference_cells(
                 "audit_position": record.get("audit_position"),
                 "n_cells": len(cells),
                 "n_matched": sum(1 for c in cells if c["matched"]),
+                "declared_but_not_published": declared_but_absent,
+                "published_but_not_compared": published_but_not_compared,
                 "cells": cells,
             }
         )
@@ -550,7 +524,15 @@ def reference_cells(
             c["cell"]
             for row in rows
             for c in row["cells"]
-            if str(c.get("how", "")).startswith("construction")
+            if c.get("previous_path") in CONSTRUCTED
+        }
+    )
+    drift = sorted(
+        {
+            path
+            for row in rows
+            for key in ("declared_but_not_published", "published_but_not_compared")
+            for path in row.get(key) or ()
         }
     )
     return {
@@ -563,6 +545,12 @@ def reference_cells(
             1 for row in rows if row["n_matched"] == row["n_cells"] and row["n_cells"]
         ),
         "cells_by_construction": constructed,
+        "compared_set_drift": drift,
+        "compared_set_is": (
+            "derived per run as reference.REFERENCE_FIELDS[phase] intersected "
+            "with the fields that run's entry published, so a field a later "
+            "task drops from the compared set is dropped here too"
+        ),
         "reference": str(reference_mod.REFERENCE_PATH),
         "reference_source": (document.get("provenance") or {}).get("source"),
         "population": (

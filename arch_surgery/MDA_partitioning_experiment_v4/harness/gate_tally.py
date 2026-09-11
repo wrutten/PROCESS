@@ -464,8 +464,8 @@ def gate(campaign: Campaign) -> Gate:
             "on the twenty runs where a previous number exists, that every "
             "table it emits carries a caption and a real denominator, that no "
             "acceptance table carries a timing, and that each of the seven "
-            "things a table may not be is a refusal rather than a review "
-            "comment"
+            "things a table may not be is a refusal at construction rather "
+            "than a review comment"
         ),
         body=lambda *, resume=False: body(campaign, resume=resume),
         needs_runs=False,

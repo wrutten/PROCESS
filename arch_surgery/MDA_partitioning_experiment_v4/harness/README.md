@@ -95,7 +95,11 @@ wording, kept only so that documents written before the rename remain readable. 
 | **skip** | an arm that is inactive on a configuration, with the reason recorded. On a steady-state plant there is no burn time to own, so the two arms that move its ownership have nothing to move | — · **added** |
 | **capability probe** | a child process that imports the driver under an arm's environment and reports what it resolved, so that an unimplemented switch is refused rather than ignored | the instrumentation ledger · **added** |
 | **pending switch** | something an arm declares that no tree implements yet, because the driver change that supplies it has not been made. Composing the arm without it is refused | — · **added** |
-| **tally** | the summary computed from the records by the phase scripts | — |
+| **tally** | the summary computed from the records: the experiment plan's §4 tables, each with its caption and its denominator. It has nothing to pass, so it is a measurement stage and not a gate | — |
+| **construction** | one declared way of computing a published number — which median, which population, what counts as an accepted optimum. Each is one function in `harness/stats.py` and **its docstring is the declaration** a caption quotes | — · **added** |
+| **source** | a named subtree of `runs/gates/` whose records are a comparable set, with the sentence saying why. The tally reads a source, never "the gate runs": several gates run the same arm at the same seed from different entries and three run it doctored | — · **added** |
+| **caption** | the five things a table cannot be emitted without — units, what a row is, what a column is, the population, the construction — plus the clauses the plan requires in that particular caption | — |
+| **denominator** | the count of things actually compared, stated beside every count. A table built with a letter where a count belongs is refused | — |
 | **analysis** | the same summary computed independently, and compared with the tally cell by cell | — |
 | **teeth** | a check's demonstrated ability to fail: a deliberate break that it must catch before its zeros are believed | — |
 
@@ -416,7 +420,12 @@ $PY experiment_runner.py --gate all --resume        # all of them, one button
 
 # a measurement stage: it publishes numbers and has nothing to pass
 $PY experiment_runner.py --measure gate_table       # the plan's §4.1 table
+$PY experiment_runner.py --measure tally_evaluation # the plan's §4.2 tables
+$PY experiment_runner.py --measure tally_optimisation  # the plan's §4.3 tables
 $PY experiment_runner.py --measure all
+
+# the tally's own gate: the cells it must land on, and what a table may not be
+$PY experiment_runner.py --gate tally_contracts
 ```
 
 **Every gate makes its own runs, and `--resume` is what decides whether it re-makes them.** Without
@@ -676,11 +685,16 @@ displacement streams (`perturb.py`), **the run path** (`child.py`, `optimise.py`
 `pool.py`, `records.py`, `failure.py`), the committed reproduction reference (`reference.py`) and
 **gate GR** (`reproduction.py`), plus the self-check and the runner's preflight.
 
-What is not here yet: the **tally** and the **analysis**. Everything above them is built — the
-artifact stages, the census, the derivation of the lifted input file, and **every gate of the
-experiment plan, inside this package**, in one registry with the harness's own checks promoted
-beside them (§8). The preflight names each missing piece and the stage that produces it rather than
-falling back to something that happens to be there.
+The **tally** is here too (§13): the declared constructions in `stats.py`, the table module that
+refuses a table without a caption or a denominator, and the two stages that emit the experiment
+plan's §4.2 and §4.3 tables from the records.
+
+What is not here yet: the **analysis** — the second, independent recomputation that the tally's
+cells are verified against. Everything above it is built: the artifact stages, the census, the
+derivation of the lifted input file, **every gate of the experiment plan inside this package** in
+one registry with the harness's own checks promoted beside them (§8), and the tally. The preflight
+names each missing piece and the stage that produces it rather than falling back to something that
+happens to be there.
 
 Nothing in a record is a placeholder any more. The driver chain is closed: the convergence test's
 evaluations and the components it walked, what each optimiser attempt cost on its own, the
@@ -971,3 +985,88 @@ committed files are never written to.
 | census | a node writing a field the committed census does not have | the this-run-only count, which fails the stage |
 | per-run | a node removed from the committed set | the node-by-node comparison |
 | per-run | a live node added to the committed set | the node-by-node comparison — the direction that would defer a node the optimiser consumes |
+
+
+---
+
+## 13. The tally — the plan's tables, from the records
+
+### What a tally is, and what it is not
+
+A **tally** reads the run records and emits the experiment plan's §4 tables. It has **nothing to
+pass**: what passes is the gate over the same records. So it is registered as a *measurement stage*
+and runs under `--measure`, never under `--gate`, and nothing can read one of its tables as a
+verdict. Where the tally *checks* something — a construction identity, a record contract, the cells
+it must land on — that check is a **gate with teeth**, `tally_contracts`, and runs under `--gate`.
+
+Three modules, and one rule each.
+
+**`stats.py` — one function per declared construction, and the docstring is the declaration.** The
+experiment plan declares how every published number is built: nearest-rank upper-middle median,
+nearest-rank p90, *accepted optimum* = status ok **and** the output file's `ifail == 1`, the one
+seed set (every arm converged), the pooled/median/worse ratio triple, the clustering rule and its
+below-resolution category, the cost ratio with and without the retried seeds. Each is one function
+here, and a report caption quotes its docstring rather than paraphrasing it. The previous revision
+kept these as comments beside whichever code needed them, which is how one definition reached two
+implementations and drifted twice.
+
+Three of them are refusals rather than computations, because the plan states them as refusals:
+`Population` refuses a record stamped `force_maxcal` (a budget-capped demonstration of the retry
+ladder, never a measurement) and refuses a mixture of phases; `retried` is computed from
+`attempts[]` and from nothing else, because there is no stored flag worth trusting; and
+`attempt_summation` states the identity Σ attempts = the run's solve-phase total **as a number the
+report prints**, which is what licenses publishing a cost ratio with and without the retried seeds.
+
+**`tables.py` — four things a table cannot be emitted without.** A `Table` cannot be constructed
+without a `Caption`, and a `Caption` cannot be constructed without units, what a row is, what a
+column is, the population and the construction. Beyond that: a denominator that is a letter rather
+than a count is refused by name (the plan's §4 placeholder tables print `n` where a count belongs,
+deliberately, and a table copied from that template and half filled in must not be emitted); an
+**acceptance** table carrying a wall-clock column is refused (no conclusion in this experiment rests
+on a timing); a column that adds the two convergence tests' counts is refused (they are not the same
+test and their widths differ by nearly two orders of magnitude, so their sum belongs to neither);
+and a residual table whose rows were audited at two different positions without a column saying so
+is refused.
+
+**`tally_evaluation.py` and `tally_optimisation.py` — the two phases' tables.** Five tables for the
+evaluation phase (cost per call, matched accuracy on both rulers, the ownership rung, the per-sweep
+overhead, the failure taxonomy) plus the predicate trial; eight for the optimisation phase (the seed
+set, the failure table, the same-optimum check, check 2 in **both** iteration constructions, the
+attempt summation identity, the cost with and without the retried seeds, the achieved accuracy at
+the accepted optimum, and the lift's residual).
+
+### The population problem, and the declared sources
+
+`runs/gates/` is **not one population**. Several gates run the same arm at the same seed from
+different entries, and three of them run it deliberately doctored. A per-run mean over that tree
+would be a mean over a set nobody can state.
+
+So the tally reads a **source**: a named subtree whose records are a comparable set, declared in
+`tally.SOURCES` with the sentence that says why. Two exist — the reproduction gate's own runs, and
+the entry gate's paired evaluations — and every caption carries the source's sentence. Records under
+`runs/gates/` that belong to no declared source are **counted and named by their gate** in the
+stage's own record, so the smaller denominator is a stated choice and not an omission.
+
+Within a source, the optimisation phase is split again into **seed-complete arm groups**. The plan's
+"the seeds on which every arm converged" assumes what a campaign guarantees — every arm at every
+seed — and a gate's runs do not: the reproduction gate runs one set of arms at its unperturbed seed
+and a different set at its perturbed one. Each group is a set of arms and the seeds at which all of
+them ran, which *is* a population the construction applies to, and the group is named in every
+table's title. In a campaign there is one group per configuration and the split is invisible.
+
+### What the tally is checked against
+
+The previous revision published a row of numbers for each of the twenty runs of the reproduction
+reference. `tally_contracts` computes **the same cells from this revision's records** and compares
+them without tolerance. Three of the cells are produced by one of this revision's own constructions
+rather than read from a field — iterations on the final attempt, iterations summed over every
+attempt, and the attempt count, all from `attempts[]` — which is what makes this a stronger
+statement than the reproduction gate's field-for-field comparison: a *rule* landing on the previous
+revision's published number says the rule is the same rule.
+
+The committed reference is **never regenerated**; its bytes are the previous revision's numbers, and
+a comparison that rewrote them would be a comparison with itself. Where a record field has been
+renamed to the vocabulary's word for it, `reference.FIELD_NAME_MAP` translates the previous
+revision's path to this revision's. The compared cell list is **derived** — the compared-field list
+for the phase intersected with what that entry actually published — so a later task that drops a
+field from the compared set drops it here too.

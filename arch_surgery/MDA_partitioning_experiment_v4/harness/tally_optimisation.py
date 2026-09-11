@@ -6,7 +6,7 @@ asks for.  It has nothing to pass, so it is a *measurement stage* and runs
 under ``--measure``; the checks it depends on are gates with teeth and live in
 ``harness/gate_tally.py``.
 
-Seven tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
+Eight tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
 
 ``seed_set``        §4.3.1 — the one population per configuration (the seeds on
                     which **every** arm reached an accepted optimum) with the
@@ -25,6 +25,10 @@ Seven tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
                     run's solve-phase total, for node calls and for sweeps.
 ``cost``            check 4 — solve-phase node calls in the one format, with
                     the ratio published **with and without** the retried seeds.
+``achieved_accuracy`` the exit audit at the accepted optimum, on **both**
+                    rulers, with the audit position and the instrument's own
+                    version in columns of their own and the argmax component
+                    named rather than averaged.
 ``lift_closed``     check 3 — constraint 93's residual at every accepted
                     optimum, in seconds and relative to the burn time.
 
@@ -954,6 +958,146 @@ def lift_closed(
     )
 
 
+def achieved_accuracy(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    configuration: str,
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    source: str,
+) -> Table:
+    """The exit audit at the accepted optimum, on both rulers, with its position.
+
+    The table the audit-position rule exists for.  A campaign-shaped
+    optimisation record is audited at the **entry to the output path** — the
+    state the solve handed over — and the reproduction gate's records are
+    audited **after the run**, where the previous revision measured.  Those are
+    two different quantities, and this table carries the position in a column
+    of its own so they can share it; a table that mixed them without the column
+    would be refused by ``tables.Table``.
+
+    The **argmax component is named, never averaged**: the statistic is one
+    component's residual, and the component that holds it is the finding.
+    """
+    rows: list[dict[str, Any]] = []
+    for arm in _arm_order(by_arm):
+        records = [
+            by_arm[arm][seed]
+            for seed in sorted(by_arm[arm])
+            if stats_mod.finished(by_arm[arm][seed])
+        ]
+        for ruler in campaign.predicate_modes:
+            restricted = [
+                stats_mod.restricted_statistic(r, ruler=ruler) for r in records
+            ]
+            whole = [
+                stats_mod.whole_state_statistic(r, ruler=ruler) for r in records
+            ]
+            restricted_values = [
+                v["max"] for v in restricted if v.get("max") is not None
+            ]
+            whole_values = [v["max"] for v in whole if v.get("max") is not None]
+            argmaxes = sorted({v.get("argmax") for v in restricted if v.get("argmax")})
+            excluded = sorted(
+                {v.get("n_excluded") for v in restricted if v.get("n_excluded") is not None}
+            )
+            positions = sorted(
+                {str(r.get("audit_position")) for r in records if r.get("audit_position")}
+            )
+            instruments = sorted(
+                {stats_mod.audit_instrument(r)["version"] for r in records}
+            )
+            rows.append(
+                {
+                    "arm": arm,
+                    "ruler": ruler,
+                    "n": len(records),
+                    "restricted_median": stats_mod.median(restricted_values),
+                    "restricted_max": max(restricted_values) if restricted_values else None,
+                    "argmax": ", ".join(argmaxes) if argmaxes else "—",
+                    "n_above_tau": ", ".join(
+                        str(v.get("n_above_tau")) for v in restricted
+                    ) or "—",
+                    "whole_median": stats_mod.median(whole_values),
+                    "n_excluded": ", ".join(str(v) for v in excluded) if excluded else "—",
+                    "audit_position": positions[0] if len(positions) == 1 else (
+                        "/".join(positions) if positions else None
+                    ),
+                    "instrument": "; ".join(instruments) if instruments else "—",
+                }
+            )
+    positions = sorted({r["audit_position"] for r in rows if r["audit_position"]})
+    return Table(
+        name=f"achieved accuracy at the accepted optimum — {configuration} — {source}",
+        caption=Caption(
+            units="dimensionless: the largest scaled coupling-state residual "
+            "found by one further full sweep past termination",
+            row_is="one arm on one ruler",
+            column_is="the restricted or whole-state audit maximum over that "
+            "arm's finished runs, the component the restricted maximum sat on, "
+            "and how many components the restriction removed",
+            population=(
+                f"{population.what}; the finished optimisation-phase runs of "
+                f"{configuration} in this arm group"
+            ),
+            construction=(
+                "stats.restricted_statistic and stats.whole_state_statistic; "
+                "median = nearest-rank upper-middle.  The restricted maximum "
+                "excludes the components the configuration's once-per-run "
+                "deferred nodes write, derived node → write sets → spec keys"
+            ),
+            clauses=(
+                "**audit position**: "
+                + (", ".join(positions) if positions else "not recorded on any run here")
+                + ".  `entry_to_write_output_files` is the declared position — "
+                "the state the solve handed over — and `after_run` is the "
+                "reproduction gate's, where the previous revision measured.  "
+                "The two are different quantities and share this table only "
+                "because the position is a column of its own",
+                "**the audit instrument's version is read from the record** "
+                "(stats.audit_instrument).  Task A61 (insstrain-diagnosis) "
+                "showed that the largest residual at the accepted point on the "
+                "pulsed configurations is an artefact of this instrument — the "
+                "output path permanently changes a model setting the snapshot "
+                "does not restore, so the audit's sweep is not the loop's map "
+                "— and task A62 (exit-audit-restore) widens the snapshot under "
+                "decision D25, which moves every value in these columns.  The "
+                "argmax is read from the record and is not written into this "
+                "table",
+                "**both rulers or neither**: the mixed ruler reads lower "
+                "wherever its denominator binds, by construction",
+                "the two rulers' exclusion counts are listed per row and never "
+                "pooled; a run whose restricted block is null carries no count "
+                "and reads —",
+            ),
+            how_to_read=(
+                "read the argmax beside the maximum: a residual above the "
+                "tolerance whose argmax is the component A61 named is a "
+                "statement about the audit instrument, not about the arm"
+            ),
+        ),
+        columns=(
+            Column("arm", "arm"),
+            Column("ruler", "ruler"),
+            Column("n", "n", fmt=_fmt_int),
+            Column("restricted_median", "restricted median", fmt=_fmt_exp),
+            Column("restricted_max", "restricted max", fmt=_fmt_exp),
+            Column("argmax", "restricted argmax"),
+            Column("n_above_tau", "components above τ"),
+            Column("whole_median", "whole-state median", fmt=_fmt_exp),
+            Column("n_excluded", "components excluded"),
+            Column("audit_position", "audit position"),
+            Column("instrument", "audit instrument"),
+        ),
+        rows=tuple(rows),
+        denominator=sum(len(v) for v in by_arm.values()),
+        denominator_is=(
+            f"optimisation-phase runs of {configuration} in this arm group"
+        ),
+        acceptance=True,
+        audit_position_labelled=True,
+    )
+
+
 def per_sweep_overhead(
     population: stats_mod.Population,
     configuration: str,
@@ -1135,6 +1279,11 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 emitted.append(attempts(population, config.name, by_arm, label))
                 emitted.append(
                     cost(population, config.name, by_arm, converged, label)
+                )
+                emitted.append(
+                    achieved_accuracy(
+                        campaign, population, config.name, by_arm, label
+                    )
                 )
                 lift = lift_closed(population, config.name, by_arm, label)
                 if lift is not None:
