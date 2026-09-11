@@ -538,6 +538,9 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
         "node_calls_solve_phase": getattr(
             caller, "NODE_CALLS_AT_OUTPUT", [None]
         )[0],
+        "dispatch_sweeps_solve_phase": getattr(
+            caller, "DISPATCH_SWEEPS_AT_OUTPUT", [None]
+        )[0],
         "n_prime_calls": getattr(caller, "ARRANGEMENT_METHOD_CALLS", [None])[0],
     }
     histogram = getattr(caller, "SWEEPS_PER_EVAL_HIST", None)
@@ -744,6 +747,139 @@ def harvest_output_path(caller) -> dict[str, Any]:
         "output_path": getattr(caller, "OUTPUT_PATH_NAME", None),
         "output_loop_sweeps": getattr(caller, "OUTPUT_LOOP_SWEEPS", [None])[0],
         "output_path_entries": getattr(caller, "OUTPUT_PATH_ENTRIES", [None])[0],
+    }
+
+
+#: What the per-attempt accounting is, in one sentence each, quoted into every
+#: record so a reader does not need the plan open beside it.
+ATTEMPT_NOTES: dict[str, str] = {
+    "node_calls_solve_phase": (
+        "model executions inside this attempt: the driver's node counter at "
+        "the attempt's exit less its value at the previous attempt's exit.  "
+        "Summed over the attempts these are the run's solve-phase total, which "
+        "is checked rather than assumed"
+    ),
+    "sweeps": (
+        "sweeps of the model sequence inside this attempt, on the same "
+        "difference; the output-time loop and the exit audit are in neither, "
+        "because they are outside every attempt"
+    ),
+    "sweeps_by_block": (
+        "those sweeps per block of the schedule, where the arm runs one; an "
+        "empty mapping where it does not"
+    ),
+    "sweeps_per_eval": (
+        "the attempt's own evaluations of the model set and the sweeps they "
+        "took, binned — the evaluation count the transfer needs per attempt, "
+        "which an iteration count cannot give because a line search and the "
+        "gradient stencil both vary at equal iteration count"
+    ),
+    "outside_attempts": (
+        "model executions and sweeps of the solve phase that fall outside "
+        "every attempt: before the first attempt is entered, or after the last "
+        "one exits and before the output path is reached.  Expected to be 0 — "
+        "the only thing that evaluates the model set during the solve is the "
+        "optimiser — and published rather than assumed, because it is what the "
+        "summation identity rests on"
+    ),
+}
+
+
+def _difference(before: Mapping[str, Any], after: Mapping[str, Any]) -> dict[str, int]:
+    """``after - before``, key by key, keeping only what moved."""
+    out: dict[str, int] = {}
+    for key in sorted(set(before) | set(after)):
+        moved = int(after.get(key, 0)) - int(before.get(key, 0))
+        if moved:
+            out[key] = moved
+    return out
+
+
+def _sweeps_per_eval(histogram: Mapping[str, int]) -> dict[str, Any]:
+    """One binned histogram, with the two totals it implies."""
+    ordered = {k: histogram[k] for k in sorted(histogram, key=int)}
+    n_evaluations = sum(ordered.values())
+    n_sweeps = sum(int(k) * v for k, v in ordered.items())
+    return {
+        "hist": ordered,
+        "n_evaluations": n_evaluations,
+        "n_sweeps": n_sweeps,
+    }
+
+
+def harvest_attempt_stamps(caller) -> dict[str, Any]:
+    """The retry ladder's boundary stamps, differenced into per-attempt costs.
+
+    The driver stamps its cost counters at the entry to and the exit from every
+    attempt of the optimiser's retry ladder (driver change DR7).  An attempt's
+    own cost is the difference between consecutive **exit** stamps, with the
+    first attempt measured from its own entry stamp — so the arithmetic here is
+    a subtraction and nothing is attributed to an attempt that did not happen
+    inside it.
+
+    Read for the same reason as the other counters and at the same moment:
+    **before** the exit audit takes its extra sweep.  The stamps themselves are
+    frozen at the boundaries, so the audit could not move them; reading them
+    here keeps every cost figure in one place in the record's construction.
+    """
+    stamps = list(getattr(caller, "ATTEMPT_STAMPS", []) or [])
+    ladders = (getattr(caller, "ATTEMPT_LADDERS", [None]) or [None])[0]
+    if not stamps:
+        return {
+            "available": False,
+            "costs": [],
+            "n_ladders": ladders,
+            "why": (
+                "the driver recorded no attempt boundary: nothing in this "
+                "process entered the optimiser's retry ladder"
+            ),
+        }
+    entries = [s for s in stamps if s.get("boundary") == "entry"]
+    exits = [s for s in stamps if s.get("boundary") == "exit"]
+    costs: list[dict[str, Any]] = []
+    previous = entries[0]
+    for index, stamp in enumerate(exits):
+        costs.append(
+            {
+                "attempt": stamp.get("attempt"),
+                "ladder": stamp.get("ladder"),
+                "stage": stamp.get("stage"),
+                "node_calls_solve_phase": (
+                    int(stamp["node_calls"]) - int(previous["node_calls"])
+                ),
+                "sweeps": (
+                    int(stamp["dispatch_sweeps"])
+                    - int(previous["dispatch_sweeps"])
+                ),
+                "sweeps_by_block": _difference(
+                    previous.get("sweeps_by_block") or {},
+                    stamp.get("sweeps_by_block") or {},
+                ),
+                "sweeps_per_eval": _sweeps_per_eval(
+                    _difference(
+                        previous.get("sweeps_per_eval_hist") or {},
+                        stamp.get("sweeps_per_eval_hist") or {},
+                    )
+                ),
+                "node_calls_at_exit": int(stamp["node_calls"]),
+                "sweeps_at_exit": int(stamp["dispatch_sweeps"]),
+            }
+        )
+        previous = stamp
+        _ = index
+    return {
+        "available": True,
+        "costs": costs,
+        "n_ladders": ladders,
+        "n_boundaries": len(stamps),
+        "n_entries": len(entries),
+        "n_exits": len(exits),
+        "node_calls_at_first_entry": int(entries[0]["node_calls"]),
+        "sweeps_at_first_entry": int(entries[0]["dispatch_sweeps"]),
+        "node_calls_at_last_exit": int(exits[-1]["node_calls"]),
+        "sweeps_at_last_exit": int(exits[-1]["dispatch_sweeps"]),
+        "stages": [s.get("stage") for s in exits],
+        "notes": ATTEMPT_NOTES,
     }
 
 
@@ -1557,12 +1693,17 @@ def stamp_capabilities_absent(record: dict[str, Any], *, phase: str) -> None:
     record of a run that crashed or was refused before the driver produced one.
 
     Nothing in this tree is *unsupplied* any more: the predicate counters
-    landed with task A58 (driver-predicate-counters) and the output-path
-    counters with task A57 (driver-output-path).  The name is kept because the
-    contract is the same one — a declared field is present or the record is
+    landed with task A58 (driver-predicate-counters), the output-path counters
+    with task A57 (driver-output-path) and the per-attempt costs with task A60
+    (driver-attempts), which was the last of them.  The name is kept because
+    the contract is the same one — a declared field is present or the record is
     refused — and the next driver capability the plan asks for will be stamped
     here in exactly this way.
     """
+    # Filled from the driver's own attempt-boundary stamps after the run
+    # (:func:`harvest_attempt_stamps`).  Present here with a null so that a
+    # record of a run that never reached the driver still carries the key.
+    record["attempt_accounting"] = None
     # Filled from the driver's own counters after the run
     # (:func:`harvest_predicate_counters`).  Present here with a null so that a
     # record of a run that never reached the driver still carries the key.

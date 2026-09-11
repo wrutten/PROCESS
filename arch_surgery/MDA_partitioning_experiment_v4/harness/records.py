@@ -28,11 +28,11 @@ Four refusals live here, and none of them is a warning:
     optimiser retries, and the published cost ratio is quoted **with and
     without** retried seeds; if the parts do not sum to the whole, that ratio is
     computed over quantities that do not decompose the published one, which is
-    worse than having no per-attempt figures at all.  The driver does not
-    supply per-attempt node calls yet — that is approved driver change DR7,
-    task **A60 (driver-attempts)** — so today the check refuses only when the
-    numbers are **present**, and its tooth is a synthetic record that carries
-    them and gets them wrong.
+    worse than having no per-attempt figures at all.  The driver stamps its
+    cost counters at every attempt boundary of the retry ladder (driver change
+    DR7, task **A60 (driver-attempts)**), so the check runs against real
+    numbers on every optimisation record — node calls and sweeps alike — and
+    its tooth is a synthetic record whose parts are made not to add up.
 
 ``assert_run_kind``
     a record that does not say what kind of run made it.  A gate run and a
@@ -309,7 +309,8 @@ SCHEMA: tuple[Field, ...] = (
     _f("node_census", "AB", "always", "model executions per node name"),
     _f("exit_forensics", "AB", "always", "the five fields recorded at every exit"),
     _f("attempts", "AB", "always", "one entry per optimiser attempt, in order"),
-    _f("attempts_node_calls_available", "AB", "always", "whether the driver supplies per-attempt node calls yet"),
+    _f("attempts_node_calls_available", "AB", "always", "whether the driver stamped the cost counters at every attempt boundary of this run"),
+    _f("attempt_accounting", "AB", "always", "how the per-attempt costs decompose the run's solve-phase totals, with what falls outside every attempt"),
     # --- the output path --------------------------------------------------
     _f("output_path", "B", "always", "which output path ran: mda_output | finalise_once"),
     _f("output_loop_sweeps", "B", "always", "sweeps the output-time loop ran; 0 under the finalise-once path"),
@@ -328,6 +329,7 @@ SCHEMA: tuple[Field, ...] = (
     _f("predicate_counters", "AB", "always", "the two predicates' counts split out, with the mean test width and the empty-visit share"),
     # --- the optimisation phase ------------------------------------------
     _f("node_calls_solve_phase", "B", "finished", "model executions during the solve: the cost unit"),
+    _f("dispatch_sweeps_solve_phase", "B", "finished", "sweeps of the dispatch body during the solve: the whole the per-attempt sweeps decompose"),
     _f("n_model_calls", "B", "finished", "evaluations of the model set the optimiser asked for"),
     _f("n_solver_iterations", "B", "finished", "the optimiser's iterations on its final attempt"),
     _f("sweeps_per_eval", "B", "finished", "sweeps per evaluation, binned"),
@@ -498,49 +500,67 @@ def assert_both_rulers(record: Mapping[str, Any], *, where: str = "") -> None:
         )
 
 
+#: The two quantities a run's attempts decompose, and the run total each must
+#: add up to.  Both are solve-phase totals: the output-time loop and the exit
+#: audit are outside every attempt and are in neither.
+ATTEMPT_SUMS: tuple[tuple[str, str], ...] = (
+    ("node_calls_solve_phase", "node_calls_solve_phase"),
+    ("sweeps", "dispatch_sweeps_solve_phase"),
+)
+
+
 def assert_attempt_summation(record: Mapping[str, Any], *, where: str = "") -> None:
     """Refuse per-attempt costs that do not sum to the run total.
 
-    The driver does not stamp node calls per attempt yet (approved driver
-    change DR7, task A60 (driver-attempts)), so every attempt carries
-    ``node_calls_solve_phase: null`` and this check has nothing to add up.  The
-    moment it does, the sum must equal ``node_calls_solve_phase`` — per-attempt
+    The driver stamps its cost counters at the entry to and the exit from every
+    attempt of the optimiser's retry ladder (driver change DR7, task A60
+    (driver-attempts)), so every attempt of a finished optimisation carries its
+    own node calls and its own sweeps.  Each of those must sum, over the
+    attempts, to the run's solve-phase total for that quantity: per-attempt
     accounting whose parts do not add up to the whole it decomposes is worse
     than none, because the cost ratio published *with and without* retried
     seeds would then be computed over quantities that do not decompose the
     published one.
+
+    A record whose attempts carry **no** cost at all is passed over rather than
+    refused — an evaluation-phase record has no attempts, and a run that
+    crashed before the driver stamped anything has nothing to check — but a
+    record carrying a cost for some attempts and not others is refused, because
+    a partial decomposition cannot be summed.
     """
     attempts = record.get("attempts")
     if not isinstance(attempts, list) or not attempts:
         return
-    per_attempt = [a.get("node_calls_solve_phase") for a in attempts]
-    if any(value is None for value in per_attempt):
+    for field, total_field in ATTEMPT_SUMS:
+        per_attempt = [a.get(field) for a in attempts]
         if all(value is None for value in per_attempt):
-            return
-        raise RecordError(
-            f"partial per-attempt node calls{' for ' + where if where else ''}: "
-            f"{sum(1 for v in per_attempt if v is not None)} of "
-            f"{len(per_attempt)} attempts carry a count.  Either the driver "
-            f"stamps them at every attempt boundary or at none; a partial "
-            f"decomposition cannot be summed."
-        )
-    total = record.get("node_calls_solve_phase")
-    if total is None:
-        raise RecordError(
-            f"per-attempt node calls without a run total"
-            f"{' for ' + where if where else ''}: there is nothing for them to "
-            f"decompose."
-        )
-    summed = sum(int(v) for v in per_attempt)
-    if summed != int(total):
-        raise RecordError(
-            f"per-attempt node calls do not sum to the run total"
-            f"{' for ' + where if where else ''}: "
-            f"{' + '.join(str(int(v)) for v in per_attempt)} = {summed}, "
-            f"node_calls_solve_phase = {int(total)}.  REFUSED: the cost ratio "
-            f"published with and without retried seeds would be computed over "
-            f"quantities that do not decompose the published one."
-        )
+            continue
+        if any(value is None for value in per_attempt):
+            raise RecordError(
+                f"partial per-attempt {field}"
+                f"{' for ' + where if where else ''}: "
+                f"{sum(1 for v in per_attempt if v is not None)} of "
+                f"{len(per_attempt)} attempts carry a count.  Either the driver "
+                f"stamps them at every attempt boundary or at none; a partial "
+                f"decomposition cannot be summed."
+            )
+        total = record.get(total_field)
+        if total is None:
+            raise RecordError(
+                f"per-attempt {field} without a run total"
+                f"{' for ' + where if where else ''}: {total_field} is absent, "
+                f"so there is nothing for them to decompose."
+            )
+        summed = sum(int(v) for v in per_attempt)
+        if summed != int(total):
+            raise RecordError(
+                f"per-attempt {field} does not sum to the run total"
+                f"{' for ' + where if where else ''}: "
+                f"{' + '.join(str(int(v)) for v in per_attempt)} = {summed}, "
+                f"{total_field} = {int(total)}.  REFUSED: the cost ratio "
+                f"published with and without retried seeds would be computed "
+                f"over quantities that do not decompose the published one."
+            )
 
 
 def assert_usable(record: Mapping[str, Any], *, where: str = "") -> None:
@@ -554,38 +574,184 @@ def assert_usable(record: Mapping[str, Any], *, where: str = "") -> None:
 # --------------------------------------------------------------------------
 
 
+#: Why an evaluation-phase record's ``attempts`` list is empty.  Written into
+#: the record rather than left to be inferred from an absent key: a reader of
+#: two records, one with attempts and one without, must be able to tell "this
+#: phase has no optimiser" from "this run stopped before it had one".
+ATTEMPTS_NOT_APPLICABLE = (
+    "this phase runs one evaluation of the model set with no optimiser in the "
+    "process, so there is no retry ladder, no attempt, and nothing for a "
+    "per-attempt cost to decompose.  The run's node calls and sweeps are the "
+    "single evaluation's own and are recorded as such."
+)
+
+
 def attempts_from_forensics(
-    forensics: Mapping[str, Any], *, node_calls_solve_phase: int | None
+    forensics: Mapping[str, Any],
+    *,
+    costs: Sequence[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """The per-attempt list of harness plan §4.4, from what the driver gives.
 
-    The solver-owned half — the ladder stage, the finite-difference step, the
-    iteration count and the exit code — is recorded by the harness's own wrap of
-    every solver's ``solve``.  The cost half is the driver's and does not exist
-    yet: ``node_calls_solve_phase`` and ``sweeps`` are explicit nulls naming the
-    change that will supply them, never absent keys.
+    Two halves meet here.  The **solver-owned** half — the finite-difference
+    step the attempt entered with, its iteration count, its exit code, whether
+    it raised — is recorded by the harness's own wrap of every solver's
+    ``solve``.  The **cost** half — model executions, sweeps, sweeps per block
+    and the evaluations they came in — is the driver's, stamped at the attempt
+    boundaries inside the retry ladder itself (driver change DR7).
+
+    The ladder stage is taken from the **driver's own** name for the rung, not
+    from the harness's positional guess at it; the guess is kept beside it under
+    ``stage_positional`` so the two can be compared rather than assumed equal,
+    which is what :func:`attempt_accounting` does.
     """
+    by_attempt = {c.get("attempt"): c for c in (costs or [])}
     out: list[dict[str, Any]] = []
     for attempt in forensics.get("attempts") or []:
+        index = attempt.get("attempt")
+        cost = by_attempt.get(index) or {}
         out.append(
             {
-                "attempt": attempt.get("attempt"),
-                "stage": attempt.get("ladder_stage_positional"),
+                "attempt": index,
+                "stage": cost.get("stage", attempt.get("ladder_stage_positional")),
+                "stage_positional": attempt.get("ladder_stage_positional"),
+                "ladder": cost.get("ladder"),
                 "epsfcn": attempt.get("epsfcn_at_entry"),
                 "n_iterations": attempt.get("n_solver_iterations"),
                 "ifail": attempt.get("ifail"),
                 "raised": attempt.get("raised"),
-                "node_calls_solve_phase": None,
-                "sweeps": None,
-                "cost_null_because": (
-                    "the driver stamps node calls and the sweep histogram at "
-                    "the end of the run, not at each retry boundary; approved "
-                    "driver change DR7, task A60 (driver-attempts)"
-                ),
+                "node_calls_solve_phase": cost.get("node_calls_solve_phase"),
+                "sweeps": cost.get("sweeps"),
+                "sweeps_by_block": cost.get("sweeps_by_block"),
+                "sweeps_per_eval": cost.get("sweeps_per_eval"),
             }
         )
-    _ = node_calls_solve_phase  # kept in the signature: A60 fills it in here
     return out
+
+
+def attempt_accounting(
+    attempts: Sequence[Mapping[str, Any]],
+    stamps: Mapping[str, Any] | None,
+    *,
+    node_calls_solve_phase: int | None,
+    dispatch_sweeps_solve_phase: int | None,
+    phase: str,
+) -> dict[str, Any]:
+    """How the per-attempt costs decompose the run's solve-phase totals.
+
+    Published beside the attempts, never instead of them, and stated as an
+    identity with its residual rather than as a claim: the summation the record
+    module refuses on is ``Σ attempts == the run total``, and that holds only
+    because nothing evaluates the model set during the solve except the
+    optimiser.  That premise is a measurement here — the node calls and sweeps
+    falling **outside** every attempt — not an assumption, so a driver change
+    that put work between the ladder and the output path would show up as a
+    non-zero residual instead of silently unbalancing the sum.
+    """
+    if phase == "A":
+        return {
+            "applicable": False,
+            "why": ATTEMPTS_NOT_APPLICABLE,
+            "n_attempts": 0,
+            "retried": False,
+        }
+    block: dict[str, Any] = {
+        "applicable": True,
+        "n_attempts": len(attempts),
+        "retried": len(attempts) > 1,
+        "retried_is": (
+            "a seed is 'retried' when the optimiser was called more than once "
+            "on it; the experiment plan publishes every cost ratio with and "
+            "without the retried seeds"
+        ),
+        "stages": [a.get("stage") for a in attempts],
+        "ifail_per_attempt": [a.get("ifail") for a in attempts],
+        "iterations_per_attempt": [a.get("n_iterations") for a in attempts],
+    }
+    if not stamps or not stamps.get("available"):
+        block["decomposes"] = None
+        block["why_not_checked"] = (
+            (stamps or {}).get("why")
+            or "the driver recorded no attempt boundary in this process"
+        )
+        return block
+    block["n_ladders"] = stamps.get("n_ladders")
+    block["stage_names_agree_with_position"] = all(
+        a.get("stage") == a.get("stage_positional") for a in attempts
+    )
+    mismatched = [
+        {"attempt": a.get("attempt"), "driver": a.get("stage"),
+         "positional": a.get("stage_positional")}
+        for a in attempts
+        if a.get("stage") != a.get("stage_positional")
+    ]
+    block["stage_name_disagreements"] = mismatched
+    sums: dict[str, Any] = {}
+    for field, total_field, first, last in (
+        (
+            "node_calls_solve_phase",
+            "node_calls_solve_phase",
+            "node_calls_at_first_entry",
+            "node_calls_at_last_exit",
+        ),
+        (
+            "sweeps",
+            "dispatch_sweeps_solve_phase",
+            "sweeps_at_first_entry",
+            "sweeps_at_last_exit",
+        ),
+    ):
+        total = (
+            node_calls_solve_phase
+            if total_field == "node_calls_solve_phase"
+            else dispatch_sweeps_solve_phase
+        )
+        per_attempt = [a.get(field) for a in attempts]
+        summed = (
+            sum(int(v) for v in per_attempt)
+            if per_attempt and all(v is not None for v in per_attempt)
+            else None
+        )
+        before = stamps.get(first)
+        after = stamps.get(last)
+        sums[field] = {
+            "per_attempt": per_attempt,
+            "summed": summed,
+            "run_total_field": total_field,
+            "run_total": total,
+            "residual": (
+                None if (summed is None or total is None) else int(total) - summed
+            ),
+            "before_the_first_attempt": before,
+            "after_the_last_attempt": (
+                None if (after is None or total is None) else int(total) - int(after)
+            ),
+        }
+    block["sums"] = sums
+    block["decomposes"] = all(
+        entry["residual"] == 0 for entry in sums.values()
+    )
+    block["outside_attempts"] = {
+        "node_calls": (
+            None
+            if sums["node_calls_solve_phase"]["before_the_first_attempt"] is None
+            else sums["node_calls_solve_phase"]["before_the_first_attempt"]
+            + (sums["node_calls_solve_phase"]["after_the_last_attempt"] or 0)
+        ),
+        "sweeps": (
+            None
+            if sums["sweeps"]["before_the_first_attempt"] is None
+            else sums["sweeps"]["before_the_first_attempt"]
+            + (sums["sweeps"]["after_the_last_attempt"] or 0)
+        ),
+        "what": (stamps.get("notes") or {}).get("outside_attempts"),
+    }
+    block["sweeps_agree_with_the_evaluation_histogram"] = all(
+        (a.get("sweeps_per_eval") or {}).get("n_sweeps") == a.get("sweeps")
+        for a in attempts
+    )
+    block["notes"] = stamps.get("notes")
+    return block
 
 
 def read(outdir: Path | str) -> dict[str, Any]:

@@ -212,6 +212,8 @@ and a null is not something a reader can tell apart from "this run stopped early
 | `PREDICATE_EVALUATIONS_BY_BLOCK` / `COMPONENTS_COMPARED_BY_BLOCK` | the same two, per block | inside `predicate_counters` |
 | `BLOCK_VISITS` / `EMPTY_BLOCK_VISITS` / `EMPTY_BLOCK_SWEEPS` | the schedule's visits to each block, the ones that executed no model node, and what those cost | `block_visits`, `empty_block_visits`, `empty_block_sweeps` |
 | `UPSTREAM_PREDICATE_EVALUATIONS` / `UPSTREAM_COMPONENTS_COMPARED` | upstream's own stopping test: how often, and how wide | `upstream_predicate_evaluations`, `upstream_components_compared` |
+| `DISPATCH_SWEEPS_AT_OUTPUT` | the sweep counter frozen where the node counter is — the whole the per-attempt sweeps decompose | `dispatch_sweeps_solve_phase` |
+| `ATTEMPT_STAMPS` / `ATTEMPT_LADDERS` | the cost counters read at the entry to and the exit from every attempt of the optimiser's retry ladder, and how many ladders were entered | `attempts[]`, `attempt_accounting` |
 
 **Why the convergence test is counted at all.** The partitioned arrangement runs far more sweeps of
 the model sequence than the flat one while executing far fewer model nodes, and the previous
@@ -249,6 +251,30 @@ intervention arms — is empty too, but costs **no** sweep at all. `EMPTY_BLOCK_
 the two apart: it is the sweeps those empty visits actually spent, and it is the number a
 per-sweep-overhead table needs, because the visit count alone would charge the free case as if it
 cost a sweep.
+
+**Why the optimiser's attempts are counted separately.** The optimiser is not tried once. When it
+returns anything but "converged", the driver calls it again with the finite-difference step
+multiplied by ten, then by a tenth, and finally — on exit code 5 with fewer than two iterations —
+once more from a reset second-derivative matrix. That is the **retry ladder**, and every one of its
+attempts evaluates the model set. Until these stamps existed the record could say how many attempts
+there were, what each one's exit code was and how many optimiser iterations each took, but the
+*cost* was a single run total: a run that failed its first attempt and converged on the retry
+charged both attempts' evaluations to one number while reporting only the last attempt's iterations.
+That is not a hypothetical. It is most of one configuration's published cost ratio in the previous
+revision — 0.450 with the one retried seed in it, 0.659 over the retry-free seeds — and the
+experiment plan now requires the ratio to be published *with and without* retried seeds, which a run
+total cannot give. A **seed is retried** when its `attempts` list has more than one entry.
+
+**The parts must add up, and a record where they do not is refused.** `attempts[].node_calls_solve_phase`
+sums to `node_calls_solve_phase` and `attempts[].sweeps` sums to `dispatch_sweeps_solve_phase`, on
+every optimisation record, checked by `records.assert_attempt_summation` before any summary reads it.
+Per-attempt accounting whose parts do not decompose the whole is worse than none, because the
+with-and-without ratio would then be computed over quantities that are not the published one's parts.
+The identity holds because nothing evaluates the model set during the solve except the optimiser —
+and that premise is **measured**, not assumed: `attempt_accounting.outside_attempts` publishes the
+node calls and sweeps that fall before the first attempt or after the last one, so a future change
+that put work between the ladder and the output path would show as a non-zero term rather than
+silently unbalance the sum.
 
 **Why the counters are safe.** Every one is a plain integer increment. None touches a float, none
 changes a branch a result depends on, and all of them count the **solve** phase only — the

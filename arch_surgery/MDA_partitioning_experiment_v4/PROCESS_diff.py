@@ -90,6 +90,8 @@ _BLOCK_VISITS = "DR4 counters: the block schedule's visits to each block, and th
 _SWEEP_COUNT = "DISPATCH_SWEEPS: the run's count of sweeps of the dispatch body, under a public name (was _SWEEP_CALLS)"
 _READS_BY_NODE = "the census instrument reports each node's read set by name, beside the write set it already reported"
 _PREDICATE_RULER = "switch PROCESS_ARCH_PREDICATE: which denominator the coupling-state convergence test scales a step by -- the measured scale alone, or that scale as a floor under the current magnitude"
+_ATTEMPTS = "DR7 stamps: what each attempt of the optimiser's retry ladder cost -- node calls and sweeps read at every attempt boundary, so the run's solve-phase totals decompose per attempt"
+_LADDER = "DR7: the retry ladder's rungs named beside the branches that implement them, and each of its four calls to the optimiser bracketed by a boundary stamp"
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
@@ -210,6 +212,16 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/caller.py", "PREDICATE_MODE", _PREDICATE_RULER),
     Annotation("process/core/caller.py", "ruler", _PREDICATE_RULER),
     Annotation("process/core/caller.py", "DR5", _PREDICATE_RULER),
+    # --- A60: the retry ladder's per-attempt cost ------------------------
+    Annotation("process/core/caller.py", "DR7", _ATTEMPTS),
+    Annotation("process/core/caller.py", "ATTEMPT_STAMPS", _ATTEMPTS),
+    Annotation("process/core/caller.py", "ATTEMPT_LADDERS", _ATTEMPTS),
+    Annotation("process/core/caller.py", "DISPATCH_SWEEPS_AT_OUTPUT", _ATTEMPTS),
+    Annotation("process/core/caller.py", "contextmanager", _ATTEMPTS),
+    Annotation("process/core/solver/solver_handler.py", "LADDER_STAGES", _LADDER),
+    Annotation("process/core/solver/solver_handler.py", "caller.attempt", _LADDER),
+    Annotation("process/core/solver/solver_handler.py", "caller.open_ladder", _LADDER),
+    Annotation("process/core/solver/solver_handler.py", "_idf_probe, caller", _LADDER),
 ]
 
 #: One paragraph per changed driver file, for a reader who will not read the
@@ -315,7 +327,20 @@ SUMMARIES: dict[str, str] = {
         "else: the components each evaluation walks are fixed by the block's "
         "write set, so the components-compared counter immediately below is "
         "the same under both, which is the free consistency check between "
-        "them."
+        "them.  Last, the run's cost stops being a single total.  The "
+        "optimiser is tried up to four times in one run -- the retry ladder in "
+        "solver_handler.py -- and every attempt evaluates the model set, so "
+        "the node-call total carried attempts whose iterations and exit code "
+        "the record did not publish.  A context manager here reads the cost "
+        "counters at the entry to and the exit from every attempt and appends "
+        "them to a list; the measurement harness differences consecutive "
+        "stamps and refuses a record whose per-attempt parts do not sum to the "
+        "solve-phase whole they decompose.  The sweep counter is frozen at the "
+        "entry to the output path by the same statement that already froze the "
+        "node counter, so the per-attempt sweep counts have a whole to add up "
+        "to: the run total contains the output-time loop and the exit audit, "
+        "which belong to no attempt.  Four integer reads and two dict copies "
+        "per boundary, at most eight boundaries in a run."
     ),
     "process/core/_idf_probe_modules.py": (
         "One line.  The census instrument attributes every data-structure read "
@@ -364,6 +389,25 @@ SUMMARIES: dict[str, str] = {
         "still runs at the end of every sweep. The general list form is not "
         "needed while exactly one quantity is ever taken out of the loop; the "
         "module docstring records that a second one would need it back."
+    ),
+    "process/core/solver/solver_handler.py": (
+        "The retry ladder is named and its attempts are bracketed.  When the "
+        "optimiser returns anything but 'converged', this file calls it again "
+        "-- with the finite-difference step multiplied by ten, then by a "
+        "tenth, and finally, on exit code 5 with fewer than two iterations, "
+        "once more from a second-derivative matrix reset to twice the identity "
+        "-- so a single run can evaluate the model set under four different "
+        "settings and report the iterations and the exit code of the last one "
+        "only.  The four rungs now have names in the file that implements "
+        "them, and each of the four calls to the optimiser is wrapped in a "
+        "context manager that reads the run's cost counters on the way in and "
+        "on the way out.  That is the whole change: no branch moves, no "
+        "setting changes, no attempt is added or removed or reordered, and "
+        "the exit stamp is taken in a finally so an attempt that raises is "
+        "still bounded.  What it buys is the ability to say what a retry cost "
+        "-- the previous revision published a cost ratio of 0.450 on one "
+        "configuration that is 0.659 without its single retried seed, and the "
+        "experiment plan now requires both readings."
     ),
     "process/core/solver/constraints.py": (
         "One docstring. The burn-time consistency constraint explains that it "

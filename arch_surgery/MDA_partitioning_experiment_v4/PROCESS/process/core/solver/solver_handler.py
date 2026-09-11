@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 from tabulate import tabulate
 
-from process.core import _idf_probe, constants, process_output
+from process.core import _idf_probe, caller, constants, process_output
 from process.core.solver.evaluators import Evaluators
 from process.core.solver.iteration_variables import (
     load_iteration_variables,
@@ -19,6 +19,24 @@ from process.data_structure.numerics import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: The retry ladder's rungs, in the order :meth:`SolverHandler.run` tries them.
+#:
+#: The optimiser is called once; on any exit code other than "converged" it is
+#: called again with the finite-difference step multiplied by ten, then again
+#: with it multiplied by a tenth, and finally -- only on exit code 5 ("no
+#: solution") and only when the optimiser did not iterate -- once more from a
+#: second-derivative matrix reset to twice the identity.  The names are here,
+#: beside the branches that implement them, so that the boundary stamps taken
+#: for DR7 (task A60 (driver-attempts)) carry the ladder's own vocabulary
+#: rather than a positional guess made somewhere else.  Nothing reads this to
+#: decide anything: the ladder is the four branches below, unchanged.
+LADDER_STAGES: tuple[str, ...] = (
+    "initial",
+    "epsfcn_x10",
+    "epsfcn_x0.1",
+    "hessian_reset_b2",
+)
 
 
 class SolverHandler:
@@ -74,7 +92,13 @@ class SolverHandler:
             + self.data.numerics.n_inequality_constraints,
             meq=self.data.numerics.n_equality_constraints,
         )
-        ifail = self.solver.solve()
+        # DR7 (A60): the retry ladder starts here, and every attempt below is
+        # bracketed by a pair of cost stamps.  The stamps read counters and
+        # append to a list; the ladder -- which attempts run, in which order,
+        # under which settings -- is exactly what it was.
+        caller.open_ladder()
+        with caller.attempt(LADDER_STAGES[0]):
+            ifail = self.solver.solve()
 
         # If VMCON optimisation has failed then try altering value of epsfcn
         if self.solver_name == "vmcon":
@@ -82,12 +106,14 @@ class SolverHandler:
                 if _idf_probe.ENABLED:
                     _idf_probe.record_retry("epsfcn_x10", ifail)
                 with epsfcn_context(self.data.numerics, 10):
-                    ifail = self.solver.solve()
+                    with caller.attempt(LADDER_STAGES[1]):
+                        ifail = self.solver.solve()
             if ifail != SolverOutputCondition.CONVERGED:
                 if _idf_probe.ENABLED:
                     _idf_probe.record_retry("epsfcn_x0.1", ifail)
                 with epsfcn_context(self.data.numerics, 0.1):
-                    ifail = self.solver.solve()
+                    with caller.attempt(LADDER_STAGES[2]):
+                        ifail = self.solver.solve()
 
             # If VMCON has exited with error code 5
             # (ifail = SolverOutputCondition.NO_SOLUTION) try another run using a
@@ -105,7 +131,8 @@ class SolverHandler:
                 if _idf_probe.ENABLED:
                     _idf_probe.record_retry("hessian_reset_b2", ifail)
                 self.solver.set_b(2.0)
-                ifail = self.solver.solve()
+                with caller.attempt(LADDER_STAGES[3]):
+                    ifail = self.solver.solve()
 
         self.output()
         return ifail
