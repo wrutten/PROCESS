@@ -47,6 +47,8 @@ SUBSOLVE = "process.core.solver.subsolve"
 #: The solver package itself, which carries the typed refusal and the list of
 #: switch names this revision retired.
 SOLVER = "process.core.solver"
+#: The solver handler, which is where the optimiser's retry ladder lives.
+SOLVER_HANDLER = "process.core.solver.solver_handler"
 
 
 # --------------------------------------------------------------------------
@@ -447,6 +449,16 @@ DIAGNOSTIC_READBACKS: tuple[tuple[str, str], ...] = (
     (CALLER, "EMPTY_BLOCK_SWEEPS"),
     (CALLER, "UPSTREAM_PREDICATE_EVALUATIONS"),
     (CALLER, "UPSTREAM_COMPONENTS_COMPARED"),
+    # Added by task A60 (driver-attempts): the retry ladder's boundary stamps,
+    # the solve-phase sweep total they add up to, and the ladder's own names
+    # for its rungs.  The last is not a counter but it is read back for the
+    # same reason — a tree whose ladder has gained a rung the harness does not
+    # know about should say so in the probe's report, not in a table nobody
+    # can explain afterwards.
+    (CALLER, "ATTEMPT_STAMPS"),
+    (CALLER, "ATTEMPT_LADDERS"),
+    (CALLER, "DISPATCH_SWEEPS_AT_OUTPUT"),
+    (SOLVER_HANDLER, "LADDER_STAGES"),
 )
 
 

@@ -440,8 +440,18 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
             "structurally inapplicable"
         ),
     )
+    # No optimiser runs in this process, so there is no retry ladder and no
+    # attempt.  Said in the record rather than left to be inferred from an
+    # empty list: a reader of two records must be able to tell "this phase has
+    # no optimiser" from "this run stopped before it had one".
     record["attempts"] = []
     record["attempts_node_calls_available"] = False
+    record["attempt_accounting"] = records_mod.attempt_accounting(
+        [], None,
+        node_calls_solve_phase=None,
+        dispatch_sweeps_solve_phase=None,
+        phase="A",
+    )
 
     record["completeness"] = _completeness(record)
     # The observation goes to its own file, never into the record: the record

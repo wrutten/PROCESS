@@ -44,6 +44,7 @@ Usage
     python -m harness.gates switch-neutrality --compare
     python -m harness.gates all            # every gate that needs no capture
     python -m harness.gates predicate-counters   # a measurement, not a gate
+    python -m harness.gates attempts             # a measurement, not a gate
     python -m harness.gates predicate-mode --capture runs
     python -m harness.gates predicate-mode
 
@@ -58,6 +59,7 @@ import datetime as _dt
 import importlib.util
 import json
 import math
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -482,6 +484,60 @@ VOLATILE_RECORD_PATHS: dict[str, str] = {
         "the loaded spec's stamp of the ruler, beside the tolerance it already "
         "carried; absent on the earlier side"
     ),
+    # The per-attempt costs (DR7).  Eight names, and the reason is one: each is
+    # a field whose value is *null or absent on the earlier side because the
+    # driver stamped nothing at an attempt boundary* and a number on the later
+    # one.  What is NOT here is the load-bearing part: every attempt's exit
+    # code, iteration count, finite-difference step and stage name keep their
+    # places and are compared element by element on both sides — which is why
+    # the exclusions name one leaf of each attempt rather than the attempts
+    # list.  The run totals these decompose (node_calls_solve_phase,
+    # node_calls_total, dispatch_sweeps, the sweep histogram) are compared in
+    # full, so a stamp that moved any of them would be caught by them.
+    "attempts[].node_calls_solve_phase": (
+        "null before the driver stamped an attempt boundary, a number after: "
+        "the count is the change.  The total it decomposes is compared"
+    ),
+    "attempts[].sweeps": (
+        "null before, a number after; the run's sweep total and its "
+        "per-evaluation histogram are both compared in full"
+    ),
+    "attempts[].sweeps_by_block": (
+        "absent before, a per-block mapping after; empty in these runs, "
+        "because the reference arms build no block schedule"
+    ),
+    "attempts[].sweeps_per_eval": (
+        "absent before, the attempt's own binned evaluations after.  The "
+        "run-level histogram of the same sweeps is compared, value for value"
+    ),
+    "attempts[].stage_positional": (
+        "absent before: the harness's positional guess at the rung's name was "
+        "the only name there was, and it was carried in 'stage', which IS "
+        "compared.  It is now beside the driver's own name so the two can be "
+        "checked against each other"
+    ),
+    "attempts[].ladder": (
+        "absent before: nothing numbered the ladders, because nothing stamped "
+        "one"
+    ),
+    "attempts[].cost_null_because": (
+        "the sentence explaining the absent per-attempt cost, present only on "
+        "the side that had none"
+    ),
+    "attempts_node_calls_available": (
+        "false before, true after: the field says whether the driver stamped "
+        "the boundaries, and the change is that it does"
+    ),
+    "attempt_accounting": (
+        "the block the decomposition and its residual are published in: absent "
+        "on the earlier side entirely"
+    ),
+    "dispatch_sweeps_solve_phase": (
+        "absent before, the solve-phase sweep total after.  The cell is not "
+        "new — the driver has always incremented the sweep counter, and the "
+        "run total and the per-evaluation histogram are both compared — what "
+        "is new is freezing it where the node counter was already frozen"
+    ),
 }
 
 #: Keys of PROCESS's own output file that record when and where a run happened
@@ -611,6 +667,16 @@ def leaves(document: Any, prefix: str = "") -> dict[str, Any]:
     return out
 
 
+#: ``[3]`` -> ``[]``, so that an exclusion can name **one leaf of every
+#: element of a list** rather than the whole list.  Added by task A60
+#: (driver-attempts): the per-attempt costs are new fields inside ``attempts``,
+#: a list whose other fields — the exit code, the iteration count, the
+#: finite-difference step — must stay compared.  Excluding the list by its bare
+#: name would have taken all of them out of the comparison, which is exactly
+#: the "zero over a quietly smaller population" this gate is built against.
+_LIST_INDEX = re.compile(r"\[\d+\]")
+
+
 def is_volatile(
     path: str, excluded: Mapping[str, str] | None = None
 ) -> str | None:
@@ -620,10 +686,22 @@ def is_volatile(
     different reason passes its own, because an exclusion is only defensible
     against the claim it is made under: G1 excludes the commit because its two
     sides are at different commits, and gate G8's two sides are not.
+
+    An exclusion name is matched two ways.  A plain name matches the path's
+    **bare** form — everything before the first list index — as an exact match
+    or as a prefix, which is how every exclusion written before this worked and
+    still works.  A name containing ``[]`` matches the path with its list
+    indices normalised, so ``attempts[].sweeps`` excludes that one leaf of every
+    attempt and leaves the rest of each attempt compared.
     """
     table = VOLATILE_RECORD_PATHS if excluded is None else excluded
     bare = path.split("[")[0]
+    indexed = _LIST_INDEX.sub("[]", path)
     for name, reason in table.items():
+        if "[]" in name:
+            if indexed == name or indexed.startswith(name + "."):
+                return reason
+            continue
         if bare == name or bare.startswith(name + "."):
             return reason
     return None
@@ -2353,6 +2431,281 @@ def print_predicate_counters(block: Mapping[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------------
+# The retry ladder, per attempt -- a measurement, not a gate
+# --------------------------------------------------------------------------
+#
+# EXPERIMENT_PLAN.md section 3.5 ("retries are a term, not a footnote") and
+# driver change DR7.  The optimiser is tried up to four times in one run and
+# every attempt evaluates the model set, so a run total charges a retry's
+# evaluations to the arm while publishing the iterations and the exit code of
+# the final attempt alone.  The previous revision published a cost ratio of
+# 0.450 on one configuration that is 0.659 over its retry-free seeds; the plan
+# now requires both readings, and both need the cost per attempt.
+#
+# Nothing here is a gate.  What makes the figures believable is the summation
+# identity the record module refuses on -- the per-attempt costs sum to the
+# run's solve-phase totals -- and that identity is printed here run by run with
+# its residual, in the shape task A58 (driver-predicate-counters) printed the
+# sweep decomposition in.
+#
+# The population is the reproduction gate's own runs: they exist at this
+# commit, they are made by the committed run path, and they are one seed each
+# -- seed 0 for most rows, seed 1 for the rest.  No row here is a campaign
+# statistic and none is quoted as one.
+
+
+def attempt_rows(campaign: Campaign, root: Path | None = None) -> list[dict[str, Any]]:
+    """One row per optimisation run of the reproduction gate, per attempt.
+
+    Reads records; runs nothing.  A run directory with no record is a row that
+    says so rather than a row silently dropped.
+    """
+    from harness import reproduction as reproduction_mod  # noqa: PLC0415
+
+    base = Path(root or (Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH))
+    rows: list[dict[str, Any]] = []
+    for run in reference_mod.reference_set(campaign):
+        if run.phase != "B":
+            continue
+        directory = (
+            base / "runs" / run.configuration / run.arm
+            / pool_mod.seed_directory(run.seed)
+        )
+        rows.append(
+            _attempt_row(
+                run.arm, run.configuration, run.seed, records_mod.read(directory)
+            )
+        )
+    rows.sort(
+        key=lambda r: (
+            r["configuration"],
+            MEASUREMENT_ARM_ORDER.index(r["arm"])
+            if r["arm"] in MEASUREMENT_ARM_ORDER
+            else len(MEASUREMENT_ARM_ORDER),
+            r["seed"],
+        )
+    )
+    return rows
+
+
+def _attempt_row(
+    arm: str, configuration: str, seed: int, record: Mapping[str, Any]
+) -> dict[str, Any]:
+    """One run's attempts, its decomposition and check 2's two constructions."""
+    attempts = record.get("attempts") or []
+    accounting = record.get("attempt_accounting") or {}
+    forensics = record.get("exit_forensics") or {}
+    total = record.get("node_calls_solve_phase")
+    # The attempts that did not produce the accepted optimum are every attempt
+    # but the last: the run's reported exit code, objective and iteration count
+    # are the last attempt's.  Where the last attempt failed too the run is a
+    # failure and this is still the share the earlier attempts cost.
+    not_accepted = [a.get("node_calls_solve_phase") for a in attempts[:-1]]
+    spent_before = (
+        sum(int(v) for v in not_accepted if v is not None) if attempts else None
+    )
+    sums = accounting.get("sums") or {}
+    return {
+        "configuration": configuration,
+        "arm": arm,
+        "seed": seed,
+        "status": record.get("status"),
+        "n_attempts": len(attempts),
+        "retried": len(attempts) > 1,
+        "stages": [a.get("stage") for a in attempts],
+        "ifail_per_attempt": [a.get("ifail") for a in attempts],
+        "epsfcn_per_attempt": [a.get("epsfcn") for a in attempts],
+        "node_calls_per_attempt": [
+            a.get("node_calls_solve_phase") for a in attempts
+        ],
+        "sweeps_per_attempt": [a.get("sweeps") for a in attempts],
+        "evaluations_per_attempt": [
+            (a.get("sweeps_per_eval") or {}).get("n_evaluations") for a in attempts
+        ],
+        "node_calls_solve_phase": total,
+        "dispatch_sweeps_solve_phase": record.get("dispatch_sweeps_solve_phase"),
+        "node_calls_not_accepted": spent_before,
+        "share_not_accepted": (
+            (spent_before / total) if (total and spent_before is not None) else None
+        ),
+        # Check 2's two constructions, side by side on one run.
+        "iterations_final_attempt": record.get("n_solver_iterations"),
+        "iterations_summed_over_attempts": forensics.get(
+            "n_solver_iterations_summed_over_attempts"
+        ),
+        "iterations_per_attempt": [a.get("n_iterations") for a in attempts],
+        "evaluations_over_all_attempts": (record.get("sweeps_per_eval") or {}).get(
+            "n_evaluations"
+        ),
+        # The identity, per run.
+        "node_calls_residual": (sums.get("node_calls_solve_phase") or {}).get(
+            "residual"
+        ),
+        "sweeps_residual": (sums.get("sweeps") or {}).get("residual"),
+        "decomposes": accounting.get("decomposes"),
+        "outside_attempts": accounting.get("outside_attempts") or {},
+        "stage_names_agree_with_position": accounting.get(
+            "stage_names_agree_with_position"
+        ),
+    }
+
+
+def attempt_measurements(
+    campaign: Campaign, root: Path | None = None
+) -> dict[str, Any]:
+    """The per-attempt block the report publishes, with its population."""
+    rows = attempt_rows(campaign, root=root)
+    finished = [r for r in rows if r["status"] == "ok"]
+    retried = [r for r in finished if r["retried"]]
+    checked = [r for r in finished if r["decomposes"] is not None]
+    broken = [r for r in checked if not r["decomposes"]]
+    return {
+        "what": (
+            "what each attempt of the optimiser's retry ladder cost, and the "
+            "two constructions of the iteration count beside it.  Counts "
+            "only; no conclusion here rests on a clock"
+        ),
+        "population": (
+            f"{len(rows)} optimisation run(s) of the reproduction gate "
+            f"({len(finished)} finished), one run per configuration and arm at "
+            f"seed 0 or seed 1 — the gate's own set.  Not a campaign "
+            f"statistic: there is one run behind every cell"
+        ),
+        "seeds": sorted({r["seed"] for r in rows}),
+        "n_runs": len(rows),
+        "n_finished": len(finished),
+        "n_retried": len(retried),
+        "which_retried": [
+            f"{r['configuration']}/{r['arm']}/seed{r['seed']:03d}" for r in retried
+        ],
+        "which_did_not_retry": [
+            f"{r['configuration']}/{r['arm']}/seed{r['seed']:03d}"
+            for r in finished
+            if not r["retried"]
+        ],
+        "summation_identity": {
+            "identity": (
+                "Σ attempts.node_calls_solve_phase == node_calls_solve_phase, "
+                "and Σ attempts.sweeps == dispatch_sweeps_solve_phase"
+            ),
+            "n_checked": len(checked),
+            "n_that_do_not_decompose": len(broken),
+            "which": [
+                f"{r['configuration']}/{r['arm']}/seed{r['seed']:03d}"
+                for r in broken
+            ],
+            "max_abs_residual_node_calls": max(
+                (abs(r["node_calls_residual"] or 0) for r in checked), default=None
+            ),
+            "max_abs_residual_sweeps": max(
+                (abs(r["sweeps_residual"] or 0) for r in checked), default=None
+            ),
+            "refused_by": (
+                "harness.records.assert_attempt_summation, which every record "
+                "of every run goes through before it is summarised; a record "
+                "whose parts do not add up is REFUSED, not rounded"
+            ),
+        },
+        "check_2_constructions": (
+            "the final attempt's iteration count (the previous revision's, "
+            "kept for comparability) and the count summed over every attempt, "
+            "failed attempts included (the acceptance statistic).  They differ "
+            "only on a retried run, which is the whole reason both are "
+            "published"
+        ),
+        "rows": rows,
+    }
+
+
+def print_attempts(block: Mapping[str, Any]) -> None:
+    """The measurement, as the report prints it."""
+    print("\n=== the retry ladder, per attempt (experiment plan §3.5; DR7)")
+    print(f"    {block['what']}")
+    print(f"    population : {block['population']}")
+    print(
+        f"    retried    : {block['n_retried']} of {block['n_finished']} "
+        f"finished run(s)"
+        + (f" — {', '.join(block['which_retried'])}" if block["which_retried"] else "")
+    )
+    print()
+    head = (
+        f"    {'configuration':<22} {'arm':<4} {'seed':>4} {'att':>4} "
+        f"{'stages (ifail)':<34} {'node calls / attempt':<26} "
+        f"{'not accepted':>13} {'share':>7}"
+    )
+    print(head)
+    print("    " + "-" * (len(head) - 4))
+    for row in block["rows"]:
+        if row["status"] != "ok":
+            print(
+                f"    {row['configuration']:<22} {row['arm']:<4} "
+                f"{row['seed']:>4} NO RECORD ({row['status']})"
+            )
+            continue
+        stages = ", ".join(
+            f"{stage} ({ifail})"
+            for stage, ifail in zip(row["stages"], row["ifail_per_attempt"])
+        )
+        per_attempt = " + ".join(_n(v) for v in row["node_calls_per_attempt"])
+        share = row["share_not_accepted"]
+        print(
+            f"    {row['configuration']:<22} {row['arm']:<4} {row['seed']:>4} "
+            f"{row['n_attempts']:>4} {stages:<34} {per_attempt:<26} "
+            f"{_n(row['node_calls_not_accepted']):>13} "
+            f"{(f'{share * 100:.2f} %' if share is not None else '—'):>7}"
+        )
+    print()
+    print("    check 2's two constructions, side by side, one run per row:")
+    print(
+        "      iterations of the final attempt (the previous revision's "
+        "construction) against iterations summed over every attempt, failed "
+        "attempts included (the acceptance statistic); the evaluation count "
+        "over all attempts beside them"
+    )
+    head2 = (
+        f"      {'configuration':<22} {'arm':<4} {'seed':>4} {'att':>4} "
+        f"{'final':>7} {'summed':>7} {'per attempt':<18} {'evaluations':>12}"
+    )
+    print(head2)
+    print("      " + "-" * (len(head2) - 6))
+    for row in block["rows"]:
+        if row["status"] != "ok":
+            continue
+        print(
+            f"      {row['configuration']:<22} {row['arm']:<4} {row['seed']:>4} "
+            f"{row['n_attempts']:>4} {_n(row['iterations_final_attempt']):>7} "
+            f"{_n(row['iterations_summed_over_attempts']):>7} "
+            f"{str(row['iterations_per_attempt']):<18} "
+            f"{_n(row['evaluations_over_all_attempts']):>12}"
+        )
+    print()
+    identity = block["summation_identity"]
+    print(f"    summation identity: {identity['identity']}")
+    print(
+        f"      {identity['n_checked']} run(s) checked, "
+        f"{identity['n_that_do_not_decompose']} that do not decompose"
+        + (f": {identity['which']}" if identity["which"] else "")
+    )
+    print(
+        f"      largest |residual|: {identity['max_abs_residual_node_calls']} "
+        f"node call(s), {identity['max_abs_residual_sweeps']} sweep(s)"
+    )
+    print(f"      {identity['refused_by']}")
+    print()
+    print("    node calls and sweeps of the solve phase falling outside every")
+    print("    attempt, per run — the premise the identity rests on:")
+    for row in block["rows"]:
+        if row["status"] != "ok":
+            continue
+        outside = row["outside_attempts"]
+        print(
+            f"      {row['configuration']:<22} {row['arm']:<4} "
+            f"{row['seed']:>4} {_n(outside.get('node_calls')):>8} node call(s), "
+            f"{_n(outside.get('sweeps')):>6} sweep(s)"
+        )
+
+
+# --------------------------------------------------------------------------
 # G8 -- the convergence predicate's trial: two rulers, one implementation
 # --------------------------------------------------------------------------
 #
@@ -3350,16 +3703,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             "output-path-measurements",
             "predicate-counters",
             "predicate-mode",
+            "attempts",
             "all",
         ),
         help="which gate to run; 'all' runs the gates that need no capture.  "
-        "'output-path-contrast', 'output-path-measurements' and "
-        "'predicate-counters' are not gates: they publish what the experiment "
-        "plan asks for by name — what the output-time loop moves in the output "
-        "files, what it costs, where the accepted state sits against the "
-        "tolerance at the declared audit position, and (section 3.5 check 5) "
-        "what each arm's convergence test cost in evaluations and components "
-        "compared, with the empty block visits counted beside them",
+        "'output-path-contrast', 'output-path-measurements', "
+        "'predicate-counters' and 'attempts' are not gates: they publish what "
+        "the experiment plan asks for by name — what the output-time loop "
+        "moves in the output files, what it costs, where the accepted state "
+        "sits against the tolerance at the declared audit position, (section "
+        "3.5 check 5) what each arm's convergence test cost in evaluations and "
+        "components compared with the empty block visits counted beside them, "
+        "and (section 3.5, retries) what each attempt of the optimiser's retry "
+        "ladder cost with check 2's two iteration constructions beside it",
     )
     parser.add_argument(
         "--capture",
@@ -3400,6 +3756,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(block, indent=2, default=str) + "\n")
         print_predicate_counters(block)
+        print(f"\n  record: {out}")
+        return 0
+
+    if args.gate == "attempts":
+        block = attempt_measurements(campaign)
+        out = records_dir / "attempts" / "measurements.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(block, indent=2, default=str) + "\n")
+        print_attempts(block)
         print(f"\n  record: {out}")
         return 0
 

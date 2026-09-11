@@ -260,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     record.update(child.harvest_counters(caller_mod, module_solve=module_solve_mod))
     record.update(child.harvest_output_path(caller_mod))
     record.update(child.harvest_predicate_counters(caller_mod))
+    attempt_stamps = child.harvest_attempt_stamps(caller_mod)
     record["first_call_models"] = call_census["first_call_models"]
     record["audit_snapshot"] = (
         child.collect_exit_snapshots(caller_mod, snapshot_state, outdir)
@@ -392,9 +393,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     record["attempts"] = records_mod.attempts_from_forensics(
         record["exit_forensics"],
-        node_calls_solve_phase=record.get("node_calls_solve_phase"),
+        costs=attempt_stamps["costs"],
     )
-    record["attempts_node_calls_available"] = False
+    record["attempts_node_calls_available"] = bool(attempt_stamps["available"])
+    record["attempt_accounting"] = records_mod.attempt_accounting(
+        record["attempts"],
+        attempt_stamps,
+        node_calls_solve_phase=record.get("node_calls_solve_phase"),
+        dispatch_sweeps_solve_phase=record.get("dispatch_sweeps_solve_phase"),
+        phase="B",
+    )
 
     if record["perturbation"] is not None and "per_variable" in record["perturbation"]:
         (outdir / "perturbation.json").write_text(
