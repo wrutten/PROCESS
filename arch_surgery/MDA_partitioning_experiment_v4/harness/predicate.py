@@ -186,13 +186,28 @@ def restore_value(record: Mapping[str, Any]):
     return record["v"]  # "r": the repr string; exact-equality comparable
 
 
-def snapshot_record(spec: ystate.YSpec, y: list) -> dict[str, Any]:
-    """The whole state, keyed by component name, exactly."""
-    return {
+def snapshot_record(
+    spec: ystate.YSpec, y: list, *, predicate_mode: str | None = None
+) -> dict[str, Any]:
+    """The whole state, keyed by component name, exactly.
+
+    ``predicate_mode`` goes into the preamble when the caller knows it: which
+    ruler the run that produced this state stopped on.  A state written by a
+    run under one ruler is not distinguishable afterwards from one written
+    under the other unless the file says so (improvement item 5a's trap (i)),
+    and the state itself carries no trace of the denominator it converged
+    against.  It is a **preamble** field only: nothing here reads it back, and
+    :func:`restore_snapshot` pairs snapshots by ``components_sha256`` as
+    before, so a snapshot written before the field existed still restores.
+    """
+    record: dict[str, Any] = {
         "components_sha256": spec.components_sha256(),
         "n_components": len(spec.keys),
-        "state": {spec.name(i): snap_value(y[i]) for i in range(len(y))},
     }
+    if predicate_mode is not None:
+        record["predicate_mode"] = predicate_mode
+    record["state"] = {spec.name(i): snap_value(y[i]) for i in range(len(y))}
+    return record
 
 
 def restore_snapshot(spec: ystate.YSpec, record: Mapping[str, Any]) -> list:
@@ -280,19 +295,13 @@ def write_entry_state(
 # --------------------------------------------------------------------------
 
 
-def cross_residual(
-    spec: ystate.YSpec, y_reference: list, y_other: list, tau: float
+def _one_cross_residual(
+    spec: ystate.YSpec, y_reference: list, y_other: list, tau: float, ruler: str
 ) -> dict[str, Any]:
-    """The scaled residual between two states, summarised.
-
-    ``max`` alone cannot tell "one straggler" from "five hundred components
-    still moving", so the count above the tolerance travels with it, and so
-    does whether anything left its category — a moved constant, a changed
-    discrete or a new NaN makes the comparison *categorically unclean*
-    regardless of how small the maximum is.
-    """
-    residual = spec.residual(y_reference, y_other)
+    """One cross-state residual, on one named ruler."""
+    residual = spec.residual(y_reference, y_other, ruler=ruler)
     return {
+        "ruler": ruler,
         "max": residual.max,
         "max_hex": float(residual.max).hex(),
         "argmax": (
@@ -303,12 +312,47 @@ def cross_residual(
         "n_discrete_mismatch": len(residual.mismatch_discrete),
         "n_constant_moved": len(residual.moved_constant),
         "n_nan_new": len(residual.nan_new),
+        "n_bound_by_the_current_value": len(residual.binding_components()),
         "categorically_clean": not (
             residual.mismatch_discrete
             or residual.moved_constant
             or residual.nan_new
         ),
     }
+
+
+def cross_residual(
+    spec: ystate.YSpec,
+    y_reference: list,
+    y_other: list,
+    tau: float,
+    *,
+    ruler: str = ystate.RULER_DEFAULT,
+) -> dict[str, Any]:
+    """The scaled residual between two states, summarised, on **both** rulers.
+
+    ``max`` alone cannot tell "one straggler" from "five hundred components
+    still moving", so the count above the tolerance travels with it, and so
+    does whether anything left its category — a moved constant, a changed
+    discrete or a new NaN makes the comparison *categorically unclean*
+    regardless of how small the maximum is.
+
+    The top-level fields are ``ruler``'s — ``frozen`` unless the caller says
+    otherwise, so an existing caller reads exactly what it read before — and
+    ``rulers`` carries the same summary computed on **each** ruler.  Both are
+    always present: the mixed ruler reads lower wherever its denominator binds,
+    by construction, so a comparison published on one ruler alone would report
+    a change of ruler as a change of agreement (improvement item 5a's trap
+    (ii)).  Computing the second costs one further pass over two states already
+    in memory; no model runs.
+    """
+    rulers = {
+        name: _one_cross_residual(spec, y_reference, y_other, tau, name)
+        for name in ystate.RULERS
+    }
+    summary = dict(rulers[ystate.assert_ruler(ruler)])
+    summary["rulers"] = rulers
+    return summary
 
 
 def component_index(spec: ystate.YSpec, name: str) -> int | None:

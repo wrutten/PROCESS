@@ -1474,7 +1474,19 @@ class Caller:
                 charge()
                 self._sweep_block(xc, nodes)
                 y = read(bound)
-                res = spec.residual(y_prev, y, subset=subset)
+                # DR5 (A59): every predicate evaluation this arrangement makes
+                # -- the flat arrangement's single block and each block loop of
+                # the partitioned one alike -- is taken on the ruler the run
+                # asked for.  There is exactly one call site, so there is
+                # exactly one place the choice can be made, and no path where a
+                # loop stops on a ruler the record does not name.  The ruler
+                # picks the denominator; it does not change which components
+                # are compared, which is why COMPONENTS_COMPARED below is the
+                # free consistency check between the two.
+                res = spec.residual(
+                    y_prev, y, subset=subset,
+                    ruler=module_solve.PREDICATE_MODE,
+                )
                 # DR4 (A58): one convergence test, of this many components.
                 PREDICATE_EVALUATIONS[0] += 1
                 COMPONENTS_COMPARED[0] += width

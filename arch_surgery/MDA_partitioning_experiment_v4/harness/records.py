@@ -16,7 +16,7 @@ other, and the omission would surface as a missing column in a table months
 later.  Here the field list is **data**, both entry points fill it, and one
 function refuses a record that does not carry what it declares.
 
-Three refusals live here, and none of them is a warning:
+Four refusals live here, and none of them is a warning:
 
 ``assert_complete``
     a finished record missing a declared field.  A summary computed over
@@ -39,6 +39,15 @@ Three refusals live here, and none of them is a warning:
     campaign run look identical afterwards, and one of them is not a
     measurement.
 
+``assert_both_rulers``
+    a finished record whose exit audit names one convergence ruler and not
+    both.  The audit is the same sweep measured with two denominators and the
+    ``mixed`` one reads lower wherever its denominator binds --- by
+    construction, not by being more accurate --- so a residual table assembled
+    from records where the pair is sometimes complete would show an accuracy
+    gain on some rows that is only a change of ruler.  Both or neither; task
+    **A59 (driver-predicate-mode)**, driver change DR5.
+
 Vocabulary, once: a **configuration** is one optimisation problem; an **arm** is
 one setting of the driver's switches; a **seed** selects which displaced
 starting point is used, and seed 0 is the undisplaced one; a **regime** says how
@@ -48,7 +57,11 @@ past termination that measures how far it still moves.  A **predicate** is the
 convergence test a loop stops on, and there are two of them in this experiment:
 the coupling-state one the flat and partitioned arrangements use, and upstream's
 own test on the objective and the constraint vector.  A record counts both,
-separately, because an arm runs exactly one of them.
+separately, because an arm runs exactly one of them.  A **ruler** is what the
+coupling-state predicate divides a step by before comparing it with the
+tolerance: ``frozen``, a scale measured once over a harvest of design points, or
+``mixed``, that scale kept as a floor under the state's current magnitude.  A
+record says which ruler its run stopped on and reports the exit audit on both.
 """
 
 from __future__ import annotations
@@ -285,6 +298,9 @@ SCHEMA: tuple[Field, ...] = (
     _f("audit_position_declared", "AB", "always", "where the plan declares it should be taken"),
     _f("audit_snapshot", "B", "always", "the driver's snapshots of the coupling state on the output path, or why there are none"),
     _f("exit_audit", "AB", "always", "the achieved accuracy: one further full sweep, uncharged"),
+    _f("exit_audit.predicate_mode", "AB", "finished", "which ruler the run's own loops stopped on"),
+    _f("exit_audit.frozen", "AB", "finished", "the audit on the measured-scale ruler"),
+    _f("exit_audit.mixed", "AB", "finished", "the audit on the scale-as-a-floor ruler; published beside the other, never alone"),
     # --- counters common to both phases -----------------------------------
     _f("node_calls_total", "AB", "always", "model executions, the whole run"),
     _f("n_prime_calls", "AB", "always", "executions of the run-constant geometry method; stamped, never pooled"),
@@ -343,6 +359,16 @@ SCHEMA: tuple[Field, ...] = (
 #: finished record missing any of these makes a summary refuse.  They are named
 #: separately from the schema because they are the ones whose absence made a
 #: whole class of failed runs vanish from a tally silently.
+#: The exit audit's two rulers.  Both are in the contract, so a finished record
+#: carrying one and not the other is **refused** rather than tallied: the mixed
+#: ruler reads lower wherever its denominator binds, by construction, and a
+#: residual table built from records where the pair is sometimes complete and
+#: sometimes not would report a change of ruler as a change of accuracy for
+#: some rows and not others (improvement item 5a's trap (ii)).  Named here
+#: rather than left to the schema because that is the trap's exact shape: not a
+#: missing field, but a *half*-present pair.
+AUDIT_RULERS: tuple[str, ...] = ("frozen", "mixed")
+
 CONTRACT: dict[str, tuple[str, ...]] = {
     "B": (
         "n_solver_iterations",
@@ -351,11 +377,13 @@ CONTRACT: dict[str, tuple[str, ...]] = {
         "exit_forensics.constraint_residual_vector",
         "exit_forensics.active_set",
         "exit_forensics.n_attempts",
+        *(f"exit_audit.{ruler}.residual_max_hex" for ruler in AUDIT_RULERS),
     ),
     "A": (
         "exit_forensics.constraint_residual_vector",
         "exit_forensics.active_set",
         "exit_forensics.n_attempts",
+        *(f"exit_audit.{ruler}.residual_max_hex" for ruler in AUDIT_RULERS),
     ),
 }
 
@@ -421,6 +449,7 @@ def assert_complete(record: Mapping[str, Any], *, where: str = "") -> None:
     there" is not.
     """
     assert_run_kind(record)
+    assert_both_rulers(record, where=where)
     absent = missing_fields(record)
     if absent:
         raise RecordError(
@@ -428,6 +457,44 @@ def assert_complete(record: Mapping[str, Any], *, where: str = "") -> None:
             f"{len(absent)} declared field(s) missing — {', '.join(absent)}.  "
             f"A summary computed over records missing different fields is a "
             f"summary over a population nobody can state."
+        )
+
+
+def assert_both_rulers(record: Mapping[str, Any], *, where: str = "") -> None:
+    """Refuse a finished record whose exit audit names one ruler and not both.
+
+    The two rulers are the same sweep measured with two denominators, and the
+    mixed one reads **lower** wherever its denominator binds --- by
+    construction, not by being more accurate.  A residual table assembled from
+    records where the pair is sometimes complete and sometimes not would
+    therefore show an accuracy gain on some rows that is a change of ruler
+    (improvement item 5a's trap (ii)).  So the pair is all-or-nothing on every
+    finished record, and half of it is a refusal with its own sentence rather
+    than one missing name in a list of forty.
+
+    A record that did not finish carries no audit at all, and that is not this
+    check's business: :func:`assert_complete` says which fields a finished
+    record owes.
+    """
+    if record.get("status") != "ok":
+        return
+    audit = record.get("exit_audit") or {}
+    if audit.get("skipped") or audit.get("refused") or audit.get("error"):
+        return
+    present = [r for r in AUDIT_RULERS if isinstance(audit.get(r), Mapping)]
+    if present and len(present) != len(AUDIT_RULERS):
+        raise RecordError(
+            f"the exit audit{' of ' + where if where else ''} carries "
+            f"{present} and not {list(AUDIT_RULERS)}.  Both rulers or neither: "
+            f"the mixed ruler reads lower wherever its denominator binds, so a "
+            f"table built from records with one column here and two there "
+            f"reports a change of ruler as a change of accuracy."
+        )
+    if not present:
+        raise RecordError(
+            f"the exit audit{' of ' + where if where else ''} of a finished "
+            f"run names no ruler at all.  An achieved-accuracy figure whose "
+            f"denominator is not recorded cannot be compared with one whose is."
         )
 
 

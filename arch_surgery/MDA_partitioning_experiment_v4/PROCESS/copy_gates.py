@@ -228,6 +228,27 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             ),
             task="A56 (driver-renames)",
         ),
+        PermittedEdit(
+            kind="switch added",
+            name="PROCESS_ARCH_PREDICATE",
+            description=(
+                "which denominator the coupling-state convergence test scales "
+                "a step by becomes a driver choice: 'frozen', the measured "
+                "scale alone and every earlier revision's ruler, or 'mixed', "
+                "the conventional scaled step with that scale kept as a floor "
+                "under the current magnitude.  Resolved once at import, "
+                "guarded against a misspelling with a typed refusal, read "
+                "back as PREDICATE_MODE, stamped into the loaded spec's "
+                "provenance beside the tolerance -- the two together are what "
+                "'converged' means -- and checked against the list the "
+                "coupling-state module itself implements the first time that "
+                "module is loaded.  Unset is 'frozen', which is upstream of "
+                "this change line for line"
+            ),
+            task="A59 (driver-predicate-mode)",
+            was="one ruler, not selectable and not named in any record",
+            now="PROCESS_ARCH_PREDICATE=frozen | mixed (unset for frozen)",
+        ),
     ],
     "process/core/solver/subsolve.py": [
         PermittedEdit(
@@ -440,6 +461,24 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A58 (driver-predicate-counters)",
             was="_SWEEP_CALLS",
             now="DISPATCH_SWEEPS",
+        ),
+        PermittedEdit(
+            kind="switch added",
+            name="PROCESS_ARCH_PREDICATE, at the predicate's call site",
+            description=(
+                "the one place this file evaluates the coupling-state "
+                "convergence test passes the ruler the run asked for.  The "
+                "call site serves both arrangements -- the flat one's single "
+                "block and each block loop of the partitioned one -- so there "
+                "is exactly one place the choice is made and no path where a "
+                "loop can stop on a ruler the record does not name.  The test "
+                "itself is not reimplemented here: it lives in the harness's "
+                "coupling-state module, which is the one implementation this "
+                "revision of the experiment has"
+            ),
+            task="A59 (driver-predicate-mode)",
+            was="spec.residual(y_prev, y, subset=subset)",
+            now="the same call, with ruler=module_solve.PREDICATE_MODE",
         ),
     ],
     "process/core/_idf_probe_modules.py": [

@@ -229,6 +229,15 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     # ------------------------------------------------------------------
     spec, spec_provenance = module_solve_mod.load_spec(str(args.coupling_state))
     record["coupling_state_provenance"] = spec_provenance
+    # Gate G8's detector, and a no-op with its variable unset: it watches every
+    # predicate evaluation on both rulers so the gate does not have to infer
+    # "no decisive pass" from "the two runs agree", which is the thing the gate
+    # is checking.  It returns the run's own residual unchanged; the driver
+    # loads the same cached spec object this call returned, which is why
+    # installing it here reaches every evaluation the run makes.
+    ruler_observer = child.install_ruler_observer(
+        module_solve_mod, spec, outdir, run_kind=args.run_kind
+    )
     record["spec_keys_owned_by_x"] = _keys_owned_by_x(numerics, spec, n)
 
     record["entry_state"] = None
@@ -268,7 +277,19 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     # exists: what the cross-arm pairing check compares bit for bit.
     y_entry = spec.read(spec.bind(data))
     (outdir / "y_entry.json").write_text(
-        json.dumps(predicate_mod.snapshot_record(spec, y_entry))
+        json.dumps(
+            predicate_mod.snapshot_record(
+                spec,
+                y_entry,
+                # The preamble names the ruler this run's loops will stop on.
+                # An entry state is compared across arms bit for bit, and a
+                # state carried between two runs on different rulers has to say
+                # so on the file rather than in whoever's memory copied it.
+                predicate_mode=getattr(
+                    module_solve_mod, "PREDICATE_MODE", "frozen"
+                ),
+            )
+        )
     )
     record["entry_state_recorded_to"] = "y_entry.json"
 
@@ -423,6 +444,10 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     record["attempts_node_calls_available"] = False
 
     record["completeness"] = _completeness(record)
+    # The observation goes to its own file, never into the record: the record
+    # is what the switch-neutrality gate compares value for value, and a
+    # gate-only instrument's output has no place in it.
+    child.write_ruler_observation(ruler_observer, outdir)
     child.write_record(outdir, record)
     child.print_brief(
         record,

@@ -126,12 +126,12 @@ harness and in the driver both.*
 | deferral `per_run` | `PROCESS_ARCH_DEFER_PER_RUN` | a file | yes | `…_POST_SOLVE` |
 | burn-time owner | `PROCESS_ARCH_BURN_TIME_OWNER` | `loop` (the default), `optimiser`, `constant:<hex float>` | yes | `…_LIFT`, `…_PIN_BURN_TIME` |
 | output-time loop | `PROCESS_ARCH_OUTPUT_LOOP` | `upstream` (the default), `none` | yes, in the optimisation phase | — |
-| predicate mode | *not implemented* → `PROCESS_ARCH_PREDICATE` | `mixed` | only for the trial | — |
+| predicate mode | `PROCESS_ARCH_PREDICATE` | `frozen` (the default), `mixed` | only for the trial | — |
 | pass trace | `PROCESS_ARCH_PASS_TRACE` | a file | never; cleared | — |
 | pass trace detail | `PROCESS_ARCH_PASS_TRACE_FULL_FROM` | a number | never; cleared | — |
 
-**Four of those rows are worth a sentence: a switch disappeared behind three of them, and one
-of them is where the experiment's own intervention shows up in the driver.**
+**Five of those rows are worth a sentence: a switch disappeared behind three of them, one is where
+the experiment's own intervention shows up in the driver, and one is a deliberate trial.**
 
 *The output path is a choice.* Upstream writes its output files through a **second** loop. Having
 accepted a design, it evaluates the whole model set again, writes an output file to a scratch
@@ -158,6 +158,32 @@ both phases — the flat loop and each block loop alike. A second, "inner" one e
 used to be compared at matched *settings*; they are compared at matched *achieved* accuracy, which
 the exit audit records per run, so there is nothing for a second number to do. Setting
 `PROCESS_ARCH_INNER_TAU` raises.
+
+*The convergence test's ruler is a choice, and the choice is on trial.* The test asks whether the
+largest **scaled step** of the coupling state is below the tolerance, and what it divides that step
+by is called the **ruler**. Under `frozen` it divides by a scale measured once, over a harvest of
+design points, and frozen in the committed artifact: `max|Δy| / s`. Under `mixed` it keeps that
+measured scale as a **floor** and divides by the state's current magnitude wherever that is larger:
+`max|Δy| / max(|y|, s)`. Two things follow from the definition rather than from measurement:
+wherever the current magnitude is at or below the scale the two are **bit-identical**, and `mixed`
+is **never tighter**, so no count of components still moving can go up.
+
+The second ruler exists because of a measured case, not a preference. A cost figure reaching
+6.6 × 10²¹ at a design point with negative net electric power, against a harvested scale of 1 251,
+makes the frozen test there about 10¹⁸ times tighter than it reads, and the loop iterates that point
+until the state stops changing in its last bit. Upstream PROCESS's own test, being relative to the
+current value, is *looser* than ours at that point. `mixed` is the smallest change that removes the
+mechanism while keeping the measured scale as a floor, so a quantity that is genuinely small is
+still tested absolutely rather than against its own noise.
+
+`frozen` is the default and the campaign's setting, so every earlier record reproduces; adoption is
+a later decision made by the experiment plan's own rule, on the trial's numbers, and not by whoever
+implemented the switch. Two consequences a reader should know. **The exit audit is published on
+both rulers on every run, always** — the mixed one reads *lower* wherever its denominator binds, by
+construction, so a table showing one column alone would report a change of ruler as a gain in
+accuracy. And **which ruler a run stopped on is stamped** in the record and in the preamble of every
+file a run writes, because a run under one ruler is otherwise indistinguishable from a run under the
+other afterwards.
 
 *One switch says who owns the burn time.* Taking the burn time out of the model and naming what
 holds it instead used to be two settings, and they could disagree: "a constant owns it, but the
@@ -357,6 +383,14 @@ $PY experiment_runner.py --run --arm A0 --configuration st_regression --seed 0
 
 # gate GR: does the rewritten harness reproduce the previous revision's numbers?
 $PY experiment_runner.py --gate reproduction --lifted-from <dir with the derived input files>
+
+# the driver gates, each in two steps: make the runs, then compare them
+$PY -m harness.gates g0prime                      # the physics is still frozen
+$PY -m harness.gates switch-neutrality --capture before   # at the commit before the change
+$PY -m harness.gates switch-neutrality --capture after    # at the commit after it
+$PY -m harness.gates switch-neutrality                    # compare, with teeth
+$PY -m harness.gates predicate-mode --capture runs # the convergence ruler's trial
+$PY -m harness.gates predicate-mode                # compare, with teeth
 ```
 
 A single run writes its record, its exit state, its displacement, its audit residual vector and
@@ -481,7 +515,7 @@ measurement. This project has published a zero over a population quietly smaller
 named, and has once had a check that returned "pass" over an empty set, which is why every count
 below carries the number of things actually compared.
 
-`harness/selfcheck.py` runs five checks, each with its teeth, in about half a minute, and starts no
+`harness/selfcheck.py` runs six checks, each with its teeth, in about half a minute, and starts no
 PROCESS run.
 
 *Caption: one row per check. "Compares" is the population; "teeth" are the deliberate breaks it is
@@ -493,7 +527,8 @@ shown to catch.*
 | **rungs** | the plan's matrix regenerates cell for cell from the arm records; the difference between two arms equals the difference the plan declares for that step; no removed arm is present | a wrong expected difference; a wrong cell in the transcribed matrix; an arm compared with itself |
 | **capability** | the tree resolves every switch each arm asks for, exactly as asked; an arm asking for something no tree implements is refused before anything runs | a switch name no tree defines; a switch the environment does not carry claimed as resolved; a retired name present in the environment |
 | **provenance** | a modified tracked file and an untracked file are recorded separately, and only the first marks the tree dirty | each kind of change, one at a time, in a throwaway repository; and the tree asserted by a prefix instead of exactly |
-| **data** | every committed file in `data/` is byte-identical to its source at the recorded commit and the file set matches exactly; `ystate.py` differs from its own source only by the recorded heritage paragraph; the counts `config.py` declares are the ones the files carry | one byte changed; a file missing; a file the record does not name; and a changed file whose recorded hash was updated to match it — which passes a record-only check and must still fail |
+| **data** | every committed file in `data/` is byte-identical to its source at the recorded commit and the file set matches exactly; `ystate.py`'s whole diff against its own source is exactly the hunks the record holds and its post-edit hash is the recorded one; the counts `config.py` declares are the ones the files carry | one byte changed; a file missing; a file the record does not name; a changed file whose recorded hash was updated to match it — which passes a record-only check and must still fail; and the same two on `ystate.py` itself |
+| **run path** | a finished record carries every field it declares, both convergence rulers included; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; an exit audit carrying one ruler and not both; a record that does not say what kind of run made it; per-attempt costs that do not sum to the run total; an allowance covering a switch the tree has |
 
 Two of these deserve their reason stated.
 
@@ -504,6 +539,17 @@ numbers would be partly the harness. The expected settings are transcribed into 
 rather than imported, because every check the experiment runs is implemented inside this package;
 `--crosscheck-previous` then *executes* the previous revision's own two composition functions in a
 subprocess and compares, so the transcription is measured rather than trusted.
+
+**Why the predicate module is allowed to differ from its source at all, and what still refuses.**
+`harness/ystate.py` was moved whole out of the repository's research tree, and for a while the
+check on it could be the strongest one available: remove the one paragraph it had gained and the
+rest was byte-identical to the source. The approved driver change that gave the convergence test a
+second ruler is *in that module*, so that reconstruction no longer exists. The check was re-based
+rather than dropped, on the model the copied PROCESS tree already uses: an edit is legal because it
+is **recorded and reviewable**, not because it is absent. The record holds every hunk of the diff
+and the post-edit hash, and each recorded edit says what it is, what it does and which task made
+it. An edit nobody recorded still fails — by the hash if the hunks were left stale, and by the
+hunks if the hash was updated to match — and both of those are teeth.
 
 **Why the dirty flag is split.** A run stamped "dirty" because a draft file was sitting beside the
 runner tells a reader nothing, and a whole set of records was stamped that way once while the
@@ -550,7 +596,11 @@ A record of one run carries, at minimum:
   the solve phase, how many components each of those tests walked, the schedule's visits to every
   block and how many of those executed nothing (§4.1);
 - **what it achieved**: the normalised objective, the optimiser's exit code, and an audit of how
-  far the coupling state still was from converged, taken at the same fixed point in every arm;
+  far the coupling state still was from converged, taken at the same fixed point in every arm —
+  **on both convergence rulers, always**, because the one that keeps the measured scale as a floor
+  reads lower wherever that floor binds and a single column would read as accuracy rather than as
+  a change of ruler. Which ruler the run's own loops stopped on is stamped beside them, and in the
+  preamble of every file the run writes;
 - **how it ended**: one of a small set of outcomes — finished, crashed, refused, did not converge,
   hit upstream's own pass cap, infeasible at the audit, or a machinery failure. Upstream's loop
   raising after ten passes is a *finding about the shipped code*, not a broken run, and has its

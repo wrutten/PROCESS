@@ -34,6 +34,7 @@ what the probe exists to notice.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import shutil
 import subprocess
@@ -1077,11 +1078,22 @@ def check_data(campaign: Campaign) -> Check:
     byte-identical to it.  Two comparisons, not one: the file's sha256 against
     the one the record carries, **and** the record's sha256 against the source
     read back from the commit -- so regenerating the record cannot be the way a
-    changed file becomes blessed.  The moved predicate module
-    ``harness/ystate.py`` is checked the same way, except that it is allowed to
-    differ from its source by exactly the heritage paragraph the record holds
-    as an expected hunk: the check removes that paragraph again and compares
-    the remainder byte for byte.
+    changed file becomes blessed.
+
+    The moved predicate module ``harness/ystate.py`` is checked on the criterion
+    the copied driver carries: its whole diff against its source at the recorded
+    commit must be exactly the hunks the record holds, **and** its post-edit
+    sha256 must be the recorded one.  Both directions are exercised below --- an
+    edit with stale hunks is caught by the digest, an edit whose digest was
+    updated to match is caught by the hunks.  Where the recorded hunks are a
+    *pure addition* the older and stronger claim still applies and is still
+    required: remove them again and the remainder is byte-identical to the
+    source.  That was the whole of the criterion until task A59
+    (driver-predicate-mode) implemented driver change DR5 in this module; the
+    re-basing, and why the reconstruction test cannot apply to a module that is
+    changed rather than only added to, is recorded in
+    ``harness/data_provenance.py``'s docstring and in the record itself
+    (``module.criterion_rebased_by``).
 
     The *campaign* argument selects the tree the rest of the self-check runs
     against and does not apply here: ``harness/data/`` is the experiment's own
@@ -1095,8 +1107,8 @@ def check_data(campaign: Campaign) -> Check:
         name="data",
         binds="every committed file the experiment reads is byte-identical to "
         "its source at the recorded commit, the file set matches exactly, and "
-        "the moved predicate module differs from its source only by the "
-        "recorded heritage paragraph",
+        "the predicate module differs from its source by exactly the recorded "
+        "hunks and carries the recorded post-edit digest",
         population=(
             f"{len(declared)} committed file(s) in harness/data/ + the moved "
             f"predicate module = {len(declared) + 1} comparisons; and "
@@ -1170,6 +1182,46 @@ def check_data(campaign: Campaign) -> Check:
                 )
                 what += ", and the record's sha256 updated to match it"
             broken = data_mod.verify(staged_prov, staged, campaign=None)
+            check.tooth(name, not broken.passed, what)
+
+    # --- the predicate module's own two teeth ------------------------------
+    #
+    # The module is allowed to differ from its source by the recorded hunks, so
+    # both halves of that permission have to be shown biting: an edit nobody
+    # recorded, and an edit whose recorded digest was updated to match it.  The
+    # second is the one that matters after A59 re-based the criterion --- it is
+    # exactly the move that would make an unrecorded change look blessed --- and
+    # it is caught by the hunks, which the digest cannot be updated to satisfy.
+    module_teeth: list[tuple[str, bool]] = [
+        ("an unrecorded edit to the predicate module", False),
+        (
+            "an edited predicate module whose recorded sha256 was updated to "
+            "match",
+            True,
+        ),
+    ]
+    for name, bless in module_teeth:
+        with tempfile.TemporaryDirectory() as td:
+            staged_module = Path(td) / "ystate.py"
+            raw = bytearray(data_mod.YSTATE.read_bytes())
+            # A comment character deep inside the file: a one-byte change that
+            # cannot alter what the module computes, so what the tooth proves
+            # is that the *check* is sensitive, not that the edit was harmful.
+            raw[3] = raw[3] ^ 0x20 if raw[3] != 0x20 else 0x09
+            staged_module.write_bytes(bytes(raw))
+            staged_prov = json.loads(json.dumps(prov))
+            what = "one byte of harness/ystate.py changed"
+            if bless:
+                staged_prov["module"]["sha256_in_copy"] = data_mod.sha256(
+                    staged_module.read_bytes()
+                )
+                what += ", and the record's sha256 updated to match it"
+            broken = data_mod.verify(
+                staged_prov,
+                data_mod.DATA_DIR,
+                ystate_path=staged_module,
+                campaign=None,
+            )
             check.tooth(name, not broken.passed, what)
     return check
 
@@ -1336,7 +1388,7 @@ def check_run_path(campaign: Campaign) -> Check:
         "refused rather than made",
         population=(
             "2 phases x the declared field list; 2 displacement streams; "
-            "3 refusals"
+            "4 refusals"
         ),
     )
 
@@ -1362,6 +1414,21 @@ def check_run_path(campaign: Campaign) -> Check:
         caught,
         f"a finished record without node_calls_solve_phase must be refused, "
         f"not summarised over ({message})",
+    )
+
+    # Half of the audit's ruler pair, which is what a table would read as an
+    # accuracy gain rather than a change of ruler.
+    half = json.loads(json.dumps(complete))
+    half["exit_audit"].pop(records_mod.AUDIT_RULERS[1])
+    caught, message = _must_refuse_here(
+        lambda: records_mod.assert_complete(half, where="a tooth")
+    )
+    check.tooth(
+        "an exit audit carrying one convergence ruler and not both",
+        caught,
+        f"the mixed ruler reads lower wherever its denominator binds, so a "
+        f"residual table built from records with one column here and two "
+        f"there reports a change of ruler as a change of accuracy ({message})",
     )
 
     unlabelled = json.loads(json.dumps(complete))
@@ -1484,38 +1551,62 @@ def check_run_path(campaign: Campaign) -> Check:
         f"prevents ({message})",
     )
 
-    # The two allowance teeth.  Every switch the *matrix* composes is now
-    # implemented, so the thing that has to be refused is asked for by the
-    # convergence-predicate trial instead: it composes a switch whose driver
-    # change has not landed.  The teeth follow the pending switch rather than a
-    # particular arm, so they keep biting as each driver change lands and stop
-    # only when nothing is pending at all -- which they say.
+    # The two allowance teeth, **re-pointed** (task A59 (driver-predicate-mode)).
+    #
+    # The allowance is the one way a run may happen without a switch its arm
+    # declares, and it exists for a switch no tree implements yet.  Both of its
+    # refusals have to be shown biting.  Until DR5 landed the teeth could bite
+    # on a real pending switch -- the predicate trial composed one whose driver
+    # change had not been made -- and A57's report predicted that they would go
+    # quiet the moment it did.  It has: every switch this harness can compose is
+    # now implemented, and `switches.REGISTRY` has no entry left with no driver
+    # name.
+    #
+    # Going quiet is the wrong answer.  A mechanism whose refusals are never
+    # exercised is an assertion, not a measurement (protocol section 12), and
+    # the mechanism is still live -- the next driver change to be approved and
+    # not yet made will use it.  So the teeth are re-pointed onto a **doctored
+    # registry**: for the duration of the two checks, the predicate-mode switch
+    # is put back the way it stood before DR5 landed (its driver name removed),
+    # which is exactly the state the allowance exists for.  The doctoring is the
+    # perturbation, it is stated in the tooth's evidence, it is confined to
+    # these two checks, and it is undone in a finally.  Nothing outside them
+    # sees it: `environment_for` refuses before any subprocess starts.
+    #
+    # The alternative -- retiring the teeth and noting that nothing is pending
+    # -- was rejected: it would leave `pool.environment_for`'s two refusals
+    # untested for as long as the registry happens to be complete, and they
+    # would be found broken by the task that next needed them.
     pending_mode = next(
-        (
-            mode
-            for mode in campaign.predicate_modes
-            if sw.unimplemented(
-                arms_mod.ARMS["B0"].terms(
-                    config, pin_hex=_PIN_HEX, campaign=campaign,
-                    predicate_mode=mode,
-                )
-            )
-        ),
-        None,
+        (m for m in campaign.predicate_modes if m != campaign.predicate_mode_default),
+        "mixed",
     )
-    if pending_mode is None:
-        check.note(
-            "every switch this harness can compose — the matrix's and the "
-            "predicate trial's alike — is implemented by the tree under test, "
-            "so the two allowance teeth have nothing to bite on"
-        )
-    else:
+    real_switch = sw.REGISTRY["predicate_mode"]
+    check.note(
+        f"every switch this harness can compose — the matrix's and the "
+        f"predicate trial's alike — is implemented by the tree under test "
+        f"(0 registry entries with no driver name), so the two allowance "
+        f"teeth bite on a registry doctored back to the state before "
+        f"{real_switch.driver_name} landed rather than on a live gap"
+    )
+    sw.REGISTRY["predicate_mode"] = dataclasses.replace(
+        real_switch,
+        driver_name=None,
+        pending_change="a driver change that has not been made (doctored here)",
+    )
+    try:
         pending_terms = sw.unimplemented(
             arms_mod.ARMS["B0"].terms(
                 config, pin_hex=_PIN_HEX, campaign=campaign,
                 predicate_mode=pending_mode,
             )
         )
+        if not pending_terms:
+            check.fail(
+                "the doctored registry did not make the predicate mode look "
+                "unimplemented, so the two allowance teeth would pass over an "
+                "empty perturbation"
+            )
         no_allowance = pool_mod.Job(
             phase="B",
             arm="B0",
@@ -1532,10 +1623,12 @@ def check_run_path(campaign: Campaign) -> Check:
         check.tooth(
             "a run asking for a switch the tree does not implement",
             caught,
-            f"B0 under predicate mode {pending_mode!r} declares "
-            f"{list(pending_terms)}, which no tree implements; composing "
-            f"without it would be a successful run of a different arm under "
-            f"this arm's name ({message})",
+            f"with the registry doctored back to before "
+            f"{real_switch.driver_name} landed, B0 under predicate mode "
+            f"{pending_mode!r} declares {list(pending_terms)}, which that "
+            f"registry says no tree implements; composing without it would be "
+            f"a successful run of a different arm under this arm's name "
+            f"({message})",
         )
         over_allowed = pool_mod.Job(
             phase="B",
@@ -1557,6 +1650,42 @@ def check_run_path(campaign: Campaign) -> Check:
             f"an allowance that covers a switch the tree has is an allowance "
             f"nobody checked ({message})",
         )
+    finally:
+        sw.REGISTRY["predicate_mode"] = real_switch
+
+    # And the live state, checked rather than assumed: with the real registry
+    # back, the arm that asks for the trial's ruler composes it and needs no
+    # allowance at all.  This is the half the doctored teeth cannot say.
+    live = pool_mod.Job(
+        phase="B",
+        arm="B0",
+        config=config,
+        seed=0,
+        outdir=Path(campaign.runs_dir) / "_never",
+        pin_hex=_PIN_HEX,
+        run_kind="smoke",
+        predicate_mode=pending_mode,
+    )
+    try:
+        live_env, _asked = pool_mod.environment_for(live, campaign)
+    except Exception as exc:  # noqa: BLE001 - reported as a failure
+        check.fail(
+            f"B0 under predicate mode {pending_mode!r} no longer composes: "
+            f"{type(exc).__name__}: {exc}"
+        )
+    else:
+        got = live_env.get(real_switch.driver_name)
+        if got != pending_mode:
+            check.fail(
+                f"B0 under predicate mode {pending_mode!r} composed "
+                f"{real_switch.driver_name}={got!r}"
+            )
+        else:
+            check.note(
+                f"B0 under predicate mode {pending_mode!r} composes "
+                f"{real_switch.driver_name}={pending_mode} and needs no "
+                f"allowance — the capability probe resolves it"
+            )
 
     # --- the reproduction gate's overrides, and what refuses one ----------
     #

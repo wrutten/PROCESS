@@ -89,6 +89,7 @@ _PREDICATE_COUNT = "DR4 counters: how often a convergence test was evaluated in 
 _BLOCK_VISITS = "DR4 counters: the block schedule's visits to each block, and the visits that executed no node (issue I-20a: counted and disclaimed, never repaired)"
 _SWEEP_COUNT = "DISPATCH_SWEEPS: the run's count of sweeps of the dispatch body, under a public name (was _SWEEP_CALLS)"
 _READS_BY_NODE = "the census instrument reports each node's read set by name, beside the write set it already reported"
+_PREDICATE_RULER = "switch PROCESS_ARCH_PREDICATE: which denominator the coupling-state convergence test scales a step by -- the measured scale alone, or that scale as a floor under the current magnitude"
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
@@ -200,6 +201,15 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/caller.py", "DISPATCH_SWEEPS", _SWEEP_COUNT),
     # --- A58: the census instrument's report (A51's handover) ------------
     Annotation("process/core/_idf_probe_modules.py", "reads_by_node", _READS_BY_NODE),
+    # --- A59: the predicate's ruler --------------------------------------
+    Annotation("process/core/solver/module_solve.py", "PROCESS_ARCH_PREDICATE", _PREDICATE_RULER),
+    Annotation("process/core/solver/module_solve.py", "PREDICATE_MODE", _PREDICATE_RULER),
+    Annotation("process/core/solver/module_solve.py", "ruler", _PREDICATE_RULER),
+    Annotation("process/core/solver/module_solve.py", "RULERS", _PREDICATE_RULER),
+    Annotation("process/core/solver/module_solve.py", "denominator", _PREDICATE_RULER),
+    Annotation("process/core/caller.py", "PREDICATE_MODE", _PREDICATE_RULER),
+    Annotation("process/core/caller.py", "ruler", _PREDICATE_RULER),
+    Annotation("process/core/caller.py", "DR5", _PREDICATE_RULER),
 ]
 
 #: One paragraph per changed driver file, for a reader who will not read the
@@ -295,7 +305,17 @@ SUMMARIES: dict[str, str] = {
         "leading underscore in the same change: it existed only to be "
         "differenced across one evaluation, and the per-sweep-overhead "
         "question needs the run total, which cannot be read from a name a "
-        "harness has to reach into the module's privates for."
+        "harness has to reach into the module's privates for.  One further "
+        "line carries the convergence test's ruler to the one place this file "
+        "evaluates it.  That call site serves both arrangements -- the flat "
+        "one's single block over every in-loop node, and each block loop of "
+        "the partitioned one -- so there is exactly one place the choice is "
+        "made and no path on which a loop can stop on a ruler the run record "
+        "does not name.  Which ruler it is changes the denominator and nothing "
+        "else: the components each evaluation walks are fixed by the block's "
+        "write set, so the components-compared counter immediately below is "
+        "the same under both, which is the free consistency check between "
+        "them."
     ),
     "process/core/_idf_probe_modules.py": (
         "One line.  The census instrument attributes every data-structure read "
@@ -375,7 +395,31 @@ SUMMARIES: dict[str, str] = {
         "tolerance for every converger in every arm, and comparisons are made "
         "at matched achieved accuracy, which the exit audit records per run, "
         "rather than at matched settings.  Every refusal in the file raises "
-        "the typed refusal."
+        "the typed refusal.  Last, the convergence test's *ruler* becomes a "
+        "choice.  The test scales a step by a measured scale -- the median "
+        "magnitude of that quantity over a harvest of design points -- and "
+        "asks whether the largest scaled step is below the tolerance.  Where a "
+        "quantity's current value is far above its harvested scale that test "
+        "is far tighter than it reads: the recorded case is a cost figure "
+        "reaching 6.6e21 against a scale of 1 251, which makes the test there "
+        "about 1e18 times tighter than intended and iterates the point until "
+        "the state stops changing in its last bit.  PROCESS_ARCH_PREDICATE "
+        "selects between that ruler, 'frozen', and the conventional one, "
+        "'mixed', which keeps the measured scale as a *floor* and divides by "
+        "the current magnitude where that is larger.  The two are "
+        "bit-identical wherever the current magnitude is at or below the "
+        "scale, and the conventional one is never tighter, so no count of "
+        "components still moving can go up.  Unset is 'frozen', line for line "
+        "what the file did before.  The setting is resolved once at import, "
+        "refused with a typed refusal if it is misspelt, read back as "
+        "PREDICATE_MODE, recorded in the loaded spec's provenance beside the "
+        "tolerance -- the two together are what 'converged' means -- and "
+        "checked against the list of rulers the coupling-state module itself "
+        "implements the first time that module is loaded, so the guard and the "
+        "predicate cannot drift apart.  The test itself is not written here "
+        "and is not duplicated: this revision of the experiment has exactly "
+        "one implementation of it, in the harness module this file loads by "
+        "path."
     ),
 }
 

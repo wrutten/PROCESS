@@ -71,15 +71,81 @@ absolute one has to be chosen.  :data:`SCALE_FLOOR` is that choice; a smaller
 floor makes those components harder to converge and a larger one makes them
 easier, and A26's report measures what a decade in each direction does.
 
+The two rulers: what the scaled step is divided by
+--------------------------------------------------
+
+The test above is a **max-norm on the scaled step**, and everything about it is
+settled except one thing: what the step is divided by.  There are two answers,
+both implemented here, chosen by the ``ruler`` argument of
+:meth:`YSpec.residual` and named in every artifact a run writes:
+
+============  ===============================  ============================
+ruler         a continuous component passes    denominator
+============  ===============================  ============================
+``frozen``    ``max|dy_i| / s_i < tau``        the measured scale alone
+``mixed``     ``max|dy_i| / max(|y_i|, s_i)``  the measured scale as a
+                                               *floor*, under the current
+                                               magnitude
+============  ===============================  ============================
+
+``frozen`` is what every earlier revision of this experiment measured under, and
+it is the default here so that those records keep reproducing bit for bit.
+``mixed`` is the conventional form --- Dennis & Schnabel's scaled step test,
+which MINPACK's ``diag``, KINSOL's scaling vectors and OpenMDAO's output ``ref``
+all reduce to.  ``|y_i|`` is read from the **current** value, the post-sweep
+iterate ``cur``, not from the previous one: the test asks how large the step is
+*relative to where the state now is*, which is what a reader means by "converged
+to six digits", and taking it from the previous iterate would scale a step by a
+magnitude the state has already left.  For an array component it is
+``max|elements|`` over the finite entries --- exactly what :func:`_char_mag`
+measures the scale by, so only the denominator differs and not the way a
+magnitude is taken.
+
+Three properties hold **by construction**, and they are what make the pair cheap
+to interpret rather than a second predicate to validate:
+
+* wherever ``|y_i| <= s_i`` the two are **bit-identical**: the denominator is
+  the same float and the division is the same division;
+* ``mixed`` is **never tighter** than ``frozen``, because its denominator is
+  never smaller, so no count of components above ``tau`` can go up;
+* discrete components, moved constants, a new NaN, a changed non-finite pattern
+  and a component no model has written yet (scored ``inf``) behave
+  **identically** under both --- the ruler touches the continuous scaling and
+  nothing else.
+
+Why the second ruler exists at all is a measured case, not a preference.  Issue
+**I-12**: ``costs.coe`` reaches 6.6e21 at a design point with negative net
+electric power, against a harvested scale of 1 251, which makes the ``frozen``
+test there roughly 1e18 times tighter than intended and iterates the point to
+bit-identity.  Upstream PROCESS's own test, being relative to the current value,
+is *looser* than ours at that point by 5.3e18.  ``mixed`` is the smallest change
+that removes the mechanism while keeping the measured scale as a floor, so a
+quantity that is genuinely small is still tested absolutely rather than
+relatively to its own noise.
+
+:class:`Residual` reports, per component, which term bound the denominator and
+what ``|y_i| / s_i`` was there, so the set of components on which the two rulers
+can differ is readable from the residual itself rather than inferred.
+
 Heritage
 --------
 
 Moved whole into the experiment's own harness from
 ``arch_surgery/fixedpoint/ystate.py`` at commit ``30198919``, by task A48
-(harness-data).  The body is byte-identical to that source: this paragraph is
-the only difference, it is recorded as an expected hunk in
-``harness/data/PROVENANCE.json``, and the harness self-check removes it again
-and compares the remainder byte for byte.
+(harness-data), which recorded the one paragraph it added as an expected hunk in
+``harness/data/PROVENANCE.json``.
+
+Task **A59 (driver-predicate-mode)** added the ``mixed`` ruler above --- driver
+change DR5 of the harness implementation plan, and the trial improvement item 5a
+pre-declared.  This file is therefore no longer byte-identical to its source
+with one paragraph removed, and the identity criterion is **re-based** rather
+than dropped: ``harness/data/PROVENANCE.json`` now records **every** hunk of the
+diff against the source commit, the way ``PROCESS/PROVENANCE.json`` records the
+copied driver's permitted edits, and the self-check's data check still refuses
+an edit that is not among them.  What changed is the baseline the check compares
+against, not whether it checks.  There is still exactly one implementation of the
+predicate in this revision of the experiment (decision D14(c)): the copied driver
+loads *this* module, and the harness imports it.
 
 Why it was moved rather than imported: decision **D20** gives this revision of
 the experiment its own copy of the PROCESS package, and that copy must not
@@ -110,6 +176,44 @@ NONFINITE = "nonfinite"
 #: admissible justification is that the quantity accumulates within a sweep and
 #: therefore has no fixed point.  See :data:`ACCUMULATORS`.
 EXCLUDED_ACCUMULATOR = "excluded_accumulator"
+
+#: The predicate's **frozen** ruler: a continuous component's scaled step is
+#: ``max|dy_i| / s_i``, with ``s_i`` the measured scale alone.  Every earlier
+#: revision of this experiment measured under it, and it is the default here so
+#: that their records keep reproducing bit for bit.
+RULER_FROZEN = "frozen"
+#: The predicate's **mixed** ruler: ``max|dy_i| / max(|y_i|, s_i)``, the
+#: conventional scaled step with the measured scale kept as a floor.  Never
+#: tighter than :data:`RULER_FROZEN`, and bit-identical to it wherever
+#: ``|y_i| <= s_i``.  DR5 / improvement item 5a; task A59
+#: (driver-predicate-mode).
+RULER_MIXED = "mixed"
+#: The two rulers, in the order the experiment plan lists them.
+RULERS = (RULER_FROZEN, RULER_MIXED)
+#: What a caller that says nothing gets.  ``frozen``, so every existing caller
+#: -- and every record made before DR5 -- reproduces unchanged.
+RULER_DEFAULT = RULER_FROZEN
+
+
+class RulerError(ValueError):
+    """A ruler that is not one of :data:`RULERS`.  Never defaulted around.
+
+    A misspelt ruler that silently fell back to ``frozen`` would produce a run
+    of one predicate under the other's name, which is the whole failure mode
+    the mode is recorded in every artifact to prevent (improvement item 5a's
+    trap (i)).
+    """
+
+
+def assert_ruler(ruler: str) -> str:
+    if ruler not in RULERS:
+        raise RulerError(
+            f"{ruler!r} is not a convergence ruler; expected one of {RULERS}.  "
+            f"Refused rather than defaulted: a run of one predicate recorded "
+            f"under the other's name cannot be told apart afterwards."
+        )
+    return ruler
+
 
 #: A18/A22/A23's categorisation, reproduced exactly.  Kept so their recorded
 #: artifacts stay reproducible; not the mode A26 and later work measure under.
@@ -705,7 +809,9 @@ class YSpec:
 
     # -- the predicate ---------------------------------------------------
 
-    def residual(self, prev: list, cur: list, subset=None) -> Residual:
+    def residual(
+        self, prev: list, cur: list, subset=None, *, ruler: str = RULER_DEFAULT
+    ) -> Residual:
         """Scaled residual between two **full** ``y`` snapshots.
 
         ``subset`` restricts the test to a set of component indices, which is
@@ -713,15 +819,21 @@ class YSpec:
         the caller already holds a subset-aligned pair --- which is what
         reading only the subset gives it --- :meth:`residual_over` is the
         entry point that does not need the full lists at all.
+
+        ``ruler`` selects the denominator: :data:`RULER_FROZEN` (the default,
+        and every earlier revision's) or :data:`RULER_MIXED`.  See the module
+        docstring; a value that is neither is refused, never defaulted around.
         """
         sel = self.subset_indices(subset)
         if subset is None:
-            return self._residual_aligned(sel, prev, cur)
+            return self._residual_aligned(sel, prev, cur, ruler)
         return self._residual_aligned(
-            sel, [prev[i] for i in sel], [cur[i] for i in sel]
+            sel, [prev[i] for i in sel], [cur[i] for i in sel], ruler
         )
 
-    def residual_over(self, sel, prev_a: list, cur_a: list) -> Residual:
+    def residual_over(
+        self, sel, prev_a: list, cur_a: list, *, ruler: str = RULER_DEFAULT
+    ) -> Residual:
         """The same residual, from snapshots already aligned with ``sel``.
 
         ``sel`` must be the sorted index list :meth:`subset_indices` returned
@@ -731,18 +843,40 @@ class YSpec:
         downstream --- ``spec.name(i)``, ``res.above(tau)``, the moved-constant
         report --- is unchanged.
         """
-        return self._residual_aligned(sel, prev_a, cur_a)
+        return self._residual_aligned(sel, prev_a, cur_a, ruler)
 
-    def _residual_aligned(self, sel, prev_a: list, cur_a: list) -> Residual:
+    def _residual_aligned(
+        self, sel, prev_a: list, cur_a: list, ruler: str = RULER_DEFAULT
+    ) -> Residual:
         """One pass over ``sel``, dispatching on each component's category.
 
         Written as one loop rather than three so that a component's category
         decides its test in exactly one place.  The ordering of every output
         list is ascending component index, which is what the previous
         three-loop form produced and what ``argmax`` tie-breaking depends on.
+
+        **The ruler enters in exactly one place**: the denominator of a
+        continuous or non-finite component's scaled step.  Under
+        :data:`RULER_FROZEN` it is ``s_i``; under :data:`RULER_MIXED` it is
+        ``max(|y_i|, s_i)`` with ``|y_i|`` the current value's characteristic
+        magnitude --- :func:`_char_mag` of ``cur``, over the finite entries,
+        which is the same measurement the scale itself was taken by.  Every
+        other branch below is reached identically under both, which is what
+        makes "a run with no decisive pass is bit-identical" a property of the
+        code rather than a hope about it.
+
+        ``denom`` and ``mag`` are recorded per component, so the
+        :class:`Residual` can say which term bound each denominator and what
+        ``|y_i| / s_i`` was there.  Under ``frozen`` the magnitude is **not
+        computed**: the frozen path costs exactly what it cost before, which
+        gate G1 is what proves.
         """
+        assert_ruler(ruler)
+        mixed = ruler == RULER_MIXED
         idx_c: list[int] = []
         scaled_l: list[float] = []
+        denom_l: list[float] = []
+        mag_l: list[float] = []
         nan_new: list[int] = []
         mismatch_d: list[int] = []
         moved_k: list[int] = []
@@ -756,13 +890,25 @@ class YSpec:
                 fa, fb = _float_view(a), _float_view(b)
                 if fa is None or fb is None or fa.shape != fb.shape:
                     scaled_l.append(np.inf)
+                    denom_l.append(scale[i])
+                    mag_l.append(np.nan)
                     continue
                 d = np.abs(fb - fa)
                 if not np.all(np.isfinite(fb)):
                     nan_new.append(i)
                     scaled_l.append(np.inf)
+                    denom_l.append(scale[i])
+                    mag_l.append(np.nan)
                     continue
-                scaled_l.append(float(np.max(d)) / scale[i])
+                den = scale[i]
+                mag = np.nan
+                if mixed:
+                    mag = _char_mag(fb)
+                    if mag > den:
+                        den = mag
+                scaled_l.append(float(np.max(d)) / den)
+                denom_l.append(den)
+                mag_l.append(mag)
             elif c == NONFINITE:
                 # A26.  Tested rather than excluded: the non-finite pattern
                 # must be unchanged, and the finite entries must satisfy the
@@ -772,17 +918,35 @@ class YSpec:
                 fa, fb = _float_view(a), _float_view(b)
                 if fa is None or fb is None or fa.shape != fb.shape:
                     scaled_l.append(np.inf)
+                    denom_l.append(scale[i])
+                    mag_l.append(np.nan)
                     continue
                 ma, mb = np.isfinite(fa), np.isfinite(fb)
                 if not np.array_equal(ma, mb):
                     nan_new.append(i)
                     scaled_l.append(np.inf)
+                    denom_l.append(scale[i])
+                    mag_l.append(np.nan)
                     continue
                 if not ma.any():
                     scaled_l.append(0.0)
+                    denom_l.append(scale[i])
+                    mag_l.append(0.0 if mixed else np.nan)
                     continue
                 d = np.abs(fb[mb] - fa[ma])
-                scaled_l.append(float(np.max(d)) / scale[i])
+                den = scale[i]
+                mag = np.nan
+                if mixed:
+                    # The magnitude is taken over the finite entries, the same
+                    # entries the step is taken over: a non-finite element must
+                    # not be able to set the denominator of a test it is
+                    # excluded from.
+                    mag = _char_mag(fb[mb])
+                    if mag > den:
+                        den = mag
+                scaled_l.append(float(np.max(d)) / den)
+                denom_l.append(den)
+                mag_l.append(mag)
             elif c == DISCRETE:
                 if not _same(a, b):
                     mismatch_d.append(i)
@@ -793,7 +957,17 @@ class YSpec:
             # first exists only in SPEC_MODE_A18; the second only ever holds
             # quantities with a recorded justification for accumulating.
         scaled = np.asarray(scaled_l, dtype=float)
-        return Residual(self, idx_c, scaled, mismatch_d, moved_k, nan_new)
+        return Residual(
+            self,
+            idx_c,
+            scaled,
+            mismatch_d,
+            moved_k,
+            nan_new,
+            ruler=ruler,
+            denominator=np.asarray(denom_l, dtype=float),
+            magnitude=np.asarray(mag_l, dtype=float),
+        )
 
 
 class Residual:
@@ -802,9 +976,30 @@ class Residual:
     ``max`` cannot distinguish "one straggler holds up eight sweeps" from
     "five hundred components are still moving", so the count above ``tau`` is
     carried alongside it and both are reported.
+
+    It also carries **which ruler produced it** and, per continuous component,
+    the denominator that was actually divided by and the current magnitude
+    ``|y_i|`` measured for it.  Those two are what make the set of components on
+    which the two rulers can disagree readable from the residual: a component
+    can only differ between rulers where ``|y_i| > s_i``, and
+    :meth:`value_over_scale` is exactly that ratio.  Under the ``frozen`` ruler
+    the magnitude is not measured, so those entries are ``nan`` and say so
+    rather than pretending to a value.
     """
 
-    def __init__(self, spec, idx_c, scaled, mismatch_d, moved_k, nan_new):
+    def __init__(
+        self,
+        spec,
+        idx_c,
+        scaled,
+        mismatch_d,
+        moved_k,
+        nan_new,
+        *,
+        ruler: str = RULER_DEFAULT,
+        denominator=None,
+        magnitude=None,
+    ):
         self.spec = spec
         self.idx_c = idx_c
         self.scaled = scaled
@@ -814,6 +1009,22 @@ class Residual:
         self.max = float(np.max(scaled)) if scaled.size else 0.0
         self.argmax = (
             int(idx_c[int(np.argmax(scaled))]) if scaled.size else None
+        )
+        #: Which denominator this residual was taken with.
+        self.ruler = ruler
+        #: What each continuous component was actually divided by, aligned with
+        #: :attr:`idx_c`.  Equals the scale under ``frozen``.
+        self.denominator = (
+            denominator
+            if denominator is not None
+            else np.asarray([spec.scale[i] for i in idx_c], dtype=float)
+        )
+        #: ``|y_i|`` as measured on the current value, aligned with
+        #: :attr:`idx_c`; ``nan`` under ``frozen``, which does not measure it.
+        self.magnitude = (
+            magnitude
+            if magnitude is not None
+            else np.full(len(idx_c), np.nan, dtype=float)
         )
 
     def n_above(self, tau: float) -> int:
@@ -837,4 +1048,68 @@ class Residual:
             "n_discrete_mismatch": len(self.mismatch_discrete),
             "n_constant_moved": len(self.moved_constant),
             "n_nan_new": len(self.nan_new),
+        }
+
+    # -- what the two rulers do and do not share --------------------------
+
+    def value_over_scale(self) -> np.ndarray:
+        """``|y_i| / s_i`` per continuous component, aligned with ``idx_c``.
+
+        The one number that says whether the two rulers can differ on a
+        component at all: at or below 1 they are bit-identical there, above 1
+        the ``mixed`` denominator is the value and the ``frozen`` one the
+        scale.  ``nan`` where the magnitude was not measured (the ``frozen``
+        ruler) or where the component scored ``inf`` before any magnitude was
+        taken.
+        """
+        scales = np.asarray([self.spec.scale[i] for i in self.idx_c], dtype=float)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return self.magnitude / scales
+
+    def bound_by(self) -> list[str]:
+        """Per continuous component: ``"scale"`` or ``"value"``.
+
+        Which term set the denominator.  Always ``"scale"`` under ``frozen``,
+        by definition; under ``mixed`` it is ``"value"`` exactly where the
+        current magnitude exceeded the measured scale, and those are the only
+        components on which the two rulers can disagree.
+        """
+        scales = np.asarray([self.spec.scale[i] for i in self.idx_c], dtype=float)
+        return [
+            "value" if float(d) > float(s) else "scale"
+            for d, s in zip(self.denominator, scales)
+        ]
+
+    def binding_components(self) -> list[int]:
+        """Component indices whose denominator was set by the current value.
+
+        Empty under ``frozen``.  Under ``mixed`` this is the set on which the
+        two rulers differ at all, before any tolerance is applied --- section
+        3.6 gate 3's "binding set" is this list intersected with the components
+        the pass actually turned on.
+        """
+        return [
+            i for i, how in zip(self.idx_c, self.bound_by()) if how == "value"
+        ]
+
+    def ruler_detail(self, tau: float, *, limit: int = 20) -> dict:
+        """:meth:`brief`, plus what the ruler did, for a record.
+
+        Kept separate from :meth:`brief` deliberately: ``brief``'s six keys are
+        what every earlier record carries, and adding a key to them would move
+        a field that a gate compares value for value.
+        """
+        ratios = self.value_over_scale()
+        binding = self.binding_components()
+        return {
+            "ruler": self.ruler,
+            **self.brief(tau),
+            "n_continuous_tested": len(self.idx_c),
+            "n_bound_by_the_current_value": len(binding),
+            "binding_components": [self.spec.name(i) for i in binding[:limit]],
+            "argmax_value_over_scale": (
+                None
+                if not self.scaled.size
+                else float(ratios[int(np.argmax(self.scaled))])
+            ),
         }
