@@ -39,7 +39,9 @@ New in A46 (process-copy); it derives from no earlier file.  A48
 recorded hunks, so an edit that is not a constant is describable.  A56
 (driver-renames) added three more permitted-edit files and taught the
 edit-behaviour gate to name the per-run deferral switch and entry point per
-side, because the rename means the two trees spell them differently.  Stdlib
+side, because the rename means the two trees spell them differently.  A60
+(driver-attempts) added the sixth, ``solver_handler.py``, where the optimiser's
+retry ladder lives.  Stdlib
 only, no PROCESS run, runs in seconds.
 
 Usage
@@ -479,6 +481,55 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A59 (driver-predicate-mode)",
             was="spec.residual(y_prev, y, subset=subset)",
             now="the same call, with ruler=module_solve.PREDICATE_MODE",
+        ),
+        PermittedEdit(
+            kind="counters",
+            name="ATTEMPT_LADDERS / ATTEMPT_STAMPS / open_ladder / attempt",
+            description=(
+                "what each attempt of the optimiser's retry ladder cost.  The "
+                "ladder runs the optimiser again on a failed exit code -- with "
+                "a larger finite-difference step, then a smaller one, then "
+                "from a reset second-derivative matrix -- and every attempt "
+                "evaluates the model set, so the run's node-call total carries "
+                "attempts whose iterations and exit code the record did not "
+                "publish.  A context manager reads the cost counters at the "
+                "entry to and the exit from every attempt and appends them to "
+                "a list the measurement harness differences; the exit stamp is "
+                "taken in a finally, so an attempt that raises is still "
+                "bounded.  DISPATCH_SWEEPS_AT_OUTPUT is frozen by the same "
+                "statement that freezes NODE_CALLS_AT_OUTPUT, so the "
+                "per-attempt sweep counts have a solve-phase whole to add up "
+                "to.  Four integer reads and two dict copies per boundary, at "
+                "most eight boundaries in a run: no float is touched and no "
+                "branch a result depends on changes"
+            ),
+            task="A60 (driver-attempts)",
+            was="node calls and sweeps were run totals; attempts had none",
+            now=(
+                "a boundary stamp per attempt entry and exit, summing to the "
+                "solve-phase totals"
+            ),
+        ),
+    ],
+    "process/core/solver/solver_handler.py": [
+        PermittedEdit(
+            kind="counters",
+            name="LADDER_STAGES, and the four attempts bracketed",
+            description=(
+                "the retry ladder's rungs are named beside the branches that "
+                "implement them -- initial, the finite-difference step times "
+                "ten, times a tenth, and the reset second-derivative matrix -- "
+                "and each of the four calls to the optimiser is wrapped in the "
+                "cost-stamp context manager.  The names are here rather than "
+                "in the harness so that a ladder which gains a rung cannot "
+                "keep the old vocabulary silently.  Nothing about the ladder "
+                "changes: which attempts run, in which order, under which "
+                "settings, is exactly what it was, and the only new statements "
+                "are the stamps"
+            ),
+            task="A60 (driver-attempts)",
+            was="four bare calls to the solver, indistinguishable in the counters",
+            now="the same four calls, each bracketed by a boundary stamp",
         ),
     ],
     "process/core/_idf_probe_modules.py": [
