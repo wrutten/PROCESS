@@ -27,12 +27,21 @@ which is trap T11's shape, so the section's heading marker says so, each
 rendered caption is prefixed with it, and the campaign fills the section again
 once the user approves execution.
 
-Written by task **A55 (harness-smoke)**.
+**§4.1 is rendered from the ``gate_table`` stage record, not from the verdicts
+themselves**, so a gate re-run after that stage would be reproduced here as it
+was, not as it is.  The renderer therefore refuses a stage record whose own
+account of the verdicts it read disagrees with the verdicts on disk, naming the
+gate, both commits and both times (issue I-22 (a); the mechanism is the
+framework's ``assert_records_read_are_current``).
+
+Written by task **A55 (harness-smoke)**; the freshness refusal and the
+comparison mode by task **A63 (stage-provenance)**.
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import difflib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,7 +50,7 @@ from typing import Any, Mapping, Sequence
 from . import framework
 from .config import EXECUTION_APPROVED, Campaign
 
-__all__ = ["PlanTablesError", "render", "write", "SECTIONS"]
+__all__ = ["PlanTablesError", "render", "check", "write", "SECTIONS"]
 
 
 class PlanTablesError(RuntimeError):
@@ -63,6 +72,15 @@ class Section:
     heading: str
     stage: str
     what: str
+    #: Whether this stage's record must say **which records it read**, and be
+    #: refused when they have moved since.  True where the stage summarises
+    #: other records rather than runs: §4.1 is one row per gate *verdict*, and
+    #: a gate re-run after the stage leaves this section reproducing the older
+    #: verdict byte for byte with nothing to mark it — which is what happened
+    #: (issue I-22 (a)).  A stage over **run** records is not checked here: its
+    #: provenance is ``runs_provenance``, which the analysis compares against
+    #: its own survey of the same runs.
+    records_read_required: bool = False
 
 
 SECTIONS: tuple[Section, ...] = (
@@ -70,6 +88,7 @@ SECTIONS: tuple[Section, ...] = (
         number="4.1",
         heading="Gates",
         stage="gate_table",
+        records_read_required=True,
         what=(
             "one row per registered gate, read from the verdict records: what "
             "it binds, its population, its denominator, its mismatches and its "
@@ -125,6 +144,39 @@ def stage_record(records_dir: Path, stage: str) -> dict[str, Any]:
         raise PlanTablesError(f"{path} is not readable JSON: {exc}") from exc
 
 
+def assert_stage_read_what_is_there(
+    record: Mapping[str, Any], records_dir: Path, section: Section
+) -> str:
+    """Refuse to render a section from a stage record its sources have outrun.
+
+    §4.1 is not rendered from the verdict records: it is rendered from the
+    ``gate_table`` **stage** record, which was made from the verdicts at the
+    moment that stage ran.  Re-run a gate afterwards and this renderer would
+    reproduce the older verdict — the same table, the same numbers, the same
+    PASS or FAIL — with nothing anywhere to say the file on disk now says
+    something else.  That is not a hypothetical: it happened, and the first
+    re-render of a fixed gate reproduced its failing row byte for byte.
+
+    The check is the framework's, not this module's, so that it is one
+    mechanism: the stage declares what it reads, the framework stamps it, and
+    every consumer refuses the same way.
+    """
+    try:
+        return framework.assert_records_read_are_current(
+            record,
+            records_dir,
+            stage=section.stage,
+            remedy=(
+                f"Re-run `experiment_runner.py --measure {section.stage}` and "
+                f"render again: §{section.number} is that stage's output, and "
+                f"a section rendered from a record older than the verdicts it "
+                f"summarises publishes the older verdict without saying so."
+            ),
+        )
+    except framework.StaleRecordError as exc:
+        raise PlanTablesError(str(exc)) from exc
+
+
 def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     """What every cell in §4 is over, measured from the records themselves.
 
@@ -133,8 +185,14 @@ def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     than written down here — a marker that says which instrument produced a
     residual, and is itself hand-maintained, is a marker that will one day name
     the wrong instrument.
+
+    The runs are surveyed **under the records directory this section is being
+    rendered from**, not under the campaign's default one.  They are the same
+    directory in every ordinary press; they are not when ``--outdir`` redirects
+    the records, and a marker describing one population above tables computed
+    from another is the shape this module exists to prevent.
     """
-    root = Path(campaign.runs_dir) / framework.GATES_SUBPATH
+    root = Path(records_dir)
     heads: dict[str, int] = {}
     kinds: dict[str, int] = {}
     positions: set[str] = set()
@@ -297,8 +355,11 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
     blocks: list[dict[str, Any]] = []
     n_tables = 0
     n_cells = 0
+    freshness: list[str] = []
     for section in SECTIONS:
         record = stage_record(records_dir, section.stage)
+        if section.records_read_required:
+            freshness.append(assert_stage_read_what_is_there(record, records_dir, section))
         lines.append(f"### {section.number} {section.heading}")
         lines.append("")
         lines.append(
@@ -357,6 +418,7 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
         "n_tables": n_tables,
         "n_cells": n_cells,
         "records_dir": str(records_dir),
+        "stage_records_are_current": freshness,
     }
 
 
@@ -377,6 +439,93 @@ def plan_path(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir).parent / "EXPERIMENT_PLAN.md"
 
 
+def section_span(document: Path, lines: Sequence[str]) -> tuple[int, int]:
+    """Where §4 starts and stops in *lines*, or a refusal.
+
+    Both headings are matched on the whole line and both must occur exactly
+    once: a renderer that writes into — or compares against — the wrong part
+    of a shared document is worse than one that does nothing.
+    """
+    starts = [i for i, line in enumerate(lines) if line.startswith(SECTION_START)]
+    ends = [i for i, line in enumerate(lines) if line.startswith(SECTION_END)]
+    if len(starts) != 1 or len(ends) != 1 or ends[0] <= starts[0]:
+        raise PlanTablesError(
+            f"{document} does not hold exactly one section starting "
+            f"{SECTION_START!r} followed by one starting {SECTION_END!r} "
+            f"(found {len(starts)} and {len(ends)}).  The renderer replaces "
+            f"that span and nothing else, and refuses rather than guessing "
+            f"which part of a shared document it was asked to rewrite."
+        )
+    return starts[0], ends[0]
+
+
+def check(
+    campaign: Campaign, records_dir: Path | None = None, *, path: Path | None = None
+) -> dict[str, Any]:
+    """Render §4 and compare it with the section the document already carries.
+
+    The same rendering as :func:`write`, and **no write**: what comes back is
+    whether the committed section is the one these records produce, and the
+    lines where it is not.  It exists so that a task whose job is the records
+    can report the state of a shared document without editing it, and so that
+    "the plan is up to date" is a comparison rather than a claim.
+    """
+    document = Path(path) if path is not None else plan_path(campaign)
+    lines = document.read_text().splitlines()
+    start, end = section_span(document, lines)
+    committed = lines[start:end]
+    rendered = render(campaign, records_dir)
+    fresh = rendered["markdown"].splitlines()
+    while committed and not committed[-1].strip():
+        committed.pop()
+    while fresh and not fresh[-1].strip():
+        fresh.pop()
+    # A **diff**, not a line-for-line comparison against position: one row
+    # added to §4.1 shifts everything below it, and a positional comparator
+    # would report seventeen hundred differences where there is one insertion —
+    # a count over a population nobody would recognise (trap T11).
+    matcher = difflib.SequenceMatcher(a=committed, b=fresh, autojunk=False)
+    common = added = removed = 0
+    hunks: list[dict[str, Any]] = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            common += i2 - i1
+            continue
+        removed += i2 - i1
+        added += j2 - j1
+        hunks.append(
+            {
+                "how": tag,
+                "at_line_in_document": i1 + 1,
+                "n_lines_in_document": i2 - i1,
+                "n_lines_from_the_records": j2 - j1,
+                "in_document": [line[:160] for line in committed[i1:i2][:3]],
+                "from_the_records": [line[:160] for line in fresh[j1:j2][:3]],
+            }
+        )
+    rendered.update(
+        {
+            "document": str(document),
+            "compared": {
+                "what_this_is": (
+                    "the document's §4 against the §4 these stage records "
+                    "produce now, as a diff, with nothing written"
+                ),
+                "n_lines_in_document": len(committed),
+                "n_lines_from_the_records": len(fresh),
+                "n_lines_identical": common,
+                "n_lines_only_in_the_document": removed,
+                "n_lines_only_from_the_records": added,
+                "n_hunks": len(hunks),
+                "identical": not hunks,
+                "hunks": hunks[:10],
+                "n_hunks_not_listed": max(0, len(hunks) - 10),
+            },
+        }
+    )
+    return rendered
+
+
 def write(
     campaign: Campaign, records_dir: Path | None = None, *, path: Path | None = None
 ) -> dict[str, Any]:
@@ -390,22 +539,13 @@ def write(
     document = Path(path) if path is not None else plan_path(campaign)
     text = document.read_text()
     lines = text.splitlines()
-    starts = [i for i, line in enumerate(lines) if line.startswith(SECTION_START)]
-    ends = [i for i, line in enumerate(lines) if line.startswith(SECTION_END)]
-    if len(starts) != 1 or len(ends) != 1 or ends[0] <= starts[0]:
-        raise PlanTablesError(
-            f"{document} does not hold exactly one section starting "
-            f"{SECTION_START!r} followed by one starting {SECTION_END!r} "
-            f"(found {len(starts)} and {len(ends)}).  The renderer replaces "
-            f"that span and nothing else, and refuses rather than guessing "
-            f"which part of a shared document it was asked to rewrite."
-        )
+    start, end = section_span(document, lines)
     rendered = render(campaign, records_dir)
     body = rendered["markdown"].splitlines()
-    replaced = lines[: starts[0]] + body + [""] + lines[ends[0] :]
+    replaced = lines[:start] + body + [""] + lines[end:]
     document.write_text("\n".join(replaced).rstrip() + "\n")
     rendered["document"] = str(document)
-    rendered["n_lines_replaced"] = ends[0] - starts[0]
+    rendered["n_lines_replaced"] = end - start
     rendered["n_lines_written"] = len(body)
     return rendered
 
@@ -414,6 +554,8 @@ def report(result: Mapping[str, Any]) -> None:
     """What was rendered, and over what, on the terminal."""
     marker = result["marker"]
     print(f"  records   : {result['records_dir']}")
+    for sentence in result.get("stage_records_are_current") or ():
+        print(f"  freshness : {sentence}")
     print(
         f"  population: {marker['n_run_records']} run record(s) at "
         f"{marker['records_by_commit']}, by run kind "
@@ -439,7 +581,35 @@ def report(result: Mapping[str, Any]) -> None:
                 f"record(s) at {provenance.get('heads')}"
             )
     print(f"  {result['n_tables']} table(s), {result['n_cells']} cell(s)")
-    if result.get("document"):
+    compared = result.get("compared")
+    if compared:
+        print(
+            f"  compared  : {result['document']} — "
+            f"{compared['n_lines_in_document']} line(s) in the document "
+            f"against {compared['n_lines_from_the_records']} from the "
+            f"records: {compared['n_lines_identical']} identical, "
+            f"{compared['n_lines_only_in_the_document']} only in the "
+            f"document, {compared['n_lines_only_from_the_records']} only from "
+            f"the records, in {compared['n_hunks']} hunk(s); "
+            + ("IDENTICAL" if compared["identical"] else "NOT IDENTICAL")
+        )
+        for hunk in compared["hunks"]:
+            print(
+                f"    {hunk['how']} at line {hunk['at_line_in_document']}: "
+                f"{hunk['n_lines_in_document']} line(s) in the document, "
+                f"{hunk['n_lines_from_the_records']} from the records"
+            )
+            for line in hunk["in_document"]:
+                print(f"      - {line[:120]}")
+            for line in hunk["from_the_records"]:
+                print(f"      + {line[:120]}")
+        if compared["n_hunks_not_listed"]:
+            print(
+                f"    and {compared['n_hunks_not_listed']} further hunk(s) "
+                f"not listed"
+            )
+        print("  nothing was written: this is the comparison mode")
+    elif result.get("document"):
         print(
             f"  written   : {result['document']} — {result['n_lines_written']} "
             f"line(s) replacing {result['n_lines_replaced']}"
