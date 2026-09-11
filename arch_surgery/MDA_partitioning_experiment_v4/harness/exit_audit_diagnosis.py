@@ -644,6 +644,7 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
             for name, sweep in sweeps.items()
         },
     }
+    row["grid_convergence"] = _grid_convergence(row)
     row["restricted_from"] = restricted.get("computed_from")
     row["reproduces_the_record_audit"] = (
         row["sweeps"].get("output_entry_as_found", {}).get("residual_max_hex")
@@ -777,10 +778,86 @@ def record_input_kind(job) -> str:
 
 
 def _component_hex(sweep: Mapping[str, Any], field: str) -> str | None:
+    """The component's value in one sweep, from the tracked block or the head.
+
+    The tracked block carries it whatever its place in the residual ordering;
+    the head is the fallback for an observation made before that block existed.
+    """
+    tracked = (sweep.get("tracked") or {}).get(COMPONENT)
+    if tracked and tracked.get("present_in_the_spec"):
+        return tracked.get(field)
     for entry in sweep.get("head") or []:
         if entry.get("component") == COMPONENT:
             return entry.get(field)
     return None
+
+
+def _grid_convergence(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Does the component behave like a first-order grid sample?
+
+    The dose series gives the component's value at five radial-discretisation
+    settings.  If the value is a sample taken one grid step short of a layer
+    boundary, it carries a first-order error: ``v(n) = v_inf + C/n``.  Two
+    consecutive settings determine ``C``; four such estimates that agree are
+    the signature, and their spread is how well they agree.  Nothing is fitted
+    and nothing is smoothed — four differences, four divisions.
+    """
+    doses = (100, 200, 300, 400, 500)
+    values: dict[int, float] = {}
+    for value in doses:
+        sweep = row["sweeps"].get(f"output_entry_with_the_candidate_at_{value}")
+        if not sweep:
+            continue
+        after = sweep.get("component_after_hex")
+        if after:
+            values[value] = float.fromhex(after)
+    if len(values) < 2:
+        return {
+            "measured": False,
+            "why": (
+                f"{COMPONENT} has no float value in this configuration's "
+                f"coupling state, so there is nothing to extrapolate"
+            ),
+        }
+    settings = sorted(values)
+    constants = [
+        (values[b] - values[a]) / (1.0 / a - 1.0 / b)
+        for a, b in zip(settings, settings[1:])
+    ]
+    limits = [values[n] - c / n for n, c in zip(settings, constants)]
+    spread = (
+        None
+        if not constants
+        else (max(constants) - min(constants)) / abs(constants[0])
+    )
+    return {
+        "measured": True,
+        "settings": settings,
+        "values": {str(n): values[n] for n in settings},
+        "values_hex": {str(n): float(values[n]).hex() for n in settings},
+        "constant_per_consecutive_pair": constants,
+        "constant_relative_spread": spread,
+        "extrapolated_limit": limits[-1] if limits else None,
+        "extrapolated_limit_hex": (
+            float(limits[-1]).hex() if limits else None
+        ),
+        "distance_of_the_solved_value_from_the_limit": (
+            None
+            if not limits
+            else abs(values[settings[0]] - limits[-1]) / abs(limits[-1])
+        ),
+        "distance_of_the_written_value_from_the_limit": (
+            None
+            if not limits
+            else abs(values[settings[-1]] - limits[-1]) / abs(limits[-1])
+        ),
+        "what": (
+            "v(n) = v_inf + C/n, with C taken from each consecutive pair of "
+            "settings.  Agreement between the estimates is the evidence that "
+            "the component is a first-order grid sample and not a "
+            "discontinuity"
+        ),
+    }
 
 
 def render(summary: Mapping[str, Any]) -> str:
@@ -950,6 +1027,41 @@ def render(summary: Mapping[str, Any]) -> str:
                 + f"max {sweep.get('residual_max_hex')}"
             )
         lines.append("| " + " | ".join(cells) + " |")
+
+    lines.append("\n## Is the component a first-order grid sample?\n")
+    lines.append(
+        "*Caption: one row per run, derived from the dose series above. "
+        f"`C` is `(v(b) - v(a)) / (1/a - 1/b)` for each consecutive pair of "
+        "settings; four estimates that agree say the value carries a `C/n` "
+        "error, which is what a sample taken one grid step short of a layer "
+        "boundary has. The limit is the last pair's extrapolation, and the "
+        "last two columns are how far the value the loop converged (at 100) "
+        "and the value written to the output file (at 500) sit from it.*\n"
+    )
+    lines.append(
+        "| run | C per consecutive pair | relative spread of C | extrapolated "
+        "limit | solved value from the limit | written value from the limit |"
+    )
+    lines.append("|---|---|---|---|---|---|")
+    for row in summary["rows"]:
+        grid = row.get("grid_convergence") or {}
+        if not grid.get("measured"):
+            lines.append(
+                f"| `{row['key']}` | not measured: {grid.get('why')} | — | — "
+                "| — | — |"
+            )
+            continue
+        lines.append(
+            f"| `{row['key']}` | "
+            + ", ".join(
+                f"{c:.6e}" for c in grid["constant_per_consecutive_pair"]
+            )
+            + f" | {grid['constant_relative_spread']:.3%} | "
+            f"{grid['extrapolated_limit']:.10e} "
+            f"(`{grid['extrapolated_limit_hex']}`) | "
+            f"{grid['distance_of_the_solved_value_from_the_limit']:.3%} | "
+            f"{grid['distance_of_the_written_value_from_the_limit']:.3%} |"
+        )
 
     lines.append("\n## Is the audited state the loop's exit state?\n")
     lines.append(

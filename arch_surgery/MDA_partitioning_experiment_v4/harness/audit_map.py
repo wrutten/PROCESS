@@ -78,6 +78,13 @@ OBSERVATION_FILE = "audit_map_observation.json"
 #: sweep, the pair is what is reported.
 CANDIDATE_FIELD = "tfcoil.n_rad_per_layer"
 
+#: Components whose before-and-after value every sweep reports, whatever their
+#: place in the residual ordering.  The head below reports the largest movers,
+#: which is exactly the wrong population for a component one is asking about
+#: *because* it sometimes does not move: a row that reads "absent" because the
+#: component fell out of the top ten is a gap, not a measurement.
+TRACKED_COMPONENTS: tuple[str, ...] = ("tfcoil.insstrain",)
+
 #: How many components of a sweep's residual are reported with their before and
 #: after values.  The summary carries the maximum and the count above the
 #: tolerance for all of them; this is the head of the ordered list.
@@ -766,6 +773,28 @@ def _one_sweep(
             range(len(residual.idx_c)),
             key=lambda p: -float(residual.scaled[p]),
         )[:N_COMPONENTS_REPORTED]
+        scaled_by_index = {
+            int(residual.idx_c[p]): float(residual.scaled[p])
+            for p in range(len(residual.idx_c))
+        }
+        result["tracked"] = {}
+        for name in TRACKED_COMPONENTS:
+            index = predicate_mod.component_index(spec, name)
+            result["tracked"][name] = (
+                {"present_in_the_spec": False}
+                if index is None
+                else {
+                    "present_in_the_spec": True,
+                    "before_hex": _hex_of(y_before[index]),
+                    "after_hex": _hex_of(y_after[index]),
+                    "scaled_hex": (
+                        None
+                        if index not in scaled_by_index
+                        else float(scaled_by_index[index]).hex()
+                    ),
+                    "tested_as_continuous": index in scaled_by_index,
+                }
+            )
         result["head"] = [
             {
                 "component": spec.name(int(residual.idx_c[p])),
