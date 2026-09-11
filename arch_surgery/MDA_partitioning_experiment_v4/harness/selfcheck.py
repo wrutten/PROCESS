@@ -34,6 +34,7 @@ what the probe exists to notice.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import shutil
 import subprocess
@@ -1387,7 +1388,7 @@ def check_run_path(campaign: Campaign) -> Check:
         "refused rather than made",
         population=(
             "2 phases x the declared field list; 2 displacement streams; "
-            "3 refusals"
+            "4 refusals"
         ),
     )
 
@@ -1413,6 +1414,21 @@ def check_run_path(campaign: Campaign) -> Check:
         caught,
         f"a finished record without node_calls_solve_phase must be refused, "
         f"not summarised over ({message})",
+    )
+
+    # Half of the audit's ruler pair, which is what a table would read as an
+    # accuracy gain rather than a change of ruler.
+    half = json.loads(json.dumps(complete))
+    half["exit_audit"].pop(records_mod.AUDIT_RULERS[1])
+    caught, message = _must_refuse_here(
+        lambda: records_mod.assert_complete(half, where="a tooth")
+    )
+    check.tooth(
+        "an exit audit carrying one convergence ruler and not both",
+        caught,
+        f"the mixed ruler reads lower wherever its denominator binds, so a "
+        f"residual table built from records with one column here and two "
+        f"there reports a change of ruler as a change of accuracy ({message})",
     )
 
     unlabelled = json.loads(json.dumps(complete))
@@ -1535,38 +1551,62 @@ def check_run_path(campaign: Campaign) -> Check:
         f"prevents ({message})",
     )
 
-    # The two allowance teeth.  Every switch the *matrix* composes is now
-    # implemented, so the thing that has to be refused is asked for by the
-    # convergence-predicate trial instead: it composes a switch whose driver
-    # change has not landed.  The teeth follow the pending switch rather than a
-    # particular arm, so they keep biting as each driver change lands and stop
-    # only when nothing is pending at all -- which they say.
+    # The two allowance teeth, **re-pointed** (task A59 (driver-predicate-mode)).
+    #
+    # The allowance is the one way a run may happen without a switch its arm
+    # declares, and it exists for a switch no tree implements yet.  Both of its
+    # refusals have to be shown biting.  Until DR5 landed the teeth could bite
+    # on a real pending switch -- the predicate trial composed one whose driver
+    # change had not been made -- and A57's report predicted that they would go
+    # quiet the moment it did.  It has: every switch this harness can compose is
+    # now implemented, and `switches.REGISTRY` has no entry left with no driver
+    # name.
+    #
+    # Going quiet is the wrong answer.  A mechanism whose refusals are never
+    # exercised is an assertion, not a measurement (protocol section 12), and
+    # the mechanism is still live -- the next driver change to be approved and
+    # not yet made will use it.  So the teeth are re-pointed onto a **doctored
+    # registry**: for the duration of the two checks, the predicate-mode switch
+    # is put back the way it stood before DR5 landed (its driver name removed),
+    # which is exactly the state the allowance exists for.  The doctoring is the
+    # perturbation, it is stated in the tooth's evidence, it is confined to
+    # these two checks, and it is undone in a finally.  Nothing outside them
+    # sees it: `environment_for` refuses before any subprocess starts.
+    #
+    # The alternative -- retiring the teeth and noting that nothing is pending
+    # -- was rejected: it would leave `pool.environment_for`'s two refusals
+    # untested for as long as the registry happens to be complete, and they
+    # would be found broken by the task that next needed them.
     pending_mode = next(
-        (
-            mode
-            for mode in campaign.predicate_modes
-            if sw.unimplemented(
-                arms_mod.ARMS["B0"].terms(
-                    config, pin_hex=_PIN_HEX, campaign=campaign,
-                    predicate_mode=mode,
-                )
-            )
-        ),
-        None,
+        (m for m in campaign.predicate_modes if m != campaign.predicate_mode_default),
+        "mixed",
     )
-    if pending_mode is None:
-        check.note(
-            "every switch this harness can compose — the matrix's and the "
-            "predicate trial's alike — is implemented by the tree under test, "
-            "so the two allowance teeth have nothing to bite on"
-        )
-    else:
+    real_switch = sw.REGISTRY["predicate_mode"]
+    check.note(
+        f"every switch this harness can compose — the matrix's and the "
+        f"predicate trial's alike — is implemented by the tree under test "
+        f"(0 registry entries with no driver name), so the two allowance "
+        f"teeth bite on a registry doctored back to the state before "
+        f"{real_switch.driver_name} landed rather than on a live gap"
+    )
+    sw.REGISTRY["predicate_mode"] = dataclasses.replace(
+        real_switch,
+        driver_name=None,
+        pending_change="a driver change that has not been made (doctored here)",
+    )
+    try:
         pending_terms = sw.unimplemented(
             arms_mod.ARMS["B0"].terms(
                 config, pin_hex=_PIN_HEX, campaign=campaign,
                 predicate_mode=pending_mode,
             )
         )
+        if not pending_terms:
+            check.fail(
+                "the doctored registry did not make the predicate mode look "
+                "unimplemented, so the two allowance teeth would pass over an "
+                "empty perturbation"
+            )
         no_allowance = pool_mod.Job(
             phase="B",
             arm="B0",
@@ -1583,10 +1623,12 @@ def check_run_path(campaign: Campaign) -> Check:
         check.tooth(
             "a run asking for a switch the tree does not implement",
             caught,
-            f"B0 under predicate mode {pending_mode!r} declares "
-            f"{list(pending_terms)}, which no tree implements; composing "
-            f"without it would be a successful run of a different arm under "
-            f"this arm's name ({message})",
+            f"with the registry doctored back to before "
+            f"{real_switch.driver_name} landed, B0 under predicate mode "
+            f"{pending_mode!r} declares {list(pending_terms)}, which that "
+            f"registry says no tree implements; composing without it would be "
+            f"a successful run of a different arm under this arm's name "
+            f"({message})",
         )
         over_allowed = pool_mod.Job(
             phase="B",
@@ -1608,6 +1650,42 @@ def check_run_path(campaign: Campaign) -> Check:
             f"an allowance that covers a switch the tree has is an allowance "
             f"nobody checked ({message})",
         )
+    finally:
+        sw.REGISTRY["predicate_mode"] = real_switch
+
+    # And the live state, checked rather than assumed: with the real registry
+    # back, the arm that asks for the trial's ruler composes it and needs no
+    # allowance at all.  This is the half the doctored teeth cannot say.
+    live = pool_mod.Job(
+        phase="B",
+        arm="B0",
+        config=config,
+        seed=0,
+        outdir=Path(campaign.runs_dir) / "_never",
+        pin_hex=_PIN_HEX,
+        run_kind="smoke",
+        predicate_mode=pending_mode,
+    )
+    try:
+        live_env, _asked = pool_mod.environment_for(live, campaign)
+    except Exception as exc:  # noqa: BLE001 - reported as a failure
+        check.fail(
+            f"B0 under predicate mode {pending_mode!r} no longer composes: "
+            f"{type(exc).__name__}: {exc}"
+        )
+    else:
+        got = live_env.get(real_switch.driver_name)
+        if got != pending_mode:
+            check.fail(
+                f"B0 under predicate mode {pending_mode!r} composed "
+                f"{real_switch.driver_name}={got!r}"
+            )
+        else:
+            check.note(
+                f"B0 under predicate mode {pending_mode!r} composes "
+                f"{real_switch.driver_name}={pending_mode} and needs no "
+                f"allowance — the capability probe resolves it"
+            )
 
     # --- the reproduction gate's overrides, and what refuses one ----------
     #

@@ -348,19 +348,27 @@ REGISTRY: dict[str, Switch] = {
     ),
     "predicate_mode": Switch(
         term="predicate_mode",
-        driver_name=None,
+        driver_name="PROCESS_ARCH_PREDICATE",
         intended_name="PROCESS_ARCH_PREDICATE",
         value_kind="enum",
-        values=("mixed",),
+        values=("frozen", "mixed"),
         composed=True,
         readbacks=((MODULE_SOLVE, "PREDICATE_MODE"),),
         resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "PREDICATE_MODE") == v,
-        pending_change="approved driver change DR5 (predicate mode frozen | mixed)",
         note=(
-            "Which denominator the convergence test scales by: the frozen "
-            "measured ruler, or one that may move with the state.  'frozen' "
-            "is the driver's behaviour today and composes nothing; 'mixed' "
-            "is the trial and needs the switch."
+            "Which denominator the convergence test scales a step by: "
+            "'frozen', the measured scale alone -- every earlier revision's "
+            "ruler, the driver's behaviour with the variable unset, and the "
+            "campaign default -- or 'mixed', the conventional scaled step "
+            "with that scale kept as a floor under the current magnitude.  "
+            "The two are bit-identical wherever the current magnitude is at "
+            "or below the scale, and 'mixed' is never tighter, so no count "
+            "can go up.  Both values are listed although an arm composes only "
+            "'mixed': 'frozen' is also what the variable unset means, and a "
+            "value that can be read back is a value that can be checked.  "
+            "Driver change DR5; the trial is the experiment plan's section "
+            "3.6 and gate G8, and adoption is a later decision by that "
+            "section's rule."
         ),
     ),
     "pass_trace": Switch(

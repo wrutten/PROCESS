@@ -160,13 +160,19 @@ HARVEST_IDENTITY_KEYS = ("harvest", "harvest_identity")
 #: nothing else identifies a filename, not a measurement.
 HARVEST_IDENTITY_REQUIRED = ("file_sha256", "content_sha256", "n_design_points")
 
-#: The preamble key that will say which convergence predicate an artifact was
-#: stamped for once the predicate trial's driver side exists.  Absent today on
-#: every committed artifact; recorded as *not stamped* rather than as a
-#: failure, because the field arrives with the task that introduces the choice.
+#: The preamble key that names a convergence ruler.  Absent on every committed
+#: coupling-state artifact, and correctly so: the ruler is a **run setting**,
+#: not a property of the components and scales an artifact holds.  Both rulers
+#: read the same components and the same scales -- ``frozen`` divides by the
+#: scale, ``mixed`` uses it as a floor -- so an artifact stamped for one of them
+#: would be claiming a restriction that does not exist, and the committed files'
+#: byte identity, which the data check guards, would have to be broken to write
+#: it.  What the key does stamp is the preamble of an artifact a **run writes**:
+#: ``audit_residual.json``, ``y_entry.json``, ``y_exit.json`` and the run record
+#: all carry it, which is where improvement item 5a's trap (i) actually bites.
 PREDICATE_MODE_KEY = "predicate_mode"
 
-#: The task that will stamp it, named in the ledger so the gap has an owner.
+#: The task that settled where the stamp belongs, named so the row has an owner.
 PREDICATE_MODE_OWNER = "A59 (driver-predicate-mode)"
 
 
@@ -620,14 +626,17 @@ def _check_coupling_state(row: Row, record: Mapping[str, Any], config: Config) -
     row.add(
         "predicate mode stamped",
         True,
-        "the preamble key that says which convergence predicate the artifact "
-        "was stamped for",
+        "the preamble key that says which convergence ruler an artifact was "
+        "stamped for",
         (
             f"{record[PREDICATE_MODE_KEY]!r}"
             if PREDICATE_MODE_KEY in record
-            else f"not stamped — the field arrives with {PREDICATE_MODE_OWNER}; "
-            f"recorded rather than failed, because today there is one "
-            f"predicate and the choice does not exist yet"
+            else f"not applicable — the ruler is a run setting, not a property "
+            f"of this file.  Both rulers read the same components and the same "
+            f"scales, so a committed artifact has nothing to stamp; the stamp "
+            f"belongs in the preamble of what a run writes (audit_residual, "
+            f"y_entry, y_exit and the record itself), and it is there.  "
+            f"Settled by {PREDICATE_MODE_OWNER}"
         ),
     )
 

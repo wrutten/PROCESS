@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import math
 import os
 import resource
 import sys
@@ -784,7 +785,11 @@ def install_exit_snapshot(caller, module_solve, *, coupling_state_path: Path):
             holder["spec"] = spec
             holder["provenance"] = provenance
         spec = holder["spec"]
-        record = predicate_mod.snapshot_record(spec, spec.read(spec.bind(data)))
+        record = predicate_mod.snapshot_record(
+            spec,
+            spec.read(spec.bind(data)),
+            predicate_mode=getattr(module_solve, "PREDICATE_MODE", "frozen"),
+        )
         state["positions"][where] = {
             "components_sha256": record["components_sha256"],
             "n_components": record["n_components"],
@@ -874,6 +879,215 @@ def summarise_node_census(
 # --------------------------------------------------------------------------
 # the exit audit
 # --------------------------------------------------------------------------
+
+
+def _finite(value) -> bool:
+    """Whether *value* is a real number worth writing into a record."""
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _ystate_namespace(spec) -> Mapping[str, Any]:
+    """The module globals of whatever coupling-state module *spec* came from.
+
+    Taken from the class's own function globals rather than from
+    ``sys.modules``: the driver loads the predicate module by path, with
+    ``importlib.util.spec_from_file_location`` and ``exec_module``, and never
+    registers it in ``sys.modules`` -- so a lookup by module name finds nothing
+    and would silently fall back to a default, which is the shape of failure
+    this whole switch exists to prevent.
+    """
+    return type(spec).residual.__globals__
+
+
+def ystate_rulers(spec) -> tuple[str, ...]:
+    """The rulers the loaded coupling-state module implements, in its order.
+
+    Read from the module the spec came from rather than listed here: there is
+    one implementation of the predicate in this revision of the experiment
+    (decision D14(c)), and a harness carrying its own list of that module's
+    rulers would be a second, differently-maintained copy of the same decision.
+    """
+    rulers = _ystate_namespace(spec).get("RULERS")
+    if not rulers:
+        raise RuntimeError(
+            "the loaded coupling-state module names no RULERS; the exit audit "
+            "cannot be taken on both rulers, and taking it on one would report "
+            "a change of ruler as a change of accuracy"
+        )
+    return tuple(rulers)
+
+
+def ystate_frozen(spec) -> str:
+    """The name of the ruler every earlier revision measured on."""
+    frozen = _ystate_namespace(spec).get("RULER_FROZEN")
+    if not frozen:
+        raise RuntimeError(
+            "the loaded coupling-state module names no RULER_FROZEN, so the "
+            "audit's unprefixed fields could not be said to be any particular "
+            "ruler's"
+        )
+    return frozen
+
+
+# --------------------------------------------------------------------------
+# the ruler observer -- gate G8's independent detector
+# --------------------------------------------------------------------------
+
+#: Environment variable that installs the observer.  **Not** a ``PROCESS_ARCH_``
+#: name: it is a harness instrument and the driver has never heard of it, so it
+#: cannot be mistaken for a switch, cannot be cleared as one, and cannot change
+#: what any arm is.
+RULER_OBSERVER_VARIABLE = "HARNESS_RULER_OBSERVER"
+
+#: Where the observation goes.  Its own file, not the run record: the record is
+#: what the switch-neutrality gate compares value for value, and a gate-only
+#: instrument's output has no business in it.
+RULER_OBSERVATION_FILE = "ruler_observation.json"
+
+
+def install_ruler_observer(
+    module_solve, spec, outdir: Path, *, run_kind: str
+) -> dict[str, Any] | None:
+    """Watch every predicate evaluation on **both** rulers.  Observation only.
+
+    Gate G8 asks two questions the run records cannot answer on their own.
+    *Was there a decisive pass* --- a component at or above the tolerance on the
+    frozen ruler and below it on the mixed one --- and *at which evaluation*.
+    Both happen inside the driver's loops, which record counters and not
+    trajectories, so without an instrument the gate would have to infer "no
+    decisive pass" from "the two runs agree", which is the very thing it is
+    supposed to be checking.  That is circular, and a circular gate passes on a
+    defect.
+
+    So this wraps the spec's own ``residual`` on the instance.  Every call
+    returns **exactly** what the unwrapped call returns --- the residual on the
+    ruler the run asked for, the same object, computed by the same method --- so
+    no float the run uses comes from here and no decision changes.  Beside it,
+    the other ruler's residual is computed and thrown away except for what is
+    recorded.  It costs one further residual per predicate evaluation, which is
+    why it is **refused on a campaign run**: a per-sweep cost measurement taken
+    with a doubled predicate would be a measurement of the instrument.
+
+    Returns the observation state, or ``None`` when the variable is unset --- in
+    which case nothing is wrapped and the run is byte-identical to one without
+    this function in the tree at all.
+    """
+    if not os.environ.get(RULER_OBSERVER_VARIABLE, "").strip():
+        return None
+    if run_kind == "campaign":
+        raise RuntimeError(
+            f"{RULER_OBSERVER_VARIABLE} is set on a campaign run.  The observer "
+            f"computes a second residual at every predicate evaluation, so a "
+            f"campaign that carried it would publish a per-sweep cost measured "
+            f"with a doubled predicate.  It is a gate instrument; refused here "
+            f"rather than allowed to contaminate a measurement."
+        )
+    rulers = ystate_rulers(spec)
+    frozen_name = ystate_frozen(spec)
+    tau = getattr(module_solve, "TAU", 1e-6)
+    run_ruler = getattr(module_solve, "PREDICATE_MODE", frozen_name)
+    real = spec.residual
+    state: dict[str, Any] = {
+        "installed": True,
+        "rulers": list(rulers),
+        "run_ruler": run_ruler,
+        "tau": tau,
+        "n_predicate_evaluations_observed": 0,
+        "n_evaluations_with_a_decisive_component": 0,
+        "n_evaluations_where_the_verdict_changed": 0,
+        "decisive": [],
+        "what": (
+            "every predicate evaluation the driver made, evaluated on both "
+            "rulers.  A component is *decisive* at an evaluation when it is at "
+            "or above tau on the frozen ruler and below it on the mixed one "
+            "(the experiment plan's section 3.6 definition).  The evaluation's "
+            "*verdict* changes only when that component was also the one "
+            "holding the loop open, which is the narrower event that can make "
+            "two runs differ at all -- both are recorded, because reporting "
+            "the second as the first would understate the binding set and "
+            "reporting the first as the second would overstate what it costs."
+        ),
+        "records_only_the_first": 200,
+    }
+
+    def observed(prev, cur, subset=None, *, ruler=run_ruler):
+        result = real(prev, cur, subset=subset, ruler=ruler)
+        index = state["n_predicate_evaluations_observed"] + 1
+        state["n_predicate_evaluations_observed"] = index
+        by_ruler = {ruler: result}
+        for other in rulers:
+            if other not in by_ruler:
+                by_ruler[other] = real(prev, cur, subset=subset, ruler=other)
+        frozen_res = by_ruler[frozen_name]
+        crossing = []
+        for other in rulers:
+            if other == frozen_name:
+                continue
+            other_res = by_ruler[other]
+            for position, index_c in enumerate(frozen_res.idx_c):
+                a = float(frozen_res.scaled[position])
+                b = float(other_res.scaled[position])
+                if a >= tau > b:
+                    ratios = other_res.value_over_scale()
+                    crossing.append(
+                        {
+                            "other_ruler": other,
+                            "component": spec.name(int(index_c)),
+                            "frozen_scaled": a,
+                            "frozen_scaled_hex": hexf(a),
+                            "other_scaled": b,
+                            "other_scaled_hex": hexf(b),
+                            "value_over_scale": (
+                                None
+                                if not _finite(ratios[position])
+                                else float(ratios[position])
+                            ),
+                            "held_the_pass_under_frozen": (
+                                int(index_c) == frozen_res.argmax
+                            ),
+                        }
+                    )
+        if crossing:
+            state["n_evaluations_with_a_decisive_component"] += 1
+            verdict_changed = any(
+                frozen_res.converged(tau) != by_ruler[other].converged(tau)
+                for other in rulers
+                if other != frozen_name
+            )
+            if verdict_changed:
+                state["n_evaluations_where_the_verdict_changed"] += 1
+            if len(state["decisive"]) < state["records_only_the_first"]:
+                state["decisive"].append(
+                    {
+                        "evaluation": index,
+                        "n_components_compared": len(frozen_res.idx_c),
+                        "frozen_max_hex": hexf(frozen_res.max),
+                        "frozen_argmax": (
+                            None
+                            if frozen_res.argmax is None
+                            else spec.name(frozen_res.argmax)
+                        ),
+                        "verdict_changed": verdict_changed,
+                        "components": crossing,
+                    }
+                )
+        return result
+
+    spec.residual = observed
+    state["outfile"] = str(Path(outdir) / RULER_OBSERVATION_FILE)
+    return state
+
+
+def write_ruler_observation(state: dict[str, Any] | None, outdir: Path) -> None:
+    """The observation, or nothing at all when the observer was not installed."""
+    if state is None:
+        return
+    (Path(outdir) / RULER_OBSERVATION_FILE).write_text(
+        json.dumps(state, indent=2, default=str) + "\n"
+    )
 
 
 def restricted_audit(
@@ -1000,16 +1214,81 @@ def take_exit_audit(
                 return record
         bound = spec.bind(data)
         y_before = spec.read(bound)
+        predicate_mode = getattr(module_solve, "PREDICATE_MODE", "frozen")
         if write_state:
             (Path(outdir) / "y_exit.json").write_text(
-                json.dumps(predicate_mod.snapshot_record(spec, y_before))
+                json.dumps(
+                    predicate_mod.snapshot_record(
+                        spec, y_before, predicate_mode=predicate_mode
+                    )
+                )
             )
             record["exit_state_written_to"] = "y_exit.json"
         nodes_before = caller.NODE_CALLS[0]
         caller.Caller(models, data)._call_models_once(x)
         y_after = spec.read(bound)
-        residual = spec.residual(y_before, y_after)
         tau = getattr(module_solve, "TAU", 1e-6)
+
+        # --- both rulers, always, never one ------------------------------
+        #
+        # The audit is where an arm's achieved accuracy is read, and the two
+        # rulers do not read the same number: the mixed one reads lower
+        # wherever its denominator binds, **by construction**.  A table
+        # carrying only the mixed audit beside an earlier revision's frozen one
+        # would report a change of ruler as a gain in accuracy (improvement
+        # item 5a's trap (ii)), so the record carries both blocks on every run
+        # regardless of which ruler the run's loops stopped on, and a reader
+        # who wants one has to see the other beside it.  It costs one further
+        # pass over the residual vector -- no model call, no sweep.
+        rulers: dict[str, Any] = {}
+        for ruler in ystate_rulers(spec):
+            residual_r = spec.residual(y_before, y_after, ruler=ruler)
+            keys_r = [spec.name(int(i)) for i in residual_r.idx_c]
+            values_r = [float(v) for v in residual_r.scaled]
+            restricted_r = None
+            excluded_r: set[str] = set()
+            if per_run_artifact is not None and node_write_sets_path is not None:
+                restricted_r, excluded_r = restricted_audit(
+                    per_run_artifact,
+                    configuration,
+                    node_write_sets_path,
+                    keys_r,
+                    values_r,
+                    tau,
+                )
+            ratios = residual_r.value_over_scale()
+            rulers[ruler] = {
+                "ruler": ruler,
+                "tau": tau,
+                "residual_max": residual_r.max,
+                "residual_max_hex": hexf(residual_r.max),
+                "brief": residual_r.brief(tau),
+                "detail": residual_r.ruler_detail(tau),
+                "restricted": restricted_r,
+                "n_excluded_from_the_restricted_statistic": len(excluded_r),
+                # Which ruler the run's own loops stopped on is stamped ONCE,
+                # at exit_audit.predicate_mode, and the block's key says which
+                # ruler the block is.  It was briefly stamped inside each block
+                # as well; gate G8 caught it as two differing values per pair,
+                # which is what a stamp of the setting being varied looks like
+                # when it is written twice.
+                "scaled_hex": {
+                    k: hexf(v) for k, v in zip(keys_r, values_r)
+                },
+                "value_over_scale": {
+                    k: (None if not _finite(r) else float(r))
+                    for k, r in zip(keys_r, ratios)
+                },
+            }
+
+        # The unprefixed fields below are the **frozen** ruler's, unchanged in
+        # name, shape and value from every record made before DR5, because a
+        # gate compares them value for value and a reproduction gate reads one
+        # of them by path.  They are taken from the frozen block above rather
+        # than computed a second time, so there is one computation and two
+        # presentations of it.
+        frozen = rulers[ystate_frozen(spec)]
+        residual = spec.residual(y_before, y_after, ruler=ystate_frozen(spec))
         keys = [spec.name(int(i)) for i in residual.idx_c]
         values = [float(v) for v in residual.scaled]
         vector = {
@@ -1017,6 +1296,23 @@ def take_exit_audit(
             "n_components": provenance.get("n_components"),
             "n_continuous_tested": len(keys),
             "tau": tau,
+            # The preamble of an artifact this run writes: which ruler the
+            # run's own loops stopped on, and which ruler the unprefixed
+            # vector below is taken on.  They can differ -- the audit is always
+            # published on both -- and a vector that named neither could not be
+            # told apart from the other afterwards (item 5a trap (i)).
+            "predicate_mode": predicate_mode,
+            "vector_ruler": ystate_frozen(spec),
+            "rulers": {
+                name: {
+                    "residual_max_hex": block["residual_max_hex"],
+                    "scaled_hex": block["scaled_hex"],
+                    "value_over_scale": block["value_over_scale"],
+                    "n_above": block["brief"]["n_above"],
+                    "argmax": block["brief"]["argmax"],
+                }
+                for name, block in rulers.items()
+            },
             "scaled": dict(zip(keys, values)),
             "scaled_hex": {k: hexf(v) for k, v in zip(keys, values)},
             "discrete_mismatch": [
@@ -1025,9 +1321,9 @@ def take_exit_audit(
             "moved_constant": [spec.name(i) for i in residual.moved_constant],
             "nan_new": [spec.name(i) for i in residual.nan_new],
         }
-        restricted = None
+        restricted = frozen["restricted"]
         if per_run_artifact is not None and node_write_sets_path is not None:
-            restricted, excluded_keys = restricted_audit(
+            _r, excluded_keys = restricted_audit(
                 per_run_artifact,
                 configuration,
                 node_write_sets_path,
@@ -1057,6 +1353,20 @@ def take_exit_audit(
                     "frozen before it ran"
                 ),
             }
+        )
+        # Both rulers, as named blocks, beside the unprefixed frozen fields
+        # above.  The pair is what a residual table reads; a table that shows
+        # one column alone is reporting a change of ruler as a change of
+        # accuracy.
+        record.update(rulers)
+        record["predicate_mode"] = predicate_mode
+        record["rulers_note"] = (
+            "'frozen' and 'mixed' are the same sweep measured with two "
+            "denominators; the mixed one reads lower wherever its denominator "
+            "binds, by construction, so the two are published together or not "
+            "at all.  The unprefixed residual_max / brief / restricted fields "
+            "are the frozen ruler's, kept under their original names because "
+            "earlier records carry them there."
         )
     except Exception:  # noqa: BLE001 - recorded, never raised
         record["error"] = traceback.format_exc()
