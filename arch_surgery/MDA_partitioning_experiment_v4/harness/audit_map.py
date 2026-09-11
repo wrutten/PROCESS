@@ -603,7 +603,8 @@ def _observe(observation, holder, caller_mod, module_solve_mod, single_run) -> N
         summary["compared"] = True
         summary["n_components"] = len(spec.keys)
         summary["n_not_bit_identical"] = len(bitwise)
-        summary["not_bit_identical"] = bitwise[:20]
+        summary["not_bit_identical"] = bitwise[:200]
+        summary["not_bit_identical_listed"] = min(len(bitwise), 200)
         observation["state_comparisons"][f"{left}__vs__{right}"] = summary
 
     # -- what the output path changed outside the coupling state ----------

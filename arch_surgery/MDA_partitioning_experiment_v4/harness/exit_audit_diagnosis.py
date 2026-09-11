@@ -117,6 +117,28 @@ INPUT_FILE_KEYS: tuple[str, ...] = (
 )
 
 
+def _statement_at(text, statements, number):
+    """The whole statement a line belongs to, so a formula is not cut in half.
+
+    A hit reported as its own physical line reads ``insstrain = (`` and says
+    nothing about what the component is computed from.  The smallest enclosing
+    statement is what a reader needs, and it is taken from the file rather than
+    retyped.
+    """
+    import ast
+
+    enclosing = sorted(
+        (s for s in statements if s[0] <= number <= (s[1] or s[0])),
+        key=lambda s: (s[1] or s[0]) - s[0],
+    )
+    if not enclosing:
+        return None
+    segment = ast.get_source_segment(text, enclosing[0][2])
+    if segment is None:
+        return None
+    return " ".join(segment.split())[:400]
+
+
 def census(campaign: Campaign) -> dict[str, Any]:
     """Which node writes the component, from what, and how it is tested.
 
@@ -284,6 +306,14 @@ def _source_census(tree: Path) -> dict[str, Any]:
                 for node in ast.walk(tree_ast)
                 if isinstance(node, ast.ClassDef)
             ]
+            statements = [
+                (node.lineno, node.end_lineno, node)
+                for node in ast.walk(tree_ast)
+                if isinstance(node, ast.stmt)
+                and not isinstance(
+                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                )
+            ]
             tests = []
             for node in ast.walk(tree_ast):
                 if isinstance(node, ast.If):
@@ -302,7 +332,7 @@ def _source_census(tree: Path) -> dict[str, Any]:
                             (start, end, branch, ast.unparse(node.test))
                         )
         except SyntaxError:
-            functions, classes, tests = [], [], []
+            functions, classes, tests, statements = [], [], [], []
         hits = []
         for number, line in enumerate(lines, start=1):
             if not any(name in line for name in names):
@@ -328,6 +358,7 @@ def _source_census(tree: Path) -> dict[str, Any]:
                         else f"{guards[0][2]} {guards[0][3]}"
                     ),
                     "guards": [f"{g[2]} {g[3]}" for g in guards[:4]],
+                    "statement": _statement_at(text, statements, number),
                 }
             )
         defaults = {}
