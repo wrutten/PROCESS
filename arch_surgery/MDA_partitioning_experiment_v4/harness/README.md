@@ -1120,13 +1120,17 @@ Four refusals, each a way the comparison could pass over nothing:
 | an **empty comparison** — no table, or no cell in the tables there are | a gate that cannot find what it compares must refuse, never pass over nothing (trap T11) |
 | a **budget-capped demonstration** (`force_maxcal`) in a population | such a record demonstrates a decomposition and is not a measurement of anything |
 | a population **straddling two commits** without `--resume` | without it every run is re-made, so a record from another commit means one was kept that should not have been |
-| the tally's **stage records absent** | `--verify` compares against the tally's output and never against its code, so the output has to be on disk: run `--measure tally_evaluation` and `--measure tally_optimisation` first |
+| the tally's **stage records absent** | `--verify` compares against the tally's output and never against its code, so the output has to be on disk |
+| a tally stage record **computed over another run population** | a stage record left from before a change that moves cells produces mismatches that look exactly like a drift; each record's own `runs_provenance` is compared with this module's own survey, on the commits and the count, and a disagreement refuses with both sides named |
 
-The last one is an ordering constraint the framework cannot express: `Gate.reads_from` names **gates**,
-and the two tally stages are measurements. `recomputation` is therefore ordered last in `GATE_ORDER`,
-and on a tree with no tally output `--gate all` reaches it and refuses with that sentence.
+**A gate may declare that it reads a measurement stage.** `Gate.reads_from` names either kind:
+`gates.assert_declared_dependencies` refuses, as the registry is built, a dependency naming something
+nobody runs; `ordered_gate_names` orders the *gate* dependencies among themselves; and the button runs
+each declared *stage* immediately before the gate that declares it, once per press, with the same
+`--resume`. `recomputation` declares `reproduction`, `entry_and_warm`, `tally_evaluation` and
+`tally_optimisation`, so `--gate all` makes what it reads and no chain needs reordering.
 
-### The independence check, and the seven teeth
+### The independence check, and the nine teeth
 
 The property the whole gate rests on — *this module borrowed no construction* — is itself a
 **checked criterion** and not a comment: the gate parses `analysis.py`'s own source and fails if it
@@ -1143,6 +1147,8 @@ denominator beside the cells.
 | a retried flag trusted from a stored field | a record whose `attempt_accounting.retried` disagrees with `attempts[]`, in both directions | follow `attempts[]` and never the stored flag |
 | a population straddling two commits | two records carrying different `tree_git_head` values | refuse without `--resume`; state the straddle with it |
 | a construction imported from the tally | a source importing `harness.stats`, `harness.tally_optimisation` and `harness.tables` | name all three, and name nothing in a source that imports only the framework |
+| a tally stage record over another run population | a stage record doctored to another commit, and one doctored to a smaller record count | refuse both, and accept one that agrees |
+| a gate declaring a stage the registry does not hold | a gate whose `reads_from` names `a_stage_nobody_runs` | refuse as the registry is built |
 
 ### What cannot be recomputed from records
 

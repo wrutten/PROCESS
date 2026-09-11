@@ -2,12 +2,12 @@
 
 > **Document status** — **OPEN.** Task **A54 (harness-analysis)**, plan item **H7**. Branch
 > `A54-harness-analysis`, off `architecture_surgery` at `06a85fa0` (the tip after A53
-> (harness-tally)'s merge). Code at `9f29757f` and `12ba1054`; every number below was produced by
-> `experiment_runner.py --gate recomputation --resume` and
-> `experiment_runner.py --measure recomputed_tables --resume` at **`12ba1054`**, over run records
-> made at **`cd62c510`** (A53's press, seeded into this worktree under amendment 15), and reproduce
-> identically at the report's own commit `25ddad47`, which adds no code. **No PROCESS run was made
-> by this task.** Folder position records lifecycle, not validity (trap T3).
+> (harness-tally)'s merge). Every number below was produced at **`09be001a`** — the tip after the
+> coordinator's three review fixes — by `--measure tally_evaluation`, `--measure tally_optimisation`,
+> `--gate tally_contracts --resume`, `--gate recomputation --resume` and
+> `--measure recomputed_tables --resume`, in that order, over run records made at **`cd62c510`**
+> (A53's press, seeded into this worktree under amendment 15). **No PROCESS run was made by this
+> task.** Folder position records lifecycle, not validity (trap T3).
 
 ---
 
@@ -16,7 +16,9 @@
 **In one sentence.** The tally computes the experiment plan's §4 tables from the run records; this
 task writes a **second implementation** of every one of those cells that shares no line of
 construction with it, compares the two cell by cell over the tally's own emitted output, and puts
-that comparison behind a gate with seven teeth — **1 847 values compared, 0 mismatched.**
+that comparison behind a gate with nine teeth — **1 901 values compared, 0 mismatched** — and it
+found two defects in the first implementation, which the coordinator ruled are fixed on this branch
+because the verifier is what proves a fix reached both sides (§4).
 
 **Why a second implementation at all.** Twice in this project a declared definition reached one
 implementation and not the other and nothing failed (queue issues **I-18**, **I-19**). A gate that
@@ -54,18 +56,18 @@ the verdict states.*
 | quantity | value |
 |---|---|
 | verdict | **PASS** |
-| values compared | **1 847** |
+| values compared | **1 901** |
 | values mismatched | **0** |
-| — of which table cells | 1 809 over 168 rows of **65 tables** |
+| — of which table cells | 1 863 over 168 rows of **65 tables** |
 | — of which published values beside the tables | 37 (16 similarity verdicts × 2 readings, 5 seed sets) |
 | — of which the independence check | 1 |
-| teeth | **7 / 7 tripped** |
+| teeth | **9 / 9 tripped** |
 | run records read | **33**, all at `cd62c510` |
 | declared sources read | 2 (`reference_runs`, `paired_entries`) |
 | populations where the two implementations differ | **0** |
 | PROCESS runs made | **0** |
 
-**The 1 809 table cells split two ways** — 1 357 produced by a construction, 452 composed as a
+**The 1 863 table cells split two ways** — 1 411 produced by a construction, 452 composed as a
 string. The split is reported and never added into one number: two implementations landing on the
 same median is evidence about a rule; two implementations landing on the same `"[18, 68]"` is
 partly evidence about a format string.
@@ -80,7 +82,7 @@ a third route that is neither implementation.
 
 ## 2. What the second implementation is, and what makes it one
 
-`harness/analysis.py` — 3 317 lines, no import of `stats.py`, `tally.py`, `tally_evaluation.py`,
+`harness/analysis.py` — 3 500 lines, no import of `stats.py`, `tally.py`, `tally_evaluation.py`,
 `tally_optimisation.py` or `tables.py`. It imports `framework` (the `Gate`/`Check`/`Measurement`
 shapes and `survey_heads`), `config` (the campaign's declared constants) and the arm-matrix order.
 
@@ -120,7 +122,7 @@ row, which is a result: no seed fell outside a converged set on any arm group.*
 | table kind | instances | rows | cells from a construction | cells composed as a string |
 |---|---|---|---|---|
 | cost per call | 6 | 14 | 98 | 56 |
-| matched accuracy | 6 | 28 | 224 | 84 |
+| matched accuracy | 6 | 28 | 252 | 84 |
 | ownership rung A0 → A0p | 2 | 2 | 12 | 4 |
 | per-sweep overhead | 11 | 27 | 296 | 54 |
 | failure taxonomy | 6 | 14 | 42 | 14 |
@@ -131,9 +133,9 @@ row, which is a result: no seed fell outside a converged set on any arm group.*
 | iteration multiplier (check 2) | 3 | 6 | 42 | 18 |
 | the attempt summation identity | 5 | 13 | 91 | 52 |
 | cost (check 4) | 3 | 9 | 99 | 9 |
-| achieved accuracy at the accepted optimum | 5 | 26 | 182 | 104 |
+| achieved accuracy at the accepted optimum | 5 | 26 | 208 | 104 |
 | the lift closed (check 3) | 4 | 6 | 24 | 12 |
-| **total** | **65** | **168** | **1 292** | **452** |
+| **total** | **65** | **168** | **1 346** | **452** |
 
 The 65 tables and the 6 tables **not produced** (each `B1·B3` arm group carries no `B0` run, and
 checks 1, 2 and 4 are all anchored on it) are the same 65 and the same 6 on both sides. Neither
@@ -147,13 +149,14 @@ at all.** Its decisive-pass counts come from an observer that watches each predi
 reconstructs them. The analysis recomputes that table's **shaping** from the same gate verdict the
 tally read (`gates/predicate_mode/gate.json`), and the gate's verdict names the table so a reader
 can see that those cells check the table and not the measurement. The other 1 612 cell positions
-come from the run records on both sides.
+come from the run records on both sides.  (1 346 + 452 = 1 798 cell positions; the 1 863 cells of
+§1 are those plus each table's own denominator.)
 
 ---
 
-## 4. Populations: what the two implementations agree about, and what differs
+## 4. Populations, and the two defects the comparison found
 
-**Nothing differs.** Source by source and phase by phase:
+**No population differs.** Source by source and phase by phase:
 
 *Caption: one row per population each implementation derives independently. "Analysis" is derived
 here from the declaration; "tally" is read out of the tally's own stage record. The seed sets are
@@ -168,20 +171,41 @@ the optimisation-phase arm groups' converged sets.*
 | seed-complete arm groups | 5, with converged sets `[0]`/`[1]` as listed | identical, all 5 |
 | similarity verdicts | 16 | 16, identical on median and p90 |
 
-**Two latent differences found, neither of which bites on this population**, both reported here
-rather than reconciled:
+### Two defects in the first implementation, found here and fixed here
 
-1. **The `n` column of the two accuracy tables is built two ways.** In `matched accuracy`
-   (evaluation phase) `n` counts the *values* — the finished runs that carry a restricted maximum.
-   In `achieved accuracy` (optimisation phase) `n` counts the *runs*. The comparison is **silent on
-   the `n` column across all 54 rows of the two accuracy tables**, so over this population the two
-   constructions coincide — every finished record here carries a restricted maximum, which is why.
-   They would diverge on a record whose restricted block is null, a case the plan's own caption
-   anticipates ("a run whose restricted block is null carries no count at all"). Same heading, two
-   constructions; it should be one, and this population cannot tell them apart.
-2. **The `instrument` column's separator differs between the two tables** — `";"` in the evaluation
-   phase, `"; "` in the optimisation phase. Presentation only, but it is an emitted cell, and this
-   implementation had to reproduce both to compare.
+Neither could be seen from inside either table alone, and neither bites on this population — which
+is precisely the shape of I-18 and I-19: a definition that reached one implementation and not the
+other, invisible because nothing disagreed yet.
+
+1. **The `n` column of the two accuracy tables was built two ways.** In `matched accuracy`
+   (evaluation phase) `n` counted the *values* — the finished runs carrying a restricted maximum. In
+   `achieved accuracy` (optimisation phase) `n` counted the *runs*. Across all 54 rows of the two
+   tables the comparison was silent, because every finished record here carries a restricted
+   maximum. They would diverge on a record whose restricted block is null — a case the plan's own
+   caption anticipates ("a run whose restricted block is null carries no count at all"), and one
+   **A62 (exit-audit-restore) makes likelier, not less likely**.
+2. **The `instrument` column's separator differed between the two tables** — `";"` in the evaluation
+   phase, `"; "` in the optimisation phase. Presentation, but an emitted cell, and this
+   implementation had to reproduce both to compare them.
+
+**Both are fixed on this branch, by the coordinator's ruling** (the one exception to decision 8:
+*a defect the verifier found in the implementation is fixed on the same branch, because the verifier
+is what proves the fix reached both sides*).
+
+- `stats.accuracy_population` is now **the one construction, and its docstring is the declaration**:
+  **`n` counts the runs the row is over.** A run whose audit carries no restricted block is counted
+  in `n` and named in a column beside it — `with a restricted statistic`, which reads the smaller
+  number — with the reason in the caption, rather than vanishing from the denominator of a median,
+  which is trap T11. Both tables use it and both gained the column; the `n` heading now reads
+  `n (runs)`.
+- `tables.cell_list` with `tables.CELL_SEPARATOR` is the one separator, and both tables join their
+  instrument column through it.
+- `analysis.py` **re-derives both from the declaration**, as it does every other construction — it
+  did not copy the fix. That the recomputation still lands on 0 mismatches over 1 863 cells is the
+  statement that the fix reached both sides.
+
+The accuracy tables therefore gained one column each: 1 798 cell positions where there were 1 744,
+and 1 863 compared cells where there were 1 809.
 
 ---
 
@@ -199,16 +223,21 @@ the verdict at `12ba1054`; a tooth that does not trip fails the gate.*
 | 5 | `attempt_accounting.retried` disagreeing with `attempts[]`, in **both** directions | follow `attempts[]`, never the stored flag | **TRIPPED** — computes `False` for the stored `True`, `True` for the stored `False` |
 | 6 | two records carrying different `tree_git_head` | refuse without `--resume`; state the straddle with it | **TRIPPED** — refused, and stated under `--resume` |
 | 7 | a source importing `harness.stats`, `harness.tally_optimisation`, `harness.tables` | name all three, and name nothing in a source importing only the framework | **TRIPPED** |
+| 8 | a tally stage record doctored to another commit, and one doctored to a smaller record count | refuse both, and accept one that agrees | **TRIPPED** |
+| 9 | a gate whose `reads_from` names `a_stage_nobody_runs` | refuse as the registry is built | **TRIPPED** |
 
-**7 / 7.** Teeth 1 and 2 are deliberately the two halves of one claim: a doctored *published cell*
+**9 / 9.** Teeth 1 and 2 are deliberately the two halves of one claim: a doctored *published cell*
 proves the comparison reads the tally, and a doctored *construction* — applied to a whole
 recomputation, not to one cell — proves it reads the records. A comparison that agreed with
 anything would pass neither.
 
-**Two further refusals exercised outside the tooth list**, because they are refusals of the stage
-rather than of the criterion: `--verify` without `--resume` on this seeded worktree refuses and
-names both commits; `read_tally_output` against a directory with no stage record refuses and names
-the `--measure` to run first.
+Teeth 8 and 9 are likewise the two halves of the declared dependency of §6: it is worth declaring
+that a gate reads a measurement stage only if declaring a stage nobody runs fails loudly, and only
+if a stage record made over a *different* run population is refused rather than silently compared.
+
+**One further refusal exercised outside the tooth list**, because it is a refusal of the stage
+rather than of the criterion: `read_tally_output` against a directory with no stage record refuses
+and names the `--measure` to run first.
 
 ---
 
@@ -219,12 +248,27 @@ the `--measure` to run first.
 | name | kind | under | what it is |
 |---|---|---|---|
 | `recomputation` | `Gate`, 7 teeth, no PROCESS run | `--gate` | the criterion of §1, promoted by `framework.gate_from_check` without restating it |
-| `recomputed_tables` | `Measurement`, no verdict | `--measure` | this implementation's own 65 tables, 1 744 cells, each with its own caption and denominator |
+| `recomputed_tables` | `Measurement`, no verdict | `--measure` | this implementation's own 65 tables, 1 798 cells, each with its own caption and denominator |
 
-`--gate all` and `--measure all` pick both up from the registry with no further wiring;
-`recomputation` is last in `GATE_ORDER` and declares `reads_from = ("reproduction",
-"entry_and_warm")`, so it runs after the gates whose records it summarises. `analysis.py` also has
-its own button — `--verify`, `--teeth`, `--tables` — for running the comparison or the teeth alone.
+`--gate all` and `--measure all` pick both up from the registry with no further wiring.
+`analysis.py` also has its own button — `--verify`, `--teeth`, `--tables` — for running the
+comparison or the teeth alone.
+
+**A gate may now declare that it reads a measurement stage** (the coordinator's decision on §8's
+fork). `Gate.reads_from` names either kind: `gates.assert_declared_dependencies` refuses, as the
+registry is built, a dependency naming something nobody runs; `ordered_gate_names` orders the *gate*
+dependencies among themselves and leaves the stages alone, because a stage has no verdict and no
+place in a gate sequence; and the button runs each declared *stage* immediately before the gate that
+declares it, once per press, with the same `--resume`. `recomputation` declares `reproduction`,
+`entry_and_warm`, `tally_evaluation` and `tally_optimisation` — so **`--gate all` makes what it
+reads, and A55's chain needs no reordering**: `--gate all --resume --census-entry evaluation` then
+`--measure all` stands as written.
+
+**And the stale case refuses.** Each tally stage record carries its own `runs_provenance`; the gate
+compares it — the commits and the record count — with the survey it makes itself of the same
+declared sources, and refuses with both sides named when they disagree. Without it, a stage record
+left from before a change that moves cells would be compared cell by cell against a recomputation of
+the new records, and every mismatch reported would be a stale file wearing the face of a drift.
 
 **The `recomputed_tables` stage refuses a table of its own** built without a caption, without an
 integer denominator, or without a sentence saying what the denominator counts. That is the same
@@ -257,69 +301,87 @@ rule `tables.py` enforces for the tally, implemented a second time, which is the
 ### To the orchestrator — what the plans should gain
 
 - **Harness plan, Appendix A — a new amendment: H7 delivered.** `analysis.py` with `--verify`
-  (gate `recomputation`, seven teeth), `--teeth` and `--tables` (stage `recomputed_tables`);
-  **1 847 values compared, 0 mismatched, over 65 tables and 33 run records at `cd62c510`**;
+  (gate `recomputation`, nine teeth), `--teeth` and `--tables` (stage `recomputed_tables`);
+  **1 901 values compared, 0 mismatched, over 65 tables and 33 run records at `cd62c510`**;
   independence from the tally's modules a checked criterion rather than a convention. §4.3's
   "the tally and the analysis start from the records, not from each other" is realised, and
   `--verify` is the only thing in the package that can catch the I-18/I-19 shape.
 
-- **A gate cannot declare that it reads a measurement stage.** `Gate.reads_from` names gates, and
-  `ordered_gate_names` raises on a dependency the gate registry does not hold — so
-  `recomputation`'s real dependency on `tally_evaluation` and `tally_optimisation` is expressible
-  only as a comment and a place in `GATE_ORDER`. On a **seeded** worktree this does not bite — A53's
-  relocated gate records carry the two stages' `measurements.json` with them — but on a tree with no
-  tally output `--gate all` reaches `recomputation` last and **refuses**, naming the `--measure` to
-  run first. The sharper case is **staleness, which nothing refuses**: the gate checks the commit of
-  the *run records* it reads, not the freshness of the tally's stage records against them, so a tally
-  record left over from before a change that moves cells would be compared against a recomputation of
-  the new records and report mismatches that are really a stale file. Either the chain becomes
-  `--measure tally_evaluation tally_optimisation` → `--gate recomputation`, or the framework gains a
-  measurement dependency a gate can declare. This is a fork and belongs to the orchestrator.
+- **The framework gained the measurement dependency** (your decision on the fork, implemented here):
+  `Gate.reads_from` may name a measurement stage; `registry()` refuses, as it is built, a dependency
+  naming something nobody runs; the button runs each declared stage immediately before the gate that
+  declares it, once per press, with `--resume` threaded. And the stale case now **refuses**:
+  `recomputation` compares each tally stage record's own `runs_provenance` — the commits and the
+  record count — with the run population it surveys itself, and names both sides. Teeth 8 and 9 cover
+  the two halves. **A55's chain needs no reordering**: `--gate all --resume --census-entry
+  evaluation` then `--measure all` stands as written, because the dependency is declared and
+  `--gate all` makes what it reads.
 
-- **`Gate.runs_under` is relative to `runs/gates`, not to `runs/`** — one directory apart from what
-  a `tally.Source.subpath` is relative to. A wrong one there surveys an empty tree and the verdict
-  reports **"0 record(s)"** instead of the straddle, silently, with no failure: the staleness check
-  in `Gate.run` is gated on `n_records > 0`. This task hit it and fixed it (the constant now derives
-  the gate-relative form), but the shape is a latent trap for every later gate and is worth a line
-  in the plan or in `TRAPS.md`.
+- **`TRAPS.md`, the exact sentence you asked for** (you add it at the merge):
 
-- **The `n` column of `matched accuracy` and `achieved accuracy` is built two ways** (§4.1). They
-  agree over all 54 rows of this population and would not on a record whose restricted block is null —
-  which A62 makes more likely, not less. One construction, please, in `stats.py`.
+  > **A gate's `runs_under` is relative to `runs/gates/`, not to `runs/`.** A `tally.Source.subpath`
+  > is relative to `runs/`, the two are one directory apart, and pasting one into the other makes
+  > `Gate.run` survey a directory that does not exist. It does not fail: `survey_heads` returns
+  > `n_records = 0`, the staleness check in `Gate.run` is gated on `n_records > 0`, and the verdict
+  > prints **"0 record(s)"** where the straddle belongs — so a gate that has read nothing and a gate
+  > whose runs are all current are indistinguishable in the record. **How to avoid it:** derive the
+  > gate-relative path from the source declaration rather than retyping it, and read the new gate's
+  > own `runs_provenance.n_records` in its first verdict — a 0 there is a bug, not a clean tree.
+  > *(Found by A54 (harness-analysis), 2026-09-11, on the gate it was itself adding.)*
 
-- **A62 (exit-audit-restore) moves every `exit_audit.*` cell in parallel with this task.** The
-  analysis reads the instrument's version **through the record** (`audit_instrument`, from
-  `audit_snapshot`'s own fields) and never assumes it, exactly as `stats.audit_instrument` does, so
-  the two implementations stay comparable across that merge and a caption that names the instrument
-  stays true. What will change after A62 is the *values* in the accuracy tables on both sides, and
-  the gate should be re-run at the merged tip — 0 mismatches there is the statement that A62's new
-  instrument reached both implementations.
+- **The two defects of §4 are fixed on this branch**, by your ruling: `stats.accuracy_population` is
+  the one `n` construction — it counts **runs**, and a run carrying no restricted statistic shows in
+  the column beside it rather than vanishing from the denominator — and `tables.cell_list` is the one
+  cell separator. The analysis re-derives both from the declaration rather than copying them.
+  Re-run: `tally_contracts` **PASS, 195/195 table checks, 270/270 reference cells, 10/10 teeth**;
+  `recomputation` **PASS, 1 901 compared, 0 mismatched, 9/9 teeth**. The two accuracy tables gained
+  one column each, so the emitted cell count is **1 798** where it was 1 744.
+
+- **A62 (exit-audit-restore) merges before this task** (your note). Its records carry
+  `exit_audit.instrument` and the previous record-field names; A53's carry the new names and no
+  instrument block — so under the merged schema **no existing record population is complete**, and
+  A55's press re-makes everything. Every number in this report is therefore over the records named in
+  the header and not over the ones the campaign will use.
+
+  What survives that merge unchanged is the *method*: the analysis reads the instrument's version
+  **through the record** (`audit_instrument`, from `audit_snapshot`'s own fields) and never assumes
+  it, exactly as `stats.audit_instrument` does. And it is now **enforced** as well as intended — the
+  gate refuses a tally stage record computed over a different run population, so after A62 the
+  recomputation cannot be run against A53-era tally output at all. The gate then runs at A55's tip,
+  on fresh tally output, reached through the declared dependency added here; **0 mismatches there is
+  the statement that A62's new instrument reached both implementations.**
 
 - **The `recomputation` verdict is not in the plan's §4.1 gate table yet** — `gate_table` fills
   itself from the verdict records, so it appears automatically once the gate has run.
 
 ### To A55 (harness-smoke)
 
-- **The chain order matters, and the seeded tree hides it.** A53's relocated gate records carry
-  `runs/gates/tally_evaluation/measurements.json` and `…/tally_optimisation/…` with them, so on a
-  seeded worktree `--gate all --resume` finds what `recomputation` needs. On a tree without them it
-  reaches `recomputation` last and **refuses**, naming the `--measure` to run first. Safer either
-  way: run `--measure tally_evaluation` and `--measure tally_optimisation` before the gates, so the
-  comparison is against a tally record made from the same run records the gate reads. Nothing
-  refuses a *stale* tally record — only a run-record straddle is refused.
+- **The chain needs no reordering.** `--gate all --resume --census-entry evaluation` then
+  `--measure all` stands as the queue writes it: `recomputation` **declares** that it reads
+  `tally_evaluation` and `tally_optimisation`, and the button runs each declared stage immediately
+  before it, once per press, with the same `--resume`. So `--gate all` makes what it reads, on a
+  seeded tree and on a bare one alike.
+- **You cannot press this gate against a stale tally record.** It compares each stage record's own
+  `runs_provenance` — commits and record count — with the run population it surveys itself, and
+  refuses naming both sides. That matters most at your tip: **A62 (exit-audit-restore) merges before
+  you**, its records carry `exit_audit.instrument` and the previous field names while A53's carry
+  the new names and no instrument block, so **under the merged schema no existing record population
+  is complete and your press re-makes everything**. The declared dependency then re-makes the tally
+  output over those fresh runs before the gate reads it, which is exactly the case this refusal
+  exists for.
 - **Neither entry point starts a PROCESS run.** `recomputation` and `recomputed_tables` are pure
   readers: `needs_runs=False`, and this whole task made 0 runs.
 - **`--resume` is load-bearing.** Without it the gate refuses a population whose records were made
   at another commit, and names both. That is the right behaviour and a smoke must not route around
   it (amendment 13 rule (i)).
 - The analysis has its own button for a fast check without the registry:
-  `python -m harness.analysis --teeth` runs the seven breaks in a few seconds.
+  `python -m harness.analysis --teeth` runs the nine breaks in a few seconds.
 
 ---
 
 ## 9. Limits of what is reported here
 
-- **0 mismatches over 1 847 values is a statement about these records.** The population is 33 gate
+- **0 mismatches over 1 901 values is a statement about these records.** The population is 33 gate
   runs at one or two seeds per arm — `EXECUTION_APPROVED` is False and no campaign record exists.
   It says the two implementations agree *on what these records exercise*, and nothing about
   constructions no record here reaches.
@@ -329,10 +391,11 @@ rule `tables.py` enforces for the tally, implemented a second time, which is the
   synthetic record. No seed failed, so **the failure table has 0 rows in all five instances** and
   its seven columns are compared over nothing. No pair hopped clusters and none fell below cluster
   resolution, so `hop_rate` and `below_resolution` are compared at 0 on both sides.
-- **452 of the 1 809 compared cells are composed strings.** Agreement there is partly agreement
+- **452 of the 1 863 compared cells are composed strings.** Agreement there is partly agreement
   about a format, not about a construction. The two denominators are reported apart for exactly
   that reason and should not be added.
-- **132 cell positions — the whole predicate-trial table — are not recomputable from run records.**
+- **132 of the 1 798 cell positions — the whole predicate-trial table — are not recomputable from
+  run records.**
   Both implementations read them from the same gate verdict, so their agreement checks the table's
   shaping and not the measurement behind it. The verdict says so by name.
 - **The exact-equality rule cuts both ways.** Its strength is that no drift can hide under a
@@ -359,3 +422,7 @@ rule `tables.py` enforces for the tally, implemented a second time, which is the
 |---|---|
 | `9f29757f` | `harness/analysis.py`; gate `recomputation` and stage `recomputed_tables` registered in `gates.py` as one contiguous block; `GATE_ORDER` gains the gate last; `harness/README.md` §10, §5 and a new §14 |
 | `12ba1054` | the similarity verdicts and the seed sets — published values beside the tables — compared and counted in the same denominator |
+| `25ddad47`, `5194b0d2` | the report |
+| `33241c1d` | **review fix 1**: `Gate.reads_from` may name a measurement stage; `registry()` refuses an undeclared one; the button runs each declared stage before the gate that declares it |
+| `e9a8e277` | **review fix 3**: `stats.accuracy_population`, the one `n` construction (it counts runs), and `tables.cell_list`, the one cell separator; both tally tables use them and both gain a column |
+| `09be001a` | **review fix 1, second half**: the gate refuses a tally stage record computed over another run population, with teeth 8 and 9; the `n` construction and the separator re-derived in the analysis |
