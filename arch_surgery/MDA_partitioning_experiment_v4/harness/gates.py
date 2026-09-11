@@ -686,11 +686,25 @@ FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE: dict[str, str] = {
         "snapshotted, what it put back and what it could not.  Absent before "
         "the mechanism existed, a block after"
     ),
-    "audit_snapshot": (
-        "what the driver's hook was asked to take: the coupling state alone, "
-        "and only where the audit position needed it, before; the coupling "
-        "state and the whole data structure at every position the driver "
-        "offers, after.  The positions themselves are unchanged"
+    # One leaf, not the block.  The hook is now installed whatever audit
+    # position was asked for, so this flag flips from False to True across the
+    # change; everything else the block holds -- which positions were reached,
+    # how many components each snapshot took, and the coupling-state digest at
+    # each position -- is unchanged and stays compared.  Excluding the block
+    # would hide those digests, and they are a **behaviour witness**: they say
+    # the driver snapshotted the same state at the same places.  It hid nothing
+    # on this pairing (measured: only `installed` and `audit_position_note`
+    # differ once the block exclusion is lifted), and that is exactly why it
+    # had to go -- an exclusion that costs nothing today is still an exclusion
+    # nobody will notice tomorrow.
+    "audit_snapshot.installed": (
+        "whether the driver's snapshot hook was installed at all.  False on "
+        "the earlier side wherever the audit position did not need a "
+        "coupling-state snapshot, True on this one, because the hook is now "
+        "installed at every audit position -- the whole-data-structure "
+        "snapshot is needed even where the coupling-state one is not.  The "
+        "positions the hook reached, their component counts and their digests "
+        "sit beside this flag in the same block and are compared"
     ),
     "audit_position_note": (
         "the sentence saying how the audit position is reached, which the "
@@ -709,7 +723,7 @@ INSTRUMENT_CHANGE_KIND: dict[str, str] = {
         if name.startswith("exit_audit.") and name != "exit_audit.instrument"
     },
     "exit_audit.instrument": "the instrument's own description of itself",
-    "audit_snapshot": "what the instrument was asked to take",
+    "audit_snapshot.installed": "whether the instrument was installed at all",
     "audit_position_note": "prose the instrument change rewrites",
 }
 
