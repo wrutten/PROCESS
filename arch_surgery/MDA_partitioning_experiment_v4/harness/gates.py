@@ -5158,6 +5158,38 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             }
         )
 
+    # Where the instrument exclusion's leaves actually are.  The group's whole
+    # claim is that it takes out the audit's residual and the instrument's own
+    # account of itself, and **nothing else** — so the leaves it removes are
+    # counted by prefix rather than asserted to be where they should be.  A
+    # leaf outside the exit audit and its stamp would mean the group is hiding
+    # something it was not written for, and the count says so by name.
+    instrument_leaves: dict[str, int] = {}
+    for before, after in g1_pairs:
+        result = compare_records(
+            before,
+            after,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+        )
+        for path in result["excluded_by_the_instrument_change"]:
+            head = path.split("[")[0]
+            prefix = (
+                "exit_audit.instrument"
+                if head.startswith("exit_audit.instrument")
+                else "exit_audit."
+                if head.startswith("exit_audit.")
+                else head.split(".")[0]
+            )
+            instrument_leaves[prefix] = instrument_leaves.get(prefix, 0) + 1
+    outside = {
+        prefix: count
+        for prefix, count in instrument_leaves.items()
+        if not prefix.startswith("exit_audit")
+        and prefix not in {"audit_snapshot", "audit_position_note"}
+    }
+
     g8_rows: list[dict[str, Any]] = []
     for name, reason in PREDICATE_PAIR_EXCLUSIONS.items():
         coverage = _coverage(name, g8_pairs)
@@ -5238,6 +5270,20 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             "reason."
         ),
         "G1_pairing": g1_straddle,
+        "G1_instrument_leaves_by_prefix": {
+            "what": (
+                "every record leaf the instrument-change group removed from "
+                "gate G1's comparison, counted by where it sits.  The group's "
+                "claim is that it takes out the audit's residual and the "
+                "instrument's own account of itself and nothing else; this is "
+                "the measurement of that claim rather than the assertion"
+            ),
+            "by_prefix": dict(sorted(instrument_leaves.items())),
+            "n_leaves": sum(instrument_leaves.values()),
+            "n_outside_the_audit_and_its_stamp": sum(outside.values()),
+            "outside_the_audit_and_its_stamp": dict(sorted(outside.items())),
+            "none_outside_the_audit_and_its_stamp": not outside,
+        },
         "G1_instrument_pairing": {
             "instruments": sorted(
                 {
@@ -5323,6 +5369,16 @@ def print_exclusion_review(block: Mapping[str, Any]) -> None:
                 f"{str(row.get('leaves_equal_where_both_sides_have_them', '-')):>7}"
                 f"  {row['verdict'].split(' — ')[0]}"
             )
+    leaves = block.get("G1_instrument_leaves_by_prefix")
+    if leaves:
+        print(
+            f"\n  instrument-change leaves, by prefix "
+            f"({leaves['n_leaves']} in all; "
+            f"{leaves['n_outside_the_audit_and_its_stamp']} outside the exit "
+            f"audit and its stamp):"
+        )
+        for prefix, count in leaves["by_prefix"].items():
+            print(f"    {prefix:<34} {count}")
     sizes = block["sizes"]
     print("\n  sizes:")
     for name, value in sizes.items():

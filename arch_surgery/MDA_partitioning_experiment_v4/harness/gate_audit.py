@@ -630,6 +630,11 @@ def optimisation_phase_statistic(
                 "n_excluded": (restricted or {}).get("n_excluded"),
                 "n_kept": (restricted or {}).get("n_kept"),
                 "record": str(path),
+                # The audit's own account of what it put back before it swept.
+                # Carried on the row so that the tooth which measures the
+                # restore's boundary reads a record this gate made, at the
+                # declared position, rather than one it found.
+                "_instrument": (record.get("exit_audit") or {}).get("instrument"),
             }
         )
     at_declared = [
@@ -748,7 +753,111 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"measurement rather than a tautology"
         )
 
+    def the_restore_boundary_is_measured() -> tuple[bool, str]:
+        """Where the audit's restore stops, measured on a record and then flipped.
+
+        The audit puts back a **derived** set before its sweep, and one
+        namespace is held out of it by a named rule: ``numerics``, the
+        optimiser's own account of the run, which the record reads *after* the
+        audit.  A rule stated and never exercised is an assertion, so this
+        tooth does two things.
+
+        It **measures the boundary** on a record this gate made: a field
+        PROCESS's output path changes that is *not* in a held-back namespace —
+        the TF-coil stress mesh, which is the case the whole mechanism exists
+        for — must be in the restored set and must not be among the fields the
+        restore missed; the fields the rule held back must be exactly the
+        differing fields in the held-back namespaces, and must still differ
+        when the sweep starts, so what the rule costs is visible rather than
+        implied.
+
+        Then it **flips the boundary**: the same held-back field name, moved
+        into another namespace, must classify as restorable, and the restored
+        field's name moved into the held-back namespace must classify as held
+        back.  So the rule is the namespace and nothing else — not the field,
+        not its value, not where it happens to appear in a record.
+        """
+        from . import child as child_mod
+
+        held_namespaces = set(child_mod.NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE)
+        candidate = "tfcoil.n_rad_per_layer"
+        # The row this is measured on must show **both** sides of the
+        # boundary, so it is chosen for both: the candidate in the restored
+        # set, and something actually held back.  A row where the rule held
+        # nothing back would show the restore working and say nothing about
+        # where it stops, and a tooth that can pass without exercising its
+        # subject is the shape this project keeps finding in its own work.
+        chosen = None
+        fallback = None
+        for row in (_HELD.get("optimisation") or {}).get("rows") or []:
+            record = row.get("_instrument")
+            if not record or not record.get("restored"):
+                continue
+            if candidate not in (record.get("derived") or []):
+                continue
+            fallback = fallback or (row, record)
+            if record.get("held_back_by_rule"):
+                chosen = (row, record)
+                break
+        chosen = chosen or fallback
+        if chosen is None:
+            return False, (
+                f"no run of this gate carries an exit-audit instrument block "
+                f"with {candidate} in its restored set, so the boundary "
+                f"between what the audit puts back and what it holds back "
+                f"cannot be measured on a record"
+            )
+        row, instrument = chosen
+        start = instrument.get("state_the_sweep_starts_from") or {}
+        held = list(instrument.get("held_back_by_rule") or [])
+        measured = (
+            candidate in (instrument.get("derived") or [])
+            and candidate not in (instrument.get("not_restorable") or [])
+            and bool(held)
+            and all(n.partition(".")[0] in held_namespaces for n in held)
+            and sorted(start.get("held_back_by_rule") or []) == sorted(held)
+            and not (start.get("the_restore_asked_for_and_missed") or [])
+        )
+        restorable = lambda name: name.partition(".")[0] not in held_namespaces  # noqa: E731
+        moved_held = f"tfcoil.{held[0].partition('.')[2]}" if held else ""
+        moved_restored = f"{sorted(held_namespaces)[0]}.n_rad_per_layer"
+        flipped = (
+            restorable(candidate)
+            and not restorable(held[0])
+            and restorable(moved_held)
+            and not restorable(moved_restored)
+        )
+        return measured and flipped, (
+            f"on {row['arm']}/{row['configuration']}/seed{row['seed']:03d}: "
+            f"{candidate} is in the restored set of "
+            f"{instrument.get('n_derived')} field(s) and is not among the "
+            f"{len(instrument.get('not_restorable') or [])} the restore could "
+            f"not put back; the rule held back {held}, all of them in "
+            f"{sorted(held_namespaces)}, and all of them still differ when the "
+            f"sweep starts "
+            f"({start.get('n_outside_the_coupling_state')} field(s) outside "
+            f"the coupling state do, "
+            f"{start.get('n_of_those_the_restore_asked_for_and_missed')} of "
+            f"them because the restore missed them).  Flipped: {moved_held!r} "
+            f"classifies as restorable and {moved_restored!r} as held back, so "
+            f"the boundary is the namespace and not the field"
+        )
+
     return (
+        Tooth(
+            name="the restore's boundary, measured and flipped",
+            what=(
+                "the exit audit's restored set and the one namespace a named "
+                "rule holds out of it, read off a record this gate made, and "
+                "then the two field names swapped between namespaces"
+            ),
+            must=(
+                "put back the model setting PROCESS's output path changes, "
+                "hold back only the optimiser's own accounting, name what it "
+                "held back, and classify a swapped name by its namespace"
+            ),
+            check=the_restore_boundary_is_measured,
+        ),
         Tooth(
             name="a doctored per-run-owned component",
             what=(
