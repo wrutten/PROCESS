@@ -58,8 +58,14 @@ __all__ = [
 ]
 
 
-class TallyError(RuntimeError):
-    """A refused tally.  Never downgraded into a warning."""
+class TallyError(framework.GateError):
+    """A refused tally.  Never downgraded into a warning.
+
+    A subclass of the framework's refusal so that the button reports it the way
+    it reports every other refusal — ``REFUSED — …`` with the sentence — rather
+    than as an uncaught traceback.  A refusal a reader has to decode from a
+    stack trace is a refusal that reads like a crash.
+    """
 
 
 #: Where the runs a tally reads live, relative to the campaign's records

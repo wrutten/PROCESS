@@ -359,8 +359,16 @@ def same_optimum(
     by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
     converged: Sequence[int],
     source: str,
-) -> Table:
-    """§4.3.2 / check 1 — is it the same optimum?"""
+) -> Table | None:
+    """§4.3.2 / check 1 — is it the same optimum?
+
+    ``None`` where this arm group carries no flat control: every pair of this
+    check is anchored on it, so without it there is nothing to compare and an
+    empty table would state a denominator over no comparison.  The omission is
+    named in the stage's record rather than left as a blank table.
+    """
+    if BASE_ARM not in by_arm:
+        return None
     pairs: list[tuple[str, str]] = []
     if all(a in by_arm for a in YARDSTICK_PAIR):
         pairs.append(YARDSTICK_PAIR)
@@ -528,7 +536,7 @@ def iterations(
     by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
     converged: Sequence[int],
     source: str,
-) -> Table:
+) -> Table | None:
     """Check 2 — the iteration multiplier, in **both** declared constructions.
 
     The acceptance statistic is the **summed** median; the final attempt's is
@@ -538,9 +546,11 @@ def iterations(
     arm's extra stencil column and the line-search evaluations that vary at
     equal iteration count.
     """
+    if BASE_ARM not in by_arm:
+        return None
     rows: list[dict[str, Any]] = []
     for arm in _arm_order(by_arm):
-        if arm == BASE_ARM or BASE_ARM not in by_arm:
+        if arm == BASE_ARM:
             continue
         seeds = [
             s
@@ -767,12 +777,16 @@ def cost(
     by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
     converged: Sequence[int],
     source: str,
-) -> Table:
-    """Check 4 — the cost, with and without the retried seeds."""
+) -> Table | None:
+    """Check 4 — the cost, with and without the retried seeds.
+
+    ``None`` where the arm group carries no flat control: every ratio here is
+    against it.
+    """
+    if BASE_ARM not in by_arm:
+        return None
     rows: list[dict[str, Any]] = []
     for arm in _arm_order(by_arm):
-        if BASE_ARM not in by_arm:
-            continue
         both = stats_mod.with_and_without_retried(
             by_arm[BASE_ARM], by_arm[arm], converged
         )
@@ -1013,7 +1027,15 @@ def achieved_accuracy(
                     "n": len(records),
                     "restricted_median": stats_mod.median(restricted_values),
                     "restricted_max": max(restricted_values) if restricted_values else None,
-                    "argmax": ", ".join(argmaxes) if argmaxes else "—",
+                    "argmax": (
+                        ", ".join(argmaxes)
+                        if argmaxes and any(v for v in restricted_values)
+                        else (
+                            "— (every component exactly 0)"
+                            if restricted_values
+                            else "—"
+                        )
+                    ),
                     "n_above_tau": ", ".join(
                         str(v.get("n_above_tau")) for v in restricted
                     ) or "—",
@@ -1230,6 +1252,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     refusals: list[str] = []
     sources: list[dict[str, Any]] = []
     seed_sets: dict[str, list[int]] = {}
+    not_produced: list[dict[str, str]] = []
     for source in tally_mod.SOURCES:
         if PHASE not in source.phases:
             continue
@@ -1266,20 +1289,41 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 emitted.append(
                     failure_table(population, config.name, by_arm, converged, label)
                 )
-                emitted.append(
-                    same_optimum(
-                        campaign, population, config.name, by_arm, converged, label
-                    )
-                )
-                emitted.append(
-                    iterations(
-                        campaign, population, config.name, by_arm, converged, label
-                    )
-                )
+                for name, table in (
+                    (
+                        "same optimum (check 1)",
+                        same_optimum(
+                            campaign, population, config.name, by_arm,
+                            converged, label,
+                        ),
+                    ),
+                    (
+                        "iteration multiplier (check 2)",
+                        iterations(
+                            campaign, population, config.name, by_arm,
+                            converged, label,
+                        ),
+                    ),
+                    (
+                        "cost (check 4)",
+                        cost(population, config.name, by_arm, converged, label),
+                    ),
+                ):
+                    if table is None:
+                        not_produced.append(
+                            {
+                                "table": f"{name} — {config.name} — {label}",
+                                "why": (
+                                    f"this arm group carries no {BASE_ARM} run, "
+                                    f"and every pair of this check is anchored "
+                                    f"on it.  A table over no comparison would "
+                                    f"state a denominator for nothing"
+                                ),
+                            }
+                        )
+                    else:
+                        emitted.append(table)
                 emitted.append(attempts(population, config.name, by_arm, label))
-                emitted.append(
-                    cost(population, config.name, by_arm, converged, label)
-                )
                 emitted.append(
                     achieved_accuracy(
                         campaign, population, config.name, by_arm, label
@@ -1305,6 +1349,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "runs_straddle_note": straddle,
         "record_contract_refusals": refusals,
         "seed_sets": seed_sets,
+        "tables_not_produced": not_produced,
         "tables": [table.as_record() for table in emitted],
         "n_tables": len(emitted),
     }
