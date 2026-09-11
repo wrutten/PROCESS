@@ -698,12 +698,98 @@ def summarise(
         )
     summary["n_rows"] = len(summary["rows"])
     summary["n_missing"] = len(summary["missing"])
+    summary["nothing_left_to_attribute"] = _nothing_left_to_attribute(summary)
     path = root(campaign) / "summary.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(summary, indent=2, default=str) + "\n")
     summary["written_to"] = str(path)
     (root(campaign) / "summary.md").write_text(render(summary))
     return summary
+
+
+def _nothing_left_to_attribute(summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Has the leave-one-out pair anything left to attribute?
+
+    This stage was built to attribute a residual to one latching output-mode
+    setting, and it did: putting that one field back collapsed the component's
+    own residual to exactly zero, and putting the other eighty-five back and
+    not it changed nothing.  Ruling **D25** then moved the putting-back into
+    the exit audit itself, over a derived set.  So the pair must now have
+    **nothing to do**: the "put back only the candidate" row and the "put back
+    nothing" row must be the same sweep of the same state, and the component
+    the whole diagnosis was about must sit at exactly ``0x0.0p+0``.
+
+    That is a check with three parts and one denominator, reported per run:
+
+    * the three rows' residual maxima are bit-identical — the candidate is
+      already back before any of them starts;
+    * the candidate is **not** among the fields the output path left changed at
+      the moment the audit's sweep begins, because the audit put it back;
+    * the tracked component's own scaled residual is exactly ``0x0.0p+0``
+      wherever it is a continuous coupling-state component, and its absence is
+      stated where it is not.
+
+    A row that fails any part is named.  The check is over the rows that exist;
+    missing runs are counted separately and never quietly shrink it.
+    """
+    rows_ok: list[str] = []
+    rows_bad: list[dict[str, Any]] = []
+    for row in summary["rows"]:
+        sweeps = row.get("sweeps") or {}
+        as_found = sweeps.get("output_entry_as_found") or {}
+        only_candidate = (
+            sweeps.get("output_entry_with_only_the_candidate_put_back") or {}
+        )
+        every_other = (
+            sweeps.get("output_entry_without_the_candidate_put_back") or {}
+        )
+        residuals = {
+            "as found (put back nothing)": as_found.get("residual_max_hex"),
+            "only the candidate put back": only_candidate.get("residual_max_hex"),
+            "every other field put back": every_other.get("residual_max_hex"),
+        }
+        tracked = as_found.get("component_scaled_hex")
+        continuous = as_found.get("component_tested_as_continuous")
+        failures: list[str] = []
+        if len(set(residuals.values())) != 1:
+            failures.append(
+                f"the three rows do not coincide: {residuals}"
+            )
+        if only_candidate.get("candidate_among_the_changed_fields"):
+            failures.append(
+                "the candidate is still among the fields the output path left "
+                "changed when the audit's sweep begins, so the audit did not "
+                "put it back"
+            )
+        if continuous and tracked != "0x0.0p+0":
+            failures.append(
+                f"the tracked component's own scaled residual is {tracked}, "
+                f"not 0x0.0p+0"
+            )
+        if failures:
+            rows_bad.append({"key": row["key"], "why": failures})
+        else:
+            rows_ok.append(row["key"])
+    return {
+        "what": (
+            "after the exit audit restores the whole data structure, the "
+            "leave-one-out pair this stage was built for must have nothing "
+            "left to attribute: the 'put back only the candidate' and 'put "
+            "back nothing' rows coincide, the candidate is no longer among "
+            "the changed fields, and the tracked component sits at exactly "
+            "0x0.0p+0 wherever it is continuous"
+        ),
+        "candidate": audit_map_mod.CANDIDATE_FIELD,
+        "component": COMPONENT,
+        "n_rows": len(summary["rows"]),
+        "n_runs_declared": summary["n_runs_declared"],
+        "n_missing": summary["n_missing"],
+        "n_rows_with_nothing_left": len(rows_ok),
+        "rows_with_nothing_left": rows_ok,
+        "n_rows_with_something_left": len(rows_bad),
+        "rows_with_something_left": rows_bad,
+        "passed": not rows_bad and bool(summary["rows"]) and not summary["missing"],
+    }
 
 
 def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
@@ -1200,6 +1286,31 @@ def render(summary: Mapping[str, Any]) -> str:
             f"| {setting.get('after')} |"
         )
 
+    left = summary.get("nothing_left_to_attribute") or {}
+    if left:
+        lines.append("\n## Is there anything left to attribute?\n")
+        lines.append(
+            f"*Caption: one row per run. After the exit audit began restoring "
+            f"the whole data structure, this stage's leave-one-out pair must "
+            f"have nothing to do: the \"put back only `{left['candidate']}`\" "
+            f"and \"put back nothing\" rows must be the same sweep, the "
+            f"candidate must no longer be among the fields the output path "
+            f"left changed when the sweep begins, and `{left['component']}` "
+            f"must sit at exactly `0x0.0p+0` wherever it is a continuous "
+            f"coupling-state component. Population: "
+            f"{left['n_rows']} row(s) of {left['n_runs_declared']} declared "
+            f"run(s), {left['n_missing']} missing.*\n"
+        )
+        lines.append(
+            f"**{left['n_rows_with_nothing_left']} of {left['n_rows']}** row(s) "
+            f"have nothing left to attribute"
+            + (
+                "."
+                if left["passed"]
+                else f"; {left['n_rows_with_something_left']} do not, and they "
+                f"are named in `summary.json`."
+            )
+        )
     lines.append("\n## What the output file reports\n")
     lines.append(
         f"*Caption: one row per run. `converged by the solve` is `{COMPONENT}` "
@@ -1497,6 +1608,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage in {"report", "all"}:
         summary = summarise(campaign, only=args.only)
         print(render(summary))
+        left = summary["nothing_left_to_attribute"]
+        print(
+            f"\nnothing left to attribute: "
+            f"{'PASS' if left['passed'] else 'FAIL'} — "
+            f"{left['n_rows_with_nothing_left']} of {left['n_rows']} row(s) "
+            f"have the pair coinciding with the component at 0x0.0p+0, "
+            f"{left['n_runs_declared']} run(s) declared, "
+            f"{left['n_missing']} missing"
+        )
+        for bad in left["rows_with_something_left"]:
+            print(f"  {bad['key']}: {'; '.join(bad['why'])}", file=sys.stderr)
+        if not left["passed"] and not summary["n_missing"]:
+            return 1
         if summary["n_missing"]:
             print(
                 f"{summary['n_missing']} declared run(s) have no observation: "

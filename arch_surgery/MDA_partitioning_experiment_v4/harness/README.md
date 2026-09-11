@@ -83,6 +83,10 @@ wording, kept only so that documents written before the rename remain readable. 
 | **deferral `per_run`** | a node runs once in total, at the accepted optimum | post-solve |
 | **burn-time owner** | who decides the burn time on a pulsed plant: the **loop** (a model solves for it), a **constant** (a fixed value, for the phase that has no optimiser), or the **optimiser** (it becomes a design variable with a consistency constraint) | lift, pin, `ixc 178`, constraint 93 |
 | **output-time loop** | upstream's second loop, which re-solves the accepted design until the output files stop changing before writing them. Only the optimisation phase reaches it; an evaluation-phase arm carries no switch for it at all | `MDA_Output`, idempotence loop |
+| **exit audit** | one further full sweep of the whole model set, taken past termination from the state the solve handed over, on the identical instrument in every arm. Its own model calls are never charged to the arm. Its residual is what "achieved accuracy" means here | — |
+| **snapshot position** | where the exit audit's state is taken from. The driver snapshots at two: the entry to the output path — the state the solve handed over, which is the position the plan declares — and immediately before the files are written | — |
+| **restored set** | the data-structure fields the audit puts back before it sweeps, so that the sweep evaluates the map the loop iterated and not the one PROCESS's output path left behind. **Derived** — what differs between the snapshot and the state the sweep would otherwise start from — never a list | — |
+| **instrument version** | which mechanism produced a residual, stamped in every record. Two residuals made by different instruments are two measurements, not a difference; a gate comparing across an instrument change excludes the residual by name and a gate comparing two records of one instrument does not | — · **added** |
 | **arm** | one column of the switch matrix: one complete setting of the driver | variant |
 | **reference arm** | PROCESS exactly as shipped, every switch unset. `AR` in the evaluation phase, `BR` in the optimisation phase | `R`, "PROCESS as shipped" |
 | **rung** | a pair of adjacent arms differing by one named thing, so that a difference in cost can be attributed to that thing | — · **added** |
@@ -658,6 +662,16 @@ A record of one run carries, at minimum:
   reads lower wherever that floor binds and a single column would read as accuracy rather than as
   a change of ruler. Which ruler the run's own loops stopped on is stamped beside them, and in the
   preamble of every file the run writes;
+- **what the audit put back before it swept**: which positions were snapshotted, how many fields
+  the derived restored set held and how many of those were read back equal, how many could not be
+  restored **and which by name**, and how far the state the sweep actually started from was from
+  the snapshot — split into the coupling state, whose restore the audit position governs, and
+  everything else, which should be zero. The reason that block is in every record and not in a
+  note somewhere: PROCESS's output path permanently changes model settings that are not
+  coupling-state components, so a sweep taken afterwards from the coupling state alone is not the
+  loop's own map. One such setting — the TF-coil stress mesh, raised 100 → 500 and never put
+  back — held the largest residual in every arm on two of three configurations for two revisions,
+  and was read as a convergence result until it was measured;
 - **how it ended**: one of a small set of outcomes — finished, crashed, refused, did not converge,
   hit upstream's own pass cap, infeasible at the audit, or a machinery failure. Upstream's loop
   raising after ten passes is a *finding about the shipped code*, not a broken run, and has its
