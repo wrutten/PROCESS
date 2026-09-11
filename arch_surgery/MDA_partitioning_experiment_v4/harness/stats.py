@@ -75,6 +75,7 @@ __all__ = [
     "failure_taxonomy",
     "restricted_statistic",
     "whole_state_statistic",
+    "accuracy_population",
     "audit_position_of",
     "empty_visit_shares",
     "predicate_widths",
@@ -881,6 +882,61 @@ def restricted_statistic(
         "n_excluded": block.get("n_excluded_from_the_restricted_statistic"),
         "n_kept": restricted.get("n_kept"),
         "tau": restricted.get("tau"),
+    }
+
+
+def accuracy_population(
+    records: Sequence[Mapping[str, Any]], *, ruler: str
+) -> dict[str, Any]:
+    """**The n of an accuracy table's row, declared once: the runs it is over.**
+
+    Both accuracy tables — the evaluation phase's *matched accuracy* and the
+    optimisation phase's *achieved accuracy* — print a column headed ``n``, and
+    until task **A54 (harness-analysis)** found it they built it two different
+    ways: one counted the finished **runs**, the other counted the **values**
+    that had a restricted statistic.  Over the gate records the two coincide,
+    so nothing disagreed and nobody could see it; that is the exact shape of
+    issues I-18 and I-19.
+
+    **The declaration, one reading: ``n`` counts the runs.**  A row of these
+    tables is one arm on one ruler over a set of runs, and the denominator of a
+    median must be the set the row names.  A run whose exit audit carries no
+    restricted block is therefore **counted in n** and named in the column
+    beside it, which reads the smaller number with the reason — never dropped
+    from n, because a denominator that quietly shrinks to the values that
+    happened to exist is this project's trap T11.
+
+    Returns the run count, the restricted statistic of each run in order, the
+    values that exist, how many of them there are, and the distinct reasons the
+    rest carry none.
+    """
+    statistics = [restricted_statistic(record, ruler=ruler) for record in records]
+    values = [
+        statistic["max"]
+        for statistic in statistics
+        if statistic.get("present") and statistic.get("max") is not None
+    ]
+    without = [
+        {
+            "run": _label(record),
+            "why": statistic.get("why")
+            or "the record's restricted statistic is null",
+        }
+        for record, statistic in zip(records, statistics)
+        if not (statistic.get("present") and statistic.get("max") is not None)
+    ]
+    return {
+        "n": len(records),
+        "n_is": (
+            "the runs this row is over; a run whose audit carries no "
+            "restricted block is counted here and shows in the column beside "
+            "as one that carried no statistic"
+        ),
+        "statistics": statistics,
+        "values": values,
+        "n_with_the_statistic": len(values),
+        "without": without,
+        "reasons": sorted({row["why"] for row in without}),
     }
 
 

@@ -49,7 +49,7 @@ from harness import arms as arms_mod
 from harness import stats as stats_mod
 from harness import tally as tally_mod
 from harness.config import Campaign
-from harness.tables import Caption, Column, Table
+from harness.tables import Caption, Column, Table, cell_list
 
 __all__ = ["tally", "print_tally", "PHASE"]
 
@@ -993,6 +993,7 @@ def achieved_accuracy(
     component's residual, and the component that holds it is the finding.
     """
     rows: list[dict[str, Any]] = []
+    reasons: set[str] = set()
     for arm in _arm_order(by_arm):
         records = [
             by_arm[arm][seed]
@@ -1000,14 +1001,16 @@ def achieved_accuracy(
             if stats_mod.finished(by_arm[arm][seed])
         ]
         for ruler in campaign.predicate_modes:
-            restricted = [
-                stats_mod.restricted_statistic(r, ruler=ruler) for r in records
-            ]
+            # One construction for n, declared in stats.accuracy_population,
+            # and the same one the evaluation phase's table uses: it counts the
+            # **runs** this row is over, never the values that happened to
+            # exist.
+            block = stats_mod.accuracy_population(records, ruler=ruler)
+            restricted = block["statistics"]
+            restricted_values = block["values"]
+            reasons.update(block["reasons"])
             whole = [
                 stats_mod.whole_state_statistic(r, ruler=ruler) for r in records
-            ]
-            restricted_values = [
-                v["max"] for v in restricted if v.get("max") is not None
             ]
             whole_values = [v["max"] for v in whole if v.get("max") is not None]
             argmaxes = sorted({v.get("argmax") for v in restricted if v.get("argmax")})
@@ -1024,7 +1027,8 @@ def achieved_accuracy(
                 {
                     "arm": arm,
                     "ruler": ruler,
-                    "n": len(records),
+                    "n": block["n"],
+                    "n_with_the_statistic": block["n_with_the_statistic"],
                     "restricted_median": stats_mod.median(restricted_values),
                     "restricted_max": max(restricted_values) if restricted_values else None,
                     "argmax": (
@@ -1044,7 +1048,7 @@ def achieved_accuracy(
                     "audit_position": positions[0] if len(positions) == 1 else (
                         "/".join(positions) if positions else None
                     ),
-                    "instrument": "; ".join(instruments) if instruments else "—",
+                    "instrument": cell_list(instruments),
                 }
             )
     positions = sorted({r["audit_position"] for r in rows if r["audit_position"]})
@@ -1090,6 +1094,17 @@ def achieved_accuracy(
                 "the two rulers' exclusion counts are listed per row and never "
                 "pooled; a run whose restricted block is null carries no count "
                 "and reads —",
+                "**n counts runs, not values** (stats.accuracy_population, the "
+                "same construction the evaluation phase's table uses): a run "
+                "whose audit carries no restricted block is counted in n and "
+                "shows in the column beside it, rather than vanishing from the "
+                "denominator of a median, which is trap T11.  Over this "
+                "population "
+                + (
+                    "every run carried the statistic"
+                    if not reasons
+                    else "some did not: " + "; ".join(sorted(reasons))
+                ),
             ),
             how_to_read=(
                 "read the argmax beside the maximum: a residual above the "
@@ -1100,7 +1115,8 @@ def achieved_accuracy(
         columns=(
             Column("arm", "arm"),
             Column("ruler", "ruler"),
-            Column("n", "n", fmt=_fmt_int),
+            Column("n", "n (runs)", fmt=_fmt_int),
+            Column("n_with_the_statistic", "with a restricted statistic", fmt=_fmt_int),
             Column("restricted_median", "restricted median", fmt=_fmt_exp),
             Column("restricted_max", "restricted max", fmt=_fmt_exp),
             Column("argmax", "restricted argmax"),
