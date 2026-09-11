@@ -1,9 +1,8 @@
 # A60 (driver-attempts) — per-attempt node-call accounting across the optimiser's retry ladder
 
-> **Document status** — **OPEN.** The task report of `A60 (driver-attempts)`, driver change **DR7**
-> of the approved V4 harness plan and the last change to V4's own copy of PROCESS. Written on the
-> branch `A60-driver-attempts`; it is archived to `docs/reports/deprecated/` when the branch merges,
-> at which point the folder records its lifecycle and this header records its validity (trap T3).
+> **Document status** — **MERGED, archived.** Task **A60 (driver-attempts)**, branch `A60-driver-attempts`
+> (retired) off `architecture_surgery` at `582d7a0d`, merged on 2026-09-11 (`73525d1e`); the orchestrator's
+> critical assessment (protocol §5) is §14. Folder position records lifecycle, not validity (trap T3).
 
 ---
 

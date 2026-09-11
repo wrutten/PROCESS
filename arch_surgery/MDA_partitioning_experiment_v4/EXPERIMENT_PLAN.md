@@ -1061,3 +1061,7 @@ implementation plan's.*
   built and passing (12/12 pairs bit-identical with an independent detector; doctored-component tooth); G0′, G1 and GR after DR5
   PASS, all re-run by the orchestrator. §4.2.5 gains the two-counts caption rule. Adoption of `mixed` is the campaign's decision
   by the adoption rule, not made here.
+- 2026-09-11 — **A60 (driver-attempts) merged — DR7; the driver chain is closed.** Every optimisation record carries the
+  cost of each retry-ladder attempt with the summation identity enforced (§3.5 check 2's two constructions and the
+  with/without-retried-seeds ratios are now computable from the record); G0′, G1 and GR after DR7 PASS, re-run by the
+  orchestrator. The five driver changes of §3.8 have all landed in the copy; from here only the harness changes.

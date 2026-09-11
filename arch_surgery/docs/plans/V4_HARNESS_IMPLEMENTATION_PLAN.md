@@ -1322,6 +1322,15 @@ of what looks like bulk is the instrument.
   check is re-based on recorded hunks, not relaxed. G8 exists in `gates.py` with an independent decisive-pass
   detector (a harness-side wrapper, refused for campaign runs, shown inert against the reference). G1's exclusion
   set is 48 names; A52 reviews it as one table. G0′, G1, G8 and GR after DR5 PASS.
+- **2026-09-11 — amendment 12, at the merge of A60 (driver-attempts): DR7 landed and the driver chain is
+  closed.** §4.4's `attempts[]` row is realised with the cost half per attempt (node calls, sweeps, evaluations),
+  the summation identity enforced by the record contract (14/14 residual 0 on GR's runs; 0 of the solve phase
+  outside any attempt), and §7.3's attempt-summation tooth running against real records. §3.2's five driver
+  changes — DR1 (A56), DR2 (A57), DR4 (A58), DR5 (A59), DR7 (A60) — have each landed with G0′, G1 and GR passing
+  at their own commit, every gate re-run by the orchestrator; §7.2's rule (G1 per change, never batched) was kept
+  throughout. G1's exclusion set closes the chain at 58 names with a list-element matching rule; A52 reviews it as
+  one table. What remains is H5–H8: the gate framework completed (G2–G7, wiring), the tally, the analysis, the
+  smoke — harness only, the copy untouched from here.
 
 ---
 
