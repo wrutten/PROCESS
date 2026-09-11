@@ -68,6 +68,16 @@ TRACE_VARIABLE = "HARNESS_AUDIT_MAP_TRACE"
 #: instrument's output has no business in it.
 OBSERVATION_FILE = "audit_map_observation.json"
 
+#: The field the attribution sweeps single out.  It is a **hypothesis under
+#: test**, not a conclusion: the radial-discretisation setting of the TF-coil
+#: stress calculation, which the model's own ``output`` branch raises from its
+#: default to its maximum and never puts back.  Two sweeps decide it — one that
+#: puts back this field alone, one that puts back every other changed field and
+#: not this one — so the attribution is a leave-one-out pair rather than an
+#: argument from plausibility.  If the pair ever disagrees with the whole-set
+#: sweep, the pair is what is reported.
+CANDIDATE_FIELD = "tfcoil.n_rad_per_layer"
+
 #: How many components of a sweep's residual are reported with their before and
 #: after values.  The summary carries the maximum and the count above the
 #: tolerance for all of them; this is the head of the ordered list.
@@ -427,6 +437,27 @@ SWEEP_SERIES: tuple[dict[str, Any], ...] = (
         "what": "a second sweep of the loop's own map, for the same question",
     },
     {
+        "name": "output_entry_with_only_the_candidate_put_back",
+        "from": "entry_to_write_output_files",
+        "restore": "candidate",
+        "what": (
+            "the same state, swept with ONE field put back to its value at "
+            "the entry to the output path: the candidate named in "
+            "CANDIDATE_FIELD.  Half of the leave-one-out attribution"
+        ),
+    },
+    {
+        "name": "output_entry_without_the_candidate_put_back",
+        "from": "entry_to_write_output_files",
+        "restore": "differing_except_the_candidate",
+        "what": (
+            "the same state, swept with every other changed field put back "
+            "and the candidate left as the output path set it.  The other "
+            "half: if this row keeps the residual and the row above removes "
+            "it, the attribution is exact"
+        ),
+    },
+    {
         "name": "loop_exit_as_found",
         "from": "last_sweep",
         "restore": "none",
@@ -668,7 +699,14 @@ def _one_sweep(
                     "than no residual"
                 )
                 return result
+            put_back = None
             if row["restore"] == "differing":
+                put_back = list(differing)
+            elif row["restore"] == "candidate":
+                put_back = [n for n in differing if n == CANDIDATE_FIELD]
+            elif row["restore"] == "differing_except_the_candidate":
+                put_back = [n for n in differing if n != CANDIDATE_FIELD]
+            if put_back is not None:
                 if entry_structure is None:
                     result["skipped"] = (
                         "no whole-data-structure snapshot was taken at the "
@@ -676,9 +714,13 @@ def _one_sweep(
                         "of the changed fields are not known"
                     )
                     return result
-                result["fields_put_back"] = list(differing)
+                result["n_fields_put_back"] = len(put_back)
+                result["fields_put_back"] = put_back[:20]
+                result["candidate_among_the_changed_fields"] = (
+                    CANDIDATE_FIELD in differing
+                )
                 result["settings_restore"] = restore_data_structure(
-                    data, entry_structure, only=differing
+                    data, entry_structure, only=put_back
                 )
         bound = spec.bind(data)
         y_before = spec.read(bound)

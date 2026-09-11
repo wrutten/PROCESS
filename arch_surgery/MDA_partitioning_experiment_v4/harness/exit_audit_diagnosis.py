@@ -571,6 +571,10 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
                 "settings_restore_bitexact": (
                     sweep.get("settings_restore") or {}
                 ).get("readback_bitexact"),
+                "n_fields_put_back": sweep.get("n_fields_put_back"),
+                "candidate_among_the_changed_fields": sweep.get(
+                    "candidate_among_the_changed_fields"
+                ),
             }
             for name, sweep in sweeps.items()
         },
@@ -656,28 +660,44 @@ def render(summary: Mapping[str, Any]) -> str:
         "structure the run was left in; `solve-phase map` puts back every "
         "data-structure field the output path changed. tau = 1e-6.*\n"
     )
-    header = (
-        "| run | record audit (restricted) | as found | as found, 2nd | "
-        "solve-phase map | solve-phase map, 2nd | loop exit, as found | "
-        "loop exit, solve-phase map |"
-    )
-    lines.append(header)
-    lines.append("|---|---|---|---|---|---|---|---|")
     order = (
-        "output_entry_as_found",
-        "output_entry_as_found_second_sweep",
-        "output_entry_with_the_solve_phase_settings",
-        "output_entry_with_the_solve_phase_settings_second_sweep",
-        "loop_exit_as_found",
-        "loop_exit_with_the_solve_phase_settings",
+        ("output_entry_as_found", "as found"),
+        ("output_entry_as_found_second_sweep", "as found, 2nd"),
+        (
+            "output_entry_with_the_solve_phase_settings",
+            "solve-phase map",
+        ),
+        (
+            "output_entry_with_the_solve_phase_settings_second_sweep",
+            "solve-phase map, 2nd",
+        ),
+        (
+            "output_entry_with_only_the_candidate_put_back",
+            f"only `{audit_map_mod.CANDIDATE_FIELD}` put back",
+        ),
+        (
+            "output_entry_without_the_candidate_put_back",
+            "every other field put back",
+        ),
+        ("loop_exit_as_found", "loop exit, as found"),
+        (
+            "loop_exit_with_the_solve_phase_settings",
+            "loop exit, solve-phase map",
+        ),
     )
+    lines.append(
+        "| run | record audit (restricted) | "
+        + " | ".join(label for _name, label in order)
+        + " |"
+    )
+    lines.append("|---" * (2 + len(order)) + "|")
     for row in summary["rows"]:
         cells = [
             f"`{row['key']}`",
             f"{row['record_audit']['restricted_max_hex']} "
             f"(`{row['record_audit']['restricted_argmax']}`)",
         ]
-        for name in order:
+        for name, _label in order:
             sweep = row["sweeps"].get(name, {})
             cells.append(
                 f"{sweep.get('residual_max_hex')} (`{sweep.get('argmax')}`, "
@@ -720,18 +740,33 @@ def render(summary: Mapping[str, Any]) -> str:
         "between the entry to the output path and the moment the record's exit "
         "audit is taken, excluding the coupling-state components themselves.*\n"
     )
-    lines.append("| run | fields compared | differ, outside the coupling state | which |")
-    lines.append("|---|---|---|---|")
+    lines.append(
+        "| run | fields compared | differ, outside the coupling state | by "
+        f"namespace | `{audit_map_mod.CANDIDATE_FIELD}` among them |"
+    )
+    lines.append("|---|---|---|---|---|")
     for row in summary["rows"]:
         value = row["data_structure"].get(
             "entry_to_write_output_files__vs__before_the_record_audit", {}
         )
         which = value.get("outside_the_coupling_state") or []
+        by_namespace: dict[str, int] = {}
+        for name in which:
+            by_namespace[name.split(".", 1)[0]] = (
+                by_namespace.get(name.split(".", 1)[0], 0) + 1
+            )
         lines.append(
             f"| `{row['key']}` | {value.get('n_compared')} | "
             f"{value.get('n_outside_the_coupling_state')} | "
-            + (", ".join(f"`{n}`" for n in which) if which else "—")
-            + " |"
+            + (
+                ", ".join(
+                    f"{namespace} {count}"
+                    for namespace, count in sorted(by_namespace.items())
+                )
+                if which
+                else "—"
+            )
+            + f" | {audit_map_mod.CANDIDATE_FIELD in which} |"
         )
     return "\n".join(lines) + "\n"
 
