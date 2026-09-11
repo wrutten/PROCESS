@@ -1,11 +1,10 @@
 # A62 (exit-audit-restore) — the exit audit sweeps the loop's own map
 
-> **Document status** — **OPEN.** Task **A62 (exit-audit-restore)**, branch `A62-exit-audit-restore`
-> off `architecture_surgery` at `fb0a7130`. Harness only: nothing under
-> `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/` or the repository-root `process/` is
-> touched, by ruling **D25**. Run records live in
-> `arch_surgery/MDA_partitioning_experiment_v4/runs/` and are untracked by design; the retire
-> script relocates them at merge. Folder position records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED (merged).** Task **A62 (exit-audit-restore)** merged into
+> `architecture_surgery` at `a3407d5d` (2026-09-11, `--no-ff`, branch tip `3850321a`). Orchestrator's
+> assessment in §15. Run records relocated by the retire script to
+> `arch_surgery/idf_probe/runs/A62_runs/` (`gates/`, `census/`, `input_files/`, `artifacts/`; untracked).
+> Folder position records lifecycle, not validity (trap T3).
 
 ---
 

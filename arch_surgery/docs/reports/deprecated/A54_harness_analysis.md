@@ -1,14 +1,10 @@
 # A54 (harness-analysis) — every published cell, computed a second time, and compared
 
-> **Document status** — **OPEN.** Task **A54 (harness-analysis)**, plan item **H7**. Branch
-> `A54-harness-analysis`, off `architecture_surgery` at `06a85fa0` (the tip after A53
-> (harness-tally)'s merge). Every number below was produced at **`09be001a`** — the tip after the
-> coordinator's three review fixes — by `--measure tally_evaluation`, `--measure tally_optimisation`,
-> `--gate tally_contracts --resume`, `--gate recomputation --resume` and
-> `--measure recomputed_tables --resume`, in that order, and reproduce identically at the report's
-> own commit `886a7138`; over run records made at **`cd62c510`**
-> (A53's press, seeded into this worktree under amendment 15). **No PROCESS run was made by this
-> task.** Folder position records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED (merged).** Task **A54 (harness-analysis)**, plan item **H7**, merged into
+> `architecture_surgery` at `72c343d1` (2026-09-11, `--no-ff`, branch tip `948644b1`). Orchestrator's
+> assessment in §11. No PROCESS run was made by this task; the seeded records and the stage/gate records it
+> wrote were relocated by the retire script to `arch_surgery/idf_probe/runs/A54_runs/` (untracked).
+> Folder position records lifecycle, not validity (trap T3).
 
 ---
 

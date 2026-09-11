@@ -178,3 +178,15 @@ was taken as "lots of room". Sitting at the floor means *converging as fast as p
 the same sentence**. If that cannot be done in one clause, the number is not ready. This is
 cheaper than it sounds and would have caught all three.
 
+## T12 — A gate's `runs_under` is relative to `runs/gates/`, not to `runs/`
+
+**A gate's `runs_under` is relative to `runs/gates/`, not to `runs/`.** A `tally.Source.subpath`
+is relative to `runs/`, the two are one directory apart, and pasting one into the other makes
+`Gate.run` survey a directory that does not exist. It does not fail: `survey_heads` returns
+`n_records = 0`, the staleness check in `Gate.run` is gated on `n_records > 0`, and the verdict
+prints **"0 record(s)"** where the straddle belongs — so a gate that has read nothing and a gate
+whose runs are all current are indistinguishable in the record. **How to avoid it:** derive the
+gate-relative path from the source declaration rather than retyping it, and read the new gate's
+own `runs_provenance.n_records` in its first verdict — a 0 there is a bug, not a clean tree.
+*(Found by A54 (harness-analysis), 2026-09-11, on the gate it was itself adding; lifted here at its
+merge, `72c343d1`.)*

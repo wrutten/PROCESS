@@ -1420,6 +1420,22 @@ of what looks like bulk is the instrument.
   `child.EXIT_AUDIT_RESTORE`. Measured: `tfcoil.insstrain` at exactly `0x0.0p+0` wherever continuous, 0 above τ on
   31/31 declared-position records; the `after_run` residual on the reference arm is 6.99e-03 / 7.02e-03 (I-21's handle).
 
+- **2026-09-11 — amendment 18, at the merge of A54 (harness-analysis) (`72c343d1`): H7 delivered.** §4.3's
+  `analysis.py` is realised as an independent second implementation of every published cell — it imports none
+  of `stats.py`, `tally.py`, the tally stages or `tables.py`, and gate `recomputation` proves that on the
+  module's own source before it compares a cell (1 901 compared, 0 mismatched; cells from a construction and
+  cells composed as a string reported apart). **Framework:** `Gate.reads_from` may name a measurement stage;
+  the registry refuses a dependency nobody runs; the button runs a declared stage immediately before the gate,
+  once per press, with `--resume` threaded; a stage record whose `runs_provenance` (commits and record count —
+  not paths, which a seeded worktree legitimately changes) disagrees with the gate's own survey is refused with
+  both sides named. So A55's chain stays `--gate all --resume --census-entry evaluation` then `--measure all`.
+  **Two defects the recomputation found in the tally, fixed on the same branch by the orchestrator's ruling
+  (the one exception to "the verifier does not edit what it verifies", safe because the verifier re-derives from
+  the declaration and its independence is checked on the source):** the accuracy tables' `n` is one
+  construction (`stats.accuracy_population`: n counts runs; a run without a restricted statistic is counted and
+  named beside it, never dropped from a median's denominator), and one cell separator. Trap T12 recorded
+  (`runs_under` is relative to `runs/gates/`). Remaining: H8 (A55).
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task
