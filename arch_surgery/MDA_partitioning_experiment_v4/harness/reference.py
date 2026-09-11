@@ -347,6 +347,55 @@ FIELDS_BEYOND_THE_PLAN: dict[str, dict[str, str]] = {
 }
 
 
+#: Fields the committed reference **holds** and the gate no longer **compares**,
+#: with the reason, keyed by phase.  The committed file is never regenerated —
+#: it is the previous revision's own numbers and re-extracting it would be
+#: re-writing the thing being reproduced — so a field leaves the comparison by
+#: being named here, and the name, the reason and the resulting count all
+#: travel in the gate's verdict.
+#:
+#: The live entry is ruling **D25**.  The exit audit now restores the data
+#: structure to its solve-phase state before its sweep, so the sweep evaluates
+#: the map the loop iterated; the previous revision's audit did not, and on the
+#: optimisation phase its sweep ran on the mesh PROCESS's output path had
+#: already changed (task A61 (insstrain-diagnosis) measured that mesh: the
+#: TF-coil stress discretisation, raised 100 → 500 and never put back).  The
+#: two numbers are therefore made by two instruments.  This gate reproduces a
+#: measurement; it cannot reproduce an instrument it has deliberately replaced,
+#: and pretending otherwise would mean either keeping the defect or tuning the
+#: gate — so the field is named out, with its reason, and the count says so.
+#:
+#: **The evaluation phase keeps it**, and that is a measurement rather than an
+#: oversight: that phase evaluates the model set once and never enters the
+#: output path, so there is nothing for the restore to put back and the two
+#: instruments produce the same number.  Its six residuals reproduce bit for
+#: bit after the change.  Dropping them too would remove a comparison that
+#: works, on the strength of a reason that does not apply to them.
+FIELDS_NOT_COMPARED: dict[str, dict[str, str]] = {
+    "B": {
+        "exit_audit.residual_max_hex": (
+            "an instrument value, not a measurement this experiment compares "
+            "on.  The previous revision's optimisation-phase audit swept from "
+            "the state PROCESS's output path left, on the discretisation that "
+            "path had already changed; this revision's puts the data "
+            "structure back to its solve-phase state first, so its sweep is "
+            "the loop's own map.  The residual is published per run on both "
+            "rulers and is compared between arms and between rulers wherever "
+            "one instrument made both sides — here it would compare two "
+            "instruments"
+        ),
+    },
+    "A": {},
+}
+
+
+def compared_fields(phase: str) -> tuple[str, ...]:
+    """The fields gate GR compares for *phase*: what the reference holds, less
+    what :data:`FIELDS_NOT_COMPARED` names."""
+    dropped = FIELDS_NOT_COMPARED.get(phase, {})
+    return tuple(f for f in REFERENCE_FIELDS[phase] if f not in dropped)
+
+
 # --------------------------------------------------------------------------
 # the reference set (harness plan §7.1)
 # --------------------------------------------------------------------------
@@ -756,6 +805,10 @@ def build(
             },
             "compared_fields_why": FIELD_NOTES,
             "compared_fields_beyond_the_plan": FIELDS_BEYOND_THE_PLAN,
+            "fields_the_gate_no_longer_compares": FIELDS_NOT_COMPARED,
+            "fields_the_gate_compares": {
+                phase: list(compared_fields(phase)) for phase in REFERENCE_FIELDS
+            },
             "field_population": _field_population(entries),
             "block_solver_field_applicability": _applicability(entries),
             "not_covered_by_this_reference": ARMS_WITHOUT_PREVIOUS_RECORDS,
@@ -1197,10 +1250,13 @@ def tables(document: Mapping[str, Any]) -> str:
         f"record directory carries; \"seed\" 0 is the unperturbed start and 1 "
         f"the first perturbed one. \"sha256\" is the first 12 characters of "
         f"the source record file's digest. The two value columns are examples "
-        f"of the compared fields, not the whole set: the optimisation phase "
-        f"compares {len(REFERENCE_FIELDS['B'])} fields per record and the "
-        f"evaluation phase {len(REFERENCE_FIELDS['A'])}, all of them in the "
-        f"committed file. Node calls are model executions during the solve "
+        f"of the compared fields, not the whole set: the committed file holds "
+        f"{len(REFERENCE_FIELDS['B'])} fields per optimisation record and "
+        f"{len(REFERENCE_FIELDS['A'])} per evaluation record, of which the "
+        f"gate compares {len(compared_fields('B'))} and "
+        f"{len(compared_fields('A'))} — the difference is named, with its "
+        f"reason, in FIELDS_NOT_COMPARED. Node calls are model executions "
+        f"during the solve "
         f"(optimisation phase) or in the one evaluation (evaluation phase); "
         f"the objective is a hex float, exact. Population: "
         f"{provenance['population']}, every record at {source['name']} commit "

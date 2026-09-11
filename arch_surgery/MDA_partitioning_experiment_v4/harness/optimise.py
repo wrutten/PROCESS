@@ -217,20 +217,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     call_census = child.install_call_models_census(caller_mod)
 
-    # The coupling-state snapshot the audit is taken from, when the audit is
-    # taken where the plan declares.  Installed before the run, because the
-    # position it is taken at is inside the run.
-    if args.audit_position == AUDIT_POSITION_DECLARED:
-        snapshot_state = child.install_exit_snapshot(
-            caller_mod,
-            module_solve_mod,
-            coupling_state_path=Path(args.coupling_state),
-        )
-    else:
-        snapshot_state = {
-            "installed": False,
-            "why": records_mod.AUDIT_POSITION_AFTER_RUN_WHY,
-        }
+    # The snapshots the audit is taken from and restores: the coupling state
+    # and the whole data structure, at each position the driver offers.
+    # Installed before the run, because the positions are inside it.
+    #
+    # It is installed **whatever position the audit is taken at** (ruling D25).
+    # The declared position needs the coupling snapshot to reach the state the
+    # solve handed over; the position after the run does not, but its sweep
+    # still has to be the loop's own map, and that needs the data structure as
+    # it stood before the output path changed it.  One hook, both positions,
+    # one shape of record.
+    snapshot_state = child.install_exit_snapshot(
+        caller_mod,
+        module_solve_mod,
+        coupling_state_path=Path(args.coupling_state),
+    )
 
     # The audit-map trace (task A61 (insstrain-diagnosis)): a gate instrument
     # that records the coupling state at the loop's own exit and the whole data
@@ -287,10 +288,9 @@ def main(argv: list[str] | None = None) -> int:
     record.update(child.harvest_predicate_counters(caller_mod))
     attempt_stamps = child.harvest_attempt_stamps(caller_mod)
     record["first_call_models"] = call_census["first_call_models"]
-    record["audit_snapshot"] = (
-        child.collect_exit_snapshots(caller_mod, snapshot_state, outdir)
-        if snapshot_state.get("installed")
-        else snapshot_state
+    structure_snapshots = dict(snapshot_state.get("structures") or {})
+    record["audit_snapshot"] = child.collect_exit_snapshots(
+        caller_mod, snapshot_state, outdir
     )
 
     # ------------------------------------------------------------------
@@ -301,10 +301,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.audit_position == AUDIT_POSITION_DECLARED:
         from_snapshot = (getattr(caller_mod, "EXIT_SNAPSHOTS", {}) or {}).get(
             AUDIT_POSITION_DECLARED
-        )
-    if single_run is not None:
-        audit_map_mod.mark(
-            audit_map_trace, single_run.data, "before_the_record_audit"
         )
     if single_run is not None and (
         args.audit_position != AUDIT_POSITION_DECLARED or from_snapshot is not None
@@ -328,6 +324,16 @@ def main(argv: list[str] | None = None) -> int:
             ),
             configuration=args.configuration,
             from_snapshot=from_snapshot,
+            structure_snapshots=structure_snapshots,
+            restore_from_position=AUDIT_POSITION_DECLARED,
+            # The diagnosis trace's "as found" state is the state the audit's
+            # sweep actually starts from, so the audit is what marks it —
+            # after both restores, not before them.  Marking it from out here
+            # would hand that trace the state the output path left, which is
+            # the state this audit exists to stop sweeping.
+            on_ready_to_sweep=lambda d: audit_map_mod.mark(
+                audit_map_trace, d, "before_the_record_audit"
+            ),
         )
     elif single_run is not None:
         record["exit_audit"] = {

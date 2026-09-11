@@ -338,11 +338,31 @@ def compare_one(
     comparison: the gate compares twenty runs to twenty entries, and nineteen of
     either is a failed gate.  So is a record that does not carry a compared
     field.
+
+    A field the committed reference holds but this gate no longer compares is
+    reported as **excluded**, by name and with its reason
+    (:data:`reference.FIELDS_NOT_COMPARED`) — never dropped silently, and never
+    counted as a match.  The reference file itself is not touched: it is the
+    previous revision's own numbers, and re-extracting it to remove a field
+    would be editing the thing being reproduced.
     """
     entry = reference_mod.lookup(
         run.arm, run.configuration, run.seed, document=document
     )
-    expected = entry["fields"]
+    not_compared = reference_mod.FIELDS_NOT_COMPARED.get(run.phase, {})
+    expected = {
+        field: value
+        for field, value in entry["fields"].items()
+        if field not in not_compared
+    }
+    excluded = {
+        field: {
+            "in_the_reference": value,
+            "why_it_is_not_compared": not_compared[field],
+        }
+        for field, value in entry["fields"].items()
+        if field in not_compared
+    }
     record = records_mod.read(outdir)
     result: dict[str, Any] = {
         "key": run.key,
@@ -358,6 +378,9 @@ def compare_one(
         "source_record": entry["source_path"],
         "source_sha256": entry["source_sha256"],
         "n_fields": len(expected),
+        "n_fields_in_the_reference": len(entry["fields"]),
+        "n_excluded": len(excluded),
+        "excluded": excluded,
         "mismatches": [],
     }
     if record.get("status") != "ok":
@@ -417,10 +440,19 @@ def compare_all(
     document = document or reference_mod.load()
     rows = [compare_one(item.run, item.job.outdir, document=document) for item in planned]
     n_values = sum(row["n_fields"] for row in rows)
+    n_in_reference = sum(row["n_fields_in_the_reference"] for row in rows)
+    n_excluded = sum(row["n_excluded"] for row in rows)
     n_mismatched = sum(row["n_mismatched"] for row in rows)
     return {
         "rows": rows,
         "n_runs": len(rows),
+        "n_values_in_the_reference": n_in_reference,
+        "n_values_excluded": n_excluded,
+        "excluded_fields": {
+            phase: dict(fields)
+            for phase, fields in reference_mod.FIELDS_NOT_COMPARED.items()
+            if fields
+        },
         "n_values_compared": n_values,
         "n_values_matched": n_values - n_mismatched,
         "n_values_mismatched": n_mismatched,
@@ -430,7 +462,9 @@ def compare_all(
             f"({sum(1 for r in rows if r['phase'] == 'B')} optimisations + "
             f"{sum(1 for r in rows if r['phase'] == 'A')} evaluations) over "
             f"{len({r['configuration'] for r in rows})} configurations; "
-            f"{n_values} compared values, no tolerance on any of them"
+            f"{n_in_reference} values in the committed reference, "
+            f"{n_excluded} of them excluded by name with their reason, "
+            f"{n_values} compared, no tolerance on any of them"
         ),
         "passed": n_mismatched == 0 and len(rows) > 0,
     }
@@ -693,10 +727,14 @@ def teeth(
     resume: bool,
     run_composition_tooth: bool = True,
 ) -> Check:
-    """The seven deliberate breaks, each of which must make the gate refuse.
+    """The eight deliberate breaks, each of which the gate must notice.
+
+    Seven must make it refuse; the eighth must make it do the other thing an
+    exclusion has to be shown to do — report a doctored value as excluded by
+    name rather than as a match.
 
     A gate that has never been shown to fail is an assertion, not a
-    measurement.  Four of the seven cost nothing — they doctor a copy of the
+    measurement.  Five of the eight cost nothing — they doctor a copy of the
     reference or of a record — and the fifth is a name lookup.  The sixth is a
     **real run**: the arm composed with one switch deliberately wrong, which is
     the positive control that proves the gate is sensitive to *which arm* ran
@@ -707,7 +745,7 @@ def teeth(
         name="reproduction gate teeth",
         binds="each deliberate break must make the comparison, the reference "
         "lookup or the record contract refuse",
-        population="7 teeth",
+        population="8 teeth",
     )
     document = reference_mod.load()
     reproduced = [item for item in planned if item.job.outdir.exists()]
@@ -750,6 +788,43 @@ def teeth(
         f"{sample.run.key}: one character appended to {hex_field} must not "
         f"reproduce",
     )
+
+    # 2b — the excluded residual: doctor it in a copy of the reference and
+    #      require the comparison to report it as EXCLUDED — not as a mismatch,
+    #      which would mean the exclusion is not in force, and not as a match,
+    #      which would mean a doctored value passed.  The tooth is what keeps
+    #      "we stopped comparing this" from being indistinguishable from "we
+    #      compared it and it agreed".
+    dropped_field = next(
+        iter(reference_mod.FIELDS_NOT_COMPARED.get(sample.run.phase, {})), None
+    )
+    if dropped_field is None:
+        check.tooth(
+            "excluded field",
+            False,
+            f"phase {sample.run.phase} excludes no reference field, so the "
+            f"exclusion cannot be shown to be an exclusion",
+        )
+    else:
+        doctored = _doctored(document)
+        target = _entry_in(doctored, sample.run)
+        original = target["fields"][dropped_field]
+        target["fields"][dropped_field] = str(original) + "0"
+        result = compare_one(sample.run, sample.job.outdir, document=doctored)
+        named = dropped_field in (result.get("excluded") or {})
+        not_a_mismatch = all(
+            m["field"] != dropped_field for m in result["mismatches"]
+        )
+        check.tooth(
+            "excluded field",
+            named and not_a_mismatch and result["passed"],
+            f"{sample.run.key}: {dropped_field} doctored in the reference "
+            f"({original!r} -> {original!r}+'0') is reported as excluded with "
+            f"its reason, is not among the "
+            f"{result['n_mismatched']} mismatch(es), and the run still "
+            f"reproduces on its {result['n_fields']} compared values — so the "
+            f"field is out of the comparison by name and not by accident",
+        )
 
     # 3 — missing reference: point the comparator at a file that is not there.
     caught, message = _must_refuse(

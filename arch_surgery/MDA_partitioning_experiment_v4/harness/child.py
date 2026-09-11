@@ -905,7 +905,7 @@ def harvest_attempt_stamps(caller) -> dict[str, Any]:
 
 
 def install_exit_snapshot(caller, module_solve, *, coupling_state_path: Path):
-    """Install the driver's coupling-state snapshot hook, and report what it took.
+    """Install the driver's snapshot hook, and report what it took.
 
     The plan declares one audit position for every arm: the entry to the output
     path, before any output-time sweep — the state the solve handed over.  The
@@ -914,13 +914,27 @@ def install_exit_snapshot(caller, module_solve, *, coupling_state_path: Path):
     the file-writing step), and the residual is computed after the run from the
     restored snapshot.
 
+    **Two snapshots are taken at each position, not one** (ruling D25).  The
+    coupling state is what the residual is measured over and what the declared
+    position restores bit for bit.  The **whole data structure** is what makes
+    the audit's sweep the loop's own map: PROCESS's output path changes model
+    settings that are not coupling-state components and never puts them back,
+    so a sweep taken after it, from a coupling state alone, evaluates a
+    different map (task A61 (insstrain-diagnosis) measured one such setting;
+    the point of snapshotting everything is not to depend on which).  The
+    structure snapshots are kept in memory under ``structures`` and are
+    **never** written into the run record: two thousand fields per position is
+    a file a gate would walk value by value, and what the record carries is
+    the derived restore's own counts and names.
+
     The driver owns the *position*; the shape of a snapshot belongs to the
-    coupling-state layer, so what is installed is this function.  It never
-    raises into the run: the driver records an exception rather than letting an
-    instrument change a measurement's outcome, and the state below carries
-    whatever went wrong so the audit can refuse instead of reporting a residual
-    of a state nobody chose.
+    harness, so what is installed is this function.  It never raises into the
+    run: the driver records an exception rather than letting an instrument
+    change a measurement's outcome, and the state below carries whatever went
+    wrong so the audit can refuse instead of reporting a residual of a state
+    nobody chose.
     """
+    from . import data_structure as structure_mod
     from . import predicate as predicate_mod
 
     state: dict[str, Any] = {
@@ -928,6 +942,8 @@ def install_exit_snapshot(caller, module_solve, *, coupling_state_path: Path):
         "coupling_state": str(coupling_state_path),
         "spec_error": None,
         "positions": {},
+        "structures": {},
+        "structure_errors": {},
     }
     holder: dict[str, Any] = {}
 
@@ -946,6 +962,10 @@ def install_exit_snapshot(caller, module_solve, *, coupling_state_path: Path):
             "components_sha256": record["components_sha256"],
             "n_components": record["n_components"],
         }
+        try:
+            state["structures"][where] = structure_mod.snapshot(data)
+        except Exception:  # noqa: BLE001 - recorded, never raised
+            state["structure_errors"][where] = traceback.format_exc()
         return record
 
     caller.EXIT_SNAPSHOT_HOOK[0] = hook
@@ -958,7 +978,13 @@ def collect_exit_snapshots(caller, state: dict[str, Any], outdir: Path) -> dict[
     Called after the run.  A position the driver never reached — a run that
     crashed before the output path — is reported as absent by name, never as an
     empty comparison (trap T11).
+
+    The whole-data-structure snapshots the hook also takes stay out of the
+    block this returns: what goes in the record is how many fields each one
+    holds and over how many namespaces, and the restore's own counts and names
+    go in the exit audit beside the residual they made possible.
     """
+    structures = dict(state.get("structures") or {})
     snapshots = dict(getattr(caller, "EXIT_SNAPSHOTS", {}) or {})
     errors = dict(getattr(caller, "EXIT_SNAPSHOT_ERRORS", {}) or {})
     written: dict[str, str] = {}
@@ -982,8 +1008,21 @@ def collect_exit_snapshots(caller, state: dict[str, Any], outdir: Path) -> dict[
                 where: record["components_sha256"]
                 for where, record in snapshots.items()
             },
+            "data_structure_positions": {
+                where: {
+                    "n_fields": snapshot["n_fields"],
+                    "n_namespaces": snapshot["n_namespaces"],
+                    "skipped_namespaces": snapshot["skipped_namespaces"],
+                }
+                for where, snapshot in sorted(structures.items())
+            },
+            "data_structure_positions_that_raised": dict(
+                state.get("structure_errors") or {}
+            ),
         }
     )
+    state.pop("structures", None)
+    state.pop("structure_errors", None)
     return state
 
 
@@ -1314,6 +1353,215 @@ def restricted_audit(
     )
 
 
+#: What the exit audit puts back before its sweep, stamped in every record it
+#: writes.  It is the **instrument's version**, and it is in the record so that
+#: two residuals can be told apart by the instrument that made them: a gate
+#: comparing records across a change to this mechanism must exclude the
+#: residual by name, and a gate comparing two records made by the same
+#: instrument must not.  The string names the mechanism, never the task or the
+#: revision that wrote it.
+EXIT_AUDIT_RESTORE = "whole_data_structure_derived_set"
+
+#: Namespaces of the data structure the audit does **not** put back, and why.
+#: A rule about one namespace, not a list of fields: whatever it holds back is
+#: named per run in the record, so the rule can never quietly grow.
+#:
+#: ``numerics`` is the optimiser's own account of the run — the design vector,
+#: the constraint residuals, the iteration and call counters, the
+#: finite-difference step.  The run record reads it **after** the audit, and the
+#: models reach none of it except through the design vector, which the audit
+#: injects explicitly.  Putting it back would mean the instrument rewinding the
+#: run's own counters and the record then publishing the instrument's
+#: bookkeeping as the run's cost.
+#:
+#: This is not a guess.  The switch-neutrality gate caught it: with the
+#: namespace restored, ``n_model_calls`` — one of the values the reproduction
+#: gate compares — read two lower on the reference arm, because PROCESS's
+#: output-time loop had incremented it twice between the snapshot and the audit
+#: and the restore wound it back.  The answer to a gate catching an instrument
+#: contaminating a measurement is to fix the instrument, not to exclude the
+#: measurement.
+NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE: dict[str, str] = {
+    "numerics": (
+        "the optimiser's own account of the run: the design vector, the "
+        "constraint residuals, the iteration and call counters, the "
+        "finite-difference step.  The record reads it after the audit and the "
+        "models reach it only through the design vector, which the audit "
+        "injects; restoring it would rewind the run's own counters"
+    ),
+}
+
+
+def _restore_the_solve_phase_structure(
+    data,
+    *,
+    structure_mod,
+    structure_snapshots: Mapping[str, Any] | None,
+    restore_from_position: str | None,
+    coupling_names: set[str],
+    audit_position: str,
+    coupling_state_is_restored: bool,
+) -> dict[str, Any]:
+    """Put the data structure back to the snapshot, field by derived field.
+
+    Returns the instrument block the record publishes.  Three things are always
+    in it, whatever happened: which positions were snapshotted, how many fields
+    were restored, and how many could not be **and which**.
+
+    The restored set is derived — the fields that differ between the snapshot
+    and the state this sweep would otherwise start from — with the coupling
+    state's own components left out of it.  Those are governed by the audit
+    position: at the declared position they are restored from the coupling
+    snapshot immediately after this, bit for bit or the audit refuses; at the
+    position after the run they are *deliberately* the state the run ended in,
+    which is what that position means.  Mixing the two would quietly turn one
+    position into the other.
+    """
+    instrument: dict[str, Any] = {
+        "restores": EXIT_AUDIT_RESTORE,
+        "what": (
+            "before the sweep, the data structure is put back to the snapshot "
+            "taken at the audit's snapshot position for every field that has "
+            "changed since — a derived set, never a list — so that the sweep "
+            "evaluates the map the loop iterated and not the one PROCESS's "
+            "output path left behind.  The coupling state's own components are "
+            "not in that set: at the declared position they are restored from "
+            "the coupling snapshot, bit for bit; after the run they are the "
+            "state the run ended in, which is what that position is"
+        ),
+        "audit_position": audit_position,
+        "positions_snapshotted": sorted(structure_snapshots or {}),
+        "snapshot_position": restore_from_position,
+        "coupling_state_restored_from_a_snapshot": bool(coupling_state_is_restored),
+    }
+    snapshot = (structure_snapshots or {}).get(restore_from_position or "")
+    if snapshot is None:
+        instrument.update(
+            {
+                "restored": False,
+                "why": (
+                    "this audit names no snapshot position: the phase "
+                    "evaluates the model set once and never enters the output "
+                    "path, so nothing the output path changes can be in the "
+                    "state the sweep starts from, and there is nothing to put "
+                    "back"
+                    if restore_from_position is None
+                    else (
+                        f"no whole-data-structure snapshot was taken at "
+                        f"{restore_from_position!r} — the run never reached "
+                        f"that position — so the fields the output path "
+                        f"changed are not known and none was put back"
+                    )
+                ),
+                "n_fields_in_the_snapshot": 0,
+                "n_derived": 0,
+                "derived": [],
+                "n_restored": 0,
+                "n_not_restorable": 0,
+                "not_restorable": [],
+                # The census of what could never be put back is a property of
+                # the data structure and of the serialiser, not of the run, so
+                # it is taken here too — from the live structure — and every
+                # record names those fields whether or not this audit had
+                # anything to restore.  A record that said only "0 restored,
+                # 0 not restorable" would be true and would still leave a
+                # reader thinking the mechanism is total.
+                "round_trip_census": structure_mod.round_trip_census(
+                    structure_mod.snapshot(data)
+                ),
+            }
+        )
+        return instrument
+    difference = structure_mod.differences(snapshot, structure_mod.snapshot(data))
+    outside = [n for n in difference["differ"] if n not in coupling_names]
+    inside = [n for n in difference["differ"] if n in coupling_names]
+    held_back = [
+        n
+        for n in outside
+        if n.partition(".")[0] in NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE
+    ]
+    derived = [n for n in outside if n not in set(held_back)]
+    put_back = structure_mod.restore(data, snapshot, only=derived)
+    instrument.update(
+        {
+            "restored": True,
+            "n_fields_in_the_snapshot": snapshot["n_fields"],
+            "n_namespaces_in_the_snapshot": snapshot["n_namespaces"],
+            "n_fields_compared": difference["n_compared"],
+            "n_fields_differing": difference["n_differ"],
+            "n_differing_outside_the_coupling_state": len(outside),
+            "n_derived": len(derived),
+            "derived": derived,
+            "n_held_back_by_rule": len(held_back),
+            "held_back_by_rule": held_back,
+            "namespaces_not_restored": dict(NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE),
+            "n_differing_inside_the_coupling_state": len(inside),
+            "differing_inside_the_coupling_state": inside[:200],
+            "n_restored": put_back["n_restored"],
+            "n_not_restorable": put_back["n_not_restorable"],
+            "not_restorable": put_back["not_restorable"],
+            "restore": put_back,
+            "round_trip_census": structure_mod.round_trip_census(snapshot),
+        }
+    )
+    return instrument
+
+
+def _census_the_state_the_sweep_starts_from(
+    instrument: dict[str, Any],
+    data,
+    *,
+    structure_mod,
+    structure_snapshots: Mapping[str, Any] | None,
+    restore_from_position: str | None,
+    coupling_names: set[str],
+) -> None:
+    """How far the state the sweep is about to take is from the snapshot.
+
+    Taken after both restores, over the **whole** snapshot rather than over the
+    set that was put back, which is the difference between "everything I tried
+    to restore worked" and "the state I am about to sweep is the state I said
+    it was".  The second is the claim the residual rests on, so it is the one
+    the record carries.  Its split — inside the coupling state, outside it — is
+    what makes the two audit positions legible: at the declared position both
+    halves are 0, and after the run the inside half is the output path's own
+    work on the coupling state, which that position exists to keep.
+    """
+    snapshot = (structure_snapshots or {}).get(restore_from_position or "")
+    if snapshot is None:
+        instrument["state_the_sweep_starts_from"] = {
+            "compared": False,
+            "why": instrument.get("why", "no snapshot to compare against"),
+        }
+        return
+    difference = structure_mod.differences(snapshot, structure_mod.snapshot(data))
+    still = difference["differ"]
+    outside = [n for n in still if n not in coupling_names]
+    inside = [n for n in still if n in coupling_names]
+    held_back = [
+        n
+        for n in outside
+        if n.partition(".")[0] in NAMESPACES_THE_AUDIT_DOES_NOT_RESTORE
+    ]
+    instrument["state_the_sweep_starts_from"] = {
+        "compared": True,
+        "n_fields_compared": difference["n_compared"],
+        "n_still_differing_from_the_snapshot": len(still),
+        "n_outside_the_coupling_state": len(outside),
+        "outside_the_coupling_state": outside,
+        "n_of_those_held_back_by_rule": len(held_back),
+        "held_back_by_rule": held_back,
+        "n_of_those_the_restore_asked_for_and_missed": len(
+            [n for n in outside if n not in set(held_back)]
+        ),
+        "the_restore_asked_for_and_missed": [
+            n for n in outside if n not in set(held_back)
+        ],
+        "n_inside_the_coupling_state": len(inside),
+        "inside_the_coupling_state": inside[:200],
+    }
+
+
 def take_exit_audit(
     caller,
     module_solve,
@@ -1329,6 +1577,9 @@ def take_exit_audit(
     node_write_sets_path: Path | None = None,
     configuration: str = "",
     from_snapshot: Mapping[str, Any] | None = None,
+    structure_snapshots: Mapping[str, Any] | None = None,
+    restore_from_position: str | None = None,
+    on_ready_to_sweep=None,
 ) -> dict[str, Any]:
     """One further full sweep past termination, and how far the state moved.
 
@@ -1345,12 +1596,36 @@ def take_exit_audit(
     output path an audited state.  The restore is proved bit-exact before the
     sweep runs, and an audit whose restore is not bit-exact is **refused**: a
     residual measured from a state nobody chose is worse than no residual.
+
+    **The sweep must be the loop's own map, not the output path's** (ruling
+    D25).  The coupling state is not the whole of what a model reads: PROCESS's
+    output path permanently changes settings that are not coupling-state
+    components and never puts them back, and a sweep taken afterwards then
+    evaluates a different function of the same state.  So ``structure_snapshots``
+    carries the whole data structure as it stood at the driver's positions, and
+    before the sweep this function puts back a **derived** set — the fields that
+    differ between the snapshot and the state the sweep would otherwise start
+    from, outside the coupling state, whose own restore is governed by the audit
+    position.  Derived, never listed: the one field known to latch today is not
+    what the mechanism knows about.  What could not be put back is counted and
+    named in the record; nothing here reports "all".
     """
     record: dict[str, Any] = {"audit_position": position}
     try:
+        from . import data_structure as structure_mod
         from . import predicate as predicate_mod
 
         spec, provenance = module_solve.load_spec(str(coupling_state_path))
+        coupling_names = {spec.name(i) for i in range(len(spec.keys))}
+        record["instrument"] = _restore_the_solve_phase_structure(
+            data,
+            structure_mod=structure_mod,
+            structure_snapshots=structure_snapshots,
+            restore_from_position=restore_from_position,
+            coupling_names=coupling_names,
+            audit_position=position,
+            coupling_state_is_restored=from_snapshot is not None,
+        )
         if from_snapshot is not None:
             restored = predicate_mod.write_entry_state(spec, data, from_snapshot)
             record["restored_from_snapshot"] = restored
@@ -1364,6 +1639,16 @@ def take_exit_audit(
                     f"report a residual of a state nobody chose"
                 )
                 return record
+        _census_the_state_the_sweep_starts_from(
+            record["instrument"],
+            data,
+            structure_mod=structure_mod,
+            structure_snapshots=structure_snapshots,
+            restore_from_position=restore_from_position,
+            coupling_names=coupling_names,
+        )
+        if on_ready_to_sweep is not None:
+            on_ready_to_sweep(data)
         bound = spec.bind(data)
         y_before = spec.read(bound)
         predicate_mode = getattr(module_solve, "PREDICATE_MODE", "frozen")

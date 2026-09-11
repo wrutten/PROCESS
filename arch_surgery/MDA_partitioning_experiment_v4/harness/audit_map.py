@@ -47,15 +47,15 @@ a file of its own.
 
 from __future__ import annotations
 
-import dataclasses
 import json
 import os
 import traceback
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 import numpy as np
 
+from . import data_structure as structure_mod
 from . import predicate as predicate_mod
 
 #: Environment variable that installs the trace.  **Not** a ``PROCESS_ARCH_``
@@ -98,144 +98,18 @@ class AuditMapError(RuntimeError):
 # --------------------------------------------------------------------------
 # whole-data-structure snapshots
 # --------------------------------------------------------------------------
+#
+# The three functions this section used to define — snapshot the whole data
+# structure, compare two snapshots, write one back — now live in
+# ``harness/data_structure.py``, because ruling **D25** makes the same
+# mechanism part of the exit audit, which runs on every run.  This module is a
+# gate instrument refused on campaign runs; a definition both need cannot live
+# in it.  The names below are this module's own spelling of that module's
+# functions, kept so that the diagnosis stage reads as it did.
 
-
-def snapshot_data_structure(data) -> dict[str, Any]:
-    """Every field of every namespace of the data structure, serialised exactly.
-
-    Floats travel as hexadecimal literals and float arrays as hex element
-    lists, by the same serialiser the coupling-state snapshot uses, so two
-    snapshots compare bit for bit and a difference is a difference in the last
-    bit rather than in a printed digit.
-
-    A namespace that is not a dataclass is named in ``skipped_namespaces``
-    rather than dropped: a silent omission would shrink the denominator of
-    every count taken over this snapshot.
-    """
-    fields: dict[str, Any] = {}
-    skipped: list[str] = []
-    for namespace_field in dataclasses.fields(data):
-        namespace = getattr(data, namespace_field.name)
-        if not dataclasses.is_dataclass(namespace):
-            skipped.append(namespace_field.name)
-            continue
-        for field in dataclasses.fields(namespace):
-            name = f"{namespace_field.name}.{field.name}"
-            try:
-                fields[name] = predicate_mod.snap_value(
-                    getattr(namespace, field.name)
-                )
-            except Exception:  # noqa: BLE001 - recorded, never raised
-                fields[name] = {"k": "error", "v": traceback.format_exc()}
-    return {
-        "n_namespaces": len(dataclasses.fields(data)) - len(skipped),
-        "n_fields": len(fields),
-        "skipped_namespaces": skipped,
-        "fields": fields,
-    }
-
-
-def data_structure_differences(
-    before: Mapping[str, Any], after: Mapping[str, Any]
-) -> dict[str, Any]:
-    """Which data-structure fields differ between two snapshots, and how many.
-
-    The denominator is the number of fields **compared** — the two snapshots'
-    common keys — and any key present in one and not the other is reported
-    separately, because a field that appeared between the two is a difference
-    of a different kind.
-    """
-    a, b = before["fields"], after["fields"]
-    common = sorted(set(a) & set(b))
-    differ = [name for name in common if a[name] != b[name]]
-    return {
-        "n_compared": len(common),
-        "n_differ": len(differ),
-        "only_before": sorted(set(a) - set(b)),
-        "only_after": sorted(set(b) - set(a)),
-        "differ": differ,
-        "detail": {
-            name: {"before": _brief(a[name]), "after": _brief(b[name])}
-            for name in differ
-        },
-    }
-
-
-def _brief(record: Mapping[str, Any]) -> Any:
-    """One serialised value, short enough to read in a report."""
-    kind = record.get("k")
-    if kind in {"f", "b", "i", "s", "none"}:
-        return record.get("hex", record.get("v"))
-    if kind in {"af", "a"}:
-        values = record.get("hex", record.get("v")) or []
-        return {
-            "kind": kind,
-            "dtype": record.get("dtype"),
-            "shape": record.get("shape"),
-            "n_elements": len(values),
-            "head": list(values[:4]),
-        }
-    if kind == "l":
-        return {"kind": "l", "n_elements": len(record.get("v") or [])}
-    return {"kind": kind}
-
-
-def restore_data_structure(
-    data, snapshot: Mapping[str, Any], *, only: Sequence[str] | None = None
-) -> dict[str, Any]:
-    """Write a data-structure snapshot back, and prove the write took.
-
-    Float arrays whose dtype and shape match the live value are written
-    element-wise in place, preserving object identity; a value that was
-    serialised as a bare ``repr`` cannot be rebuilt and is skipped **by name**;
-    a field that refuses assignment is recorded **by name**.  Afterwards every
-    field written is read back and compared against the snapshot, so
-    ``readback_bitexact`` is evidence rather than an assumption.
-    """
-    fields = snapshot["fields"]
-    names = list(fields) if only is None else [n for n in only if n in fields]
-    skipped_repr: list[str] = []
-    refused: dict[str, str] = {}
-    written: list[str] = []
-    for name in names:
-        record = fields[name]
-        if record.get("k") in {"r", "error"}:
-            skipped_repr.append(name)
-            continue
-        namespace_name, _, field = name.partition(".")
-        namespace = getattr(data, namespace_name)
-        try:
-            target = predicate_mod.restore_value(record)
-            current = getattr(namespace, field)
-            if (
-                isinstance(target, np.ndarray)
-                and isinstance(current, np.ndarray)
-                and current.shape == target.shape
-                and current.dtype == target.dtype
-            ):
-                current[...] = target
-            else:
-                setattr(namespace, field, target)
-            written.append(name)
-        except Exception:  # noqa: BLE001 - recorded, never raised
-            refused[name] = traceback.format_exc(limit=1).strip()
-    mismatch = []
-    for name in written:
-        namespace_name, _, field = name.partition(".")
-        value = getattr(getattr(data, namespace_name), field)
-        if predicate_mod.snap_value(value) != fields[name]:
-            mismatch.append(name)
-    return {
-        "n_asked": len(names),
-        "n_written": len(written),
-        "n_skipped_repr": len(skipped_repr),
-        "skipped_repr": skipped_repr[:20],
-        "n_refused": len(refused),
-        "refused": dict(list(refused.items())[:20]),
-        "readback_bitexact": not mismatch,
-        "n_readback_mismatch": len(mismatch),
-        "readback_mismatch_first": mismatch[:10],
-    }
+snapshot_data_structure = structure_mod.snapshot
+data_structure_differences = structure_mod.differences
+restore_data_structure = structure_mod.restore
 
 
 # --------------------------------------------------------------------------
