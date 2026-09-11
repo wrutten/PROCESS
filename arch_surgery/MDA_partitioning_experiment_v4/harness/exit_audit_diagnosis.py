@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from . import arms as arms_mod
+from . import gates as gates_mod
 from . import audit_map as audit_map_mod
 from . import input_files as input_files_mod
 from . import pool as pool_mod
@@ -70,6 +71,62 @@ RUNS: tuple[dict[str, Any], ...] = (
     {"configuration": "low_aspect_ratio_DEMO", "arm": "B3", "seed": 0},
     {"configuration": "st_regression", "arm": "B0", "seed": 0},
 )
+
+
+#: The job the inertness check runs twice.  One configuration is enough for a
+#: claim about an instrument that does the same thing on every configuration,
+#: and it is the cheapest of the three.
+INERTNESS_RUN: dict[str, Any] = {
+    "configuration": "st_regression",
+    "arm": "B0",
+    "seed": 0,
+}
+
+#: What the inertness check may not compare, and why.  The two sides are the
+#: **same code at the same commit** — the only difference is whether the trace
+#: is installed — so the commit, the tree and the counters are all compared,
+#: and the set is much smaller than a switch-neutrality gate's.  Anything not
+#: named here is compared without tolerance.
+INERTNESS_EXCLUSIONS: dict[str, str] = {
+    "outdir": "the two runs are in different directories, by construction",
+    "campaign_input_file": "the input file is copied into the run's own directory",
+    "wall_s": "wall clock is context, never evidence (I-10)",
+    "cpu_user_s": "cpu time is a contention diagnostic",
+    "cpu_sys_s": "cpu time is a contention diagnostic",
+    "cpu_s": "cpu time is a contention diagnostic",
+    "maxrss_kb": "peak memory varies with the machine's state",
+    "loadavg": "machine load while it ran",
+    "mfile.process_runtime": "PROCESS's own timing of itself",
+    "mfile.fileprefix": "an absolute path into the run's own directory",
+    "started": "the wall-clock moment the run began",
+    "finished": "the wall-clock moment the run ended",
+}
+
+
+#: Leaves the inertness check must actually be comparing.  A zero over a
+#: population that quietly excluded the decisive fields is the failure shape
+#: this project has published before (trap T11), so the check asserts that each
+#: of these is present on both sides and not excluded, and refuses otherwise.
+INERTNESS_MUST_COMPARE: tuple[str, ...] = (
+    "values.norm_objf",
+    "exact.norm_objf",
+    "node_calls_total",
+    "node_calls_solve_phase",
+    "dispatch_sweeps",
+    "n_solver_iterations",
+    "predicate_evaluations",
+    "components_compared",
+    "sweeps_per_eval.n_sweeps",
+    "exit_audit.residual_max_hex",
+    "exit_audit.brief.n_above",
+    "exit_audit.frozen.residual_max_hex",
+    "exit_audit.mixed.residual_max_hex",
+)
+
+#: The tooth: one leaf given a deliberately wrong value in a copy of the
+#: traced record.  The comparison must catch it.  A check that has never been
+#: shown to fail is an assertion, not a measurement (protocol section 12).
+INERTNESS_TOOTH: tuple[str, str] = ("node_calls_total", "one node call added")
 
 
 class DiagnosisError(RuntimeError):
@@ -498,6 +555,106 @@ def make_runs(
 # --------------------------------------------------------------------------
 # stage 3 — the report's numbers
 # --------------------------------------------------------------------------
+
+
+def inertness(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
+    """The same run, with the trace installed and without it, compared leaf by leaf.
+
+    An instrument that changes what it measures is not an instrument.  The
+    trace only reads — it wraps three calls and returns exactly what each
+    unwrapped call returns — but "only reads" is a claim about code, and this
+    project gates such claims rather than asserting them.  So the same job runs
+    twice at the same commit, differing in one environment variable, and every
+    deterministic leaf of the two records is compared without tolerance.
+
+    The check **fails** on any mismatch and says which leaves; nothing is
+    retried and no exclusion is added to make it pass.
+    """
+    config = campaign.configuration(INERTNESS_RUN["configuration"])
+    base = root(campaign) / "inertness"
+    results = {}
+    for label, override in (
+        ("with_the_trace", {audit_map_mod.TRACE_VARIABLE: "1"}),
+        ("without_the_trace", {}),
+    ):
+        job = pool_mod.Job(
+            phase="B",
+            arm=INERTNESS_RUN["arm"],
+            config=config,
+            seed=int(INERTNESS_RUN["seed"]),
+            outdir=base / label,
+            regime="unperturbed",
+            delta=campaign.delta,
+            run_kind="gate",
+            override_env=override,
+        )
+        results[label] = pool_mod.run(job, campaign, resume=resume)
+    with_trace = records_mod.read(base / "with_the_trace")
+    without_trace = records_mod.read(base / "without_the_trace")
+    comparison = gates_mod.compare_records(
+        without_trace, with_trace, excluded=INERTNESS_EXCLUSIONS
+    )
+    # The population, checked rather than assumed.
+    leaves = gates_mod.leaves(dict(with_trace))
+    excluded_paths = set(comparison.get("excluded") or ())
+    not_compared = [
+        path
+        for path in INERTNESS_MUST_COMPARE
+        if path not in leaves or path in excluded_paths
+    ]
+    # The tooth: doctor one leaf of a copy and require the comparison to fail.
+    field, why = INERTNESS_TOOTH
+    doctored = dict(with_trace)
+    doctored[field] = (doctored.get(field) or 0) + 1
+    tooth = gates_mod.compare_records(
+        without_trace, doctored, excluded=INERTNESS_EXCLUSIONS
+    )
+    tooth_bit = len(tooth.get("mismatches") or []) > 0
+    record = {
+        "stage": "inertness",
+        "made": _dt.datetime.now().isoformat(timespec="seconds"),
+        "tree_git_head": _git_head(),
+        "job": dict(INERTNESS_RUN),
+        "variable": audit_map_mod.TRACE_VARIABLE,
+        "exclusions": INERTNESS_EXCLUSIONS,
+        "n_excluded_paths": len(comparison.get("excluded", []) or []),
+        "n_compared": comparison.get("n_compared"),
+        "n_mismatches": len(comparison.get("mismatches", []) or []),
+        "mismatches": (comparison.get("mismatches") or [])[:40],
+        "must_compare": list(INERTNESS_MUST_COMPARE),
+        "n_declared_leaves_not_compared": len(not_compared),
+        "declared_leaves_not_compared": not_compared,
+        "tooth": {
+            "field": field,
+            "why": why,
+            "bit": tooth_bit,
+            "n_mismatches_when_doctored": len(tooth.get("mismatches") or []),
+        },
+        "observation_present": (
+            base / "with_the_trace" / audit_map_mod.OBSERVATION_FILE
+        ).exists(),
+        "observation_absent_without_it": not (
+            base / "without_the_trace" / audit_map_mod.OBSERVATION_FILE
+        ).exists(),
+        "what": (
+            "the same job at the same commit, with and without the trace; "
+            "every deterministic leaf of the two records compared without "
+            "tolerance"
+        ),
+    }
+    record["passed"] = bool(
+        record["n_mismatches"] == 0
+        and record["n_compared"]
+        and not not_compared
+        and tooth_bit
+        and record["observation_present"]
+        and record["observation_absent_without_it"]
+    )
+    path = root(campaign) / "inertness.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2, default=str) + "\n")
+    record["written_to"] = str(path)
+    return record
 
 
 def summarise(
@@ -1284,7 +1441,10 @@ def render(summary: Mapping[str, Any]) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "stage", choices=("census", "runs", "report", "all"), nargs="?", default="all"
+        "stage",
+        choices=("census", "runs", "report", "inertness", "all"),
+        nargs="?",
+        default="all",
     )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument(
@@ -1319,6 +1479,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage in {"runs", "all"}:
         manifest = make_runs(campaign, resume=args.resume, only=args.only)
         print(f"{manifest['n_runs']} runs; manifest {manifest['manifest']}")
+    if args.stage in {"inertness", "all"}:
+        record = inertness(campaign, resume=args.resume)
+        print(
+            f"inertness: {'PASS' if record['passed'] else 'FAIL'} — "
+            f"{record['n_mismatches']} mismatches over {record['n_compared']} "
+            f"compared leaves, {record['n_excluded_paths']} excluded, "
+            f"{len(INERTNESS_MUST_COMPARE) - record['n_declared_leaves_not_compared']}"
+            f"/{len(INERTNESS_MUST_COMPARE)} declared leaves compared, tooth "
+            f"{'bit' if record['tooth']['bit'] else 'DID NOT BITE'}; "
+            f"{record['written_to']}"
+        )
+        if not record["passed"]:
+            for mismatch in record["mismatches"]:
+                print(f"  {mismatch}", file=sys.stderr)
+            return 1
     if args.stage in {"report", "all"}:
         summary = summarise(campaign, only=args.only)
         print(render(summary))
