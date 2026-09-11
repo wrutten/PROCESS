@@ -72,6 +72,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
 from harness import arms as arms_mod  # noqa: E402
+from harness import framework  # noqa: E402
 from harness import child as child_mod  # noqa: E402
 from harness import input_files as input_files_mod  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
@@ -83,107 +84,19 @@ from harness.config import Campaign, default_campaign  # noqa: E402
 #: Where a gate's verdict goes, under the campaign's runs directory.  Bulk run
 #: artifacts are untracked by design; the verdict is small and its numbers go
 #: into the report.
-GATES_SUBPATH = Path("gates")
+GATES_SUBPATH = framework.GATES_SUBPATH
 
-
-class GateError(RuntimeError):
-    """A refusal to run or to compare.  Never downgraded into a warning."""
-
-
-# --------------------------------------------------------------------------
-# the framework
-# --------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Tooth:
-    """One deliberate break, and what the gate must do about it.
-
-    ``check`` returns ``(caught, evidence)``: whether the gate noticed the
-    break, and the sentence a reader needs to believe that it did.
-    """
-
-    name: str
-    what: str
-    must: str
-    check: Callable[[], tuple[bool, str]] = field(compare=False, repr=False)
-
-    def run(self) -> dict[str, Any]:
-        try:
-            caught, evidence = self.check()
-        except Exception as exc:  # noqa: BLE001 - a tooth that raises is a failure
-            caught, evidence = False, f"the tooth raised {type(exc).__name__}: {exc}"
-        return {
-            "tooth": self.name,
-            "perturbation": self.what,
-            "must": self.must,
-            "caught": bool(caught),
-            "tooth_result": "TRIPPED" if caught else "DID NOT TRIP",
-            "evidence": evidence,
-        }
-
-
-@dataclass(frozen=True)
-class Gate:
-    """One gate: what it binds, what it proves, how it runs, and its teeth.
-
-    **A gate with no tooth cannot be constructed.**  That is the whole reason
-    this class exists rather than a function per gate: the protocol's rule that
-    every gate must be shown capable of failing is a ``TypeError`` here, not a
-    checklist item somebody has to remember at review.
-    """
-
-    name: str
-    binds: str
-    what_it_proves: str
-    body: Callable[[], dict[str, Any]] = field(compare=False, repr=False)
-    teeth: tuple[Tooth, ...] = ()
-
-    def __post_init__(self) -> None:
-        if not self.teeth:
-            raise TypeError(
-                f"gate {self.name!r} was constructed with no tooth.  A check "
-                f"that has never been shown to fail is an assertion, not a "
-                f"measurement (protocol §12): give it at least one Tooth."
-            )
-
-    def run(self, *, records_dir: Path, teeth: bool = True) -> dict[str, Any]:
-        """Run the gate, run its teeth, write the verdict, return it."""
-        outcome = self.body()
-        tooth_records = [t.run() for t in self.teeth] if teeth else []
-        all_tripped = all(t["caught"] for t in tooth_records)
-        verdict = {
-            "gate": self.name,
-            "binds": self.binds,
-            "what_it_proves": self.what_it_proves,
-            "verdict": (
-                "PASS" if (outcome.get("passed") and (all_tripped or not teeth)) else "FAIL"
-            ),
-            "criterion_passed": bool(outcome.get("passed")),
-            "teeth_all_tripped": all_tripped if teeth else None,
-            "teeth_run": teeth,
-            "generated": _dt.datetime.now().isoformat(timespec="seconds"),
-            "tree_git_head": _git_head(),
-            **{k: v for k, v in outcome.items() if k != "passed"},
-            "teeth": tooth_records,
-        }
-        out = Path(records_dir) / self.name / "gate.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(verdict, indent=2, default=str) + "\n")
-        verdict["record"] = str(out)
-        return verdict
-
-
-def _git_head() -> str | None:
-    try:
-        return subprocess.run(
-            ["git", "-C", str(_EXPERIMENT_DIR), "rev-parse", "HEAD"],
-            check=True,
-            stdout=subprocess.PIPE,
-            text=True,
-        ).stdout.strip()
-    except Exception:  # noqa: BLE001 - context only
-        return None
+#: The framework lives in ``harness/framework.py`` so that the self-check and
+#: the artifact stages can import ``Check`` without importing this module -- the
+#: promotion task **A52 (harness-gates)** moved the three shapes there and left
+#: these names here, because the plan names ``gates.Gate`` and ``gates.Tooth``
+#: and a reader who looks them up should find them.
+Gate = framework.Gate
+Tooth = framework.Tooth
+Check = framework.Check
+Measurement = framework.Measurement
+GateError = framework.GateError
+_git_head = framework.git_head
 
 
 # --------------------------------------------------------------------------
@@ -321,6 +234,23 @@ VOLATILE_RECORD_PATHS: dict[str, str] = {
     "exit_audit.coupling_state": "an absolute path; the file is the same file",
     "exit_audit.restricted.artifact": "an absolute path; the file is the same file",
     "exit_audit.restricted.census": "an absolute path; the file is the same file",
+    # The restricted audit on an OPTIMISATION record (A52 (harness-gates)).
+    # Null on the earlier side because the optimisation phase was never handed
+    # the two artifacts the statistic is derived from, a block on the later
+    # one.  It is excluded *after* the two path leaves above rather than
+    # instead of them, so that the reason for each stays its own.  What this
+    # costs: the evaluation phase's restricted block, which was compared and is
+    # now not.  What still carries it: the restricted statistic is a maximum
+    # over a **subset** of the audit residual, and the audit residual's own
+    # maximum, hex, brief and per-component vector are compared in full on both
+    # sides -- so a change that moved the restricted maximum would have to move
+    # a quantity this gate still compares, or move nothing.
+    "exit_audit.restricted": (
+        "null on the optimisation records before the optimisation phase was "
+        "handed the per-run artifact and the write census, a block after: the "
+        "statistic is the change.  The residual it restricts is compared in "
+        "full, maximum, hex and brief alike"
+    ),
     "pythonpath": "an absolute path; the tree is the same tree",
     "tree": "an absolute path; the tree is the same tree",
     "repository": "an absolute path",
@@ -3619,20 +3549,39 @@ def _load_ystate():
     return ystate_mod
 
 
-# --------------------------------------------------------------------------
-# the registry
-# --------------------------------------------------------------------------
+def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The gates of the experiment plan's §3.9 table, by name.
 
-
-def registry(campaign: Campaign) -> dict[str, Gate]:
-    """Every gate this module implements, by name.
-
-    A52 (harness-gates) adds the rest of the experiment plan's gates here and
-    wires the names into ``experiment_runner.py``'s ``--gate`` option.
+    The plan's label for each is on the gate as ``plan_name``, so a reader can
+    go from the plan's table to this dictionary and back without a second
+    mapping to maintain.  ``G0`` and ``G0'`` are **one gate** here: the V4 plan
+    §3.9's G0 row and §7.6's G0' state the same criterion — the copy's
+    ``process/models/`` byte-identical to the frozen base commit — and giving
+    one criterion two entries is how two implementations start.
     """
+    from . import gate_audit, gate_composition, gate_entry, gate_prime, gate_records
+
     return {
+        "reproduction": Gate(
+            name="reproduction",
+            plan_name="GR",
+            needs_runs=True,
+            binds=(
+                "the harness rewrite and the experiment's copy of PROCESS, "
+                "once, at the copy commit before any driver change"
+            ),
+            what_it_proves=(
+                "the rewritten harness reproduces the previous revision's "
+                "twenty runs bit for bit on every count field and hex float, "
+                "so the rewrite changed the measurement in no respect this "
+                "experiment compares on"
+            ),
+            body=lambda: _reproduction_body(campaign),
+            teeth=_reproduction_teeth(),
+        ),
         "g0prime": Gate(
             name="g0prime",
+            plan_name="G0 / G0'",
             binds="every V4 commit, every arm, both phases",
             what_it_proves=(
                 "the physics and engineering models in the experiment's own "
@@ -3644,6 +3593,8 @@ def registry(campaign: Campaign) -> dict[str, Gate]:
         ),
         "switch_neutrality": Gate(
             name="switch_neutrality",
+            plan_name="G1",
+            needs_runs=True,
             binds="each driver change, run per change and never batched",
             what_it_proves=(
                 "with every architecture switch unset, the copy after the "
@@ -3652,8 +3603,34 @@ def registry(campaign: Campaign) -> dict[str, Gate]:
             body=lambda: neutrality_body(campaign),
             teeth=_neutrality_teeth(campaign),
         ),
+        "prime_map": gate_prime.prime_map_gate(campaign),
+        "cold_chain": gate_prime.cold_chain_gate(campaign),
+        "audit_restriction": gate_audit.audit_restriction_gate(campaign),
+        "switch_composition": gate_composition.switch_composition_gate(campaign),
+        "entry_and_warm": gate_entry.entry_and_warm_gate(campaign),
+        "record_completeness": gate_records.record_completeness_gate(campaign),
+        "predicate_mode": Gate(
+            name="predicate_mode",
+            plan_name="G8",
+            needs_runs=True,
+            binds=(
+                "the convergence predicate's second ruler, on the "
+                "evaluation-phase arms of every configuration"
+            ),
+            what_it_proves=(
+                "the default ruler moves nothing (gate GR's own check, read "
+                "here); a pair of runs no evaluation decided differently is "
+                "bit-identical under the two rulers; and the components on "
+                "which the two rulers do disagree are named with |y| / s "
+                "there, or their absence is stated with its population"
+            ),
+            body=lambda: predicate_mode_body(campaign),
+            teeth=_predicate_mode_teeth(campaign),
+        ),
         "output_path": Gate(
             name="output_path",
+            plan_name="G9",
+            needs_runs=True,
             binds=(
                 "the removal of the output-time loop from the arms whose "
                 "matrix cell turns it off, on every configuration where they "
@@ -3670,23 +3647,565 @@ def registry(campaign: Campaign) -> dict[str, Gate]:
             body=lambda: output_path_body(campaign),
             teeth=_output_path_teeth(campaign),
         ),
-        "predicate_mode": Gate(
-            name="predicate_mode",
-            binds=(
-                "the convergence predicate's second ruler, on the "
-                "evaluation-phase arms of every configuration"
+    }
+
+
+# --------------------------------------------------------------------------
+# the entry reference every warm gate is anchored on
+# --------------------------------------------------------------------------
+#
+# Three gates -- G2 (the prime's fixed-point map), G4 (the audit restriction)
+# and G6 (entry and warm equivalence) -- all start from the same thing: one
+# undisplaced evaluation of the flat control per configuration, entered cold
+# from the input file's own design point.  Its exit state is the fixed point
+# every warm run is entered from and its converged burn time is what a constant
+# owns.  It is made once, here, and shared, because three gates making their own
+# would be three fixed points that have to be argued to be the same one.
+#
+# The directory shape is `reproduction.phase_a_reference_directory`'s, imported
+# rather than restated, so the reproduction gate's references and these are the
+# same construction and can be read side by side.
+
+
+def entry_reference_root(campaign: Campaign) -> Path:
+    return Path(campaign.runs_dir) / GATES_SUBPATH / "entry_references"
+
+
+def entry_references(
+    campaign: Campaign, *, resume: bool = False
+) -> dict[str, dict[str, Any]]:
+    """One cold flat evaluation per configuration, and what it left behind.
+
+    Returns, per configuration: the exit snapshot's path, the converged burn
+    time as a hex literal, the run's own exit-audit maximum, and the cold-start
+    cost.  A configuration whose reference did not finish **refuses** -- every
+    warm run is entered from its exit state, so there is nothing to enter from,
+    and that is a result rather than a reason to enter from somewhere else.
+    """
+    from . import reproduction as reproduction_mod
+
+    root = entry_reference_root(campaign)
+    jobs = [
+        pool_mod.Job(
+            phase="A",
+            arm="A0",
+            config=config,
+            seed=0,
+            outdir=reproduction_mod.phase_a_reference_directory(root, config.name),
+            regime="unperturbed",
+            delta=None,
+            run_kind="gate",
+        )
+        for config in campaign.configurations
+    ]
+    pool_mod.run_all(jobs, campaign, resume=resume)
+    references: dict[str, dict[str, Any]] = {}
+    for job in jobs:
+        record = records_mod.read(job.outdir)
+        if record.get("status") != "ok":
+            raise GateError(
+                f"the entry reference for {job.config.name} did not finish "
+                f"(status {record.get('status')!r}, taxonomy row "
+                f"{record.get('failure_class')!r}).  Every warm run of every "
+                f"gate is entered from its exit state, so the gates that need "
+                f"it stop here rather than entering from somewhere else."
+            )
+        references[job.config.name] = {
+            "outdir": str(job.outdir),
+            "snapshot": str(Path(job.outdir) / "y_exit.json"),
+            "t_plant_pulse_burn_hex": record.get("t_plant_pulse_burn_hex"),
+            "audit_residual_max_hex": (record.get("exit_audit") or {}).get(
+                "residual_max_hex"
             ),
-            what_it_proves=(
-                "the default ruler moves nothing (gate GR's own check, read "
-                "here); a pair of runs no evaluation decided differently is "
-                "bit-identical under the two rulers; and the components on "
-                "which the two rulers do disagree are named with |y| / s "
-                "there, or their absence is stated with its population"
-            ),
-            body=lambda: predicate_mode_body(campaign),
-            teeth=_predicate_mode_teeth(campaign),
+            "cold_start_node_calls": record.get("node_calls_single_eval"),
+            "cold_start_sweeps": record.get("n_model_calls_sweeps"),
+        }
+    return references
+
+
+# --------------------------------------------------------------------------
+# gate GR, wrapped into the framework
+# --------------------------------------------------------------------------
+#
+# GR is implemented in ``harness/reproduction.py`` and was reachable only from
+# ``experiment_runner.py --gate reproduction``.  It is registered here so that
+# ``registry`` really is *every* gate, and so that ``--gate all`` runs it with
+# the rest.  The criterion is not restated: the body calls the same stage, and
+# the teeth read the same seven results out of its verdict.
+
+#: GR's own deliberate breaks, by the names ``reproduction.teeth`` records them
+#: under.  Declared here rather than counted, so that a tooth the gate stops
+#: running is a tooth that DID NOT TRIP rather than one fewer tooth.
+REPRODUCTION_TEETH: tuple[str, ...] = (
+    "count",
+    "hex",
+    "missing reference",
+    "missing key",
+    "bad name map",
+    "composition",
+    "attempt summation",
+)
+
+_REPRODUCTION_HELD: dict[str, Any] = {}
+
+#: Where GR's runs and verdict go when the gate is run from the registry.  It
+#: is settable so that ``--outdir`` redirects the gate, which it did not before
+#: (task A57 (driver-output-path) recorded the quirk: ``--gate reproduction``
+#: wrote to the campaign's records directory whatever ``--outdir`` said).
+REPRODUCTION_ROOT: dict[str, Any] = {"root": None}
+
+#: Where the lifted input files are staged from, for GR.  Also settable, for
+#: the same reason: the gate needs them and the runner has the flag.
+REPRODUCTION_LIFTED_FROM: dict[str, Any] = {"path": None}
+
+#: Whether GR reuses runs already on disk.  A gate never retries a run with
+#: different settings; resuming a *complete record of the same job* is not a
+#: retry, and ``pool.run`` checks that it is the same job before it keeps one.
+REPRODUCTION_RESUME: dict[str, bool] = {"resume": False}
+
+
+def _reproduction_body(campaign: Campaign) -> dict[str, Any]:
+    from . import reproduction as reproduction_mod
+
+    code, verdict = reproduction_mod.stage(
+        campaign=campaign,
+        root=REPRODUCTION_ROOT["root"],
+        resume=REPRODUCTION_RESUME["resume"],
+        lifted_from=REPRODUCTION_LIFTED_FROM["path"],
+    )
+    _REPRODUCTION_HELD["verdict"] = verdict
+    comparison = verdict.get("comparison") or {}
+    return {
+        "passed": code == 0,
+        "criterion": (
+            "twenty runs against the previous revision's committed numbers, "
+            "every compared value exact — counts and hex floats, no tolerance"
+        ),
+        "population": (
+            f"{verdict.get('n_planned')} reference runs; "
+            f"{comparison.get('n_compared')} compared values"
+        ),
+        "n_compared": comparison.get("n_compared"),
+        "n_mismatched": comparison.get("n_mismatched"),
+        "refused": verdict.get("refused"),
+        "coverage_boundary": verdict.get("coverage_boundary"),
+        "substitutes": {
+            name: block.get("passed")
+            for name, block in (verdict.get("substitutes") or {}).items()
+        },
+        "record_contract_passed": (verdict.get("record_contract") or {}).get("passed"),
+        "gate_record": verdict.get("root"),
+    }
+
+
+def _reproduction_teeth() -> tuple[Tooth, ...]:
+    def read(name: str):
+        def look() -> tuple[bool, str]:
+            verdict = _REPRODUCTION_HELD.get("verdict")
+            if verdict is None:
+                return False, "the gate did not run, so its teeth never ran"
+            for entry in (verdict.get("teeth") or {}).get("teeth", []):
+                if entry["tooth"] == name:
+                    return bool(entry["caught"]), str(entry["what"])
+            return False, (
+                f"gate GR ran no tooth named {name!r}; a declared tooth the "
+                f"gate no longer exercises is a tooth that did not trip"
+            )
+
+        return look
+
+    return tuple(
+        Tooth(
+            name=name,
+            what="gate GR's own deliberate break, by name",
+            must="FAIL, REFUSE or RAISE — never skip",
+            check=read(name),
+        )
+        for name in REPRODUCTION_TEETH
+    )
+
+
+# --------------------------------------------------------------------------
+# the harness's own checks, promoted
+# --------------------------------------------------------------------------
+#
+# Six self-checks and four artifact stages existed before this framework did,
+# each already carrying what a gate carries: what it binds, a population, a
+# denominator, a mismatch count and its own teeth.  They are promoted rather
+# than rewritten -- ``framework.gate_from_check`` runs the *same function* and
+# adds the verdict record, the registry entry and a declared tooth list.  The
+# numbers a promoted gate reports are the numbers the check reported; that is
+# the point of promoting instead of restating.
+
+
+def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The six self-checks, each with the teeth it must run.
+
+    The retired-name family is **derived** from the switch registry rather than
+    listed, because the check generates one tooth per retired name from that
+    same registry: a hand-copied list would drift the moment a name is retired.
+    """
+    from . import selfcheck as selfcheck_mod
+    from . import switches as switches_mod
+
+    retired = tuple(
+        f"the retired name {name} present in the environment"
+        for name in sorted(switches_mod.retired_names())
+    )
+    declared: dict[str, tuple[str, ...]] = {
+        "composition": (
+            "a role both revisions can express treated as a new capability",
+            "wrong switch value in one arm",
+            "one switch dropped from an arm",
+            "the wrong per-run artifact handed to an arm",
+            "the fold read as a difference",
+            "a schedule policy the fold does not cover",
+            "a skipped arm asked to compose",
+        ),
+        "rungs": (
+            "a wrong expected difference in the rung table",
+            "a wrong cell in the transcribed matrix",
+            "an arm compared with itself",
+        ),
+        "capability": (
+            "an arm asks for a switch the tree does not implement",
+            "the driver resolves a switch differently from what was asked",
+            *retired,
+            "the driver's own refusal of a retired name",
+        ),
+        "provenance": (
+            "a tracked file modified",
+            "an untracked file beside the runner",
+            "a campaign pointed at a tree that is not the experiment's copy",
+            "the tree asserted by a prefix instead of exactly",
+        ),
+        "data": (
+            "one byte changed in a copied file",
+            "a copied file missing",
+            "a file added that the record does not name",
+            "a changed file whose recorded sha256 was updated to match",
+            "an unrecorded edit to the predicate module",
+            "an edited predicate module whose recorded sha256 was updated to match",
+        ),
+        "run_path": (
+            "a declared field removed",
+            "an exit audit carrying one convergence ruler and not both",
+            "a record that does not say what kind of run made it",
+            "per-attempt costs that do not sum to the run total",
+            "per-attempt costs stamped at some attempts and not others",
+            "the design-vector stream keyed on position instead of number",
+            "the two streams sharing a namespace",
+            "a run against a tree that is not the experiment's copy",
+            "a run asking for a switch the tree does not implement",
+            "an allowance naming a switch the tree does implement",
+            "a campaign run carrying the reproduction gate's override",
+            "a reproduction override that changes nothing",
         ),
     }
+    bodies: dict[str, Any] = {
+        "composition": lambda: selfcheck_mod.check_composition(campaign),
+        "rungs": selfcheck_mod.check_rungs,
+        "capability": lambda: selfcheck_mod.check_capability(campaign),
+        "provenance": lambda: selfcheck_mod.check_provenance(campaign),
+        "data": lambda: selfcheck_mod.check_data(campaign),
+        "run_path": lambda: selfcheck_mod.check_run_path(campaign),
+    }
+    proves = {
+        "composition": (
+            "every arm composes on every configuration, a skipped arm refuses "
+            "by name, and the arms the previous revision also ran ask the "
+            "driver for the same thing"
+        ),
+        "rungs": (
+            "the plan's switch matrix and rung table regenerate cell for cell "
+            "from the arm records"
+        ),
+        "capability": (
+            "the tree resolves every switch each arm asks for, exactly as "
+            "asked, and refuses a retired name rather than ignoring it"
+        ),
+        "provenance": (
+            "a modified tracked file and an untracked file are recorded "
+            "separately, and only the first marks the tree dirty"
+        ),
+        "data": (
+            "every committed file the experiment reads is byte-identical to "
+            "its source at the recorded commit, and the predicate module "
+            "differs from its source by exactly the recorded hunks"
+        ),
+        "run_path": (
+            "a finished record carries every field it declares, both rulers "
+            "included; the two displacement streams key on what they say they "
+            "key on; and a run against the wrong tree is refused, not made"
+        ),
+    }
+    return {
+        name: framework.gate_from_check(
+            name=name,
+            binds="the harness itself, before any PROCESS run",
+            what_it_proves=proves[name],
+            run=bodies[name],
+            teeth=declared[name],
+            needs_runs=False,
+        )
+        for name in declared
+    }
+
+
+#: The four artifact stages, each promoted with **its own** teeth.  The stage
+#: and its teeth are two functions in the artifact modules, so the promotion
+#: runs both: the criterion is the stage, unchanged, and the teeth are the
+#: stage's own deliberate breaks, declared by name here.
+ARTIFACT_GATE_TEETH: dict[str, tuple[str, ...]] = {
+    "artifacts_check": (
+        "a corrupted components digest",
+        "an artifact with no harvest identity",
+        "a deferral set derived for a different figure of merit",
+    ),
+    "artifacts_derive_inputs": (
+        "one byte changed in a derived file",
+        "no measurement behind the third line: a baseline evaluation that crashed",
+        "no measurement behind the third line: a record carrying no settled burn time",
+        "the burn-time constraint appended at the end of the file",
+    ),
+    "artifacts_census": (
+        "one node's write removed from the census",
+        "a node writing a field the committed census does not have",
+    ),
+    "artifacts_per_run": (
+        "a node removed from the committed set",
+        "a node added to the committed set",
+    ),
+}
+
+#: Which entry the census stages are taken at when they run from the registry.
+#: ``evaluation`` is one design point and costs seconds; ``optimisation`` is the
+#: population the committed census was measured over.  Settable so that the
+#: runner's ``--census-entry`` reaches the promoted gates too.
+CENSUS_ENTRY: dict[str, str] = {"entry": "evaluation"}
+
+
+def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
+    from . import artifacts as artifacts_mod
+    from . import census as census_mod
+    from . import input_files as input_files_mod
+    from . import postsolve as postsolve_mod
+
+    def promote(
+        name: str,
+        *,
+        binds: str,
+        proves: str,
+        stage,
+        stage_teeth,
+        needs_runs: bool,
+    ) -> Gate:
+        def run() -> Check:
+            _code, record = stage()
+            check = Check(
+                name=name,
+                binds=binds,
+                passed=record.get("verdict") == "PASS",
+                population=record.get("population", ""),
+                n_compared=record.get("n_compared", 0),
+                n_mismatched=record.get("n_mismatched", 0),
+                detail=list(record.get("detail") or ()),
+            )
+            tooth_code, tooth_record = stage_teeth()
+            check.teeth = list(tooth_record.get("teeth") or ())
+            if tooth_code != 0:
+                check.note(
+                    "the stage's teeth stage returned a non-zero code; the "
+                    "teeth below say which break was not caught"
+                )
+            return check
+
+        return framework.gate_from_check(
+            name=name,
+            binds=binds,
+            what_it_proves=proves,
+            run=run,
+            teeth=ARTIFACT_GATE_TEETH[name],
+            needs_runs=needs_runs,
+        )
+
+    return {
+        "artifacts_check": promote(
+            "artifacts_check",
+            binds="every committed artifact of every configuration",
+            proves=(
+                "each artifact's own stamps rebuild and agree with the files "
+                "they must agree with, so an artifact built for a different "
+                "configuration or component set is refused by name"
+            ),
+            stage=lambda: artifacts_mod.check(campaign),
+            stage_teeth=lambda: artifacts_mod.stage_teeth(campaign),
+            needs_runs=False,
+        ),
+        "artifacts_derive_inputs": promote(
+            "artifacts_derive_inputs",
+            binds="the lifted input file of each pulsed configuration",
+            proves=(
+                "the three-line derivation reproduces the recorded bytes, and "
+                "a derivation with no measurement behind its third line "
+                "refuses rather than falling back on a default"
+            ),
+            stage=lambda: input_files_mod.stage_derive(campaign, resume=True),
+            stage_teeth=lambda: input_files_mod.stage_teeth(campaign),
+            needs_runs=True,
+        ),
+        "artifacts_census": promote(
+            "artifacts_census",
+            binds="the committed run-time write census, per configuration",
+            proves=(
+                "what the models write at run time is what the committed "
+                "census says they write, node by node and field by field"
+            ),
+            stage=lambda: census_mod.stage(
+                campaign, entry=CENSUS_ENTRY["entry"], resume=True
+            ),
+            stage_teeth=lambda: census_mod.stage_teeth(campaign),
+            needs_runs=True,
+        ),
+        "artifacts_per_run": promote(
+            "artifacts_per_run",
+            binds="each configuration's per-run deferral set",
+            proves=(
+                "the class-level classifier re-derives every committed "
+                "deferral set from a source scan of the tree under test, node "
+                "for node and in the same order"
+            ),
+            stage=lambda: postsolve_mod.stage(
+                campaign, census_entry=CENSUS_ENTRY["entry"], resume=True
+            ),
+            stage_teeth=lambda: postsolve_mod.stage_teeth(campaign),
+            needs_runs=False,
+        ),
+    }
+
+
+# --------------------------------------------------------------------------
+# the measurement stages
+# --------------------------------------------------------------------------
+
+
+def measurements(campaign: Campaign) -> dict[str, Measurement]:
+    """Every stage that publishes numbers and has nothing to pass.
+
+    They are listed beside the gates because a reader looking for "what does
+    this package run?" should find one answer, and they are a different type
+    because a measurement has no verdict and must never be read as one.
+    """
+    return {
+        "predicate_counters": Measurement(
+            name="predicate_counters",
+            reports=(
+                "what each arm's convergence test cost — evaluations and "
+                "components compared — with the empty block visits and the "
+                "sweeps they cost beside it (plan §3.5 check 5)"
+            ),
+            guarded_by="switch_neutrality",
+            body=lambda: predicate_counter_measurements(campaign),
+            printer=print_predicate_counters,
+        ),
+        "attempts": Measurement(
+            name="attempts",
+            reports=(
+                "what each attempt of the optimiser's retry ladder cost, with "
+                "check 2's two iteration constructions beside it (plan §3.5, "
+                "retries)"
+            ),
+            guarded_by="reproduction",
+            body=lambda: attempt_measurements(campaign),
+            printer=print_attempts,
+        ),
+        "output_path_measurements": Measurement(
+            name="output_path_measurements",
+            reports=(
+                "what the output-time loop moves in the output files, what it "
+                "costs, and where the accepted state sits against the "
+                "tolerance at the declared audit position"
+            ),
+            guarded_by="output_path",
+            body=lambda: output_path_measurements(campaign),
+            printer=print_measurements,
+        ),
+    }
+
+
+# --------------------------------------------------------------------------
+# the registry
+# --------------------------------------------------------------------------
+
+
+def registry(campaign: Campaign) -> dict[str, Any]:
+    """**Every** gate and every measurement stage this package runs, by name.
+
+    Three groups, in one dictionary because a reader should not have to know
+    which group a name is in to look it up:
+
+    * the experiment plan's §3.9 gates — ``GR``, ``G0``/``G0'``, ``G1``–``G9``
+      — each carrying the plan's own label in ``plan_name``;
+    * the harness's own checks, promoted: the six self-checks and the four
+      artifact stages, with their criteria unchanged;
+    * the measurement stages, which have no verdict and are a different type so
+      that nothing can read one as a gate.
+
+    Every entry has ``.run(records_dir=…)`` and writes its record under
+    ``runs/gates/<name>/``.
+    """
+    entries: dict[str, Any] = {}
+    entries.update(_plan_gates(campaign))
+    entries.update(_selfcheck_gates(campaign))
+    entries.update(_artifact_gates(campaign))
+    entries.update(measurements(campaign))
+    return entries
+
+
+def gates_only(campaign: Campaign) -> dict[str, Gate]:
+    """The registry's gates: everything with a verdict."""
+    return {
+        name: entry
+        for name, entry in registry(campaign).items()
+        if isinstance(entry, Gate)
+    }
+
+
+#: The order ``--gate all`` runs in: cheapest first, so a repository-state
+#: failure is reported in seconds rather than after an hour of runs.  A name
+#: absent from this tuple still runs — it is appended in registry order — so a
+#: gate added later cannot be silently left out of the button.
+GATE_ORDER: tuple[str, ...] = (
+    "g0prime",
+    "composition",
+    "rungs",
+    "provenance",
+    "data",
+    "run_path",
+    "capability",
+    "artifacts_check",
+    "artifacts_derive_inputs",
+    "artifacts_census",
+    "artifacts_per_run",
+    "record_completeness",
+    "prime_map",
+    "cold_chain",
+    "audit_restriction",
+    "entry_and_warm",
+    "switch_composition",
+    "output_path",
+    "predicate_mode",
+    "switch_neutrality",
+    "reproduction",
+)
+
+
+def ordered_gate_names(campaign: Campaign) -> list[str]:
+    """Every gate's name, cheapest first, with nothing left out."""
+    available = gates_only(campaign)
+    ordered = [name for name in GATE_ORDER if name in available]
+    ordered += [name for name in available if name not in ordered]
+    return ordered
 
 
 def print_predicate_mode(verdict: Mapping[str, Any]) -> None:

@@ -368,7 +368,18 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
                 "--stencil-sign", str(job.stencil_sign),
             ]
     else:
-        command += ["--audit-position", job.audit_position]
+        # The restricted exit-audit statistic needs the same two artifacts in
+        # both phases.  The per-run deferral set is the one stamped for the
+        # input file this job actually reads -- the lifted one where the
+        # optimiser owns the burn time -- so that the excluded set is derived
+        # from the run that was made and not from the other one.
+        command += [
+            "--audit-position", job.audit_position,
+            "--per-run-artifact",
+            str(job.config.per_run_artifact(lifted_input_file=input_kind == "lifted")),
+            "--node-write-sets",
+            str(campaign.data_dir / "node_writesets.json"),
+        ]
         if job.force_maxcal is not None:
             command += ["--force-maxcal", str(job.force_maxcal)]
     return command

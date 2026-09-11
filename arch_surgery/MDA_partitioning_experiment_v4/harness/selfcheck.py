@@ -42,7 +42,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+# dataclasses are no longer used here: the check record moved to harness/framework.py
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +52,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
 
 from harness import arms as arms_mod  # noqa: E402
 from harness import data_provenance as data_mod  # noqa: E402
+from harness import framework  # noqa: E402
 from harness import input_files as input_files_mod  # noqa: E402
 from harness import perturb as perturb_mod  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
@@ -72,45 +73,11 @@ from harness.config import (  # noqa: E402
 # --------------------------------------------------------------------------
 
 
-@dataclass
-class Check:
-    """One gate: what it binds, over how many things, and its teeth."""
-
-    name: str
-    binds: str
-    passed: bool = True
-    population: str = ""
-    n_compared: int = 0
-    n_mismatched: int = 0
-    detail: list[str] = field(default_factory=list)
-    teeth: list[dict[str, Any]] = field(default_factory=list)
-
-    def fail(self, message: str) -> None:
-        self.passed = False
-        self.n_mismatched += 1
-        self.detail.append(message)
-
-    def note(self, message: str) -> None:
-        self.detail.append(message)
-
-    def tooth(self, name: str, caught: bool, message: str) -> None:
-        """Record a deliberate break and whether the check caught it."""
-        self.teeth.append({"tooth": name, "caught": bool(caught), "what": message})
-        if not caught:
-            self.passed = False
-            self.detail.append(f"TOOTH DID NOT TRIP: {name} — {message}")
-
-    def as_record(self) -> dict[str, Any]:
-        return {
-            "check": self.name,
-            "binds": self.binds,
-            "verdict": "PASS" if self.passed else "FAIL",
-            "population": self.population,
-            "n_compared": self.n_compared,
-            "n_mismatched": self.n_mismatched,
-            "detail": self.detail,
-            "teeth": self.teeth,
-        }
+#: The check record's shape, defined once in ``harness/framework.py`` and named
+#: here because this module's six checks are written against it.  It was defined
+#: in this file until task **A52 (harness-gates)** promoted it: the class moved,
+#: field for field, and nothing about what a check computes changed.
+Check = framework.Check
 
 
 # --------------------------------------------------------------------------

@@ -112,6 +112,16 @@ def build_parser() -> argparse.ArgumentParser:
                              "record; empty for every other run")
     parser.add_argument("--node-census", action="store_true",
                         help="count model executions per node name")
+    parser.add_argument("--per-run-artifact", default=None,
+                        help="the per-run deferral set, for the exit audit's "
+                             "restricted statistic: the maximum over the "
+                             "components the in-loop nodes write, with the "
+                             "per-run deferred nodes' own writes excluded.  "
+                             "Membership is derived from this file and the "
+                             "census below, never listed")
+    parser.add_argument("--node-write-sets", default=None,
+                        help="the committed run-time write census the "
+                             "restricted statistic derives membership from")
     parser.add_argument("--force-maxcal", type=int, default=None,
                         help="cap the optimiser's iteration budget to force a "
                              "deliberately unconverged exit.  GATE RUNS ONLY; "
@@ -156,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     record["force_maxcal"] = args.force_maxcal
     overrides = json.loads(args.reproduction_overrides)
     record["reproduction_overrides"] = overrides or None
+    record["per_run_artifact"] = args.per_run_artifact
     record["audit_position"] = args.audit_position
     record["audit_position_declared"] = AUDIT_POSITION_DECLARED
     record["audit_position_note"] = (
@@ -291,6 +302,13 @@ def main(argv: list[str] | None = None) -> int:
             outdir=outdir,
             position=args.audit_position,
             write_state=True,
+            per_run_artifact=(
+                Path(args.per_run_artifact) if args.per_run_artifact else None
+            ),
+            node_write_sets_path=(
+                Path(args.node_write_sets) if args.node_write_sets else None
+            ),
+            configuration=args.configuration,
             from_snapshot=from_snapshot,
         )
     elif single_run is not None:

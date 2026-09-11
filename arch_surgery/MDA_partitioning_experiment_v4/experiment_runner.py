@@ -31,13 +31,13 @@ if str(HERE) not in sys.path:
 from harness import arms as arms_mod  # noqa: E402
 from harness import artifacts as artifacts_mod  # noqa: E402
 from harness import census as census_mod  # noqa: E402
+from harness import gates as gates_mod  # noqa: E402
 from harness import input_files as input_files_mod  # noqa: E402
 from harness import postsolve as postsolve_mod  # noqa: E402
 from harness import provenance as prov  # noqa: E402
 from harness import pool as pool_mod  # noqa: E402
 from harness import records as records_mod  # noqa: E402
 from harness import reference as reference_mod  # noqa: E402
-from harness import reproduction as reproduction_mod  # noqa: E402
 from harness import selfcheck as selfcheck_mod  # noqa: E402
 from harness.config import (  # noqa: E402
     EXECUTION_APPROVED,
@@ -360,23 +360,133 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
     return 0 if result["status"] == "ok" else 1
 
 
-def stage_reproduction_gate(args: argparse.Namespace, campaign: Campaign) -> int:
-    """Gate GR: twenty runs against the previous revision's committed numbers."""
-    _rule("gate GR — reproduction")
-    code, verdict = reproduction_mod.stage(
-        campaign=campaign,
-        resume=args.resume,
-        lifted_from=args.lifted_from,
-        skip_runs=args.skip_runs,
+def _gate_records_dir(args: argparse.Namespace, campaign: Campaign) -> Path:
+    """Where a gate's verdict goes.
+
+    ``--outdir`` redirects it.  It did not before: ``--gate reproduction``
+    wrote to the campaign's records directory whatever ``--outdir`` said, which
+    task A57 (driver-output-path) recorded as a quirk worth one line.  This is
+    that line, and it applies to every gate rather than to one.
+    """
+    if args.outdir:
+        return Path(args.outdir)
+    return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH
+
+
+def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
+    """One gate, or every gate, from the button.
+
+    Every gate returns a verdict and writes its record; a failed gate stops the
+    chain and is **reported**, never retried with different settings (protocol
+    §6).  ``--gate all`` runs them cheapest first, so a repository-state failure
+    is reported in seconds rather than after an hour of runs.
+    """
+    records_dir = _gate_records_dir(args, campaign)
+    # `--outdir` moves the **verdicts**, not the gates' runs.  The output-path
+    # gate reads the reproduction gate's own runs at their declared place to
+    # show that nothing about the solve changed on the arms that keep the loop,
+    # so moving those runs would break a cross-reference between two gates in
+    # order to relocate a small JSON file.
+    gates_mod.REPRODUCTION_LIFTED_FROM["path"] = args.lifted_from
+    gates_mod.REPRODUCTION_RESUME["resume"] = args.resume
+    gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
+
+    available = gates_mod.gates_only(campaign)
+    names = (
+        gates_mod.ordered_gate_names(campaign)
+        if args.gate == "all"
+        else [args.gate]
     )
-    for line in reproduction_mod.summary(verdict):
-        print(line)
-    print(f"\n  verdict: {verdict.get('verdict', 'REFUSED')}")
-    out = args.json or (campaign.runs_dir / reproduction_mod.RUNS_SUBPATH / "gate.json")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(verdict, indent=2, default=str))
-    print(f"  record: {out}")
-    return code
+    unknown = [n for n in names if n not in available]
+    if unknown:
+        print(
+            f"  REFUSED — {unknown} is not a registered gate.  The registry "
+            f"holds {sorted(available)}; a measurement stage runs under "
+            f"--measure, not --gate, because it has no verdict."
+        )
+        return 3
+    status = 0
+    for name in names:
+        gate = available[name]
+        _rule(f"gate {name}" + (f" ({gate.plan_name})" if gate.plan_name else ""))
+        try:
+            verdict = gate.run(records_dir=records_dir, teeth=not args.no_teeth)
+        except gates_mod.GateError as exc:
+            print(f"  REFUSED TO RUN — {exc}")
+            status = 3
+            if args.gate == "all":
+                print(
+                    "\n  the chain stops here.  A refused gate is a result, "
+                    "not an obstacle: nothing below is run with different "
+                    "settings."
+                )
+                break
+            continue
+        gates_mod.print_verdict(verdict)
+        if verdict["verdict"] != "PASS":
+            status = 1
+            if args.gate == "all":
+                print(
+                    f"\n  gate {name!r} did not pass; the chain stops here.  "
+                    f"A failed gate is a result, not an obstacle."
+                )
+                break
+    return status
+
+
+def stage_measure(args: argparse.Namespace, campaign: Campaign) -> int:
+    """One measurement stage, or every one, from the button.
+
+    A measurement has no verdict: it publishes what the experiment plan asks
+    for by name.  It is a separate option from ``--gate`` so that nothing can
+    be read as a gate that is not one.
+    """
+    records_dir = _gate_records_dir(args, campaign)
+    available = gates_mod.measurements(campaign)
+    names = sorted(available) if args.measure == "all" else [args.measure]
+    unknown = [n for n in names if n not in available]
+    if unknown:
+        print(
+            f"  REFUSED — {unknown} is not a registered measurement stage.  "
+            f"The registry holds {sorted(available)}; a gate runs under "
+            f"--gate."
+        )
+        return 3
+    status = 0
+    for name in names:
+        stage = available[name]
+        _rule(f"measurement {name}")
+        print(f"  reports: {stage.reports}")
+        print(f"  guarded by gate: {stage.guarded_by}")
+        try:
+            stage.run(records_dir=records_dir)
+        except (gates_mod.GateError, FileNotFoundError, KeyError) as exc:
+            print(f"  REFUSED — {type(exc).__name__}: {exc}")
+            status = 3
+    return status
+
+
+def stage_gate_catalogue(campaign: Campaign) -> int:
+    """Every registered gate and measurement stage, with what it binds."""
+    _rule("the gate registry")
+    entries = gates_mod.registry(campaign)
+    gates = gates_mod.ordered_gate_names(campaign)
+    print(
+        f"  {len(gates)} gate(s) and "
+        f"{len(entries) - len(gates)} measurement stage(s)\n"
+    )
+    print("  gates, in the order --gate all runs them:")
+    for name in gates:
+        gate = entries[name]
+        runs = "runs PROCESS" if gate.needs_runs else "no PROCESS run"
+        label = f"[{gate.plan_name}]" if gate.plan_name else "[harness]"
+        print(f"    {name:<24} {label:<12} {len(gate.teeth):>2} teeth   {runs}")
+        print(f"      binds: {gate.binds}")
+    print("\n  measurement stages (--measure), which have no verdict:")
+    for name, stage in sorted(gates_mod.measurements(campaign).items()):
+        print(f"    {name:<24} guarded by {stage.guarded_by}")
+        print(f"      reports: {stage.reports}")
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -632,11 +742,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--gate",
-        choices=("reproduction",),
-        help="run one gate and stop.  'reproduction' is gate GR: the twenty "
-        "reference runs against the previous revision's committed numbers, "
-        "the seven teeth, and the two substitutes for the arms the reference "
-        "cannot cover",
+        metavar="NAME",
+        help="run one gate and stop, or 'all' for every registered gate "
+        "cheapest first.  '--gates' lists them.  Only gates run here; a "
+        "measurement stage has no verdict and runs under --measure",
+    )
+    parser.add_argument(
+        "--gates",
+        action="store_true",
+        help="list every registered gate and measurement stage, with what "
+        "each binds, how many teeth it has and whether it starts PROCESS",
+    )
+    parser.add_argument(
+        "--measure",
+        metavar="NAME",
+        help="run one measurement stage and stop, or 'all'.  A measurement "
+        "publishes numbers and has nothing to pass; the gate that guards the "
+        "same records is named beside it",
+    )
+    parser.add_argument(
+        "--no-teeth",
+        action="store_true",
+        help="for --gate: skip the teeth.  The verdict then says so, and a "
+        "gate whose teeth were not run is not an accepted gate (protocol §12)",
     )
     parser.add_argument(
         "--run",
@@ -664,7 +792,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="for --run: switch terms this tree does not "
                         "implement that this run may omit, named explicitly "
                         "and recorded.  Never available to a campaign stage")
-    parser.add_argument("--outdir", default=None, help="for --run")
+    parser.add_argument("--outdir", default=None,
+                        help="for --run: where the run goes.  For --gate and "
+                             "--measure: where the verdicts and the gates' own "
+                             "runs go, instead of the campaign's records "
+                             "directory")
     parser.add_argument("--resume", action="store_true",
                         help="keep a run whose directory already holds a "
                         "complete record of the same job")
@@ -694,8 +826,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.artifacts:
         return stage_artifacts(args, campaign)
 
+    if args.gates:
+        return stage_gate_catalogue(campaign)
+
     if args.gate:
-        return stage_reproduction_gate(args, campaign)
+        return stage_gate(args, campaign)
+
+    if args.measure:
+        return stage_measure(args, campaign)
 
     if args.run:
         if not (args.arm and args.configuration):

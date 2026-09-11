@@ -57,6 +57,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from . import framework
 from .config import DRIVER_FIXED_ARTIFACTS, Campaign, Config
 
 
@@ -69,52 +70,15 @@ class ArtifactError(RuntimeError):
 # --------------------------------------------------------------------------
 
 
-@dataclass
-class StageCheck:
-    """One stage's verdict: what it binds, over how many things, and its teeth.
-
-    The same shape the harness's own self-check uses, kept here so that the
-    artifact stages do not depend on that module's internals.  Three fields are
-    not optional decoration: ``population`` says what the numbers are over,
-    ``n_compared`` is the denominator every count needs, and ``teeth`` records
-    the deliberate breaks — a check whose failure mode has never been exercised
-    is an assertion, not a measurement (orchestration protocol §12, trap T11).
-    """
-
-    name: str
-    binds: str
-    passed: bool = True
-    population: str = ""
-    n_compared: int = 0
-    n_mismatched: int = 0
-    detail: list[str] = field(default_factory=list)
-    teeth: list[dict[str, Any]] = field(default_factory=list)
-
-    def fail(self, message: str) -> None:
-        self.passed = False
-        self.n_mismatched += 1
-        self.detail.append(message)
-
-    def note(self, message: str) -> None:
-        self.detail.append(message)
-
-    def tooth(self, name: str, caught: bool, message: str) -> None:
-        self.teeth.append({"tooth": name, "caught": bool(caught), "what": message})
-        if not caught:
-            self.passed = False
-            self.detail.append(f"TOOTH DID NOT TRIP: {name} — {message}")
-
-    def as_record(self) -> dict[str, Any]:
-        return {
-            "check": self.name,
-            "binds": self.binds,
-            "verdict": "PASS" if self.passed else "FAIL",
-            "population": self.population,
-            "n_compared": self.n_compared,
-            "n_mismatched": self.n_mismatched,
-            "detail": self.detail,
-            "teeth": self.teeth,
-        }
+#: One stage's verdict.  The same shape the harness's own self-check uses --
+#: literally the same class since task **A52 (harness-gates)** promoted it into
+#: ``harness/framework.py``; this file defined its own copy, field for field
+#: identical, until then.  Three fields are not optional decoration:
+#: ``population`` says what the numbers are over, ``n_compared`` is the
+#: denominator every count needs, and ``teeth`` records the deliberate breaks --
+#: a check whose failure mode has never been exercised is an assertion, not a
+#: measurement (orchestration protocol §12, trap T11).
+StageCheck = framework.Check
 
 
 def report(check_record: Mapping[str, Any], *, indent: str = "  ") -> list[str]:
