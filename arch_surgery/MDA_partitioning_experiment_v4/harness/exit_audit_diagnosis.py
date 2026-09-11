@@ -659,6 +659,9 @@ def _row(key, job, record, observation, campaign, directory) -> dict[str, Any]:
                 "component_before_hex": _component_hex(sweep, "before_hex"),
                 "component_after_hex": _component_hex(sweep, "after_hex"),
                 "component_scaled_hex": _component_hex(sweep, "scaled_hex"),
+                "component_tested_as_continuous": (
+                    (sweep.get("tracked") or {}).get(COMPONENT) or {}
+                ).get("tested_as_continuous"),
                 "skipped": sweep.get("skipped"),
                 "failed": sweep.get("failed"),
                 "refused": sweep.get("refused"),
@@ -959,6 +962,46 @@ def render(summary: Mapping[str, Any]) -> str:
                 f"{sweep.get('residual_max_hex')} (`{sweep.get('argmax')}`, "
                 f"{sweep.get('n_above_tau')} above)"
             )
+        lines.append("| " + " | ".join(cells) + " |")
+
+    lines.append(f"\n## The component's own residual, sweep by sweep\n")
+    lines.append(
+        f"*Caption: one row per run, one column per sweep. The cell is "
+        f"`{COMPONENT}`'s own scaled residual under that sweep, on the frozen "
+        "ruler, whatever its place in the ordering — so the partitioned arm, "
+        "whose whole-state maximum belongs to the nodes deferred to once per "
+        "run, is on the same ruler as every other row. tau = 1e-6; `—` is a "
+        "configuration where the component is not a continuous coupling-state "
+        "component at all.*\n"
+    )
+    component_order = (
+        ("output_entry_as_found", "as found"),
+        ("output_entry_as_found_second_sweep", "as found, 2nd"),
+        ("output_entry_with_the_solve_phase_settings", "solve-phase map"),
+        (
+            "output_entry_with_only_the_candidate_put_back",
+            f"only `{audit_map_mod.CANDIDATE_FIELD}` put back",
+        ),
+        (
+            "output_entry_without_the_candidate_put_back",
+            "every other field put back",
+        ),
+        ("loop_exit_as_found", "loop exit, as found"),
+        (
+            "loop_exit_with_the_solve_phase_settings",
+            "loop exit, solve-phase map",
+        ),
+    )
+    lines.append(
+        "| run | " + " | ".join(label for _n, label in component_order) + " |"
+    )
+    lines.append("|---" * (1 + len(component_order)) + "|")
+    for row in summary["rows"]:
+        cells = [f"`{row['key']}`"]
+        for name, _label in component_order:
+            sweep = row["sweeps"].get(name, {})
+            scaled = sweep.get("component_scaled_hex")
+            cells.append(scaled if scaled else "—")
         lines.append("| " + " | ".join(cells) + " |")
 
     lines.append("\n## The component, and the setting the output path changes\n")
