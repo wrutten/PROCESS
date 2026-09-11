@@ -106,16 +106,28 @@ PLAN_COLUMN: tuple[tuple[str, Any], ...] = (
             config.per_run_artifact(lifted_input_file=config.pulsed)
         ),
     ),
-    # "burn-time owner | optimiser" on a pulsed configuration; the row does not
-    # apply where there is no burn-time coupling.
+    # "burn-time owner | optimiser", a row the plan marks as applying on the
+    # pulsed configurations **only**: where the plant is steady state there is
+    # no burn-time coupling and the row does not apply, so the switch is left
+    # unset rather than set to the loop.  (Found by this gate failing: writing
+    # "loop" there composes a different environment for the same arm, and the
+    # plan's own footnote is what settles which is right.)
     (
         "burn_time_owner",
-        lambda config, campaign: "optimiser" if config.pulsed else "loop",
+        lambda config, campaign: "optimiser" if config.pulsed else None,
     ),
     # "output-time loop | none".
     ("output_loop", lambda config, campaign: "none"),
-    # The convergence ruler: the default, which is the campaign's.
-    ("predicate_mode", lambda config, campaign: "frozen"),
+    # The convergence ruler.  The plan's row for this arm is the campaign's
+    # **default**, and a default is composed by leaving the switch unset: the
+    # driver resolves an absent `PROCESS_ARCH_PREDICATE` to the frozen ruler.
+    # That is not taken on trust here — the run comparison below includes what
+    # the driver *resolved*, read back from the imported modules, so "unset"
+    # and "frozen" have to reach the same place or the gate fails.  (Found by
+    # this gate failing: the hand-written column set the value explicitly and
+    # the matrix left it unset, which is the same arm and a different
+    # environment.)
+    ("predicate_mode", lambda config, campaign: None),
 )
 
 #: What the two runs must agree on, and the path each is read from.  Every one
@@ -130,6 +142,11 @@ COMPARED: tuple[tuple[str, str], ...] = (
     ("inner_sweeps_by_block", "module_solve_totals.inner_sweeps_by_block"),
     ("exit_audit_hex", "exit_audit.residual_max_hex"),
     ("node_calls_solve_phase", "node_calls_solve_phase"),
+    # What the driver **resolved**, read back from the imported modules rather
+    # than as the harness asked.  This is what makes a switch left unset and a
+    # switch set to its default comparable: they compose different environments
+    # and must resolve to the same thing.
+    ("resolved_switches", "resolved_switches"),
 )
 
 _HELD: dict[str, Any] = {}
@@ -159,7 +176,8 @@ def switch_by_switch(config: Config, campaign: Campaign) -> dict[str, str | None
                 f"the switch registry gives {term!r} no driver name; this tree "
                 f"cannot compose the plan's column"
             )
-        composed[switch.driver_name] = resolve(config, campaign)
+        value = resolve(config, campaign)
+        composed[switch.driver_name] = value  # None means "left unset"
     return composed
 
 
