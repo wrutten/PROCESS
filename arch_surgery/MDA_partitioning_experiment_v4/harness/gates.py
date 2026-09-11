@@ -4024,6 +4024,9 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
             body=lambda *, resume=False: _with_capture(
                 capture_predicate_mode, predicate_mode_body, campaign, resume=resume
             ),
+            # Its neutrality part is the reproduction gate's verdict, read
+            # rather than re-measured, so that verdict has to exist first.
+            reads_from=("reproduction",),
             teeth=_predicate_mode_teeth(campaign),
         ),
         "output_path": Gate(
@@ -4047,6 +4050,9 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
                 capture_output_path, output_path_body, campaign, resume=resume
             ),
             runs_under=("output_path/runs",),
+            # It compares its reference arms against the reproduction gate's
+            # own records, so it cannot run before that gate has made them.
+            reads_from=("reproduction",),
             teeth=_output_path_teeth(campaign),
         ),
     }
@@ -5534,10 +5540,57 @@ GATE_ORDER: tuple[str, ...] = (
 
 
 def ordered_gate_names(campaign: Campaign) -> list[str]:
-    """Every gate's name, cheapest first, with nothing left out."""
+    """Every gate's name, cheapest first **and after what it reads**.
+
+    :data:`GATE_ORDER` is a *preference*: run the cheap repository-state checks
+    before the hour of runs, so a failure is reported in seconds.  It is not a
+    correctness order, and treating it as one was a defect the from-scratch run
+    found: gate G9 reads the reproduction gate's own runs, and cheapest-first
+    put the reproduction gate last, so on a tree with no runs at all G9 refused
+    for want of records that were about to be made.  With everything resumed
+    from an earlier session it had never surfaced.
+
+    So the order is now *derived*: the preference decides between gates that do
+    not depend on each other, and a declared ``reads_from`` decides when they
+    do.  A dependency naming a gate that does not exist, or a cycle, raises —
+    an order nobody can compute is not an order.
+    """
     available = gates_only(campaign)
-    ordered = [name for name in GATE_ORDER if name in available]
-    ordered += [name for name in available if name not in ordered]
+    preference = {name: i for i, name in enumerate(GATE_ORDER)}
+    rank = sorted(available, key=lambda n: (preference.get(n, len(GATE_ORDER)), n))
+    pending = {
+        name: {
+            dependency
+            for dependency in available[name].reads_from
+            if dependency in available
+        }
+        for name in rank
+    }
+    unknown = {
+        name: sorted(set(available[name].reads_from) - set(available))
+        for name in rank
+        if set(available[name].reads_from) - set(available)
+    }
+    if unknown:
+        raise GateError(
+            f"gate(s) declare a dependency on something the registry does not "
+            f"hold: {unknown}.  A gate that reads a gate nobody runs cannot be "
+            f"ordered, and running it anyway would read whatever happened to "
+            f"be on disk"
+        )
+    ordered: list[str] = []
+    while pending:
+        ready = [name for name in rank if name in pending and not pending[name]]
+        if not ready:
+            raise GateError(
+                f"the declared reads-from dependencies are cyclic among "
+                f"{sorted(pending)}; no order runs each gate after what it reads"
+            )
+        chosen = ready[0]
+        ordered.append(chosen)
+        del pending[chosen]
+        for remaining in pending.values():
+            remaining.discard(chosen)
     return ordered
 
 

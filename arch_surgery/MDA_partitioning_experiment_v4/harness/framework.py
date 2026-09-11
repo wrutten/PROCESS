@@ -126,6 +126,11 @@ class Gate:
     #: record under these paths was made at, so that a verdict says **which
     #: runs it read** rather than leaving a reader to assume they are current.
     runs_under: tuple[str, ...] = ()
+    #: Gates whose runs or whose verdict this gate reads.  A **declared**
+    #: dependency, because the order ``--gate all`` uses is derived from it
+    #: rather than hand-sorted: cheapest-first is a preference, and a gate that
+    #: reads another's runs has to follow it whatever either costs.
+    reads_from: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.teeth:
