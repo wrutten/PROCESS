@@ -173,8 +173,25 @@ def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     }
 
 
+def _caption_marker(marker: Mapping[str, Any]) -> str:
+    """The clause every caption carries: what population this cell is over.
+
+    Short on purpose.  The full statement is made once, under the section
+    heading; what a caption needs is the one thing a reader must not infer —
+    that this cell is a **gate** figure and not a campaign one — with the
+    commits its records were made at, so no cell can be quoted without them.
+    """
+    return (
+        f"Population: the gate runs at "
+        f"{', '.join(f'`{h[:8]}`' for h in marker['records_by_commit'])}, "
+        f"one or two seeds per arm — **not** the campaign, which has not run "
+        f"(`EXECUTION_APPROVED` is {marker['execution_approved']}); see the "
+        f"§4 heading for the audit position, the ruler and the instrument."
+    )
+
+
 def _marker_sentence(marker: Mapping[str, Any]) -> str:
-    """The one clause every caption in this section is prefixed with."""
+    """The full statement, made once under the section heading."""
     return (
         f"**Population: the gate runs, not the campaign.** "
         f"`EXECUTION_APPROVED` is {marker['execution_approved']}, so no "
@@ -250,10 +267,11 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
     )
     marker = population_marker(campaign, records_dir)
     marker_sentence = _marker_sentence(marker)
-    head = marker["verdict_commit"] or "unknown"
+    caption_marker = _caption_marker(marker)
+    commits = ", ".join(f"`{h[:8]}`" for h in marker["records_by_commit"])
     lines: list[str] = [
-        f"{SECTION_START} *(the gate population at `{head[:8]}` — **not** the "
-        f"campaign; every cell is from gate runs, and the campaign fills the "
+        f"{SECTION_START} *(the **gate** population — not the campaign — "
+        f"rendered from the records at {commits}; the campaign fills the "
         f"section again after execution approval)*",
         "",
         "**Where these cells come from.** Every table below is emitted by a "
@@ -289,7 +307,7 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
         )
         lines.append("")
         if section.stage == "gate_table":
-            lines.extend(_gate_table_block(record, marker_sentence))
+            lines.extend(_gate_table_block(record, caption_marker))
             n_tables += 1
             n_cells += len(record.get("rows") or [])
             blocks.append(
@@ -310,7 +328,7 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
             )
         not_produced = record.get("tables_not_produced") or []
         for table in tables:
-            lines.extend(_table_block(table, marker_sentence))
+            lines.extend(_table_block(table, caption_marker))
             n_tables += 1
             n_cells += len(table.get("rows") or []) * len(
                 table.get("columns") or []
