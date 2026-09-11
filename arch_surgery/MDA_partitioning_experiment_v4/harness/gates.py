@@ -55,6 +55,7 @@ Exit status: 0 every gate passed with every tooth tripping, 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import ast
 import copy
 import datetime as _dt
@@ -5254,6 +5255,47 @@ def _tally_measurements(campaign: Campaign) -> dict[str, Measurement]:
 
 
 # --------------------------------------------------------------------------
+# the analysis: one gate and one measurement stage  (task A54 (harness-analysis))
+# --------------------------------------------------------------------------
+#
+# Kept as one contiguous block, beside the tally's, so that the registry's
+# other entries and this one can be merged past each other without a conflict
+# in the middle of a dictionary.  The gate recomputes every cell the tally
+# publishes from the same run records, through a second implementation that
+# shares no construction with it; the stage publishes that implementation's own
+# tables and has nothing to pass.
+#
+# The gate reads the two tally stages' **output** on disk
+# (``runs/gates/tally_*/measurements.json``) and refuses when it is not there.
+# That dependency cannot be declared in ``reads_from``, which names gates only,
+# so the gate is ordered last and a fresh tree must run
+# ``--measure tally_evaluation tally_optimisation`` before ``--gate all``
+# reaches it.
+
+
+def _analysis_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The recomputation gate, with its six teeth."""
+    from harness import analysis as analysis_mod  # noqa: PLC0415
+
+    gate = analysis_mod.gate(campaign)
+    # Declared so ``--gate all`` runs this after the gates whose runs it
+    # summarises.  The two tally *measurement* stages it compares against
+    # cannot be declared: ``reads_from`` names gates only.
+    return {
+        "recomputation": dataclasses.replace(
+            gate, reads_from=("reproduction", "entry_and_warm")
+        )
+    }
+
+
+def _analysis_measurements(campaign: Campaign) -> dict[str, Measurement]:
+    """The analysis's own tables, to be read beside the tally's."""
+    from harness import analysis as analysis_mod  # noqa: PLC0415
+
+    return {"recomputed_tables": analysis_mod.measurement(campaign)}
+
+
+# --------------------------------------------------------------------------
 # the measurement stages
 # --------------------------------------------------------------------------
 
@@ -5338,6 +5380,7 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             printer=print_measurements,
         ),
         **_tally_measurements(campaign),
+        **_analysis_measurements(campaign),
     }
 
 
@@ -5367,6 +5410,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_selfcheck_gates(campaign))
     entries.update(_artifact_gates(campaign))
     entries.update(_tally_gates(campaign))
+    entries.update(_analysis_gates(campaign))
     entries.update(measurements(campaign))
     return entries
 
@@ -5592,6 +5636,7 @@ GATE_ORDER: tuple[str, ...] = (
     "switch_neutrality",
     "reproduction",
     "tally_contracts",
+    "recomputation",
 )
 
 
