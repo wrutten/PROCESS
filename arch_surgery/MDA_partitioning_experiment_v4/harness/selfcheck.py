@@ -1161,19 +1161,32 @@ def check_stage_provenance(campaign: Campaign) -> Check:
                 f"check that runs over nothing proves nothing."
             )
             return check
-        original = json.loads(stage_path.read_text())
-        block = original.get("records_read") or {}
+        as_copied = json.loads(stage_path.read_text())
+        block = as_copied.get("records_read") or {}
         if not block:
             check.fail(
                 f"the {section.stage} stage record carries no `records_read` "
                 f"block, so nothing says which verdicts it summarised"
             )
-        else:
-            check.note(
-                f"the {section.stage} stage record names "
-                f"{block['n_records']} verdict record(s) it read, matched by "
-                f"{block['patterns']}, at commit(s) {block['heads']}"
-            )
+            return check
+        check.note(
+            f"the {section.stage} stage record names {block['n_records']} "
+            f"verdict record(s) it read, matched by {block['patterns']}, at "
+            f"commit(s) {block['heads']}"
+        )
+
+        # The scratch baseline is re-stamped against the scratch copy before
+        # anything is broken.  What this check binds is the **mechanism** —
+        # does a moved record get refused, and does an unmoved one render —
+        # and not the press order of whoever ran the button last: a gate run
+        # after `--measure gate_table` leaves the real stage record legitimately
+        # behind its verdicts, which is the renderer's refusal to make and not
+        # this check's to fail on.  That state is read below and *noted*.
+        original = dict(as_copied)
+        original["records_read"] = framework.survey_records(
+            root, tuple(block.get("patterns") or ())
+        )
+        stage_path.write_text(json.dumps(original, indent=2) + "\n")
 
         def renders() -> tuple[bool, str]:
             """Whether the renderer accepts the scratch records, and why not."""
@@ -1271,6 +1284,29 @@ def check_stage_provenance(campaign: Campaign) -> Check:
             + (f"refused — {why}" if not rendered else "NOT refused"),
         )
         stage_path.write_text(json.dumps(original, indent=2) + "\n")
+
+    # --- and the state of the real records, read rather than failed on ---
+    live = Path(campaign.runs_dir) / framework.GATES_SUBPATH / section.stage
+    live_record = live / "measurements.json"
+    if live_record.exists():
+        check.n_compared += 1
+        try:
+            check.note(
+                "the records on disk now: "
+                + plan_tables_mod.assert_stage_read_what_is_there(
+                    json.loads(live_record.read_text()),
+                    live.parent,
+                    section,
+                )
+            )
+        except plan_tables_mod.PlanTablesError as exc:
+            check.note(
+                "the records on disk now: the renderer would REFUSE — "
+                + " | ".join(str(exc).splitlines()[:2])[:320]
+                + f".  That is the order rule working ({section.stage} is "
+                f"pressed after the gates, not before), not a failure of this "
+                f"check."
+            )
 
     # --- the stamping path a census child runs ---------------------------
     # The code itself, not a restatement of it: a check that rebuilt the stamp
