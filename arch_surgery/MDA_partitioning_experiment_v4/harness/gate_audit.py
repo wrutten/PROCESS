@@ -124,25 +124,31 @@ _HELD: dict[str, Any] = {}
 def excluded_namespaces(campaign: Campaign, config: Config) -> dict[str, Any]:
     """The namespaces the restriction excludes on this configuration.
 
-    Derived from the per-run classifier's own crawl rather than listed.  The
-    census is the **committed** one, read as data: the derivation needs to know
-    what each node writes, and taking a fresh runtime census here would make a
-    gate about the audit depend on a stage about the census.
+    Derived from the per-run classifier's own crawl rather than listed, and from
+    the **run-time** census rather than the committed one.  That distinction is
+    load-bearing and was found by this gate failing: the committed artifact
+    records what each node *writes*, and the crawl needs to know what each node
+    *ran*.  A node whose body is guarded off on a configuration writes nothing
+    and is still executed on every sweep — which is precisely a node worth
+    deferring — so a unit list taken from the writers alone drops it, and on the
+    steady-state configuration that node is ``pulse``, a whole excluded
+    namespace lost in silence.  The committed file's node map is not a
+    substitute either: it lists every node the experiment knows, including the
+    TF-coil variants this configuration never runs.
+
+    The census is taken with ``resume``, so it reuses the run the artifact
+    stages already made rather than starting another.
     """
-    committed = json.loads(
-        (Path(campaign.data_dir) / "node_writesets.json").read_text()
-    )["per_scenario"]
-    if config.name not in committed:
-        raise GateError(
-            f"no write census for {config.name}; the excluded namespaces would "
-            f"be guessed, so they are refused"
-        )
-    writes_by_node = committed[config.name]["writes_by_node"]
-    census = {
-        "writes_by_node": writes_by_node,
-        "node_calls": {node: None for node in writes_by_node},
-        "entry": "the committed per-node write census, read as data",
-    }
+    from . import census as census_mod
+
+    census = census_mod.take(
+        config,
+        campaign,
+        entry=gates_mod.CENSUS_ENTRY["entry"],
+        read_census=True,
+        resume=True,
+    )
+    writes_by_node = census["writes_by_node"]
     node_map = json.loads(
         (Path(campaign.data_dir) / "dsm_node_map.json").read_text()
     )
@@ -156,15 +162,28 @@ def excluded_namespaces(campaign: Campaign, config: Config) -> dict[str, Any]:
         "post_solve_nodes": nodes,
         "writes_by_node": writes_by_node,
         "derivation": (
-            "postsolve.derive(...)['crawl']['candidate_units'] on the "
-            "committed write census — derived per configuration, never listed"
+            "postsolve.derive(...)['crawl']['candidate_units'] on the run-time "
+            "write census — derived per configuration, never listed"
         ),
+        "census_entry": census.get("entry"),
     }
 
 
 def _scales(config: Config) -> dict[str, float]:
+    """Each component's measured scale, where it has one.
+
+    A discrete component has no scale: it is compared for equality, not for
+    distance, so the artifact records none.  Those components are therefore not
+    candidates for doctoring — a factor applied to one would not be measurable
+    against a scale that does not exist — and :func:`choose_component` refuses
+    them on the same ground.
+    """
     artifact = json.loads(Path(config.coupling_state_path).read_text())
-    return {c["key"]: float(c["scale"]) for c in artifact["components"]}
+    return {
+        c["key"]: float(c["scale"])
+        for c in artifact["components"]
+        if c.get("scale") is not None
+    }
 
 
 def _categories(config: Config) -> dict[str, str]:
@@ -316,7 +335,10 @@ def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
         namespaces_seen[config.name] = namespaces["candidate_units"]
         scales = _scales(config)
         categories = _categories(config)
-        tested = set(scales)
+        # Every component the audit tests, not only the ones with a scale: the
+        # in-loop candidate list is filtered for eligibility afterwards, and a
+        # population narrowed here would narrow it twice.
+        tested = set(categories)
 
         # 2. one doctored component per excluded namespace, plus one in-loop.
         plan: list[tuple[str, str, str]] = []  # (label, namespace, component)
@@ -325,20 +347,30 @@ def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
                 set(namespaces["writes_by_node"].get(unit, ())) & excluded_keys
             )
             if not node_fields:
+                # A namespace that writes no component of the coupling state on
+                # this configuration excludes nothing, so there is nothing to
+                # doctor and nothing the restriction could hide.  That is the
+                # certification, not a gap in it -- and it is *recorded*, with
+                # the count, rather than left to be inferred from an absence.
+                # The live case is `pulse` on the steady-state configuration,
+                # whose whole body is guarded off there: it is visited on every
+                # sweep and computes nothing.
                 rows.append(
                     {
                         "configuration": config.name,
+                        "direction": "per_run-owned",
                         "namespace": unit,
-                        "failed_at": (
-                            "the namespace writes no component of the coupling "
-                            "state on this configuration, so there is nothing "
-                            "to doctor.  That is a finding about the namespace, "
-                            "not a reason to skip it"
+                        "component": None,
+                        "n_components_owned_here": 0,
+                        "why_no_component_is_doctored": (
+                            "this namespace writes no component of the coupling "
+                            "state on this configuration, so it excludes "
+                            "nothing and there is nothing for the restriction "
+                            "to hide"
                         ),
-                        "passed": False,
+                        "passed": True,
                     }
                 )
-                passed = False
                 continue
             component = choose_component(
                 snapshot["state"],
@@ -360,11 +392,14 @@ def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
         plan.append(("in_loop", None, in_loop))
 
         jobs: list[tuple[str, str, str, pool_mod.Job, float, float]] = []
+        # The doctored entries live **outside** the run directories: a run
+        # clears its own directory before it starts, so an entry state written
+        # inside one would be deleted by the run that is meant to read it.
+        entries_dir = audit_root(campaign) / config.name / "_entries"
+        entries_dir.mkdir(parents=True, exist_ok=True)
         for label, unit, component in plan:
             doctored, before, after = doctor_snapshot(snapshot, component)
-            directory = audit_root(campaign) / config.name / label
-            directory.mkdir(parents=True, exist_ok=True)
-            entry = directory / "doctored_entry.json"
+            entry = entries_dir / f"{label}.json"
             entry.write_text(json.dumps(doctored))
             jobs.append(
                 (
@@ -522,21 +557,47 @@ def audit_restriction_body(campaign: Campaign) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
+#: The arm whose optimisation records the restricted statistic is read from:
+#: the full intervention, which is the arm the experiment reports it for.
+OPTIMISATION_ARM = "B3"
+
+
 def optimisation_phase_statistic(campaign: Campaign) -> dict[str, Any]:
     """Is the restricted statistic in the optimisation records, and what is it?
 
-    The gate reads whatever optimisation records the other gates have already
-    made — the reproduction gate's, the output-path gate's — rather than
-    starting runs of its own, because the question is about the **record**, not
-    about a new measurement: does an optimisation record now carry the
-    statistic, and which component carries the maximum?  A reader who wants to
-    know *why* that component is there has the argmax named here and the
-    decision in improvement item 11.
+    The gate makes **one optimisation per configuration** of its own, so that
+    the answer does not depend on which other gate happened to run first, and
+    then reads every optimisation record any gate has left under ``runs/gates``
+    as well — the question is about the **record**: does an optimisation record
+    now carry the statistic, and which component carries the maximum?  A reader
+    who wants to know *why* that component is there has the argmax named here
+    and the decision in improvement item 11.
+
+    Two populations are kept apart and never pooled.  The campaign's declared
+    audit position is the entry to the output path; the reproduction gate audits
+    where the previous revision audited, after the run, and is the only caller
+    allowed to.  Records at the two positions must never share a column without
+    saying so, so the verdict counts only the first and lists the second.
 
     Records stamped ``force_maxcal`` are excluded: they are budget-capped
     demonstrations and never a population.
     """
     root = Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH
+    own = [
+        pool_mod.Job(
+            phase="B",
+            arm=OPTIMISATION_ARM,
+            config=config,
+            seed=0,
+            outdir=audit_root(campaign) / config.name / "optimisation",
+            regime="unperturbed",
+            delta=None,
+            run_kind="gate",
+        )
+        for config in campaign.configurations
+        if OPTIMISATION_ARM not in config.skips
+    ]
+    pool_mod.run_all(own, campaign, resume=True)
     rows: list[dict[str, Any]] = []
     for path in sorted(root.rglob("metrics.json")):
         try:
@@ -637,7 +698,8 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         ]
         covered: dict[str, set[str]] = {}
         for row in rows:
-            covered.setdefault(row["configuration"], set()).add(row["namespace"])
+            if row.get("namespace"):
+                covered.setdefault(row["configuration"], set()).add(row["namespace"])
         missing = {
             name: sorted(set(units) - covered.get(name, set()))
             for name, units in seen.items()

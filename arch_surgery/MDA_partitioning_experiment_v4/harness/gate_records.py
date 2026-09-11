@@ -130,6 +130,17 @@ def _remove_path(document: dict[str, Any], path: str) -> dict[str, Any]:
     return copy
 
 
+def _at(record: Mapping[str, Any], path: str) -> Any:
+    """A record's value at a dotted path, or None where the path is absent.
+
+    An evaluation record has no ``mfile`` block at all — it runs no optimiser
+    and writes no output file — and asking for one must read as "not there",
+    not as an error.  Whether a field that *is* declared is present is the
+    completeness contract's question, and this helper never answers it.
+    """
+    return records_mod.resolve_path(record, path) if records_mod.has_path(record, path) else None
+
+
 def _refuses(call) -> tuple[bool, str]:
     """Did the contract refuse, and what did it say?"""
     try:
@@ -188,7 +199,7 @@ def record_completeness_body(campaign: Campaign) -> dict[str, Any]:
             "status": record.get("status"),
             "failure_class": record.get("failure_class"),
             "force_maxcal": record.get("force_maxcal"),
-            "ifail": records_mod.resolve_path(record, "mfile.ifail"),
+            "ifail": _at(record, "mfile.ifail"),
             "n_declared_fields": len(declared),
             "n_missing_fields": len(missing),
             "missing_fields": missing,
@@ -219,8 +230,7 @@ def record_completeness_body(campaign: Campaign) -> dict[str, Any]:
                 record.get("force_maxcal") == FORCED_MAXCAL
             )
             checks["the_five_forensics_fields_are_non_null"] = all(
-                records_mod.resolve_path(record, path) is not None
-                for path in FORENSICS_FIELDS
+                _at(record, path) is not None for path in FORENSICS_FIELDS
             )
             summed, why = _refuses(
                 lambda: records_mod.assert_attempt_summation(record, where=label)

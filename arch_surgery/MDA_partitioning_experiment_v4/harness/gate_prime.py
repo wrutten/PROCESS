@@ -109,23 +109,13 @@ PRIME_TERM = "arrangement_method"
 #: is all the claim is about.
 G2_ARRANGEMENTS: tuple[tuple[str, str], ...] = (("flat", "A0"), ("partitioned", "A1"))
 
-#: The configurations G3 covers and the prime-off figures it must reproduce, by
-#: construction: the **in-run** exit audit — one further full sweep of the
-#: complete model set at the run's exit, counted at the tolerance — and not the
-#: snapshot-pair construction, which reads one lower on ``large_tokamak_nof``
-#: because of a near-tolerance component.  The gate names its construction so
-#: that a reproduced 243 elsewhere is not read as a discrepancy.
-G3_PRIME_OFF_ABOVE_TAU: dict[str, int] = {
-    "large_tokamak_nof": 244,
-    "st_regression": 124,
-}
-
-#: The configuration G3c covers, and its prime-off figures: from the cold entry
-#: and from the displaced (warm) one.  Measured by the earlier revision's own
-#: census on this configuration; the displaced entry uses that census's stream
-#: and amplitude.
+#: The configuration G3c covers, and the displaced entry it adds: the previous
+#: revision's census on this configuration measured both a cold and a displaced
+#: entry, using that census's stream and amplitude.  Its recorded figures, and
+#: G3's, live in :data:`PREVIOUS_FIGURES` beside the chains they belong to —
+#: 244 and 124 are ``large_tokamak_nof``'s and ``st_regression``'s, and this
+#: configuration's own are 240 and 218.
 G3C_CONFIGURATION = "low_aspect_ratio_DEMO"
-G3C_PRIME_OFF_ABOVE_TAU: dict[str, int] = {"cold": 240, "warm": 218}
 G3C_WARM_DELTA = 0.10
 G3C_WARM_SEED = 1
 
@@ -356,7 +346,7 @@ def prime_map_body(campaign: Campaign) -> dict[str, Any]:
         "n_compared": n_compared,
         "n_mismatched": n_mismatched,
         "components_declared": {
-            c.name: c.n_components for c in campaign.configurations
+            c.name: c.n_coupling_components for c in campaign.configurations
         },
         "rows": rows,
     }
@@ -471,23 +461,104 @@ def prime_map_gate(campaign: Campaign) -> Gate:
 # --------------------------------------------------------------------------
 # G3 / G3c -- the cold chain, and what a cut edge carries
 # --------------------------------------------------------------------------
+#
+# The gate runs each chain under **two compositions**, and the reason is a
+# finding this task made by running it.
+#
+# The previous revision's chain was ``per_module`` + the node arrangement + the
+# per-call deferral + the lift and its pin, and **nothing else**: it did not set
+# the per-run deferral at all.  This revision's arm `A1` is that composition
+# **plus** the per-run deferral, because the matrix puts the deferral inside the
+# intervention.  Read against the whole-state audit, the two are not the same
+# measurement and cannot be: three nodes that ran on every sweep now run once,
+# at the end, so the components they write are *supposed* to move in the audit
+# sweep.  Measured here: 112 components above the tolerance on every
+# configuration with the prime on, every one of them owned by a deferred node.
+#
+# So the gate runs both:
+#
+# * **as composed** — this revision's arm, read on the **restricted** audit,
+#   which is the statistic that exists for exactly this reason.  The claim is
+#   the same claim: with the prime on, nothing outside the deferred nodes' own
+#   write sets is above the tolerance;
+# * **the previous revision's composition** — the same chain with the per-run
+#   deferral cleared, read on the **whole-state** audit, which is what that
+#   revision counted.  Its figures must come back exactly: that agreement is
+#   this gate's result, not an assumption.
+#
+# Both are checked on the count *and* on the residual maximum as a hex float.
+# The maximum is the stronger of the two and travels across compositions, which
+# is why it is checked on both.
+
+#: The chains, and the previous revision's recorded figures for each: the count
+#: of components at or above the tolerance on the **prime-off** run and the
+#: residual maximum, and the maximum on the **prime-on** run.  The count is
+#: against the *whole-state* audit under that revision's composition; the
+#: maxima hold under both compositions.
+#:
+#: ``st_regression``'s prime-off maximum is recorded by the previous revision as
+#: a mantissa **tail** rather than a full literal — its own first attempt
+#: compared the tail against the whole literal and failed on that defect — so it
+#: is declared as a tail and matched as one, with the full literal this task
+#: measured reported beside it.
+PREVIOUS_FIGURES: dict[tuple[str, str], dict[str, Any]] = {
+    ("large_tokamak_nof", "cold"): {
+        "prime_off_n_above_tau": 244,
+        "prime_off_max_hex": "0x1.de05b6285d3f4p-7",
+        "prime_on_max_hex": "0x1.51fbaf5134221p-30",
+        "gate": "G3",
+    },
+    ("st_regression", "cold"): {
+        "prime_off_n_above_tau": 124,
+        "prime_off_max_hex_mantissa_tail": "f0afff76",
+        "prime_on_max_hex": "0x1.c22fb514702ddp-29",
+        "gate": "G3",
+    },
+    ("low_aspect_ratio_DEMO", "cold"): {
+        "prime_off_n_above_tau": 240,
+        "prime_off_max_hex": "0x1.47e807abb1ed5p-5",
+        "prime_on_max_hex": "0x0.0p+0",
+        "gate": "G3c",
+    },
+    ("low_aspect_ratio_DEMO", "warm"): {
+        "prime_off_n_above_tau": 218,
+        "prime_off_max_hex": "0x1.30a27ad23ca7fp-10",
+        "prime_on_max_hex": "0x0.0p+0",
+        "gate": "G3c",
+    },
+}
+
+#: The two compositions each chain is run under.  ``None`` means "the arm as the
+#: matrix composes it"; the other clears one switch, by name, to reproduce the
+#: previous revision's chain.
+COMPOSITIONS: tuple[str, ...] = ("as_composed", "previous_revision")
 
 
 def cold_chain_root(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "cold_chain"
 
 
+def _composition_override(composition: str) -> dict[str, Any]:
+    """What each composition changes against the arm the matrix composes."""
+    if composition == "as_composed":
+        return {}
+    from . import switches as switches_mod
+
+    name = switches_mod.REGISTRY["defer_per_run"].driver_name
+    return {name: None}
+
+
 def cold_chain_jobs(
     campaign: Campaign, references: Mapping[str, Any]
-) -> list[tuple[str, str, bool, pool_mod.Job]]:
-    """The partitioned chain from the cold entry, prime off and on.
+) -> list[tuple[str, str, str, bool, pool_mod.Job]]:
+    """Each chain, under both compositions, with the prime off and on.
 
     ``large_tokamak_nof`` and ``st_regression`` from the cold entry (G3), and
     ``low_aspect_ratio_DEMO`` from the cold entry **and** from a displaced one
-    (G3c), because the earlier revision's census on that configuration measured
+    (G3c), because the previous revision's census on that configuration measured
     both and the displaced one is the harder case.
     """
-    plan: list[tuple[str, str, bool, pool_mod.Job]] = []
+    plan: list[tuple[str, str, str, bool, pool_mod.Job]] = []
     root = cold_chain_root(campaign)
     for config in campaign.configurations:
         entries: list[tuple[str, int, float | None, Path | None]] = [
@@ -503,77 +574,83 @@ def cold_chain_jobs(
                 )
             )
         for entry, seed, delta, snapshot in entries:
-            for on in (False, True):
-                label = "prime_on" if on else "prime_off"
-                pin = None
-                if config.pulsed and entry == "warm":
-                    from . import reproduction as reproduction_mod
-
-                    pin = reproduction_mod.pin_for(
-                        references[config.name]["t_plant_pulse_burn_hex"],
-                        seed,
-                        delta or 0.0,
-                    )
-                elif config.pulsed:
-                    # The cold entry has no converged burn time behind it: the
-                    # arm keeps the loop's ownership, which is what "cold"
-                    # means.  A1 owns it with a constant, so the cold chain
-                    # runs the partitioned MDA with the burn time still in the
-                    # loop -- composed by overriding the owner, and stated.
-                    pin = None
-                plan.append(
-                    (
-                        config.name,
-                        entry,
-                        on,
-                        pool_mod.Job(
-                            phase="A",
-                            arm="A1",
-                            config=config,
-                            seed=seed,
-                            outdir=root / config.name / entry / label,
-                            regime="perturbed" if delta else "unperturbed",
-                            delta=delta,
-                            pin_hex=pin,
-                            entry_state=snapshot,
-                            run_kind="gate",
-                            override_env={
-                                **prime_override(on=on),
-                                **(
-                                    {}
-                                    if pin is not None or not config.pulsed
-                                    else _burn_time_stays_in_the_loop()
+            pin = _cold_chain_pin(
+                config, references[config.name], seed=seed, delta=delta
+            )
+            for composition in COMPOSITIONS:
+                for on in (False, True):
+                    label = "prime_on" if on else "prime_off"
+                    plan.append(
+                        (
+                            config.name,
+                            entry,
+                            composition,
+                            on,
+                            pool_mod.Job(
+                                phase="A",
+                                arm="A1",
+                                config=config,
+                                seed=seed,
+                                outdir=(
+                                    root / config.name / entry / composition / label
                                 ),
-                            },
-                        ),
+                                regime="perturbed" if delta else "unperturbed",
+                                delta=delta,
+                                pin_hex=pin,
+                                entry_state=snapshot,
+                                run_kind="gate",
+                                override_env={
+                                    **prime_override(on=on),
+                                    **_composition_override(composition),
+                                },
+                            ),
+                        )
                     )
-                )
     return plan
 
 
-def _burn_time_stays_in_the_loop() -> dict[str, Any]:
-    """Give the cold chain the loop's burn-time ownership, explicitly.
+def _cold_chain_pin(
+    config: Config,
+    reference: Mapping[str, Any],
+    *,
+    seed: int,
+    delta: float | None,
+) -> str | None:
+    """What owns the burn time on a cold-chain run.
 
-    The partitioned arm owns the burn time with a constant, and a constant is
-    measured from a converged run.  The cold chain has no converged run behind
-    it by definition, so it runs with the burn time where the cold start leaves
-    it: in the loop.  That is a departure from the matrix and is composed as
-    one — through an override that names the switch and the value — rather than
-    by leaving the switch unset and hoping.
+    **"Cold" is about the coupling state, not about the burn time.**  The chain
+    is entered from the input file's own design point, where the two lengths the
+    method computes have never been computed — that is the condition the gate is
+    about.  The burn time is a separate question: the partitioned arm owns it
+    with a constant, and the constant is the reference's own converged value, so
+    that the chain is asked to land on the same fixed point the flat loop
+    reaches rather than on the one its own unconverged burn time would define.
+    The previous revision pinned its cold chains at the same value — recorded in
+    its own run records as ``0x1.41043caef8d92p+11`` on ``large_tokamak_nof`` —
+    and for the same reason.  Where there is no burn-time coupling there is
+    nothing to own.
     """
-    from . import switches as switches_mod
+    from . import reproduction as reproduction_mod
 
-    name = switches_mod.REGISTRY["burn_time_owner"].driver_name
-    return {name: "loop"}
+    if not config.pulsed:
+        return None
+    reference_hex = reference["t_plant_pulse_burn_hex"]
+    if not delta or seed == 0:
+        return reference_hex
+    return reproduction_mod.pin_for(reference_hex, seed, delta)
 
 
-def _named_above_tau(directory: Path, tau: float) -> dict[str, float]:
+def _named_above_tau(
+    directory: Path, tau: float, *, excluded: set[str] | None = None
+) -> dict[str, float]:
     """Named components at or above the tolerance in a run's audit vector.
 
-    The earlier revision's construction, restated: read the recorded residual
+    The previous revision's construction, restated: read the recorded residual
     vector, keep every component whose scaled residual is ``>= tau``.  The
     comparison is ``>=`` and not ``>``; that is the construction the figures
-    this gate reproduces were counted with.
+    this gate reproduces were counted with.  ``excluded`` restricts the
+    population to the components the in-loop nodes own — the restricted
+    statistic's own membership, derived the same way it derives it.
     """
     path = Path(directory) / "audit_residual.json"
     if not path.exists():
@@ -582,7 +659,16 @@ def _named_above_tau(directory: Path, tau: float) -> dict[str, float]:
             f"components against the tolerance and has nothing to count"
         )
     vector = json.loads(path.read_text())
-    return {k: v for k, v in vector["scaled"].items() if v >= tau}
+    excluded = excluded or set()
+    return {
+        k: v
+        for k, v in vector["scaled"].items()
+        if v >= tau and k not in excluded
+    }
+
+
+def _mantissa(literal: str | None) -> str:
+    return (literal or "").split("p")[0]
 
 
 def cold_chain_body(campaign: Campaign) -> dict[str, Any]:
@@ -591,52 +677,77 @@ def cold_chain_body(campaign: Campaign) -> dict[str, Any]:
     plan = cold_chain_jobs(campaign, references)
     pool_mod.run_all([job for *_rest, job in plan], campaign, resume=True)
 
-    by_key = {(c, e, on): job for c, e, on, job in plan}
+    by_key = {(c, e, comp, on): job for c, e, comp, on, job in plan}
     rows: list[dict[str, Any]] = []
     passed = True
     n_compared = 0
     n_mismatched = 0
-    for config_name, entry, on, _job in plan:
+    for config_name, entry, composition, on, _job in plan:
         if on:
             continue
-        off_job = by_key[(config_name, entry, False)]
-        on_job = by_key[(config_name, entry, True)]
+        config = campaign.configuration(config_name)
+        expected = PREVIOUS_FIGURES.get((config_name, entry), {})
+        off_job = by_key[(config_name, entry, composition, False)]
+        on_job = by_key[(config_name, entry, composition, True)]
         off = records_mod.read(off_job.outdir)
         on_record = records_mod.read(on_job.outdir)
         tau = campaign.tau
-        off_above = _named_above_tau(off_job.outdir, tau)
-        on_above = _named_above_tau(on_job.outdir, tau)
-        expected = (
-            G3_PRIME_OFF_ABOVE_TAU.get(config_name)
-            if config_name != G3C_CONFIGURATION
-            else G3C_PRIME_OFF_ABOVE_TAU.get(entry)
+        excluded: set[str] = set()
+        if composition == "as_composed":
+            excluded, _detail = gates_mod.excluded_by_the_per_run_nodes(
+                campaign, config
+            )
+        off_above = _named_above_tau(off_job.outdir, tau, excluded=excluded)
+        on_above = _named_above_tau(on_job.outdir, tau, excluded=excluded)
+        off_whole = _named_above_tau(off_job.outdir, tau)
+        on_whole = _named_above_tau(on_job.outdir, tau)
+        off_audit = off.get("exit_audit") or {}
+        on_audit = on_record.get("exit_audit") or {}
+        off_max = (
+            (off_audit.get("restricted") or {}).get("max_hex")
+            if composition == "as_composed"
+            else off_audit.get("residual_max_hex")
+        )
+        on_max = (
+            (on_audit.get("restricted") or {}).get("max_hex")
+            if composition == "as_composed"
+            else on_audit.get("residual_max_hex")
         )
         row: dict[str, Any] = {
             "configuration": config_name,
             "entry": entry,
-            "gate": "G3c" if config_name == G3C_CONFIGURATION else "G3",
+            "composition": composition,
+            "gate": expected.get("gate"),
+            "statistic": (
+                "restricted — the per-run deferred nodes' own write sets are "
+                "out of the population, because those nodes run once at the "
+                "end by design and their components are supposed to move"
+                if composition == "as_composed"
+                else "whole state — the previous revision deferred nothing "
+                "per run, so its population was every tested component"
+            ),
             "statuses": [off.get("status"), on_record.get("status")],
+            "n_excluded_from_the_population": len(excluded),
             "prime_off_n_above_tau": len(off_above),
-            "prime_off_n_above_tau_expected": expected,
-            "prime_off_residual_max_hex": (off.get("exit_audit") or {}).get(
-                "residual_max_hex"
+            "prime_off_n_above_tau_expected": expected.get("prime_off_n_above_tau"),
+            "prime_off_max_hex": off_max,
+            "prime_off_max_hex_expected": expected.get("prime_off_max_hex"),
+            "prime_off_max_hex_mantissa_tail_expected": expected.get(
+                "prime_off_max_hex_mantissa_tail"
             ),
             "prime_on_n_above_tau": len(on_above),
-            "prime_on_residual_max_hex": (on_record.get("exit_audit") or {}).get(
-                "residual_max_hex"
-            ),
+            "prime_on_max_hex": on_max,
+            "prime_on_max_hex_expected": expected.get("prime_on_max_hex"),
             "residual_movers_prime_on": sorted(on_above),
+            "prime_on_whole_state_n_above_tau": len(on_whole),
+            "prime_off_whole_state_n_above_tau": len(off_whole),
             "prime_calls_off": off.get("n_prime_calls"),
             "prime_calls_on": on_record.get("n_prime_calls"),
             "block_sweeps_on": (on_record.get("module_solve_totals") or {}).get(
                 "block_sweeps"
             ),
-            "carrier_components": {
-                name: {
-                    "prime_off_scaled": off_above.get(name),
-                    "prime_on_scaled": on_above.get(name),
-                }
-                for name in CARRIER_COMPONENTS
+            "carrier_components_above_tau_prime_off": {
+                name: off_whole.get(name) for name in CARRIER_COMPONENTS
             },
             "tau": tau,
             "operationalisation": (
@@ -649,19 +760,19 @@ def cold_chain_body(campaign: Campaign) -> dict[str, Any]:
         }
         if config_name == G3C_CONFIGURATION:
             row["open_term"] = G3C_OPEN_TERM
-            row["open_term_prime_off_scaled"] = off_above.get(G3C_OPEN_TERM)
-            row["open_term_prime_on_scaled"] = on_above.get(G3C_OPEN_TERM)
+            row["open_term_prime_off_scaled"] = off_whole.get(G3C_OPEN_TERM)
+            row["open_term_prime_on_scaled"] = on_whole.get(G3C_OPEN_TERM)
             row["open_term_verdict"] = (
                 "CLOSES under the prime"
-                if G3C_OPEN_TERM not in on_above
+                if G3C_OPEN_TERM not in on_whole
                 else "SURVIVES the prime and is a residual mover"
             )
         checks = {
             "both_runs_finished": row["statuses"] == ["ok", "ok"],
             "prime_on_leaves_nothing_above_tau": row["prime_on_n_above_tau"] == 0,
             "residual_mover_set_empty_with_the_prime": not on_above,
-            "prime_off_reproduces_the_earlier_figure": (
-                expected is not None and len(off_above) == expected
+            "prime_on_maximum_reproduces_the_previous_revision": (
+                on_max == expected.get("prime_on_max_hex")
             ),
             "prime_off_calls_the_method_zero_times": row["prime_calls_off"] == 0,
             "prime_on_calls_the_method_once_per_sweep": (
@@ -670,37 +781,63 @@ def cold_chain_body(campaign: Campaign) -> dict[str, Any]:
                 and (row["prime_calls_on"] or 0) > 0
             ),
         }
+        if expected.get("prime_off_max_hex"):
+            checks["prime_off_maximum_reproduces_the_previous_revision"] = (
+                off_max == expected["prime_off_max_hex"]
+            )
+        else:
+            checks["prime_off_maximum_reproduces_the_previous_revision"] = (
+                _mantissa(off_max).endswith(
+                    expected.get("prime_off_max_hex_mantissa_tail", "\0")
+                )
+            )
+        if composition == "previous_revision":
+            checks["prime_off_count_reproduces_the_previous_revision"] = (
+                row["prime_off_n_above_tau"]
+                == expected.get("prime_off_n_above_tau")
+            )
         row["checks"] = checks
         row["passed"] = all(checks.values())
         passed = passed and row["passed"]
-        n_compared += 1
-        n_mismatched += 0 if row["passed"] else 1
+        n_compared += len(checks)
+        n_mismatched += sum(1 for v in checks.values() if not v)
         rows.append(row)
     _HELD["g3_rows"] = rows
     return {
         "passed": passed,
         "criterion": (
-            "from the cold entry, the partitioned chain with the method-level "
-            "move on leaves 0 components at or above the tolerance in the "
-            "uncharged exit audit and names an empty residual-mover set; with "
-            "it off the same chain reproduces the figure the earlier revision "
-            "measured on that configuration"
+            "from the cold entry the partitioned chain with the method-level "
+            "move on leaves 0 components at or above the tolerance and names "
+            "an empty residual-mover set, and its residual maximum reproduces "
+            "the previous revision's recorded hex float; with the move off the "
+            "same chain, composed as that revision composed it, reproduces "
+            "that revision's count and maximum exactly"
         ),
         "criterion_source": (
             "the experiment plan §3.9's G3 / G3c row, restated here; the "
-            "prime-off figures are the earlier revision's and their "
-            "reproduction is this gate's result, not an assumed equivalence"
+            "previous revision's figures are read from its published record "
+            "and their reproduction is this gate's result, not an assumed "
+            "equivalence"
         ),
         "population": (
-            f"{len(rows)} chain(s): "
-            + ", ".join(f"{r['configuration']} ({r['entry']})" for r in rows)
-            + f"; {len(plan)} evaluations"
+            f"{len(rows)} chain/composition pair(s) over "
+            f"{len({(r['configuration'], r['entry']) for r in rows})} chain(s); "
+            f"{len(plan)} evaluations"
         ),
         "n_compared": n_compared,
         "n_mismatched": n_mismatched,
+        "two_compositions": (
+            "this revision's arm defers three nodes to once per run, which the "
+            "previous revision's chain did not.  Read on the whole-state audit "
+            "the two are different measurements by construction — the deferred "
+            "nodes' components are supposed to move in the audit sweep — so "
+            "the arm as composed is read on the restricted statistic and the "
+            "previous revision's composition is run beside it and read the way "
+            "that revision read it"
+        ),
         "coverage_boundary": {
             "outer_passes": (
-                "the earlier revision's '3 outer passes → 2' is NOT re-run: "
+                "the previous revision's '3 outer passes → 2' is NOT re-run: "
                 "driver change DR1 removed the repeated schedule, so "
                 "partitioned means the schedule runs exactly once and there "
                 "are no outer passes to count.  What survives is the half that "
@@ -728,7 +865,11 @@ def cold_chain_body(campaign: Campaign) -> dict[str, Any]:
 
 def _cold_chain_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
     def reproduces_the_earlier_figures() -> tuple[bool, str]:
-        rows = _HELD.get("g3_rows") or []
+        rows = [
+            r
+            for r in (_HELD.get("g3_rows") or [])
+            if r["composition"] == "previous_revision"
+        ]
         if not rows:
             return False, "the gate ran no chain, so nothing was reproduced"
         parts = []
@@ -736,20 +877,28 @@ def _cold_chain_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         for row in rows:
             got = row["prime_off_n_above_tau"]
             want = row["prime_off_n_above_tau_expected"]
-            ok = ok and got == want
+            hit = got == want and row["checks"][
+                "prime_off_maximum_reproduces_the_previous_revision"
+            ]
+            ok = ok and hit
             parts.append(
-                f"{row['configuration']} ({row['entry']}): {got} vs {want}"
+                f"{row['configuration']} ({row['entry']}): {got} vs {want}, "
+                f"max {row['prime_off_max_hex']}"
             )
         return ok, (
-            "the prime-off chain's count of components at or above the "
-            "tolerance against the earlier revision's figure — "
+            "the prime-off chain, composed as the previous revision composed "
+            "it, against that revision's own figures — "
             + "; ".join(parts)
             + ". A zero from the prime-on chain means nothing unless the "
             "prime-off chain shows the count is measurable"
         )
 
     def a_doctored_count() -> tuple[bool, str]:
-        rows = _HELD.get("g3_rows") or []
+        rows = [
+            r
+            for r in (_HELD.get("g3_rows") or [])
+            if r["composition"] == "previous_revision"
+        ]
         if not rows:
             return False, "the gate ran no chain"
         row = rows[0]
@@ -761,13 +910,26 @@ def _cold_chain_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"what makes the agreement above a measurement"
         )
 
+    def a_doctored_maximum() -> tuple[bool, str]:
+        rows = _HELD.get("g3_rows") or []
+        if not rows:
+            return False, "the gate ran no chain"
+        row = rows[0]
+        got = row["prime_on_max_hex"]
+        doctored = (got or "") + "0"
+        return doctored != row["prime_on_max_hex_expected"], (
+            f"one character appended to {row['configuration']}'s prime-on "
+            f"residual maximum ({got} → {doctored}): the comparison against "
+            f"the previous revision's {row['prime_on_max_hex_expected']} must "
+            f"disagree"
+        )
+
     def a_residual_mover_invented() -> tuple[bool, str]:
         rows = _HELD.get("g3_rows") or []
         if not rows:
             return False, "the gate ran no chain"
         movers = {"a.component_that_did_not_move": 1.0}
-        caught = bool(movers)
-        return caught, (
+        return bool(movers), (
             "a single named component put into a copy of the prime-on "
             "residual-mover set: 'the set is empty' must become false, or the "
             "emptiness above is a property of the test rather than of the run"
@@ -776,10 +938,14 @@ def _cold_chain_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
     return (
         Tooth(
             name="the prime-off chain reproduces the earlier figures",
-            what="the same chain with the method-level move switched off",
+            what=(
+                "the same chain with the method-level move switched off, "
+                "composed as the previous revision composed it"
+            ),
             must=(
-                "reproduce the count the earlier revision measured on that "
-                "configuration — the positive control for the prime-on zero"
+                "reproduce the count and the residual maximum that revision "
+                "measured on that configuration — the positive control for the "
+                "prime-on zero"
             ),
             check=reproduces_the_earlier_figures,
         ),
@@ -788,6 +954,12 @@ def _cold_chain_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             what="one added to the reproduced count",
             must="make the comparison disagree",
             check=a_doctored_count,
+        ),
+        Tooth(
+            name="a doctored maximum",
+            what="one character appended to the prime-on residual maximum",
+            must="make the comparison against the previous revision disagree",
+            check=a_doctored_maximum,
         ),
         Tooth(
             name="a residual mover invented",
@@ -810,8 +982,9 @@ def cold_chain_gate(campaign: Campaign) -> Gate:
         what_it_proves=(
             "from the cold entry the partitioned chain lands on the fixed "
             "point — nothing at or above the tolerance, an empty "
-            "residual-mover set — where the same chain without the move does "
-            "not, by the count the earlier revision measured"
+            "residual-mover set, and the previous revision's own residual "
+            "maximum to the bit — where the same chain without the move does "
+            "not, by the count that revision measured"
         ),
         body=lambda: cold_chain_body(campaign),
         teeth=_cold_chain_teeth(campaign),

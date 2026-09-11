@@ -4079,7 +4079,8 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
                 campaign, census_entry=CENSUS_ENTRY["entry"], resume=True
             ),
             stage_teeth=lambda: postsolve_mod.stage_teeth(campaign),
-            needs_runs=False,
+            # It takes a write census of its own, so it starts PROCESS.
+            needs_runs=True,
         ),
     }
 
