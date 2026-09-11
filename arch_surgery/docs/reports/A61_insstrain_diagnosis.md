@@ -3,7 +3,8 @@
 > **Document status** — **OPEN**. Task **A61 (insstrain-diagnosis)**, branch `A61-insstrain-diagnosis`,
 > off `architecture_surgery` at `0a023d63`. Every number below was produced by running
 > `arch_surgery/MDA_partitioning_experiment_v4/harness/exit_audit_diagnosis.py` at commit
-> `ebf243ed`; the eleven PROCESS runs it made are stamped with that commit and a clean tree. The
+> `2ae57064`; the eleven PROCESS runs it made are stamped with that commit, a clean tree and the
+> experiment's own copy of PROCESS, each asserted inside the run. The
 > physics is unchanged: nothing under `PROCESS/process/models/` was edited, read-only throughout
 > (D5). Numbers from the superseded study at `710a75c9` are not cited (D4).
 
@@ -561,4 +562,4 @@ measurement shows Y", and none is sent without the user's word.
 
 | date | change |
 |---|---|
-| 2026-09-11 | Created. `harness/audit_map.py` (the trace and the sweep series), `harness/exit_audit_diagnosis.py` (the stage), three lines in `harness/optimise.py`. Nine diagnosis runs plus two inertness runs at `ebf243ed`; classification (d), output-mode branch, attributed to `tfcoil.n_rad_per_layer` by a leave-one-out pair and a dose response. |
+| 2026-09-11 | Created. `harness/audit_map.py` (the trace and the sweep series), `harness/exit_audit_diagnosis.py` (the stage), three lines in `harness/optimise.py`. Nine diagnosis runs plus two inertness runs at `2ae57064`; classification (d), output-mode branch, attributed to `tfcoil.n_rad_per_layer` by a leave-one-out pair and a dose response. |
