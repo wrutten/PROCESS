@@ -441,8 +441,12 @@ $PY -m harness.analysis --teeth                          # the six deliberate br
 # 'smoke'; no approval needed and no campaign record made
 $PY experiment_runner.py --smoke --resume --census-entry evaluation
 
-# the plan's results section, rendered from the measurement stages' records
+# the plan's results section, rendered from the measurement stages' records.
+# 'check' compares it with the section the document carries and writes nothing
+# (exit 3 on a difference); press --measure gate_table after any gate re-run,
+# or the renderer refuses rather than reproducing the older verdict
 $PY experiment_runner.py --plan-tables show
+$PY experiment_runner.py --plan-tables check
 $PY experiment_runner.py --plan-tables write
 ```
 
@@ -599,7 +603,7 @@ measurement. This project has published a zero over a population quietly smaller
 named, and has once had a check that returned "pass" over an empty set, which is why every count
 below carries the number of things actually compared.
 
-`harness/selfcheck.py` runs six checks, each with its teeth, in about half a minute, and starts no
+`harness/selfcheck.py` runs seven checks, each with its teeth, in about half a minute, and starts no
 PROCESS run.
 
 *Caption: one row per check. "Compares" is the population; "teeth" are the deliberate breaks it is
@@ -613,6 +617,7 @@ shown to catch.*
 | **provenance** | a modified tracked file and an untracked file are recorded separately, and only the first marks the tree dirty | each kind of change, one at a time, in a throwaway repository; and the tree asserted by a prefix instead of exactly |
 | **data** | every committed file in `data/` is byte-identical to its source at the recorded commit and the file set matches exactly; `ystate.py`'s whole diff against its own source is exactly the hunks the record holds and its post-edit hash is the recorded one; the counts `config.py` declares are the ones the files carry | one byte changed; a file missing; a file the record does not name; a changed file whose recorded hash was updated to match it — which passes a record-only check and must still fail; and the same two on `ystate.py` itself |
 | **run path** | a finished record carries every field it declares, both convergence rulers included; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; an exit audit carrying one ruler and not both; a record that does not say what kind of run made it; per-attempt costs that do not sum to the run total; an allowance covering a switch the tree has |
+| **stage provenance** | a measurement stage that reads other records says which ones it read — path, bytes, commit, time and verdict — and a consumer refuses that stage record once those records have moved, so the plan's §4.1 can no longer reproduce a verdict the gate has since replaced; and every census record carries the commit of the tree it was taken in, or is named as one a stamp survey cannot place | a verdict re-made at a later commit after the stage record was written; a verdict written after it; a verdict it read that is gone; a stage record that does not say what it read |
 
 Two of these deserve their reason stated.
 
@@ -963,6 +968,14 @@ an instrument that hooks `run()` alone attributes reporting traffic to the analy
 over the model sequence and refuses anything arriving afterwards; the census stage records the
 refusal count, so a reader can see the mechanism working instead of assuming it.
 
+**A census record is placed like any other run record.** It carries `tree_git_head` and the rest of
+the "where it ran" group on the record itself (`record_format` `census-2`), because that is the key
+a survey of "which commit was each record under `runs/` made at" reads — the survey that catches a
+`--resume` which kept what it should have re-made. The six records taken before this contract kept
+the commit one level down, inside a nested `provenance` block, so the survey placed them nowhere;
+the stage that reads a census now refuses an unstamped one by name, and the self-check names every
+one on disk rather than leaving it merely absent from a survey.
+
 ### 12.5 The per-run deferral sets — derived, and compared node by node
 
 A node whose outputs nothing the optimiser decides on ever reads cannot change what the optimiser
@@ -1011,6 +1024,8 @@ committed files are never written to.
 | input files | the constraint appended at the end of the file instead of inside the equality block | the digest |
 | census | one node's write removed | the per-node comparison's counts |
 | census | a node writing a field the committed census does not have | the this-run-only count, which fails the stage |
+| census | a census record carrying no tree stamp | the record contract: `census-2` stamps `tree_git_head` and the rest of the "where it ran" group on the record itself, and a record without them is refused by name rather than compared from nowhere |
+| census | a census with no run record beside it | the same refusal, one step earlier |
 | per-run | a node removed from the committed set | the node-by-node comparison |
 | per-run | a live node added to the committed set | the node-by-node comparison — the direction that would defer a node the optimiser consumes |
 
@@ -1313,6 +1328,18 @@ It refuses rather than guessing: a stage that has written no record, a stage tha
 (a section with no population is not a section), and a plan document in which §4's heading or §5's
 has moved or been reworded — a renderer that writes into the wrong part of a shared document is
 worse than one that does nothing.
+
+**And it refuses a stage record the verdicts have outrun.** §4.1 is rendered from the `gate_table`
+*stage* record, not from the verdicts themselves, so a gate re-run after that stage would be
+published here as it was rather than as it is — silently, and it happened once: a re-render
+reproduced a failing row byte for byte after the gate had passed. The stage therefore declares what
+it reads (`Measurement.reads_records`), the framework stamps every record it found — path, digest,
+commit, time, verdict — into `records_read`, and the renderer re-surveys those same patterns and
+refuses when a verdict has been re-made, removed or added since, naming the gate, both commits and
+both times. The order is `--gate …`, then `--measure gate_table`, then `--plan-tables`; pressed the
+other way round the renderer stops instead of publishing the older table. `--plan-tables check`
+compares without writing, for a reader who wants to know whether the document is the one these
+records produce.
 
 **What the cells are over is stamped on the section and on every caption.** While
 `EXECUTION_APPROVED` is `False` there is no campaign, so every cell in §4 is over the **gate

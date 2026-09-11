@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import datetime as _dt
 import json
 import os
 import shutil
@@ -1086,6 +1087,420 @@ def _stage_data(source: Path, destination: Path) -> Path:
     return destination
 
 
+#: The scratch fixture's own verdict records: three gates, since one is enough
+#: for a break but three make "1 of 3 disagree" a count rather than a tautology.
+_SCRATCH_GATES: tuple[str, ...] = ("a_first_gate", "a_second_gate", "a_third_gate")
+
+
+def _scratch_records(destination: Path) -> tuple[int, int]:
+    """Write a records directory this check owns: verdicts and stage records.
+
+    **Synthesised, never copied.**  A self-check builds its own fixtures: one
+    that read the tree's real records would report FAIL on a tree that has not
+    been pressed yet — a fresh worktree, or a trial merge — which is a
+    statement about the directory and not about the mechanism this check
+    binds.  (It did exactly that, and this is the fix.)  The real records are
+    still read, further down, where their freshness is *noted*.
+
+    The four stage records are the four the plan's §4 is rendered from, each
+    with the least content the renderer accepts, so that the breaks below run
+    through the renderer itself rather than through a function beside it.
+    """
+    destination = Path(destination)
+    now = _dt.datetime.now().isoformat(timespec="seconds")
+    for index, name in enumerate(_SCRATCH_GATES):
+        path = destination / name / "gate.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "gate": name,
+                    "plan_name": None,
+                    "binds": "a scratch fixture, owned by the self-check",
+                    "verdict": "PASS",
+                    "population": f"{index + 1} scratch thing(s)",
+                    "n_compared": index + 1,
+                    "n_mismatched": 0,
+                    "generated": now,
+                    "tree_git_head": "0" * 40,
+                    "teeth": [{"tooth": "a scratch tooth", "caught": True}],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+    rows = [
+        {
+            "gate": name,
+            "plan_name": None,
+            "binds": "a scratch fixture",
+            "verdict": "PASS",
+            "population": "scratch",
+            "n_compared": index + 1,
+            "n_mismatched": 0,
+            "n_teeth": 1,
+            "n_teeth_tripped": 1,
+            "record": f"{name}/gate.json",
+        }
+        for index, name in enumerate(_SCRATCH_GATES)
+    ]
+    stage_records = {
+        "gate_table": {
+            "what_this_is": "a scratch gate table, owned by the self-check",
+            "caption": "One row per scratch gate.",
+            "population": f"{len(rows)} scratch gate(s)",
+            "n_gates": len(rows),
+            "n_pass": len(rows),
+            "n_fail": 0,
+            "n_not_run": 0,
+            "n_teeth": len(rows),
+            "n_teeth_tripped": len(rows),
+            "rows": rows,
+            "markdown": "| gate | verdict |\n|---|---|\n"
+            + "\n".join(f"| `{row['gate']}` | **PASS** |" for row in rows),
+        }
+    }
+    for stage in ("tally_evaluation", "tally_optimisation", "recomputed_tables"):
+        stage_records[stage] = {
+            "population": "a scratch population of 1",
+            "runs_provenance": {"n_records": 0, "heads": []},
+            "tables": [
+                {
+                    "table": f"a_scratch_table_of_{stage}",
+                    "caption": "a scratch table, owned by the self-check.",
+                    "denominator": 1,
+                    "denominator_is": "one scratch row",
+                    "columns": ["a"],
+                    "rows": [{"a": 1}],
+                    "markdown": "| a |\n|---|\n| 1 |",
+                }
+            ],
+        }
+    for stage, record in stage_records.items():
+        path = destination / stage / "measurements.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if stage == "gate_table":
+            record["records_read"] = framework.survey_records(
+                destination, ("*/gate.json",)
+            )
+        path.write_text(json.dumps(record, indent=2) + "\n")
+    return len(_SCRATCH_GATES), len(stage_records)
+
+
+def check_stage_provenance(campaign: Campaign) -> Check:
+    """What a stage read, and whether a consumer can still trust it.
+
+    The plan's results section is rendered from the ``gate_table`` **stage**
+    record rather than from the verdicts themselves, so a gate re-run after
+    that stage would be published as it was, not as it is — silently, with the
+    same table and the same PASS or FAIL.  It happened: a re-render reproduced
+    a failing row byte for byte after the gate had passed.
+
+    So the stage stamps the records it read — path, bytes, commit, time,
+    verdict — and the renderer refuses when they have moved.  The four breaks
+    below are the four ways they can move, each made on a **copy** of this
+    tree's own records in a scratch directory; nothing on disk is written.
+
+    The census records are **surveyed** here rather than broken: what refuses
+    an unstamped one is the stage that reads it (gate ``artifacts_census``,
+    whose teeth do the breaking), and re-taking a census is a PROCESS run this
+    check may not start.  What this check does is name them, so that a record
+    a stamp survey cannot place is never merely absent from the survey.
+    """
+    from harness import census as census_mod  # noqa: PLC0415 - one direction
+    from harness import plan_tables as plan_tables_mod  # noqa: PLC0415
+
+    check = Check(
+        name="stage provenance",
+        binds=(
+            "a stage record says which records it read, and a consumer of it "
+            "refuses when those records have moved; a census record says "
+            "which tree took it"
+        ),
+    )
+    section = plan_tables_mod.SECTIONS[0]
+    with tempfile.TemporaryDirectory(prefix="stage_provenance_") as scratch:
+        root = Path(scratch)
+        n_verdicts, n_stages = _scratch_records(root)
+        check.n_compared += n_verdicts + n_stages
+        check.population = (
+            f"a scratch records directory this check writes itself — "
+            f"{n_verdicts} verdict record(s) and {n_stages} stage record(s) — "
+            f"broken 4 ways; a scratch census record, stamped and unstamped; "
+            f"the census stamping path, run; and whatever live records this "
+            f"tree holds, surveyed and named"
+        )
+        stage_path = root / section.stage / "measurements.json"
+        original = json.loads(stage_path.read_text())
+        block = original["records_read"]
+        check.note(
+            f"the scratch {section.stage} record names {block['n_records']} "
+            f"verdict record(s) it read, matched by {block['patterns']}"
+        )
+
+        def renders() -> tuple[bool, str]:
+            """Whether the renderer accepts the scratch records, and why not."""
+            try:
+                plan_tables_mod.render(campaign, root)
+            except plan_tables_mod.PlanTablesError as exc:
+                # Two lines, not one: the first says a stage record is stale
+                # and the second is the row that names the gate, both commits
+                # and both times — which is the half a reader acts on.
+                said = " | ".join(str(exc).splitlines()[:2])
+                return False, f"PlanTablesError: {said[:320]}"
+            return True, "it rendered"
+
+        agreed, why_agreed = renders()
+        if not agreed:
+            check.fail(
+                f"the renderer refuses this tree's own unmodified records: "
+                f"{why_agreed}"
+            )
+
+        # 1. a verdict re-made after the stage record was written: the case
+        #    that was reproduced byte for byte in the plan.
+        doctored = sorted(root.glob("*/gate.json"))[0]
+        keep = doctored.read_bytes()
+        verdict = json.loads(keep)
+        was_commit, was_time = verdict.get("tree_git_head"), verdict.get("generated")
+        verdict["tree_git_head"] = "e" * 40
+        verdict["generated"] = "2099-01-01T00:00:00"
+        verdict["verdict"] = "PASS" if verdict.get("verdict") != "PASS" else "FAIL"
+        doctored.write_text(json.dumps(verdict, indent=2) + "\n")
+        rendered, why = renders()
+        check.tooth(
+            "a verdict re-made at a later commit after the stage record was "
+            "written",
+            not rendered and agreed,
+            f"{doctored.parent.name}'s verdict moved from "
+            f"{str(was_commit)[:8]} at {was_time} to e2099 in the scratch "
+            f"copy: "
+            + (f"refused — {why}" if not rendered else "NOT refused")
+            + "; the same records unmodified: "
+            + (why_agreed if agreed else f"REFUSED TOO — {why_agreed}"),
+        )
+        doctored.write_bytes(keep)
+
+        # 2. a gate run *after* the stage: a verdict nobody read.  Only the
+        #    declared pattern can find this one, which is why the block
+        #    carries the pattern and not just the files it matched.
+        appeared = root / "a_gate_run_since" / "gate.json"
+        appeared.parent.mkdir(parents=True, exist_ok=True)
+        appeared.write_text(
+            json.dumps(
+                {
+                    "gate": "a_gate_run_since",
+                    "verdict": "FAIL",
+                    "generated": "2099-01-01T00:00:00",
+                    "tree_git_head": "f" * 40,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        rendered, why = renders()
+        check.tooth(
+            "a verdict record written after the stage record",
+            not rendered,
+            "a gate.json that no stage ever read, added to the scratch copy: "
+            + (f"refused — {why}" if not rendered else "NOT refused"),
+        )
+        shutil.rmtree(appeared.parent)
+
+        # 3. a verdict the stage read that is no longer there.
+        removed = sorted(root.glob("*/gate.json"))[0]
+        keep = removed.read_bytes()
+        removed.unlink()
+        rendered, why = renders()
+        check.tooth(
+            "a verdict record the stage read and that is gone",
+            not rendered,
+            f"{removed.parent.name}'s verdict deleted from the scratch copy: "
+            + (f"refused — {why}" if not rendered else "NOT refused"),
+        )
+        removed.write_bytes(keep)
+
+        # 4. the shape every stage record had before this contract: numbers,
+        #    and nothing saying what they were computed from.
+        without = dict(original)
+        without.pop("records_read", None)
+        stage_path.write_text(json.dumps(without, indent=2) + "\n")
+        rendered, why = renders()
+        check.tooth(
+            "a stage record that does not say what it read",
+            not rendered,
+            "the records_read block removed from the scratch copy of the "
+            f"{section.stage} record: "
+            + (f"refused — {why}" if not rendered else "NOT refused"),
+        )
+        stage_path.write_text(json.dumps(original, indent=2) + "\n")
+
+    # --- a census record the check writes itself, stamped and unstamped ---
+    # The census contract, exercised without a census on disk and without
+    # starting PROCESS: the reader refuses an unstamped record, --resume does
+    # not keep one (it is re-taken, as pool.run re-runs an incomplete run
+    # record), and both accept the same record once the fields are there.
+    with tempfile.TemporaryDirectory(prefix="scratch_census_") as scratch:
+        directory = Path(scratch)
+        (directory / "census.json").write_text(
+            json.dumps(
+                {
+                    "configuration": "a_scratch_configuration",
+                    "entry": "evaluation",
+                    "read_census": True,
+                    "writes_by_node": {},
+                }
+            )
+        )
+        bare = {"record_format": "census-1", "campaign_phase": "census"}
+        (directory / "metrics.json").write_text(json.dumps(bare))
+        reader_refused, reader_said = _must_refuse_here(
+            lambda: census_mod.assert_stamped(
+                json.loads((directory / "metrics.json").read_text()),
+                where="the self-check's scratch census",
+            )
+        )
+        kept_unstamped, why_unstamped = census_mod.resume_keeps(
+            directory,
+            configuration="a_scratch_configuration",
+            entry="evaluation",
+            read_census=True,
+        )
+        stamped = dict(bare)
+        stamped["record_format"] = census_mod.RECORD_FORMAT
+        stamped.update({name: None for name in census_mod.STAMP_FIELDS})
+        (directory / "metrics.json").write_text(json.dumps(stamped))
+        reader_accepted, _ = _must_refuse_here(
+            lambda: census_mod.assert_stamped(
+                json.loads((directory / "metrics.json").read_text()),
+                where="the self-check's scratch census",
+            )
+        )
+        kept_stamped, why_stamped = census_mod.resume_keeps(
+            directory,
+            configuration="a_scratch_configuration",
+            entry="evaluation",
+            read_census=True,
+        )
+    check.n_compared += 2
+    check.tooth(
+        "a scratch census record with no tree stamp",
+        reader_refused
+        and not reader_accepted
+        and not kept_unstamped
+        and kept_stamped,
+        "a census record this check wrote, without the stamp: the reader "
+        + (f"refused ({reader_said})" if reader_refused else "DID NOT refuse")
+        + " and --resume "
+        + (
+            f"did not keep it, so it is re-taken — {why_unstamped[:110]}"
+            if not kept_unstamped
+            else "KEPT it"
+        )
+        + "; with the stamp: the reader "
+        + ("accepted" if not reader_accepted else "REFUSED it too")
+        + " and --resume "
+        + ("kept it" if kept_stamped else f"did NOT keep it — {why_stamped[:110]}"),
+    )
+
+    # --- and the state of the real records, read rather than failed on ---
+    live = Path(campaign.runs_dir) / framework.GATES_SUBPATH / section.stage
+    live_record = live / "measurements.json"
+    if live_record.exists():
+        check.n_compared += 1
+        try:
+            check.note(
+                "the records on disk now: "
+                + plan_tables_mod.assert_stage_read_what_is_there(
+                    json.loads(live_record.read_text()),
+                    live.parent,
+                    section,
+                )
+            )
+        except plan_tables_mod.PlanTablesError as exc:
+            check.note(
+                "the records on disk now: the renderer would REFUSE — "
+                + " | ".join(str(exc).splitlines()[:2])[:320]
+                + f".  That is the order rule working ({section.stage} is "
+                f"pressed after the gates, not before), not a failure of this "
+                f"check."
+            )
+
+    # --- the stamping path a census child runs ---------------------------
+    # The code itself, not a restatement of it: a check that rebuilt the stamp
+    # beside the child would pass while the child stamped nothing.  It is the
+    # only thing that can be said about a census record here without starting
+    # PROCESS, which this check may not do.
+    check.n_compared += 1
+    fresh_stamp = census_mod.tree_stamp(
+        campaign.tree,
+        process_file=str(Path(campaign.tree) / "process" / "__init__.py"),
+        pythonpath=None,
+    )
+    still_missing = census_mod.missing_stamp_fields(fresh_stamp)
+    if still_missing:
+        check.fail(
+            f"the stamping path a census child runs leaves "
+            f"{len(still_missing)} declared field(s) unset: "
+            f"{', '.join(still_missing)} — a census taken now would be as "
+            f"unplaceable as the ones taken before the contract"
+        )
+    else:
+        check.note(
+            f"the stamping path a census child runs produces all "
+            f"{len(census_mod.STAMP_FIELDS)} declared field(s); a census taken "
+            f"now would be stamped at "
+            f"{str(fresh_stamp.get('tree_git_head'))[:8]}"
+        )
+
+    # --- the census records, surveyed and named --------------------------
+    census_root = Path(campaign.runs_dir) / census_mod.RUNS_SUBPATH
+    stamped: list[str] = []
+    unstamped: list[str] = []
+    for path in sorted(census_root.glob("*/*/metrics.json")):
+        check.n_compared += 1
+        try:
+            record = json.loads(path.read_text())
+        except Exception as exc:  # noqa: BLE001
+            check.fail(f"{path} is not readable JSON: {exc}")
+            continue
+        missing = census_mod.missing_stamp_fields(record)
+        where = str(path.relative_to(census_root))
+        if missing:
+            unstamped.append(
+                f"{where} ({record.get('record_format')}, "
+                f"{len(missing)} of {len(census_mod.STAMP_FIELDS)} field(s) "
+                f"missing, commit reachable only as "
+                f"provenance.tree_git_head = "
+                f"{str((record.get('provenance') or {}).get('tree_git_head'))[:8]})"
+            )
+        else:
+            stamped.append(f"{where} at {str(record.get('tree_git_head'))[:8]}")
+    if not stamped and not unstamped and not live_record.exists():
+        check.note(
+            "this tree holds no verdict record, no stage record and no census "
+            "record — a fresh worktree, or a trial merge, before its first "
+            "press.  The scratch fixture above is the whole population of the "
+            "breaks, which is why it is written here rather than read: a "
+            "self-check that needed a press to pass would fail on every tree "
+            "that has not had one."
+        )
+    else:
+        check.note(
+            f"census records: {len(stamped)} carry the tree stamp "
+            f"({', '.join(stamped) or 'none'}); {len(unstamped)} do not "
+            f"({'; '.join(unstamped) or 'none'})"
+        )
+    if unstamped:
+        check.note(
+            f"the {len(unstamped)} unstamped record(s) are named rather than "
+            f"failed here: a stamp survey cannot place them, the stage that "
+            f"reads a census refuses one by name (gate artifacts_census), and "
+            f"re-taking a census is a PROCESS run this check may not start"
+        )
+    return check
+
+
 def check_data(campaign: Campaign) -> Check:
     """The committed data is the source's, and the record says whose.
 
@@ -1831,6 +2246,7 @@ def run_all(
     checks.append(check_provenance(campaign))
     checks.append(check_data(campaign))
     checks.append(check_run_path(campaign))
+    checks.append(check_stage_provenance(campaign))
     if include_crosscheck:
         checks.append(crosscheck_previous(campaign))
     return checks

@@ -627,6 +627,10 @@ def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
             result = plan_tables_mod.write(
                 campaign, _gate_records_dir(args, campaign)
             )
+        elif args.plan_tables == "check":
+            result = plan_tables_mod.check(
+                campaign, _gate_records_dir(args, campaign)
+            )
         else:
             result = plan_tables_mod.render(
                 campaign, _gate_records_dir(args, campaign)
@@ -638,6 +642,11 @@ def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
     if args.plan_tables == "show":
         print()
         print(result["markdown"])
+    if args.plan_tables == "check" and not result["compared"]["identical"]:
+        # A difference is reported, not repaired: the plan is a shared
+        # document and this mode exists so that a task can say what the
+        # records now produce without editing it.
+        return 3
     return 0
 
 
@@ -877,11 +886,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--plan-tables",
-        choices=("show", "write"),
+        choices=("show", "check", "write"),
         help="render the experiment plan's section 4 from the measurement "
         "stages' own records — the gate table, the two tally stages and the "
-        "recomputed tables — and either print it or write it into "
-        "EXPERIMENT_PLAN.md.  No cell is typed by hand",
+        "recomputed tables — and print it ('show'), compare it line for line "
+        "with the section EXPERIMENT_PLAN.md already carries without writing "
+        "anything ('check', which exits 3 on a difference), or write it into "
+        "the document ('write').  No cell is typed by hand",
     )
     parser.add_argument(
         "--selfcheck",

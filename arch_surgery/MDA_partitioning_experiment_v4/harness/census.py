@@ -42,7 +42,8 @@ finding, reported with its content.
 Derived from the census probe ``process/core/_idf_probe_modules.py`` (read, not
 modified) and from ``arch_surgery/fixedpoint/gen_node_writesets.py`` and
 ``arch_surgery/idf_probe/a25_writeset.py``, read at ``f1f90c20``; task
-**A51 (harness-artifacts)**.
+**A51 (harness-artifacts)**.  Task **A63 (stage-provenance)** put the tree stamp
+on the record itself (``census-2``) and made an unstamped one a refusal.
 """
 
 from __future__ import annotations
@@ -50,6 +51,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -88,6 +90,36 @@ PREDICATE_NODE = "objective_constraints"
 #: Where this stage's records go.  Untracked, like every run artifact.
 RUNS_SUBPATH = "census"
 
+#: The schema tag of a census record.  ``census-1`` carried its provenance in a
+#: nested ``provenance`` block only, so ``tree_git_head`` was not where every
+#: other record in this package keeps it and a survey of the commits the records
+#: under ``runs/`` were made at could not place a census at all — six records
+#: read as "no stamp" in exactly the survey that catches a resume which kept
+#: what it should have re-made (trap T13).  ``census-2`` stamps the tree the way
+#: a run record does, at the top level, and keeps the nested block beside it so
+#: that nothing reading the old shape breaks (issue I-22 (b)).
+RECORD_FORMAT = "census-2"
+
+#: What a census record must carry about the tree it was taken in, by name: the
+#: same fields ``records.SCHEMA``'s "where it ran" group declares for a run
+#: record.  A census **is** a PROCESS run and is placed by the same evidence.
+STAMP_FIELDS: tuple[str, ...] = (
+    "tree",
+    "tree_git_head",
+    "tree_git_branch",
+    "tree_git_describe",
+    "tree_modified_tracked_n",
+    "tree_untracked_paths_n",
+    "tree_git_dirty",
+    "tree_contains_base_commit",
+    "base_commit",
+    "process_file",
+    "process_copy_provenance",
+    "python",
+    "python_version",
+    "pythonpath",
+)
+
 #: Which arm a census is taken under, per entry.  It is the **reference** arm
 #: in both cases — PROCESS as shipped, every architecture switch unset — because
 #: the committed census describes what the models write when nothing has been
@@ -114,6 +146,159 @@ ENTRIES = {
 
 class CensusError(RuntimeError):
     """A refusal to census, or to compare one."""
+
+
+def missing_stamp_fields(record: Mapping[str, Any]) -> list[str]:
+    """Declared provenance fields this census record does not carry.
+
+    Present and null counts as carried, as it does for a run record: "the copy
+    has no provenance file, and here is the null that says so" is information,
+    and a missing key is not.
+    """
+    return [name for name in STAMP_FIELDS if name not in record]
+
+
+def assert_stamped(record: Mapping[str, Any], *, where: str = "") -> None:
+    """Refuse a census record that does not say which tree it was taken in.
+
+    A census is a PROCESS run, and every other run in this package is placed by
+    its own ``tree_git_head``: that is the key a stamp survey reads, and the
+    survey is what catches a ``--resume`` that kept a record it should have
+    re-made (trap T13).  The six records taken before this contract carried the
+    commit one level down, inside a nested block, so the survey placed them
+    nowhere and they read as "no stamp" — indistinguishable, in a survey, from
+    a record made by a tree with no git at all.
+
+    So the refusal is by **name**: the record, its schema tag and the fields it
+    lacks.  Re-taking the census is a PROCESS run, which is why this refuses
+    instead of quietly re-running: a stage asked to compare a census must not
+    decide on its own to make a new measurement.
+    """
+    absent = missing_stamp_fields(record)
+    if not absent:
+        return
+    raise CensusError(
+        f"the census record{' for ' + where if where else ''} is "
+        f"{record.get('record_format')!r} and carries no tree stamp: "
+        f"{len(absent)} of {len(STAMP_FIELDS)} declared provenance field(s) "
+        f"missing — {', '.join(absent)}.  A survey of which commit each record "
+        f"under runs/ was made at reads `tree_git_head` on the record itself, "
+        f"so this census can be placed nowhere and a resume that kept it could "
+        f"not be told from one that re-made it (trap T13).  Re-take it with "
+        f"`experiment_runner.py --artifacts census` (a PROCESS run), which "
+        f"writes it as {RECORD_FORMAT}."
+    )
+
+
+def tree_stamp(
+    tree: Path, *, process_file: str, pythonpath: str | None
+) -> dict[str, Any]:
+    """The provenance a census record carries, flattened as a run record's is.
+
+    One function rather than a few lines inside the child, so that the
+    self-check can run **this** code and find out whether a census taken now
+    would be complete — a re-implementation beside it would pass while the
+    child stamped nothing.
+    """
+    from harness import child as child_mod  # noqa: PLC0415 - one direction
+    from harness import provenance as prov  # noqa: PLC0415
+
+    stamp = prov.stamp(Path(tree), process_file=process_file)
+    return {
+        **stamp,
+        "tree": str(tree),
+        "process_file": process_file,
+        "pythonpath": pythonpath,
+        "process_copy_provenance": child_mod.copy_provenance(Path(tree)),
+        # The earlier shape, kept beside the flattened fields: it is what the
+        # records taken before this contract carry, and a reader comparing an
+        # old record with a new one should find the same block in both.
+        "provenance": stamp,
+    }
+
+
+def resume_keeps(
+    directory: Path,
+    *,
+    configuration: str,
+    entry: str,
+    read_census: bool,
+) -> tuple[bool, str]:
+    """Whether a census on disk may be kept under ``--resume``, and why not.
+
+    What ``--resume`` consults, and the **only** thing it consults: the census
+    and the record beside it.  A directory is never evidence, a census taken
+    with the read half off cannot stand in for one that needs it (trap T13) —
+    and a record that does not carry the current contract's tree stamp is
+    **incomplete under that contract and is re-taken**, exactly as
+    ``pool.run`` re-runs an incomplete run record (harness plan amendment 17's
+    standing property (a)).  It is the contract working, not a defect.
+
+    The refusal in :func:`assert_stamped` is not weakened by this: it applies
+    to every reader that is not the stage doing the taking — a comparison over
+    a census this call did not just make, and any survey placing records by
+    their commit.  A stage that *can* re-make the measurement re-makes it; a
+    stage that can only read it refuses.
+    """
+    census_path = Path(directory) / "census.json"
+    if not census_path.exists():
+        return False, f"there is no census at {directory}"
+    try:
+        previous = json.loads(census_path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{census_path} is not readable JSON: {exc}"
+    if previous.get("configuration") != configuration:
+        return False, (
+            f"the census on disk is {previous.get('configuration')!r}, not "
+            f"{configuration!r}"
+        )
+    if previous.get("entry") != entry:
+        return False, (
+            f"the census on disk was taken at entry {previous.get('entry')!r}, "
+            f"not {entry!r}"
+        )
+    if read_census and not previous.get("read_census"):
+        return False, (
+            "the census on disk was taken with the read half of the "
+            "instrument off and this call needs it"
+        )
+    try:
+        record = run_record(Path(directory))
+    except CensusError as exc:
+        return False, str(exc).splitlines()[0]
+    missing = missing_stamp_fields(record)
+    if missing:
+        return False, (
+            f"the record beside it is {record.get('record_format')!r} and "
+            f"carries {len(missing)} of {len(STAMP_FIELDS)} declared "
+            f"provenance field(s): {', '.join(missing)}.  A record incomplete "
+            f"under the current contract is re-taken, not kept — the stamp is "
+            f"what a survey places the record by (trap T13)"
+        )
+    return True, (
+        f"a matching census is already on disk, its record {RECORD_FORMAT} at "
+        f"{str(record.get('tree_git_head'))[:8]}"
+    )
+
+
+def run_record(directory: Path) -> dict[str, Any]:
+    """The census run's own record, beside its census.  Absent is a refusal.
+
+    Not ``records.read``: that returns a synthetic "no_record" row for an
+    absent file, which is right for a population being tallied and wrong here,
+    where a census present without its record is a directory somebody assembled
+    by hand.
+    """
+    path = Path(directory) / "metrics.json"
+    if not path.exists():
+        raise CensusError(
+            f"there is a census at {directory} with no run record beside it "
+            f"({path} does not exist), so nothing says which tree took it."
+        )
+    try:
+        return json.loads(path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        raise CensusError(f"{path} is not readable JSON: {exc}") from exc
 
 
 # ==========================================================================
@@ -181,7 +366,7 @@ def run_child(args: argparse.Namespace) -> int:
     from harness import provenance as prov
 
     record: dict[str, Any] = {
-        "record_format": "census-1",
+        "record_format": RECORD_FORMAT,
         "campaign_phase": "census",
         "campaign_configuration": args.configuration,
         "campaign_arm": args.arm,
@@ -196,8 +381,17 @@ def run_child(args: argparse.Namespace) -> int:
     started = time.perf_counter()
     try:
         process_file = prov.assert_tree(Path(args.tree))
-        record["process_file"] = str(process_file)
-        record["provenance"] = prov.stamp(Path(args.tree), process_file=str(process_file))
+        # Flattened, not nested.  Every other record in this package keeps the
+        # commit at ``tree_git_head`` on the record itself, and a survey of
+        # what was made where reads exactly that key; a census that kept it one
+        # level down was invisible to the survey rather than wrong in it.
+        record.update(
+            tree_stamp(
+                Path(args.tree),
+                process_file=str(process_file),
+                pythonpath=os.environ.get("PYTHONPATH"),
+            )
+        )
 
         source = Path(args.input)
         local_input = outdir / f"{args.configuration}.IN.DAT"
@@ -310,26 +504,44 @@ def take(
         outdir or (Path(campaign.runs_dir) / RUNS_SUBPATH / config.name / entry)
     )
     existing = directory / "census.json"
+    superseded: dict[str, Any] | None = None
     if resume and existing.exists():
-        previous = json.loads(existing.read_text())
-        matches = (
-            previous.get("configuration") == config.name
-            and previous.get("entry") == entry
-            and (previous.get("read_census") or not read_census)
+        keep, why = resume_keeps(
+            directory,
+            configuration=config.name,
+            entry=entry,
+            read_census=read_census,
         )
-        if matches:
-            # A census already on disk for exactly this configuration and entry,
-            # carrying at least the halves this call asks for.  Resume means
-            # *this*: a directory alone is never evidence, and a census taken
-            # with the read half off cannot stand in for one that needs it.
+        if keep:
             print(
                 f"  {config.name:24s} census   entry={entry:<12s} resumed "
-                f"(a matching census is already on disk)",
+                f"({why})",
                 flush=True,
             )
+            previous = json.loads(existing.read_text())
             previous.setdefault("run", {})["resumed"] = True
             previous["run"]["outdir"] = str(directory)
             return previous
+        # Not kept, and named before it is replaced: the pool clears the
+        # directory, so what the superseded record said has to be read out
+        # here or it is gone without a trace.
+        was = {}
+        try:
+            was = run_record(directory)
+        except CensusError:
+            was = {}
+        superseded = {
+            "why": why,
+            "record_format": was.get("record_format"),
+            "tree_git_head": was.get("tree_git_head")
+            or (was.get("provenance") or {}).get("tree_git_head"),
+            "outdir": str(directory),
+        }
+        print(
+            f"  {config.name:24s} census   entry={entry:<12s} RE-TAKEN — "
+            f"{why}",
+            flush=True,
+        )
     job = pool_mod.Job(
         phase="census",
         arm=CENSUS_ARM[entry],
@@ -352,12 +564,17 @@ def take(
             f"Refused rather than compared against nothing: a comparison over "
             f"an empty census reports zero differences and means nothing."
         )
+    taken = run_record(directory)
+    assert_stamped(taken, where=f"{config.name} ({entry})")
     census = json.loads(path.read_text())
     census["run"] = {
         "outdir": str(directory),
         "status": result.get("status"),
         "wall_s": result.get("wall_s"),
         "resumed": result.get("resumed", False),
+        "record_format": taken.get("record_format"),
+        "tree_git_head": taken.get("tree_git_head"),
+        "superseded": superseded,
     }
     return census
 
@@ -813,7 +1030,118 @@ def stage_teeth(
         "an invented field added to a throwaway copy; the comparison must "
         "report it as this-run-only, which is what fails the stage",
     )
+
+    # 3. a census record that does not say which tree took it.  The stage reads
+    #    a census through ``take``, which asserts the stamp on the record beside
+    #    it; a record without one can be placed nowhere by a stamp survey, and
+    #    the survey is what catches a resume that kept what it should have
+    #    re-made (trap T13).  Both halves, because a check that refuses
+    #    everything is not a check: the stripped record must be refused **and**
+    #    the stamped one accepted.
+    unstamped, source = _a_census_record_for_teeth(campaign)
+    stamped = dict(unstamped)
+    stamped.update({name: None for name in STAMP_FIELDS})
+    refused, why = _must_refuse(lambda: assert_stamped(unstamped, where=source))
+    accepted, _ = _must_refuse(lambda: assert_stamped(stamped, where=source))
+    check.tooth(
+        "a census record carrying no tree stamp",
+        refused and not accepted,
+        f"the record at {source} ({unstamped.get('record_format')}) with "
+        f"{len(missing_stamp_fields(unstamped))} of {len(STAMP_FIELDS)} "
+        f"declared provenance field(s) missing: "
+        + (f"refused — {why}" if refused else "NOT refused")
+        + "; the same record with the fields present is "
+        + ("accepted" if not accepted else "REFUSED TOO, so the check does not "
+           "discriminate"),
+    )
+
+    # 3b. the other half of the same contract: a census whose record is
+    #     unstamped is not *kept* by --resume — it is re-taken, exactly as
+    #     pool.run re-runs an incomplete run record.  The decision is what the
+    #     tooth exercises; the re-take itself is a PROCESS run and belongs to
+    #     the press, not to a tooth.  Both cases are built in a scratch
+    #     directory from a real census, so the tooth reads the same whether or
+    #     not the records on disk have been re-taken yet.
+    with tempfile.TemporaryDirectory(prefix="census_resume_") as scratch:
+        directory = Path(scratch)
+        (directory / "census.json").write_text(json.dumps(census))
+        stripped = {
+            name: value
+            for name, value in unstamped.items()
+            if name not in STAMP_FIELDS
+        }
+        (directory / "metrics.json").write_text(json.dumps(stripped))
+        kept_unstamped, why_unstamped = resume_keeps(
+            directory,
+            configuration=configuration,
+            entry=census["entry"],
+            read_census=bool(census.get("read_census")),
+        )
+        complete = dict(stripped)
+        complete.update({name: None for name in STAMP_FIELDS})
+        complete["record_format"] = RECORD_FORMAT
+        (directory / "metrics.json").write_text(json.dumps(complete))
+        kept_stamped, why_stamped = resume_keeps(
+            directory,
+            configuration=configuration,
+            entry=census["entry"],
+            read_census=bool(census.get("read_census")),
+        )
+    check.tooth(
+        "an unstamped census record offered to --resume",
+        (not kept_unstamped) and kept_stamped,
+        "a scratch copy of this census beside an unstamped record: "
+        + (
+            f"not kept, so it is re-taken — {why_unstamped[:150]}"
+            if not kept_unstamped
+            else "KEPT, so a resume would carry a record no survey can place"
+        )
+        + "; the same census beside a stamped record: "
+        + ("kept" if kept_stamped else f"NOT KEPT either — {why_stamped[:120]}"),
+    )
+
+    # 4. a census sitting beside no run record at all — a directory somebody
+    #    assembled by hand, which has no tree to be placed in.
+    refused, why = _must_refuse(
+        lambda: run_record(Path(campaign.runs_dir) / RUNS_SUBPATH / "_no_such_census")
+    )
+    check.tooth(
+        "a census with no run record beside it",
+        refused,
+        "a directory holding no metrics.json: "
+        + (f"refused — {why}" if refused else "NOT refused"),
+    )
     return (0 if check.passed else 3), check.as_record()
+
+
+def _must_refuse(call) -> tuple[bool, str]:
+    """Whether *call* refused, and what it said.  A success is a tooth failure."""
+    try:
+        call()
+    except Exception as exc:  # noqa: BLE001 - the refusal is the result
+        return True, f"{type(exc).__name__}: {str(exc).splitlines()[0][:120]}"
+    return False, "it did not refuse"
+
+
+def _a_census_record_for_teeth(campaign: Campaign) -> tuple[dict[str, Any], str]:
+    """A census run record to break a copy of, and where it came from.
+
+    The one on disk where there is one — a tooth on the real shape is worth
+    more than a tooth on an invented one — and an explicitly synthetic record
+    otherwise, named as such so no reader mistakes which was used.
+    """
+    root = Path(campaign.runs_dir) / RUNS_SUBPATH
+    for path in sorted(root.glob("*/*/metrics.json")):
+        try:
+            record = json.loads(path.read_text())
+        except Exception:  # noqa: BLE001 - a half-written record is not a tooth
+            continue
+        if missing_stamp_fields(record):
+            return record, str(path)
+    return (
+        {"record_format": "census-1", "campaign_phase": "census"},
+        "a synthetic record (no unstamped census is on disk)",
+    )
 
 
 def _one_census_for_teeth(
