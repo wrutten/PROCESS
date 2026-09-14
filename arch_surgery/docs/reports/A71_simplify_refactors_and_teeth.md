@@ -372,3 +372,35 @@ for the presses, found byte-identical to `--plan-tables write`'s output, and com
 | date | change |
 |---|---|
 | 2026-09-14 | Created at branch tip `b52e40a5` (code final at `92217de7`). Fourteen items; 13 done, A7 4 of 5 with the fifth named for A73. 0 PROCESS runs. |
+
+---
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `5ba21fd8`, before the merge. Checks chosen to differ from the
+agent's.*
+
+1. **A6's precondition, re-grepped by me.** Four untyped raises remain in the copy's driver:
+   `caller.py:1840` (upstream's output-loop pass cap — `failure.py` keeps its own marker for that,
+   `UPSTREAM_PASS_CAP_MARKERS`, which is a taxonomy row, not a refusal), `subsolve.py:229` (the
+   deliberate tripwire), `constraints.py:122` (a duplicate-registration guard, set by no switch), and
+   `_idf_probe.py:101` (the superseded probe's mode guard). None is an architecture refusal; 37 sites
+   raise `ArchitectureRefusal`. The removed fallback was `REFUSAL_MARKERS` only. Correct.
+2. **On a trial merge onto trunk (`34c5c3e4`)**: clean; import walk 51 modules, 0 failures; the
+   registry has 34 entries (29 gates + 5 stages); **`--gate run_path` PASSes on the record-less merged
+   tree** — the gate the agent found FAILing at the base for an undeclared tooth, now declared.
+3. **The `run_path` finding is the important one and is a process lesson.** A70 added a tooth to a
+   gate's check without adding it to the gate's declared list; the framework refuses that, which is
+   right, but every seeded verdict predated the tooth and `gate_table --resume` reads verdicts, so
+   the FAIL was invisible to A70's own presses and to my assessment. A gate whose *code* changed must
+   be pressed once even when its records are kept; goes to the harness plan as a rule at the merge.
+4. **B7 kept `--reference show/tables`** and retired only `extract/verify/teeth`, as specified. The
+   committed reference is still readable from the button.
+5. **A8's equivalence** is proven by a committed script over every (arm, configuration) pair and
+   3 120 pin evaluations — the right form for a merge of two bodies.
+6. **The `git add -A <paths>` slip** was caught and undone by the agent before committing; recorded, no
+   effect on the tree.
+7. **0 PROCESS runs**, consistent with the stamp survey (184 → 184) and every listed press being
+   0-run or on kept records.
+
+**Approved for merge.**
