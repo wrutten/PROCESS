@@ -114,8 +114,11 @@ REPRODUCTION_OVERRIDE_REASON = (
 )
 
 #: Where this gate takes its exit audit, and why it is not the campaign's
-#: position.
-REPRODUCTION_AUDIT_POSITION = "after_run"
+#: position.  This gate is one of the position's declared callers
+#: (:data:`harness.core.records.AUDIT_POSITION_AFTER_RUN_CALLERS`) and names
+#: itself on every job it makes, which is what the run pool checks.
+REPRODUCTION_AUDIT_POSITION = records_mod.AUDIT_POSITION_AFTER_RUN
+GATE_NAME = "reproduction"
 
 
 def reproduction_overrides(arm: str) -> dict[str, str]:
@@ -249,6 +252,7 @@ def _job_for(
             run_kind="gate",
             reproduction_overrides=reproduction_overrides(run.arm),
             audit_position=REPRODUCTION_AUDIT_POSITION,
+            audit_position_caller=GATE_NAME,
         )
     return pool_mod.Job(
         phase="A",
@@ -957,6 +961,7 @@ def _composition_tooth(
         run_kind="gate",
         reproduction_overrides=reproduction_overrides("B3"),
         audit_position=REPRODUCTION_AUDIT_POSITION,
+        audit_position_caller=GATE_NAME,
         override_env={switch: wrong_value},
     )
     pool_mod.run_all([job], campaign, resume=resume)
@@ -1043,7 +1048,9 @@ def stage(
             },
             "why": REPRODUCTION_OVERRIDE_REASON,
             "audit_position": REPRODUCTION_AUDIT_POSITION,
-            "audit_position_why": records_mod.AUDIT_POSITION_AFTER_RUN_WHY,
+            "audit_position_caller": GATE_NAME,
+            "audit_position_why": records_mod.AUDIT_POSITION_AFTER_RUN_CALLERS[GATE_NAME],
+            "audit_position_note": records_mod.AUDIT_POSITION_AFTER_RUN_WHY,
             "matches_the_matrix": assert_overrides_match_matrix(),
             "available_to_the_campaign": False,
         },

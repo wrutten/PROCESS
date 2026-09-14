@@ -330,6 +330,22 @@ ALWAYS_EXCLUDED: dict[str, str] = {
         "the driver's module-level readbacks are what the change renames; their "
         "values are the off-state on both sides"
     ),
+    # Prose the harness quotes into the record from a constant.  It names no
+    # driver behaviour -- it is the sentence records.AUDIT_POSITION_HOW or
+    # records.AUDIT_POSITION_AFTER_RUN_WHY held when the run was made -- so
+    # two captures can differ on it whenever the harness rewords the sentence,
+    # with or without an instrument change.  It sat in the two conditional
+    # groups above (compared whenever both sides carried it and the instrument
+    # stamps agreed), which made a harness prose correction a G1 mismatch on
+    # the next straddle; task A67 (written-file-gap) corrected the after_run
+    # sentence and moved the leaf here.  What the leaf could witness is
+    # compared elsewhere: `audit_position` itself is compared, and two
+    # captures that disagree on it are refused before any value is.
+    "audit_position_note": (
+        "prose quoted from a harness constant into the record; it names no "
+        "driver behaviour.  audit_position itself is compared, and two "
+        "captures that disagree on it are refused before any value is"
+    ),
 }
 
 #: Record leaves that a **driver or harness change adds**, and that can
@@ -406,11 +422,6 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "a field the record gains so that a run made under the reproduction "
         "gate's overrides says so; null on both sides here, absent on the "
         "earlier one"
-    ),
-    "audit_position_note": (
-        "the sentence saying how the audit position is reached, which is what "
-        "the change rewrites.  audit_position itself is compared, and the two "
-        "captures are refused if it differs"
     ),
     # The predicate counters (DR4).  Each is a field whose value is *null on
     # the earlier side because no counter existed* and a number on the later
@@ -707,11 +718,6 @@ FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE: dict[str, str] = {
         "positions the hook reached, their component counts and their digests "
         "sit beside this flag in the same block and are compared"
     ),
-    "audit_position_note": (
-        "the sentence saying how the audit position is reached, which the "
-        "instrument change rewrites.  audit_position itself is compared, and "
-        "two captures that disagree on it are refused before any value is"
-    ),
 }
 
 #: What kind of thing each instrument-change name is, on the same rule as
@@ -725,7 +731,6 @@ INSTRUMENT_CHANGE_KIND: dict[str, str] = {
     },
     "exit_audit.instrument": "the instrument's own description of itself",
     "audit_snapshot.installed": "whether the instrument was installed at all",
-    "audit_position_note": "prose the instrument change rewrites",
 }
 
 
@@ -768,7 +773,13 @@ NEUTRAL_ARMS: tuple[tuple[str, str], ...] = (("B", "BR"), ("A", "AR"))
 #: letting each side audit wherever its own revision does and excluding the
 #: block, would put the strongest thing G1 compares outside the comparison.
 #: A capture whose records disagree about the position **refuses**.
-NEUTRAL_AUDIT_POSITION = "after_run"
+#:
+#: This gate is one of the position's declared callers
+#: (:data:`records.AUDIT_POSITION_AFTER_RUN_CALLERS`) and names itself on
+#: every job it makes; the run pool refuses the position for a caller that
+#: does not.
+NEUTRAL_AUDIT_POSITION = records_mod.AUDIT_POSITION_AFTER_RUN
+NEUTRAL_GATE_NAME = "switch_neutrality"
 
 
 def neutrality_root(campaign: Campaign) -> Path:
@@ -809,6 +820,7 @@ def capture_neutrality(
                     delta=campaign.delta if phase == "B" else None,
                     run_kind="gate",
                     audit_position=NEUTRAL_AUDIT_POSITION,
+                    audit_position_caller=NEUTRAL_GATE_NAME,
                 )
             )
     results = pool_mod.run_all(jobs, campaign, resume=resume)
@@ -819,6 +831,7 @@ def capture_neutrality(
         "tree": str(campaign.tree),
         "n_runs": len(jobs),
         "audit_position": NEUTRAL_AUDIT_POSITION,
+        "audit_position_caller": NEUTRAL_GATE_NAME,
         "runs": [
             {
                 "configuration": job.config.name,
@@ -1435,6 +1448,12 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
         "n_mfile_lines_excluded": n_excluded_lines,
         "n_mfile_lines_differing": n_line_mismatches,
         "audit_position_on_both_sides": NEUTRAL_AUDIT_POSITION,
+        "audit_position_override": {
+            "position": NEUTRAL_AUDIT_POSITION,
+            "caller": NEUTRAL_GATE_NAME,
+            "why": records_mod.AUDIT_POSITION_AFTER_RUN_CALLERS[NEUTRAL_GATE_NAME],
+            "declared_callers": sorted(records_mod.AUDIT_POSITION_AFTER_RUN_CALLERS),
+        },
         "excluded_record_paths": VOLATILE_RECORD_PATHS,
         "excluded_across_an_instrument_change": FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
         "excluded_mfile_keys": VOLATILE_MFILE_KEYS,
@@ -3410,6 +3429,11 @@ def print_predicate_counters(block: Mapping[str, Any]) -> None:
 #: and the same identity.
 LADDER_DEMONSTRATION_ARM = "BR"
 LADDER_DEMONSTRATION_MAXCAL = 2
+#: The registry name of the stage these runs belong to, which is a declared
+#: caller of the ``after_run`` audit position
+#: (:data:`records.AUDIT_POSITION_AFTER_RUN_CALLERS`): the runs audit where
+#: gate GR's population does.
+LADDER_STAGE_NAME = "attempts"
 
 
 def ladder_root(campaign: Campaign) -> Path:
@@ -3428,6 +3452,7 @@ def ladder_jobs(campaign: Campaign) -> list[pool_mod.Job]:
             delta=campaign.delta,
             run_kind="gate",
             audit_position=NEUTRAL_AUDIT_POSITION,
+            audit_position_caller=LADDER_STAGE_NAME,
             force_maxcal=LADDER_DEMONSTRATION_MAXCAL,
         )
         for config in campaign.configurations
@@ -3444,6 +3469,11 @@ def capture_ladder(campaign: Campaign, *, resume: bool = False) -> dict[str, Any
         "n_runs": len(jobs),
         "arm": LADDER_DEMONSTRATION_ARM,
         "force_maxcal": LADDER_DEMONSTRATION_MAXCAL,
+        "audit_position_override": {
+            "position": NEUTRAL_AUDIT_POSITION,
+            "caller": LADDER_STAGE_NAME,
+            "why": records_mod.AUDIT_POSITION_AFTER_RUN_CALLERS[LADDER_STAGE_NAME],
+        },
         "what": (
             "deliberately budget-capped runs whose only purpose is to make the "
             "retry ladder run more than one attempt.  Stamped force_maxcal in "
@@ -4976,6 +5006,8 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "an allowance naming a switch the tree does implement",
             "a campaign run carrying the reproduction gate's override",
             "a reproduction override that changes nothing",
+            "a campaign run asking for the after_run audit position",
+            "an undeclared caller asking for the after_run audit position",
         ),
     }
     # None of the six starts a PROCESS run through the pool -- the capability
@@ -5245,6 +5277,7 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "process_copy_provenance.copy_date": "the commit, or the working tree's state",
     "env_architecture": "the switch vocabulary the change renames",
     "resolved_switches": "the switch vocabulary the change renames",
+    "audit_position_note": "prose quoted from a harness constant",
 }
 
 #: The kinds of thing gate G8's set excludes.  Its two sides are the **same
@@ -5534,7 +5567,7 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
         prefix: count
         for prefix, count in instrument_leaves.items()
         if not prefix.startswith("exit_audit")
-        and prefix not in {"audit_snapshot", "audit_position_note"}
+        and prefix not in {"audit_snapshot"}
     }
 
     g8_rows: list[dict[str, Any]] = []
@@ -6088,6 +6121,18 @@ def _analysis_measurements(campaign: Campaign) -> dict[str, Measurement]:
 # and a campaign record is never made by a path the user has not approved.
 
 
+def _written_file_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The gate that measures the written-file gap on the one-call output path (I-21).
+
+    Not one of the experiment plan's §3.9 gates -- it publishes a finding about
+    PROCESS's output pass and gates only on its runs' composition and audit
+    position -- so it carries no ``plan_name`` and is listed under its own name.
+    """
+    from . import gate_written_file
+
+    return {gate_written_file.GATE_NAME: gate_written_file.gate(campaign)}
+
+
 def _chain_gates(campaign: Campaign) -> dict[str, Gate]:
     """The run-kind separation gate, with its six teeth."""
     from harness import chain as chain_mod  # noqa: PLC0415
@@ -6263,6 +6308,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_artifact_gates(campaign))
     entries.update(_tally_gates(campaign))
     entries.update(_analysis_gates(campaign))
+    entries.update(_written_file_gates(campaign))
     entries.update(_chain_gates(campaign))
     entries.update(measurements(campaign))
     assert_declared_dependencies(entries)
@@ -6486,6 +6532,9 @@ GATE_ORDER: tuple[str, ...] = (
     "entry_and_warm",
     "switch_composition",
     "output_path",
+    # Six runs; it reads G9's records for its beside-column, so the dependency
+    # already puts it after output_path whatever this preference says.
+    "written_file_gap",
     "predicate_mode",
     "switch_neutrality",
     "reproduction",
