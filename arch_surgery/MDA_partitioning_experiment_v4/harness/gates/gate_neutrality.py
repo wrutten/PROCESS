@@ -279,14 +279,14 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "equal where both sides carry it"
     ),
     # The allowance mechanism's record field, retired from the schema by A72
-    # (survey item B4).  The child still writes it (an empty list) until the
-    # child-side remainder is taken up; when that lands the field is present
-    # on the earlier capture and absent on the later one, which is the shape
-    # this table exists for.  Compared, and equal, wherever both sides carry it.
+    # (survey item B4) and from the child by A73 (the child-side remainder):
+    # present (an empty list) on every capture made before A73, absent on
+    # every capture made since, which is the shape this table exists for.
+    # Compared, and equal, wherever both sides carry it.
     "pending_switches_allowed": (
         "the retired allowance's stamp: an empty list on every record made "
-        "since A59, absent once the child stops writing it.  Excluded only "
-        "while one side lacks it"
+        "between A59 and A73, absent since the child stopped writing it.  "
+        "Excluded only while one side lacks it"
     ),
     # The predicate counters (DR4).  Each is a field whose value is *null on
     # the earlier side because no counter existed* and a number on the later

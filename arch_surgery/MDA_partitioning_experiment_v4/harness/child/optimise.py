@@ -96,10 +96,6 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=records_mod.REGIMES)
     parser.add_argument("--predicate-mode", default="frozen")
     parser.add_argument("--pin-hex", default=None)
-    parser.add_argument("--pending-allowed", default="",
-                        help="comma-separated switch terms this tree does not "
-                             "implement and this run was allowed to omit; "
-                             "recorded in the record, never silent")
     parser.add_argument("--switches-asked", default="{}",
                         help="JSON of term -> value the arm asked for")
     parser.add_argument("--audit-position",
@@ -164,9 +160,6 @@ def main(argv: list[str] | None = None) -> int:
         input_file=source.resolve(),
         input_file_kind=args.input_kind,
         pin_hex=args.pin_hex,
-        pending_switches_allowed=[
-            t for t in args.pending_allowed.split(",") if t
-        ],
         switches_asked=json.loads(args.switches_asked),
     )
     record["outdir"] = str(outdir)
@@ -181,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.audit_position == AUDIT_POSITION_DECLARED
         else records_mod.AUDIT_POSITION_AFTER_RUN_WHY
     )
-    child.stamp_capabilities_absent(record, phase="B")
+    child.stamp_driver_counters_null(record, phase="B")
 
     # ------------------------------------------------------------------
     # The tree, before anything else.  A sibling environment on this machine
