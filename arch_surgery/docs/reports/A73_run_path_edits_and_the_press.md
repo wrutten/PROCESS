@@ -15,18 +15,21 @@ is context only, with the worker count (3, `Campaign.workers`), never evidence.*
 ## 1. Verdict in one page
 
 **Part 1 is done, all four items, committed before any run** (§2). **The press is done, once,
-with one interruption and one failed gate — both results, both stated with their numbers** (§3, §4):
+with one interruption and one gate that failed at the press and passed after a ruled exclusion fix
+— both results, both stated with their numbers** (§3, §4). **Final gate table: 30 PASS, 0 FAIL,
+152 of 152 teeth** (§4, after §4.4):
 
 | | result |
 |---|---|
-| gates | **30 registered, 29 PASS, 1 FAIL** (`predicate_mode`, G8); 152 of 152 teeth tripped; every verdict names the commits of the records it read |
-| G8's FAIL | 24 of 8 092 record values differ over 12 pairs — **exactly two per pair, `job_identity.predicate_mode` and `job_digest`**, the pool's stamp of the setting the gate varies (A72's identity fields, added after G8's exclusion table was written; G8 was on A72's unpressed list); 0 of 84 output-file lines and 0 other values differ. Not tuned, not re-pressed (§4.3) |
+| gates | **30 registered; at the press 29 PASS, 1 FAIL** (`predicate_mode`, G8); **after the ruled fix of §4.4, 30 PASS, 0 FAIL**; 152 of 152 teeth tripped; every verdict names the commits of the records it read |
+| G8 at the press | **FAIL**: 24 of 8 092 record values differ over 12 pairs — **exactly two per pair, `job_identity.predicate_mode` and `job_digest`**, the pool's stamp of the setting the gate varies (A72's identity fields, added after G8's exclusion table was written; G8 was on A72's unpressed list); 0 of 84 output-file lines and 0 other values differ (§4.3). A measured result, kept in the history |
+| G8 after the ruling | **PASS** at `b485bf4c`: 12/12 pairs bit-identical, 0 of 8 068 values and 0 of 84 lines differ, 240 values excluded (the two new names: 24); **0 PROCESS runs**, 27 records kept (24 at `0677a9b3`, 3 at `4ca8cff5`) (§4.4) |
 | GR | PASS, 20/20 runs reproduced, 0 of 256 compared values differ (270 in the reference, 14 excluded by name); read 29 records, 26 at `0677a9b3` and 3 at `4ca8cff5` |
 | G1, a straddle `fd480aff` → `0677a9b3` across the run-path change | PASS, a neutrality result: 6 pairs, **0 of 2 825 record values and 0 of 51 319 output-file lines differ**; 1 758 values and 45 lines excluded, 951 of the values by the instrument-change kind A62 introduced (0 outside the exit audit and its stamp); the three A72 identity names one-sided as expected (`job_identity` 0/120 leaves, `job_digest` 0/6, `pending_switches_allowed` 6/0) |
 | the population | **136 PROCESS runs made** (41 in the aborted press at `4ca8cff5`, 95 in the resumed press at `0677a9b3`); 147 run records under `runs/` afterwards: 126 shared-pool jobs (89 at `0677a9b3`, 37 at `4ca8cff5`), G1's 6 after-capture runs, G1's 6 kept before-capture runs at `fd480aff`, the 6 kept census records, 2 lifted-input baselines, 1 GR tooth fixture |
 | the shared pool's saving | 242 gate-job declarations over 30 gates → **126 distinct jobs**, 42 read by more than one gate; run-making gates alone declare 167 jobs. Against the per-gate layout at A71's tip (152 runs per press) the pool plus G1's after capture is **132 — 20 fewer, A72 §7's projection exactly**. Against A67's 184-record seed population the tree holds 147 records (37 fewer; that figure also counts B3's 11 retired diagnosis records and B5's 6 retired contrast runs, so it is not the pool's saving alone) |
 | lines | `harness_survey.py` §1: **47 728 (A68, before D27) → 45 390** after A73 (A72's tip: 47 783; the difference here is B3's 2 332 lines and the child-side remainder) |
-| the harness plan's §4 | rendered from the records at `0677a9b3`, `4ca8cff5`, `fd480aff`; 131 tables, 3 932 cells; `--plan-tables check` clean; the gate table reads **29 PASS, 1 FAIL, 0 not run; 152 of 152 teeth** |
+| the harness plan's §4 | rendered from the records at `0677a9b3`, `4ca8cff5`, `fd480aff`; 131 tables, 3 932 cells; `--plan-tables check` clean; the gate table reads **30 PASS, 0 FAIL, 0 not run; 152 of 152 teeth** (first render, before §4.4: 29 PASS, 1 FAIL) |
 
 **Two things happened during the press that the protocol asks to be said plainly.** (i) The first
 `--gate all` at `4ca8cff5` crashed in gate G4's body after 41 runs on a `NameError`
@@ -37,7 +40,9 @@ debt). No run was executing; the one-line fix was committed (`0677a9b3`) and the
 reversal is to delete `runs/gates/_runs/` and press once more). (ii) The press stopped at G8's FAIL
 by design; the four 0-run gates after it in the order (`tally_contracts`, `recomputation`,
 `run_kind_separation`, `stage_provenance`) were run one by one with `--resume` so the gate table has
-every row — all PASS, 0 PROCESS runs (§4.2). G8 was not touched.
+every row — all PASS, 0 PROCESS runs (§4.2). G8 was not touched by this task on its own
+authority; the orchestrator ruled on it (§4.4), and both were the orchestrator's decisions on §9's
+items 2 and 3.
 
 ## 2. Part 1 — the run-path edits, item by item
 
@@ -99,6 +104,7 @@ re-made), `input_files/`, `artifacts/teeth.json` and `census/` (6 census-2 recor
 | 4 | `run_stamp_survey.py --json` | `0677a9b3` | §5 |
 | 4 | `--jobs all` | `0677a9b3` | 126 distinct jobs, 242 declarations, 42 shared, `--resume` would keep 126; §6 |
 | 5 | `PROCESS_diff.py --markdown`; `copy_gates.py all` | `0677a9b3` | the copy's diff: `module_solve.py` 15 hunks, every one claimed by an annotation (the path-constant hunk reads `YSTATE_MODULE_PATH -> harness/child/ystate.py`), 0 `UNEXPLAINED`; `copy_gates.py all` runs inside `--gate all` as `g0prime`, `copy_identity`, `edit_behaviour` — all PASS |
+| 6 (after the ruling, §4.4) | fix `gate_predicate_mode.py` + `exclusion_review.py`, commit; `--gate predicate_mode --resume`; `--measure gate_table --resume`; `--measure exclusion_review --resume`; `--plan-tables write`; `--plan-tables check`; `--selfcheck` | `b485bf4c` | G8 **PASS**, 0 runs, 27 kept; gate table **30 PASS, 0 FAIL; 152/152**; review lists the two names as KEPT (12/12 leaves, 0 equal — they differ by construction); §4 re-rendered (2 lines changed: G8's row and the headline), check clean; selfcheck PASS |
 
 **Wall clock, as context, 3 workers:** press 2a 16:34 → ~16:38 (aborted); press 2c 16:39:39 →
 16:54:16 (14.6 min for 95 runs); steps 2d–3 a further few minutes. Not evidence.
@@ -136,13 +142,15 @@ into `EXPERIMENT_PLAN.md` §4 by `--plan-tables write`; "runs read" from each ve
 | `reproduction` | GR | PASS | 256 / 0 | 8/8 | 29 — 26 at `0677a9b3`, 3 at `4ca8cff5` [resumed] |
 | `output_path` | G9 | PASS | 3 879 / 0 | 4/4 | 17 — 17 at `0677a9b3` [resumed] |
 | `written_file_gap` | — | PASS | 42 / 0 | 4/4 | 12 — 12 at `0677a9b3` [resumed] |
-| `predicate_mode` | G8 | **FAIL** | 8 176 / **24** (8 092 values, 24 differing; 84 lines, 0) | 4/4 | 27 — 24 at `0677a9b3`, 3 at `4ca8cff5` [resumed] |
+| `predicate_mode` | G8 | **FAIL** at the press (`0677a9b3`) → **PASS** at `b485bf4c` (§4.4) | at the press 8 176 / **24** (8 092 values, 24 differing; 84 lines, 0); after: 8 152 / 0 (8 068 values, 84 lines) | 4/4 | 27 — 24 at `0677a9b3`, 3 at `4ca8cff5` [resumed], both times |
 | `tally_contracts` | — | PASS | 195 / 0 (451 in the table's sum) | 10/10 | 25 — 25 at `0677a9b3` [resumed] |
 | `recomputation` | — | PASS | 2 066 / 0 | 9/9 | 25 — 25 at `0677a9b3` [resumed] |
 | `run_kind_separation` | — | PASS | 178 / 0 (147 records under `runs/`, 31 in the tally's sources) | 6/6 | 25 — 25 at `0677a9b3` [resumed] |
 | `stage_provenance` | — | PASS | 16 / 0 | 5/5 | — |
 
-**29 PASS, 1 FAIL, 0 not run; 152 of 152 teeth tripped** (the §4 render's own line).
+**At the press: 29 PASS, 1 FAIL, 0 not run; 152 of 152 teeth tripped** (the first §4 render's own
+line). **Final, after §4.4: 30 PASS, 0 FAIL, 0 not run; 152 of 152 teeth tripped** (the §4 render
+at `b485bf4c`).
 
 ### 4.1 The interruption — a `NameError` in G4's body, and what was done
 
@@ -196,13 +204,44 @@ excludes six ways (`campaign_predicate_mode`, `switches_asked.predicate_mode`,
 G1's conditional table (where the two captures are the *same* job and must agree) and not to G8's
 (where the two sides are *different* jobs by construction, and G8 was not pressed).
 
-**Not done, on the brief's rule:** the two-row addition to `PREDICATE_PAIR_EXCLUSIONS` —
-`"job_identity.predicate_mode": "the pool's stamp of the setting being varied"` and
-`"job_digest": "sha256 of the identity, which differs whenever any identity field does"` — followed
-by `--gate predicate_mode --resume` (0 PROCESS runs; 27 records kept) and `--measure gate_table`,
-`--plan-tables write`. It is a gate-table change after a press and it makes a failed gate pass, so it
-is the orchestrator's or the user's to license, not this task's. Everything G8 measured other than
-the stamp of its own variable is 0 differing.
+**Not done on this task's own authority** — a gate-table change after a press that makes a failed
+gate pass is a ruling, not an implementation detail. Everything G8 measured other than the stamp of
+its own variable was 0 differing. Put to the orchestrator; ruled and done in §4.4.
+
+### 4.4 The ruled fix, and G8 re-pressed over its kept records
+
+**The ruling** (orchestrator, 2026-09-14, implementation-level under D24/D27, after verifying the
+G8 verdict and the fix commit's diff): add the two names to `PREDICATE_PAIR_EXCLUSIONS`; re-press
+G8 over its kept records; re-render §4; keep the FAIL in the history as a measured result.
+
+**Done, `27c9dc8d` + `b485bf4c`** (no run executing; nothing under `child/` changed; committed
+before the press): in `gate_predicate_mode.PREDICATE_PAIR_EXCLUSIONS`'s "the mode stamps -- the
+thing being varied" block, `job_identity.predicate_mode` ("the pool's stamp of the setting being
+varied — rule (xiv): `predicate_mode` is a `Job` field, so it is in the identity") and `job_digest`
+("sha256 of the identity, which changes whenever any identity field does — here exactly because
+`job_identity.predicate_mode` does; excluded on the condition that this gate's pairs differ in that
+one field and no other, which the identity block's other leaves — all compared — hold; that two
+distinct jobs carry distinct digests is gate `resume_identity`'s claim, not this one's"). The first
+commit alone was refused at import by `exclusion_review._assert_every_name_is_classified` ("2 of gate
+G8's excluded name(s) carry no declared kind") — the review's own guard against an unclassified
+exclusion, working; `PREDICATE_PAIR_KIND` gained the two names under *the setting being varied, or a
+stamp of it* in the second commit. **The class of the fix is A62's:** an exclusion for a field the
+pair differs in *by construction* (there, the instrument stamp across two instruments; here, the
+identity stamp across two rulers), conditional on the construction and reviewed as a named row.
+
+**G8 at `b485bf4c`: PASS.** `--gate predicate_mode --resume`: **0 `rc=` lines, 27 records resumed**
+("complete record of this job kept"), runs read 27 — 24 at `0677a9b3`, 3 at `4ca8cff5`; 12/12
+pairs bit-identical; **0 of 8 068 record values and 0 of 84 output-file lines differ**; 240 values
+excluded (216 before + the 24 that were the FAIL — the count moved from "differing" to "excluded by
+name", and nowhere else); GR's neutrality check PASS; 4/4 teeth tripped (the `one_ulp` tooth: 1 of
+664 compared values, so the pair is still compared value for value).
+`--measure exclusion_review --resume`: the two names appear in G8's table as *KEPT*, 12 leaves on
+each side, 0 equal — the shape the reason claims; G8's set 17 → 19 names. `--measure gate_table
+--resume`, `--plan-tables write` (2 lines of `EXPERIMENT_PLAN.md` changed: G8's row and the
+headline), `--plan-tables check` clean, `--selfcheck` PASS.
+
+**Reversal:** `git revert b485bf4c 27c9dc8d`, `--gate predicate_mode --resume` (0 runs), and G8 reads
+FAIL 24/8 092 again.
 
 ## 5. The stamp survey
 
@@ -294,8 +333,8 @@ press:** 152 (A71's tip) → 132 measured (§6). **Tier C (C1–C3) stays open**
    (`--jobs all`: 0). *Reversal:* none needed; the flag decided nothing the record did not.
 2. **Continuing after the G4 crash by fix-and-resume rather than fix-and-start-over** (§4.1).
    *Reversal:* delete the pool and press once more at `0677a9b3`.
-3. **Not fixing G8's exclusion table after its FAIL** (§4.3). *Reversal:* the two rows, then
-   `--gate predicate_mode --resume`, `--measure gate_table`, `--plan-tables write` — 0 PROCESS runs.
+3. **Not fixing G8's exclusion table on this task's own authority** (§4.3) — put to the
+   orchestrator, who ruled yes; done in §4.4 with its reversal there.
 4. **Pressing the four post-G8 0-run gates individually** (§4.2). *Reversal:* delete their four
    verdict directories; the gate table then shows them "not run".
 5. **`--artifacts all` not run** (§3): its four stages ran as gates and nothing reads its stage
@@ -319,11 +358,15 @@ press:** 152 (A71's tip) → 132 measured (§6). **Tier C (C1–C3) stays open**
 
 ## 10. Limits
 
-- The population sits at two commits (`4ca8cff5`, `0677a9b3`) that differ by one gate-module line;
-  every verdict states which records it read at which commit, and the reader who wants one commit
-  has §4.1's reversal.
-- G8's FAIL is a stamp of the varied setting, measured as such (§4.3), but this report does not
-  *prove* that adding the two exclusions would make the gate pass — it did not run that.
+- The population sits at two commits (`4ca8cff5`, `0677a9b3`). **Accepted by the orchestrator's
+  ruling of 2026-09-14, not re-pressed.** The evidence: `git show --stat 0677a9b3` lists exactly one
+  file, `arch_surgery/MDA_partitioning_experiment_v4/harness/gates/gate_audit.py`, 1 insertion, 1
+  deletion — gate code, nothing under `harness/child/`, nothing under `PROCESS/`, nothing the pool
+  composes into a job — so records made at the two commits are of the same driver and the same child,
+  and every verdict that read both states both. §4.1's reversal stands for a reader who wants one
+  commit anyway.
+- G8's verdict record on disk is the `b485bf4c` one; the FAIL at `0677a9b3` survives in
+  `runs/_press_logs/gate_all_resume_at_0677a9b3.log` and in §4.3, not as a record.
 - The saving in §6 (a) is against A72's count of the A71-tip layout, not against a re-press of that
   layout; (b) is a record count over two differently composed trees.
 - The wall clock (§3) is one machine, one afternoon, 3 workers; it is context.
@@ -342,14 +385,18 @@ press:** 152 (A71's tip) → 132 measured (§6). **Tier C (C1–C3) stays open**
 | `731a6be8` | A72's hand-over, child side; `predicate.provenance_of` |
 | `4ca8cff5` | improvement item 13 — **the first press commit** |
 | `0677a9b3` | `gate_audit.py` `excluded_keys` — **the second press commit** |
-| (this report's commit) | `EXPERIMENT_PLAN.md` §4 render; this report |
+| `6280e220` | `EXPERIMENT_PLAN.md` §4 render (29/1); this report |
+| `27c9dc8d` | G8's two exclusion rows (§4.4) |
+| `b485bf4c` | `exclusion_review.PREDICATE_PAIR_KIND` classifies them — **G8's re-press commit** |
+| (this report's second commit) | §4 re-render (30/0); this report updated |
 
 ## 12. What the documents should gain (not edited by this task)
 
-**The queue.** A66 → MERGED (carried by A73); A73's row → its outcome, the gate table's line and the
-G8 FAIL with §4.3's proposed rows as a decision for the user; D27 → discharged *when* G8 is ruled
-on (the programme's twenty items and A66 have landed — §8 — but "rerun the gates once" ends on
-29/1). A decision row: whether the two identity names join `PREDICATE_PAIR_EXCLUSIONS`.
+**The queue.** A66 → MERGED (carried by A73); A73's row → its outcome (30/30 after the ruled
+exclusion fix; the G4 crash and the G8 FAIL at the press named as results); D27 → discharged: the
+twenty items and A66 have landed (§8) and the one press ends at 30 PASS, 0 FAIL, 152/152. The two
+orchestrator rulings of §4.4 and §10 (the exclusion fix; the two-commit population accepted) are
+implementation-level under D24/D27 and should be recorded in the change log, not as D-rows.
 
 **The harness plan.** An amendment closing D27 with §8's ledger; the rules table's row for
 rule (xiii) gains the measured instance: a gate left unpressed by the task that changed it (A72,
@@ -358,7 +405,10 @@ jobs on purpose (G8) excludes the identity fields that differ by construction, w
 the *same* job at two commits (G1) requires them equal — the distinction A72 §4 drew for G1 and did
 not carry to G8.
 
-**TRAPS.** Nothing new; the G4 and G8 findings are amendment 23's shape.
+**TRAPS.** Nothing new; the G4 and G8 findings are amendment 23's shape. One candidate sentence for
+rule (xiv)'s amendment rather than a trap: *a schema field added to every record reaches every gate
+that compares two records, and each such gate's exclusion table needs the decision "same job — must
+agree" (G1) or "different jobs by construction — excluded" (G8) made explicitly.*
 
 **The improvement list.** Item 13 → discharged (`4ca8cff5`). A candidate: a static
 never-bound-name scan as a self-check tooth (the `ast` walk in §4.1 found the G4 defect in under a
