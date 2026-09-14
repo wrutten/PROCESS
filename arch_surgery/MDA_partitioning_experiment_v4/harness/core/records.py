@@ -114,12 +114,15 @@ REGIMES: tuple[str, ...] = ("unperturbed", "perturbed", "stencil")
 #: **snapshot** — see :data:`AUDIT_POSITION_HOW`.
 #:
 #: ``after_run`` is where the previous revision audited: after the run has
-#: finished, which is after the output path.  It survives for exactly one
-#: caller — see :data:`AUDIT_POSITION_AFTER_RUN_WHY`.  Its sweep is the loop's
-#: own map there too: the data structure is put back to the snapshot taken at
-#: the entry to the output path for every field that changed outside the
-#: coupling state, and the coupling state itself is left as the run ended it,
-#: which is what distinguishes the position from the declared one.
+#: finished, which is after the output path.  It is a position with **declared
+#: callers** — the stages named in :data:`AUDIT_POSITION_AFTER_RUN_CALLERS`,
+#: and no other; see :data:`AUDIT_POSITION_AFTER_RUN_WHY`.  Its sweep is the
+#: loop's own map there too: the data structure is put back to the snapshot
+#: taken at the entry to the output path for every field that changed outside
+#: the coupling state, and the coupling state itself is left as the run ended
+#: it — as PROCESS wrote it out — which is what distinguishes the position from
+#: the declared one, and what makes its residual the distance between the
+#: written file and a fixed point of the solve's own map.
 AUDIT_POSITIONS: tuple[str, ...] = (
     "after_single_evaluation",
     "after_run",
@@ -127,12 +130,54 @@ AUDIT_POSITIONS: tuple[str, ...] = (
 )
 
 #: Positions an optimisation run may audit at.  The declared one is the
-#: default; the other is the reproduction gate's, and nothing else may ask for
-#: it.
+#: default; the other may be asked for only by a declared caller
+#: (:data:`AUDIT_POSITION_AFTER_RUN_CALLERS`), never by a campaign run.
 OPTIMISATION_AUDIT_POSITIONS: tuple[str, ...] = (
     "entry_to_write_output_files",
     "after_run",
 )
+
+#: The optimisation phase's declared position, and the one position beside it.
+AUDIT_POSITION_DECLARED = "entry_to_write_output_files"
+AUDIT_POSITION_AFTER_RUN = "after_run"
+
+#: The stages that may ask an optimisation run to audit at ``after_run``, by
+#: their registry name, each with the reason.  **Declared, never inferred**:
+#: the run pool refuses the position for any caller not named here and for
+#: every campaign run (:func:`assert_audit_position_allowed`), and each caller
+#: stamps the override in its own record.  Adding a caller is adding a row
+#: here with its reason — a gate that needs the position and is not named is
+#: refused, which is the point.
+#:
+#: Until task **A67 (written-file-gap)** the prose here said the position had
+#: "exactly one caller", the reproduction gate; it had three (the switch-
+#: neutrality gate pins both of its captures to it, and the retry-ladder
+#: demonstration runs of the ``attempts`` stage audit there), none of them
+#: refused, because nothing enforced the sentence.  The table replaces the
+#: sentence and the pool enforces the table.
+AUDIT_POSITION_AFTER_RUN_CALLERS: dict[str, str] = {
+    "reproduction": (
+        "gate GR reproduces the previous revision's records, and that "
+        "revision audited after the run; reproducing them means auditing "
+        "where they were audited"
+    ),
+    "switch_neutrality": (
+        "gate G1 pins both of its captures to one position so that the whole "
+        "exit_audit block is compared value for value across a driver change "
+        "rather than excluded"
+    ),
+    "attempts": (
+        "the retry-ladder demonstration runs of the attempts measurement "
+        "stage: budget-capped reference-arm runs whose only purpose is the "
+        "per-attempt accounting, audited where gate GR's population is"
+    ),
+    "written_file_gap": (
+        "the gate that measures, per run, the distance between the state "
+        "PROCESS wrote to its output files and a fixed point of the solve's "
+        "own map (issue I-21) — which is what this position, and only this "
+        "position, reads"
+    ),
+}
 
 #: How the declared position is reached, quoted into every record that uses it.
 #: The audit sweep mutates the state it measures, so it cannot be *run* at the
@@ -158,22 +203,68 @@ AUDIT_POSITION_HOW = (
     "iterated rather than the one the output path left behind."
 )
 
-#: Why ``after_run`` still exists, and the only thing that may ask for it.
-#: The reproduction gate reproduces the **previous revision**, which audited
-#: after the run; its recorded ``exit_audit.residual_max_hex`` values are among
-#: the values that gate compares, so reproducing them means auditing where they
-#: were audited.  Every campaign record uses the declared position.
+#: Why ``after_run`` still exists, what its residual means, and who may ask
+#: for it.  Quoted into every record that audits there as
+#: ``audit_position_note``.  Every campaign record uses the declared position.
 AUDIT_POSITION_AFTER_RUN_WHY = (
-    "the reproduction gate reproduces the previous revision's records, and "
-    "that revision audited after the run, so this gate's runs audit where "
-    "those were audited.  The residual itself is no longer among the values "
-    "that gate compares: this revision's audit restores the data structure to "
-    "its solve-phase state before its sweep, and the previous revision's did "
-    "not, so the two numbers are measurements by two instruments and the "
-    "reference names the difference rather than absorbing it.  This position "
-    "is refused outside that gate: it is recorded per run and stamped in the "
-    "gate's own record as a reproduction override."
+    "this run audits after the whole run, which is after the output path: the "
+    "same one-sweep instrument every arm gets, with the solve-phase data "
+    "structure put back for every field outside the coupling state, on the "
+    "coupling state as PROCESS wrote it out.  Its residual is therefore the "
+    "distance between the written state and a fixed point of the solve's own "
+    "map — not a convergence statement about the arm.  The position is where "
+    "the previous revision audited, which is why the reproduction gate uses "
+    "it; it may be asked for only by the stages "
+    "records.AUDIT_POSITION_AFTER_RUN_CALLERS declares by name, each of which "
+    "stamps the override in its own record, and the run pool refuses any "
+    "other caller and every campaign run."
 )
+
+
+def assert_audit_position_allowed(
+    position: str,
+    *,
+    phase: str,
+    run_kind: str,
+    caller: str | None,
+    where: str = "",
+) -> None:
+    """Refuse an audit position nobody declared, or a campaign run off the declared one.
+
+    The evaluation phase has one position and takes no argument; this is about
+    the optimisation phase, where the plan declares one position for every arm
+    and a second one exists for the callers named in
+    :data:`AUDIT_POSITION_AFTER_RUN_CALLERS`.  Three refusals, none a warning:
+    a position the record vocabulary does not know; a **campaign** run at any
+    position but the declared one — the campaign audits where the plan says,
+    whoever asks; and the second position asked for by a caller the table does
+    not name, or by no caller at all.
+    """
+    at = f" for {where}" if where else ""
+    if phase != "B":
+        return
+    if position not in OPTIMISATION_AUDIT_POSITIONS:
+        raise RecordError(
+            f"audit position {position!r}{at} is not one an optimisation run "
+            f"may audit at ({OPTIMISATION_AUDIT_POSITIONS})"
+        )
+    if position == AUDIT_POSITION_DECLARED:
+        return
+    if run_kind == "campaign":
+        raise RecordError(
+            f"a campaign run{at} may not audit at {position!r}: every campaign "
+            f"record audits at the declared position "
+            f"{AUDIT_POSITION_DECLARED!r}, whoever asks"
+        )
+    if caller not in AUDIT_POSITION_AFTER_RUN_CALLERS:
+        raise RecordError(
+            f"audit position {position!r}{at} was asked for by "
+            f"{caller!r}, which is not a declared caller of it.  The declared "
+            f"callers are {sorted(AUDIT_POSITION_AFTER_RUN_CALLERS)}; a stage "
+            f"that needs the position is added to "
+            f"records.AUDIT_POSITION_AFTER_RUN_CALLERS with its reason, and "
+            f"stamps the override in its own record"
+        )
 
 
 class RecordError(RuntimeError):

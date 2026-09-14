@@ -137,9 +137,17 @@ class Job:
     #: :func:`environment_for`.
     reproduction_overrides: Mapping[str, str] = field(default_factory=dict)
     #: Where an optimisation run takes its exit audit.  The default is the
-    #: position the plan declares for every arm; the reproduction gate is the
-    #: only caller that may ask for the previous revision's.
-    audit_position: str = "entry_to_write_output_files"
+    #: position the plan declares for every arm; the other position,
+    #: ``after_run``, may be asked for only by a stage
+    #: :data:`harness.core.records.AUDIT_POSITION_AFTER_RUN_CALLERS` names,
+    #: which says so in ``audit_position_caller``.  Refused otherwise, and for
+    #: every campaign run, by :func:`environment_for`.
+    audit_position: str = records_mod.AUDIT_POSITION_DECLARED
+    #: The registry name of the stage asking for a position other than the
+    #: declared one.  Stamped into the run's ``command.json`` beside the
+    #: record, and into the caller's own record; None for a run at the
+    #: declared position.
+    audit_position_caller: str | None = None
 
     @property
     def key(self) -> str:
@@ -182,6 +190,7 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
     See :func:`_apply_reproduction_overrides` for the four things that refuse
     one; a campaign run carrying one is the first of them.
     """
+    _assert_audit_position_declared(job)
     arm = arms_mod.ARMS[job.arm]
     terms = arm.terms(
         job.config,
@@ -231,6 +240,34 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         else:
             env[name] = str(value)
     return env, terms
+
+
+def _assert_audit_position_declared(job: Job) -> None:
+    """Refuse an audit position off the declared one unless a declared caller asks.
+
+    The third way a run may differ from the campaign, beside ``allow_pending``
+    and ``reproduction_overrides``: **where its exit audit is taken**.  The
+    plan declares one position for every arm; the other, ``after_run``, reads
+    the state PROCESS wrote out rather than the state the solve handed over,
+    and a residual table that mixed the two without saying so is the thing the
+    per-run ``audit_position`` field exists to prevent.  So the position is
+    governed the way the overrides are: a campaign run never leaves the
+    declared position, and a gate run leaves it only if the stage asking is
+    named in :data:`harness.core.records.AUDIT_POSITION_AFTER_RUN_CALLERS` —
+    a table with a reason per row, enforced here on every path a run takes.
+    The refusal is :class:`records.RecordError`, re-raised as a
+    :class:`PoolError` so the pool's callers see one kind of refusal.
+    """
+    try:
+        records_mod.assert_audit_position_allowed(
+            job.audit_position,
+            phase=job.phase,
+            run_kind=job.run_kind,
+            caller=job.audit_position_caller,
+            where=job.key,
+        )
+    except records_mod.RecordError as exc:
+        raise PoolError(str(exc)) from exc
 
 
 def _apply_reproduction_overrides(
@@ -453,6 +490,13 @@ def run(job: Job, campaign: Campaign, *, resume: bool = False) -> dict[str, Any]
                 "cwd": str(outdir),
                 "allow_pending": list(job.allow_pending),
                 "override_env": dict(job.override_env or {}),
+                # Where the exit audit was asked to be taken and, when that is
+                # not the declared position, which declared stage asked.  The
+                # record carries the position itself (``audit_position``); the
+                # caller is stamped here, beside it, and in the caller's own
+                # record.
+                "audit_position": job.audit_position,
+                "audit_position_caller": job.audit_position_caller,
             },
             indent=2,
         )

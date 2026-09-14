@@ -2209,6 +2209,73 @@ def check_run_path(campaign: Campaign) -> Check:
             f"out of step with the matrix unnoticed ({message})",
         )
 
+    # --- the after_run audit position's declared callers -------------------
+    #
+    # The third way a run may differ from the campaign: where its exit audit
+    # is taken.  ``after_run`` has a table of declared callers
+    # (records.AUDIT_POSITION_AFTER_RUN_CALLERS) with a reason per row; the
+    # pool refuses the position for a campaign run and for any caller the
+    # table does not name.  Both refusals are teeth, and the table's rows are
+    # checked to be registered stages, so a caller nobody runs cannot be
+    # declared.
+    from harness.gates import gates as gates_mod  # noqa: PLC0415 - cycle otherwise
+
+    declared_callers = records_mod.AUDIT_POSITION_AFTER_RUN_CALLERS
+    registered = set(gates_mod.registry(campaign))
+    for caller in declared_callers:
+        check.n_compared += 1
+        if caller not in registered:
+            check.fail(
+                f"records.AUDIT_POSITION_AFTER_RUN_CALLERS names {caller!r}, "
+                f"which the registry does not hold; a declared caller nobody "
+                f"runs is a declaration nobody checks"
+            )
+    check.note(
+        f"the after_run audit position has {len(declared_callers)} declared "
+        f"caller(s), every one a registered stage: "
+        f"{', '.join(sorted(declared_callers))}"
+    )
+    pulsed = next(c for c in campaign.configurations if c.pulsed)
+    campaign_after_run = pool_mod.Job(
+        phase="B",
+        arm="BR",
+        config=pulsed,
+        seed=0,
+        outdir=Path(campaign.runs_dir) / "_never",
+        run_kind="campaign",
+        audit_position=records_mod.AUDIT_POSITION_AFTER_RUN,
+        audit_position_caller="reproduction",
+    )
+    caught, message = _must_refuse_here(
+        lambda: pool_mod.environment_for(campaign_after_run, campaign)
+    )
+    check.tooth(
+        "a campaign run asking for the after_run audit position",
+        caught,
+        f"every campaign record audits at the declared position, whoever asks; "
+        f"a campaign run audited after the output path would publish the "
+        f"written-file gap as an arm's accuracy ({message})",
+    )
+    undeclared_after_run = pool_mod.Job(
+        phase="B",
+        arm="BR",
+        config=pulsed,
+        seed=0,
+        outdir=Path(campaign.runs_dir) / "_never",
+        run_kind="gate",
+        audit_position=records_mod.AUDIT_POSITION_AFTER_RUN,
+        audit_position_caller="a_stage_nobody_declared",
+    )
+    caught, message = _must_refuse_here(
+        lambda: pool_mod.environment_for(undeclared_after_run, campaign)
+    )
+    check.tooth(
+        "an undeclared caller asking for the after_run audit position",
+        caught,
+        f"the position has declared callers with a reason each; a stage that "
+        f"needs it is added to the table, not waved through ({message})",
+    )
+
     # --- the lifted input file's digests ----------------------------------
     for name in input_files_mod.LIFTED_INPUT_SHA256:
         check.n_compared += 1

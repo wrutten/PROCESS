@@ -56,10 +56,14 @@ from harness.core import records as records_mod  # noqa: E402
 #: :data:`harness.core.records.AUDIT_POSITION_HOW`.
 #:
 #: A run may be asked for ``after_run`` instead, which is where the previous
-#: revision audited.  Exactly one caller may ask — the reproduction gate, whose
-#: whole purpose is to reproduce that revision's recorded residuals — and the
-#: run record says so; see :data:`harness.core.records.AUDIT_POSITION_AFTER_RUN_WHY`.
-AUDIT_POSITION_DECLARED = "entry_to_write_output_files"
+#: revision audited and where the state swept is the one PROCESS wrote out.
+#: Only the stages :data:`harness.core.records.AUDIT_POSITION_AFTER_RUN_CALLERS`
+#: declares may ask — the run pool refuses any other caller and every campaign
+#: run before this process starts — and the run record says where it audited;
+#: see :data:`harness.core.records.AUDIT_POSITION_AFTER_RUN_WHY`.  (Until task
+#: A67 (written-file-gap) this comment said "exactly one caller"; there were
+#: three, unrefused, and the declared table replaced the sentence.)
+AUDIT_POSITION_DECLARED = records_mod.AUDIT_POSITION_DECLARED
 AUDIT_POSITION = AUDIT_POSITION_DECLARED
 
 
@@ -105,8 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="where the exit audit is taken.  The default is "
                              "the position the plan declares, reached by the "
                              "driver's snapshot; 'after_run' is the previous "
-                             "revision's position and is the reproduction "
-                             "gate's alone")
+                             "revision's position, on the state PROCESS wrote "
+                             "out, and only the stages "
+                             "records.AUDIT_POSITION_AFTER_RUN_CALLERS "
+                             "declares may ask for it (the run pool refuses "
+                             "the rest)")
     parser.add_argument("--reproduction-overrides", default="{}",
                         help="JSON of what the reproduction gate set "
                              "differently from the campaign, stamped into the "

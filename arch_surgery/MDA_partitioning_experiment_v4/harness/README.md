@@ -777,6 +777,27 @@ and the post-edit hash, and each recorded edit says what it is, what it does and
 it. An edit nobody recorded still fails — by the hash if the hunks were left stale, and by the
 hunks if the hash was updated to match — and both of those are teeth.
 
+**Where the exit audit is taken, and who may move it.** Every optimisation run audits at the
+position the plan declares — the entry to the file-writing routine, the state the solve handed
+over — and says so in its record. One other position exists, `after_run`: the same one-sweep
+instrument taken after the files are written, with the solve-phase settings put back but the
+coupling state left as PROCESS wrote it out. Its residual is therefore *how far the written file is
+from a fixed point of the solve's own map*, not how well an arm converged. Only stages named in
+`records.AUDIT_POSITION_AFTER_RUN_CALLERS` may ask for it — today the reproduction gate, the
+switch-neutrality gate, the retry-ladder demonstration runs and gate `written_file_gap` — each
+with its reason beside its name; the run pool refuses any other caller and every campaign run,
+and the `run path` self-check has a tooth for each refusal. The caller is stamped in the run's
+`command.json` beside its record and in the caller's own verdict.
+
+**Gate `written_file_gap`** is the one gate that exists to read that position. It runs the
+reference arm and the two one-call arms (`BR`, `B1`, `B3`) at seed 0 on the pulsed
+configurations, composed exactly as the campaign composes them, and publishes the written-file
+gap per run with the component that carries it named. It passes or fails only on whether the runs
+finished as the arms the matrix describes and audited where asked; **the size of the gap is a
+finding about PROCESS's output pass, never a criterion.** Measured 2026-09-14: on both output
+paths, exactly one component moves — `tfcoil.insstrain`, ~7e-3 scaled — and every other one by
+exactly zero.
+
 **Why the dirty flag is split.** A run stamped "dirty" because a draft file was sitting beside the
 runner tells a reader nothing, and a whole set of records was stamped that way once while the
 measured code was clean. A modified *tracked* file can change a measurement; an untracked one
