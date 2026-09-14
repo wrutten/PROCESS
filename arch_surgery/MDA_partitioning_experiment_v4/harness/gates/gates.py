@@ -626,19 +626,14 @@ def reproduction_gate(campaign: Campaign) -> Gate:
 
 
 def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
-    """The six self-checks, each with the teeth it must run.
+    """The seven self-checks, each with the teeth it must run.
 
-    The retired-name family is **derived** from the switch registry rather than
-    listed, because the check generates one tooth per retired name from that
-    same registry: a hand-copied list would drift the moment a name is retired.
+    The retired-name tooth is **one** tooth over the registry's whole retired
+    list (survey item B6); the check iterates the list itself, so nothing here
+    names a switch and nothing drifts when one is retired.
     """
     from . import selfcheck as selfcheck_mod
-    from ..experiment import switches as switches_mod
 
-    retired = tuple(
-        f"the retired name {name} present in the environment"
-        for name in sorted(switches_mod.retired_names())
-    )
     declared: dict[str, tuple[str, ...]] = {
         "composition": (
             "a role both revisions can express treated as a new capability",
@@ -657,7 +652,8 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
         "capability": (
             "an arm asks for a switch the tree does not implement",
             "the driver resolves a switch differently from what was asked",
-            *retired,
+            "a retired switch name present in the environment, each of the "
+            "registry's list in turn",
             "the driver's own refusal of a retired name",
             "the working directory holds a package that shadows the tree",
         ),
@@ -685,10 +681,12 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
         ),
         "run_path": (
             "a declared field removed",
-            "an exit audit carrying one convergence ruler and not both",
             "a record that does not say what kind of run made it",
-            "per-attempt costs that do not sum to the run total",
             "per-attempt costs stamped at some attempts and not others",
+            # Added to the check by A70 (records.sweep_decomposition) and not
+            # declared here, so --gate run_path FAILed at 34c5c3e4 on an
+            # undeclared tooth -- found by A71's press; the framework working.
+            "a sweep total that does not decompose into the parts that claim it",
             "the design-vector stream keyed on position instead of number",
             "the two streams sharing a namespace",
             "a run against a tree that is not the experiment's copy",
@@ -738,9 +736,10 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "differs from its source by exactly the recorded hunks"
         ),
         "run_path": (
-            "a finished record carries every field it declares, both rulers "
-            "included; the two displacement streams key on what they say they "
-            "key on; and a run against the wrong tree is refused, not made"
+            "a finished record carries every field it declares and its "
+            "per-attempt and sweep decompositions add up; the two displacement "
+            "streams key on what they say they key on; and a run against the "
+            "wrong tree is refused, not made"
         ),
         "stage_provenance": (
             "a stage record names the records it read, and the renderer of "
