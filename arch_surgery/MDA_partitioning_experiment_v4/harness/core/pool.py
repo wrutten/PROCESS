@@ -337,13 +337,18 @@ def _apply_reproduction_overrides(
     return merged
 
 
-def input_file_for(job: Job, campaign: Campaign) -> tuple[Path, str]:
-    """The input file this job reads, and whether it is committed or lifted."""
-    arm = arms_mod.ARMS[job.arm]
-    if arm.input_file == "lifted" and job.config.pulsed:
+def assert_input_file_for(job: Job, campaign: Campaign) -> tuple[Path, str]:
+    """The input file this job reads, asserted, and whether it is committed or lifted.
+
+    *Which* file is :func:`harness.experiment.arms.input_file_for`'s one answer;
+    this adds the refusal a run needs before it starts: a lifted file must be
+    present and carry the recorded digest, or the run is not made.
+    """
+    path = arms_mod.input_file_for(job.arm, job.config, campaign=campaign)
+    if path != job.config.input_path:
         input_files_mod.assert_lifted(job.config, campaign)
-        return input_files_mod.lifted_path(job.config, campaign), "lifted"
-    return job.config.input_path, "committed"
+        return path, "lifted"
+    return path, "committed"
 
 
 # --------------------------------------------------------------------------
@@ -353,7 +358,7 @@ def input_file_for(job: Job, campaign: Campaign) -> tuple[Path, str]:
 
 def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str]:
     entry = CHILD_DIR / ENTRY_POINT[job.phase]
-    input_path, input_kind = input_file_for(job, campaign)
+    input_path, input_kind = assert_input_file_for(job, campaign)
     if job.phase == "census":
         command = [
             sys.executable,

@@ -92,10 +92,10 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
-from ..experiment import arms as arms_mod
 from ..core import framework
 from . import gate_output_path
 from . import gates as gates_mod
+from . import reproduction as reproduction_mod
 from ..core import pool as pool_mod
 from ..core import records as records_mod
 from ..core.config import Campaign, Config
@@ -168,15 +168,6 @@ def prime_override(*, on: bool) -> dict[str, Any]:
     return {name: values[0]}
 
 
-def _pin_for(config: Config, arm: str, reference: Mapping[str, Any]) -> str | None:
-    """The constant a pinned arm owns at the undisplaced point, or None."""
-    if not config.pulsed:
-        return None
-    if arms_mod.ARMS[arm].burn_time_owner != "constant":
-        return None
-    return reference["t_plant_pulse_burn_hex"]
-
-
 # --------------------------------------------------------------------------
 # G2 -- the prime's fixed-point map
 # --------------------------------------------------------------------------
@@ -212,7 +203,7 @@ def prime_map_jobs(
                             outdir=root / config.name / arrangement / label,
                             regime="unperturbed",
                             delta=None,
-                            pin_hex=_pin_for(config, arm, reference),
+                            pin_hex=reproduction_mod.entry_pin(config, arm, reference),
                             entry_state=Path(reference["snapshot"]),
                             run_kind="gate",
                             override_env=prime_override(on=on),
