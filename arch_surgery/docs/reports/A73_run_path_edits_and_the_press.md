@@ -414,3 +414,41 @@ agree" (G1) or "different jobs by construction — excluded" (G8) made explicitl
 never-bound-name scan as a self-check tooth (the `ast` walk in §4.1 found the G4 defect in under a
 second and nothing else), since no linter is installed in the environment.
 
+
+---
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `bb34cee8`, before the merge. Checks chosen to differ from the
+agent's.*
+
+1. **The population, surveyed by me from the pool's records:** 126 records under `runs/gates/_runs/`,
+   89 at `0677a9b3` and 37 at `4ca8cff5`, 124 gate-kind and 2 smoke-kind (the run-kind separation
+   gate's own positive control, as in every earlier population). Matches the report.
+2. **The two-commit population is acceptable on the evidence:** `git show --stat 0677a9b3` is one file,
+   `harness/gates/gate_audit.py`, one line; nothing under `harness/child/`, `ystate.py` or `PROCESS/`
+   changed between the two press commits, so the driver and the child that made every record are the
+   same. Every verdict names both commits. Ruled by the orchestrator under D27; reversal is a 20-minute
+   re-press, not taken.
+3. **G8's failure and its fix.** I read G8's failing verdict before ruling: 24 differing values over 12
+   pairs, field names `job_identity.predicate_mode` and `job_digest` only, 0 output-file lines. The two
+   are stamps of the setting the pair varies by construction, the same class as the six already in the
+   table. The fix is two exclusion rows and their classification in the review; G8 re-pressed on kept
+   records at 0 runs: 12/12 pairs identical, 0 of 8 068 values. The failure and its numbers stay in
+   the report as a measured result. The review's import-time refusal of an unclassified exclusion
+   caught the first commit — a guard working.
+4. **G1 read from its verdict, not the summary:** PASS, 2 825 values compared, 0 differing, a declared
+   straddle `fd480aff → 0677a9b3` with the instrument-change exclusion kind. **GR:** PASS, 256
+   compared. **Gate table:** 30 rows, all PASS.
+5. **The `ystate.py` move, proven through the copy from a third directory on a trial merge onto trunk
+   (`605b5af7`):** with `PYTHONPATH` on the copy, `module_solve._ystate_module()` loads
+   `harness/child/ystate.py`; `copy_gates.py all` reports ALL GATES PASS after the provenance
+   regeneration; the import walk loads 50 modules with 0 failures; the merge is clean (28 files).
+6. **Rule (xiii) debt, discharged the hard way.** Two of the ten gates A72 changed without pressing
+   failed at this press (G4 by a crash on a renamed name, G8 by an unexcluded stamp). Both are exactly
+   what the rule predicts and what a from-scratch press exists to find. The agent's proposed self-check
+   tooth for a never-bound name goes to the improvement list.
+7. **`--artifacts all` not pressed:** its four stages ran as gates and nothing reads its stage records;
+   accepted.
+
+**Approved for merge.** D27's programme is complete at this tip.
