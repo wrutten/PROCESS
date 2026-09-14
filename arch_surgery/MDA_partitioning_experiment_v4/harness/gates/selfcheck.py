@@ -873,18 +873,29 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
                 f"the tree under test, each a declared record field"
             )
 
-    for retired in sorted(sw.retired_names()):
-        caught = False
+    # One tooth over the registry's whole retired list, each name set alone:
+    # the list it iterates is the registry's own, and the *criterion* above is
+    # what compares that list with the driver's ``RETIRED_SWITCHES``.  A tooth
+    # per name was the same refusal observed eleven times (survey item B6).
+    retired_names = sorted(sw.retired_names())
+    not_refused: list[str] = []
+    for retired in retired_names:
         try:
             sw.assert_no_retired({retired: "anything", **reference_env})
         except sw.SwitchError:
-            caught = True
-        check.tooth(
-            f"the retired name {retired} present in the environment",
-            caught,
-            "a retired switch name must be refused, not cleared and forgotten: "
-            "an ignored one runs a different arrangement under the right name",
-        )
+            continue
+        not_refused.append(retired)
+    check.tooth(
+        "a retired switch name present in the environment, each of the "
+        "registry's list in turn",
+        bool(retired_names) and not not_refused,
+        f"a retired switch name must be refused, not cleared and forgotten: "
+        f"an ignored one runs a different arrangement under the right name "
+        f"({len(retired_names) - len(not_refused)} of {len(retired_names)} "
+        f"refused"
+        + (f"; NOT refused: {', '.join(not_refused)}" if not_refused else "")
+        + ")",
+    )
 
     refused_by_driver = sw.probe(
         campaign.tree,
@@ -1755,21 +1766,6 @@ def check_run_path(campaign: Campaign) -> Check:
         f"not summarised over ({message})",
     )
 
-    # Half of the audit's ruler pair, which is what a table would read as an
-    # accuracy gain rather than a change of ruler.
-    half = json.loads(json.dumps(complete))
-    half["exit_audit"].pop(records_mod.AUDIT_RULERS[1])
-    caught, message = _must_refuse_here(
-        lambda: records_mod.assert_complete(half, where="a tooth")
-    )
-    check.tooth(
-        "an exit audit carrying one convergence ruler and not both",
-        caught,
-        f"the mixed ruler reads lower wherever its denominator binds, so a "
-        f"residual table built from records with one column here and two "
-        f"there reports a change of ruler as a change of accuracy ({message})",
-    )
-
     unlabelled = json.loads(json.dumps(complete))
     unlabelled["campaign_run_kind"] = "measurement"
     caught, message = _must_refuse_here(
@@ -1782,23 +1778,12 @@ def check_run_path(campaign: Campaign) -> Check:
         f"one of them is not a measurement ({message})",
     )
 
-    unsummed = json.loads(json.dumps(complete))
-    unsummed["node_calls_solve_phase"] = 1000
-    unsummed["attempts"] = [
-        {"attempt": 1, "node_calls_solve_phase": 400},
-        {"attempt": 2, "node_calls_solve_phase": 550},
-    ]
-    caught, message = _must_refuse_here(
-        lambda: records_mod.assert_attempt_summation(unsummed, where="a tooth")
-    )
-    check.tooth(
-        "per-attempt costs that do not sum to the run total",
-        caught,
-        f"400 + 550 against a total of 1000 must be refused: the cost ratio "
-        f"published with and without retried seeds would otherwise be computed "
-        f"over quantities that do not decompose the published one ({message})",
-    )
-
+    # Half of the audit's ruler pair, and per-attempt costs that do not sum to
+    # the run total, are gate G7's teeth (``record_completeness``), tripped on
+    # a real record made by the gate; this check no longer repeats them on a
+    # synthetic one (survey item B6).  What it keeps are the two refusals G7
+    # has no tooth for: a partial per-attempt decomposition, and a sweep total
+    # that does not decompose.
     partial = json.loads(json.dumps(complete))
     partial["node_calls_solve_phase"] = 1000
     partial["attempts"] = [
