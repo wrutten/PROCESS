@@ -1,11 +1,9 @@
 # A72 (resume-identity-and-shared-pool) — the job identity, the retired allowance, the shared run pool
 
-> **Document status** — **OPEN.** Task **A72 (resume-identity-and-shared-pool)**, branch
-> `A72-resume-identity-and-shared-pool` off `architecture_surgery` at base `77d3c2fd` (after A70
-> and A71). Ruling **D27**; issue **I-23**; survey items **B4** and **B1**. The one schema change of
-> the programme. Every number below was produced by a committed script or the committed button
-> (`experiment_runner.py`, `harness_survey.py`, `run_stamp_survey.py`) at the commit named beside
-> it. Folder position records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A72 (resume-identity-and-shared-pool)** merged into `architecture_surgery`
+> at `73be52e5` (base `77d3c2fd`). Records relocated to `arch_surgery/idf_probe/runs/A72_runs/` (19 shared-pool records at the new schema; the
+> old-layout records there are pre-schema and resume nothing). The orchestrator's critical assessment is the last section. Folder position
+> records lifecycle, not validity (trap T3).
 
 *Vocabulary is the harness README's §3. "Job", "identity", "digest", "shared pool" as defined in
 §2 below; "press", "tooth", `--resume` as in A68's preamble.*

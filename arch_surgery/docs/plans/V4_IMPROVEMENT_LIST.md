@@ -719,3 +719,7 @@ pass leaves inconsistent in the written file). The three PROCESS findings were f
 ### 13. Gate G1's `--resume` press rewrites the `after` manifest's commit *(A67 (written-file-gap), 2026-09-14)*
 
 Under `--gate switch_neutrality --resume` with every record kept, the `after` capture's manifest is rewritten with the pressing commit while the records it indexes stay at theirs (`b784158c` in A67's press). The verdict prints both lines, so nothing is hidden, but a manifest should carry the commit of the records it indexes, or state both fields by name. Cosmetic to the verdict; a trap for a reader of the manifest alone. Small harness task; no runs.
+
+### 14. δ at seed 0 is composed two ways *(A72 (resume-identity-and-shared-pool), 2026-09-14)*
+
+G9, GR, G1 and `written_file_gap` hand the pool `campaign.delta` at seed 0; G4 and G5 hand `None`. Seed 0 is the unperturbed regime either way, so the runs are bit-identical, but they are distinct *jobs* under rule (xiv) and are not shared. Normalising the convention reaches G1's kept before capture (its identity would change), so it belongs to a press that re-takes that capture, not to A73. Also from A72: **dry-run a resume with `--jobs` before pressing it** — the habit that would have saved 38 runs on A72.
