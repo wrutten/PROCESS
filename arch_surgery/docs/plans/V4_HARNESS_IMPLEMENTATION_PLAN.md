@@ -26,34 +26,24 @@
 ## 0. Reading guide — the vocabulary, spelled out once
 
 This project's shorthand is dense and this document is meant to be readable without the queue
-open beside it (protocol §4). Everything used below, defined here.
+open beside it (protocol §4). **The vocabulary lives in one place:
+[`harness/README.md` §3](../../MDA_partitioning_experiment_v4/harness/README.md#3-the-vocabulary)**
+— model, driver, node, sweep, coupling state, τ, configuration, arm, rung, the deferrals, the
+burn-time owner, seed, the two regimes, teeth, tally, analysis and the rest. This section used to
+repeat 23 of those rows and now keeps only the ones whose wording is a ruling's, plus the three
+pieces of queue shorthand the README has no reason to carry. *(Consolidated by the simplification
+survey's item A12, 2026-09-14; the rows removed here read identically in the README.)*
 
-*Caption: one row per term; the meaning is the one this repository uses, not a general one.
-"Driver" always means the arrangement of solvers and loops; "model" always means a frozen
-physics or engineering calculation.*
+*Caption: one row per term whose definition here carries a user ruling's words, then the queue
+shorthand. "Driver" always means the arrangement of solvers and loops; "model" always means a
+frozen physics or engineering calculation.*
 
 | term | meaning |
 |---|---|
-| **PROCESS** | the fusion power-plant systems code this repository forks. An optimiser (VMCON) wrapped around a loop that runs ~26 physics and engineering **models** until their outputs stop changing |
-| **driver** | the arrangement of solvers and loops: `process/core/caller.py` and `process/core/solver/`. The experiment's *independent variable* |
 | **model** | a physics or engineering calculation under `process/models/`. **Frozen** at base commit `c0ae5b28` — the whole point (decision **D5**) |
-| **MDA** | multidisciplinary analysis: the loop that drives the models to a consistent state at a fixed design vector |
-| **node** | one model call site inside `call_models` (`physics`, `build`, `costs`, …). One **node call** = one execution of one node. The cost unit |
-| **sweep** | one pass over a node sequence — the whole loop (flat) or one block's nodes (partitioned) |
-| **coupling state `y`** | the measured set of state fields written by in-loop models: 840 / 846 / 827 components on the three configurations. What the MDA converges |
-| **τ** (tau) | the convergence tolerance on `y`, per component, scaled: `max_i \|Δy_i\| / s_i < τ`. τ = 1e-6 |
-| **configuration** (V3's "deck") | one input file defining one optimisation problem: `large_tokamak_nof` (nof), `low_aspect_ratio_DEMO` (lad), `st_regression` (st). Display term is "configuration"; identifiers in code and records still say `deck` |
 | **arm** | one assignment of the driver's environment switches. Phase A arms `AR A0 A0p A1`; Phase B arms `BR B0 B1 B3` *(**D22**, 2026-09-10: `B2` removed from the arm set)* |
-| **rung** | an ordered pair of adjacent arms differing by one named thing |
-| **prime** | executing the first-wall geometry method at the head of every sweep so `build` reads this pass's first-wall thickness instead of the previous pass's. A driver choice about *when a method runs* (decision **D19**) |
-| **hoist** (V3) → **`per_call`** (V4) | running a feed-forward node once per `call_models` evaluation instead of once per sweep |
-| **post-solve** (V3) → **`per_run`** (V4) | running a feed-forward node once in total, at the accepted optimum |
-| **lift** | taking the burn time out of the loop. Its **owner** becomes a *constant* (Phase A: the **pin**) or *the optimiser* (Phase B: iteration variable 178 + equality constraint 93) |
-| **teeth** | a gate's demonstrated ability to fail: a deliberately broken input that must trip it before the gate's zeros are believed (protocol §12) |
-| **δ** (delta) | the entry displacement of a Phase A evaluation, or the start displacement of a Phase B optimisation |
-| **`ifail`** | VMCON's exit code; `1` = converged |
+| **prime** | executing the first-wall geometry method at the head of every sweep so `build` reads this pass's first-wall thickness instead of the previous pass's. A driver choice about *when a method runs* (decision **D19**); the README calls it **arrangement · method** |
 | **`norm_objf`** | the normalised objective at exit. The correctness quantity (decision **D6**: never iteration variables) |
-| **switch neutrality** | with every `PROCESS_ARCH_*` variable unset the driver's behaviour is byte-identical to upstream. A gate, not an aspiration |
 | **D`<n>` / I-`<n>` / A`<n>`** | a recorded user decision / a filed issue / a queue task, in [`MASTER_TODO.md`](MASTER_TODO.md) |
 | **protocol §`<n>`** | a numbered rule of the orchestration protocol in the same file. §12 = gates need teeth and counts need denominators; §15 = every published number comes from a committed script; §16 = every table carries a caption |
 | **trap T`<n>`** | a recorded way this project has already been misled, in [`../TRAPS.md`](../TRAPS.md) |
@@ -1139,6 +1129,11 @@ of what looks like bulk is the instrument.
 
 ## Appendix A — Change log
 
+> The twelve binding rules the amendments below added one at a time — (i)–(v) in amendment 13,
+> (vi) in 16, (vii)–(ix) in 19, (x) in 20, (xi) in 21, (xii) in 22 — are collected **in one table
+> with what enforces each** in [Appendix A.1](#appendix-a1--the-twelve-rules-and-what-enforces-each)
+> at the end of this appendix. The amendments' own text is the record and is not rewritten.
+
 - **2026-09-10** — written by task **A45 (v4-harness-plan)** at branch point `16a6e87e`.
   Inventory taken at that commit; the V4 experiment plan and improvement-list items 1c and 1d
   were read **uncommitted** from the main checkout on the same date and may have moved since.
@@ -1471,6 +1466,34 @@ of what looks like bulk is the instrument.
 
 - **Amendment 22 (2026-09-14, at A65 (harness-folders)'s merge, `28df7409`).** The harness's modules are grouped by who imports them and when they run: `core/` (framework, config, failure, provenance, records, pool), `experiment/` (arms, switches, input_files, artifacts, data_provenance), `child/` (child, evaluate, optimise, predicate, perturb, data_structure, audit_map, census, postsolve), `gates/` (gates, gate_audit, gate_composition, gate_entry, gate_prime, gate_records, gate_tally, reproduction, reference, selfcheck, exit_audit_diagnosis), `measurement/` (tally, tally_evaluation, tally_optimisation, stats, tables, analysis, plan_tables); `__init__.py`, `chain.py`, `data/`, `reference/` and **`ystate.py`** stay at the top — the last because the frozen driver copy reaches it by a literal path that `copy_gates.py` asserts, so moving it is a driver-copy change with G0′ and GR behind it. **Rule (xii): `child/` plus `ystate.py` is amendment 13 rule (vi)'s set** — the modules a measurement subprocess imports, never edited while a run executes; the folder boundary is the rule. §4.1's target tree of 2026-09-10 stands as the record of what was approved then; file paths in earlier amendments and archived reports read with the move applied (A65's report §10). Verified as a pure move: 0 runs re-made by it, G1 byte-neutral (2 831 values, 51 319 lines, 0 differing).
 
+### Appendix A.1 — the twelve rules, and what enforces each
+
+*Added 2026-09-14 by the simplification survey's item A12 (A71 (simplify-refactors-and-teeth)),
+from A68's §6, re-read against the tree after A70 and A71. Caption: one row per rule (i)–(xii) of
+amendments 13, 16, 19, 20, 21 and 22, plus the two protocol rules and the one plan requirement the
+framework enforces. "Text" is the rule in short — the amendment named is the binding wording.
+"Enforced by" names the code that makes a violation a refusal or a failed tooth; "prose only" means
+the code does nothing and the rule lives in review. Where a row says "open", the queue holds the
+proposal (C2, C3 of the survey; the user's).*
+
+| rule | amendment | text (short) | enforced by | status |
+|---|---|---|---|---|
+| (i) | 13 | `--resume` reaches every run; a verdict records the commits of the runs it read and fails without `--resume` when they are not its own | `framework.Gate.run` (`survey_heads`, the staleness check); `tally.assert_one_commit`; `analysis.assert_one_commit` | mechanical |
+| (ii) | 13 | G1's `before` capture is made in a tree at the earlier commit and never re-made; a same-commit G1 labels itself determinism-and-coverage | `gate_neutrality._capture_before_if_there_is_none`, `_straddle`; tooth `missing_before_record` | mechanical |
+| (iii) | 13 | every child that imports the copy runs with `-P` and `PYTHONSAFEPATH=1`, so the working directory cannot shadow `PYTHONPATH` | `switches.probe` runs the capability probe with `-P` (A71 kept one of the two, item A10; the cross-check child that carried both is retired, item A4); the `capability` tooth *"the working directory holds a package that shadows the tree"* runs the probe from a scratch tree holding a decoy `process/`. The pool's measurement children (`pool._command`) run as scripts and carry neither | **prose overstates the code** — survey C2, the user's: correct the text to the probe, or extend the code to the pool (a run-path change) |
+| (iv) | 13 | the `--gate all` order is derived from declared `reads_from` dependencies, cheapest-first among independent gates | `registry.ordered_gate_names`, `registry.assert_declared_dependencies`; self-check tooth *"a gate declaring a stage the registry does not hold"* | mechanical |
+| (v) | 13 | do not commit while measurement runs execute | nothing: a two-commit population *fails* only without `--resume` and is *stated* with it; caught afterwards by `run_stamp_survey.py` (T13) | **prose only** — survey C3, the user's |
+| (vi) | 16 | no edit to any module a measurement child imports while runs execute | nothing | **prose only** — survey C3 |
+| (vii) | 19 | a `--resume` that consults anything but the record is not a resume | `pool.run` is the only decision (`records.is_complete_for`); since A71 (item B2) no gate body passes `resume=False` — every `run_all` call threads the press's flag | mechanical for keeping; the widened job identity is A72's (I-23) |
+| (viii) | 19 | a record-field rename is translated through `reference.FIELD_NAME_MAP`, never excluded | `gate_neutrality.translate_leaves`; teeth `a_renamed_field_moved_by_one`, `a_one_sided_leaf_the_name_map_does_not_cover` | mechanical |
+| (ix) | 19 | §4 is rendered from the `gate_table` stage record; a gate re-run needs `--measure gate_table` first | `plan_tables.assert_records_read_are_current`, `--plan-tables check`; gate `stage_provenance` (5 teeth) | mechanical since A63 |
+| (x) | 20 | a self-check builds its own fixture | observed, not asserted: every self-check passes on a tree with no verdict record (a new worktree's first `--selfcheck` is the test); `selfcheck._campaign_elsewhere` builds the wrong-tree fixture from the campaign under check (A71, item A3) | half |
+| (xi) | 21 | a gate's arm, seed or configuration set is a tally population; a change re-makes the dependent stages in the same press | `analysis.assert_the_tally_read_these_runs` *refuses* a stale stage; the re-make is `--gate recomputation --resume` through its declared dependency (0 PROCESS runs) | half: refusal mechanical, re-make manual |
+| (xii) | 22 | `child/` plus `ystate.py` is rule (vi)'s set; the folder boundary is the rule | nothing beyond the folder | **prose only** — as (vi) |
+| protocol §12 | — | every gate has a tooth | `framework.Gate.__post_init__` (`TypeError` without one) | mechanical |
+| protocol §16 | — | every table carries a caption with units, row, column, population, construction | `tables.Caption` / `tables.Table` constructors; `tally_contracts` teeth 1–6 | mechanical |
+| plan §6 | — | nothing in `harness/` imports or spawns into `idf_probe/` or `fixedpoint/` | gate `self_containment` (A71, item B8): 0 imports, 0 unclassified executable lines, 0 stale declarations; one tooth (a scratch module importing `idf_probe` must be counted) | mechanical since A71 — was a measurement that could not fail |
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task
@@ -1492,26 +1515,17 @@ in docstrings, change logs and reports — never in identifiers.
 
 ### 11.2 Terminology: assessed, homogenised, simplified
 
-*Caption: one row per term the harness, the plan and the README use; the V3 words it replaces; the
-reason. `A47 (harness-skeleton)` owns this table in `harness/README.md` and the switch registry; the
-experiment plan's §1.3 follows it.*
+**The table is [`harness/README.md` §3](../../MDA_partitioning_experiment_v4/harness/README.md#3-the-vocabulary)**,
+which `A47 (harness-skeleton)` owns together with the switch registry; the experiment plan's §1.3
+follows it. This section kept a 14-row copy of it and now keeps only the two rows whose wording is
+a ruling's *(consolidated by the simplification survey's item A12, 2026-09-14)*.
+
+*Caption: one row per term ruled on here; the V3 words it replaces; the reason.*
 
 | V4 term | replaces | why |
 |---|---|---|
-| **configuration** (`Config`) | deck, scenario, config | one word for one optimisation problem; "deck" is PROCESS jargon a reader does not know |
 | **input file** — *committed* or *lifted* *(ruled 2026-09-10, orchestrator, at A47 (harness-skeleton)'s assessment)* | "deck" kept for the file; "frozen deck" / "lifted deck"; `deck_for()`; `scenario_dir`; the plan's `decks.py` | a configuration has two files, so the file needs a word, and it is the plain one: `input_file_for()`, `input_dir`, `harness/experiment/input_files.py`. **"frozen" is reserved** for the physics freeze and the predicate mode (`frozen \| mixed`) and names no file, field or matrix cell. The per-run deferral artifacts follow: `defer_per_run_{name}.json` for the committed input file (the unmarked default), `defer_per_run_lifted_{name}.json` for the lifted one |
-| **arm** | arm, variant, arrangement | kept — one column of the switch matrix |
-| **flat** / **partitioned** (switch values) | `flat_state` / `per_module` | say what the MDA is, not how V3 spelt it |
-| **block loop**; **one τ** | inner loop / outer loop; `INNER_TAU`; trust / verify | there is one kind of loop and one tolerance (D23); "trust/verify" named an arm V4 does not have |
-| **deferral `per_call` / `per_run`** | hoist / post-solve | item 1d; the name says the frequency |
-| **arrangement · node** / **arrangement · method** | `SEQUENCE=build_after_physics` / `PRIME=fw_geometry` | both are *when* something runs; the prime is a method-level reorder (matrix rows) |
-| **burn-time owner**: loop / constant / optimiser | lift, pin, `ixc 178`, constraint 93 | the matrix row; "lift" and "pin" survive only as the mechanism names in docstrings |
-| **reference arm** `AR` / `BR` | `R`, "PROCESS as shipped" | the phase in the name |
 | **seed** (both phases) | seed (A) / start (B) | one word; Phase B's `start000` is seed 0. **Run directories are `seed000…`, not `start000…`** *(ruled 2026-09-10 at A47's assessment; approved, D24)* |
-| **coupling state**, **coupling-state spec**, **write sets** | ystate, spec, writeset, harvest | plain nouns; "harvest" is the frozen ruler's origin and appears only in provenance |
-| **output-time loop** | `MDA_Output`, idempotence loop | says when it runs |
-| **stencil regime** / **δ regime** | E3/E3b, warm δ-stream | the two Phase A entry regimes by what displaces the state |
-| **teeth**, **tally**, **analysis** | — | kept, each defined in the README in one sentence |
 
 Switch names follow the terms: `PROCESS_ARCH_MDA = flat | partitioned`, `PROCESS_ARCH_TAU`,
 `PROCESS_ARCH_ARRANGEMENT_NODE`, `PROCESS_ARCH_ARRANGEMENT_METHOD`, `PROCESS_ARCH_DEFER_PER_CALL`,
