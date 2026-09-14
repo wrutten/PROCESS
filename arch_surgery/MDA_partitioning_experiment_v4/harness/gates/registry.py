@@ -368,6 +368,8 @@ def registry(campaign: Campaign) -> dict[str, Any]:
 
     * the experiment plan's §3.9 gates — ``GR``, ``G0``/``G0'``, ``G1``–``G9``
       — each carrying the plan's own label in ``plan_name``;
+    * the copy's two other gates, ``copy_identity`` and ``edit_behaviour``,
+      loaded from ``PROCESS/copy_gates.py`` by path as G0' is;
     * the harness's own checks, promoted: the six self-checks and the four
       artifact stages, with their criteria unchanged;
     * the measurement stages, which have no verdict and are a different type so
@@ -378,6 +380,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     """
     entries: dict[str, Any] = {}
     entries.update(_plan_gates(campaign))
+    entries.update(gates_mod.copy_gates(campaign))
     entries.update(gates_mod._selfcheck_gates(campaign))
     entries.update(gates_mod._artifact_gates(campaign))
     entries.update(_tally_gates(campaign))
@@ -589,6 +592,10 @@ def gates_only(campaign: Campaign) -> dict[str, Gate]:
 #: gate added later cannot be silently left out of the button.
 GATE_ORDER: tuple[str, ...] = (
     "g0prime",
+    # The copy's two other gates: the same criterion library as G0', loaded
+    # by path, no PROCESS run.
+    "copy_identity",
+    "edit_behaviour",
     "composition",
     "rungs",
     "provenance",

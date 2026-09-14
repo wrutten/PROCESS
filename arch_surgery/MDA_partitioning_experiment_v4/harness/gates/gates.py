@@ -186,6 +186,194 @@ def g0prime_gate(campaign: Campaign) -> Gate:
 
 
 # --------------------------------------------------------------------------
+# the copy's two other gates -- copy identity, and the one edit's behaviour
+# --------------------------------------------------------------------------
+#
+# ``PROCESS/copy_gates.py`` implements three criteria about the copy.  G0' has
+# been registered here since A56; the other two were run by that script's own
+# command line only, which wrote verdicts under ``runs/gates/`` with no commit
+# stamp and no place in the registry, the ordering or the gate table (A63 §5
+# d3; survey item A9).  They are registered here the way G0' is -- the
+# criterion loaded by path, never restated -- so that one gate runner covers
+# the copy and ``--gate all`` reaches them.  ``copy_gates.py all`` remains a
+# thin second entry to the same functions and writes no record of its own.
+
+
+def copy_identity_body(campaign: Campaign) -> dict[str, Any]:
+    gates = _copy_gates(campaign)
+    prov = gates.load_provenance()
+    res = gates.check_copy_identity(prov, Path(campaign.tree))
+    detail = res.detail
+    return {
+        "passed": res.passed,
+        "population": (
+            f"{res.compared} files under PROCESS/process/ compared byte for "
+            f"byte against the source commit {prov['source']['commit']} (git "
+            f"cat-file, never a working tree), plus the file set; "
+            f"{len(detail['permitted_edit_files'])} permitted-edit file(s) "
+            f"compared on their recorded post-edit digest and hunks"
+        ),
+        "n_compared": res.compared,
+        "n_identical": res.identical,
+        "n_mismatched": res.compared - res.identical,
+        "source_commit": detail["source_commit_full"],
+        "files_at_source_commit": detail["files_at_source_commit"],
+        "files_in_copy": detail["files_in_copy"],
+        "files_missing_from_copy": detail["files_missing_from_copy"],
+        "files_added_to_copy": detail["files_added_to_copy"],
+        "permitted_edit_files": detail["permitted_edit_files"],
+        "unexplained_differences": detail["unexplained_differences"],
+        "failures": res.failures,
+        "implementation": str(Path(campaign.tree) / "copy_gates.py"),
+        "note": (
+            "n_mismatched counts the files that differ from the source commit; "
+            "the gate passes when every one of them is a recorded permitted "
+            "edit with the recorded digest and hunks, and fails on any other"
+        ),
+    }
+
+
+def _copy_identity_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
+    """The four perturbations ``copy_gates.run_teeth`` builds for copy-identity.
+
+    Run once and shared, as G0''s are: each stages a throwaway copy of the
+    whole package.
+    """
+    cache: dict[str, dict] = {}
+
+    def one(kind: str):
+        def check() -> tuple[bool, str]:
+            if not cache:
+                gates = _copy_gates(campaign)
+                prov = gates.load_provenance()
+                for record in gates.run_teeth(prov, Path(campaign.tree), "copy-identity"):
+                    cache[record["tooth"]] = record
+            record = cache.get(kind)
+            if record is None:
+                return False, f"copy_gates.run_teeth produced no {kind!r} tooth"
+            return (
+                record["tooth_result"] == "TRIPPED",
+                f"{record['perturbation']} -> gate {record['gate_verdict']}"
+                f" ({record['first_failure']})",
+            )
+
+        return check
+
+    return (
+        Tooth(
+            "one_byte_changed",
+            "one byte of one copied driver file changed in a throwaway copy of the tree",
+            "FAIL",
+            one("one_byte_changed"),
+        ),
+        Tooth(
+            "file_removed",
+            "one copied file removed from a throwaway copy of the tree",
+            "FAIL",
+            one("file_removed"),
+        ),
+        Tooth(
+            "file_added",
+            "one file added to a throwaway copy of the tree",
+            "FAIL",
+            one("file_added"),
+        ),
+        Tooth(
+            "permitted_file_changed_elsewhere",
+            "a file that is allowed to differ, changed somewhere other than its recorded hunks",
+            "FAIL",
+            one("permitted_file_changed_elsewhere"),
+        ),
+    )
+
+
+def copy_identity_gate(campaign: Campaign) -> Gate:
+    return Gate(
+        name="copy_identity",
+        binds="every V4 commit that touches the experiment's copy of PROCESS",
+        what_it_proves=(
+            "every file under the copy's process/ is byte-identical to the "
+            "source commit named in PROVENANCE.json, except the recorded "
+            "permitted edits -- whose post-edit digest and exact hunks match "
+            "-- and the file set is the source commit's"
+        ),
+        body=lambda *, resume=False: copy_identity_body(campaign),
+        teeth=_copy_identity_teeth(campaign),
+    )
+
+
+def edit_behaviour_body(campaign: Campaign) -> dict[str, Any]:
+    gates = _copy_gates(campaign)
+    prov = gates.load_provenance()
+    passed, result = gates.check_edit_behaviour(prov, root=Path(campaign.tree))
+    return {
+        "passed": passed,
+        "population": (
+            "three arms of one probe, no PROCESS run: the copy with the "
+            "per-run write-set artifact absent, the source commit "
+            f"{prov['source']['commit']} (git archive) with it absent, and the "
+            "copy with it present"
+        ),
+        "n_compared": 3,
+        "n_mismatched": len(result.get("failures") or []),
+        "copy_artifact_absent": result.get("copy_artifact_absent"),
+        "source_commit_artifact_absent": result.get("source_commit_artifact_absent"),
+        "copy_artifact_present": result.get("tooth_copy_artifact_present"),
+        "artifact_used": result.get("artifact_used"),
+        "failures": result.get("failures") or [],
+        "implementation": str(Path(campaign.tree) / "copy_gates.py"),
+    }
+
+
+def _edit_behaviour_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
+    def doctored() -> tuple[bool, str]:
+        gates = _copy_gates(campaign)
+        prov = gates.load_provenance()
+        record = gates.run_edit_behaviour_tooth(prov, Path(campaign.tree))
+        return (
+            record["tooth_result"] == "TRIPPED",
+            f"{record['perturbation']} -> gate {record['gate_verdict']} "
+            f"(the doctored copy raised {record.get('copy_artifact_absent_raised')}; "
+            f"{record['first_failure']})",
+        )
+
+    return (
+        Tooth(
+            "permitted_edit_doctored",
+            "the permitted edit's existence check made unreachable in a "
+            "throwaway copy of the tree, so the copy behaves as the source "
+            "commit did",
+            "FAIL",
+            doctored,
+        ),
+    )
+
+
+def edit_behaviour_gate(campaign: Campaign) -> Gate:
+    return Gate(
+        name="edit_behaviour",
+        binds="the one permitted edit in the copy that is not a rename or a comment",
+        what_it_proves=(
+            "the existence check A48 added on the per-run deferral path "
+            "refuses by name where the source commit raised a bare "
+            "FileNotFoundError, and refuses nothing when the artifact is "
+            "present -- a guard on absence, not a new refusal on the path "
+            "every run takes"
+        ),
+        body=lambda *, resume=False: edit_behaviour_body(campaign),
+        teeth=_edit_behaviour_teeth(campaign),
+    )
+
+
+def copy_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The copy's two gates beside G0', for the registry."""
+    return {
+        "copy_identity": copy_identity_gate(campaign),
+        "edit_behaviour": edit_behaviour_gate(campaign),
+    }
+
+
+# --------------------------------------------------------------------------
 # the entry reference every warm gate is anchored on
 # --------------------------------------------------------------------------
 #
