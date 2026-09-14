@@ -11,8 +11,8 @@ publishes are *paired differences* — this arm against that arm at the same see
 difference would be partly the entry and nobody could say how much.  The gate
 therefore compares the entry states the runs actually wrote, **byte for byte**,
 across the arms of each configuration: the displaced coupling state a seed
-produces has to be the same bytes for the flat control, the flat arm that pins
-the burn time, and the partitioned arm.
+produces has to be the same bytes for the reference arm, the flat control, the
+flat arm that pins the burn time, and the partitioned arm.
 
 That is not automatic.  The pinned arms do not take their burn time from the
 displacement stream directly; they are handed a **constant**, computed as the
@@ -49,7 +49,9 @@ runs it too, under its own root, so that the two block arms are compared on one
 page — and says so here rather than leaving a reader to discover that the same
 construction runs twice.
 
-Written by task **A52 (harness-gates)**.
+Written by task **A52 (harness-gates)**.  The reference arm was added to the
+pairing by task **A64 (entry-pairing-reference)** under decision **D26**; see
+:data:`PAIRED_ARMS`.
 """
 
 from __future__ import annotations
@@ -66,10 +68,20 @@ from . import records as records_mod
 from .config import Campaign, Config
 from .framework import Gate, GateError, Tooth
 
-#: The evaluation-phase arms whose entries must pair, in the plan's order.  The
-#: reference arm is deliberately absent: it is entered from the input file's own
-#: point and never from a snapshot, which is what "PROCESS as shipped" means.
-PAIRED_ARMS: tuple[str, ...] = ("A0", "A0p", "A1")
+#: The evaluation-phase arms whose entries must pair, in the plan's order — the
+#: reference arm included (**decision D26**, ruled by the user 2026-09-14).
+#: "PROCESS as shipped" is a statement about the **switches**, not about where
+#: the run starts: ``AR`` has every architecture switch unset, and it is entered
+#: from the **same displaced snapshot at the same seed** as every other Phase A
+#: arm — which is what ``chain.stage_evaluation_displaced`` has always done, and
+#: what lets the plan state the ``AR → A0`` rung (§3.3) as a difference in the
+#: stopping rule and in nothing else.  The cost of starting from the input
+#: file's own point is a separate quantity and is already accounted for: it is
+#: §3.4's once-per-run **cold-start term**, reported beside and never pooled,
+#: measured by ``gates.entry_references``.  An earlier revision of this comment
+#: said the opposite; the two passages disagreed, and D26 ruled for the chain's
+#: reading.
+PAIRED_ARMS: tuple[str, ...] = ("AR", "A0", "A0p", "A1")
 
 #: The arms whose warm landing is checked.  Both block arms of the plan's §7.5
 #: table: the partitioned arm, and the flat arm that pins the burn time.
@@ -94,6 +106,12 @@ def _pin(
     At the undisplaced point it is the reference's own converged burn time; at a
     displaced one it rides the **same** stream the coupling state rides, so the
     constant and the state the run is entered with are displaced together.
+
+    An arm whose burn-time owner is the **loop** owns no constant and gets
+    ``None`` — the reference arm ``AR`` and the flat control ``A0`` both, so
+    adding ``AR`` to :data:`PAIRED_ARMS` needs no pin treatment of its own: it
+    is handed nothing to pin, exactly as ``A0`` is, and the two routes this
+    function exists to reconcile do not arise for it.
     """
     from . import reproduction as reproduction_mod
 
