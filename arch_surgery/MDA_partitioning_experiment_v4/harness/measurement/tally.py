@@ -35,7 +35,6 @@ Written by task **A53 (harness-tally)**.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -614,11 +613,3 @@ def reference_cells(
             else None
         ),
     }
-
-
-def load_json(path: Path) -> dict[str, Any]:
-    """A JSON file, or an empty document.  Used for the audit vectors."""
-    try:
-        return json.loads(Path(path).read_text())
-    except Exception:  # noqa: BLE001 - an absent side file is not a failure
-        return {}

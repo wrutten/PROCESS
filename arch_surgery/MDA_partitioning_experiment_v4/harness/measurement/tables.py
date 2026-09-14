@@ -409,14 +409,3 @@ class Table:
             "rows": [dict(row) for row in self.rows],
             "markdown": self.markdown(),
         }
-
-
-def print_table(table: Table, *, indent: str = "  ") -> None:
-    """A table on the terminal: caption, rows, denominator, how to read."""
-    print(f"\n{indent}{table.name}")
-    print(f"{indent}  caption: {table.caption.text()}")
-    for line in table.text().splitlines():
-        print(f"{indent}  {line}")
-    print(f"{indent}  n = {table.denominator} ({table.denominator_is})")
-    if table.caption.how_to_read:
-        print(f"{indent}  how to read: {table.caption.how_to_read}")
