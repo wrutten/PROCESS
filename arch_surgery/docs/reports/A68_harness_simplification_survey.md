@@ -531,3 +531,40 @@ The recommendation is the shape A12 proposes for the plan: one table, this colum
 | date | change |
 |---|---|
 | 2026-09-14 | Created. `harness_survey.py` committed at `dd3f6ee4` and run; report written from its output, one allowed self-check press, and the archived reports. No code, plan, queue or improvement-list change. |
+
+---
+
+## 11. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `dee8e55c`, before the merge. Checks chosen to differ from the
+agent's.*
+
+1. **The resume-identity hazard (B1's precondition) is real and is the survey's most useful finding.**
+   Read directly: `records.is_complete_for` compares `campaign_arm`, `campaign_configuration`,
+   `campaign_seed`, `campaign_phase`, `regime` and, when named, `campaign_run_kind` — not δ, the
+   predicate mode, the pin, the stencil column or the overrides. Today two jobs differing only in one
+   of those never share a directory, so the layout is what keeps `--resume` honest. That is a rule
+   held by convention, and it is queued as its own item whether or not B1 is ever done.
+2. **C1's wording overstates the measurement.** The survey's duplicate detector normalises identifiers
+   before hashing, so "byte-identical" means *structurally identical after renaming*. On raw text,
+   with the same two files, I find one same-name identical body (`__len__`) and one identical body
+   under different names (`_label` / `label_of`). The nine are the agent's structural count and the
+   report says "after the name" in one place; the decision-(6) caveat should be phrased as
+   "structurally identical after identifier normalisation, nine constructions", not "byte-identical".
+   The recommendation — keep the second implementation, record the caveat — is right either way.
+3. **The line count.** `find harness -name '*.py' | xargs cat | wc -l` gives 43 516 on this tree; the
+   survey's 46 973 includes `experiment_runner.py`, `harness_survey.py` and the top-level scripts, as
+   its §1 states. Same order; the 7× against the plan's estimate stands.
+4. **A3/A4's evidence (`--tree repository` fails capability 19/55)** was not re-run by me: it is a
+   self-check press the agent made and stamped, and the mechanism (the repository tree has none of
+   the V4 switch names since A56 (driver-renames)) is readable in `switches.py`.
+5. **Tiering.** Tier C is correctly the user's: each of C1–C4 touches a decision row or an amendment
+   rule. B3 and B5 are correctly held behind A67 (written-file-gap), which has since merged
+   (`f8d67eb4`): B5's contrast is now the gate `written_file_gap`'s job, and B3's instrument
+   (`exit_audit_diagnosis`, `audit_map`) has no remaining reader on the button's default path.
+6. **"Do not simplify" is the section that earns the report its place.** Every entry names the trap or
+   report that shows the redundancy is load-bearing; three of them (the second implementation, the
+   census stamps, run-kind separation) are things a fresh reader would cut first.
+
+**Approved for merge.** Nothing is implemented by this task; the items go to the queue as proposals
+by tier, C1–C4 to the user.
