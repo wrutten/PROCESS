@@ -216,3 +216,9 @@ reads, the framework stamps them (path, digest, commit, time) into the stage rec
 refuses when the files have moved. A related blind spot: a provenance block one level down in a
 record is invisible to a stamp survey that reads the top level — the census records carried their
 commit only inside a nested block and read as "no stamp" (I-22 (b)). *(A55 and A63, 2026-09-11.)*
+
+## T15 — A stage whose population is a gate job set passes the smoke and reads nothing at the campaign
+
+The tally declared two sources, both gate job sets (GR's runs, G6's pairing). The smoke ran the campaign's chain at one seed and then the tally — which, by design, refuses smoke records and so read the *seeded gate records* instead. Every smoke press passed. At the first campaign press (2026-09-14, `57dc0c14`) the tally read 0 of 949 records and `tally_contracts` FAILed: no source had ever named the campaign's own jobs (I-24, fixed by A75 (campaign-tally-source)).
+
+**How to avoid it:** a stage that summarises records must declare a source for every run kind it is meant to summarise, and the smoke must show the stage reading the smoke's *own* records (as a population it then refuses to publish) rather than a seeded population of another kind. A passing smoke that read no record of its own kind proved nothing about the campaign path.

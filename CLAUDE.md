@@ -77,7 +77,7 @@ in `arch_surgery/`.
   `arch_surgery/docs/reports/deprecated/` at merge. **Folder position records lifecycle, not
   validity** — read each document's `> **Document status**` header (trap T3).
 - **Read [`arch_surgery/docs/TRAPS.md`](arch_surgery/docs/TRAPS.md) before touching anything.**
-  Fourteen recorded ways this project has already misled someone.
+  Fifteen recorded ways this project has already misled someone.
 - Bulk run artifacts (`arch_surgery/idf_probe/runs/`) stay untracked. Summaries and verdicts
   are committed; raw JSONs are not.
 

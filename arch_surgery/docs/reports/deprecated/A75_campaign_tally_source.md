@@ -1,10 +1,8 @@
 # A75 (campaign-tally-source) — the campaign source family, and the tables over the 949
 
-> **Document status** — **OPEN.** Task **A75 (campaign-tally-source)**, branch `A75-campaign-tally-source`
-> off `architecture_surgery` at base `b72ef578`. Closes issue **I-24** (the tally had no campaign
-> source). Every number here comes from a committed press of `experiment_runner.py` at the commit
-> named beside it; the records read are the campaign's 949 at `57dc0c14` and the reproduction gate's
-> 20 at `0677a9b3`, both seeded into this worktree. **0 PROCESS runs** (stamp survey §10).
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A75 (campaign-tally-source)** merged into `architecture_surgery`
+> at `004eb06b` (base `b72ef578`). Records relocated to `arch_surgery/idf_probe/runs/A75_runs/` (the campaign's 949 records with the measurement
+> stage records over them; the campaign's own copy is `campaign_57dc0c14/`). The orchestrator's critical assessment is the last section.
 > Folder position records lifecycle, not validity (trap T3).
 
 *Vocabulary as in the harness README: "source" (a named, statable job set the tally may summarise),
