@@ -104,15 +104,18 @@ printers; it implements no criterion. `gates/gates.py` holds the gates that need
 own — G0′ and the copy's two sibling gates (`copy_identity`, `edit_behaviour`), all three loading
 their one implementation from `PROCESS/copy_gates.py` by path — plus the shared entry references
 every warm gate is anchored on, gate GR's wrapper, the promoted self-checks and the
-`self_containment` measurement. The important ones:
+`self_containment` gate (the package scanned for any import of, or subprocess into, the two
+superseded directories; one tooth — a scratch module importing one must be counted). The
+important ones:
 
 - **G1 switch neutrality** (`gates/gate_neutrality.py`, with the exclusion tables and the
   record/output-file comparison machinery G8, G9 and `exclusion_review` import) — with every switch
   unset, the copy's output is byte-identical to the frozen base, on values and on every output-file
   line.
 - **G0′ copy integrity** — the copy differs from the base only in permitted files.
-- **G9 output path** (`gates/gate_output_path.py`, with the `output_path_measurements` stage) — `B1`
-  and `B3` write once with zero loop sweeps; `BR` and `B0` keep the loop.
+- **G9 output path** (`gates/gate_output_path.py`, which also holds the restricted statistic's
+  excluded set G2/G3 and G4 import) — `B1` and `B3` write once with zero loop sweeps; `BR` and `B0`
+  keep the loop. The output-loop sweep count is the tally's `output_loop_sweeps` column.
 - **G8 predicate mode** (`gates/gate_predicate_mode.py`) — the two convergence rulers, one
   implementation.
 - **`run_kind_separation`** — every published cell is over campaign records only, with gate and smoke
@@ -197,14 +200,16 @@ actually imported is exactly that one.
    code, and the two summaries are compared cell by cell. Twice, because a definition that reached
    one implementation and not the other has slipped past review here before.
 
-Steps 1–5 are built. Step 6 — the two summaries and the comparison between them — is a later task; the runner names it when you ask for it.
+All six steps are built: step 6 is the tally (§13), the analysis (§14) and gate `recomputation`
+between them.
 
 ---
 
 ## 3. The vocabulary
 
 One row per word this project uses in a particular way. Where a word is *not* used, the word it
-replaces is named so that older documents can still be read.
+replaces is named so that older documents can still be read. **This table is the one vocabulary**:
+the harness plan's §0 and §11.2 point here and keep only the rows that carry a ruling's words.
 
 *Caption: the harness's terms. "Means" is the definition in force; "replaces" names the older
 wording, kept only so that documents written before the rename remain readable. Rows marked
@@ -212,10 +217,12 @@ wording, kept only so that documents written before the rename remain readable. 
 
 | term | means | replaces |
 |---|---|---|
+| **PROCESS** | the fusion power-plant systems code this repository forks: an optimiser (VMCON) wrapped around a loop that runs the models until their outputs stop changing. The experiment runs its own copy, `../PROCESS/` | — |
 | **model** | one physics or engineering calculation. Frozen; the experiment never changes one | — |
 | **driver** | the arrangement of loops and solvers around the models. The only thing the experiment changes | — |
 | **node** | one place a model is called from inside the loop. One **node call** is one execution of one node, and node calls are the unit of cost | — |
 | **sweep** | one pass over a sequence of nodes — the whole loop, or one block's share of it | — |
+| **MDA** | multidisciplinary analysis: the loop that drives the models to a consistent coupling state at a fixed design vector. `PROCESS_ARCH_MDA = flat | partitioned` names its shape | — |
 | **coupling state** | the set of numbers the models pass to each other (about 830–850 of them). The loop's job is to make these stop changing | ystate, spec, harvest |
 | **tolerance (τ)** | how small a scaled change in the coupling state counts as "stopped changing". **One value, 1e-6, for every loop in every arm** | tau, inner tau |
 | **flat** | the loop as one block containing every node | `flat_state` |
@@ -252,6 +259,8 @@ wording, kept only so that documents written before the rename remain readable. 
 | **denominator** | the count of things actually compared, stated beside every count. A table built with a letter where a count belongs is refused | — |
 | **analysis** | the same summary computed independently, and compared with the tally cell by cell | — |
 | **teeth** | a check's demonstrated ability to fail: a deliberate break that it must catch before its zeros are believed | — |
+| **`ifail`** | VMCON's exit code, stamped in every optimisation record; `1` is converged | — |
+| **switch neutrality** | with every `PROCESS_ARCH_*` variable unset the copy's behaviour is byte-identical to the frozen base, on record values and on every output-file line. Gate G1, run per driver change | — |
 
 ---
 
@@ -467,9 +476,8 @@ is a change to the driver, not to the harness.*
 
 The old spellings carry the number of the task that first produced the file, which the naming
 rule for this revision forbids, and they use words the vocabulary has since replaced. Both
-spellings resolve: `default_campaign()` uses the first column and `repository_tree_campaign()` the
-second, so the harness can be pointed at either set of files without either name being written
-twice.
+spellings resolve: `default_campaign()` uses the first column, and the second is what
+`data_provenance` names as each copied file's source, so neither name is written twice.
 
 **Those files are copies, and `data/PROVENANCE.json` says whose.** Sixteen files sit in `data/` —
 the six kinds above for three configurations, plus the three committed input files. Each was
@@ -513,12 +521,11 @@ names resolve to it.
 
 Two more rows need a word.
 
-**`schedule passes` is composed but never declared.** The partitioned arms work through their
-three blocks once. The driver's own default is to repeat the whole schedule while anything is
-still moving, and it expresses "do not repeat" as a separate setting. Since no arm in this
-experiment repeats the schedule, that setting is not a choice an arm makes: the registry supplies
-it whenever the partitioned loop is selected. It disappears from the driver when the partitioned
-setting comes to mean one pass on its own.
+**`schedule passes` no longer exists as a setting.** The partitioned arms work through their
+three blocks once. The driver used to express "do not repeat the schedule" as a separate setting
+the registry supplied whenever the partitioned loop was selected; since DR1 (A56
+(driver-renames)) `partitioned` means one pass on its own, the setting is gone from the driver and
+its old name (`PROCESS_ARCH_OUTER`) is on the retired list — set, it raises. §7.2 records why.
 
 **`second tolerance` is refused, not merely unused.** The driver still lets a block loop use a
 different tolerance from the outer test. There is one tolerance in this experiment, so a run
@@ -534,12 +541,12 @@ Everything runs under the project's own interpreter. Another environment on this
 failure, so the harness refuses to start under an interpreter that cannot import the tree it is
 about to measure.
 
-**`--tree` is not a way to run the experiment somewhere else.** The default, and the only tree a
-record is ever made against, is the experiment's own copy of PROCESS in `../PROCESS/`.
-`--tree repository` points the preflight and the self-check at the repository's own tree, which is
-useful for asking "does the harness still compose the way it did?" — and every campaign stage
-refuses in that case, saying so, so a measurement of a tree nobody asked for cannot be produced by
-forgetting a flag.
+**There is no flag to run the experiment against another tree.** The only tree a record is ever
+made against is the experiment's own copy of PROCESS in `../PROCESS/`; `pool.run` and every
+campaign stage refuse a campaign pointed anywhere else, and the self-check proves both refusals on
+a campaign it constructs at the repository root for the purpose. (The `--tree repository` flag that
+once pointed the preflight at the repository's own tree was retired when that tree stopped
+implementing the renamed switches — its capability check failed 19 of 55 by construction.)
 
 ```bash
 PY=/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
@@ -548,12 +555,9 @@ cd arch_surgery/MDA_partitioning_experiment_v4
 # the button: preflight, the matrix, the rungs, what the tree can do
 $PY experiment_runner.py
 
-# the same, against the repository's own PROCESS instead of the experiment's copy
-$PY experiment_runner.py --tree repository
-
 # the harness's own gates, with their teeth
 $PY experiment_runner.py --selfcheck
-$PY harness/gates/selfcheck.py --tree repository --json runs/selfcheck.json
+$PY harness/gates/selfcheck.py --json runs/selfcheck.json
 
 # quickly, without starting a child process per arm
 $PY experiment_runner.py --no-capability
@@ -645,9 +649,9 @@ To inspect one arm without running anything:
 
 ```python
 import sys; sys.path.insert(0, "arch_surgery/MDA_partitioning_experiment_v4")
-from harness import ARMS, env_for, input_file_for, repository_tree_campaign, rung
+from harness import ARMS, default_campaign, env_for, input_file_for, rung
 
-campaign = repository_tree_campaign()
+campaign = default_campaign()
 nof = campaign.configuration("large_tokamak_nof")
 
 rung("B0", "B3")                       # what separates the two arms, field by field
@@ -735,9 +739,9 @@ changes and five additions were made; each is listed here so the plan can absorb
 8. **Two places where the plan disagreed with itself were found here and have since been ruled**
    (2026-09-10). See §8; the rulings are in the plan, and the code carries the reasons rather
    than a flag.
-9. **Run directories should be named for the seed.** §11.2 makes "seed" the word in both phases,
-   but the run-layout decision still writes `start001`. The task that builds the run path should
-   use `seed001`.
+9. **Run directories are named for the seed.** §11.2 makes "seed" the word in both phases; the
+   run path writes `seed001` (ruled at A47's assessment, approved under D24). The previous
+   revision's `start001` survives only in the committed reference's `source_path` entries.
 
 ---
 
@@ -759,10 +763,10 @@ shown to catch.*
 |---|---|---|
 | **composition** | every arm composes on every configuration; a skipped arm refuses by name and quotes its recorded reason; the reference arms compose to every switch cleared; the arms the previous revision also ran compose to the *same switch settings* it used | a wrong value in one arm; a switch dropped from an arm; a skipped arm asked to compose |
 | **rungs** | the plan's matrix regenerates cell for cell from the arm records; the difference between two arms equals the difference the plan declares for that step; no removed arm is present | a wrong expected difference; a wrong cell in the transcribed matrix; an arm compared with itself |
-| **capability** | the tree resolves every switch each arm asks for, exactly as asked; an arm asking for something no tree implements is refused before anything runs | a switch name no tree defines; a switch the environment does not carry claimed as resolved; a retired name present in the environment |
+| **capability** | the tree resolves every switch each arm asks for, exactly as asked; an arm asking for something no tree implements is refused before anything runs | a switch name no tree defines; a switch the environment does not carry claimed as resolved; each retired name of the registry's list present in the environment, one tooth over the list; the driver's own refusal of a retired name; a decoy `process/` package in the working directory |
 | **provenance** | a modified tracked file and an untracked file are recorded separately, and only the first marks the tree dirty | each kind of change, one at a time, in a throwaway repository; and the tree asserted by a prefix instead of exactly |
 | **data** | every committed file in `data/` is byte-identical to its source at the recorded commit and the file set matches exactly; `ystate.py`'s whole diff against its own source is exactly the hunks the record holds and its post-edit hash is the recorded one; the counts `config.py` declares are the ones the files carry | one byte changed; a file missing; a file the record does not name; a changed file whose recorded hash was updated to match it — which passes a record-only check and must still fail; and the same two on `ystate.py` itself |
-| **run path** | a finished record carries every field it declares, both convergence rulers included; its per-attempt costs sum to its totals and its sweep total decomposes into the parts that claim it; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; an exit audit carrying one ruler and not both; a record that does not say what kind of run made it; per-attempt costs that do not sum to the run total; a sweep total that does not decompose; an allowance covering a switch the tree has |
+| **run path** | a finished record carries every field it declares; a partial per-attempt decomposition is refused and its sweep total decomposes into the parts that claim it; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; a record that does not say what kind of run made it; per-attempt costs stamped at some attempts and not others; a sweep total that does not decompose; an allowance covering a switch the tree has. (One ruler and not both, and attempts that do not sum, are gate G7's teeth on a real record and are not repeated here) |
 | **stage provenance** | a measurement stage that reads other records says which ones it read — path, bytes, commit, time and verdict — and a consumer refuses that stage record once those records have moved, so the plan's §4.1 can no longer reproduce a verdict the gate has since replaced; and every census record carries the commit of the tree it was taken in, or is named as one a stamp survey cannot place | a verdict re-made at a later commit after the stage record was written; a verdict written after it; a verdict it read that is gone; a stage record that does not say what it read |
 
 Two of these deserve their reason stated.
@@ -771,9 +775,10 @@ Two of these deserve their reason stated.
 measurement is not a rewrite; it is a new experiment. The six arms this revision shares with the
 last one must compose to the same switch settings, or the difference between the two revisions'
 numbers would be partly the harness. The expected settings are transcribed into `selfcheck.py`
-rather than imported, because every check the experiment runs is implemented inside this package;
-`--crosscheck-previous` then *executes* the previous revision's own two composition functions in a
-subprocess and compares, so the transcription is measured rather than trusted.
+rather than imported, because every check the experiment runs is implemented inside this package.
+The transcription was measured once against the previous revision's own composition functions
+(A47's `--crosscheck-previous`, retired: that revision is frozen with D20 and composes switch
+names the copy has since refused, so the check could neither go stale nor still run).
 
 **Why the predicate module is allowed to differ from its source at all, and what still refuses.**
 `harness/ystate.py` was moved whole out of the repository's research tree, and for a while the
@@ -872,7 +877,8 @@ A record of one run carries, at minimum:
   raising after ten passes is a *finding about the shipped code*, not a broken run, and has its
   own outcome so that the two are never confused again.
 
-The record's schema and the code that reads it are a later task; this list is what it must carry.
+The record's schema is `core/records.py`'s `SCHEMA` (100 declared fields) and every reader goes
+through its contract (`assert_usable`); this list is the plain-language version of what it carries.
 
 ---
 
@@ -903,7 +909,7 @@ it had — this is a move, not a rename.*
 | `core/` | `framework` (what a gate, a tooth, a check and a measurement *are*), `config` (every declared setting), `failure` (the taxonomy), `provenance` (interpreter, tree and git stamps), `records` (the run-record schema and its completeness contract), `pool` (one run in its own directory, and the decision to keep an existing record) | everything |
 | `experiment/` | `arms` (the switch matrix as data), `switches` (the driver's vocabulary and the capability probe), `input_files` (committed and lifted), `artifacts` (the committed per-configuration files), `data_provenance` (where the copied data came from) | everything but `core/` |
 | `child/` | `child`, `evaluate`, `optimise`, `census` (the three entry points a measurement subprocess is started as, and what they load), `predicate`, `perturb`, `data_structure`, `audit_map`, `postsolve` | the pool spawns them; the gates import them |
-| `gates/` | `registry` (every gate and stage by name, the derived order, the gate table, the printers and the module's own command line), `gates` (G0′, `copy_identity` and `edit_behaviour` loading `PROCESS/copy_gates.py` by path; the shared entry references and `_with_capture`; GR's wrapper; the promoted self-checks; `self_containment`), `gate_neutrality` (G1 and the comparison machinery), `gate_output_path` (G9 and the output-path measurement), `gate_predicate_mode` (G8), `exclusion_review` (the review of G1's and G8's exclusion tables), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `gate_written_file`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck`, `exit_audit_diagnosis` | the runner, and `chain.py` |
+| `gates/` | `registry` (every gate and stage by name, the derived order, the gate table, the printers and the module's own command line), `gates` (G0′, `copy_identity` and `edit_behaviour` loading `PROCESS/copy_gates.py` by path; the shared entry references and `_with_capture`; GR's wrapper; the promoted self-checks; the `self_containment` gate), `gate_neutrality` (G1 and the comparison machinery), `gate_output_path` (G9, and the restricted statistic's excluded set), `gate_predicate_mode` (G8), `exclusion_review` (the review of G1's and G8's exclusion tables), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `gate_written_file`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck`, `exit_audit_diagnosis` | the runner, and `chain.py` |
 | `measurement/` | `stats`, `tables`, `tally`, `tally_evaluation`, `tally_optimisation`, `analysis`, `plan_tables` | `gates/` imports it — a gate reads records, it does not decide what a record means |
 | *(top level)* | `__init__.py` (the one public import surface), `chain.py` (the sequence the campaign and the smoke both run), `ystate.py`, `data/`, `reference/` | — |
 
@@ -976,50 +982,35 @@ I-15 and I-16; the trap is written up in `arch_surgery/docs/TRAPS.md`). A gate a
 that can be deleted by retiring a working tree is a gate that will one day quietly have nothing to
 compare against, and a check with no population is not a check.
 
-So the compared fields are extracted **once** into a small committed file (32 KB), and the gate reads
-that. The live records are used only to *re-derive* the file and confirm, byte for byte, that
-nothing has drifted. If the records vanish tomorrow, the gate still works; only the re-derivation
-becomes unavailable, and it says so rather than passing.
+So the compared fields were extracted **once** into a small committed file (32 KB), verified byte
+for byte against the records at the time, and committed; the gate reads that and nothing
+regenerates it (D25). The stages that extracted and verified it were retired with the survey's item
+B7 — the file's `provenance` block names the root, commit and date it came from, and git history is
+its second copy. If the records vanish tomorrow, the gate still works.
 
-### How to re-derive it and how to check it
-
-The records live in the **main checkout**, so a task working in its own worktree has to be pointed
-at them; there is no default that guesses at another checkout, because guessing would read numbers
-nobody asked for.
+### How to read it
 
 ```bash
 PY=/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
 cd arch_surgery/MDA_partitioning_experiment_v4
-RUNS=/home/wrutten/projects/PROCESS_surgery/arch_surgery/MDA_partitioning_experiment_v3/runs
 
 # what is committed, and what it does not cover — reads no records
 $PY experiment_runner.py --reference show
-
-# re-derive it from the records and require byte-for-byte equality
-$PY experiment_runner.py --reference verify --previous-runs $RUNS
-
-# the four deliberate breaks, each of which must make a stage refuse
-$PY experiment_runner.py --reference teeth --previous-runs $RUNS
-
-# rebuild the committed file (only when the reference set or the field list changes)
-$PY experiment_runner.py --reference extract --previous-runs $RUNS
 
 # the report's two tables, rendered from the committed file with their captions
 $PY experiment_runner.py --reference tables
 ```
 
-Exit codes are the runner's: `0` pass, `3` fail. Each stage writes its own record under `../runs/`,
-which is untracked. `harness/gates/reference.py` takes the same flags directly if you want the module on
-its own.
+Exit codes are the runner's: `0` pass, `3` the file is missing or in another format. `show` writes
+its record under `../runs/reference/`, which is untracked. `harness/gates/reference.py --show |
+--tables` takes the same two flags directly.
 
-**Everything that could stop the comparison is a failure, never a skip.** A record that is not
-there, a record that does not carry a field the plan names for its phase, a record made at a commit
-other than the previous revision's campaign commit, an absent committed file, an absent records
-directory — each one refuses and says which record and which field. The four **teeth** (a gate's
-demonstrated ability to fail — §8) exercise exactly that: one record deleted from a throwaway copy;
-one compared field deleted from a throwaway copy of a record; the arm-name map bypassed; one value
-changed in a throwaway copy of the committed file. All four must trip before the gate's zeros mean
-anything.
+**What refuses.** An absent committed file, a file in another format, a lookup for an arm or seed
+the set does not hold, a lookup by a retired arm name — each raises and says what it looked for.
+The gate's own teeth (GR's eight, in `reproduction.py`) cover the comparison; the four teeth of the
+retired extraction stage (a record deleted, a field deleted, the name map bypassed, a value changed
+in a throwaway copy of the file) went with it; a doctored committed value is still caught by GR's
+own `count` and `hex` teeth, which alter one reproduced value in a copy of the reference entry.
 
 **One thing to know about the arm names.** The previous revision called the optimisation-phase
 reference arm `R`; this revision calls it `BR`, because the phase belongs in the name. The map lives

@@ -45,7 +45,6 @@ from .core.config import (  # noqa: F401
     artifact_file_names,
     default_campaign,
     default_configurations,
-    repository_tree_campaign,
 )
 from .child.perturb import (  # noqa: F401
     coupling_state_factor,
@@ -148,7 +147,6 @@ __all__ = [
     "matrix",
     "matrix_cell",
     "probe",
-    "repository_tree_campaign",
     "retired_names",
     "rung",
     "skipped_arms",

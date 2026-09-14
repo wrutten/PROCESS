@@ -52,12 +52,7 @@ from harness.gates import gate_output_path  # noqa: E402
 from harness.gates import gate_predicate_mode  # noqa: E402
 from harness.gates import gates as gates_mod  # noqa: E402
 from harness.gates.gate_neutrality import capture_neutrality  # noqa: E402
-from harness.gates.gate_output_path import (  # noqa: E402
-    capture_contrast,
-    capture_output_path,
-    output_path_measurements,
-    print_measurements,
-)
+from harness.gates.gate_output_path import capture_output_path  # noqa: E402
 from harness.gates.gate_predicate_mode import (  # noqa: E402
     capture_predicate_mode,
     print_predicate_mode,
@@ -266,18 +261,6 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             # stage leaves a verdict nobody read, and only the pattern finds it.
             reads_records=("*/gate.json",),
         ),
-        "self_containment": Measurement(
-            name="self_containment",
-            reports=(
-                "every mention of the two superseded directories in this "
-                "package and the runner beside it, classified — the "
-                "measurement behind 'nothing is imported from, and nothing is "
-                "invoked as a subprocess into, idf_probe/ or fixedpoint/'"
-            ),
-            guarded_by="the user's requirement in the harness plan §6",
-            body=lambda *, resume=False: gates_mod.self_containment(campaign),
-            printer=gates_mod.print_self_containment,
-        ),
         "exclusion_review": Measurement(
             name="exclusion_review",
             reports=(
@@ -290,19 +273,6 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             guarded_by="switch_neutrality",
             body=lambda *, resume=False: exclusion_review_mod.exclusion_review(campaign),
             printer=exclusion_review_mod.print_exclusion_review,
-        ),
-        "output_path_measurements": Measurement(
-            name="output_path_measurements",
-            reports=(
-                "what the output-time loop moves in the output files, what it "
-                "costs, and where the accepted state sits against the "
-                "tolerance at the declared audit position"
-            ),
-            guarded_by="output_path",
-            body=lambda *, resume=False: gates_mod._with_capture(
-                capture_contrast, output_path_measurements, campaign, resume=resume
-            ),
-            printer=print_measurements,
         ),
         **_tally_measurements(campaign),
         **_analysis_measurements(campaign),
@@ -381,6 +351,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries: dict[str, Any] = {}
     entries.update(_plan_gates(campaign))
     entries.update(gates_mod.copy_gates(campaign))
+    entries["self_containment"] = gates_mod.self_containment_gate(campaign)
     entries.update(gates_mod._selfcheck_gates(campaign))
     entries.update(gates_mod._artifact_gates(campaign))
     entries.update(_tally_gates(campaign))
@@ -596,6 +567,9 @@ GATE_ORDER: tuple[str, ...] = (
     # by path, no PROCESS run.
     "copy_identity",
     "edit_behaviour",
+    # The package scanned for the two superseded directories: a gate since
+    # the simplification survey's item B8, no PROCESS run.
+    "self_containment",
     "composition",
     "rungs",
     "provenance",
@@ -761,17 +735,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "g0prime",
             "switch-neutrality",
             "output-path",
-            "output-path-contrast",
-            "output-path-measurements",
             "predicate-mode",
             "all",
         ),
-        help="which gate to run; 'all' runs the gates that need no capture.  "
-        "'output-path-contrast' and 'output-path-measurements' are not gates: "
-        "they publish what the experiment plan asks for by name — what the "
-        "output-time loop moves in the output files, what it costs, and where "
-        "the accepted state sits against the tolerance at the declared audit "
-        "position",
+        help="which gate to run; 'all' runs the gates that need no capture",
     )
     parser.add_argument(
         "--capture",
@@ -795,25 +762,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     campaign = default_campaign()
     records_dir = Path(args.records) if args.records else Path(campaign.runs_dir) / GATES_SUBPATH
-
-    if args.gate == "output-path-contrast":
-        manifest = capture_contrast(campaign, resume=args.resume)
-        print(f"captured {manifest['n_runs']} contrast run(s) at "
-              f"{manifest['tree_git_head']}")
-        for row in manifest["runs"]:
-            print(f"  {row['configuration']:<22} {row['label']:<14} "
-                  f"{row['status']} {row['override_env']}")
-        print(f"  manifest: {manifest['manifest']}")
-        return 0
-
-    if args.gate == "output-path-measurements":
-        block = output_path_measurements(campaign)
-        out = records_dir / "output_path" / "measurements.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(block, indent=2, default=str) + "\n")
-        print_measurements(block)
-        print(f"\n  record: {out}")
-        return 0
 
     if args.gate == "output-path" and args.capture:
         manifest = capture_output_path(campaign, resume=args.resume)

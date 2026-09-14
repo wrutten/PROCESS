@@ -517,33 +517,6 @@ def stage_entry_references(
     }
 
 
-def _pin_for(
-    config: Config,
-    arm: str,
-    reference: Mapping[str, Any],
-    *,
-    seed: int,
-    delta: float | None,
-) -> str | None:
-    """The constant the arm owns at this entry, or None where it owns none.
-
-    At an undisplaced entry it is the reference's own converged burn time; at a
-    displaced one it rides the **same** stream the coupling state rides, so the
-    constant and the state the run is entered with move together.  Both routes
-    are the harness's one implementation of that rule.
-    """
-    from .gates import reproduction as reproduction_mod  # noqa: PLC0415
-
-    if not config.pulsed:
-        return None
-    if arms_mod.ARMS[arm].burn_time_owner != "constant":
-        return None
-    reference_hex = reference["t_plant_pulse_burn_hex"]
-    if not delta or seed == 0:
-        return reference_hex
-    return reproduction_mod.pin_for(reference_hex, seed, delta)
-
-
 def stage_evaluation_displaced(
     campaign: Campaign,
     plan: ChainPlan,
@@ -559,6 +532,8 @@ def stage_evaluation_displaced(
     is the reason the plan's binding rule on `AR → A0` (§3.3) can be stated at
     all: the two arms differ in their stopping rule and in nothing else.
     """
+    from .gates import reproduction as reproduction_mod  # noqa: PLC0415
+
     root = chain_root(campaign, plan) / "evaluation"
     jobs: list[pool_mod.Job] = []
     for config in plan.configurations:
@@ -580,7 +555,7 @@ def stage_evaluation_displaced(
                         ),
                         regime="perturbed" if displaced else "unperturbed",
                         delta=campaign.delta,
-                        pin_hex=_pin_for(
+                        pin_hex=reproduction_mod.entry_pin(
                             config,
                             arm,
                             reference,
@@ -625,6 +600,8 @@ def stage_evaluation_stencil(
     clamped, and every record stamps the ``nvar`` it saw, so the column set
     derived here is checked against the runs it produced instead of trusted.
     """
+    from .gates import reproduction as reproduction_mod  # noqa: PLC0415
+
     root = chain_root(campaign, plan) / "evaluation_stencil"
     chains: list[list[pool_mod.Job]] = []
     planned: list[dict[str, Any]] = []
@@ -635,7 +612,7 @@ def stage_evaluation_stencil(
             for column in columns:
                 forward = root / config.name / arm / f"column{column:03d}_forward"
                 backward = root / config.name / arm / f"column{column:03d}_backward"
-                pin = _pin_for(config, arm, reference, seed=0, delta=None)
+                pin = reproduction_mod.entry_pin(config, arm, reference)
                 chains.append(
                     [
                         pool_mod.Job(

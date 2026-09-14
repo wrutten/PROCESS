@@ -96,8 +96,13 @@ def record_root(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "record_completeness"
 
 
-def cheapest_configuration(campaign: Campaign):
+def fewest_variables_configuration(campaign: Campaign):
     """The configuration with the fewest iteration variables.
+
+    Not :func:`harness.chain.cheapest_configuration`, which is *measured* cost
+    in node calls over the records on disk; this is the declared size of the
+    problem, and a gate that makes one forced run wants the small problem, not
+    a measurement of it.
 
     Derived, not named: a gate that hard-coded a configuration would have to be
     edited when the configuration list changes, and the list is allowed to
@@ -156,7 +161,7 @@ def record_completeness_body(
     campaign: Campaign, *, resume: bool = False
 ) -> dict[str, Any]:
     """G7: the declared fields are there, and a missing one is refused."""
-    config = cheapest_configuration(campaign)
+    config = fewest_variables_configuration(campaign)
     root = record_root(campaign)
     forced = pool_mod.Job(
         phase="B",
@@ -378,7 +383,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         because resume keeps a complete record of the same job; without it the
         stamp must be gone, because the run was re-made.
         """
-        config = cheapest_configuration(campaign)
+        config = fewest_variables_configuration(campaign)
         directory = record_root(campaign) / config.name / "evaluation"
         path = directory / "metrics.json"
         if not path.exists():

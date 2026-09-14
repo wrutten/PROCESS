@@ -79,7 +79,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 #: Schema tag.  Bumped when a field is added, renamed or dropped, so a reader
 #: that expected the old shape says so instead of finding ``None``.
@@ -1038,9 +1038,3 @@ def summarise(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 def declared_field_names(phase: str) -> tuple[str, ...]:
     """Every field name declared for a phase, finished or not."""
     return tuple(field.name for field in SCHEMA if phase in field.phases)
-
-
-def schema_table() -> Iterable[tuple[str, str, str, str]]:
-    """The schema as rows, for the README and the report."""
-    for field in SCHEMA:
-        yield field.name, "".join(field.phases), field.when, field.why

@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import shutil
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -127,11 +126,10 @@ def assert_lifted(config: Config, campaign: Campaign) -> dict[str, Any]:
     if not path.exists():
         raise InputFileError(
             f"the lifted input file for {config.name} is not at {path}.  It is "
-            f"derived by the input-file stage (task A51 (harness-artifacts)); "
-            f"until that exists, stage it from a directory holding the "
-            f"previous revision's derived files — the runner's "
-            f"--lifted-from option — which checks the bytes against the "
-            f"recorded digest {expected[:12]}…"
+            f"derived from the committed input file by "
+            f"`experiment_runner.py --artifacts derive-inputs`, whose gate "
+            f"checks the bytes against the recorded digest {expected[:12]}…; "
+            f"nothing stages it from anywhere else."
         )
     found = sha256_of(path)
     if found != expected:
@@ -146,42 +144,6 @@ def assert_lifted(config: Config, campaign: Campaign) -> dict[str, Any]:
         "sha256": found,
         "kind": "lifted",
         "provenance": LIFTED_INPUT_PROVENANCE,
-    }
-
-
-def stage_lifted(
-    config: Config, campaign: Campaign, source_dir: Path
-) -> dict[str, Any]:
-    """Put a previously derived lifted input file where the run path expects it.
-
-    *source_dir* is a directory holding ``<name>/<name>_lifted.IN.DAT``.  The
-    bytes are checked against the recorded digest **before** the copy, so a
-    wrong file is refused rather than staged and then found.
-    """
-    if not config.pulsed:
-        return {"skipped": f"{config.name} is steady state: no lifted input file"}
-    expected = LIFTED_INPUT_SHA256[config.name]
-    source = Path(source_dir) / config.name / f"{config.name}_lifted.IN.DAT"
-    if not source.exists():
-        raise InputFileError(
-            f"no lifted input file for {config.name} under {source_dir}: "
-            f"{source} does not exist"
-        )
-    found = sha256_of(source)
-    if found != expected:
-        raise InputFileError(
-            f"{source} is not {config.name}'s lifted input file: sha256 "
-            f"{found} against {expected} recorded"
-        )
-    destination = lifted_path(config, campaign)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, destination)
-    return {
-        "configuration": config.name,
-        "source": str(source),
-        "destination": str(destination),
-        "sha256": found,
-        "matched_recorded_digest": True,
     }
 
 
@@ -279,22 +241,6 @@ def parse_input_file(path: Path | str) -> dict[str, Any]:
         "equality_count_line": equality_line,
         "integer_settings": switches,
     }
-
-
-def expected_constraint_set(
-    path: Path | str, *, lifted: bool
-) -> list[int]:
-    """The active ``icc`` set a run of this input file will hold.
-
-    The lifted input file carries exactly one constraint the committed one does
-    not — the burn-time consistency residual — so the two artifacts differ in
-    their stamp by that one entry and in nothing else.
-    """
-    parsed = parse_input_file(path)
-    icc = list(parsed["icc_in_file_order"])
-    if lifted:
-        icc.append(ICC_BURN_TIME)
-    return sorted(icc)
 
 
 # ==========================================================================

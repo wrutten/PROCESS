@@ -27,7 +27,7 @@ import ast
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Sequence
 
 _EXPERIMENT_DIR = Path(__file__).resolve().parents[2]
 if str(_EXPERIMENT_DIR) not in sys.path:
@@ -166,7 +166,6 @@ def _g0prime_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             one("approved_file_changed_further"),
         ),
     )
-
 
 
 def g0prime_gate(campaign: Campaign) -> Gate:
@@ -521,10 +520,6 @@ _REPRODUCTION_HELD: dict[str, Any] = {}
 #: wrote to the campaign's records directory whatever ``--outdir`` said).
 REPRODUCTION_ROOT: dict[str, Any] = {"root": None}
 
-#: Where the lifted input files are staged from, for GR.  Also settable, for
-#: the same reason: the gate needs them and the runner has the flag.
-REPRODUCTION_LIFTED_FROM: dict[str, Any] = {"path": None}
-
 def _reproduction_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     from . import reproduction as reproduction_mod
 
@@ -532,7 +527,6 @@ def _reproduction_body(campaign: Campaign, *, resume: bool = False) -> dict[str,
         campaign=campaign,
         root=REPRODUCTION_ROOT["root"],
         resume=resume,
-        lifted_from=REPRODUCTION_LIFTED_FROM["path"],
     )
     _REPRODUCTION_HELD["verdict"] = verdict
     comparison = verdict.get("comparison") or {}
@@ -594,8 +588,6 @@ def _reproduction_teeth() -> tuple[Tooth, ...]:
     )
 
 
-
-
 def reproduction_gate(campaign: Campaign) -> Gate:
     """GR, as the registry holds it.  The literal is the one ``_plan_gates`` held."""
     return Gate(
@@ -631,19 +623,14 @@ def reproduction_gate(campaign: Campaign) -> Gate:
 
 
 def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
-    """The six self-checks, each with the teeth it must run.
+    """The seven self-checks, each with the teeth it must run.
 
-    The retired-name family is **derived** from the switch registry rather than
-    listed, because the check generates one tooth per retired name from that
-    same registry: a hand-copied list would drift the moment a name is retired.
+    The retired-name tooth is **one** tooth over the registry's whole retired
+    list (survey item B6); the check iterates the list itself, so nothing here
+    names a switch and nothing drifts when one is retired.
     """
     from . import selfcheck as selfcheck_mod
-    from ..experiment import switches as switches_mod
 
-    retired = tuple(
-        f"the retired name {name} present in the environment"
-        for name in sorted(switches_mod.retired_names())
-    )
     declared: dict[str, tuple[str, ...]] = {
         "composition": (
             "a role both revisions can express treated as a new capability",
@@ -662,7 +649,8 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
         "capability": (
             "an arm asks for a switch the tree does not implement",
             "the driver resolves a switch differently from what was asked",
-            *retired,
+            "a retired switch name present in the environment, each of the "
+            "registry's list in turn",
             "the driver's own refusal of a retired name",
             "the working directory holds a package that shadows the tree",
         ),
@@ -690,10 +678,12 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
         ),
         "run_path": (
             "a declared field removed",
-            "an exit audit carrying one convergence ruler and not both",
             "a record that does not say what kind of run made it",
-            "per-attempt costs that do not sum to the run total",
             "per-attempt costs stamped at some attempts and not others",
+            # Added to the check by A70 (records.sweep_decomposition) and not
+            # declared here, so --gate run_path FAILed at 34c5c3e4 on an
+            # undeclared tooth -- found by A71's press; the framework working.
+            "a sweep total that does not decompose into the parts that claim it",
             "the design-vector stream keyed on position instead of number",
             "the two streams sharing a namespace",
             "a run against a tree that is not the experiment's copy",
@@ -743,9 +733,10 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "differs from its source by exactly the recorded hunks"
         ),
         "run_path": (
-            "a finished record carries every field it declares, both rulers "
-            "included; the two displacement streams key on what they say they "
-            "key on; and a run against the wrong tree is refused, not made"
+            "a finished record carries every field it declares and its "
+            "per-attempt and sweep decompositions add up; the two displacement "
+            "streams key on what they say they key on; and a run against the "
+            "wrong tree is refused, not made"
         ),
         "stage_provenance": (
             "a stage record names the records it read, and the renderer of "
@@ -905,10 +896,8 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
     }
 
 
-
-
 # --------------------------------------------------------------------------
-# self-containment, measured rather than asserted
+# self-containment -- the user's requirement on this package, as a gate
 # --------------------------------------------------------------------------
 #
 # The user's binding requirement on this package (harness plan §6): **every
@@ -917,34 +906,29 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
 # invoked as a subprocess into them.**
 #
 # "grep finds no import" is a claim, and a claim about a package is worth what
-# its measurement is worth, so this stage *is* the grep: it reads every Python
+# its measurement is worth, so this gate *is* the grep: it reads every Python
 # file of the package and the runner beside it, finds every occurrence of either
-# directory name, and classifies each one.  Anything it cannot classify is
-# printed as a finding rather than passed over.
+# directory name, and classifies each one.  Anything it cannot classify is a
+# finding, and a finding fails the gate.  It was a measurement stage until the
+# simplification survey's item B8 pointed out that a requirement with a pass
+# condition that prints a count and fails nothing cannot fail; it is a gate
+# now, with the tooth a gate must have: a scratch module that imports
+# ``idf_probe`` is added to the scanned set and must be counted.
 #
 # One classification needs stating because it looks like a hit and is not.  The
 # **driver's own** census probe is `process/core/_idf_probe*.py`, inside the
 # copied PROCESS tree: same three letters, different thing entirely.  A name
 # beginning with an underscore is that module; `arch_surgery/idf_probe` is the
-# superseded task machinery.  The stage tells them apart by the underscore and
+# superseded task machinery.  The gate tells them apart by the underscore and
 # says so, because a measurement that silently counted one as the other would be
 # reporting the opposite of what it claims.
 
 #: Lines of executable code that name one of the two directories and are
 #: **allowed** to, each with what it is and why it cannot reach a measurement.
-#: A line of code naming either directory that is not here is a finding.
+#: A line of code naming either directory that is not here is a finding -- and
+#: a file named here whose executable lines no longer name either directory is
+#: a finding too: a declaration nothing uses is a declaration nobody checked.
 DECLARED_OUTSIDE_REFERENCES: dict[str, str] = {
-    "config.py": (
-        "the preflight-only campaign's input directory.  "
-        "`repository_tree_campaign()` points the preflight and the self-check "
-        "at the repository's own tree and its committed input files, which is "
-        "where the superseded revision kept them.  It answers 'does the "
-        "harness still compose against the tree the earlier revisions "
-        "measured?' and **no record is ever made against it**: "
-        "`Campaign.is_experiment_copy` is False for it and `pool.run` refuses "
-        "every run on that ground, with a tooth in the run-path check.  It is "
-        "a path constant, not an import and not a subprocess"
-    ),
     "data_provenance.py": (
         "the declared **source** of two committed files: where each came from "
         "when it was copied in.  It is read by the data check, which fetches "
@@ -953,45 +937,21 @@ DECLARED_OUTSIDE_REFERENCES: dict[str, str] = {
         "study's generated output read live catches a half-written state).  A "
         "provenance string, not an import and not a subprocess"
     ),
-    "reference.py": (
-        "the default root of the **previous revision's** untracked run "
-        "records, under `MDA_partitioning_experiment_v3/runs` — not "
-        "`idf_probe/` or `fixedpoint/` at all.  It is read by the reproduction "
-        "reference's `extract` and `verify` stages only, never at run time, "
-        "and what the gate compares against is the committed extract"
-    ),
     "gates.py": (
-        "this stage's own declaration: the two directory names it searches "
+        "this gate's own declaration: the two directory names it searches "
         "for, and the prose that explains each classification.  A measurement "
         "that looks for a string has to contain the string"
     ),
-    "registry.py": (
-        "the registry entry of this stage: the sentence in its `reports=` "
-        "that says what the stage measures names the two directories.  Prose "
-        "in a string the button prints; this package opens no such path.  "
-        "Added when the registry moved out of gates.py into its own module -- "
-        "the stage found the line there and reported it, which is the "
-        "scanner biting on a move"
-    ),
     "input_files.py": (
-        "a sentence inside a **refusal message**, saying where the previous "
-        "revision's derived input files were kept so that a reader knows what "
-        "to point `--lifted-from` at.  Prose in a message; this package opens "
-        "no such path"
+        "a **provenance string**: where the lifted input file's recorded digest "
+        "was measured from, quoted in every record beside the digest so that a "
+        "reader does not take it on trust.  Data written out, not a path read "
+        "in"
     ),
     "ystate.py": (
         "a provenance stamp written **into** a generated artifact, naming the "
         "generator the artifact came from.  It is data written out, not a path "
         "read in"
-    ),
-    "selfcheck.py": (
-        "the opt-in, labelled cross-check of the previous revision's "
-        "composition — `--crosscheck-previous`, which executes that revision's "
-        "own two composition functions in a subprocess and compares.  It names "
-        "`MDA_partitioning_experiment_v3`, not `idf_probe/` or `fixedpoint/`; "
-        "it is off by default, is not one of the package's gates, and exists "
-        "so that the transcription in this package is *measured* rather than "
-        "trusted"
     ),
 }
 
@@ -1025,7 +985,11 @@ def _docstring_and_comment_lines(source: str) -> set[int]:
     try:
         for token in tokenize.generate_tokens(io.StringIO(source).readline):
             if token.type == tokenize.COMMENT:
-                lines.add(token.start[0])
+                # A comment-only line is prose; a trailing comment does not
+                # make the code before it prose.  (The tooth found the old
+                # form hiding an import line behind its own trailing comment.)
+                if token.line[: token.start[1]].strip() == "":
+                    lines.add(token.start[0])
             elif token.type == tokenize.STRING and "\n" in token.string:
                 # a triple-quoted string used as prose anywhere else
                 lines.update(range(token.start[0], token.end[0] + 1))
@@ -1034,18 +998,23 @@ def _docstring_and_comment_lines(source: str) -> set[int]:
     return lines
 
 
-def self_containment(campaign: Campaign) -> dict[str, Any]:
-    """Every mention of the two superseded directories, classified.
+def self_containment_files(campaign: Campaign) -> list[Path]:
+    """Every Python file the requirement is over: the package and the runner."""
+    here = Path(__file__).resolve().parent.parent
+    return sorted(here.rglob("*.py")) + [here.parent / "experiment_runner.py"]
+
+
+def scan_self_containment(files: Sequence[Path], *, relative_to: Path) -> dict[str, Any]:
+    """Every mention of the two superseded directories in *files*, classified.
 
     The measurement behind the sentence *"grep finds no import of, and no
-    subprocess into, `idf_probe/` or `fixedpoint/`"*.
+    subprocess into, `idf_probe/` or `fixedpoint/`"*.  Takes the file list so
+    that the tooth can hand it one file more than the package holds.
     """
-    here = Path(__file__).resolve().parent.parent
-    runner = here.parent / "experiment_runner.py"
-    files = sorted(here.rglob("*.py")) + [runner]
     hits: list[dict[str, Any]] = []
     findings: list[dict[str, Any]] = []
     imports: list[dict[str, Any]] = []
+    declared_and_seen: set[str] = set()
     for path in files:
         source = path.read_text()
         prose = _docstring_and_comment_lines(source)
@@ -1083,11 +1052,16 @@ def self_containment(campaign: Campaign) -> dict[str, Any]:
                 elif path.name in DECLARED_OUTSIDE_REFERENCES:
                     kind = DECLARED_OUTSIDE_REFERENCES[path.name]
                     classified = True
+                    declared_and_seen.add(path.name)
                 else:
                     kind = "UNCLASSIFIED — a finding"
                     classified = False
+                try:
+                    shown = str(path.relative_to(relative_to))
+                except ValueError:
+                    shown = str(path)
                 row = {
-                    "file": str(path.relative_to(here.parent)),
+                    "file": shown,
                     "line": number,
                     "text": line.strip()[:140],
                     "directory": directory,
@@ -1098,6 +1072,12 @@ def self_containment(campaign: Campaign) -> dict[str, Any]:
                 if not classified:
                     findings.append(row)
                 break
+    scanned_names = {path.name for path in files}
+    stale_declarations = sorted(
+        name
+        for name in DECLARED_OUTSIDE_REFERENCES
+        if name in scanned_names and name not in declared_and_seen
+    )
     by_kind: dict[str, int] = {}
     for row in hits:
         key = row["classification"].split(" — ")[0].split(".")[0][:60]
@@ -1114,7 +1094,9 @@ def self_containment(campaign: Campaign) -> dict[str, Any]:
             "is False where the line is inside a docstring or a comment. "
             f"Population: {len(files)} Python file(s) — every module of the "
             "package plus the runner. A row classified as a finding is one "
-            "this stage could not account for."
+            "this gate could not account for; a declared file with no "
+            "executable line left to declare is a stale declaration and a "
+            "finding of its own."
         ),
         "n_files_scanned": len(files),
         "n_hits": len(hits),
@@ -1122,37 +1104,109 @@ def self_containment(campaign: Campaign) -> dict[str, Any]:
         "n_executable": sum(1 for row in hits if row["executable"]),
         "n_findings": len(findings),
         "n_imports_of_either_directory": len(imports),
+        "n_stale_declarations": len(stale_declarations),
+        "stale_declarations": stale_declarations,
         "imports": imports,
         "by_classification": by_kind,
         "findings": findings,
-        "passed": not findings and not imports,
+        "passed": not findings and not imports and not stale_declarations,
         "hits": hits,
     }
 
 
-def print_self_containment(block: Mapping[str, Any]) -> None:
-    print(f"\n  {block['what_this_is']}")
-    print(f"\n  {block['caption']}\n")
-    print(
-        f"    files scanned                 {block['n_files_scanned']}\n"
-        f"    lines naming either directory {block['n_hits']}\n"
-        f"      of which inside prose       {block['n_in_prose']}\n"
-        f"      of which executable code    {block['n_executable']}\n"
-        f"    imports of either directory   {block['n_imports_of_either_directory']}\n"
-        f"    unclassified (findings)       {block['n_findings']}"
+def self_containment(campaign: Campaign) -> dict[str, Any]:
+    """The gate's body: the package and the runner, scanned."""
+    here = Path(__file__).resolve().parent.parent
+    block = scan_self_containment(self_containment_files(campaign), relative_to=here.parent)
+    block["population"] = (
+        f"{block['n_files_scanned']} Python file(s): every module under harness/ "
+        f"and experiment_runner.py beside it; {block['n_hits']} line(s) naming "
+        f"either directory, {block['n_executable']} of them executable"
     )
-    print("\n    by classification:")
-    for kind, count in sorted(block["by_classification"].items(), key=lambda kv: -kv[1]):
-        print(f"      {count:>3}  {kind}")
-    print("\n    every executable line, with what it is:")
-    for row in block["hits"]:
-        if not row["executable"]:
-            continue
-        print(f"      {row['file']}:{row['line']}  {row['text']}")
-        print(f"          {row['classification'][:150]}")
-    if block["findings"]:
-        print("\n    FINDINGS:")
-        for row in block["findings"]:
-            print(f"      {row['file']}:{row['line']}  {row['text']}")
+    block["criterion"] = (
+        "0 imports of either directory, 0 executable lines naming one that "
+        "the declaration table does not account for, and 0 declared files "
+        "with nothing left to declare"
+    )
+    block["n_compared"] = block["n_files_scanned"]
+    block["n_mismatched"] = (
+        block["n_findings"]
+        + block["n_imports_of_either_directory"]
+        + block["n_stale_declarations"]
+    )
+    return block
 
 
+def _self_containment_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
+    def a_scratch_module_importing_the_directory() -> tuple[bool, str]:
+        """One file more than the package holds, and it must be counted.
+
+        The scratch module is written in a temporary directory, never inside
+        the package; only the scanned file *list* is widened.  It does both
+        forbidden things in one line -- imports ``idf_probe`` and names it in
+        executable code -- so the count of imports and the count of findings
+        must both move by exactly one, and the gate must say FAIL.
+        """
+        import tempfile
+
+        here = Path(__file__).resolve().parent.parent
+        baseline = scan_self_containment(
+            self_containment_files(campaign), relative_to=here.parent
+        )
+        with tempfile.TemporaryDirectory() as td:
+            scratch = Path(td) / "a_scratch_module_for_the_tooth.py"
+            scratch.write_text(
+                "from arch_surgery.idf_probe import run_one  # the tooth's import\n"
+                "def reach():\n"
+                "    return run_one\n"
+            )
+            widened = scan_self_containment(
+                [*self_containment_files(campaign), scratch], relative_to=here.parent
+            )
+        counted = (
+            widened["n_imports_of_either_directory"]
+            == baseline["n_imports_of_either_directory"] + 1
+            and widened["n_findings"] == baseline["n_findings"] + 1
+            and widened["n_files_scanned"] == baseline["n_files_scanned"] + 1
+            and any(row["file"].endswith(scratch.name) for row in widened["findings"])
+            and any(row["file"] == scratch.name for row in widened["imports"])
+            and not widened["passed"]
+        )
+        return counted, (
+            f"a scratch module importing arch_surgery.idf_probe added to the "
+            f"scanned set: imports {baseline['n_imports_of_either_directory']} -> "
+            f"{widened['n_imports_of_either_directory']}, findings "
+            f"{baseline['n_findings']} -> {widened['n_findings']}, files "
+            f"{baseline['n_files_scanned']} -> {widened['n_files_scanned']}, "
+            f"passed {baseline['passed']} -> {widened['passed']}"
+        )
+
+    return (
+        Tooth(
+            "a_scratch_module_importing_the_directory",
+            "a module that imports arch_surgery.idf_probe, written in a scratch "
+            "directory and added to the scanned file list",
+            "FAIL, counting one import and one finding more",
+            a_scratch_module_importing_the_directory,
+        ),
+    )
+
+
+def self_containment_gate(campaign: Campaign) -> Gate:
+    return Gate(
+        name="self_containment",
+        binds=(
+            "the user's requirement in the harness plan §6: nothing in this "
+            "package is imported from, or invoked as a subprocess into, "
+            "idf_probe/ or fixedpoint/"
+        ),
+        what_it_proves=(
+            "every mention of the two superseded directories in this package "
+            "and the runner beside it is classified -- heritage prose, the "
+            "driver's own probe module, or a declared provenance string -- "
+            "with 0 imports, 0 unclassified executable lines and 0 stale "
+            "declarations"
+        ),
+        body=lambda *, resume=False: self_containment(campaign),
+        teeth=_self_containment_teeth(campaign),
+    )

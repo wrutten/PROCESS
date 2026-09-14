@@ -24,11 +24,10 @@ the check must catch before its zeros are believed (orchestration protocol
    paragraph the record names.
 
 Run it directly, or through ``experiment_runner.py --selfcheck``.  Both check
-the experiment's own copy of PROCESS, which is the tree every run uses;
-``--tree repository`` checks the repository-root package instead, and since the
-switch rename its capability check **fails by design** — that tree belongs to
-the previous revision and does not implement the new names, which is exactly
-what the probe exists to notice.
+the experiment's own copy of PROCESS, which is the tree every run uses.  The
+refusals that keep it so are exercised on a campaign this module constructs at
+another path (:func:`_campaign_elsewhere`); there is no flag to check a tree the
+harness does not run.
 """
 
 from __future__ import annotations
@@ -67,7 +66,6 @@ from harness.core.config import (  # noqa: E402
     Campaign,
     artifact_file_names,
     default_campaign,
-    repository_tree_campaign,
 )
 
 # --------------------------------------------------------------------------
@@ -92,9 +90,9 @@ Check = framework.Check
 # rather than imported: every verification the experiment runs is implemented
 # inside this package, and importing the earlier revision would pull five
 # modules of superseded task machinery onto the import path to obtain six
-# dictionaries.  `--crosscheck-previous` executes those two functions in a
-# subprocess and compares, so the transcription itself is measured rather
-# than trusted.
+# dictionaries.  The transcription is frozen with the revision it transcribes
+# (D20); the composition gate compares this revision's arms against it at
+# every press.
 
 # The comparison below is **by role**, and that is the whole reason it still
 # means something after the rename.  The previous revision's environments carry
@@ -875,18 +873,29 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
                 f"the tree under test, each a declared record field"
             )
 
-    for retired in sorted(sw.retired_names()):
-        caught = False
+    # One tooth over the registry's whole retired list, each name set alone:
+    # the list it iterates is the registry's own, and the *criterion* above is
+    # what compares that list with the driver's ``RETIRED_SWITCHES``.  A tooth
+    # per name was the same refusal observed eleven times (survey item B6).
+    retired_names = sorted(sw.retired_names())
+    not_refused: list[str] = []
+    for retired in retired_names:
         try:
             sw.assert_no_retired({retired: "anything", **reference_env})
         except sw.SwitchError:
-            caught = True
-        check.tooth(
-            f"the retired name {retired} present in the environment",
-            caught,
-            "a retired switch name must be refused, not cleared and forgotten: "
-            "an ignored one runs a different arrangement under the right name",
-        )
+            continue
+        not_refused.append(retired)
+    check.tooth(
+        "a retired switch name present in the environment, each of the "
+        "registry's list in turn",
+        bool(retired_names) and not not_refused,
+        f"a retired switch name must be refused, not cleared and forgotten: "
+        f"an ignored one runs a different arrangement under the right name "
+        f"({len(retired_names) - len(not_refused)} of {len(retired_names)} "
+        f"refused"
+        + (f"; NOT refused: {', '.join(not_refused)}" if not_refused else "")
+        + ")",
+    )
 
     refused_by_driver = sw.probe(
         campaign.tree,
@@ -964,6 +973,20 @@ def _git(repo: Path, *args: str) -> None:
         capture_output=True,
         text=True,
     )
+
+
+def _campaign_elsewhere(campaign: Campaign) -> Campaign:
+    """*campaign* with its tree pointed at the repository root — a fixture.
+
+    :attr:`Campaign.is_experiment_copy` is False for it and ``pool.run``
+    refuses every run against it; the provenance and run-path checks use it
+    to prove both.  It is built here, on the spot, from the campaign under
+    check (rule (x): a self-check builds its own fixture) — the repository
+    root is chosen because it is the one other directory on this machine that
+    holds a ``process/`` package, which is exactly the shape a wrong tree has.
+    No record is ever made against it.
+    """
+    return dataclasses.replace(campaign, tree=Path(campaign.tree).resolve().parents[2])
 
 
 def check_provenance(campaign: Campaign) -> Check:
@@ -1046,16 +1069,16 @@ def check_provenance(campaign: Campaign) -> Check:
 
     # The exact-tree assertion (trap T6) refuses a prefix match.
     check.n_compared += 1
-    if repository_tree_campaign().is_experiment_copy:
+    elsewhere = _campaign_elsewhere(campaign)
+    if elsewhere.is_experiment_copy:
         check.fail(
-            "a campaign pointed at the repository's own tree reports itself "
-            "as the experiment's copy; records would be made against a tree "
-            "nobody asked for"
+            f"a campaign pointed at {elsewhere.tree} reports itself as the "
+            f"experiment's copy; records would be made against a tree nobody "
+            f"asked for"
         )
     check.tooth(
         "a campaign pointed at a tree that is not the experiment's copy",
-        (not repository_tree_campaign().is_experiment_copy)
-        and default_campaign().is_experiment_copy,
+        (not elsewhere.is_experiment_copy) and default_campaign().is_experiment_copy,
         "the checking campaign must not pass for the production one; the "
         "runner refuses every campaign stage on that ground, so a record "
         "cannot be made against the wrong tree by forgetting a flag",
@@ -1658,119 +1681,6 @@ def check_data(campaign: Campaign) -> Check:
 
 
 # --------------------------------------------------------------------------
-# the previous revision's own composition, executed
-# --------------------------------------------------------------------------
-
-_CROSSCHECK_SOURCE = r"""
-import json, os, sys
-v3 = sys.argv[1]
-sys.path.insert(0, v3)
-import v3_config as cfg
-import v3_runner
-import phase_a
-out = {}
-for configuration in cfg.DECKS:
-    for arm in ("R", "B0", "B1", "B3"):
-        out["B:%s:%s" % (arm, configuration)] = {
-            k: v for k, v in v3_runner.env_for(configuration, arm).items()
-            if k.startswith("PROCESS_ARCH") or k == "PROCESS_IDF_PROBE"
-        }
-    for arm in ("A0", "A1"):
-        pin = "0x1.34a0000000000p+10" if configuration in cfg.PULSED else None
-        out["A:%s:%s" % (arm, configuration)] = {
-            k: v
-            for k, v in phase_a.env_for_phase_a(
-                configuration, arm, pin_hex=pin
-            ).items()
-            if k.startswith("PROCESS_ARCH") or k == "PROCESS_IDF_PROBE"
-        }
-print("@@X@@" + json.dumps(out) + "@@X@@")
-"""
-
-
-def crosscheck_previous(campaign: Campaign) -> Check:
-    """Execute the previous revision's composition and compare, once.
-
-    Not one of the four gates and not run by default: it reaches outside this
-    package deliberately, to measure the transcription in
-    :func:`_previous_environment` instead of trusting it.
-    """
-    check = Check(
-        name="crosscheck-previous",
-        binds="the transcription of the previous revision's composition "
-        "matches what its own code produces",
-        population="6 arms x 3 configurations",
-    )
-    v3 = Path(campaign.tree) / "arch_surgery" / "MDA_partitioning_experiment_v3"
-    if not v3.exists():
-        check.note(f"no previous revision at {v3}; not run")
-        return check
-    # ``-P`` and PYTHONSAFEPATH for the same reason the capability probe
-    # carries them: with ``-c``, Python puts the current working directory at
-    # the head of ``sys.path``, ahead of everything PYTHONPATH names, so a
-    # child started from a directory that happens to hold a ``process/``
-    # package would import that one instead of the tree this check is about.
-    proc = subprocess.run(
-        [sys.executable, "-P", "-c", _CROSSCHECK_SOURCE, str(v3)],
-        capture_output=True,
-        text=True,
-        env={
-            **dict(__import__("os").environ),
-            "PYTHONPATH": str(campaign.tree),
-            "PYTHONSAFEPATH": "1",
-        },
-        timeout=600,
-    )
-    body = proc.stdout.split("@@X@@")
-    if len(body) < 3:
-        check.fail(
-            f"the previous revision's composition could not be executed "
-            f"(rc={proc.returncode}): {(proc.stderr or '').strip()[-400:]}"
-        )
-        return check
-    theirs_all = json.loads(body[1])
-    for config in campaign.configurations:
-        for name in _PREVIOUS_NAME:
-            if name in config.skips:
-                continue
-            phase = arms_mod.ARMS[name].phase
-            key = f"{phase}:{_PREVIOUS_NAME[name]}:{config.name}"
-            if key not in theirs_all:
-                check.fail(f"no previous-revision environment for {key}")
-                continue
-            theirs = _architecture_only(theirs_all[key], config)
-            if "PROCESS_ARCH_PIN_BURN_TIME" in theirs:
-                theirs["PROCESS_ARCH_PIN_BURN_TIME"] = "<pin>"
-            mine = _previous_environment(name, config, campaign)
-            check.n_compared += 1
-            if mine != theirs:
-                check.fail(
-                    f"{name} on {config.name}: transcribed {mine}, their code "
-                    f"produced {theirs}"
-                )
-
-    first = campaign.configurations[0]
-    key = f"B:B3:{first.name}"
-    if key in theirs_all:
-        theirs = _architecture_only(theirs_all[key], first)
-        corrupted = dict(_previous_environment("B3", first, campaign))
-        corrupted["PROCESS_ARCH_HOIST"] = "feedforward"
-        check.tooth(
-            "a wrong value in the transcription",
-            corrupted != theirs,
-            "the per-call deferral transcribed without the lifted variant "
-            "must not match what their code produced on a pulsed "
-            "configuration",
-        )
-    return check
-
-
-# --------------------------------------------------------------------------
-# entry point
-# --------------------------------------------------------------------------
-
-
-# --------------------------------------------------------------------------
 # 6. the run path
 # --------------------------------------------------------------------------
 #
@@ -1856,21 +1766,6 @@ def check_run_path(campaign: Campaign) -> Check:
         f"not summarised over ({message})",
     )
 
-    # Half of the audit's ruler pair, which is what a table would read as an
-    # accuracy gain rather than a change of ruler.
-    half = json.loads(json.dumps(complete))
-    half["exit_audit"].pop(records_mod.AUDIT_RULERS[1])
-    caught, message = _must_refuse_here(
-        lambda: records_mod.assert_complete(half, where="a tooth")
-    )
-    check.tooth(
-        "an exit audit carrying one convergence ruler and not both",
-        caught,
-        f"the mixed ruler reads lower wherever its denominator binds, so a "
-        f"residual table built from records with one column here and two "
-        f"there reports a change of ruler as a change of accuracy ({message})",
-    )
-
     unlabelled = json.loads(json.dumps(complete))
     unlabelled["campaign_run_kind"] = "measurement"
     caught, message = _must_refuse_here(
@@ -1883,23 +1778,12 @@ def check_run_path(campaign: Campaign) -> Check:
         f"one of them is not a measurement ({message})",
     )
 
-    unsummed = json.loads(json.dumps(complete))
-    unsummed["node_calls_solve_phase"] = 1000
-    unsummed["attempts"] = [
-        {"attempt": 1, "node_calls_solve_phase": 400},
-        {"attempt": 2, "node_calls_solve_phase": 550},
-    ]
-    caught, message = _must_refuse_here(
-        lambda: records_mod.assert_attempt_summation(unsummed, where="a tooth")
-    )
-    check.tooth(
-        "per-attempt costs that do not sum to the run total",
-        caught,
-        f"400 + 550 against a total of 1000 must be refused: the cost ratio "
-        f"published with and without retried seeds would otherwise be computed "
-        f"over quantities that do not decompose the published one ({message})",
-    )
-
+    # Half of the audit's ruler pair, and per-attempt costs that do not sum to
+    # the run total, are gate G7's teeth (``record_completeness``), tripped on
+    # a real record made by the gate; this check no longer repeats them on a
+    # synthetic one (survey item B6).  What it keeps are the two refusals G7
+    # has no tooth for: a partial per-attempt decomposition, and a sweep total
+    # that does not decompose.
     partial = json.loads(json.dumps(complete))
     partial["node_calls_solve_phase"] = 1000
     partial["attempts"] = [
@@ -1993,7 +1877,7 @@ def check_run_path(campaign: Campaign) -> Check:
 
     # --- the refusals -----------------------------------------------------
     config = campaign.configurations[0]
-    elsewhere = repository_tree_campaign()
+    elsewhere = _campaign_elsewhere(campaign)
     job = pool_mod.Job(
         phase="B",
         arm="BR",
@@ -2325,7 +2209,6 @@ def run_all(
     campaign: Campaign,
     *,
     include_capability: bool = True,
-    include_crosscheck: bool = False,
 ) -> list[Check]:
     checks = [check_composition(campaign), check_rungs()]
     if include_capability:
@@ -2334,8 +2217,6 @@ def run_all(
     checks.append(check_data(campaign))
     checks.append(check_run_path(campaign))
     checks.append(check_stage_provenance(campaign))
-    if include_crosscheck:
-        checks.append(crosscheck_previous(campaign))
     return checks
 
 
@@ -2364,42 +2245,19 @@ def report(checks: list[Check]) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--tree",
-        choices=("copy", "repository"),
-        default="copy",
-        help="which tree to check against.  The default is the experiment's "
-        "own copy, which is the tree every run uses.  'repository' checks "
-        "against the repository-root package, which belongs to the previous "
-        "revision: **its capability check now fails by design**, because that "
-        "tree does not implement the renamed switches and the probe's whole "
-        "job is to say so",
-    )
-    parser.add_argument(
         "--no-capability",
         action="store_true",
         help="skip the capability probe (it starts one child process per "
         "arm and configuration and takes tens of seconds)",
     )
-    parser.add_argument(
-        "--crosscheck-previous",
-        action="store_true",
-        help="also execute the previous revision's own composition and "
-        "compare it with this package's transcription of it",
-    )
     parser.add_argument("--json", type=Path, help="write the records here")
     args = parser.parse_args(argv)
 
-    campaign = (
-        repository_tree_campaign() if args.tree == "repository" else default_campaign()
-    )
+    campaign = default_campaign()
     print(f"tree under check: {campaign.tree}")
     print(f"artifacts       : {campaign.data_dir}")
     print(f"configurations  : {', '.join(campaign.population)}\n")
-    checks = run_all(
-        campaign,
-        include_capability=not args.no_capability,
-        include_crosscheck=args.crosscheck_previous,
-    )
+    checks = run_all(campaign, include_capability=not args.no_capability)
     rc = report(checks)
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)

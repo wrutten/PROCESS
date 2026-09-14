@@ -24,10 +24,13 @@ typed refusal — ``process.core.solver.ArchitectureRefusal`` — for every refu
 of an architecture setting, and that **type** is what classifies a run here.
 Before it existed the only evidence was the text of the message, matched on
 distinctive fragments; that worked, and was checked, but it puts a *reworded*
-refusal in the wrong row of the failure table.  The text match is kept below as
-a **fallback, and is marked for removal**: it exists only for a record made by a
-tree that predates the typed refusal, and once no such record is read any more
-it and :data:`REFUSAL_MARKERS` go together.
+refusal in the wrong row of the failure table.  The text match was kept as a
+fallback for records made by a tree that predates the typed refusal; every run
+asserts the copy, no such record exists, and the fallback was removed once a
+grep of the copy's ``process/core/`` showed every architecture refusal typed
+(37 ``raise ArchitectureRefusal`` sites; the ``RuntimeError`` sites that remain
+are upstream's pass cap, a tripwire that is a crash by design, and the
+superseded probe's own mode guard, which no arm sets).
 
 The type is matched **by name over the exception's inheritance chain**, not by
 ``isinstance``.  The harness must be able to classify a run without importing
@@ -55,22 +58,6 @@ UPSTREAM_PASS_CAP_MARKERS: tuple[str, ...] = (
 #: inheritance chain, so a future subclass of it lands in the same row.
 REFUSAL_TYPES: tuple[str, ...] = ("ArchitectureRefusal",)
 
-#: **Fallback, marked for removal.**  Fragments that mark a driver refusal in a
-#: record made before the typed refusal existed.  Each is a sentence the driver
-#: itself wrote.  Delete this tuple, and the branch that consults it, once no
-#: record from such a tree is read any more.
-REFUSAL_MARKERS: tuple[str, ...] = (
-    "is not a recognised",
-    "must refuse rather than",
-    "refuse rather than",
-    "two owners",
-    "which is only correct once",
-    "does not exist.  There",
-    "which is not present",
-    "must not be guessed",
-    "does not rebuild",
-)
-
 
 def classify(exception: BaseException | None, *, status: str) -> str:
     """The taxonomy row for how a run ended.
@@ -97,9 +84,6 @@ def classify(exception: BaseException | None, *, status: str) -> str:
         return "refused"
     if all(marker in text for marker in UPSTREAM_PASS_CAP_MARKERS):
         return "unconverged-at-cap"
-    # The fallback, for a record made before the typed refusal existed.
-    if any(marker in text for marker in REFUSAL_MARKERS):
-        return "refused"
     return "crashed"
 
 

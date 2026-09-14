@@ -7,20 +7,16 @@ their solve handed over, bit for bit outside the per-run deferred nodes' own
 writes, with no output-time sweep run and the accepted objective in the file;
 and nothing about the solve changed on the arms that keep the loop.
 
-The second section, ``the output path, measured``, is the measurement stage
-``output_path_measurements`` with its contrast runs (``capture_contrast``): what
-the output-time loop moves in the output files and what it costs.  It is a
-measurement and not a gate, and it lives here because it is built on G9's run
-directory and comparison helpers.
+The second section holds :func:`excluded_by_the_per_run_nodes`, the excluded
+set of the restricted audit statistic, which gates G2/G3 and G4 import from
+here.  The measurement stage that used to follow it (``output_path_measurements``
+with its contrast runs) was retired by the simplification survey's item B5.
 
-:func:`excluded_by_the_per_run_nodes` is shared with gates G2/G3 and G4, which
-import it from here.
-
-Moved verbatim out of ``harness/gates/gates.py`` (its ``G9`` and ``the output
-path, measured`` sections) by the code-move task of the simplification survey;
-written by task **A57 (driver-output-path)**.  Gate name, ``runs_under``, record
-path and teeth are unchanged; the gate is constructed by :func:`gate` and
-registered in ``harness/gates/registry.py``.
+Moved verbatim out of ``harness/gates/gates.py`` (its ``G9`` section) by the
+code-move task of the simplification survey; written by task **A57
+(driver-output-path)**.  Gate name, ``runs_under``, record path and teeth are
+unchanged; the gate is constructed by :func:`gate` and registered in
+``harness/gates/registry.py``.
 """
 
 from __future__ import annotations
@@ -42,15 +38,8 @@ from harness.core import framework  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
-from harness.gates import reference as reference_mod  # noqa: E402
-from harness.experiment import switches as switches_mod  # noqa: E402
 from harness.core.config import Campaign  # noqa: E402
-from harness.gates.gate_neutrality import (  # noqa: E402
-    _mfile_for,
-    _read_record,
-    _same,
-    compare_mfiles,
-)
+from harness.gates.gate_neutrality import _read_record, _same  # noqa: E402
 from harness.gates.gates import _with_capture  # noqa: E402
 
 GATES_SUBPATH = framework.GATES_SUBPATH
@@ -562,53 +551,24 @@ def _output_path_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
 
 
 # --------------------------------------------------------------------------
-# the output path, measured -- not a gate
+# the per-run nodes' own writes -- the excluded set gates G2/G3 and G4 share
 # --------------------------------------------------------------------------
 #
-# Two quantities the experiment plan asks for by name, published as
-# measurements with their populations and never as acceptance criteria.
+# The audit sweep runs every node, including the ones an arm defers to once
+# per run; measured from the handed-over state -- which is *before* those
+# nodes have run -- their own outputs necessarily move, and a whole-state
+# count on such an arm would report that as non-convergence.  The restricted
+# count excludes exactly the components those nodes write, derived from the
+# same two committed artifacts the audit's own restricted statistic derives
+# from: the per-run deferral artifact names the nodes, the run-time write
+# census says what each writes on this configuration.  One excluded set per
+# configuration, from the committed input file's artifact, so that the count
+# is on the same ruler in every arm of that configuration.
 #
-# **What the output-time loop costs.**  Section 3.3 of the plan commits the
-# sweep count of that loop, per run, by arm and configuration.  It is read from
-# the driver's own counter on the reproduction gate's runs -- the only set of
-# runs in which every arm, including the two whose matrix cell turns the loop
-# off, executes it (that gate runs them with it on, because the records it
-# reproduces were made that way).
-#
-# **What the accepted state's residual is, at the declared position.**  The
-# same section says the one signal the output-time loop found by accident in
-# the previous revision -- a handed-over state that was not output-idempotent
-# -- is to be "looked for on purpose": the exit audit at the accepted point,
-# per run, with the count of components above the tolerance.  That count is
-# read from the gate's own runs at the declared position.
-#
-# It is published **twice**, and the reason is not caution.  The audit sweep
-# runs every node, including the ones an arm defers to once per run; measured
-# from the handed-over state -- which is *before* those nodes have run -- their
-# own outputs necessarily move, and a whole-state count on such an arm would
-# report that as non-convergence.  The restricted count excludes exactly the
-# components those nodes write, derived here from the same two committed
-# artifacts the audit's own restricted statistic derives from: the per-run
-# deferral artifact names the nodes, the run-time write census says what each
-# writes on this configuration.  One excluded set per configuration, from the
-# committed input file's artifact, so that the count is on the same ruler in
-# every arm of that configuration.
-#
-# (The restricted count is computed here, from the run's own committed residual
-# vector, rather than carried in the record: wiring it into the optimisation
-# record belongs with gate G4, which is task A52 (harness-gates)'s.  Both
-# constructions are stated in the table's caption.)
-
-
-def _residual_vector(directory: Path, *, key: str) -> dict[str, Any]:
-    path = Path(directory) / "audit_residual.json"
-    if not path.exists():
-        raise GateError(
-            f"no residual vector for {key}: {path} is not there.  A count of "
-            f"components above the tolerance with no vector behind it is a "
-            f"number over an unstated population (trap T11)."
-        )
-    return json.loads(path.read_text())
+# (The measurement stage that used to sit here -- ``output_path_measurements``
+# with its six contrast optimisations -- was retired by the simplification
+# survey's item B5: its sweep-count half is the tally's ``output_loop_sweeps``
+# column, and the written-file half is gate ``written_file_gap``'s question.)
 
 
 def excluded_by_the_per_run_nodes(campaign: Campaign, config) -> tuple[set[str], dict]:
@@ -639,383 +599,6 @@ def excluded_by_the_per_run_nodes(campaign: Campaign, config) -> tuple[set[str],
         "census": str(Path(campaign.data_dir) / "node_writesets.json"),
         "n_fields_named": len(owned),
     }
-
-
-#: The two runs the contrast makes on each configuration: the reference arm,
-#: identical in everything, written out through each of the two output paths.
-CONTRAST_LABELS: dict[str, str | None] = {"with_loop": None, "without_loop": "none"}
-
-
-def contrast_root(campaign: Campaign) -> Path:
-    return output_path_root(campaign) / "contrast"
-
-
-def contrast_jobs(campaign: Campaign) -> list[pool_mod.Job]:
-    """The reference arm, run twice per configuration, once down each path.
-
-    Deliberately **not** a matrix composition: no arm of the experiment writes
-    upstream's own solve out through the one-call path.  That is the point —
-    holding the solve fixed and varying only the output path is the only way to
-    say what the output-time loop does to the numbers a reader of the output
-    file gets, and the arm whose numbers a reader actually gets is the reference
-    one.  It runs as a gate, never as a campaign record, and the environment
-    override is stamped in each record.
-    """
-    jobs: list[pool_mod.Job] = []
-    for config in campaign.configurations:
-        for label, value in CONTRAST_LABELS.items():
-            jobs.append(
-                pool_mod.Job(
-                    phase="B",
-                    arm="BR",
-                    config=config,
-                    seed=0,
-                    outdir=contrast_root(campaign) / config.name / label,
-                    regime="unperturbed",
-                    delta=campaign.delta,
-                    run_kind="gate",
-                    override_env=(
-                        {}
-                        if value is None
-                        else {switches_mod.REGISTRY["output_loop"].driver_name: value}
-                    ),
-                )
-            )
-    return jobs
-
-
-def capture_contrast(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
-    """Run the contrast's two runs per configuration.  Nothing is compared here."""
-    jobs = contrast_jobs(campaign)
-    results = pool_mod.run_all(jobs, campaign, resume=resume)
-    manifest = {
-        "captured": _dt.datetime.now().isoformat(timespec="seconds"),
-        "tree_git_head": _git_head(),
-        "n_runs": len(jobs),
-        "runs": [
-            {
-                "configuration": job.config.name,
-                "label": sorted(CONTRAST_LABELS)[i % len(CONTRAST_LABELS)],
-                "override_env": dict(job.override_env),
-                "outdir": str(job.outdir),
-                "status": (results[i] or {}).get("status")
-                if isinstance(results, list)
-                else None,
-            }
-            for i, job in enumerate(jobs)
-        ],
-    }
-    path = contrast_root(campaign) / "manifest.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(manifest, indent=2, default=str) + "\n")
-    manifest["manifest"] = str(path)
-    return manifest
-
-
-def contrast_rows(campaign: Campaign) -> list[dict[str, Any]]:
-    """What the output-time loop moves, per configuration, in the output file.
-
-    The solve is held fixed and is checked to be fixed: the accepted objective
-    and the solve-phase node count must be identical on the two sides, and a
-    row where they are not says so rather than attributing a solve difference
-    to the output path.  What is then counted is output-file lines differing,
-    with the same metadata keys excluded that gate G1 excludes -- date, time,
-    user, paths, version strings and PROCESS's own timing of itself.
-    """
-    rows: list[dict[str, Any]] = []
-    for config in campaign.configurations:
-        key = f"BR/{config.name}"
-        directory = {
-            label: contrast_root(campaign) / config.name / label
-            for label in CONTRAST_LABELS
-        }
-        record = {
-            label: _read_record(d, side=f"contrast:{label}", key=key)
-            for label, d in directory.items()
-        }
-        mfile = {}
-        for label, d in directory.items():
-            found = _mfile_for(d, config.name)
-            if found is None:
-                raise GateError(
-                    f"the contrast has no output file for {key} on the "
-                    f"{label!r} side ({d}); the line comparison would be over "
-                    f"nothing"
-                )
-            mfile[label] = found
-        lines = compare_mfiles(mfile["with_loop"], mfile["without_loop"])
-        solve_identical = (
-            record["with_loop"].get("node_calls_solve_phase")
-            == record["without_loop"].get("node_calls_solve_phase")
-            and (record["with_loop"].get("exact") or {}).get("norm_objf")
-            == (record["without_loop"].get("exact") or {}).get("norm_objf")
-        )
-        rows.append(
-            {
-                "configuration": config.name,
-                "arm": "BR",
-                "solve_identical": solve_identical,
-                "node_calls_solve_phase": record["with_loop"].get(
-                    "node_calls_solve_phase"
-                ),
-                "node_calls_total_with_loop": record["with_loop"].get(
-                    "node_calls_total"
-                ),
-                "node_calls_total_without_loop": record["without_loop"].get(
-                    "node_calls_total"
-                ),
-                "accepted_objf_hex": (record["with_loop"].get("exact") or {}).get(
-                    "norm_objf"
-                ),
-                "output_loop_sweeps_with_loop": record["with_loop"].get(
-                    "output_loop_sweeps"
-                ),
-                "output_loop_sweeps_without_loop": record["without_loop"].get(
-                    "output_loop_sweeps"
-                ),
-                "mfile_ifail_with_loop": (record["with_loop"].get("mfile") or {}).get(
-                    "ifail"
-                ),
-                "mfile_ifail_without_loop": (
-                    record["without_loop"].get("mfile") or {}
-                ).get("ifail"),
-                "n_lines_compared": lines["n_lines_compared"],
-                "n_lines_excluded": lines["n_lines_excluded"],
-                "n_lines_differing": lines["n_lines_differing"],
-                "differing_first": [
-                    row["before"].split()[0][:70] for row in lines["differing"][:12]
-                ],
-            }
-        )
-    return rows
-
-
-def output_path_measurements(campaign: Campaign) -> dict[str, Any]:
-    """The two measurements, over the run sets each is defined on."""
-    reproduction_root = Path(campaign.runs_dir) / "gates" / "reproduction" / "runs"
-    sweeps: list[dict[str, Any]] = []
-    for run in reference_mod.reference_set(campaign):
-        if run.phase != "B":
-            continue
-        key = f"{run.arm}/{run.configuration}/seed{run.seed:03d}"
-        directory = (
-            reproduction_root
-            / run.configuration
-            / run.arm
-            / pool_mod.seed_directory(run.seed)
-        )
-        record = _read_record(directory, side="the reproduction gate", key=key)
-        total = record.get("node_calls_total")
-        solve = record.get("node_calls_solve_phase")
-        sweeps.append(
-            {
-                "arm": run.arm,
-                "configuration": run.configuration,
-                "seed": run.seed,
-                "output_path": record.get("output_path"),
-                "output_loop_sweeps": record.get("output_loop_sweeps"),
-                "output_path_entries": record.get("output_path_entries"),
-                "reproduction_overrides": record.get("reproduction_overrides"),
-                "node_calls_solve_phase": solve,
-                "node_calls_total": total,
-                "node_calls_after_the_solve": (
-                    None if total is None or solve is None else total - solve
-                ),
-            }
-        )
-
-    above: list[dict[str, Any]] = []
-    excluded_by_config: dict[str, dict] = {}
-    for config in campaign.configurations:
-        owned, derivation = excluded_by_the_per_run_nodes(campaign, config)
-        excluded_by_config[config.name] = derivation
-        for arm in arms_mod.active_arms(config, "B"):
-            if arms_mod.ARMS[arm].output_loop != "none":
-                continue
-            key = f"{arm}/{config.name}"
-            directory = output_path_root(campaign) / "runs" / config.name / arm
-            record = _read_record(directory, side="G9", key=key)
-            vector = _residual_vector(directory, key=key)
-            tau = float(vector["tau"])
-            scaled = vector["scaled"]
-            kept = {k: v for k, v in scaled.items() if k not in owned}
-            above.append(
-                {
-                    "arm": arm,
-                    "configuration": config.name,
-                    "audit_position": record.get("audit_position"),
-                    "tau": tau,
-                    "residual_max_hex": (record.get("exit_audit") or {}).get(
-                        "residual_max_hex"
-                    ),
-                    "n_tested_whole_state": len(scaled),
-                    "n_above_tau_whole_state": sum(
-                        1 for v in scaled.values() if v >= tau
-                    ),
-                    "n_tested_restricted": len(kept),
-                    "n_above_tau_restricted": sum(
-                        1 for v in kept.values() if v >= tau
-                    ),
-                    "n_excluded_as_per_run_owned": len(scaled) - len(kept),
-                    "residual_max_restricted": max(kept.values()) if kept else 0.0,
-                    "residual_max_restricted_hex": float(
-                        max(kept.values()) if kept else 0.0
-                    ).hex(),
-                    "residual_argmax_restricted": (
-                        max(kept, key=kept.get) if kept else None
-                    ),
-                    "above_tau_restricted": sorted(
-                        k for k, v in kept.items() if v >= tau
-                    )[:20],
-                }
-            )
-    contrast = contrast_rows(campaign)
-    return {
-        "what_the_output_time_loop_moves": {
-            "population": (
-                f"{len(contrast) * 2} run(s) = the reference arm at seed 0 on "
-                f"each of {len(contrast)} configuration(s), written out once "
-                f"through each output path with everything else identical.  "
-                f"Not a matrix composition: no arm of the experiment writes "
-                f"upstream's own solve through the one-call path, and holding "
-                f"the solve fixed while varying only the output path is what "
-                f"isolates the loop's effect on the numbers a reader gets"
-            ),
-            "rows": contrast,
-        },
-        "output_time_loop_sweeps": {
-            "population": (
-                f"{len(sweeps)} optimisation run(s) of the reproduction gate = "
-                f"its whole optimisation-phase reference set.  Every one runs "
-                f"upstream's output-time loop: the two arms whose matrix cell "
-                f"turns it off carry the gate's recorded override, because the "
-                f"records they reproduce were made before the switch existed"
-            ),
-            "rows": sweeps,
-        },
-        "above_tau_at_the_declared_position": {
-            "population": (
-                f"{len(above)} run(s) at seed 0 = the arms whose matrix cell "
-                f"turns the output-time loop off, on every configuration where "
-                f"they are active, from gate G9's own runs; the audit is taken "
-                f"at the entry to the output path in every one"
-            ),
-            "excluded_set_per_configuration": excluded_by_config,
-            "rows": above,
-        },
-        "generated": _dt.datetime.now().isoformat(timespec="seconds"),
-        "tree_git_head": _git_head(),
-    }
-
-
-def print_measurements(block: Mapping[str, Any]) -> None:
-    """The three tables, with their captions, as the report prints them."""
-    contrast = block["what_the_output_time_loop_moves"]
-    print()
-    print(
-        "*Caption: one row per configuration.  The reference arm is run at "
-        "seed 0 and written out twice — once through upstream's output-time "
-        "loop and once through the one-call path — with everything else "
-        "identical.  The solve is held fixed and checked to be fixed: "
-        '"solve identical" is the accepted objective hex and the solve-phase '
-        "node count agreeing on the two sides, and a row where they do not "
-        "agree is not a statement about the output path.  Lines differing are "
-        "lines of PROCESS's own output file, with the same metadata keys "
-        "excluded that the switch-neutrality gate excludes (date, time, user, "
-        "paths, version strings and PROCESS's own timing of itself).  Counts, "
-        "not timings.  Population: " + contrast["population"] + ".*"
-    )
-    print()
-    print(
-        "| configuration | solve identical | accepted objective (hex) | "
-        "solve-phase node calls | total node calls, loop on / off | sweeps, "
-        "on / off | output-file lines differing / compared |"
-    )
-    print("|---|---|---|---:|---:|---:|---:|")
-    for row in contrast["rows"]:
-        print(
-            f"| `{row['configuration']}` | "
-            f"{'yes' if row['solve_identical'] else '**NO**'} | "
-            f"`{row['accepted_objf_hex']}` | {row['node_calls_solve_phase']} | "
-            f"{row['node_calls_total_with_loop']} / "
-            f"{row['node_calls_total_without_loop']} | "
-            f"{row['output_loop_sweeps_with_loop']} / "
-            f"{row['output_loop_sweeps_without_loop']} | "
-            f"**{row['n_lines_differing']}** / {row['n_lines_compared']} |"
-        )
-    print()
-    for row in contrast["rows"]:
-        if row["differing_first"]:
-            print(f"  {row['configuration']}: {', '.join(row['differing_first'])}")
-    sweeps = block["output_time_loop_sweeps"]
-    print()
-    print(
-        "*Caption: one row per optimisation run of the reproduction gate.  "
-        '"Sweeps" is how many times upstream\'s output-time loop evaluated the '
-        "whole model set before writing the output files, read from the "
-        'driver\'s own counter; "entries" is how many times the output path '
-        'was entered (one per scan point).  "After the solve" is model node '
-        "calls made after the solve-phase counter was frozen: the per-run "
-        "deferred nodes where an arm has them, plus the output-time loop's own "
-        "sweeps.  Counts, not timings.  Population: "
-        + sweeps["population"]
-        + ".*"
-    )
-    print()
-    print("| arm | configuration | seed | path | sweeps | entries | solve-phase node calls | node calls after the solve |")
-    print("|---|---|---:|---|---:|---:|---:|---:|")
-    for row in sweeps["rows"]:
-        print(
-            f"| `{row['arm']}` | `{row['configuration']}` | {row['seed']} | "
-            f"`{row['output_path']}` | {row['output_loop_sweeps']} | "
-            f"{row['output_path_entries']} | {row['node_calls_solve_phase']} | "
-            f"{row['node_calls_after_the_solve']} |"
-        )
-    above = block["above_tau_at_the_declared_position"]
-    print()
-    print(
-        "*Caption: one row per run of gate G9 on an arm whose matrix cell "
-        "turns the output-time loop off.  The exit audit is one further sweep "
-        "of the whole model set from the state the solve handed over, and the "
-        "columns count how many coupling-state components moved by at least "
-        "the tolerance under it.  **Whole state** counts every tested "
-        "component; **restricted** excludes the components the per-run "
-        "deferrable nodes write, derived from the committed per-run artifact "
-        "and the committed run-time write census, one set per configuration so "
-        "every arm is on the same ruler.  The two differ because the audit "
-        "sweep runs those nodes and the handed-over state is from before they "
-        "ran, so their own outputs move by construction — which is why the "
-        "whole-state maximum is not published here at all: on an arm that "
-        "defers, it is a per-run node's own output and says nothing about "
-        "convergence.  Population: "
-        + above["population"]
-        + ".*"
-    )
-    print()
-    print(
-        "| arm | configuration | tau | tested | above tau, whole state | "
-        "tested, restricted | above tau, restricted | restricted max | "
-        "restricted argmax |"
-    )
-    print("|---|---|---:|---:|---:|---:|---:|---:|---|")
-    for row in above["rows"]:
-        print(
-            f"| `{row['arm']}` | `{row['configuration']}` | {row['tau']:g} | "
-            f"{row['n_tested_whole_state']} | "
-            f"{row['n_above_tau_whole_state']} | {row['n_tested_restricted']} | "
-            f"{row['n_above_tau_restricted']} | "
-            f"{row['residual_max_restricted']:.3g} | "
-            f"`{row['residual_argmax_restricted']}` |"
-        )
-    print()
-    for name, derivation in above["excluded_set_per_configuration"].items():
-        print(
-            f"  {name}: per-run nodes {derivation['per_run_nodes']} write "
-            f"{derivation['n_fields_named']} field(s); artifact "
-            f"{Path(derivation['artifact']).name}"
-        )
-
-
 
 
 def gate(campaign: Campaign) -> Gate:
