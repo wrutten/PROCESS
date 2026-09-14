@@ -338,3 +338,34 @@ before the first press.
   `predicate_counters` and `attempts`; §4.1's placeholder prose "one row per gate" is now 28 rows.
 - **README**: edited — §0 layer 5, §8 (`run path` row, the callers list), §10.1 (the `gates/` row
   and the who-imports-whom paragraph).
+
+---
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `c44e6525`, before the merge. Checks chosen to differ from
+the agent's.*
+
+1. **Is the split a move?** I hashed the AST of every top-level definition in the old `gates.py`
+   (113) and looked for each in the new `gates/`, `records.py` and `measurement/` modules. 17 are
+   absent, all of them the two retired stages' functions (A2) plus `_reconcile_sweeps`, which lives
+   on as `records.sweep_decomposition`. 4 changed body: `registry`, `measurements`, `_plan_gates`,
+   `main` — exactly the four that lose two stages, gain two gates and re-point imports. The other 92
+   are byte-identical by AST. No gate criterion changed.
+2. **On a trial merge onto trunk (`5bccae08`, which carries A69's `CHANGES.md`):** clean; an import
+   walk loads 51 modules with 0 failures; the registry lists 35 entries with `copy_identity` and
+   `edit_behaviour` present and `attempts`/`predicate_counters` gone; the after-run caller table reads
+   `reproduction, switch_neutrality, written_file_gap`; `copy_gates.py all` still reports ALL GATES
+   PASS, so `CHANGES.md` §6's verification command is intact.
+3. **The scanner hazard** the brief named was hit and caught by the scanner itself (`self_containment`
+   flagged the moved line before the declaration was updated). That is the mechanism working; the
+   declaration change is one string.
+4. **The four dead records moved out of `runs/`** (two legacy verdicts without a tree stamp, two
+   stage records of the retired stages): correct — `gate_table` would otherwise stamp a `None` head —
+   and they will not exist in A73's from-scratch press anyway. Not put back.
+5. **`gate_neutrality.py` at 1 844 lines** against the survey's ≤ 1 800: the exclusion tables stay
+   with G1 whole, as briefed; the target was a guide, not a rule.
+6. **0 PROCESS runs**, by the agent's stamp survey (184 → 184, 0 changed) — consistent with every
+   press it lists being 0-run or `--resume` on kept records.
+
+**Approved for merge.**
