@@ -1579,7 +1579,6 @@ def take_exit_audit(
     from_snapshot: Mapping[str, Any] | None = None,
     structure_snapshots: Mapping[str, Any] | None = None,
     restore_from_position: str | None = None,
-    on_ready_to_sweep=None,
 ) -> dict[str, Any]:
     """One further full sweep past termination, and how far the state moved.
 
@@ -1647,8 +1646,6 @@ def take_exit_audit(
             restore_from_position=restore_from_position,
             coupling_names=coupling_names,
         )
-        if on_ready_to_sweep is not None:
-            on_ready_to_sweep(data)
         bound = spec.bind(data)
         y_before = spec.read(bound)
         predicate_mode = getattr(module_solve, "PREDICATE_MODE", "frozen")
@@ -1918,7 +1915,6 @@ def open_record(
     input_file: Path,
     input_file_kind: str,
     pin_hex: str | None,
-    pending_switches_allowed: list[str],
     switches_asked: Mapping[str, str],
 ) -> dict[str, Any]:
     """The identity half of a record, filled before anything runs.
@@ -1944,7 +1940,6 @@ def open_record(
         "campaign_input_file_kind": input_file_kind,
         "campaign_pin_hex": pin_hex,
         "regime": regime,
-        "pending_switches_allowed": list(pending_switches_allowed),
         "switches_asked": dict(switches_asked),
         "python": sys.executable,
         "python_version": sys.version.split()[0],
@@ -1984,22 +1979,22 @@ def stamp_resources(record: dict[str, Any], usage_before, started: float) -> Non
     record["timing_is_context_not_evidence"] = True
 
 
-def stamp_capabilities_absent(record: dict[str, Any], *, phase: str) -> None:
-    """The fields a record carries even when the run never reached the driver.
+def stamp_driver_counters_null(record: dict[str, Any], *, phase: str) -> None:
+    """The driver-counter fields, present with an explicit null before the run.
 
-    Present with an explicit null, never absent: a reader of a record must be
-    able to tell "this run did not get far enough to have one" from "the
-    harness forgot to write it down".  Every field here is filled after the run
-    from the driver's own counters; a record that still carries the null is a
+    Never absent: a reader of a record must be able to tell "this run did not
+    get far enough to have one" from "the harness forgot to write it down".
+    Every field here is filled after the run from the driver's own counters
+    (:func:`harvest_attempt_stamps`, :func:`harvest_predicate_counters`,
+    :func:`harvest_output_path`); a record that still carries the null is a
     record of a run that crashed or was refused before the driver produced one.
+    The next driver counter the plan asks for is stamped here in the same way.
 
-    Nothing in this tree is *unsupplied* any more: the predicate counters
-    landed with task A58 (driver-predicate-counters), the output-path counters
-    with task A57 (driver-output-path) and the per-attempt costs with task A60
-    (driver-attempts), which was the last of them.  The name is kept because
-    the contract is the same one — a declared field is present or the record is
-    refused — and the next driver capability the plan asks for will be stamped
-    here in exactly this way.
+    *Was ``stamp_capabilities_absent``*: named when some of these counters were
+    driver capabilities the tree did not yet supply (before A57, A58 and A60),
+    and kept under that name with the allowance for a *pending* switch until
+    A72 retired the allowance (survey item B4).  Renamed for what it does by
+    A73, the child-side remainder of that retirement.
     """
     # Filled from the driver's own attempt-boundary stamps after the run
     # (:func:`harvest_attempt_stamps`).  Present here with a null so that a

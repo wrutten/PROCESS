@@ -10,7 +10,7 @@ deliberate:
 * the previous revision reached the coupling-state module through an
   ``importlib`` load of a file two directories away, and reached
   ``_cross_residual`` by importing a **private** name across a package
-  boundary.  Here the module is :mod:`harness.ystate`, imported normally, and
+  boundary.  Here the module is :mod:`harness.child.ystate`, imported normally, and
   the cross-state comparison is public;
 * the spec rebuild caches nothing.  The driver's own ``load_spec`` caches, and
   a harness-side cache keyed on a path would be a second, differently-keyed
@@ -38,7 +38,7 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from .. import ystate
+from . import ystate
 
 
 class PredicateError(RuntimeError):
@@ -51,7 +51,7 @@ class PredicateError(RuntimeError):
 
 
 def load_spec(path: Path | str) -> ystate.YSpec:
-    """Rebuild a :class:`~harness.ystate.YSpec` from a committed artifact.
+    """Rebuild a :class:`~harness.child.ystate.YSpec` from a committed artifact.
 
     The artifact carries, per component, its key, its category and (for a
     continuous one) its scale — which is the whole of what the predicate needs.
@@ -84,36 +84,6 @@ def load_spec(path: Path | str) -> ystate.YSpec:
             f"spec that does not rebuild is refused, never used."
         )
     return spec
-
-
-def provenance_of(path: Path | str) -> dict[str, Any]:
-    """The artifact's own preamble, for the record.  Never its components.
-
-    ``harvest`` is the key the committed artifacts actually carry for their
-    identity block; ``harvest_identity`` is the name this project's prose uses
-    for the same thing.  Both are listed, so the block reaches the record
-    whichever name it is under — without it, a record would name the artifact's
-    digest but not the measurement the artifact's scales came from.  *(One-word
-    addition by task A51 (harness-artifacts): only ``harvest_identity`` was
-    listed, and no committed artifact uses that key, so the block never reached
-    a record.)*
-    """
-    record = json.loads(Path(path).read_text())
-    return {
-        key: record.get(key)
-        for key in (
-            "format",
-            "scenario",
-            "spec_mode",
-            "scale_floor",
-            "n_components",
-            "components_sha256",
-            "harvest",
-            "harvest_identity",
-            "predicate_mode",
-        )
-        if key in record
-    }
 
 
 # --------------------------------------------------------------------------

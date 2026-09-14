@@ -279,14 +279,14 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "equal where both sides carry it"
     ),
     # The allowance mechanism's record field, retired from the schema by A72
-    # (survey item B4).  The child still writes it (an empty list) until the
-    # child-side remainder is taken up; when that lands the field is present
-    # on the earlier capture and absent on the later one, which is the shape
-    # this table exists for.  Compared, and equal, wherever both sides carry it.
+    # (survey item B4) and from the child by A73 (the child-side remainder):
+    # present (an empty list) on every capture made before A73, absent on
+    # every capture made since, which is the shape this table exists for.
+    # Compared, and equal, wherever both sides carry it.
     "pending_switches_allowed": (
         "the retired allowance's stamp: an empty list on every record made "
-        "since A59, absent once the child stops writing it.  Excluded only "
-        "while one side lacks it"
+        "between A59 and A73, absent since the child stopped writing it.  "
+        "Excluded only while one side lacks it"
     ),
     # The predicate counters (DR4).  Each is a field whose value is *null on
     # the earlier side because no counter existed* and a number on the later
@@ -699,10 +699,28 @@ def capture_neutrality(
                 )
             )
     results = pool_mod.run_all(jobs, campaign, resume=resume)
+    # The manifest carries the commit of the **records it indexes**, read from
+    # the records themselves, and names the pressing commit apart.  Under
+    # ``--resume`` the two differ whenever every record was kept -- the press
+    # is at a later commit than the runs -- and a manifest that stamped the
+    # pressing commit as ``tree_git_head`` misplaced its own records
+    # (improvement list item 13, found by A67 (written-file-gap)).  The
+    # straddle is between the records, so it is the records' commit that
+    # decides it; a capture whose records sit at two commits states both and
+    # names none as its own.
+    record_heads = sorted(
+        head
+        for head in {
+            records_mod.read(job.outdir).get("tree_git_head") for job in jobs
+        }
+        if head
+    )
     manifest = {
         "label": label,
         "captured": _dt.datetime.now().isoformat(timespec="seconds"),
-        "tree_git_head": _git_head(),
+        "tree_git_head": record_heads[0] if len(record_heads) == 1 else None,
+        "records_git_heads": record_heads,
+        "pressed_at_git_head": _git_head(),
         "tree": str(campaign.tree),
         "n_runs": len(jobs),
         "audit_position": NEUTRAL_AUDIT_POSITION,

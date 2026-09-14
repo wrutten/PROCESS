@@ -130,7 +130,6 @@ def build_parser() -> argparse.ArgumentParser:
                              "the design vector")
     parser.add_argument("--stencil-sign", type=int, default=1, choices=(1, -1),
                         help="+1 the forward point, -1 the backward point")
-    parser.add_argument("--pending-allowed", default="")
     parser.add_argument("--reproduction-overrides", default="{}",
                         help="JSON of what the reproduction gate set "
                              "differently from the campaign, stamped into the "
@@ -167,9 +166,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         input_file=source.resolve(),
         input_file_kind=args.input_kind,
         pin_hex=args.pin_hex,
-        pending_switches_allowed=[
-            t for t in args.pending_allowed.split(",") if t
-        ],
         switches_asked=json.loads(args.switches_asked),
     )
     record["outdir"] = str(outdir)
@@ -184,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         "the state the evaluation terminated in — the declared position, "
         "reached by there being no output path rather than by a hook"
     )
-    child.stamp_capabilities_absent(record, phase="A")
+    child.stamp_driver_counters_null(record, phase="A")
 
     process_file = child.assert_tree(Path(args.tree))
     child.stamp_tree(record, Path(args.tree), process_file)

@@ -43,7 +43,6 @@ if sys.path and Path(sys.path[0] or ".").resolve() == _HERE:
 elif str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
-from harness.child import audit_map as audit_map_mod  # noqa: E402
 from harness.child import child  # noqa: E402
 from harness.core import failure as failure_mod  # noqa: E402
 from harness.child import perturb  # noqa: E402
@@ -97,10 +96,6 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=records_mod.REGIMES)
     parser.add_argument("--predicate-mode", default="frozen")
     parser.add_argument("--pin-hex", default=None)
-    parser.add_argument("--pending-allowed", default="",
-                        help="comma-separated switch terms this tree does not "
-                             "implement and this run was allowed to omit; "
-                             "recorded in the record, never silent")
     parser.add_argument("--switches-asked", default="{}",
                         help="JSON of term -> value the arm asked for")
     parser.add_argument("--audit-position",
@@ -165,9 +160,6 @@ def main(argv: list[str] | None = None) -> int:
         input_file=source.resolve(),
         input_file_kind=args.input_kind,
         pin_hex=args.pin_hex,
-        pending_switches_allowed=[
-            t for t in args.pending_allowed.split(",") if t
-        ],
         switches_asked=json.loads(args.switches_asked),
     )
     record["outdir"] = str(outdir)
@@ -182,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.audit_position == AUDIT_POSITION_DECLARED
         else records_mod.AUDIT_POSITION_AFTER_RUN_WHY
     )
-    child.stamp_capabilities_absent(record, phase="B")
+    child.stamp_driver_counters_null(record, phase="B")
 
     # ------------------------------------------------------------------
     # The tree, before anything else.  A sibling environment on this machine
@@ -238,19 +230,6 @@ def main(argv: list[str] | None = None) -> int:
         caller_mod,
         module_solve_mod,
         coupling_state_path=Path(args.coupling_state),
-    )
-
-    # The audit-map trace (task A61 (insstrain-diagnosis)): a gate instrument
-    # that records the coupling state at the loop's own exit and the whole data
-    # structure at the output path's positions, so that "the audit's sweep is
-    # the loop's own map" is measured rather than assumed.  Unset on every
-    # campaign run and refused there; installed AFTER the driver's snapshot
-    # hook, which it wraps.
-    audit_map_trace = audit_map_mod.install(
-        caller_mod,
-        module_solve_mod,
-        coupling_state_path=Path(args.coupling_state),
-        run_kind=args.run_kind,
     )
 
     try:
@@ -333,14 +312,6 @@ def main(argv: list[str] | None = None) -> int:
             from_snapshot=from_snapshot,
             structure_snapshots=structure_snapshots,
             restore_from_position=AUDIT_POSITION_DECLARED,
-            # The diagnosis trace's "as found" state is the state the audit's
-            # sweep actually starts from, so the audit is what marks it —
-            # after both restores, not before them.  Marking it from out here
-            # would hand that trace the state the output path left, which is
-            # the state this audit exists to stop sweeping.
-            on_ready_to_sweep=lambda d: audit_map_mod.mark(
-                audit_map_trace, d, "before_the_record_audit"
-            ),
         )
     elif single_run is not None:
         record["exit_audit"] = {
@@ -470,18 +441,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         record["perturbation"]["delta"] = args.delta
         record["perturbation"]["seed"] = args.seed
-
-    # The audit-map trace's own sweeps, taken last so that nothing they do can
-    # reach a field of the record.  A no-op when the trace was not installed,
-    # and its output goes to its own file.
-    if single_run is not None:
-        audit_map_mod.observe(
-            audit_map_trace,
-            caller_mod,
-            module_solve_mod,
-            single_run=single_run,
-            outdir=outdir,
-        )
 
     # ------------------------------------------------------------------
     # The record's own contract, before it is written.

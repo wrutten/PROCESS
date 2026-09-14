@@ -1,9 +1,9 @@
 {
-  "what": "Provenance of the committed data this experiment reads.  Every file in harness/data/ was copied from the source below at the source commit, not from a working tree, and is byte-identical to it.  harness/selfcheck.py's data check verifies both claims and is runnable at any later commit.",
+  "what": "Provenance of the committed data this experiment reads.  Every file in harness/data/ was copied from the source below at the source commit, not from a working tree, and is byte-identical to it.  harness/gates/selfcheck.py's data check verifies both claims and is runnable at any later commit.",
   "task": "A48 (harness-data)",
   "decision": "D20, 2026-09-10 -- the experiment runs its own copy of PROCESS and owns its own inputs; harness implementation plan sections 5.2 and 5.3, ruled the same day",
   "generated_by": "harness/data_provenance.py copy",
-  "copy_date": "2026-09-11",
+  "copy_date": "2026-09-14",
   "source": {
     "repository": "PROCESS_surgery (this repository), branch architecture_surgery",
     "artifact_path": "arch_surgery/docs/data/",
@@ -27,7 +27,7 @@
     "what": "The coupling-state predicate: which fields make up y, their categories and scales, the residual, and the convergence test in both of its rulers.  It is code, not data, and the copied driver loads it by path (module_solve.YSTATE_MODULE_PATH).  Moved whole out of the research tree, then changed by the approved driver change DR5, which added the second ruler.  The identity claim is the one the copied driver carries: the whole diff against the source at the source commit is exactly the hunks recorded below, and the post-edit sha256 is the one recorded below.  An edit nobody recorded fails either way round -- stale hunks are caught by the digest, a digest updated to match is caught by the hunks.",
     "identity_criterion": "the recorded hunks and the post-edit sha256",
     "criterion_rebased_by": "A59 (driver-predicate-mode).  A48 (harness-data) moved the module whole and added one paragraph, so it could require that removing the paragraph reproduced the source byte for byte.  DR5 changes the module, so that reconstruction is no longer available; the criterion is re-based on the model PROCESS/copy_gates.py already uses for the copied driver -- an edit is legal because it is recorded and reviewable, not because it is absent -- and the reconstruction test still runs wherever the recorded hunks are a pure addition.",
-    "name": "harness/ystate.py",
+    "name": "harness/child/ystate.py",
     "source": "arch_surgery/fixedpoint/ystate.py",
     "sha256_at_source_commit": "ce47ebef1ecbf7e3b89b8b61bf6d623ce5187f416d42d774041b92a71d96b533",
     "sha256_in_copy": "9bab4dfb961df3b8b708a6b1dd15ae21ff1a45d42d84016cb5f46cbaf952d9f2",

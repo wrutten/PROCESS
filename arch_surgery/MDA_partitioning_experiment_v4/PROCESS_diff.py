@@ -95,7 +95,7 @@ _LADDER = "DR7: the retry ladder's rungs named beside the branches that implemen
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
-    Annotation("process/core/solver/module_solve.py", "YSTATE_MODULE_PATH", "harness path constant YSTATE_MODULE_PATH -> harness/ystate.py (D20, decision 2 option v)"),
+    Annotation("process/core/solver/module_solve.py", "YSTATE_MODULE_PATH", "harness path constant YSTATE_MODULE_PATH -> harness/child/ystate.py (D20, decision 2 option v)"),
     Annotation("process/core/caller.py", "NODE_WRITESET_PATH", "harness path constant NODE_WRITESET_PATH -> harness/data/ (D20, decision 3)"),
     Annotation("process/core/caller.py", "NODE_MAP_PATH", "harness path constant NODE_MAP_PATH -> harness/data/ (D20, decision 3)"),
     Annotation("process/core/caller.py", "its source, its sha256", "comment: the artifacts the two path constants name are committed here, and their provenance file says so"),
@@ -422,7 +422,7 @@ SUMMARIES: dict[str, str] = {
         "a module by path, because the harness is not an importable package; "
         "in the repository-root tree that is arch_surgery/fixedpoint/"
         "ystate.py.  In the copy it is MDA_partitioning_experiment_v4/harness/"
-        "ystate.py -- the same module, moved whole, its body byte-identical "
+        "child/ystate.py -- the same module, moved whole, its body byte-identical "
         "to its source and gated as such.  Same loader, same contract, "
         "different file.  The docstring's reference to the coupling-state "
         "artifact follows the file the copy actually reads.  On top of that, "

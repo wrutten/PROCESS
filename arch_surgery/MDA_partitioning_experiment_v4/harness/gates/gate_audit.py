@@ -479,7 +479,7 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
             passed = False
             continue
         baseline_restricted = _restricted(baseline)
-        _excluded_keys, excluded_detail = gate_output_path.excluded_by_the_per_run_nodes(
+        excluded_keys, excluded_detail = gate_output_path.excluded_by_the_per_run_nodes(
             campaign, config
         )
         empty_rows, plan, namespaces = _doctoring_plan(campaign, config, snapshot, baseline)
