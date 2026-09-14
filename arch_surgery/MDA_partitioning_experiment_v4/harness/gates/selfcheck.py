@@ -2218,7 +2218,7 @@ def check_run_path(campaign: Campaign) -> Check:
     # table does not name.  Both refusals are teeth, and the table's rows are
     # checked to be registered stages, so a caller nobody runs cannot be
     # declared.
-    from harness.gates import gates as gates_mod  # noqa: PLC0415 - cycle otherwise
+    from harness.gates import registry as gates_mod  # noqa: PLC0415 - cycle otherwise
 
     declared_callers = records_mod.AUDIT_POSITION_AFTER_RUN_CALLERS
     registered = set(gates_mod.registry(campaign))

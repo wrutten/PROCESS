@@ -94,6 +94,7 @@ from typing import Any, Mapping
 
 from ..experiment import arms as arms_mod
 from ..core import framework
+from . import gate_output_path
 from . import gates as gates_mod
 from ..core import pool as pool_mod
 from ..core import records as records_mod
@@ -695,7 +696,7 @@ def cold_chain_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
         tau = campaign.tau
         excluded: set[str] = set()
         if composition == "as_composed":
-            excluded, _detail = gates_mod.excluded_by_the_per_run_nodes(
+            excluded, _detail = gate_output_path.excluded_by_the_per_run_nodes(
                 campaign, config
             )
         off_above = _named_above_tau(off_job.outdir, tau, excluded=excluded)
