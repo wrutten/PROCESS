@@ -149,6 +149,8 @@ PREDICATE_PAIR_KIND: dict[str, str] = {
         "the setting being varied, or a stamp of it"
     ),
     "exit_audit.predicate_mode": "the setting being varied, or a stamp of it",
+    "job_identity.predicate_mode": "the setting being varied, or a stamp of it",
+    "job_digest": "the setting being varied, or a stamp of it",
     "exit_audit.rulers_note": "prose, identical on both sides",
 }
 
