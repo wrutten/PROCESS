@@ -771,11 +771,11 @@ def probe(
     # the orchestrator at review.
     #
     # ``-P`` (Python 3.11+) is the fix: it stops the cwd being prepended and
-    # leaves PYTHONPATH alone.  ``PYTHONSAFEPATH`` says the same thing through
-    # the environment, for a child started some other way, and the two together
-    # cost nothing.  ``-I`` would be wrong: it isolates the interpreter and
-    # drops PYTHONPATH, which is the one thing this child needs.
-    child_env["PYTHONSAFEPATH"] = "1"
+    # leaves PYTHONPATH alone.  It used to travel with ``PYTHONSAFEPATH=1`` in
+    # the environment, which says the same thing a second way; one is kept,
+    # and the capability check's decoy tooth is what proves it holds.  ``-I``
+    # would be wrong: it isolates the interpreter and drops PYTHONPATH, which
+    # is the one thing this child needs.
     proc = subprocess.run(
         [sys.executable, "-P", "-c", _PROBE_SOURCE],
         input=json.dumps(spec),
