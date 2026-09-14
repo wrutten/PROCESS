@@ -152,6 +152,28 @@ OPTIMISATION_AUDIT_POSITIONS: tuple[str, ...] = (
 AUDIT_POSITION_DECLARED = "entry_to_write_output_files"
 AUDIT_POSITION_AFTER_RUN = "after_run"
 
+#: The evaluation phase's one position: that phase runs one evaluation and
+#: never reaches the output path, so the child audits where it terminated and
+#: the pool composes no position for it (``child/evaluate.py`` stamps this
+#: constant).  Named here so that the job identity can render an evaluation
+#: job's position as what the run will actually stamp.
+AUDIT_POSITION_EVALUATION = "after_single_evaluation"
+
+
+def effective_audit_position(phase: str, asked: str) -> str | None:
+    """The position a run of *phase* audits at, given what the job asked.
+
+    An optimisation run audits where the job asked (the pool passes it to the
+    child); an evaluation run audits at :data:`AUDIT_POSITION_EVALUATION`
+    whatever the job's default says, because the pool passes no position and
+    the child has one; a census run audits nowhere.
+    """
+    if phase == "B":
+        return asked
+    if phase == "A":
+        return AUDIT_POSITION_EVALUATION
+    return None
+
 #: The stages that may ask an optimisation run to audit at ``after_run``, by
 #: their registry name, each with the reason.  **Declared, never inferred**:
 #: the run pool refuses the position for any caller not named here and for

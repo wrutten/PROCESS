@@ -188,6 +188,13 @@ class Job:
                 rendered[name] = self.config.name
                 continue
             value = getattr(self, name)
+            if name == "audit_position":
+                # What the run will stamp, not the field's default: the pool
+                # composes a position for an optimisation only, and an
+                # evaluation audits at its one position whatever the job says.
+                value = records_mod.effective_audit_position(self.phase, value)
+            elif name == "audit_position_caller" and self.phase != "B":
+                value = None
             if isinstance(value, Path):
                 value = _render_path(value, runs_dir)
             elif isinstance(value, Mapping):
