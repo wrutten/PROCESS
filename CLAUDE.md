@@ -1,8 +1,10 @@
 # CLAUDE.md
 
 Agent-facing rules for this repository. The queue's protocol section
-([`arch_surgery/docs/plans/MASTER_TODO.md`](arch_surgery/docs/plans/MASTER_TODO.md)) is the
-fuller version; the rules below are always in force.
+([`arch_surgery/docs/MASTER_TODO_v2.md`](arch_surgery/docs/MASTER_TODO_v2.md) §1; the rationale
+behind each rule is in the archived history,
+[`arch_surgery/docs/plans/MASTER_TODO.md`](arch_surgery/docs/plans/MASTER_TODO.md)) is the fuller
+version; the rules below are always in force.
 
 **What this repository is.** A fork of PROCESS (`wrutten/PROCESS`) in which the *optimisation
 architecture* — the arrangement of solvers and optimisers — is modified while every physics
@@ -81,8 +83,11 @@ in `arch_surgery/`.
 
 ## Orientation
 
-- [`arch_surgery/docs/plans/MASTER_TODO.md`](arch_surgery/docs/plans/MASTER_TODO.md) — the
-  queue: protocol, decisions, issues, task rows.
+- [`arch_surgery/docs/MASTER_TODO_v2.md`](arch_surgery/docs/MASTER_TODO_v2.md) — the
+  queue: protocol, decisions, issues, task rows. Its predecessor
+  [`arch_surgery/docs/plans/MASTER_TODO.md`](arch_surgery/docs/plans/MASTER_TODO.md) is archived
+  (2026-09-14) as the history — full text of every decision, issue and task up to A74; read it
+  for the record, never for the current state.
 - [`arch_surgery/docs/plans/MDA_PARTITION_EXPERIMENT.md`](arch_surgery/docs/plans/MDA_PARTITION_EXPERIMENT.md)
   — the experiment plan: hypothesis, evidence, critical assessment, stages and gates.
 - [`arch_surgery/docs/reports/PROCESS_architecture_evaluation.md`](arch_surgery/docs/reports/PROCESS_architecture_evaluation.md)
