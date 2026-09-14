@@ -914,7 +914,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         sources.append(
             {
                 "source": source.name,
-                "subpath": source.subpath,
+                "owner": source.owner,
                 "what": source.what,
                 "n_records": len(population),
                 "n_excluded_as_demonstrations": len(population.excluded),
@@ -979,7 +979,7 @@ def print_tally(block: Mapping[str, Any]) -> None:
     for source in block.get("sources") or []:
         print(
             f"\n  source {source['source']:<16} {source['n_records']:>3} "
-            f"record(s) under {source['subpath']}"
+            f"record(s) of gate {source['owner']}'s job set"
         )
         print(f"    {source['what']}")
         if source.get("n_excluded_as_demonstrations"):

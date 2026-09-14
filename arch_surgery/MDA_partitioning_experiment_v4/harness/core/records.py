@@ -76,6 +76,7 @@ record says which ruler its run stopped on and reports the exit audit on both.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -150,6 +151,28 @@ OPTIMISATION_AUDIT_POSITIONS: tuple[str, ...] = (
 #: The optimisation phase's declared position, and the one position beside it.
 AUDIT_POSITION_DECLARED = "entry_to_write_output_files"
 AUDIT_POSITION_AFTER_RUN = "after_run"
+
+#: The evaluation phase's one position: that phase runs one evaluation and
+#: never reaches the output path, so the child audits where it terminated and
+#: the pool composes no position for it (``child/evaluate.py`` stamps this
+#: constant).  Named here so that the job identity can render an evaluation
+#: job's position as what the run will actually stamp.
+AUDIT_POSITION_EVALUATION = "after_single_evaluation"
+
+
+def effective_audit_position(phase: str, asked: str) -> str | None:
+    """The position a run of *phase* audits at, given what the job asked.
+
+    An optimisation run audits where the job asked (the pool passes it to the
+    child); an evaluation run audits at :data:`AUDIT_POSITION_EVALUATION`
+    whatever the job's default says, because the pool passes no position and
+    the child has one; a census run audits nowhere.
+    """
+    if phase == "B":
+        return asked
+    if phase == "A":
+        return AUDIT_POSITION_EVALUATION
+    return None
 
 #: The stages that may ask an optimisation run to audit at ``after_run``, by
 #: their registry name, each with the reason.  **Declared, never inferred**:
@@ -394,7 +417,9 @@ SCHEMA: tuple[Field, ...] = (
     _f("env_architecture", "AB", "always", "every known switch variable and its value, or null"),
     _f("switches_asked", "AB", "always", "what the arm asked for, term by term"),
     _f("resolved_switches", "AB", "always", "what the driver resolved, read back from the imported modules"),
-    _f("pending_switches_allowed", "AB", "always", "switches this tree does not implement that this run was allowed to omit"),
+    # --- which job this is: the pool's stamp, after the child returns ------
+    _f("job_identity", "AB", "always", "every field the pool composed into this run, rendered once (pool.JOB_IDENTITY_FIELDS): what --resume compares"),
+    _f("job_digest", "AB", "always", "sha256 over the canonical JSON of job_identity; the shared pool's directory carries its first sixteen digits"),
     # --- how it ended -----------------------------------------------------
     _f("status", "AB", "always", "the run's own word for how it ended"),
     _f("failure_class", "AB", "always", "the taxonomy row"),
@@ -984,42 +1009,126 @@ def read(outdir: Path | str) -> dict[str, Any]:
         }
 
 
+def job_digest(identity: Mapping[str, Any]) -> str:
+    """The digest of one job identity: sha256 over its canonical JSON.
+
+    Canonical means sorted keys, no whitespace, ASCII escapes — so two renders
+    of the same identity are the same bytes whatever produced them.  Lives here
+    rather than in the pool so that a reader of a record can re-derive the
+    digest from the stamped ``job_identity`` without importing the pool, which
+    is what :func:`is_complete_for` does.
+    """
+    canonical = json.dumps(
+        identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
+#: Identity fields the **child** also stamps, under its own names.  Compared by
+#: :func:`is_complete_for` beside the pool's stamp, so a record whose digest
+#: matches but whose child-stamped δ (or mode, or pin, or position) differs is
+#: refused: the two stamps have to agree with each other and with the job.
+IDENTITY_FIELDS_STAMPED_BY_THE_CHILD: dict[str, str] = {
+    "phase": "campaign_phase",
+    "arm": "campaign_arm",
+    "configuration": "campaign_configuration",
+    "seed": "campaign_seed",
+    "regime": "regime",
+    "run_kind": "campaign_run_kind",
+    "delta": "campaign_delta",
+    "pin_hex": "campaign_pin_hex",
+    "predicate_mode": "campaign_predicate_mode",
+    "audit_position": "audit_position",
+}
+
+#: The six fields the comparison consisted of before task A72
+#: (resume-identity-and-shared-pool): the readable half, kept as the first
+#: thing checked so that a refusal on them reads as "not this arm" rather than
+#: as a digest mismatch.
+READABLE_IDENTITY_FIELDS: tuple[str, ...] = (
+    "arm", "configuration", "seed", "phase", "regime", "run_kind",
+)
+
+
+def why_not_complete_for(
+    record: Mapping[str, Any], *, identity: Mapping[str, Any], digest: str
+) -> str | None:
+    """Why *record* is not a finished record of exactly this job, or None.
+
+    What ``resume`` consults, spelled out.  A directory is never evidence of a
+    completed run: an interrupted one leaves a directory behind, and re-using
+    it would put a half-written record into a population.  Four comparisons,
+    in order:
+
+    1. the record finished (``status == "ok"``);
+    2. the **readable half** — arm, configuration, seed, phase, regime, run
+       kind — against the child's own stamps;
+    3. every identity field the child also stamps
+       (:data:`IDENTITY_FIELDS_STAMPED_BY_THE_CHILD`) against the job, and the
+       pool's stamped ``job_identity`` field by field against the job's — so a
+       record whose digest was copied but whose δ was not is refused by name;
+    4. the stamped ``job_digest`` equals the job's **and** re-derives from the
+       stamped ``job_identity``; a record with no digest is incomplete, which
+       is what makes every record made before this field existed re-run
+       (harness plan amendment 17: ``--resume`` cannot cross a schema change);
+
+    and then the completeness contract itself (:func:`missing_fields`).
+    """
+    if record.get("status") != "ok":
+        return f"status is {record.get('status')!r}, not 'ok'"
+    for name in READABLE_IDENTITY_FIELDS:
+        stamped = record.get(IDENTITY_FIELDS_STAMPED_BY_THE_CHILD[name])
+        if stamped != identity.get(name):
+            return (
+                f"{IDENTITY_FIELDS_STAMPED_BY_THE_CHILD[name]} is {stamped!r}, "
+                f"the job's {name} is {identity.get(name)!r}"
+            )
+    for name, child_name in IDENTITY_FIELDS_STAMPED_BY_THE_CHILD.items():
+        if record.get(child_name) != identity.get(name):
+            return (
+                f"the child stamped {child_name}={record.get(child_name)!r} "
+                f"and the job's {name} is {identity.get(name)!r}"
+            )
+    stamped_identity = record.get("job_identity")
+    if not isinstance(stamped_identity, Mapping):
+        return "the record carries no job_identity (made before the field existed)"
+    for name in identity:
+        if stamped_identity.get(name) != identity[name]:
+            return (
+                f"job_identity.{name} is {stamped_identity.get(name)!r} in the "
+                f"record and {identity[name]!r} in the job"
+            )
+    extra = sorted(set(stamped_identity) - set(identity))
+    if extra:
+        return f"job_identity carries fields the job does not: {extra}"
+    stamped_digest = record.get("job_digest")
+    if not isinstance(stamped_digest, str):
+        return "the record carries no job_digest (made before the field existed)"
+    if stamped_digest != digest:
+        return f"job_digest is {stamped_digest[:12]}…, the job's is {digest[:12]}…"
+    rederived = job_digest(stamped_identity)
+    if rederived != stamped_digest:
+        return (
+            f"job_digest {stamped_digest[:12]}… does not re-derive from the "
+            f"stamped job_identity ({rederived[:12]}…)"
+        )
+    absent = missing_fields(record)
+    if absent:
+        return f"{len(absent)} declared field(s) missing: {', '.join(absent[:6])}"
+    return None
+
+
 def is_complete_for(
-    record: Mapping[str, Any],
-    *,
-    arm: str,
-    configuration: str,
-    seed: int,
-    phase: str,
-    regime: str,
-    run_kind: str | None = None,
+    record: Mapping[str, Any], *, identity: Mapping[str, Any], digest: str
 ) -> bool:
     """Whether *record* is a finished record of exactly this job.
 
-    What ``resume`` consults.  A directory is never evidence of a completed
-    run: an interrupted one leaves a directory behind, and re-using it would
-    put a half-written record into a population.
-
-    ``run_kind`` is compared when the caller names it.  A record's kind is the
-    only thing that afterwards says what it may be used for — a gate's, a
-    campaign's, or a one-seed smoke's — so keeping a record of one kind for a
-    job of another would launder that stamp by moving a directory.  A caller
-    that does not name one gets the earlier behaviour.
+    The predicate ``pool.run`` consults under ``--resume``; the reasons are in
+    :func:`why_not_complete_for`.  *identity* is ``Job.identity(runs_dir)`` and
+    *digest* is :func:`job_digest` of it — both the pool's construction, handed
+    in rather than recomputed here so that this module never imports the pool.
     """
-    if record.get("status") != "ok":
-        return False
-    for key, value in (
-        ("campaign_arm", arm),
-        ("campaign_configuration", configuration),
-        ("campaign_seed", seed),
-        ("campaign_phase", phase),
-        ("regime", regime),
-    ):
-        if record.get(key) != value:
-            return False
-    if run_kind is not None and record.get("campaign_run_kind") != run_kind:
-        return False
-    return not missing_fields(record)
+    return why_not_complete_for(record, identity=identity, digest=digest) is None
 
 
 def summarise(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

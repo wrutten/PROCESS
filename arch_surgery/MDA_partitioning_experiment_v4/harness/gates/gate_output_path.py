@@ -38,7 +38,7 @@ from harness.core import framework  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
-from harness.core.config import Campaign  # noqa: E402
+from harness.core.config import Campaign, Config  # noqa: E402
 from harness.gates.gate_neutrality import _read_record, _same  # noqa: E402
 from harness.gates.gates import _with_capture  # noqa: E402
 
@@ -100,7 +100,28 @@ UNCHANGED_ON_REFERENCE_ARMS: tuple[str, ...] = (
 
 
 def output_path_root(campaign: Campaign) -> Path:
+    """Where G9's verdict and manifest go.  Its runs are shared-pool jobs."""
     return Path(campaign.runs_dir) / GATES_SUBPATH / "output_path"
+
+
+def output_path_job(campaign: Campaign, config: Config, arm: str) -> pool_mod.Job:
+    """One Phase B arm at seed 0, at the declared audit position."""
+    return pool_mod.Job(
+        phase="B",
+        arm=arm,
+        config=config,
+        seed=0,
+        regime="unperturbed",
+        delta=campaign.delta,
+        run_kind="gate",
+    )
+
+
+def output_path_run_dir(campaign: Campaign, configuration: str, arm: str) -> Path:
+    """Where G9's run of this arm on this configuration is: the pool's directory."""
+    return pool_mod.directory_for(
+        output_path_job(campaign, campaign.configuration(configuration), arm), campaign
+    )
 
 
 def output_path_jobs(campaign: Campaign) -> list[pool_mod.Job]:
@@ -110,23 +131,64 @@ def output_path_jobs(campaign: Campaign) -> list[pool_mod.Job]:
     "nothing changes" half.  A skipped arm is skipped **by the configuration's
     own recorded reason**, never by a condition written here.
     """
-    root = output_path_root(campaign)
     jobs: list[pool_mod.Job] = []
     for config in campaign.configurations:
         for arm in arms_mod.active_arms(config, "B"):
-            jobs.append(
-                pool_mod.Job(
-                    phase="B",
-                    arm=arm,
-                    config=config,
-                    seed=0,
-                    outdir=root / "runs" / config.name / arm,
-                    regime="unperturbed",
-                    delta=campaign.delta,
-                    run_kind="gate",
-                )
-            )
+            jobs.append(output_path_job(campaign, config, arm))
     return jobs
+
+
+def _reproduction_planned(campaign: Campaign) -> list[Any]:
+    """GR's planned runs with their entries attached, directories resolved."""
+    from . import reproduction as reproduction_mod  # noqa: PLC0415
+
+    root = Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH
+    planned, _prerequisites = reproduction_mod.plan(campaign, root)
+    reproduction_mod.attach_phase_a_entries(planned, root, campaign)
+    return planned
+
+
+def reproduction_run_dir(campaign: Campaign, configuration: str, arm: str, seed: int) -> Path:
+    """Where the reproduction gate's run of this arm is: **its** job, resolved.
+
+    The reference arms are compared against GR's record of the same arm; that
+    record is GR's job — after-run audit, the gate's overrides — and is found
+    by composing that job and asking the pool, not by a directory G9 knows.
+    """
+    for item in _reproduction_planned(campaign):
+        if (
+            item.run.configuration == configuration
+            and item.run.arm == arm
+            and item.run.seed == seed
+        ):
+            return Path(item.job.outdir)
+    raise GateError(
+        f"the reproduction gate plans no run of {arm} on {configuration} at "
+        f"seed {seed}, so G9 has nothing to compare its reference arm against"
+    )
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job G9 reads: its own runs, and GR's seed-0 records of the reference arms."""
+    jobs = output_path_jobs(campaign)
+    reference_arms = {
+        arm
+        for config in campaign.configurations
+        for arm in arms_mod.active_arms(config, "B")
+        if arms_mod.ARMS[arm].output_loop != "none"
+    }
+    jobs += [
+        item.job
+        for item in _reproduction_planned(campaign)
+        if item.run.phase == "B" and item.run.seed == 0 and item.run.arm in reference_arms
+    ]
+    return jobs
+
+
+def _job_rows(campaign: Campaign) -> list[dict[str, Any]]:
+    from . import gates as gates_mod  # noqa: PLC0415
+
+    return gates_mod.job_rows(jobs_read, campaign)
 
 
 def capture_output_path(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
@@ -255,8 +317,6 @@ def per_run_owned_components(
 
 def output_path_body(campaign: Campaign) -> dict[str, Any]:
     """Compare each run against its criteria, and each reference against GR."""
-    root = output_path_root(campaign)
-    reference_root = Path(campaign.runs_dir) / "gates" / "reproduction" / "runs"
     rows: list[dict[str, Any]] = []
     passed = True
     n_components = n_component_diffs = 0
@@ -264,7 +324,7 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
     for config in campaign.configurations:
         for arm in arms_mod.active_arms(config, "B"):
             key = f"{arm}/{config.name}"
-            directory = root / "runs" / config.name / arm
+            directory = output_path_run_dir(campaign, config.name, arm)
             record = _read_record(directory, side="G9", key=key)
             entry = arms_mod.ARMS[arm]
             row: dict[str, Any] = {
@@ -349,7 +409,7 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
                 ]
             else:
                 row["expected_output_path"] = "mda_output"
-                reference = reference_root / config.name / arm / pool_mod.seed_directory(0)
+                reference = reproduction_run_dir(campaign, config.name, arm, 0)
                 previous = _read_record(
                     reference, side="reproduction gate", key=key
                 )
@@ -449,7 +509,7 @@ def _output_path_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         for config in campaign.configurations:
             for arm in arms_mod.active_arms(config, "B"):
                 if arms_mod.ARMS[arm].output_loop == "none":
-                    directory = output_path_root(campaign) / "runs" / config.name / arm
+                    directory = output_path_run_dir(campaign, config.name, arm)
                     if (directory / "metrics.json").exists():
                         return directory, f"{arm}/{config.name}", config
         raise GateError("G9 has no intervention run to bite on")
@@ -623,7 +683,7 @@ def gate(campaign: Campaign) -> Gate:
         body=lambda *, resume=False: _with_capture(
             capture_output_path, output_path_body, campaign, resume=resume
         ),
-        runs_under=("output_path/runs",),
+        jobs=lambda: _job_rows(campaign),
         # It compares its reference arms against the reproduction gate's
         # own records, so it cannot run before that gate has made them.
         reads_from=("reproduction",),

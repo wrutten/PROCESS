@@ -68,7 +68,7 @@ from .experiment import arms as arms_mod
 from .core import framework
 from .core import pool as pool_mod
 from .core import records as records_mod
-from .core.config import EXECUTION_APPROVED, Campaign, Config
+from .core.config import EXECUTION_APPROVED, Campaign, Config, default_campaign
 from .core.framework import Gate, GateError, Tooth
 
 __all__ = [
@@ -1165,20 +1165,34 @@ def _tooth_smoke_plan_cannot_be_a_campaign(campaign: Campaign):
 
 
 def _tooth_resume_does_not_cross_run_kinds() -> tuple[bool, str]:
-    record = dict(_doctored("campaign"))
-    record["regime"] = "unperturbed"
-    kept = records_mod.is_complete_for(
-        record,
-        arm="A0",
-        configuration="large_tokamak_nof",
-        seed=0,
-        phase="A",
-        regime="unperturbed",
+    """A campaign record offered to a smoke job's ``--resume`` is refused.
+
+    The job identity carries the run kind (``pool.JOB_IDENTITY_FIELDS``); the
+    record is a campaign record of the same arm, configuration, seed and phase,
+    with its own identity and digest stamped consistently, so the **only**
+    thing that refuses it is the kind.
+    """
+    campaign = default_campaign()
+    config = campaign.configuration("large_tokamak_nof")
+    smoke = pool_mod.Job(
+        phase="A", arm="A0", config=config, seed=0, regime="unperturbed",
         run_kind="smoke",
     )
-    return (not kept), (
+    forged = pool_mod.Job(
+        phase="A", arm="A0", config=config, seed=0, regime="unperturbed",
+        run_kind="campaign",
+    )
+    record = dict(_doctored("campaign"))
+    record["regime"] = "unperturbed"
+    record["job_identity"] = forged.identity(Path(campaign.runs_dir))
+    record["job_digest"] = records_mod.job_digest(record["job_identity"])
+    identity = smoke.identity(Path(campaign.runs_dir))
+    why = records_mod.why_not_complete_for(
+        record, identity=identity, digest=records_mod.job_digest(identity)
+    )
+    return (why is not None and "run_kind" in why), (
         "a record stamped 'campaign' is not kept by --resume for a smoke run "
-        f"(is_complete_for returned {kept})"
+        f"(why_not_complete_for: {why})"
     )
 
 
@@ -1279,14 +1293,11 @@ def gate(campaign: Campaign) -> Gate:
         ),
         body=lambda *, resume=False: separation_body(campaign, resume=resume),
         needs_runs=False,
-        # Derived from the tally's own source declarations rather than retyped:
-        # ``runs_under`` is relative to ``runs/gates/`` and a ``Source.subpath``
-        # to ``runs/``, and pasting one into the other surveys a directory that
-        # does not exist and prints "0 record(s)" where the straddle belongs
-        # (trap T12).
-        runs_under=tuple(
-            str(Path(source.subpath).relative_to("gates"))
-            for source in tally_mod.SOURCES
+        # Derived from the tally's own source declarations rather than retyped
+        # (trap T12): the sources are job sets, and the pool resolves them.
+        jobs=lambda: pool_mod.job_listing(
+            [job for source in tally_mod.SOURCES for job in tally_mod.source_jobs(campaign, source)],
+            campaign,
         ),
         teeth=(
             Tooth(

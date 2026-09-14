@@ -131,12 +131,24 @@ class Gate:
     plan_name: str | None = None
     needs_runs: bool = False
     kind: str = "gate"
-    #: Where this gate's own runs live, relative to the records directory.  The
-    #: default is a directory named for the gate; a gate that also reads a
-    #: shared set of runs names that too.  :meth:`run` surveys the commit every
-    #: record under these paths was made at, so that a verdict says **which
-    #: runs it read** rather than leaving a reader to assume they are current.
+    #: Directories, relative to the records directory (``runs/gates/``, trap
+    #: T12), under which this gate reads run records that are **not** shared
+    #: pool jobs: gate G1's two captures, which are one identity at two commits
+    #: and keep their own directories.  Empty for a gate whose runs are all
+    #: jobs.  :meth:`run` surveys the commit every record under these paths
+    #: and under the resolved job directories was made at, so that a verdict
+    #: says **which runs it read** rather than leaving a reader to assume they
+    #: are current.
     runs_under: tuple[str, ...] = ()
+    #: The **jobs this gate reads**, by identity (survey item B1): a callable
+    #: returning one row per distinct job — ``{"key", "job_digest", "path"}``,
+    #: the path resolved by the pool (``pool.job_listing``).  Called after the
+    #: body, when every prerequisite record exists; the verdict carries the
+    #: rows under ``runs_provenance.jobs`` and surveys their directories.  A
+    #: gate with neither this nor ``runs_under`` makes no runs.
+    jobs: Callable[[], Sequence[Mapping[str, Any]]] | None = field(
+        default=None, compare=False, repr=False
+    )
     #: Gates whose runs or whose verdict this gate reads.  A **declared**
     #: dependency, because the order ``--gate all`` uses is derived from it
     #: rather than hand-sorted: cheapest-first is a preference, and a gate that
@@ -164,9 +176,30 @@ class Gate:
         that is not the one named, one level up.
         """
         outcome = self.body(resume=resume)
-        provenance = survey_heads(
-            [Path(records_dir) / sub for sub in (self.runs_under or (self.name,))]
-        )
+        job_rows: list[Mapping[str, Any]] = []
+        jobs_not_composable: str | None = None
+        if self.jobs is not None:
+            try:
+                job_rows = list(self.jobs())
+            except Exception as exc:  # noqa: BLE001 - a body that refused leaves no prerequisites
+                # The job set is composed from records on disk; a body that
+                # refused before making its prerequisites has none, and the
+                # verdict says so rather than dying after the body reported.
+                jobs_not_composable = f"{type(exc).__name__}: {exc}"
+        paths = [Path(records_dir) / sub for sub in self.runs_under]
+        paths += [Path(row["path"]) for row in job_rows]
+        provenance = survey_heads(paths, relative_to=Path(records_dir))
+        provenance["jobs"] = [
+            {
+                "key": row["key"],
+                "job_digest": row["job_digest"],
+                "path": _relative(Path(row["path"]), Path(records_dir)),
+            }
+            for row in job_rows
+        ]
+        provenance["n_jobs"] = len(job_rows)
+        if jobs_not_composable is not None:
+            provenance["jobs_not_composable"] = jobs_not_composable
         stale = provenance["n_records"] > 0 and provenance["heads"] != [git_head()]
         outcome.setdefault("runs_provenance", provenance)
         if stale and not resume:
@@ -261,18 +294,35 @@ class Measurement:
         return block
 
 
-def survey_heads(paths: Sequence[Path]) -> dict[str, Any]:
+def _relative(path: Path, root: Path) -> str:
+    """*path* relative to *root* where it lies under it, else as given (T12)."""
+    try:
+        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def survey_heads(
+    paths: Sequence[Path], *, relative_to: Path | None = None
+) -> dict[str, Any]:
     """Which commit every run record under *paths* was made at.
 
     A gate's verdict is about the runs it read, and a reader cannot tell from a
     count whether those runs are the ones this commit would produce.  So the
     verdict carries the distinct ``tree_git_head`` values of the records under
-    the gate's own run directories, with how many records sit at each.
+    the gate's own run directories, with how many records sit at each.  A
+    directory named twice is surveyed once: a shared-pool job two declarations
+    resolve to is one record, not two.  With *relative_to* the paths are
+    written relative to it (``runs/gates/``, trap T12).
     """
     by_head: dict[str, int] = {}
     total = 0
+    seen: set[Path] = set()
     for root in paths:
         for record in sorted(Path(root).rglob("metrics.json")):
+            if record in seen:
+                continue
+            seen.add(record)
             try:
                 head = json.loads(record.read_text()).get("tree_git_head")
             except Exception:  # noqa: BLE001 - a half-written record is not a row
@@ -281,7 +331,10 @@ def survey_heads(paths: Sequence[Path]) -> dict[str, Any]:
             key = str(head)
             by_head[key] = by_head.get(key, 0) + 1
     return {
-        "paths": [str(path) for path in paths],
+        "paths": [
+            _relative(path, relative_to) if relative_to is not None else str(path)
+            for path in paths
+        ],
         "n_records": total,
         "heads": sorted(by_head),
         "records_by_head": by_head,
@@ -582,6 +635,7 @@ def gate_from_check(
     teeth: Sequence[str],
     needs_runs: bool = False,
     runs_under: tuple[str, ...] = (),
+    jobs: Callable[[], Sequence[Mapping[str, Any]]] | None = None,
 ) -> Gate:
     """Promote a ``Check``-shaped criterion into the gate framework, unchanged.
 
@@ -658,6 +712,7 @@ def gate_from_check(
         body=body,
         needs_runs=needs_runs,
         runs_under=runs_under,
+        jobs=jobs,
         teeth=tuple(
             Tooth(
                 name=tooth_name,

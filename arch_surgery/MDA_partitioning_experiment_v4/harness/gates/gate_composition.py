@@ -192,7 +192,51 @@ def _architecture_only(env: Mapping[str, str]) -> dict[str, str | None]:
 
 
 def composition_root(campaign: Campaign) -> Path:
+    """Where G5's verdict goes.  Its runs are shared-pool jobs."""
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "switch_composition"
+
+
+def composition_jobs(campaign: Campaign, config: Config) -> tuple[pool_mod.Job, pool_mod.Job]:
+    """The two runs: from the matrix, and switch by switch.
+
+    The second is composed by forcing **every** switch name to the hand-built
+    value -- present ones set, absent ones removed -- so the run really is
+    driven by that dictionary and not by the matrix's with a coincidence on
+    top.  Its ``override_env`` is what makes it a **different job identity**
+    from the first under the shared pool, although the two compose the same
+    environment: the comparison *is* the second run (survey §5), and the
+    identity is over what the pool was handed, not over what it produced.
+    """
+    from_matrix = pool_mod.Job(
+        phase="B",
+        arm=G5_ARM,
+        config=config,
+        seed=0,
+        regime="unperturbed",
+        delta=None,
+        run_kind="gate",
+    )
+    by_switch = pool_mod.Job(
+        phase="B",
+        arm=G5_ARM,
+        config=config,
+        seed=0,
+        regime="unperturbed",
+        delta=None,
+        run_kind="gate",
+        override_env=switch_by_switch(config, campaign),
+    )
+    return from_matrix, by_switch
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job G5 reads: two per configuration where the arm is active."""
+    jobs: list[pool_mod.Job] = []
+    for config in campaign.configurations:
+        if G5_ARM in config.skips:
+            continue
+        jobs.extend(composition_jobs(campaign, config))
+    return jobs
 
 
 def switch_composition_body(
@@ -234,43 +278,9 @@ def switch_composition_body(
             row["passed"] = False
             passed = False
             continue
-        # The two runs.  The second is composed by forcing **every** switch
-        # name to the hand-built value -- present ones set, absent ones
-        # removed -- so the run really is driven by that dictionary and not by
-        # the matrix's with a coincidence on top.
-        jobs.append(
-            (
-                config.name,
-                "from_the_matrix",
-                pool_mod.Job(
-                    phase="B",
-                    arm=G5_ARM,
-                    config=config,
-                    seed=0,
-                    outdir=composition_root(campaign) / config.name / "from_the_matrix",
-                    regime="unperturbed",
-                    delta=None,
-                    run_kind="gate",
-                ),
-            )
-        )
-        jobs.append(
-            (
-                config.name,
-                "switch_by_switch",
-                pool_mod.Job(
-                    phase="B",
-                    arm=G5_ARM,
-                    config=config,
-                    seed=0,
-                    outdir=composition_root(campaign) / config.name / "switch_by_switch",
-                    regime="unperturbed",
-                    delta=None,
-                    run_kind="gate",
-                    override_env=by_switch,
-                ),
-            )
-        )
+        from_matrix_job, by_switch_job = composition_jobs(campaign, config)
+        jobs.append((config.name, "from_the_matrix", from_matrix_job))
+        jobs.append((config.name, "switch_by_switch", by_switch_job))
 
     pool_mod.run_all([job for *_r, job in jobs], campaign, resume=resume)
 
@@ -420,5 +430,6 @@ def switch_composition_gate(campaign: Campaign) -> Gate:
             "run, to the bit"
         ),
         body=lambda *, resume=False: switch_composition_body(campaign, resume=resume),
+        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
         teeth=_teeth(campaign),
     )

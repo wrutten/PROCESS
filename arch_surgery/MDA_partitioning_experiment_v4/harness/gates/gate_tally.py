@@ -38,6 +38,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from harness.core import pool as pool_mod
 from harness.core import records as records_mod
 from harness.gates import reference as reference_mod
 from harness.measurement import stats as stats_mod
@@ -469,7 +470,18 @@ def gate(campaign: Campaign) -> Gate:
         ),
         body=lambda *, resume=False: body(campaign, resume=resume),
         needs_runs=False,
-        runs_under=("reproduction", "predicate_mode", "output_path"),
+        # The runs it reads are the tally's declared sources' job sets — GR's
+        # planned runs and G6's pairing runs — resolved by the pool.  It used
+        # to name three gate directories, two of which (G8's, G9's) it read no
+        # run record under: the predicate trial's table reads G8's *verdict*.
+        jobs=lambda: pool_mod.job_listing(
+            [
+                job
+                for source in tally_mod.SOURCES
+                for job in tally_mod.source_jobs(campaign, source)
+            ],
+            campaign,
+        ),
         reads_from=("reproduction",),
         teeth=(
             Tooth(

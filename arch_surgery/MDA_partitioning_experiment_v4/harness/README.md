@@ -103,10 +103,13 @@ run executes (harness plan amendment 13, rule (vi)).
 printers; it implements no criterion. `gates/gates.py` holds the gates that need no module of their
 own — G0′ and the copy's two sibling gates (`copy_identity`, `edit_behaviour`), all three loading
 their one implementation from `PROCESS/copy_gates.py` by path — plus the shared entry references
-every warm gate is anchored on, gate GR's wrapper, the promoted self-checks and the
-`self_containment` gate (the package scanned for any import of, or subprocess into, the two
-superseded directories; one tooth — a scratch module importing one must be counted). The
-important ones:
+every warm gate is anchored on (one job, `reproduction.entry_reference_job`, so one record in the
+pool), gate GR's wrapper, the promoted self-checks and the `self_containment` gate (the package
+scanned for any import of, or subprocess into, the two superseded directories; one tooth — a
+scratch module importing one must be counted). `gates/gate_resume_identity.py` holds the gate over
+the job identity itself: every `pool.Job` field classified, one by-design pair per class of
+deliberate second run composed from the gate modules' own constructors and required to differ (or,
+for the shared reference, to agree); five teeth. The important ones:
 
 - **G1 switch neutrality** (`gates/gate_neutrality.py`, with the exclusion tables and the
   record/output-file comparison machinery G8, G9 and `exclusion_review` import) — with every switch
@@ -251,7 +254,7 @@ wording, kept only so that documents written before the rename remain readable. 
 | **stencil regime** | Phase A entries taken from the optimiser's own finite-difference steps, which is what the loop actually sees during an optimisation | — |
 | **skip** | an arm that is inactive on a configuration, with the reason recorded. On a steady-state plant there is no burn time to own, so the two arms that move its ownership have nothing to move | — · **added** |
 | **capability probe** | a child process that imports the driver under an arm's environment and reports what it resolved, so that an unimplemented switch is refused rather than ignored | the instrumentation ledger · **added** |
-| **pending switch** | something an arm declares that no tree implements yet, because the driver change that supplies it has not been made. Composing the arm without it is refused | — · **added** |
+| **job identity** | every field the pool composes into a run, rendered once and digested; what `--resume` calls "the same job" and what names a directory of the shared pool. A switch term no tree implements is refused at composition; the allowance that once let a run omit one was retired (A72) | — · **added** |
 | **tally** | the summary computed from the records: the experiment plan's §4 tables, each with its caption and its denominator. It has nothing to pass, so it is a measurement stage and not a gate | — |
 | **construction** | one declared way of computing a published number — which median, which population, what counts as an accepted optimum. Each is one function in `harness/measurement/stats.py` and **its docstring is the declaration** a caption quotes | — · **added** |
 | **source** | a named subtree of `runs/gates/` whose records are a comparable set, with the sentence saying why. The tally reads a source, never "the gate runs": several gates run the same arm at the same seed from different entries and three run it doctored | — · **added** |
@@ -600,19 +603,36 @@ $PY experiment_runner.py --plan-tables check
 $PY experiment_runner.py --plan-tables write
 ```
 
-**Every gate makes its own runs, and `--resume` is what decides whether it re-makes them.** Without
-the flag every run a gate reads is made again, so a verdict is never computed over records made
-before the change it is checking; with it, a directory already holding a *complete record of the
-same job* is kept, which is not a retry — `pool.run` checks the job matches before keeping anything.
-Every verdict says which commit the records it read were made at: records from another commit are
-expected under `--resume`, stated either way, and a **failure** without it.
+**Every gate's runs are jobs in one shared pool, and `--resume` is what decides whether a job is
+re-made.** A job's **identity** is every field the pool composes into the run — arm, configuration,
+seed, phase, regime, run kind, δ, the pin, the entry state, the stencil point, the ruler, the
+overrides, the audit position and its caller — listed once in `pool.JOB_IDENTITY_FIELDS`, rendered
+as one dictionary, digested (`records.job_digest`) and stamped into the record as `job_identity` and
+`job_digest`. One directory per distinct identity, `runs/gates/_runs/<phase>_<arm>_<configuration>_
+seed<NNN>_<kind>_<digest>`; a gate declares the **jobs it reads** (`Gate.jobs`) and the pool resolves
+them, so two gates composing the same job share one record and a gate that runs the same arm a second
+way on purpose — a hand-composed environment, a doctored entry state, another audit position —
+differs in an identity field and has its own directory by construction (gate `resume_identity`
+checks one pair per class). `experiment_runner.py --jobs <gate|all>` lists a gate's job set with the
+resume decision per job, without running anything.
 
-Two exceptions, both stated where they happen. The shared cold-flat reference evaluations are made
-**once per invocation** and shared by the three gates anchored on them. And gate G1, switch
-neutrality, compares the copy *before* a driver change with the copy *after* it, so its two sides
-are at two commits by construction: it cannot make its own "before", and **never re-makes one that
-is there**. Move a "before" capture between trees by copying the directory, never by re-running the
-stage — it was written by an earlier record schema, and resume judges it against the current one.
+Without `--resume` every job is made again — once per press, whichever gates share it — so a verdict
+is never computed over records made before the change it is checking; with it, a directory holding a
+*complete record of exactly this job* is kept, which is not a retry: `records.is_complete_for`
+compares the readable six fields, every identity field the child also stamps, the stamped identity
+field by field and the digest (which must re-derive from the stamped identity) before anything is
+kept. A record made before the identity existed has no digest and is incomplete, so a change to what
+the identity covers re-makes every run (harness plan amendment 17's property, by construction).
+Every verdict says which commit the records it read were made at, and lists the jobs: records from
+another commit are expected under `--resume`, stated either way, and a **failure** without it.
+
+One exception, stated where it happens. Gate G1, switch neutrality, compares the copy *before* a
+driver change with the copy *after* it, so its two sides are **one identity at two commits**: the
+pool's one-directory-per-identity would put the second on top of the first, so its two captures keep
+their own directories (`runs/gates/switch_neutrality/{before,after}/`), it cannot make its own
+"before", and **never re-makes one that is there**. Move a "before" capture between trees by copying
+the directory, never by re-running the stage — it was written by an earlier record schema, and
+resume judges it against the current one.
 
 ```bash
 $PY experiment_runner.py --gate switch_neutrality --capture before  # in a tree at the commit before
@@ -627,7 +647,7 @@ the dependency wins: G9 compares its reference arms against gate GR's own record
 GR however much GR costs. A dependency on a gate the registry does not hold, or a cycle, raises.
 
 `--outdir` sends a gate's verdict somewhere other than the campaign's records
-directory; the gates' own runs stay where they are, because one gate reads
+directory; the shared pool stays where it is, because one gate reads
 another's runs. `--no-teeth` skips the teeth and the verdict says so — a gate
 whose teeth were not run is not an accepted gate.
 
@@ -700,6 +720,18 @@ as the burn time's owner did — give `canonical_roles()` the folding, and give 
 the folding must drop the old switch only where its value is the one the new one implies, and any
 other value must survive as a role of its own so a real difference still reads as a difference.
 
+**A gate that makes runs.** Compose its jobs in one function of the campaign (`jobs_read`),
+reading any prerequisite — the entry references, a baseline record — from disk through the pool
+(`gates.entry_references_from_records`, `pool.directory_for`), and declare that function as the
+gate's `jobs` (`gates.job_rows`); the body calls the same function and hands the jobs to
+`pool.run_all`. Name no directory: a job's directory is the pool's, from its identity. A second run
+the gate makes *on purpose* must differ from the first in an identity field — `override_env`, the
+entry state's path, the audit position — or the pool hands it the first run's record; add the pair
+to `gate_resume_identity.by_design_pairs` so the distinctness is checked, not assumed. **A field
+added to `pool.Job`** must be put in `JOB_IDENTITY_FIELDS` or `JOB_NON_IDENTITY_FIELDS`, with the
+reason; the module refuses to import otherwise, and a change to the identity re-makes every record
+under `--resume`, which is the contract working.
+
 ---
 
 ## 7. Where this differs from the plan's terminology table, and why
@@ -730,7 +762,8 @@ changes and five additions were made; each is listed here so the plan can absorb
    "lift" switch took a *list*; if a second quantity is ever taken out, the general form is needed
    back, and the driver's own docstring says so where a reader will meet it.
 6. **Five terms with no row in §11.2 are added**: rung, stopping rule, skip, capability probe,
-   pending switch. Each is a thing the harness has to name in a refusal message.
+   job identity (which replaced *pending switch* when the allowance was retired, A72). Each is a
+   thing the harness has to name in a refusal message.
 7. **The plan's matrix row "outer loop" is regenerated, not stored.** Four of the plan's eleven
    matrix rows — the stopping rule, the outer loop, whether the burn time is out of the loop, and
    which input file is read — follow from the other rows. They are computed, and the whole table is
@@ -766,7 +799,7 @@ shown to catch.*
 | **capability** | the tree resolves every switch each arm asks for, exactly as asked; an arm asking for something no tree implements is refused before anything runs | a switch name no tree defines; a switch the environment does not carry claimed as resolved; each retired name of the registry's list present in the environment, one tooth over the list; the driver's own refusal of a retired name; a decoy `process/` package in the working directory |
 | **provenance** | a modified tracked file and an untracked file are recorded separately, and only the first marks the tree dirty | each kind of change, one at a time, in a throwaway repository; and the tree asserted by a prefix instead of exactly |
 | **data** | every committed file in `data/` is byte-identical to its source at the recorded commit and the file set matches exactly; `ystate.py`'s whole diff against its own source is exactly the hunks the record holds and its post-edit hash is the recorded one; the counts `config.py` declares are the ones the files carry | one byte changed; a file missing; a file the record does not name; a changed file whose recorded hash was updated to match it — which passes a record-only check and must still fail; and the same two on `ystate.py` itself |
-| **run path** | a finished record carries every field it declares; a partial per-attempt decomposition is refused and its sweep total decomposes into the parts that claim it; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; a record that does not say what kind of run made it; per-attempt costs stamped at some attempts and not others; a sweep total that does not decompose; an allowance covering a switch the tree has. (One ruler and not both, and attempts that do not sum, are gate G7's teeth on a real record and are not repeated here) |
+| **run path** | a finished record carries every field it declares; a partial per-attempt decomposition is refused and its sweep total decomposes into the parts that claim it; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; a record that does not say what kind of run made it; per-attempt costs stamped at some attempts and not others; a sweep total that does not decompose; a run asking for a switch the tree does not implement. (One ruler and not both, and attempts that do not sum, are gate G7's teeth on a real record and are not repeated here) |
 | **stage provenance** | a measurement stage that reads other records says which ones it read — path, bytes, commit, time and verdict — and a consumer refuses that stage record once those records have moved, so the plan's §4.1 can no longer reproduce a verdict the gate has since replaced; and every census record carries the commit of the tree it was taken in, or is named as one a stamp survey cannot place | a verdict re-made at a later commit after the stage record was written; a verdict written after it; a verdict it read that is gone; a stage record that does not say what it read |
 
 Two of these deserve their reason stated.
@@ -875,10 +908,14 @@ A record of one run carries, at minimum:
 - **how it ended**: one of a small set of outcomes — finished, crashed, refused, did not converge,
   hit upstream's own pass cap, infeasible at the audit, or a machinery failure. Upstream's loop
   raising after ten passes is a *finding about the shipped code*, not a broken run, and has its
-  own outcome so that the two are never confused again.
+  own outcome so that the two are never confused again;
+- **which job it is**: the pool's rendering of every field it composed into the run
+  (`job_identity`) and its digest (`job_digest`), stamped after the child returns; what `--resume`
+  compares, and what names the record's directory in the shared pool (§5).
 
-The record's schema is `core/records.py`'s `SCHEMA` (100 declared fields) and every reader goes
-through its contract (`assert_usable`); this list is the plain-language version of what it carries.
+The record's schema is `core/records.py`'s `SCHEMA` (101 declared fields: 90 in the optimisation
+phase, 83 in the evaluation phase) and every reader goes through its contract (`assert_usable`);
+this list is the plain-language version of what it carries.
 
 ---
 
@@ -1280,11 +1317,14 @@ the accepted optimum, and the lift's residual).
 different entries, and three of them run it deliberately doctored. A per-run mean over that tree
 would be a mean over a set nobody can state.
 
-So the tally reads a **source**: a named subtree whose records are a comparable set, declared in
-`tally.SOURCES` with the sentence that says why. Two exist — the reproduction gate's own runs, and
-the entry gate's paired evaluations — and every caption carries the source's sentence. Records under
-`runs/gates/` that belong to no declared source are **counted and named by their gate** in the
-stage's own record, so the smaller denominator is a stated choice and not an omission.
+So the tally reads a **source**: a gate's **job set** whose records are a comparable set, declared in
+`tally.SOURCES` with the sentence that says why and resolved through the pool — named by job set, not
+by directory, because under the shared pool every gate's runs sit in one directory keyed by identity.
+Two exist — the reproduction gate's planned runs, and the entry gate's pairing runs — and every
+caption carries the source's sentence; `analysis.SOURCES` declares the same two independently.
+Records under `runs/gates/` that belong to no declared source are **counted and named** (by gate
+directory, or by phase and arm for the pool's) in the stage's own record, so the smaller denominator
+is a stated choice and not an omission.
 
 Within a source, the optimisation phase is split again into **seed-complete arm groups**. The plan's
 "the seeds on which every arm converged" assumes what a campaign guarantees — every arm at every
@@ -1476,9 +1516,9 @@ quietly, which is the error this project has made three times.
 **A campaign record is never made by the smoke.** The campaign plan refuses to compose while
 `EXECUTION_APPROVED` is `False` or while the tree is not the experiment's own copy, and the smoke
 asks for the smoke plan by name — there is no argument it could pass that would produce a campaign
-record. Resume is closed the same way: `records.is_complete_for` compares the run kind, so a record
-of one kind is never kept for a job of another, and a stamp cannot be laundered by moving a
-directory.
+record. Resume is closed the same way: the run kind is in the job identity `records.is_complete_for`
+compares, so a record of one kind is never kept for a job of another, and a stamp cannot be laundered
+by moving a directory.
 
 Both directions are gate **`run_kind_separation`**, whose criterion is a survey of every record
 under `runs/` by kind — including the positive statement that no record a declared tally source

@@ -250,6 +250,9 @@ def doctor_snapshot(
 
 
 def audit_root(campaign: Campaign) -> Path:
+    """Where G4's verdict and its doctored entry states go.  Its runs are
+    shared-pool jobs: each doctored run's identity carries the path of the
+    entry state it was entered from, so twelve doctorings are twelve jobs."""
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "audit_restriction"
 
 
@@ -265,13 +268,157 @@ def _job(
         arm=G4_ARM,
         config=config,
         seed=0,
-        outdir=audit_root(campaign) / config.name / label,
         regime="unperturbed",
         delta=None,
         pin_hex=pin_hex,
         entry_state=entry_state,
         run_kind="gate",
     )
+
+
+def _doctoring_plan(
+    campaign: Campaign,
+    config: Config,
+    snapshot: Mapping[str, Any],
+    baseline: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], list[tuple[str, str | None, str]], dict[str, Any]]:
+    """Which component is doctored per excluded namespace, plus one in-loop.
+
+    Returns the rows for namespaces that own nothing here, the plan
+    ``(label, namespace, component)`` and the namespace census.  Composed
+    from the reference snapshot and the **baseline record** — the design
+    vector's own keys are read from it — so the doctored jobs exist only once
+    the baseline has run.
+    """
+    owned_by_x = baseline.get("spec_keys_owned_by_x") or []
+    excluded_keys, _excluded_detail = gate_output_path.excluded_by_the_per_run_nodes(
+        campaign, config
+    )
+    namespaces = excluded_namespaces(campaign, config)
+    categories = _categories(config)
+    tested = set(categories)
+    rows: list[dict[str, Any]] = []
+    plan: list[tuple[str, str | None, str]] = []
+    for unit in namespaces["candidate_units"]:
+        node_fields = sorted(
+            set(namespaces["writes_by_node"].get(unit, ())) & excluded_keys
+        )
+        if not node_fields:
+            # A namespace that writes no component of the coupling state on
+            # this configuration excludes nothing, so there is nothing to
+            # doctor and nothing the restriction could hide.  That is the
+            # certification, not a gap in it -- and it is *recorded*, with
+            # the count, rather than left to be inferred from an absence.
+            # The live case is `pulse` on the steady-state configuration,
+            # whose whole body is guarded off there: it is visited on every
+            # sweep and computes nothing.
+            rows.append(
+                {
+                    "configuration": config.name,
+                    "direction": "per_run-owned",
+                    "namespace": unit,
+                    "component": None,
+                    "n_components_owned_here": 0,
+                    "why_no_component_is_doctored": (
+                        "this namespace writes no component of the coupling "
+                        "state on this configuration, so it excludes "
+                        "nothing and there is nothing for the restriction "
+                        "to hide"
+                    ),
+                    "passed": True,
+                }
+            )
+            continue
+        component = choose_component(
+            snapshot["state"],
+            node_fields,
+            categories=categories,
+            owned_by_x=owned_by_x,
+            where=f"{config.name}/{unit}",
+        )
+        plan.append((f"per_run_{unit}", unit, component))
+    in_loop_candidates = sorted(tested - excluded_keys)
+    in_loop = choose_component(
+        snapshot["state"],
+        in_loop_candidates,
+        categories=categories,
+        owned_by_x=owned_by_x,
+        where=f"{config.name}/in-loop",
+    )
+    plan.append(("in_loop", None, in_loop))
+    return rows, plan, namespaces
+
+
+def _doctored_jobs(
+    campaign: Campaign,
+    config: Config,
+    snapshot: Mapping[str, Any],
+    plan: Sequence[tuple[str, str | None, str]],
+    pin: str | None,
+) -> list[tuple[str, str | None, str, pool_mod.Job, float, float]]:
+    """Write each doctored entry state and compose the job entered from it."""
+    jobs: list[tuple[str, str | None, str, pool_mod.Job, float, float]] = []
+    # The doctored entries live **outside** the run directories: a run
+    # clears its own directory before it starts, so an entry state written
+    # inside one would be deleted by the run that is meant to read it.
+    entries_dir = audit_root(campaign) / config.name / "_entries"
+    entries_dir.mkdir(parents=True, exist_ok=True)
+    for label, unit, component in plan:
+        doctored, before, after = doctor_snapshot(snapshot, component)
+        entry = entries_dir / f"{label}.json"
+        entry.write_text(json.dumps(doctored))
+        jobs.append(
+            (
+                label,
+                unit,
+                component,
+                _job(campaign, config, label, entry, pin),
+                before,
+                after,
+            )
+        )
+    return jobs
+
+
+def optimisation_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    """One optimisation of the full intervention per configuration."""
+    return [
+        pool_mod.Job(
+            phase="B",
+            arm=OPTIMISATION_ARM,
+            config=config,
+            seed=0,
+            regime="unperturbed",
+            delta=None,
+            run_kind="gate",
+        )
+        for config in campaign.configurations
+        if OPTIMISATION_ARM not in config.skips
+    ]
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job G4 reads: references, baselines, the doctored runs, the optimisations.
+
+    The doctored runs are composable only from a baseline **record**; where
+    one is not on disk yet the baseline alone is listed for that configuration.
+    """
+    references = gates_mod.entry_references_from_records(campaign)
+    jobs = gates_mod.entry_reference_jobs(campaign)
+    for config in campaign.configurations:
+        if G4_ARM in config.skips:
+            continue
+        reference = references[config.name]
+        pin = _pin(config, reference)
+        baseline_job = _job(campaign, config, "baseline", Path(reference["snapshot"]), pin)
+        jobs.append(baseline_job)
+        baseline = records_mod.read(pool_mod.directory_for(baseline_job, campaign))
+        if baseline.get("status") != "ok":
+            continue
+        snapshot = json.loads(Path(reference["snapshot"]).read_text())
+        _rows, plan, _namespaces = _doctoring_plan(campaign, config, snapshot, baseline)
+        jobs += [job for *_r, job, _b, _a in _doctored_jobs(campaign, config, snapshot, plan, pin)]
+    return jobs + optimisation_jobs(campaign)
 
 
 def _pin(config: Config, reference: Mapping[str, Any]) -> str | None:
@@ -332,91 +479,14 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
             passed = False
             continue
         baseline_restricted = _restricted(baseline)
-        owned_by_x = baseline.get("spec_keys_owned_by_x") or []
-
-        excluded_keys, excluded_detail = gate_output_path.excluded_by_the_per_run_nodes(
+        _excluded_keys, excluded_detail = gate_output_path.excluded_by_the_per_run_nodes(
             campaign, config
         )
-        namespaces = excluded_namespaces(campaign, config)
+        empty_rows, plan, namespaces = _doctoring_plan(campaign, config, snapshot, baseline)
+        rows.extend(empty_rows)
         namespaces_seen[config.name] = namespaces["candidate_units"]
         scales = _scales(config)
-        categories = _categories(config)
-        # Every component the audit tests, not only the ones with a scale: the
-        # in-loop candidate list is filtered for eligibility afterwards, and a
-        # population narrowed here would narrow it twice.
-        tested = set(categories)
-
-        # 2. one doctored component per excluded namespace, plus one in-loop.
-        plan: list[tuple[str, str, str]] = []  # (label, namespace, component)
-        for unit in namespaces["candidate_units"]:
-            node_fields = sorted(
-                set(namespaces["writes_by_node"].get(unit, ())) & excluded_keys
-            )
-            if not node_fields:
-                # A namespace that writes no component of the coupling state on
-                # this configuration excludes nothing, so there is nothing to
-                # doctor and nothing the restriction could hide.  That is the
-                # certification, not a gap in it -- and it is *recorded*, with
-                # the count, rather than left to be inferred from an absence.
-                # The live case is `pulse` on the steady-state configuration,
-                # whose whole body is guarded off there: it is visited on every
-                # sweep and computes nothing.
-                rows.append(
-                    {
-                        "configuration": config.name,
-                        "direction": "per_run-owned",
-                        "namespace": unit,
-                        "component": None,
-                        "n_components_owned_here": 0,
-                        "why_no_component_is_doctored": (
-                            "this namespace writes no component of the coupling "
-                            "state on this configuration, so it excludes "
-                            "nothing and there is nothing for the restriction "
-                            "to hide"
-                        ),
-                        "passed": True,
-                    }
-                )
-                continue
-            component = choose_component(
-                snapshot["state"],
-                node_fields,
-                categories=categories,
-                owned_by_x=owned_by_x,
-                where=f"{config.name}/{unit}",
-            )
-            plan.append((f"per_run_{unit}", unit, component))
-
-        in_loop_candidates = sorted(tested - excluded_keys)
-        in_loop = choose_component(
-            snapshot["state"],
-            in_loop_candidates,
-            categories=categories,
-            owned_by_x=owned_by_x,
-            where=f"{config.name}/in-loop",
-        )
-        plan.append(("in_loop", None, in_loop))
-
-        jobs: list[tuple[str, str, str, pool_mod.Job, float, float]] = []
-        # The doctored entries live **outside** the run directories: a run
-        # clears its own directory before it starts, so an entry state written
-        # inside one would be deleted by the run that is meant to read it.
-        entries_dir = audit_root(campaign) / config.name / "_entries"
-        entries_dir.mkdir(parents=True, exist_ok=True)
-        for label, unit, component in plan:
-            doctored, before, after = doctor_snapshot(snapshot, component)
-            entry = entries_dir / f"{label}.json"
-            entry.write_text(json.dumps(doctored))
-            jobs.append(
-                (
-                    label,
-                    unit,
-                    component,
-                    _job(campaign, config, label, entry, pin),
-                    before,
-                    after,
-                )
-            )
+        jobs = _doctored_jobs(campaign, config, snapshot, plan, pin)
         # ``resume`` is the pool's decision from the record, here as everywhere
         # (rule (vii)): each doctored job has its own directory and its own
         # complete record, so a kept record is a record of the same doctoring.
@@ -596,20 +666,7 @@ def optimisation_phase_statistic(
     demonstrations and never a population.
     """
     root = Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH
-    own = [
-        pool_mod.Job(
-            phase="B",
-            arm=OPTIMISATION_ARM,
-            config=config,
-            seed=0,
-            outdir=audit_root(campaign) / config.name / "optimisation",
-            regime="unperturbed",
-            delta=None,
-            run_kind="gate",
-        )
-        for config in campaign.configurations
-        if OPTIMISATION_ARM not in config.skips
-    ]
+    own = optimisation_jobs(campaign)
     pool_mod.run_all(own, campaign, resume=resume)
     rows: list[dict[str, Any]] = []
     for path in sorted(root.rglob("metrics.json")):
@@ -932,6 +989,6 @@ def audit_restriction_gate(campaign: Campaign) -> Gate:
             "with the component that carries it named"
         ),
         body=lambda *, resume=False: audit_restriction_body(campaign, resume=resume),
-        runs_under=("audit_restriction", "entry_references"),
+        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
         teeth=_teeth(campaign),
     )

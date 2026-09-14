@@ -224,6 +224,13 @@ def _written_file_gates(campaign: Campaign) -> dict[str, Gate]:
     return {gate_written_file.GATE_NAME: gate_written_file.gate(campaign)}
 
 
+def _identity_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The resume-identity gate (task A72): the job identity and the shared pool."""
+    from . import gate_resume_identity
+
+    return {gate_resume_identity.GATE_NAME: gate_resume_identity.gate(campaign)}
+
+
 def _chain_gates(campaign: Campaign) -> dict[str, Gate]:
     """The run-kind separation gate, with its six teeth."""
     from harness import chain as chain_mod  # noqa: PLC0415
@@ -357,6 +364,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_tally_gates(campaign))
     entries.update(_analysis_gates(campaign))
     entries.update(_written_file_gates(campaign))
+    entries.update(_identity_gates(campaign))
     entries.update(_chain_gates(campaign))
     entries.update(measurements(campaign))
     assert_declared_dependencies(entries)
@@ -575,6 +583,9 @@ GATE_ORDER: tuple[str, ...] = (
     "provenance",
     "data",
     "run_path",
+    # The job identity and the shared pool's distinctness pairs: composed
+    # from the gate modules' own job constructors, no PROCESS run.
+    "resume_identity",
     "capability",
     "artifacts_check",
     "artifacts_derive_inputs",

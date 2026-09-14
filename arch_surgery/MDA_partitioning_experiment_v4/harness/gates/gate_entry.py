@@ -95,6 +95,7 @@ _HELD: dict[str, Any] = {}
 
 
 def entry_root(campaign: Campaign) -> Path:
+    """Where the gate's verdict goes.  Its runs are shared-pool jobs."""
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "entry_and_warm"
 
 
@@ -167,7 +168,6 @@ def entry_and_warm_jobs(
     """The pairing runs and the warm runs, per configuration."""
     pairing: list[tuple[str, str, pool_mod.Job]] = []
     warm: list[tuple[str, str, pool_mod.Job]] = []
-    root = entry_root(campaign)
     for config in campaign.configurations:
         reference = references[config.name]
         snapshot = Path(reference["snapshot"])
@@ -183,7 +183,6 @@ def entry_and_warm_jobs(
                         arm=arm,
                         config=config,
                         seed=PAIRING_SEED,
-                        outdir=root / config.name / "pairing" / arm,
                         regime="perturbed",
                         delta=campaign.delta,
                         pin_hex=_pin(
@@ -210,7 +209,6 @@ def entry_and_warm_jobs(
                         arm=arm,
                         config=config,
                         seed=0,
-                        outdir=root / config.name / "warm" / arm,
                         regime="unperturbed",
                         delta=None,
                         pin_hex=_pin(config, arm, reference, seed=0, delta=None),
@@ -220,6 +218,29 @@ def entry_and_warm_jobs(
                 )
             )
     return pairing, warm
+
+
+def pairing_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    """The pairing runs alone — the tally's ``paired_entries`` population.
+
+    Composed from the reference records on disk (``gates.entry_references_from_records``);
+    what ``tally.SOURCES`` and ``analysis.SOURCES`` name, each on its own, as
+    the population of the experiment plan's Phase A entry construction.
+    """
+    references = gates_mod.entry_references_from_records(campaign)
+    pairing, _warm = entry_and_warm_jobs(campaign, references)
+    return [job for *_r, job in pairing]
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job G6 reads: the references, the pairing runs and the warm runs."""
+    references = gates_mod.entry_references_from_records(campaign)
+    pairing, warm = entry_and_warm_jobs(campaign, references)
+    return (
+        gates_mod.entry_reference_jobs(campaign)
+        + [job for *_r, job in pairing]
+        + [job for *_r, job in warm]
+    )
 
 
 def _warm_row(
@@ -362,6 +383,8 @@ def entry_and_warm_body(campaign: Campaign, *, resume: bool = False) -> dict[str
     _HELD["warm"] = warm_rows
     _HELD["references"] = references
     _HELD["campaign"] = campaign
+    _HELD["warm_dirs"] = {(name, arm): Path(job.outdir) for name, arm, job in warm}
+    _HELD["pairing_dirs"] = {(name, arm): Path(job.outdir) for name, arm, job in pairing}
     return {
         "passed": passed,
         "criterion": (
@@ -419,7 +442,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         y_reference = predicate_mod.restore_snapshot(
             spec, json.loads(Path(reference["snapshot"]).read_text())
         )
-        directory = entry_root(campaign) / config.name / "warm" / row["arm"]
+        directory = _HELD["warm_dirs"][(config.name, row["arm"])]
         y_arm = predicate_mod.restore_snapshot(
             spec, json.loads((directory / "y_exit.json").read_text())
         )
@@ -452,7 +475,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         y_reference = predicate_mod.restore_snapshot(
             spec, json.loads(Path(reference["snapshot"]).read_text())
         )
-        directory = entry_root(campaign) / config.name / "warm" / row["arm"]
+        directory = _HELD["warm_dirs"][(config.name, row["arm"])]
         y_arm = predicate_mod.restore_snapshot(
             spec, json.loads((directory / "y_exit.json").read_text())
         )
@@ -490,9 +513,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             return False, "the gate paired no entries"
         row = rows[0]
         config = campaign.configuration(row["configuration"])
-        directory = (
-            entry_root(campaign) / config.name / "pairing" / row["pair"][0]
-        )
+        directory = _HELD["pairing_dirs"][(config.name, row["pair"][0])]
         state = json.loads((directory / "y_entry.json").read_text())
         doctored = json.loads(json.dumps(state))
         name = next(
@@ -554,6 +575,6 @@ def entry_and_warm_gate(campaign: Campaign) -> Gate:
             "fixed point when entered warm and pinned"
         ),
         body=lambda *, resume=False: entry_and_warm_body(campaign, resume=resume),
-        runs_under=("entry_and_warm", "entry_references"),
+        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
         teeth=_teeth(campaign),
     )

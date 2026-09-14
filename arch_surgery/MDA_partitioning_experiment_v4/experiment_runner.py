@@ -50,6 +50,7 @@ from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.child import postsolve as postsolve_mod  # noqa: E402
 from harness.core import provenance as prov  # noqa: E402
 from harness.measurement import plan_tables as plan_tables_mod  # noqa: E402
+from harness.core import framework as framework_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
 from harness.gates import reference as reference_mod  # noqa: E402
@@ -427,7 +428,6 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         stencil_column=args.stencil_column,
         stencil_sign=args.stencil_sign,
         run_kind=args.run_kind,
-        allow_pending=tuple(t for t in (args.allow_pending or "").split(",") if t),
     )
     print(
         f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
@@ -641,6 +641,72 @@ def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
         # document and this mode exists so that a task can say what the
         # records now produce without editing it.
         return 3
+    return 0
+
+
+def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
+    """One gate's job set, by identity, and what ``--resume`` would do with each.
+
+    Nothing runs.  The gate's ``jobs`` declaration is composed from the records
+    on disk — a dependent job carries its reference's exit state, so a gate
+    whose references are not made yet says so by name — and each job is
+    printed with its key, its digest, the shared pool's directory and
+    ``records.why_not_complete_for``'s sentence, or KEPT where a complete
+    record of exactly that job is there.  That sentence is the whole of the
+    resume decision (rule (vii)); this shows it without pressing anything.
+    With ``all``, the union over every gate, and which gates share each job.
+    """
+    _rule(f"jobs of gate {args.jobs}")
+    available = registry_mod.gates_only(campaign)
+    names = registry_mod.ordered_gate_names(campaign) if args.jobs == "all" else [args.jobs]
+    unknown = [n for n in names if n not in available]
+    if unknown:
+        print(f"  REFUSED — {unknown} is not a registered gate")
+        return 3
+    by_digest: dict[str, dict[str, Any]] = {}
+    readers: dict[str, list[str]] = {}
+    for name in names:
+        gate = available[name]
+        if gate.jobs is None:
+            if args.jobs != "all":
+                print(
+                    f"  gate {name} declares no job set"
+                    + (f"; it reads run records under {list(gate.runs_under)}" if gate.runs_under else "")
+                )
+            continue
+        try:
+            rows = list(gate.jobs())
+        except gates_mod.GateError as exc:
+            print(f"  gate {name}: not composable yet — {exc}")
+            continue
+        except Exception as exc:  # noqa: BLE001 - the reproduction gate's own refusal
+            if type(exc).__name__ != "ReproductionError":
+                raise
+            print(f"  gate {name}: not composable yet — {exc}")
+            continue
+        for row in rows:
+            by_digest.setdefault(row["job_digest"], row)
+            readers.setdefault(row["job_digest"], []).append(name)
+        if args.jobs != "all":
+            kept = sum(1 for r in rows if r["why_not_complete"] is None)
+            print(f"  {len(rows)} distinct job(s); --resume would keep {kept}\n")
+            for row in rows:
+                state = "KEPT" if row["why_not_complete"] is None else f"RUN — {row['why_not_complete']}"
+                relative = framework_mod._relative(Path(row["path"]), Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH)
+                print(f"    {row['key']}")
+                print(f"      digest {row['job_digest'][:16]}  {relative}")
+                print(f"      {state}")
+    if args.jobs == "all":
+        shared = {d: g for d, g in readers.items() if len(g) > 1}
+        kept = sum(1 for r in by_digest.values() if r["why_not_complete"] is None)
+        print(
+            f"  {len(by_digest)} distinct job(s) over {len(names)} gate(s); "
+            f"{sum(len(g) for g in readers.values())} gate-job declarations; "
+            f"{len(shared)} job(s) read by more than one gate; --resume would "
+            f"keep {kept}\n"
+        )
+        for digest, gates in sorted(shared.items(), key=lambda kv: by_digest[kv[0]]["key"]):
+            print(f"    {by_digest[digest]['key']}  <- {', '.join(gates)}")
     return 0
 
 
@@ -894,6 +960,14 @@ def main(argv: list[str] | None = None) -> int:
         "expensive half",
     )
     parser.add_argument(
+        "--jobs",
+        metavar="NAME",
+        help="list one gate's job set by identity — key, digest, shared-pool "
+        "directory, and whether --resume would keep the record there, with "
+        "the reason where it would not — and stop.  Nothing runs.  'all' "
+        "lists the union and which gates share each job",
+    )
+    parser.add_argument(
         "--gate",
         metavar="NAME",
         help="run one gate and stop, or 'all' for every registered gate "
@@ -949,10 +1023,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stencil-column", type=int, default=None, help="for --run")
     parser.add_argument("--stencil-sign", type=int, default=1, choices=(1, -1),
                         help="for --run")
-    parser.add_argument("--allow-pending", default="",
-                        help="for --run: switch terms this tree does not "
-                        "implement that this run may omit, named explicitly "
-                        "and recorded.  Never available to a campaign stage")
     parser.add_argument("--outdir", default=None,
                         help="for --run: where the run goes.  For --gate and "
                              "--measure: where the verdicts and the gates' own "
@@ -995,6 +1065,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.gates:
         return stage_gate_catalogue(campaign)
+
+    if args.jobs:
+        return stage_jobs(args, campaign)
 
     if args.gate:
         return stage_gate(args, campaign)

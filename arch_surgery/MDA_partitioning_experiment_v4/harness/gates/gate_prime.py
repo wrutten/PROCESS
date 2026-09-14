@@ -174,6 +174,7 @@ def prime_override(*, on: bool) -> dict[str, Any]:
 
 
 def prime_map_root(campaign: Campaign) -> Path:
+    """Where G2's verdict goes.  Its runs are shared-pool jobs."""
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "prime_map"
 
 
@@ -182,7 +183,6 @@ def prime_map_jobs(
 ) -> list[tuple[str, str, bool, pool_mod.Job]]:
     """Four runs per configuration: two arrangements × the prime on and off."""
     plan: list[tuple[str, str, bool, pool_mod.Job]] = []
-    root = prime_map_root(campaign)
     for config in campaign.configurations:
         reference = references[config.name]
         for arrangement, arm in G2_ARRANGEMENTS:
@@ -200,7 +200,6 @@ def prime_map_jobs(
                             arm=arm,
                             config=config,
                             seed=0,
-                            outdir=root / config.name / arrangement / label,
                             regime="unperturbed",
                             delta=None,
                             pin_hex=reproduction_mod.entry_pin(config, arm, reference),
@@ -211,6 +210,14 @@ def prime_map_jobs(
                     )
                 )
     return plan
+
+
+def prime_map_jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job G2 reads: the references and the four runs per configuration."""
+    references = gates_mod.entry_references_from_records(campaign)
+    return gates_mod.entry_reference_jobs(campaign) + [
+        job for *_rest, job in prime_map_jobs(campaign, references)
+    ]
 
 
 def full_state_compare(
@@ -252,6 +259,9 @@ def prime_map_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any
     pool_mod.run_all([job for *_rest, job in plan], campaign, resume=resume)
 
     by_key = {(c, a, on): job for c, a, on, job in plan}
+    _HELD["g2_dirs"] = {
+        (c, a): Path(job.outdir) for c, a, on, job in plan if on
+    }
     rows: list[dict[str, Any]] = []
     passed = True
     n_compared = 0
@@ -351,12 +361,7 @@ def _prime_map_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         if not live:
             return False, "the gate compared nothing, so nothing can be doctored"
         row = live[-1]
-        job_dir = (
-            prime_map_root(campaign)
-            / row["configuration"]
-            / row["arrangement"]
-            / "prime_on"
-        )
+        job_dir = _HELD["g2_dirs"][(row["configuration"], row["arrangement"])]
         state = dict(json.loads((job_dir / "y_exit.json").read_text())["state"])
         chosen = None
         for name in sorted(state):
@@ -394,12 +399,7 @@ def _prime_map_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         if not live:
             return False, "the gate compared nothing"
         row = live[-1]
-        job_dir = (
-            prime_map_root(campaign)
-            / row["configuration"]
-            / row["arrangement"]
-            / "prime_on"
-        )
+        job_dir = _HELD["g2_dirs"][(row["configuration"], row["arrangement"])]
         state = dict(json.loads((job_dir / "y_exit.json").read_text())["state"])
         dropped = sorted(state)[0]
         short = {k: v for k, v in state.items() if k != dropped}
@@ -446,7 +446,7 @@ def prime_map_gate(campaign: Campaign) -> Gate:
             "method runs at the head of every sweep or not at all"
         ),
         body=lambda *, resume=False: prime_map_body(campaign, resume=resume),
-        runs_under=("prime_map", "entry_references"),
+        jobs=lambda: gates_mod.job_rows(prime_map_jobs_read, campaign),
         teeth=_prime_map_teeth(campaign),
     )
 
@@ -528,7 +528,16 @@ COMPOSITIONS: tuple[str, ...] = ("as_composed", "previous_revision")
 
 
 def cold_chain_root(campaign: Campaign) -> Path:
+    """Where G3's verdict goes.  Its runs are shared-pool jobs."""
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "cold_chain"
+
+
+def cold_chain_jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job G3/G3c reads: the references and each chain under each composition."""
+    references = gates_mod.entry_references_from_records(campaign)
+    return gates_mod.entry_reference_jobs(campaign) + [
+        job for *_rest, job in cold_chain_jobs(campaign, references)
+    ]
 
 
 def _composition_override(composition: str) -> dict[str, Any]:
@@ -552,7 +561,6 @@ def cold_chain_jobs(
     both and the displaced one is the harder case.
     """
     plan: list[tuple[str, str, str, bool, pool_mod.Job]] = []
-    root = cold_chain_root(campaign)
     for config in campaign.configurations:
         entries: list[tuple[str, int, float | None, Path | None]] = [
             ("cold", 0, None, None)
@@ -584,9 +592,6 @@ def cold_chain_jobs(
                                 arm="A1",
                                 config=config,
                                 seed=seed,
-                                outdir=(
-                                    root / config.name / entry / composition / label
-                                ),
                                 regime="perturbed" if delta else "unperturbed",
                                 delta=delta,
                                 pin_hex=pin,
@@ -980,6 +985,6 @@ def cold_chain_gate(campaign: Campaign) -> Gate:
             "not, by the count that revision measured"
         ),
         body=lambda *, resume=False: cold_chain_body(campaign, resume=resume),
-        runs_under=("cold_chain", "entry_references"),
+        jobs=lambda: gates_mod.job_rows(cold_chain_jobs_read, campaign),
         teeth=_cold_chain_teeth(campaign),
     )

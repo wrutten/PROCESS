@@ -33,13 +33,14 @@ from harness.core import framework  # noqa: E402
 from harness.child import child as child_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
-from harness.core.config import Campaign  # noqa: E402
+from harness.core.config import Campaign, Config  # noqa: E402
 from harness.gates.gate_neutrality import (  # noqa: E402
     _mfile_for,
     _read_record,
     compare_mfiles,
     compare_records,
 )
+from harness.gates import gates as gates_mod  # noqa: E402
 from harness.gates.gates import _with_capture  # noqa: E402
 
 GATES_SUBPATH = framework.GATES_SUBPATH
@@ -170,12 +171,17 @@ def predicate_mode_root(campaign: Campaign) -> Path:
 def predicate_mode_run_dir(
     campaign: Campaign, mode: str, configuration: str, arm: str, seed: int
 ) -> Path:
-    return (
-        predicate_mode_root(campaign)
-        / mode
-        / configuration
-        / arm
-        / pool_mod.seed_directory(seed)
+    """Where one trial run's record is: the shared pool's directory for its job.
+
+    Resolved through the job's identity — which carries the ruler, the
+    observer variable, the entry state and the constant — so two runs of one
+    pair are two directories by construction, and the reference record must
+    exist for the directory to be known (``GateError`` otherwise).
+    """
+    config = campaign.configuration(configuration)
+    entries = predicate_mode_entries(campaign)
+    return pool_mod.directory_for(
+        predicate_mode_job(campaign, entries, config, arm, seed, mode), campaign
     )
 
 
@@ -198,25 +204,23 @@ def predicate_mode_reference_dir(campaign: Campaign, configuration: str) -> Path
     cold values, so each configuration needs one undisplaced evaluation first:
     its exit state is what every displaced entry is built from, and its
     converged burn time is what the constant owns on the arm that takes the
-    quantity out of the loop.  The gate makes its own rather than reading
-    another gate's, so that it can be run on its own and so that no two gates
-    share a run directory.
+    quantity out of the loop.  The job is ``reproduction.entry_reference_job``
+    — the same identity GR, G2, G4, G6 and the cold chain enter from — so under
+    the shared pool it is one record, where before A72 this gate made its own
+    "so that no two gates share a run directory".
     """
-    return predicate_mode_root(campaign) / "reference" / configuration
+    from harness.gates import reproduction as reproduction_mod  # noqa: PLC0415
+
+    return reproduction_mod.phase_a_reference_directory(
+        campaign, campaign.configuration(configuration)
+    )
 
 
 def predicate_mode_reference_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    from harness.gates import reproduction as reproduction_mod  # noqa: PLC0415
+
     return [
-        pool_mod.Job(
-            phase="A",
-            arm="A0",
-            config=config,
-            seed=0,
-            outdir=predicate_mode_reference_dir(campaign, config.name),
-            regime="unperturbed",
-            delta=None,
-            run_kind="gate",
-        )
+        reproduction_mod.entry_reference_job(config)
         for config in campaign.configurations
     ]
 
@@ -247,6 +251,46 @@ def predicate_mode_entries(campaign: Campaign) -> dict[str, dict[str, Any]]:
     return entries
 
 
+def predicate_mode_job(
+    campaign: Campaign,
+    entries: Mapping[str, dict[str, Any]] | None,
+    config: Config,
+    arm_name: str,
+    seed: int,
+    mode: str,
+) -> pool_mod.Job:
+    """One trial run: this arm at this seed under this ruler, observer installed."""
+    arm = arms_mod.ARMS[arm_name]
+    entry_state = None
+    pin_hex = None
+    if entries is not None:
+        entry = entries[config.name]
+        entry_state = Path(entry["snapshot"])
+        if config.pulsed and arm.burn_time_owner == "constant":
+            pin_hex = entry["pin_for"](
+                entry["t_plant_pulse_burn_hex"], seed, campaign.delta
+            )
+    return pool_mod.Job(
+        phase="A",
+        arm=arm_name,
+        config=config,
+        seed=seed,
+        regime="perturbed",
+        delta=campaign.delta,
+        run_kind="gate",
+        predicate_mode=mode,
+        entry_state=entry_state,
+        pin_hex=pin_hex,
+        # The gate's detector.  Not a switch: the driver has never heard of
+        # this name, so it cannot be mistaken for one, and the child refuses
+        # it outright on a campaign run.  It is in the job's identity, so a
+        # trial run and a pairing run of the same arm at the same seed are two
+        # jobs: the record G6 reads has no observation file, and this gate's
+        # must.
+        override_env={child_mod.RULER_OBSERVER_VARIABLE: "1"},
+    )
+
+
 def predicate_mode_jobs(
     campaign: Campaign, entries: Mapping[str, dict[str, Any]] | None = None
 ) -> list[pool_mod.Job]:
@@ -259,39 +303,18 @@ def predicate_mode_jobs(
     jobs: list[pool_mod.Job] = []
     for pair in predicate_mode_pairs(campaign):
         config, arm_name, seed = pair["config"], pair["arm"], pair["seed"]
-        arm = arms_mod.ARMS[arm_name]
-        entry_state = None
-        pin_hex = None
-        if entries is not None:
-            entry = entries[config.name]
-            entry_state = Path(entry["snapshot"])
-            if config.pulsed and arm.burn_time_owner == "constant":
-                pin_hex = entry["pin_for"](
-                    entry["t_plant_pulse_burn_hex"], seed, campaign.delta
-                )
         for mode in campaign.predicate_modes:
             jobs.append(
-                pool_mod.Job(
-                    phase="A",
-                    arm=arm_name,
-                    config=config,
-                    seed=seed,
-                    outdir=predicate_mode_run_dir(
-                        campaign, mode, config.name, arm_name, seed
-                    ),
-                    regime="perturbed",
-                    delta=campaign.delta,
-                    run_kind="gate",
-                    predicate_mode=mode,
-                    entry_state=entry_state,
-                    pin_hex=pin_hex,
-                    # The gate's detector.  Not a switch: the driver has never
-                    # heard of this name, so it cannot be mistaken for one, and
-                    # the child refuses it outright on a campaign run.
-                    override_env={child_mod.RULER_OBSERVER_VARIABLE: "1"},
-                )
+                predicate_mode_job(campaign, entries, config, arm_name, seed, mode)
             )
     return jobs
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job G8 reads: the references and every pair under both rulers."""
+    return predicate_mode_reference_jobs(campaign) + predicate_mode_jobs(
+        campaign, predicate_mode_entries(campaign)
+    )
 
 
 def capture_predicate_mode(
@@ -817,6 +840,7 @@ def gate(campaign: Campaign) -> Gate:
         # Its neutrality part is the reproduction gate's verdict, read
         # rather than re-measured, so that verdict has to exist first.
         reads_from=("reproduction",),
+        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
         teeth=_predicate_mode_teeth(campaign),
     )
 

@@ -263,6 +263,31 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "gate's overrides says so; null on both sides here, absent on the "
         "earlier one"
     ),
+    # The job identity (task A72 (resume-identity-and-shared-pool), I-23).
+    # Stamped by the pool after the child returns; absent on a capture made
+    # before the field existed.  Where both sides carry it, it is compared:
+    # the two captures are the **same job** at two commits, so every identity
+    # field must agree, and a difference there is a capture of another job
+    # under this gate's name.  The digest is a function of the identity.
+    "job_identity": (
+        "the pool's rendering of every field it composed into the run; absent "
+        "on a capture made before A72.  Where both sides carry it the two "
+        "captures must be the same job, field for field"
+    ),
+    "job_digest": (
+        "sha256 of the identity above; absent on a capture made before A72, "
+        "equal where both sides carry it"
+    ),
+    # The allowance mechanism's record field, retired from the schema by A72
+    # (survey item B4).  The child still writes it (an empty list) until the
+    # child-side remainder is taken up; when that lands the field is present
+    # on the earlier capture and absent on the later one, which is the shape
+    # this table exists for.  Compared, and equal, wherever both sides carry it.
+    "pending_switches_allowed": (
+        "the retired allowance's stamp: an empty list on every record made "
+        "since A59, absent once the child stops writing it.  Excluded only "
+        "while one side lacks it"
+    ),
     # The predicate counters (DR4).  Each is a field whose value is *null on
     # the earlier side because no counter existed* and a number on the later
     # one -- which is the change itself, not a behavioural difference, and is
@@ -623,6 +648,16 @@ NEUTRAL_GATE_NAME = "switch_neutrality"
 
 
 def neutrality_root(campaign: Campaign) -> Path:
+    """Where G1's two captures live — **not** the shared pool.
+
+    The before and after captures are one job identity at two commits; the
+    pool's one-directory-per-identity would put the second on top of the first,
+    and the "before" side is never re-made by this gate (harness plan amendment
+    13, rule (ii)).  So each capture names its directory explicitly, by label,
+    and the gate declares ``runs_under`` rather than a job set.  Nothing shares
+    with these runs anyway: their audit position and caller are in the
+    identity.
+    """
     return Path(campaign.runs_dir) / GATES_SUBPATH / "switch_neutrality"
 
 
