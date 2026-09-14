@@ -27,7 +27,7 @@ import ast
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 _EXPERIMENT_DIR = Path(__file__).resolve().parents[2]
 if str(_EXPERIMENT_DIR) not in sys.path:
@@ -166,7 +166,6 @@ def _g0prime_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             one("approved_file_changed_further"),
         ),
     )
-
 
 
 def g0prime_gate(campaign: Campaign) -> Gate:
@@ -589,8 +588,6 @@ def _reproduction_teeth() -> tuple[Tooth, ...]:
     )
 
 
-
-
 def reproduction_gate(campaign: Campaign) -> Gate:
     """GR, as the registry holds it.  The literal is the one ``_plan_gates`` held."""
     return Gate(
@@ -897,8 +894,6 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
             needs_runs=True,
         ),
     }
-
-
 
 
 # --------------------------------------------------------------------------
@@ -1215,36 +1210,3 @@ def self_containment_gate(campaign: Campaign) -> Gate:
         body=lambda *, resume=False: self_containment(campaign),
         teeth=_self_containment_teeth(campaign),
     )
-
-
-def print_self_containment(block: Mapping[str, Any]) -> None:
-    print(f"\n  {block['what_this_is']}")
-    print(f"\n  {block['caption']}\n")
-    print(
-        f"    files scanned                 {block['n_files_scanned']}\n"
-        f"    lines naming either directory {block['n_hits']}\n"
-        f"      of which inside prose       {block['n_in_prose']}\n"
-        f"      of which executable code    {block['n_executable']}\n"
-        f"    imports of either directory   {block['n_imports_of_either_directory']}\n"
-        f"    unclassified (findings)       {block['n_findings']}\n"
-        f"    stale declarations            {block.get('n_stale_declarations', 0)}"
-    )
-    print("\n    by classification:")
-    for kind, count in sorted(block["by_classification"].items(), key=lambda kv: -kv[1]):
-        print(f"      {count:>3}  {kind}")
-    print("\n    every executable line, with what it is:")
-    for row in block["hits"]:
-        if not row["executable"]:
-            continue
-        print(f"      {row['file']}:{row['line']}  {row['text']}")
-        print(f"          {row['classification'][:150]}")
-    if block["findings"]:
-        print("\n    FINDINGS:")
-        for row in block["findings"]:
-            print(f"      {row['file']}:{row['line']}  {row['text']}")
-    if block.get("stale_declarations"):
-        print("\n    STALE DECLARATIONS (declared, nothing left to declare):")
-        for name in block["stale_declarations"]:
-            print(f"      {name}")
-
-
