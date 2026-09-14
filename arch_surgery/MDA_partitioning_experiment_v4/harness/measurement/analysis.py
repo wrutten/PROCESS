@@ -3088,9 +3088,11 @@ def verify(campaign: Campaign, *, resume: bool = False) -> framework.Check:
     check.population = (
         f"{result['n_tables_compared']} table(s) emitted by the two tally "
         f"stages, recomputed cell by cell from "
-        f"{provenance['n_records']} run record(s) under "
-        f"{len(SOURCES)} declared source(s), plus this module's own import "
-        f"list against the tally modules it may not borrow from"
+        f"{provenance['n_records']} run record(s) under the "
+        f"{len(published_sources(campaign))} published source(s) of the "
+        f"{recomputed['population_family']} population ({len(SOURCES)} "
+        f"declared), plus this module's own import list against the tally "
+        f"modules it may not borrow from"
     )
     # The cells, plus one for the independence check: an analysis that
     # borrowed a construction would agree with the tally by construction, so
