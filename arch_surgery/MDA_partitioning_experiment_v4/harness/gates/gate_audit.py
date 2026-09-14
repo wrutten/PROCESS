@@ -417,7 +417,12 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
                     after,
                 )
             )
-        pool_mod.run_all([job for *_r, job, _b, _a in jobs], campaign, resume=False)
+        # ``resume`` is the pool's decision from the record, here as everywhere
+        # (rule (vii)): each doctored job has its own directory and its own
+        # complete record, so a kept record is a record of the same doctoring.
+        # This call used to pass ``resume=False`` and re-made the twelve runs
+        # on every press (improvement item 12).
+        pool_mod.run_all([job for *_r, job, _b, _a in jobs], campaign, resume=resume)
 
         for label, unit, component, job, before, after in jobs:
             record = records_mod.read(job.outdir)
