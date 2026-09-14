@@ -16,7 +16,7 @@ other, and the omission would surface as a missing column in a table months
 later.  Here the field list is **data**, both entry points fill it, and one
 function refuses a record that does not carry what it declares.
 
-Four refusals live here, and none of them is a warning:
+Five refusals live here, and none of them is a warning:
 
 ``assert_complete``
     a finished record missing a declared field.  A summary computed over
@@ -33,6 +33,16 @@ Four refusals live here, and none of them is a warning:
     DR7, task **A60 (driver-attempts)**), so the check runs against real
     numbers on every optimisation record — node calls and sweeps alike — and
     its tooth is a synthetic record whose parts are made not to add up.
+
+``assert_sweep_decomposition``
+    a finished record whose sweep total does not decompose into the parts that
+    claim it: ``dispatch_sweeps = loop sweeps + output-time loop sweeps + the
+    one sweep the per-run deferral spends at the output path``.  A sweep total
+    nobody can decompose is a total nobody can attribute.  The identity was
+    the ``predicate_counters`` measurement stage's one unique construction
+    (task **A58 (driver-predicate-counters)**); when that stage was retired the
+    identity moved here, beside the attempt summation it is the same shape as,
+    so that it is asserted by the contract rather than printed by a stage.
 
 ``assert_run_kind``
     a record that does not say what kind of run made it.  A gate run and a
@@ -152,9 +162,12 @@ AUDIT_POSITION_AFTER_RUN = "after_run"
 #: Until task **A67 (written-file-gap)** the prose here said the position had
 #: "exactly one caller", the reproduction gate; it had three (the switch-
 #: neutrality gate pins both of its captures to it, and the retry-ladder
-#: demonstration runs of the ``attempts`` stage audit there), none of them
+#: demonstration runs of the ``attempts`` stage audited there), none of them
 #: refused, because nothing enforced the sentence.  The table replaces the
-#: sentence and the pool enforces the table.
+#: sentence and the pool enforces the table.  The ``attempts`` stage was
+#: retired with the simplification survey's item A2 (its columns are the
+#: tally's) and its row left this table with it; a caller by that name is
+#: refused like any other undeclared one.
 AUDIT_POSITION_AFTER_RUN_CALLERS: dict[str, str] = {
     "reproduction": (
         "gate GR reproduces the previous revision's records, and that "
@@ -165,11 +178,6 @@ AUDIT_POSITION_AFTER_RUN_CALLERS: dict[str, str] = {
         "gate G1 pins both of its captures to one position so that the whole "
         "exit_audit block is compared value for value across a driver change "
         "rather than excluded"
-    ),
-    "attempts": (
-        "the retry-ladder demonstration runs of the attempts measurement "
-        "stage: budget-capped reference-arm runs whose only purpose is the "
-        "per-attempt accounting, audited where gate GR's population is"
     ),
     "written_file_gap": (
         "the gate that measures, per run, the distance between the state "
@@ -669,10 +677,99 @@ def assert_attempt_summation(record: Mapping[str, Any], *, where: str = "") -> N
             )
 
 
+#: The identity a finished run's sweep total decomposes by.  ``per_run_sweep``
+#: is one sweep, spent in ``write_output_files`` running the nodes deferred to
+#: once per run; it is 1 when that set is non-empty and 0 otherwise.  For an arm
+#: with no block schedule the loop term is the sweeps the analysis loop took,
+#: which the per-evaluation histogram sums.  The exit audit's own sweep is not in
+#: the total: the counters are read before the audit runs, so the measurement is
+#: not charged to the thing it measures.
+SWEEP_DECOMPOSITION_IDENTITY = (
+    "dispatch_sweeps = loop sweeps + output-time loop sweeps + the one sweep "
+    "the per-run deferral spends at the output path"
+)
+
+
+def sweep_decomposition(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Does the run's sweep total decompose into the parts that claim it?
+
+    The identity, for an arm that runs a block schedule::
+
+        dispatch_sweeps = block_sweeps + output_loop_sweeps + per_run_sweep
+
+    For an arm with no block schedule the first term is instead
+    ``sweeps_per_eval.n_sweeps``.  Returns the reconciliation as a block --
+    ``checked``, each term, ``residual`` and ``decomposes`` -- so a stage that
+    prints it and the refusal that acts on it read one construction.  A record
+    that carries no sweep total is ``checked: False`` with the reason.
+
+    Moved verbatim from the retired ``predicate_counters`` stage's
+    ``_reconcile_sweeps`` (task A58 (driver-predicate-counters)); the row it
+    used to read its terms from is read from the record here instead.
+    """
+    total = record.get("dispatch_sweeps")
+    if total is None:
+        return {"checked": False, "why": "the record carries no sweep total"}
+    per_run = record.get("defer_per_run_totals") or {}
+    per_run_sweep = 1 if (per_run.get("executed_once") or []) else 0
+    output = record.get("output_loop_sweeps") or 0
+    totals = record.get("block_loop_totals") or {}
+    if totals.get("block_sweeps"):
+        loop = totals["block_sweeps"]
+        loop_is = "block_sweeps (the block schedule's own charged sweeps)"
+    else:
+        loop = ((record.get("sweeps_per_eval") or {}).get("n_sweeps")) or 0
+        loop_is = "sweeps_per_eval.n_sweeps (the analysis loop's own sweeps)"
+    residual = int(total) - (int(loop) + int(output) + per_run_sweep)
+    return {
+        "checked": True,
+        "identity": SWEEP_DECOMPOSITION_IDENTITY,
+        "dispatch_sweeps": total,
+        "loop_sweeps": loop,
+        "loop_sweeps_is": loop_is,
+        "output_loop_sweeps": output,
+        "per_run_deferral_sweep": per_run_sweep,
+        "residual": residual,
+        "decomposes": residual == 0,
+        "why": (
+            "the exit audit's own sweep is not in this total: the counters are "
+            "read before the audit runs, so the measurement is not charged to "
+            "the thing it measures"
+        ),
+    }
+
+
+def assert_sweep_decomposition(record: Mapping[str, Any], *, where: str = "") -> None:
+    """Refuse a finished record whose sweep total does not decompose.
+
+    A residual that is not 0 is refused, never absorbed: a sweep total nobody
+    can decompose is a total nobody can attribute, and the per-sweep overhead
+    tables are built from exactly these terms.  A record that did not finish,
+    or carries no sweep total, is passed over -- there is no total to
+    decompose, and :func:`assert_complete` says what a finished record owes.
+    """
+    if record.get("status") != "ok":
+        return
+    block = sweep_decomposition(record)
+    if not block["checked"] or block["decomposes"]:
+        return
+    raise RecordError(
+        f"the sweep total does not decompose"
+        f"{' for ' + where if where else ''}: dispatch_sweeps = "
+        f"{block['dispatch_sweeps']}, but {block['loop_sweeps_is']} = "
+        f"{block['loop_sweeps']} + output_loop_sweeps = "
+        f"{block['output_loop_sweeps']} + per-run deferral sweep = "
+        f"{block['per_run_deferral_sweep']} leaves a residual of "
+        f"{block['residual']}.  REFUSED: a sweep total nobody can decompose is "
+        f"a total nobody can attribute ({SWEEP_DECOMPOSITION_IDENTITY})."
+    )
+
+
 def assert_usable(record: Mapping[str, Any], *, where: str = "") -> None:
     """Every refusal, in one call.  What a reader of records goes through."""
     assert_complete(record, where=where)
     assert_attempt_summation(record, where=where)
+    assert_sweep_decomposition(record, where=where)
 
 
 # --------------------------------------------------------------------------
