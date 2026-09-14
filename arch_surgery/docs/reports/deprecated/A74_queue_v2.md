@@ -1,9 +1,7 @@
 # A74 (queue-v2) — the queue archived and re-issued as `docs/MASTER_TODO_v2.md`
 
-> **Document status** — **OPEN.** Task **A74 (queue-v2)**, branch `A74-queue-v2` off
-> `architecture_surgery` at `c5fc49d3`, worktree `/home/wrutten/projects/PROCESS_surgery_worktrees/A74-queue-v2`.
-> Documentation only: no PROCESS run, no harness press, no code. The orchestrator's assessment is
-> appended at merge, after which this report is archived to `deprecated/` (protocol §7).
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A74 (queue-v2)** merged into `architecture_surgery` at `98ea75c1`
+> (base `c5fc49d3`). No records. The orchestrator's critical assessment is the last section. Folder position records lifecycle, not validity (trap T3).
 
 ## 1. Verdict
 

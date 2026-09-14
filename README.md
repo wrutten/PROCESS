@@ -6,7 +6,7 @@
 > measure what the architecture alone contributes to solve cost and robustness.
 >
 > **Start at [`arch_surgery/README.md`](arch_surgery/README.md).** The queue is
-> [`arch_surgery/docs/plans/MASTER_TODO.md`](arch_surgery/docs/plans/MASTER_TODO.md).
+> [`arch_surgery/docs/MASTER_TODO_v2.md`](arch_surgery/docs/MASTER_TODO_v2.md) (the queue; its predecessor `arch_surgery/docs/plans/MASTER_TODO.md` is the archived history).
 >
 > Everything below is upstream PROCESS's own README.
 <!-- END FORK NOTICE -->

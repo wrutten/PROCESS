@@ -14,7 +14,7 @@ only the driver changes.
 
 | | |
 |---|---|
-| [`docs/plans/MASTER_TODO.md`](docs/plans/MASTER_TODO.md) | **The queue** — protocol, decisions, issues, task rows. Read before working. |
+| [`docs/MASTER_TODO_v2.md`](docs/MASTER_TODO_v2.md) | **The queue** — protocol, decisions, issues, task rows. Read before working. Its predecessor [`docs/plans/MASTER_TODO.md`](docs/plans/MASTER_TODO.md) is the archived history (2026-09-14). |
 | [`docs/TRAPS.md`](docs/TRAPS.md) | **Binding.** Five recorded ways this project has already misled someone. |
 | [`../CLAUDE.md`](../CLAUDE.md) | Hard rules, working rules, environments. |
 | [`docs/plans/MDA_PARTITION_EXPERIMENT.md`](docs/plans/MDA_PARTITION_EXPERIMENT.md) | The live experiment. |
