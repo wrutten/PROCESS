@@ -1,10 +1,9 @@
 # A64 (entry-pairing-reference) — the reference arm joins the entry pairing
 
-> **Document status** — **OPEN.** Task **A64 (entry-pairing-reference)**, branch
-> `A64-entry-pairing-reference` off `architecture_surgery` at base `9ffad6da`. Worktree
-> `/home/wrutten/projects/PROCESS_surgery_worktrees/A64-entry-pairing-reference`. Records under the
-> worktree's `arch_surgery/MDA_partitioning_experiment_v4/runs/`, untracked, to be relocated by the
-> retire script at merge. Folder position records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A64 (entry-pairing-reference)** merged into
+> `architecture_surgery` at `dc437a82` (branch tip `b47a99a4`, base `9ffad6da`). Records relocated to
+> `arch_surgery/idf_probe/runs/A64_runs/`. The orchestrator's critical assessment is §12. Folder position
+> records lifecycle, not validity (trap T3).
 
 ---
 

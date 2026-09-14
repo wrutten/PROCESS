@@ -332,7 +332,7 @@ configuration's design point (one `A0` evaluation from the cold entry of the inp
 term, reported beside, never pooled). Campaign entries are multiplicative `1 ± δ·u`
 perturbations of that snapshot over the coupling state, `u` uniform in `[−1, 1)` per component
 from a hash of (seed, component), seeds 1–25, seed-paired across arms and verified
-bit-identical per configuration; each is evaluated by one `call_models` under each arm.
+bit-identical per configuration; each is evaluated by one `call_models` under each arm. **Every Phase A arm, the reference arm `AR` included, is entered from the same displaced snapshot at the same seed** (decision D26, ruled by the user 2026-09-14: *"here we compare just the stopping rule"*); "PROCESS as shipped" names `AR`'s switches, not its starting point, and the cost of starting from the input file's own point is the cold-start term above. Gate G6 checks the pairing for `AR` too since A64 (entry-pairing-reference).
 
 **Two entry regimes** *(amended 2026-09-10 on A44's measurement; A44 pending review)*.
 **δ = 0.10**, the V2/V3 regime, deliberately hostile — it displaces run-constants and post-solve

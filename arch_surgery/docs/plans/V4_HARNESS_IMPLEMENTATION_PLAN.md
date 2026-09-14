@@ -1467,6 +1467,8 @@ of what looks like bulk is the instrument.
   What remains before the campaign is not implementation: D26 (the reference arm's Phase A entry) and the user's
   approval commit; I-21 is a small declared gate if the user wants it measured.
 
+- **Amendment 21 (2026-09-14, at A64 (entry-pairing-reference)'s merge, `dc437a82`).** D26 (the user, 2026-09-14) put the reference arm `AR` into gate G6's pairing. Widening the gate's arm set widened the tally's population: `tally.SOURCES` names `runs/gates/entry_and_warm/*/pairing` as `paired_entries`, so three new gate runs left the tally, analysis and recomputed-table stage records over 33 records while disk held 36 — the disagreement `analysis.assert_the_tally_read_these_runs` refuses on, and trap T14's shape one level down. **Rule (xi): a gate's arm, seed or configuration set is also a tally population.** A change to any of them re-makes, in the same press, every measurement stage over the source that directory feeds (`--gate recomputation --resume` does it through its declared dependency; 0 PROCESS runs), and the report states the population before and after. Measured instance: A64's report §7.1 (recomputation 2 066/0 over 36; §4 3 621 → 3 927 cells).
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task
