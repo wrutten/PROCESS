@@ -682,7 +682,10 @@ def assert_attempt_summation(record: Mapping[str, Any], *, where: str = "") -> N
     attempts = record.get("attempts")
     if not isinstance(attempts, list) or not attempts:
         return
-    finished = record.get("status") == "ok"
+    # Unfinished means the record *says* it did not finish; a record with no
+    # status at all (a synthetic one in a tooth) is held to the full rule.
+    status = record.get("status")
+    finished = status is None or status == "ok"
     for field, total_field in ATTEMPT_SUMS:
         per_attempt = [a.get(field) for a in attempts]
         if all(value is None for value in per_attempt):
