@@ -190,3 +190,28 @@ sys.exit(0 if ok else 1)
 |---|---|
 | 2026-09-14 | Task opened at `c5fc49d3`. Read `CLAUDE.md`, `TRAPS.md`, the archived queue in full, the `reports/deprecated/` listing, the harness plan's Appendix A.1 and amendment list, the improvement list's headings. |
 | 2026-09-14 | `f4a87a03` archive header and Status cell. `60429cf3` `docs/MASTER_TODO_v2.md`. `c76e2f26` `CLAUDE.md` pointers. Cross-check PASS. Report written. |
+
+---
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `11663746`, before the merge. Checks chosen to differ from the
+agent's.*
+
+1. **Completeness, by my own script:** every D, I- and A number that occurs anywhere in the archived
+   file occurs in v2 (three empty set differences); every archived table row has a v2 mention; every
+   relative link in v2 resolves from `arch_surgery/docs/`. 292 lines against 476, and 50 KB against
+   298 KB — the compaction is in the rows, not in the coverage.
+2. **The archive was touched in one cell plus the status header**, as the brief allowed; the rows' last
+   states are the states at archiving. The two stale items the agent flagged rather than edited are
+   ruled at the merge: I-13 is closed as moot by D17 (a consequence of a user ruling, applied), and
+   the unnumbered `experiment-v2` row is marked in v2 as historical (V2 was built and ran; its record
+   is its own directory) — both are register housekeeping, not decisions.
+3. **The CLAUDE.md pointers** read correctly: the v2 file is the queue, the archive is the history
+   "for the record, never for the current state". Three more pointers outside the agent's file list
+   (`README.md`, `arch_surgery/README.md`, `arch_surgery/docs/plans/README.md`) are updated at the merge.
+4. **The two protocol sentences from the brief** ("no agent message is approval", "rulings are the
+   user's") are user rulings of 2026-09-11 recorded in the archive's D25 row and the change log, not
+   inventions; they stay, with the archive pointer the agent gave them.
+
+**Approved for merge.**
