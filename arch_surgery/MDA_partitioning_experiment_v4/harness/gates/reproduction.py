@@ -280,6 +280,33 @@ def pin_for(reference_burn_hex: str, seed: int, delta: float) -> str:
     ).hex()
 
 
+def entry_pin(
+    config: Config,
+    arm: str,
+    reference: Mapping[str, Any],
+    *,
+    seed: int = 0,
+    delta: float | None = None,
+) -> str | None:
+    """The constant *arm* owns at this entry on *config*, or None where it owns none.
+
+    A steady-state configuration has no burn time to own; an arm whose owner is
+    not the constant is handed nothing.  At an undisplaced entry (seed 0, or no
+    δ) it is the reference's own converged burn time; at a displaced one it
+    rides the **same** stream the coupling state rides (:func:`pin_for`), so the
+    constant and the state the run is entered with move together.  The one
+    implementation of that rule: the chain and gate G2 both call it.
+    """
+    if not config.pulsed:
+        return None
+    if arms_mod.ARMS[arm].burn_time_owner != "constant":
+        return None
+    reference_hex = reference["t_plant_pulse_burn_hex"]
+    if not delta or seed == 0:
+        return reference_hex
+    return pin_for(reference_hex, seed, delta)
+
+
 def attach_phase_a_entries(
     planned: Sequence[PlannedRun], root: Path, campaign: Campaign
 ) -> dict[str, dict[str, Any]]:
@@ -1021,7 +1048,6 @@ def stage(
     campaign: Campaign | None = None,
     root: Path | None = None,
     resume: bool = False,
-    lifted_from: Path | None = None,
     skip_runs: bool = False,
 ) -> tuple[int, dict[str, Any]]:
     """Run gate GR and write its verdict.  0 PASS, 1 FAIL, 3 refused to start."""
@@ -1065,8 +1091,8 @@ def stage(
         )
         return 3, verdict
 
-    # The two lifted input files, staged and checked, before anything runs.
-    verdict["input_files"] = _stage_input_files(campaign, lifted_from)
+    # The two lifted input files, checked before anything runs.
+    verdict["input_files"] = _resolve_input_files(campaign)
     if verdict["input_files"].get("refused"):
         verdict["refused"] = verdict["input_files"]["refused"]
         return 3, verdict
@@ -1124,24 +1150,17 @@ def stage(
     return (0 if passed else 1), verdict
 
 
-def _stage_input_files(
-    campaign: Campaign, lifted_from: Path | None
-) -> dict[str, Any]:
-    """Put the lifted input files in place and prove they are the declared ones."""
-    block: dict[str, Any] = {"staged": [], "resolved": []}
+def _resolve_input_files(campaign: Campaign) -> dict[str, Any]:
+    """Prove each pulsed configuration's lifted input file is the declared one.
+
+    The file is derived by ``--artifacts derive-inputs`` and gated on its
+    digest there; here it is only asserted present and identical, so that a
+    run on a different problem is refused before it is made.
+    """
+    block: dict[str, Any] = {"resolved": []}
     for config in campaign.configurations:
         if not config.pulsed:
             continue
-        if lifted_from is not None and not input_files_mod.is_lifted_available(
-            config, campaign
-        ):
-            try:
-                block["staged"].append(
-                    input_files_mod.stage_lifted(config, campaign, Path(lifted_from))
-                )
-            except input_files_mod.InputFileError as exc:
-                block["refused"] = str(exc)
-                return block
         try:
             block["resolved"].append(input_files_mod.assert_lifted(config, campaign))
         except input_files_mod.InputFileError as exc:
@@ -1393,11 +1412,6 @@ def main(argv: list[str] | None = None) -> int:
                         help="keep a run whose directory already holds a "
                              "complete record of the same job; a directory "
                              "alone is never evidence")
-    parser.add_argument("--lifted-from", type=Path, default=None,
-                        help="a directory holding <name>/<name>_lifted.IN.DAT, "
-                             "staged into the experiment's own derived-input "
-                             "directory after its bytes are checked against the "
-                             "recorded digest")
     parser.add_argument("--skip-runs", action="store_true",
                         help="compare and run the cost-free teeth against "
                              "records that already exist, starting nothing")
@@ -1420,7 +1434,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     code, verdict = stage(
         resume=args.resume,
-        lifted_from=args.lifted_from,
         skip_runs=args.skip_runs,
     )
     print("=" * 74)

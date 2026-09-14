@@ -521,10 +521,6 @@ _REPRODUCTION_HELD: dict[str, Any] = {}
 #: wrote to the campaign's records directory whatever ``--outdir`` said).
 REPRODUCTION_ROOT: dict[str, Any] = {"root": None}
 
-#: Where the lifted input files are staged from, for GR.  Also settable, for
-#: the same reason: the gate needs them and the runner has the flag.
-REPRODUCTION_LIFTED_FROM: dict[str, Any] = {"path": None}
-
 def _reproduction_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     from . import reproduction as reproduction_mod
 
@@ -532,7 +528,6 @@ def _reproduction_body(campaign: Campaign, *, resume: bool = False) -> dict[str,
         campaign=campaign,
         root=REPRODUCTION_ROOT["root"],
         resume=resume,
-        lifted_from=REPRODUCTION_LIFTED_FROM["path"],
     )
     _REPRODUCTION_HELD["verdict"] = verdict
     comparison = verdict.get("comparison") or {}
