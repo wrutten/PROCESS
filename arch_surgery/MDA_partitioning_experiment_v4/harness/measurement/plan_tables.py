@@ -18,14 +18,18 @@ What is rendered, and from which stage's record:
 ``recomputed_tables``      §4.4, the same cells from the second implementation
 =========================  ==================================================
 
-**What the cells are over, said once and in every caption.** While
-``EXECUTION_APPROVED`` is False there is no campaign, so every cell in §4 is
-over the **gate population** — the runs the verification gates made, one or two
-seeds per arm — and not over the experiment's twenty-five.  A median over one
-run and a median over twenty-five are different quantities with the same name,
-which is trap T11's shape, so the section's heading marker says so, each
-rendered caption is prefixed with it, and the campaign fills the section again
-once the user approves execution.
+**What the cells are over, said once and in every caption.** §4.2–§4.4 are
+over **one population**, the one the tally publishes (``tally.published_sources``):
+the **campaign population** — the campaign plan's own records under
+``runs/campaign/``, twenty-five seeds per arm — once a campaign record exists,
+and the **gate population** — the runs the verification gates made, one or two
+seeds per arm — while none does.  A median over one run and a median over
+twenty-five are different quantities with the same name, which is trap T11's
+shape, so the section's heading marker names the population and the commit
+its records were made at, each rendered caption is prefixed with it, and the
+other population is named as excluded (the gate population as the section's
+earlier fill, before execution approval).  §4.1 is the gates' own table and
+stays over each gate's own population: gates are gates.
 
 **§4.1 is rendered from the ``gate_table`` stage record, not from the verdicts
 themselves**, so a gate re-run after that stage would be reproduced here as it
@@ -177,31 +181,17 @@ def assert_stage_read_what_is_there(
         raise PlanTablesError(str(exc)) from exc
 
 
-def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
-    """What every cell in §4 is over, measured from the records themselves.
-
-    The commit, the record count, the audit position, the convergence ruler and
-    the exit-audit instrument version, all read from the run records rather
-    than written down here — a marker that says which instrument produced a
-    residual, and is itself hand-maintained, is a marker that will one day name
-    the wrong instrument.
-
-    The runs are surveyed **under the records directory this section is being
-    rendered from**, not under the campaign's default one.  They are the same
-    directory in every ordinary press; they are not when ``--outdir`` redirects
-    the records, and a marker describing one population above tables computed
-    from another is the shape this module exists to prevent.
-    """
-    root = Path(records_dir)
+def _survey(paths: Sequence[Path]) -> dict[str, Any]:
+    """Commit, run kind, audit position, ruler and instrument over *paths*."""
     heads: dict[str, int] = {}
     kinds: dict[str, int] = {}
     positions: set[str] = set()
     rulers: set[str] = set()
     instruments: set[str] = set()
     total = 0
-    for path in sorted(root.rglob("metrics.json")):
+    for path in paths:
         try:
-            record = json.loads(path.read_text())
+            record = json.loads(Path(path).read_text())
         except Exception:  # noqa: BLE001 - a half-written record is not a row
             continue
         total += 1
@@ -219,50 +209,136 @@ def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         if instrument.get("restores"):
             instruments.add(str(instrument["restores"]))
     return {
-        "verdict_commit": framework.git_head(),
         "n_run_records": total,
         "records_by_commit": dict(sorted(heads.items())),
         "records_by_run_kind": dict(sorted(kinds.items())),
         "audit_positions": sorted(positions),
         "predicate_modes": sorted(rulers),
         "exit_audit_instrument": sorted(instruments),
+    }
+
+
+def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
+    """What every cell in §4.2–§4.4 is over, measured from the records themselves.
+
+    The commit, the record count, the audit position, the convergence ruler and
+    the exit-audit instrument version, all read from the run records rather
+    than written down here — a marker that says which instrument produced a
+    residual, and is itself hand-maintained, is a marker that will one day name
+    the wrong instrument.
+
+    **Which records:** the tally's published sources' (``tally.published_sources``
+    — the campaign family once a campaign record exists, the gate family
+    otherwise), so the marker describes the population the tables were
+    computed over and no other.  The gate runs under *records_dir* are
+    surveyed too, as the population §4.1 is over and — with the campaign
+    present — as the section's earlier fill, named as excluded.
+    """
+    from harness.measurement import tally as tally_mod  # noqa: PLC0415
+
+    present = tally_mod.campaign_present(campaign)
+    published = tally_mod.published_sources(campaign)
+    by_source: dict[str, int] = {}
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for source in published:
+        n = 0
+        for directory in tally_mod.source_directories(campaign, source):
+            path = Path(directory) / "metrics.json"
+            if path.exists():
+                n += 1
+                if str(path) not in seen:
+                    seen.add(str(path))
+                    paths.append(path)
+        by_source[source.name] = n
+    root = Path(records_dir)
+    gates = _survey(sorted(root.rglob("metrics.json")))
+    return {
+        "verdict_commit": framework.git_head(),
+        "campaign_present": present,
+        "population_family": "campaign" if present else "gate",
+        "published_sources": by_source,
+        **_survey(paths),
+        "gate_runs": gates,
         "execution_approved": EXECUTION_APPROVED,
         "generated": _dt.datetime.now().isoformat(timespec="seconds"),
     }
 
 
+def _commits(block: Mapping[str, Any]) -> str:
+    return ", ".join(f"`{h[:8]}`" for h in block["records_by_commit"]) or "—"
+
+
 def _caption_marker(marker: Mapping[str, Any]) -> str:
-    """The clause every caption carries: what population this cell is over.
+    """The clause every §4.2–§4.4 caption carries: what population this cell is over.
 
     Short on purpose.  The full statement is made once, under the section
     heading; what a caption needs is the one thing a reader must not infer —
-    that this cell is a **gate** figure and not a campaign one — with the
-    commits its records were made at, so no cell can be quoted without them.
+    which population this cell is a figure of, and the commit its records
+    were made at, so no cell can be quoted without them.
     """
+    if marker["campaign_present"]:
+        return (
+            f"Population: the campaign runs at {_commits(marker)} — the source "
+            f"named in the caption, twenty-five seeds per arm — **not** the gate "
+            f"runs, which filled this section before execution approval and are "
+            f"excluded by kind; see the §4 heading for the audit position, the "
+            f"ruler and the instrument."
+        )
     return (
-        f"Population: the gate runs at "
-        f"{', '.join(f'`{h[:8]}`' for h in marker['records_by_commit'])}, "
+        f"Population: the gate runs at {_commits(marker)}, "
         f"one or two seeds per arm — **not** the campaign, which has not run "
         f"(`EXECUTION_APPROVED` is {marker['execution_approved']}); see the "
         f"§4 heading for the audit position, the ruler and the instrument."
     )
 
 
+def _gate_caption_marker(marker: Mapping[str, Any]) -> str:
+    """§4.1's clause: the gates' own populations, whatever §4.2–§4.4 are over."""
+    gates = marker["gate_runs"]
+    return (
+        f"Population: each gate's own, stated in its row — the gate population "
+        f"({gates['n_run_records']} run record(s) at {_commits(gates)}), never "
+        f"the campaign's; gates are gates.  §4.2–§4.4 are over the "
+        f"{marker['population_family']} population."
+    )
+
+
 def _marker_sentence(marker: Mapping[str, Any]) -> str:
     """The full statement, made once under the section heading."""
+    audit = (
+        f"The exit audit was taken at position(s) "
+        f"{', '.join(f'`{p}`' for p in marker['audit_positions'])} with the "
+        f"convergence ruler(s) "
+        f"{', '.join(f'`{r}`' for r in marker['predicate_modes'])} and the "
+        f"exit-audit instrument "
+        f"{', '.join(f'`{i}`' for i in marker['exit_audit_instrument'])}."
+    )
+    if marker["campaign_present"]:
+        gates = marker["gate_runs"]
+        sources = ", ".join(
+            f"`{name}` {n}" for name, n in marker["published_sources"].items()
+        )
+        return (
+            f"**Population: the campaign, not the gate runs.** "
+            f"`EXECUTION_APPROVED` is {marker['execution_approved']} and the "
+            f"campaign has run: every cell in §4.2–§4.4 is over the "
+            f"{marker['n_run_records']} campaign run record(s) made at "
+            f"commit(s) {_commits(marker)}, by run kind "
+            f"{marker['records_by_run_kind']}, by source {sources}. The "
+            f"{gates['n_run_records']} gate run record(s) at {_commits(gates)} "
+            f"(by run kind {gates['records_by_run_kind']}) were this section's "
+            f"earlier fill, before execution approval; they are excluded from "
+            f"every published cell **by kind** (gate `run_kind_separation`) and "
+            f"appear only in §4.1, which is the gates' own table. {audit}"
+        )
     return (
         f"**Population: the gate runs, not the campaign.** "
         f"`EXECUTION_APPROVED` is {marker['execution_approved']}, so no "
         f"campaign record exists: every cell below is over the "
         f"{marker['n_run_records']} run record(s) the verification gates made "
-        f"— one or two seeds per arm — at commit(s) "
-        f"{', '.join(f'`{h[:8]}`' for h in marker['records_by_commit'])}, by "
-        f"run kind {marker['records_by_run_kind']}. The exit audit was taken "
-        f"at position(s) {', '.join(f'`{p}`' for p in marker['audit_positions'])} "
-        f"with the convergence ruler(s) "
-        f"{', '.join(f'`{r}`' for r in marker['predicate_modes'])} and the "
-        f"exit-audit instrument "
-        f"{', '.join(f'`{i}`' for i in marker['exit_audit_instrument'])}. The "
+        f"— one or two seeds per arm — at commit(s) {_commits(marker)}, by "
+        f"run kind {marker['records_by_run_kind']}. {audit} The "
         f"campaign fills these tables again, over its own twenty-five seeds "
         f"per arm, after the user approves execution."
     )
@@ -326,11 +402,23 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
     marker = population_marker(campaign, records_dir)
     marker_sentence = _marker_sentence(marker)
     caption_marker = _caption_marker(marker)
-    commits = ", ".join(f"`{h[:8]}`" for h in marker["records_by_commit"])
+    gate_caption_marker = _gate_caption_marker(marker)
+    if marker["campaign_present"]:
+        heading_note = (
+            f"*(the **campaign** population — {marker['n_run_records']} records "
+            f"at {_commits(marker)} — rendered from the campaign's records; the "
+            f"gate population at {_commits(marker['gate_runs'])} was the "
+            f"section's earlier fill, before execution approval, and is "
+            f"excluded by kind)*"
+        )
+    else:
+        heading_note = (
+            f"*(the **gate** population — not the campaign — rendered from the "
+            f"records at {_commits(marker)}; the campaign fills the section "
+            f"again after execution approval)*"
+        )
     lines: list[str] = [
-        f"{SECTION_START} *(the **gate** population — not the campaign — "
-        f"rendered from the records at {commits}; the campaign fills the "
-        f"section again after execution approval)*",
+        f"{SECTION_START} {heading_note}",
         "",
         "**Where these cells come from.** Every table below is emitted by a "
         "measurement stage of `experiment_runner.py` and rendered into this "
@@ -368,7 +456,7 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
         )
         lines.append("")
         if section.stage == "gate_table":
-            lines.extend(_gate_table_block(record, caption_marker))
+            lines.extend(_gate_table_block(record, gate_caption_marker))
             n_tables += 1
             n_cells += len(record.get("rows") or [])
             blocks.append(

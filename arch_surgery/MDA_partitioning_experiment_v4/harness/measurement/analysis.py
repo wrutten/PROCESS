@@ -50,9 +50,13 @@ see that those cells are a check on the table and not on the measurement.
 
 Heritage: the constructions are the V4 experiment plan's §3.4, §3.5 and §3.6 as
 declared in ``harness/measurement/stats.py``'s docstrings; the populations are the
-declarations in ``harness/measurement/tally.py`` (the two sources) and
-``harness/measurement/tally_optimisation.py`` (seed-complete arm groups), re-derived here.
-Written by task **A54 (harness-analysis)**, plan item H7.
+declarations in ``harness/measurement/tally.py`` (the two gate sources, the five
+campaign sources, and the rule that the campaign family is the published one
+once a campaign record exists) and ``harness/measurement/tally_optimisation.py``
+(seed-complete arm groups), re-derived here.  Written by task **A54
+(harness-analysis)**, plan item H7; the campaign sources, the stencil pairing
+by column and the optimisation phase's taxonomy by task **A75
+(campaign-tally-source)**.
 """
 
 from __future__ import annotations
@@ -67,7 +71,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from harness.core import framework
 from harness.experiment.arms import MATRIX_ORDER
-from harness.core.config import Campaign, default_campaign
+from harness.core.config import EXECUTION_APPROVED, Campaign, default_campaign
 
 __all__ = [
     "AnalysisError",
@@ -118,6 +122,17 @@ FORCED_BUDGET_STAMP = "force_maxcal"
 #: configuration, and is refused rather than filtered — a population that
 #: shrinks quietly is the failure this project has made three times.
 MEASURABLE_RUN_KINDS: tuple[str, ...] = ("campaign", "gate")
+
+#: The only run kind a published cell may be computed over **once a campaign
+#: record exists**.  Re-derived, not imported (``stats.CAMPAIGN_PUBLISHED_RUN_KINDS``
+#: is the tally's): a gate record was the population for want of a campaign
+#: and is refused by kind — never filtered — the moment one has run.
+CAMPAIGN_PUBLISHED_RUN_KINDS: tuple[str, ...] = ("campaign",)
+
+
+def allowed_run_kinds(*, campaign_present: bool) -> tuple[str, ...]:
+    """The kinds a population may hold, given whether the campaign has run."""
+    return CAMPAIGN_PUBLISHED_RUN_KINDS if campaign_present else MEASURABLE_RUN_KINDS
 
 #: The arm every optimisation-phase ratio and pair is stated against: the flat
 #: control, which differs from the shipped reference by the stopping rule alone
@@ -700,6 +715,11 @@ class Source:
     jobs: Callable[[Campaign], Sequence[Any]]
     phases: str
     what: str
+    #: ``"gate"`` — a verification gate's job set, the population for want of
+    #: a campaign — or ``"campaign"`` — one run stage of the campaign plan's.
+    family: str = "gate"
+    #: The run kind every composed job and every record of this source carries.
+    run_kind: str = "gate"
 
 
 def _reference_runs(campaign: Campaign) -> list[Any]:
@@ -714,11 +734,28 @@ def _paired_entries(campaign: Campaign) -> list[Any]:
     return gate_entry_mod.pairing_jobs(campaign)
 
 
-#: The two declared sources, re-derived from the declaration in
+def _campaign_run_stage(stage: str, sign: int | None = None):
+    """The campaign plan's own job set for one run stage — the chain owns the
+    composition (``chain.campaign_jobs``); this module declares **which**
+    stages are sources, how the stencil stage splits, and what each is."""
+
+    def jobs(campaign: Campaign) -> list[Any]:
+        from harness import chain as chain_mod  # noqa: PLC0415
+
+        composed = chain_mod.campaign_jobs(campaign, stage)
+        return composed if sign is None else [j for j in composed if j.stencil_sign == sign]
+
+    return jobs
+
+
+#: The declared sources, re-derived from the declaration in
 #: ``harness/measurement/tally.py``.  Re-derived rather than imported: if this module's
 #: population and the tally's differ, that difference is a finding the verify
-#: reports, and importing the tally's list would hide it.
-SOURCES: tuple[Source, ...] = (
+#: reports, and importing the tally's list would hide it.  Two gate sources,
+#: five campaign sources — one per run stage of the campaign plan, the stencil
+#: stage as its forward and backward point sets (the plan's bracket, §3.4) —
+#: the campaign five declared only while execution is approved.
+GATE_SOURCES: tuple[Source, ...] = (
     Source(
         name="reference_runs",
         owner="reproduction",
@@ -727,8 +764,10 @@ SOURCES: tuple[Source, ...] = (
         what=(
             "the reproduction gate's own runs: one record per arm, "
             "configuration and seed of the reference set, made by the "
-            "committed run path.  Gate runs, never campaign runs"
+            "committed run path.  The gate population, never the campaign"
         ),
+        family="gate",
+        run_kind="gate",
     ),
     Source(
         name="paired_entries",
@@ -737,10 +776,107 @@ SOURCES: tuple[Source, ...] = (
         phases="A",
         what=(
             "the entry gate's paired evaluations: every evaluation-phase arm "
-            "entered from the same displaced coupling state at one seed"
+            "entered from the same displaced coupling state at one seed.  The "
+            "gate population"
         ),
+        family="gate",
+        run_kind="gate",
     ),
 )
+
+CAMPAIGN_SOURCES: tuple[Source, ...] = (
+    Source(
+        name="campaign_entry_references",
+        owner="campaign plan, stage entry_references",
+        jobs=_campaign_run_stage("entry_references"),
+        phases="A",
+        what=(
+            "the campaign population: one flat A0 evaluation per configuration "
+            "from the input file's design point — the cold-start term, beside "
+            "and never pooled"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_displaced",
+        owner="campaign plan, stage evaluation_displaced",
+        jobs=_campaign_run_stage("evaluation_displaced"),
+        phases="A",
+        what=(
+            "the campaign population: the displaced-entry regime, every arm "
+            "from the same seeded displacement of the reference fixed point, "
+            "seeds 1–25"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_stencil_forward",
+        owner="campaign plan, stage evaluation_stencil",
+        jobs=_campaign_run_stage("evaluation_stencil", 1),
+        phases="A",
+        what=(
+            "the campaign population: the stencil regime's forward points, one "
+            "per design-vector column per arm, paired by column"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_stencil_backward",
+        owner="campaign plan, stage evaluation_stencil",
+        jobs=_campaign_run_stage("evaluation_stencil", -1),
+        phases="A",
+        what=(
+            "the campaign population: the stencil regime's backward points, "
+            "each from its forward point's exit, one per design-vector column "
+            "per arm, paired by column"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_optimisation",
+        owner="campaign plan, stage optimisation",
+        jobs=_campaign_run_stage("optimisation"),
+        phases="B",
+        what=(
+            "the campaign population: every optimisation-phase arm, 25 starts "
+            "per configuration, seed000 unperturbed; a crashed start is a "
+            "taxonomy row and never a cost"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+)
+
+SOURCES: tuple[Source, ...] = GATE_SOURCES + (
+    CAMPAIGN_SOURCES if EXECUTION_APPROVED else ()
+)
+
+#: The composition refusals that mean "a prerequisite record is not on disk"
+#: and leave a source empty rather than raising.
+COMPOSITION_REFUSALS: tuple[str, ...] = ("GateError", "ReproductionError", "ChainError")
+
+
+def source_jobs(campaign: Campaign, source: Source) -> list[Any]:
+    """The composed job set of *source*, empty where not composable yet; a job
+    of another run kind than the source declares is a refusal."""
+    try:
+        jobs = list(source.jobs(campaign))
+    except Exception as exc:  # noqa: BLE001 - a missing prerequisite, stated
+        if type(exc).__name__ not in COMPOSITION_REFUSALS:
+            raise
+        return []
+    wrong = [job.key for job in jobs if job.run_kind != source.run_kind]
+    if wrong:
+        raise AnalysisError(
+            f"source {source.name!r} declares run kind {source.run_kind!r} and "
+            f"{len(wrong)} of its composed job(s) are stamped otherwise: "
+            f"{wrong[:3]}"
+        )
+    return jobs
 
 
 def source_directories(campaign: Campaign, source: Source) -> list[Path]:
@@ -748,20 +884,33 @@ def source_directories(campaign: Campaign, source: Source) -> list[Path]:
     the job set is not composable yet (no reference record to enter from)."""
     from harness.core import pool as pool_mod  # noqa: PLC0415
 
-    try:
-        jobs = list(source.jobs(campaign))
-    except Exception as exc:  # noqa: BLE001 - a missing prerequisite, stated
-        if type(exc).__name__ not in ("GateError", "ReproductionError"):
-            raise
-        return []
-    return pool_mod.directories_for(jobs, campaign)
+    return pool_mod.directories_for(source_jobs(campaign, source), campaign)
+
+
+def campaign_present(campaign: Campaign) -> bool:
+    """Does any campaign source have a record on disk?  Read from the records,
+    never from the approval switch: an approved campaign that has not run has
+    no population."""
+    return any(
+        (directory / "metrics.json").exists()
+        for source in SOURCES
+        if source.family == "campaign"
+        for directory in source_directories(campaign, source)
+    )
+
+
+def published_sources(campaign: Campaign) -> tuple[Source, ...]:
+    """The family whose tables are published: campaign when a campaign record
+    exists, gate otherwise — never both."""
+    family = "campaign" if campaign_present(campaign) else "gate"
+    return tuple(source for source in SOURCES if source.family == family)
 
 
 def declared_paths(campaign: Campaign) -> list[Path]:
-    """Every directory the declared sources resolve to, once each."""
+    """Every directory the **published** sources resolve to, once each."""
     paths: list[Path] = []
     seen: set[str] = set()
-    for source in SOURCES:
+    for source in published_sources(campaign):
         for directory in source_directories(campaign, source):
             if str(directory) not in seen:
                 seen.add(str(directory))
@@ -780,14 +929,19 @@ class Population:
 
     @staticmethod
     def of(
-        records: Sequence[Mapping[str, Any]], *, what: str
+        records: Sequence[Mapping[str, Any]],
+        *,
+        what: str,
+        campaign_present: bool = False,
     ) -> "Population":
         """Build a population, naming what may not be in one.
 
-        A record whose run kind is not one of :data:`MEASURABLE_RUN_KINDS` is
-        refused outright: a ``smoke`` record is one run of the campaign's own
-        chain, made to show the chain runs, and a cell computed over it would
-        carry a caption naming a population it is not over.
+        A record whose run kind is not one of
+        :func:`allowed_run_kinds` ``(campaign_present=…)`` is refused
+        outright: a ``smoke`` record is one run of the campaign's own chain,
+        made to show the chain runs, and a cell computed over it would carry a
+        caption naming a population it is not over; with the campaign present
+        a ``gate`` record is refused the same way, by kind.
 
         A record stamped ``force_maxcal`` is a budget-capped demonstration of
         the retry ladder and never a measurement; it is excluded **by name**
@@ -797,18 +951,20 @@ class Population:
         record the same quantities and a table over both is a table over a
         population nobody can state.
         """
+        allowed = allowed_run_kinds(campaign_present=campaign_present)
         unsummarisable = [
             (label_of(record), str(record.get("campaign_run_kind")))
             for record in records
             if record.get("campaign_run_kind") is not None
-            and record.get("campaign_run_kind") not in MEASURABLE_RUN_KINDS
+            and record.get("campaign_run_kind") not in allowed
         ]
         if unsummarisable:
             raise AnalysisError(
                 f"{len(unsummarisable)} record(s) of a run kind no published "
                 f"cell may be computed over reached a population: "
                 f"{unsummarisable[:5]}.  The kinds allowed are "
-                f"{list(MEASURABLE_RUN_KINDS)}."
+                f"{list(allowed)}"
+                + (" while a campaign record exists." if campaign_present else ".")
             )
         kept: list[Mapping[str, Any]] = []
         excluded: list[str] = []
@@ -902,14 +1058,28 @@ def by_arm(
     return out
 
 
+def pairing_key(record: Mapping[str, Any]) -> int | None:
+    """The key two arms' runs pair on: the seed — or, for a stencil point,
+    the design-vector column out of the record's own job identity, because
+    every stencil point carries seed 0 and a seed-keyed pairing over them
+    would compare one point per arm.  Re-derived from the plan's §3.4, not
+    imported from the tally."""
+    if record.get("regime") == "stencil":
+        identity = record.get("job_identity") or {}
+        column = identity.get("stencil_column", record.get("stencil_column"))
+        return None if column is None else int(column)
+    seed = record.get("campaign_seed")
+    return None if seed is None else int(seed)
+
+
 def by_arm_and_seed(
     population: Population, configuration: str
 ) -> dict[str, dict[int, Mapping[str, Any]]]:
-    """This configuration's records indexed by arm and seed.
+    """This configuration's records indexed by arm and pairing key.
 
-    A ratio between two arms is paired **seed by seed** or it is not paired at
+    A ratio between two arms is paired **key by key** or it is not paired at
     all: pairing two lists by position compares whichever runs happened to sort
-    first.  Within one declared source an (arm, seed) is one job; a second
+    first.  Within one declared source an (arm, key) is one job; a second
     record for the same key is the source failing to be the comparable set it
     declares itself to be, and the first is kept.
     """
@@ -917,12 +1087,10 @@ def by_arm_and_seed(
     for record in population.records:
         if record.get("campaign_configuration") != configuration:
             continue
-        seed = record.get("campaign_seed")
-        if seed is None:
+        key = pairing_key(record)
+        if key is None:
             continue
-        out.setdefault(str(record.get("campaign_arm")), {}).setdefault(
-            int(seed), record
-        )
+        out.setdefault(str(record.get("campaign_arm")), {}).setdefault(key, record)
     return out
 
 
@@ -1174,8 +1342,9 @@ def _cost_per_call(
             f"{denominator} run(s) of {configuration}.  Construction: pooled = "
             f"Σ arm / Σ reference over the seed-paired runs, median = "
             f"nearest-rank upper-middle of the per-run ratios, worse = runs on "
-            f"which the arm cost more.  These are gate runs at one or two "
-            f"seeds: no cell here is a campaign statistic."
+            f"which the arm cost more, keyed by seed (displaced entries) or "
+            f"by design-vector column (stencil points).  The population is "
+            f"the one named and no other."
         ),
         columns=(
             "arm", "ok", "calls_per_eval", "calls_bracket", "sweeps_per_eval",
@@ -1185,7 +1354,7 @@ def _cost_per_call(
         key_columns=("arm",),
         rows=tuple(rows),
         denominator=denominator,
-        denominator_is=f"evaluation-phase gate runs of {configuration}",
+        denominator_is=f"evaluation-phase runs of {configuration}",
         composite=("ok", "calls_bracket", "sweeps_by_block", "paired_seeds"),
     )
 
@@ -1358,7 +1527,7 @@ def _matched_accuracy(
             key_columns=("arm", "ruler"),
             rows=tuple(rows),
             denominator=denominator,
-            denominator_is=f"evaluation-phase gate runs of {configuration}",
+            denominator_is=f"evaluation-phase runs of {configuration}",
             composite=("argmax", "n_excluded", "instrument"),
         ),
         verdicts,
@@ -1429,7 +1598,7 @@ def _ownership_rung(
         key_columns=("n", "paired_seeds"),
         rows=(row,),
         denominator=len(flat) + len(pinned),
-        denominator_is=f"A0 and A0p gate runs of {configuration}",
+        denominator_is=f"A0 and A0p runs of {configuration}",
         composite=("paired_seeds", "residual_s_bracket"),
     )
 
@@ -1515,15 +1684,38 @@ def _per_sweep_overhead(
         key_columns=("arm", "seed"),
         rows=tuple(rows),
         denominator=len(rows),
-        denominator_is=f"finished {phase}-phase gate runs of {configuration}",
+        denominator_is=f"finished {phase}-phase runs of {configuration}",
         composite=("stops_on", "coupling_width_by_block"),
     )
+
+
+def last_traceback_line(record: Mapping[str, Any]) -> str | None:
+    """The last non-blank line of an unfinished record's traceback, else None."""
+    if record.get("status") == "ok" or not isinstance(record.get("traceback"), str):
+        return None
+    lines = [ln.strip() for ln in record["traceback"].strip().splitlines() if ln.strip()]
+    return lines[-1] if lines else None
+
+
+def crash_lines(records: Iterable[Mapping[str, Any]]) -> str:
+    """Distinct traceback last lines with counts, most frequent first; ``—`` if none."""
+    counts: dict[str, int] = {}
+    for record in records:
+        line = last_traceback_line(record)
+        if line is not None:
+            counts[line] = counts.get(line, 0) + 1
+    if not counts:
+        return "—"
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return CELL_SEPARATOR.join(f"{line} ×{n}" for line, n in ordered)
 
 
 def _failure_taxonomy(
     population: Population, configuration: str, source: str
 ) -> Recomputed:
-    """Every scheduled run a row, with its denominator (plan §4.2.6)."""
+    """Every scheduled run a row, with its denominator (plan §4.2.6; §3.5
+    check 4 for the optimisation phase), and the traceback's last line as the
+    class detail.  Over the whole source population of the configuration."""
     grouped = by_arm(population, configuration)
     classes = sorted(
         {str(r.get("failure_class")) for records in grouped.values() for r in records}
@@ -1538,25 +1730,29 @@ def _failure_taxonomy(
         }
         for name in classes:
             row[name] = counted["by_failure_class"].get(name, 0)
+        row["detail"] = crash_lines(grouped[arm])
         rows.append(row)
+    phase = "evaluation" if population.phase == "A" else "optimisation"
     return Recomputed(
         name=f"failure taxonomy — {configuration} — {source}",
         caption=(
-            f"units: counts of runs.  A row is one arm on this configuration.  "
-            f"A column is one disposition of the taxonomy.  Population: "
-            f"{population.what}; every gate run of {configuration}.  "
+            f"units: counts of runs; the detail column is text.  A row is one "
+            f"arm on this configuration.  A column is one disposition of the "
+            f"taxonomy, and the detail is the last line of each unfinished "
+            f"run's traceback, distinct, with its count.  Population: "
+            f"{population.what}; every run of {configuration}.  "
             f"Construction: every scheduled run is a row and a run that wrote "
             f"no record is counted as no_record, never skipped.  An arm "
             f"inactive on a configuration is absent from this table rather "
             f"than reading 0: a skipped arm and a failing arm are different "
-            f"results."
+            f"results.  A crashed start reaches no cost cell."
         ),
-        columns=("arm", "denominator", *classes, "sums"),
+        columns=("arm", "denominator", *classes, "sums", "detail"),
         key_columns=("arm",),
         rows=tuple(rows),
         denominator=sum(len(v) for v in grouped.values()),
-        denominator_is=f"evaluation-phase gate runs of {configuration}",
-        composite=("sums",),
+        denominator_is=f"{phase}-phase runs of {configuration}",
+        composite=("sums", "detail"),
     )
 
 
@@ -2068,7 +2264,7 @@ def _attempt_identity(
         key_columns=("arm", "seed"),
         rows=tuple(rows),
         denominator=len(rows),
-        denominator_is=f"optimisation-phase gate runs of {configuration}",
+        denominator_is=f"optimisation-phase runs of {configuration}",
         composite=(
             "retried", "node_per_attempt", "sweeps_per_attempt", "decomposes",
         ),
@@ -2273,7 +2469,7 @@ def _lift_closed(
         key_columns=("arm",),
         rows=tuple(rows),
         denominator=sum(len(v) for v in index.values()),
-        denominator_is=f"optimisation-phase gate runs of {configuration}",
+        denominator_is=f"optimisation-phase runs of {configuration}",
         composite=("bracket", "in_equality_block"),
     )
 
@@ -2297,7 +2493,8 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
     verdicts: list[dict[str, Any]] = []
     seed_sets: dict[str, list[int]] = {}
     not_produced: list[str] = []
-    for source in SOURCES:
+    present = campaign_present(campaign)
+    for source in published_sources(campaign):
         records = source_records(campaign, source)
         for phase in ("A", "B"):
             if phase not in source.phases:
@@ -2305,6 +2502,7 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
             population = Population.of(
                 [r for r in records if r.get("campaign_phase") == phase],
                 what=f"{source.name} — {source.what}",
+                campaign_present=present,
             )
             population.assert_no_demonstration()
             populations.append(
@@ -2312,6 +2510,7 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                     "source": source.name,
                     "phase": phase,
                     "owner": source.owner,
+                    "family": source.family,
                     "n_records": len(population),
                     "n_excluded_as_demonstrations": len(population.excluded),
                 }
@@ -2353,6 +2552,10 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                     whole = by_arm_and_seed(population, config.name)
                     if not whole:
                         continue
+                    taxonomy_table = _failure_taxonomy(
+                        population, config.name, source.name
+                    )
+                    produced[taxonomy_table.name] = taxonomy_table
                     for arms, seeds in seed_complete_arm_groups(whole):
                         label = f"{source.name} · {'·'.join(arms)}"
                         index = restricted_index(whole, arms, seeds)
@@ -2408,6 +2611,8 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
     return {
         "tables": produced,
         "populations": populations,
+        "campaign_present": present,
+        "population_family": "campaign" if present else "gate",
         "similarity_verdicts": verdicts,
         "seed_sets": seed_sets,
         "tables_not_produced": not_produced,
@@ -3396,7 +3601,7 @@ def print_tables(block: Mapping[str, Any]) -> None:
     for row in block.get("populations") or []:
         print(
             f"  population {row['source']}/{row['phase']}: "
-            f"{row['n_records']} record(s) of gate {row['owner']}'s job set"
+            f"{row['n_records']} record(s) of {row['owner']}'s job set"
         )
     provenance = block.get("runs_provenance") or {}
     print(
@@ -3453,12 +3658,8 @@ def _job_rows(campaign: Campaign) -> list[dict[str, Any]]:
     from harness.core import pool as pool_mod  # noqa: PLC0415
 
     jobs: list[Any] = []
-    for source in SOURCES:
-        try:
-            jobs += list(source.jobs(campaign))
-        except Exception as exc:  # noqa: BLE001
-            if type(exc).__name__ not in ("GateError", "ReproductionError"):
-                raise
+    for source in published_sources(campaign):
+        jobs += source_jobs(campaign, source)
     return pool_mod.job_listing(jobs, campaign)
 
 

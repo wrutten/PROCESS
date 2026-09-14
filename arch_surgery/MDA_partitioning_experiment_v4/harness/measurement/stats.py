@@ -48,6 +48,10 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
 __all__ = [
+    "CAMPAIGN_PUBLISHED_RUN_KINDS",
+    "measurable_run_kinds",
+    "traceback_last_line",
+    "crash_detail",
     "StatsError",
     "Population",
     "median",
@@ -113,6 +117,21 @@ FORCED_BUDGET_STAMP = "force_maxcal"
 #: has already made three times.
 MEASURABLE_RUN_KINDS: tuple[str, ...] = ("campaign", "gate")
 
+#: The run kinds a published table may be computed over **once a campaign
+#: record exists**.  A gate record is a measurable kind only for want of a
+#: campaign: the moment the campaign has run, a table over gate runs beside a
+#: table over campaign runs is two populations under one caption vocabulary,
+#: so :meth:`Population.of` refuses a gate record — by kind, at construction,
+#: never by filter — when told the campaign is present (task A75
+#: (campaign-tally-source), gate ``run_kind_separation``'s second direction).
+CAMPAIGN_PUBLISHED_RUN_KINDS: tuple[str, ...] = ("campaign",)
+
+
+def measurable_run_kinds(*, campaign_present: bool) -> tuple[str, ...]:
+    """Which run kinds a published population may contain, given whether the
+    campaign has run.  One rule, read by the population and by the gate."""
+    return CAMPAIGN_PUBLISHED_RUN_KINDS if campaign_present else MEASURABLE_RUN_KINDS
+
 
 @dataclass(frozen=True)
 class Population:
@@ -158,6 +177,7 @@ class Population:
         *,
         what: str,
         denominator: int | None = None,
+        campaign_present: bool = False,
     ) -> "Population":
         """Build a population, refusing what may not be in one.
 
@@ -166,25 +186,42 @@ class Population:
         denominator of a taxonomy is what was scheduled and not what survived.
         Pass it explicitly wherever the scheduled count is known independently
         (25 seeds per arm, say) and differs from the records on disk.
+
+        ``campaign_present`` says whether a campaign record exists anywhere
+        the tally reads (``tally.campaign_present``).  With it True the only
+        kind a published population may hold is ``campaign``
+        (:func:`measurable_run_kinds`): a gate record offered then is refused
+        the way a smoke record always is, because the gate population was the
+        tables' population *for want of a campaign* and a cell over it beside
+        the campaign's cells would be a number without the condition that
+        limits it (trap T11).
         """
         offered = list(records)
         kept: list[Mapping[str, Any]] = []
         excluded: list[tuple[str, str]] = []
+        allowed = measurable_run_kinds(campaign_present=campaign_present)
         unsummarisable = [
             (_label(record), str(record.get("campaign_run_kind")))
             for record in offered
             if record.get("campaign_run_kind") is not None
-            and record.get("campaign_run_kind") not in MEASURABLE_RUN_KINDS
+            and record.get("campaign_run_kind") not in allowed
         ]
         if unsummarisable:
             raise StatsError(
                 f"{len(unsummarisable)} record(s) of a run kind this table may "
                 f"not be computed over reached a population: "
                 f"{unsummarisable[:5]}.  The kinds a published table may "
-                f"summarise are {list(MEASURABLE_RUN_KINDS)}; a 'smoke' record "
-                f"is one run of the campaign's own chain, made to show the "
-                f"chain runs, and a table over it would carry a caption naming "
-                f"a population it is not over."
+                f"summarise are {list(allowed)}"
+                + (
+                    " while a campaign record exists — a gate record was the "
+                    "tables' population for want of a campaign and is excluded "
+                    "by kind now that one has run"
+                    if campaign_present
+                    else ""
+                )
+                + "; a 'smoke' record is one run of the campaign's own chain, "
+                f"made to show the chain runs, and a table over it would carry "
+                f"a caption naming a population it is not over."
             )
         for record in offered:
             if record.get(FORCED_BUDGET_STAMP) is not None:
@@ -235,6 +272,21 @@ class Population:
     @property
     def is_empty(self) -> bool:
         return not self.records
+
+    @property
+    def run_kinds(self) -> tuple[str, ...]:
+        """The run kinds of the kept records, sorted; what the caption names."""
+        return tuple(sorted({str(r.get("campaign_run_kind")) for r in self.records}))
+
+    @property
+    def runs_word(self) -> str:
+        """``campaign runs`` or ``gate runs`` — the population's kind, for a
+        caption or a denominator sentence, read from the records and never
+        assumed.  An empty population reads ``runs``."""
+        kinds = self.run_kinds
+        if len(kinds) == 1:
+            return f"{kinds[0]} runs"
+        return "runs" if not kinds else f"{'/'.join(kinds)} runs"
 
     def where(self, predicate) -> "Population":
         """The sub-population satisfying *predicate*, denominator preserved."""
@@ -790,6 +842,39 @@ def failure_taxonomy(
         "by_failure_class": dict(sorted(counts.items())),
         "rows_sum_to_denominator": sum(counts.values()) == denominator,
     }
+
+
+def traceback_last_line(record: Mapping[str, Any]) -> str | None:
+    """The last non-empty line of an unfinished record's traceback, or None.
+
+    The class detail the taxonomy carries beside its counts: ``crashed`` says
+    the run raised, the last line says what — and two arms crashing on the
+    same seed with the same line is a different finding from two different
+    lines.  A finished record has no traceback and reads None.
+    """
+    if record.get("status") == "ok":
+        return None
+    text = record.get("traceback")
+    if not isinstance(text, str):
+        return None
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    return lines[-1] if lines else None
+
+
+def crash_detail(records: Iterable[Mapping[str, Any]]) -> str:
+    """The distinct traceback last lines among *records*, each with its count,
+    most frequent first, joined with ``; `` — or ``—`` where no run crashed."""
+    counts: dict[str, int] = {}
+    for record in records:
+        line = traceback_last_line(record)
+        if line is None:
+            continue
+        counts[line] = counts.get(line, 0) + 1
+    if not counts:
+        return "—"
+    return "; ".join(
+        f"{line} ×{n}" for line, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
 
 
 # --------------------------------------------------------------------------
