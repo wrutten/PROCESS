@@ -99,13 +99,22 @@ run executes (harness plan amendment 13, rule (vi)).
 
 ### Layer 5 — the gates: `harness/gates/`
 
-`gates/gates.py` holds the registry, the ordering by declared dependency, the comparison machinery,
-and the gates that need no module of their own. The important ones:
+`gates/registry.py` holds the registry, the ordering by declared dependency, the gate table and the
+printers; it implements no criterion. `gates/gates.py` holds the gates that need no module of their
+own — G0′ and the copy's two sibling gates (`copy_identity`, `edit_behaviour`), all three loading
+their one implementation from `PROCESS/copy_gates.py` by path — plus the shared entry references
+every warm gate is anchored on, gate GR's wrapper, the promoted self-checks and the
+`self_containment` measurement. The important ones:
 
-- **G1 switch neutrality** — with every switch unset, the copy's output is byte-identical to the
-  frozen base, on values and on every output-file line.
+- **G1 switch neutrality** (`gates/gate_neutrality.py`, with the exclusion tables and the
+  record/output-file comparison machinery G8, G9 and `exclusion_review` import) — with every switch
+  unset, the copy's output is byte-identical to the frozen base, on values and on every output-file
+  line.
 - **G0′ copy integrity** — the copy differs from the base only in permitted files.
-- **G9 output path** — `B1` and `B3` write once with zero loop sweeps; `BR` and `B0` keep the loop.
+- **G9 output path** (`gates/gate_output_path.py`, with the `output_path_measurements` stage) — `B1`
+  and `B3` write once with zero loop sweeps; `BR` and `B0` keep the loop.
+- **G8 predicate mode** (`gates/gate_predicate_mode.py`) — the two convergence rulers, one
+  implementation.
 - **`run_kind_separation`** — every published cell is over campaign records only, with gate and smoke
   records excluded by kind.
 - **`recomputation`** — tally and analysis agree.
@@ -753,7 +762,7 @@ shown to catch.*
 | **capability** | the tree resolves every switch each arm asks for, exactly as asked; an arm asking for something no tree implements is refused before anything runs | a switch name no tree defines; a switch the environment does not carry claimed as resolved; a retired name present in the environment |
 | **provenance** | a modified tracked file and an untracked file are recorded separately, and only the first marks the tree dirty | each kind of change, one at a time, in a throwaway repository; and the tree asserted by a prefix instead of exactly |
 | **data** | every committed file in `data/` is byte-identical to its source at the recorded commit and the file set matches exactly; `ystate.py`'s whole diff against its own source is exactly the hunks the record holds and its post-edit hash is the recorded one; the counts `config.py` declares are the ones the files carry | one byte changed; a file missing; a file the record does not name; a changed file whose recorded hash was updated to match it — which passes a record-only check and must still fail; and the same two on `ystate.py` itself |
-| **run path** | a finished record carries every field it declares, both convergence rulers included; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; an exit audit carrying one ruler and not both; a record that does not say what kind of run made it; per-attempt costs that do not sum to the run total; an allowance covering a switch the tree has |
+| **run path** | a finished record carries every field it declares, both convergence rulers included; its per-attempt costs sum to its totals and its sweep total decomposes into the parts that claim it; the two displacement streams key on what they say they key on; a run against the wrong tree, or without a switch its arm declares, is refused rather than made | a declared field removed; an exit audit carrying one ruler and not both; a record that does not say what kind of run made it; per-attempt costs that do not sum to the run total; a sweep total that does not decompose; an allowance covering a switch the tree has |
 | **stage provenance** | a measurement stage that reads other records says which ones it read — path, bytes, commit, time and verdict — and a consumer refuses that stage record once those records have moved, so the plan's §4.1 can no longer reproduce a verdict the gate has since replaced; and every census record carries the commit of the tree it was taken in, or is named as one a stamp survey cannot place | a verdict re-made at a later commit after the stage record was written; a verdict written after it; a verdict it read that is gone; a stage record that does not say what it read |
 
 Two of these deserve their reason stated.
@@ -784,7 +793,7 @@ instrument taken after the files are written, with the solve-phase settings put 
 coupling state left as PROCESS wrote it out. Its residual is therefore *how far the written file is
 from a fixed point of the solve's own map*, not how well an arm converged. Only stages named in
 `records.AUDIT_POSITION_AFTER_RUN_CALLERS` may ask for it — today the reproduction gate, the
-switch-neutrality gate, the retry-ladder demonstration runs and gate `written_file_gap` — each
+switch-neutrality gate and gate `written_file_gap` — each
 with its reason beside its name; the run pool refuses any other caller and every campaign run,
 and the `run path` self-check has a tooth for each refusal. The caller is stamped in the run's
 `command.json` beside its record and in the caller's own verdict.
@@ -894,7 +903,7 @@ it had — this is a move, not a rename.*
 | `core/` | `framework` (what a gate, a tooth, a check and a measurement *are*), `config` (every declared setting), `failure` (the taxonomy), `provenance` (interpreter, tree and git stamps), `records` (the run-record schema and its completeness contract), `pool` (one run in its own directory, and the decision to keep an existing record) | everything |
 | `experiment/` | `arms` (the switch matrix as data), `switches` (the driver's vocabulary and the capability probe), `input_files` (committed and lifted), `artifacts` (the committed per-configuration files), `data_provenance` (where the copied data came from) | everything but `core/` |
 | `child/` | `child`, `evaluate`, `optimise`, `census` (the three entry points a measurement subprocess is started as, and what they load), `predicate`, `perturb`, `data_structure`, `audit_map`, `postsolve` | the pool spawns them; the gates import them |
-| `gates/` | `gates` (the registry), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck`, `exit_audit_diagnosis` | the runner, and `chain.py` |
+| `gates/` | `registry` (every gate and stage by name, the derived order, the gate table, the printers and the module's own command line), `gates` (G0′, `copy_identity` and `edit_behaviour` loading `PROCESS/copy_gates.py` by path; the shared entry references and `_with_capture`; GR's wrapper; the promoted self-checks; `self_containment`), `gate_neutrality` (G1 and the comparison machinery), `gate_output_path` (G9 and the output-path measurement), `gate_predicate_mode` (G8), `exclusion_review` (the review of G1's and G8's exclusion tables), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `gate_written_file`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck`, `exit_audit_diagnosis` | the runner, and `chain.py` |
 | `measurement/` | `stats`, `tables`, `tally`, `tally_evaluation`, `tally_optimisation`, `analysis`, `plan_tables` | `gates/` imports it — a gate reads records, it does not decide what a record means |
 | *(top level)* | `__init__.py` (the one public import surface), `chain.py` (the sequence the campaign and the smoke both run), `ystate.py`, `data/`, `reference/` | — |
 
@@ -904,6 +913,17 @@ the experiment's copied driver reaches it by the literal path
 (`PROCESS/process/core/solver/module_solve.py`), and `PROCESS/copy_gates.py` asserts that literal as
 one of the copy's permitted edits.  Moving the file would mean editing the frozen copy, so it stays
 where the driver expects it.
+
+**Inside `gates/`, who imports whom.** `registry` imports every gate module and is imported by
+the runner, `chain.py`, `selfcheck.py` and the analysis's dependency tooth — and by no gate module,
+so a gate never reaches the registry that holds it. `gate_output_path` and `gate_predicate_mode`
+import `gate_neutrality` (the comparison machinery) and `gates` (`_with_capture`);
+`exclusion_review` imports all three gate modules; `gate_prime` and `gate_audit` import
+`gate_output_path` for `excluded_by_the_per_run_nodes`; `exit_audit_diagnosis` imports
+`gate_neutrality`. Every source scanner that holds a module name as a string — `self_containment`'s
+`DECLARED_OUTSIDE_REFERENCES` (keyed by file name), `analysis.FORBIDDEN_IMPORTS` — was re-checked
+at the split; the first found the moved line in `registry.py` and reported it until the table
+named the file.
 
 **The rule that makes the grouping worth having.** `child/` is exactly the set the harness
 implementation plan's amendment 13, rule (vi) forbids editing while any measurement run executes —
