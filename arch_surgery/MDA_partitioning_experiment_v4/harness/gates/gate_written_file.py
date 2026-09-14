@@ -507,7 +507,8 @@ def written_against_solved(directory: Path, record: Mapping[str, Any], argmax: s
     if mfile.exists():
         for line in mfile.read_text().splitlines():
             parts = line.split()
-            if len(parts) >= 3 and parts[1] == tag:
+            # The MFILE pads the tag to a fixed width with underscores.
+            if len(parts) >= 3 and parts[1].rstrip("_") == tag:
                 try:
                     written = float(parts[2])
                 except ValueError:
