@@ -85,7 +85,7 @@ def reference_hexes(campaign) -> list[str]:
             record = json.loads(path.read_text())
         except Exception:  # noqa: BLE001 - an unreadable record is not this check's business
             continue
-        value = (record.get("exact") or {}).get("t_plant_pulse_burn_hex")
+        value = record.get("t_plant_pulse_burn_hex")
         if isinstance(value, str):
             found.add(value)
     return sorted(found) or ["0x1.34a0000000000p+10"]
