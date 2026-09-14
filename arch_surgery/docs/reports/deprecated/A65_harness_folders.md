@@ -1,9 +1,9 @@
 # A65 (harness-folders) — the harness's flat modules, grouped into five subpackages
 
-> **Document status** — **OPEN.** Task **A65 (harness-folders)**, branch `A65-harness-folders`, off
-> `architecture_surgery` at `486fa9ad` (the tip after A64 (entry-pairing-reference) merged).
-> A pure move: no behaviour, no `records.SCHEMA` field, no gate name, no stage name and no value in
-> `config.py` changes. Folder position records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A65 (harness-folders)** merged into
+> `architecture_surgery` at `28df7409` (branch tip `46bb54b1`, base `486fa9ad`). Records relocated to
+> `arch_surgery/idf_probe/runs/A65_runs/`. The orchestrator's critical assessment is §12. Folder position
+> records lifecycle, not validity (trap T3).
 
 ---
 
