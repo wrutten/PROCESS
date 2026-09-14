@@ -25,15 +25,24 @@ Five tables, each the shape of one of the plan's §4.2 placeholders:
 ``failure_taxonomy``   §4.2.6 — every scheduled run a row, denominators stated.
 
 **What the population is, stated once here and in every caption.** These
-tables are over the **gate runs** — the records the verification gates made,
-under ``runs/gates/`` — because ``EXECUTION_APPROVED`` is False and no campaign
-record exists.  They are one or two seeds per arm per configuration, so no cell
-here is a campaign statistic and none may be quoted as one.  What the tally
-demonstrates at this commit is that the constructions are implemented, that
-they refuse what they must refuse, and that they reproduce the previous
-revision's published cells on the twenty runs where a previous number exists.
+tables are over **one declared population** (``tally.published_sources``): the
+**campaign** sources — the campaign plan's own job sets, one per run stage,
+under ``runs/campaign/`` — once a campaign record exists, and the **gate**
+sources — the records the verification gates made, under ``runs/gates/``, one
+or two seeds per arm — while none does.  Never both: with the campaign present
+a gate record is refused by kind at the population's construction, and every
+caption and denominator sentence names the kind of run it is over, read from
+the records.  A source whose family is not published is counted and named in
+the stage record rather than tabled.
 
-Written by task **A53 (harness-tally)**.
+Within the evaluation phase the pairing across arms is by **seed** for the
+displaced regime and by **design-vector column** for the stencil regime
+(:func:`pairing_key`), because the stencil points all carry seed 0 and a
+seed-keyed pairing over them would compare one point per arm under a caption
+naming the whole set.
+
+Written by task **A53 (harness-tally)**; the campaign sources and the
+stencil pairing by task **A75 (campaign-tally-source)**.
 """
 
 from __future__ import annotations
@@ -49,7 +58,7 @@ from harness.measurement import tables as tables_mod
 from harness.core.config import Campaign
 from harness.measurement.tables import Caption, Column, Table, cell_list
 
-__all__ = ["tally", "print_tally", "PHASE"]
+__all__ = ["tally", "print_tally", "PHASE", "pairing_key"]
 
 PHASE = "A"
 
@@ -137,29 +146,53 @@ def _by_arm(
     return out
 
 
+def pairing_key(record: Mapping[str, Any]) -> int | None:
+    """What two arms' runs are paired on: the seed, or the stencil column.
+
+    A displaced or unperturbed entry is one job per (arm, seed) and pairs by
+    seed.  A stencil point is one job per (arm, column, sign) and every one
+    of them carries seed 0, so within a one-sign stencil source the pairing
+    key is the **design-vector column**, read from the record's own job
+    identity (``job_identity.stencil_column``, the pool's stamp); a record
+    that carries neither is unpaired, never keyed 0.
+    """
+    if record.get("regime") == "stencil":
+        column = (record.get("job_identity") or {}).get("stencil_column")
+        if column is None:
+            column = record.get("stencil_column")
+        return None if column is None else int(column)
+    seed = record.get("campaign_seed")
+    return None if seed is None else int(seed)
+
+
 def _by_arm_and_seed(
     population: stats_mod.Population, configuration: str
 ) -> dict[str, dict[int, Mapping[str, Any]]]:
-    """Records indexed by arm and seed, for a **seed-keyed** pairing.
+    """Records indexed by arm and pairing key, for a **keyed** pairing.
 
-    A ratio between two arms is paired seed by seed or it is not paired at all:
-    pairing two lists by position compares whichever runs happened to sort
-    first, which is a ratio over a population nobody can state.  Within one
-    declared source an (arm, seed) is one job; a second record for the same key
-    would be a source that is not the comparable set it declares itself to be,
-    and is reported rather than kept.
+    A ratio between two arms is paired point by point or it is not paired at
+    all: pairing two lists by position compares whichever runs happened to
+    sort first, which is a ratio over a population nobody can state.  The key
+    is :func:`pairing_key` — the seed, or the stencil column.  Within one
+    declared source an (arm, key) is one job; a second record for the same
+    key would be a source that is not the comparable set it declares itself
+    to be, and the first is kept.
     """
     out: dict[str, dict[int, Mapping[str, Any]]] = {}
     for record in population.records:
         if record.get("campaign_configuration") != configuration:
             continue
-        seed = record.get("campaign_seed")
-        if seed is None:
+        key = pairing_key(record)
+        if key is None:
             continue
-        out.setdefault(str(record.get("campaign_arm")), {}).setdefault(
-            int(seed), record
-        )
+        out.setdefault(str(record.get("campaign_arm")), {}).setdefault(key, record)
     return out
+
+
+def _paired_with(population: stats_mod.Population) -> str:
+    """The column header's word for the pairing key of this population."""
+    regimes = {str(r.get("regime")) for r in population.records}
+    return "columns" if regimes == {"stencil"} else "seeds"
 
 
 def _paired(
@@ -286,8 +319,9 @@ def cost_per_call(
                 "the empty block visits are included in every sweep count and "
                 "are disclaimed in the per-sweep-overhead table, which states "
                 "their sweep share",
-                "these are gate runs at one or two seeds, not campaign runs: "
-                "no cell here is a campaign statistic",
+                f"these are {population.runs_word}: the population named "
+                f"above and no other",
+                f"pairs are keyed by {_paired_with(population)}",
             ),
             how_to_read=(
                 "a pooled ratio below 1 with worse = 0 means the arm was "
@@ -303,14 +337,14 @@ def cost_per_call(
             Column("sweeps_per_eval", "sweeps / eval", fmt=lambda v: "—" if v is None else f"{v:.2f}"),
             Column("sweeps_by_block", "sweeps by block"),
             Column("arrangement_method_calls", "arrangement·method calls", fmt=lambda v: "—" if v is None else f"{v:.1f}"),
-            Column("paired_seeds", f"paired with {base} at seeds"),
+            Column("paired_seeds", f"paired with {base} at {_paired_with(population)}"),
             Column("pooled", f"vs {base} pooled", fmt=_fmt_ratio),
             Column("median", f"vs {base} median", fmt=_fmt_ratio),
             Column("worse", "worse", fmt=_fmt_int),
         ),
         rows=tuple(rows),
         denominator=denominator,
-        denominator_is=f"evaluation-phase gate runs of {configuration}",
+        denominator_is=f"evaluation-phase {population.runs_word} of {configuration}",
         acceptance=True,
     )
 
@@ -487,7 +521,7 @@ def matched_accuracy(
         ),
         rows=tuple(rows),
         denominator=sum(len(v) for v in by_arm.values()),
-        denominator_is=f"evaluation-phase gate runs of {configuration}",
+        denominator_is=f"evaluation-phase {population.runs_word} of {configuration}",
         acceptance=True,
         audit_position_labelled=True,
     )
@@ -574,7 +608,7 @@ def ownership_rung(
         ),
         columns=(
             Column("n", "n", fmt=_fmt_int),
-            Column("paired_seeds", "paired at seeds"),
+            Column("paired_seeds", f"paired at {_paired_with(population)}"),
             Column("pooled", "A0p/A0 pooled", fmt=_fmt_ratio),
             Column("median", "median", fmt=_fmt_ratio),
             Column("worse", "worse", fmt=_fmt_int),
@@ -584,7 +618,7 @@ def ownership_rung(
         ),
         rows=tuple(rows),
         denominator=len(flat) + len(pinned),
-        denominator_is=f"A0 and A0p gate runs of {configuration}",
+        denominator_is=f"A0 and A0p {population.runs_word} of {configuration}",
         acceptance=True,
     )
 
@@ -661,7 +695,7 @@ def per_sweep_overhead(
             column_is="a counter of one **named** convergence test, or the "
             "sweep total the run's dispatch body walked",
             population=(
-                f"{population.what}; the finished evaluation-phase gate runs "
+                f"{population.what}; the finished evaluation-phase {population.runs_word} "
                 f"of {configuration}"
             ),
             construction=(
@@ -703,7 +737,7 @@ def per_sweep_overhead(
         rows=tuple(rows),
         denominator=len(rows),
         denominator_is=(
-            f"finished evaluation-phase gate runs of {configuration}"
+            f"finished evaluation-phase {population.runs_word} of {configuration}"
         ),
         acceptance=True,
     )
@@ -736,14 +770,17 @@ def failure_taxonomy(
         }
         for name in classes:
             row[name] = taxonomy["by_failure_class"].get(name, 0)
+        row["detail"] = stats_mod.crash_detail(by_arm[arm])
         rows.append(row)
     return Table(
         name=f"failure taxonomy — {configuration} — {source}",
         caption=Caption(
-            units="counts of runs",
+            units="counts of runs; the detail column is text",
             row_is="one arm on this configuration",
-            column_is="one disposition of the taxonomy",
-            population=f"{population.what}; every gate run of {configuration}",
+            column_is="one disposition of the taxonomy, and the detail: the "
+            "last line of each unfinished run's traceback, distinct, with "
+            "its count",
+            population=f"{population.what}; every {population.runs_word[:-1]} of {configuration}",
             construction=(
                 "stats.failure_taxonomy — every scheduled run is a row and a "
                 "run that wrote no record is counted as no_record, never "
@@ -766,10 +803,11 @@ def failure_taxonomy(
             Column("denominator", "scheduled", fmt=_fmt_int),
             *[Column(name, name, fmt=_fmt_int) for name in classes],
             Column("sums", "rows sum"),
+            Column("detail", "detail (traceback's last line × count)"),
         ),
         rows=tuple(rows),
         denominator=sum(len(v) for v in by_arm.values()),
-        denominator_is=f"evaluation-phase gate runs of {configuration}",
+        denominator_is=f"evaluation-phase {population.runs_word} of {configuration}",
         acceptance=True,
     )
 
@@ -898,26 +936,32 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     paths = tally_mod.declared_paths(campaign)
     provenance = tally_mod.survey(paths)
     straddle = tally_mod.assert_one_commit(provenance, resume=resume)
+    present = tally_mod.campaign_present(campaign)
     emitted: list[Table] = []
     verdicts: list[dict[str, Any]] = []
     refusals: list[str] = []
     sources: list[dict[str, Any]] = []
-    for source in tally_mod.SOURCES:
+    for source in tally_mod.published_sources(campaign):
         if PHASE not in source.phases:
             continue
         rows, source_refusals = tally_mod.source_rows(campaign, source)
         refusals.extend(f"[{source.name}] {line}" for line in source_refusals)
         population = tally_mod.population_for(
-            rows, phase=PHASE, what=f"{source.name} — {source.what}"
+            rows,
+            phase=PHASE,
+            what=f"{source.name} — {source.what}",
+            campaign_present=present,
         )
         population.assert_no_forced_budget()
         sources.append(
             {
                 "source": source.name,
                 "owner": source.owner,
+                "family": source.family,
                 "what": source.what,
                 "n_records": len(population),
                 "n_excluded_as_demonstrations": len(population.excluded),
+                "run_kinds": list(population.run_kinds),
             }
         )
         if population.is_empty:
@@ -952,11 +996,17 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         emitted.append(trial)
     return {
         "phase": PHASE,
+        "campaign_present": present,
+        "population_family": "campaign" if present else "gate",
         "sources": sources,
+        "sources_not_published": _not_published(campaign, PHASE),
         "population": "; ".join(f"{s['source']}: {s['n_records']} record(s)" for s in sources),
         "n_records": sum(s["n_records"] for s in sources),
         "records_outside_every_source": tally_mod.records_outside_every_source(
             campaign
+        ),
+        "campaign_records_outside_every_source": (
+            tally_mod.campaign_records_outside_every_source(campaign)
         ),
         "runs_provenance": provenance,
         "runs_straddle_note": straddle,
@@ -964,6 +1014,22 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "similarity_verdicts": verdicts,
         "tables": [table.as_record() for table in emitted],
         "n_tables": len(emitted),
+    }
+
+
+def _not_published(campaign: Campaign, phase: str) -> dict[str, Any]:
+    """The sources of the other family, counted and named, with the reason."""
+    return {
+        "why": tally_mod.why_not_published(campaign),
+        "sources": [
+            {
+                "source": source.name,
+                "family": source.family,
+                "n_records": len(tally_mod.source_rows(campaign, source)[0]),
+            }
+            for source in tally_mod.unpublished_sources(campaign)
+            if phase in source.phases
+        ],
     }
 
 
@@ -976,10 +1042,15 @@ REFUSALS_PRINTED = 5
 
 def print_tally(block: Mapping[str, Any]) -> None:
     """The stage's tables on the terminal, each with its caption."""
+    print(
+        f"\n  population: the {block.get('population_family')} family "
+        f"(campaign record present: {block.get('campaign_present')})"
+    )
     for source in block.get("sources") or []:
         print(
-            f"\n  source {source['source']:<16} {source['n_records']:>3} "
-            f"record(s) of gate {source['owner']}'s job set"
+            f"\n  source {source['source']:<28} {source['n_records']:>3} "
+            f"record(s) of {source['owner']}'s job set, run kind(s) "
+            f"{source.get('run_kinds')}"
         )
         print(f"    {source['what']}")
         if source.get("n_excluded_as_demonstrations"):
@@ -987,6 +1058,24 @@ def print_tally(block: Mapping[str, Any]) -> None:
                 f"    {source['n_excluded_as_demonstrations']} excluded as "
                 f"budget-capped demonstrations"
             )
+    unpublished = block.get("sources_not_published") or {}
+    if unpublished.get("sources"):
+        print(
+            "\n  not published: "
+            + ", ".join(
+                f"{s['source']} ({s['n_records']} record(s))"
+                for s in unpublished["sources"]
+            )
+            + f" — {unpublished.get('why')}"
+        )
+    campaign_outside = block.get("campaign_records_outside_every_source") or {}
+    if campaign_outside.get("n_records_under_runs_campaign"):
+        print(
+            f"  {campaign_outside.get('n_in_a_campaign_source')} of "
+            f"{campaign_outside.get('n_records_under_runs_campaign')} record(s) "
+            f"under runs/campaign/ are in a campaign source; "
+            f"{campaign_outside.get('n_outside_every_campaign_source')} are not"
+        )
     outside = block.get("records_outside_every_source") or {}
     if outside:
         print(

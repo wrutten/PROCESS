@@ -43,6 +43,12 @@ population of one, published beside tables over twenty-five.  So the run kinds a
 published population may contain are declared (``stats.MEASURABLE_RUN_KINDS``
 and, independently, ``analysis.MEASURABLE_RUN_KINDS``) and a record of any other
 kind is **refused** at the population's construction, not filtered out of it.
+**Once a campaign record exists the same refusal takes a gate record**
+(``stats.measurable_run_kinds(campaign_present=True)`` is ``campaign`` alone):
+the gate population was the tables' population for want of a campaign, and
+the tally publishes the campaign family only (``tally.published_sources``),
+the gate family counted and named in the stage record (task A75
+(campaign-tally-source), issue I-24).
 
 **A campaign record is never made by the smoke.**  ``EXECUTION_APPROVED`` is the
 user's switch and the smoke does not reach it: :func:`plan_for` refuses a
@@ -77,6 +83,8 @@ __all__ = [
     "plan_for",
     "smoke_plan",
     "campaign_plan",
+    "campaign_jobs",
+    "RUN_STAGES",
     "cheapest_configuration",
     "stage_names",
     "run",
@@ -455,19 +463,16 @@ def entry_reference_directory(root: Path, configuration: str) -> Path:
     return Path(root) / "entry_references" / configuration
 
 
-def stage_entry_references(
-    campaign: Campaign, plan: ChainPlan, *, resume: bool
-) -> dict[str, Any]:
-    """One flat evaluation per configuration, from the input file's own point.
+def entry_reference_jobs(campaign: Campaign, plan: ChainPlan) -> list[pool_mod.Job]:
+    """The entry-reference job set: one flat ``A0`` evaluation per configuration.
 
-    Its exit state is what every displaced entry and every stencil point is
-    entered from, and its converged burn time is the constant the pinned arms
-    own.  A reference that does not finish stops the chain: there is nothing to
-    enter from, and entering from somewhere else would be a different
-    experiment reported under this one's name.
+    Composed here and not inside the stage that runs it, so that a reader of
+    the records — the tally's ``campaign_entry_references`` source — names the
+    same jobs the stage made, resolved to the same directories, without
+    running anything (harness plan rule (xiv): one job identity).
     """
     root = chain_root(campaign, plan)
-    jobs = [
+    return [
         pool_mod.Job(
             phase="A",
             arm="A0",
@@ -480,9 +485,21 @@ def stage_entry_references(
         )
         for config in plan.configurations
     ]
-    results = pool_mod.run_all(jobs, campaign, resume=resume)
+
+
+def references_from_records(
+    campaign: Campaign, plan: ChainPlan
+) -> dict[str, dict[str, Any]]:
+    """What every later entry is derived from, read back from the reference records.
+
+    Refuses (``ChainError``) where a configuration's reference did not finish
+    or was never made: every entry of the evaluation phase is a displacement
+    of its exit state, so there is nothing to compose a dependent job from.
+    The stage that makes the references and the tally that reads them both
+    go through this one reading.
+    """
     references: dict[str, dict[str, Any]] = {}
-    for job in jobs:
+    for job in entry_reference_jobs(campaign, plan):
         record = records_mod.read(job.outdir)
         if record.get("status") != "ok":
             raise ChainError(
@@ -502,6 +519,23 @@ def stage_entry_references(
                 "residual_max_hex"
             ),
         }
+    return references
+
+
+def stage_entry_references(
+    campaign: Campaign, plan: ChainPlan, *, resume: bool
+) -> dict[str, Any]:
+    """One flat evaluation per configuration, from the input file's own point.
+
+    Its exit state is what every displaced entry and every stencil point is
+    entered from, and its converged burn time is the constant the pinned arms
+    own.  A reference that does not finish stops the chain: there is nothing to
+    enter from, and entering from somewhere else would be a different
+    experiment reported under this one's name.
+    """
+    jobs = entry_reference_jobs(campaign, plan)
+    results = pool_mod.run_all(jobs, campaign, resume=resume)
+    references = references_from_records(campaign, plan)
     return {
         "stage": "entry_references",
         "what": (
@@ -517,21 +551,11 @@ def stage_entry_references(
     }
 
 
-def stage_evaluation_displaced(
-    campaign: Campaign,
-    plan: ChainPlan,
-    references: Mapping[str, Any],
-    *,
-    resume: bool,
-) -> dict[str, Any]:
-    """Plan §3.4's δ regime: every arm, every seed, one evaluation each.
-
-    Every arm is entered from the **same** displaced state at the same seed —
-    the reference arm included.  That is what makes the published cost ratios
-    paired differences rather than a mixture of the entry and the arm, and it
-    is the reason the plan's binding rule on `AR → A0` (§3.3) can be stated at
-    all: the two arms differ in their stopping rule and in nothing else.
-    """
+def evaluation_displaced_jobs(
+    campaign: Campaign, plan: ChainPlan, references: Mapping[str, Any]
+) -> list[pool_mod.Job]:
+    """The displaced-entry job set: every arm, every seed of the plan, from the
+    same seeded displacement of the configuration's reference fixed point."""
     from .gates import reproduction as reproduction_mod  # noqa: PLC0415
 
     root = chain_root(campaign, plan) / "evaluation"
@@ -566,6 +590,25 @@ def stage_evaluation_displaced(
                         run_kind=plan.run_kind,
                     )
                 )
+    return jobs
+
+
+def stage_evaluation_displaced(
+    campaign: Campaign,
+    plan: ChainPlan,
+    references: Mapping[str, Any],
+    *,
+    resume: bool,
+) -> dict[str, Any]:
+    """Plan §3.4's δ regime: every arm, every seed, one evaluation each.
+
+    Every arm is entered from the **same** displaced state at the same seed —
+    the reference arm included.  That is what makes the published cost ratios
+    paired differences rather than a mixture of the entry and the arm, and it
+    is the reason the plan's binding rule on `AR → A0` (§3.3) can be stated at
+    all: the two arms differ in their stopping rule and in nothing else.
+    """
+    jobs = evaluation_displaced_jobs(campaign, plan, references)
     results = pool_mod.run_all(jobs, campaign, resume=resume)
     return {
         "stage": "evaluation_displaced",
@@ -581,25 +624,12 @@ def stage_evaluation_displaced(
     }
 
 
-def stage_evaluation_stencil(
-    campaign: Campaign,
-    plan: ChainPlan,
-    references: Mapping[str, Any],
-    *,
-    resume: bool,
-) -> dict[str, Any]:
-    """Plan §3.4's stencil regime: the optimiser's own finite-difference points.
-
-    One column at a time: the forward point ``x_i (1 + epsfcn)`` entered from
-    the reference fixed point, then the backward point ``x_i (1 − epsfcn)``
-    entered from **that forward point's exit**, which is the order
-    ``fcnvmc2`` executes.  The pair is therefore run serially; different columns
-    are independent and go through the pool.
-
-    A column outside the design vector is refused by the child rather than
-    clamped, and every record stamps the ``nvar`` it saw, so the column set
-    derived here is checked against the runs it produced instead of trusted.
-    """
+def evaluation_stencil_chains(
+    campaign: Campaign, plan: ChainPlan, references: Mapping[str, Any]
+) -> tuple[list[list[pool_mod.Job]], list[dict[str, Any]]]:
+    """The stencil job set, as forward/backward pairs per column, with the
+    planned column list.  The backward point's entry state is its forward
+    point's exit, which is why the pair is a serial chain and not two jobs."""
     from .gates import reproduction as reproduction_mod  # noqa: PLC0415
 
     root = chain_root(campaign, plan) / "evaluation_stencil"
@@ -653,6 +683,29 @@ def stage_evaluation_stencil(
                         "n_columns_planned": len(columns),
                     }
                 )
+    return chains, planned
+
+
+def stage_evaluation_stencil(
+    campaign: Campaign,
+    plan: ChainPlan,
+    references: Mapping[str, Any],
+    *,
+    resume: bool,
+) -> dict[str, Any]:
+    """Plan §3.4's stencil regime: the optimiser's own finite-difference points.
+
+    One column at a time: the forward point ``x_i (1 + epsfcn)`` entered from
+    the reference fixed point, then the backward point ``x_i (1 − epsfcn)``
+    entered from **that forward point's exit**, which is the order
+    ``fcnvmc2`` executes.  The pair is therefore run serially; different columns
+    are independent and go through the pool.
+
+    A column outside the design vector is refused by the child rather than
+    clamped, and every record stamps the ``nvar`` it saw, so the column set
+    derived here is checked against the runs it produced instead of trusted.
+    """
+    chains, planned = evaluation_stencil_chains(campaign, plan, references)
     results: list[dict[str, Any]] = []
     for pair in chains:
         results.extend(pool_mod.run_serially(pair, campaign, resume=resume))
@@ -724,10 +777,9 @@ def _assert_columns(
     }
 
 
-def stage_optimisation(
-    campaign: Campaign, plan: ChainPlan, *, resume: bool
-) -> dict[str, Any]:
-    """Plan §3.5: every optimisation-phase arm, every start, one solve each."""
+def optimisation_jobs(campaign: Campaign, plan: ChainPlan) -> list[pool_mod.Job]:
+    """The optimisation job set: every arm active on the configuration, one
+    full optimisation per start of the plan."""
     root = chain_root(campaign, plan) / "optimisation"
     jobs: list[pool_mod.Job] = []
     for config in plan.configurations:
@@ -750,6 +802,14 @@ def stage_optimisation(
                         run_kind=plan.run_kind,
                     )
                 )
+    return jobs
+
+
+def stage_optimisation(
+    campaign: Campaign, plan: ChainPlan, *, resume: bool
+) -> dict[str, Any]:
+    """Plan §3.5: every optimisation-phase arm, every start, one solve each."""
+    jobs = optimisation_jobs(campaign, plan)
     results = pool_mod.run_all(jobs, campaign, resume=resume)
     return {
         "stage": "optimisation",
@@ -763,6 +823,44 @@ def stage_optimisation(
         "seeds": list(plan.optimisation_seeds),
         "results": _result_summary(results),
     }
+
+
+#: The run stages a reader may name a job set of, in the chain's order.
+RUN_STAGES: tuple[str, ...] = (
+    "entry_references",
+    "evaluation_displaced",
+    "evaluation_stencil",
+    "optimisation",
+)
+
+
+def campaign_jobs(campaign: Campaign, stage: str) -> list[pool_mod.Job]:
+    """The **campaign** plan's job set for one run stage, composed without running.
+
+    This is what the tally's and the analysis's ``campaign_*`` sources name
+    (harness plan rule (xi): a plan's job set is a tally population; rule
+    (xiv): one job identity).  The plan is :func:`campaign_plan`'s — built
+    whether or not it may run — and every job it composes is stamped
+    ``run_kind == "campaign"``, which the caller checks rather than assumes.
+    The dependent stages need the entry references' records to compose their
+    entry state and constant; where a reference is not on disk this refuses
+    with ``ChainError`` and a source over it is empty, stated, never a row.
+    """
+    if stage not in RUN_STAGES:
+        raise ChainError(
+            f"{stage!r} is not a run stage of the chain; the run stages are "
+            f"{list(RUN_STAGES)}"
+        )
+    plan = campaign_plan(campaign)
+    if stage == "entry_references":
+        return entry_reference_jobs(campaign, plan)
+    if stage == "optimisation":
+        return optimisation_jobs(campaign, plan)
+    references = references_from_records(campaign, plan)
+    if stage == "evaluation_displaced":
+        return evaluation_displaced_jobs(campaign, plan, references)
+    chains, _ = evaluation_stencil_chains(campaign, plan, references)
+    return [job for pair in chains for job in pair]
 
 
 def _result_summary(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -1115,7 +1213,8 @@ def _tooth_a_measurable_record_is_still_accepted() -> tuple[bool, str]:
     """The other half: the refusal must not refuse everything.
 
     A refusal that fires on every record would pass both teeth above and make
-    every table empty.  This is the positive control.
+    every table empty.  This is the positive control **for the gate family**:
+    with no campaign record present, a gate record is summarised.
     """
     from .measurement import stats as stats_mod  # noqa: PLC0415
 
@@ -1126,17 +1225,100 @@ def _tooth_a_measurable_record_is_still_accepted() -> tuple[bool, str]:
     except stats_mod.StatsError as exc:
         return False, f"a gate record was refused as well: {exc}"
     return len(population.records) == 1, (
-        f"a record stamped 'gate' is still summarised: "
-        f"{len(population.records)} of 1 kept"
+        f"a record stamped 'gate' is still summarised while no campaign record "
+        f"exists: {len(population.records)} of 1 kept"
     )
+
+
+def _tooth_tally_refuses_a_gate_record_with_the_campaign_present() -> tuple[bool, str]:
+    """The second direction: once the campaign exists, a gate record is refused."""
+    from .measurement import stats as stats_mod  # noqa: PLC0415
+
+    try:
+        stats_mod.Population.of(
+            [_doctored("gate")],
+            what="a doctored population, for the tooth",
+            campaign_present=True,
+        )
+    except stats_mod.StatsError as exc:
+        return True, f"the tally's population refused it: {exc}"
+    return False, (
+        "the tally's population accepted a record stamped 'gate' with the "
+        "campaign present; a one-or-two-seed gate figure would then be "
+        "published beside the campaign's under the same caption vocabulary"
+    )
+
+
+def _tooth_analysis_refuses_a_gate_record_with_the_campaign_present() -> tuple[bool, str]:
+    from .measurement import analysis as analysis_mod  # noqa: PLC0415
+
+    try:
+        analysis_mod.Population.of(
+            [_doctored("gate")],
+            what="a doctored population, for the tooth",
+            campaign_present=True,
+        )
+    except analysis_mod.AnalysisError as exc:
+        return True, f"the analysis's population refused it: {exc}"
+    return False, (
+        "the analysis's population accepted a record stamped 'gate' with the "
+        "campaign present.  The two implementations declare this rule "
+        "separately on purpose; one of them has stopped declaring it"
+    )
+
+
+def _tooth_a_campaign_record_is_kept_with_the_campaign_present() -> tuple[bool, str]:
+    """The positive control for the campaign family: the refusal above must
+    not refuse the campaign's own records, in either implementation."""
+    from .measurement import analysis as analysis_mod  # noqa: PLC0415
+    from .measurement import stats as stats_mod  # noqa: PLC0415
+
+    try:
+        mine = stats_mod.Population.of(
+            [_doctored("campaign")], what="for the tooth", campaign_present=True
+        )
+        theirs = analysis_mod.Population.of(
+            [_doctored("campaign")], what="for the tooth", campaign_present=True
+        )
+    except (stats_mod.StatsError, analysis_mod.AnalysisError) as exc:
+        return False, f"a campaign record was refused with the campaign present: {exc}"
+    kept = len(mine.records) == 1 and len(theirs.records) == 1
+    return kept, (
+        f"a record stamped 'campaign' is summarised with the campaign present: "
+        f"tally {len(mine.records)} of 1, analysis {len(theirs.records)} of 1 kept"
+    )
+
+
+class _approval_off:
+    """Run a check with ``EXECUTION_APPROVED`` read as False by this module.
+
+    The two plan teeth below prove that the **switch** is what refuses a
+    campaign plan and a forged smoke plan.  While the switch is on (the
+    campaign is approved) the refusal is legitimately absent, so the teeth
+    exercise the off state by patching this module's own binding of the name
+    for the duration of the check and restoring it — nothing under
+    ``harness/core/config.py`` is touched, and the patch never outlives the
+    tooth.
+    """
+
+    def __enter__(self) -> None:
+        self._kept = globals()["EXECUTION_APPROVED"]
+        globals()["EXECUTION_APPROVED"] = False
+
+    def __exit__(self, *exc: Any) -> None:
+        globals()["EXECUTION_APPROVED"] = self._kept
 
 
 def _tooth_campaign_plan_refused(campaign: Campaign):
     def check() -> tuple[bool, str]:
-        try:
-            plan_for("campaign", campaign)
-        except ChainError as exc:
-            return True, f"the campaign plan refused to compose: {exc}"
+        with _approval_off():
+            try:
+                plan_for("campaign", campaign)
+            except ChainError as exc:
+                return True, (
+                    f"with EXECUTION_APPROVED read as False the campaign plan "
+                    f"refused to compose: {exc}"
+                )
         return False, (
             "a campaign plan composed while EXECUTION_APPROVED is False; the "
             "chain would make campaign records nobody approved"
@@ -1149,13 +1331,14 @@ def _tooth_smoke_plan_cannot_be_a_campaign(campaign: Campaign):
     def check() -> tuple[bool, str]:
         smoke = smoke_plan(campaign)
         forged = replace(smoke, run_kind="campaign", needs_approval=True)
-        try:
-            assert_may_run(forged, campaign)
-        except ChainError as exc:
-            return True, (
-                f"the smoke's own plan, forged to stamp campaign records, was "
-                f"refused: {exc}"
-            )
+        with _approval_off():
+            try:
+                assert_may_run(forged, campaign)
+            except ChainError as exc:
+                return True, (
+                    f"with EXECUTION_APPROVED read as False the smoke's own "
+                    f"plan, forged to stamp campaign records, was refused: {exc}"
+                )
         return False, (
             "the smoke's plan was accepted with run kind 'campaign'; the smoke "
             "path could then write a campaign record"
@@ -1199,11 +1382,18 @@ def _tooth_resume_does_not_cross_run_kinds() -> tuple[bool, str]:
 def separation_body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     """Every record under ``runs/``, by run kind, against what may be there.
 
-    Two statements, both over a stated denominator:
+    Three statements, each over a stated denominator:
 
-    * **no record a declared tally source covers is of a kind the tally may not
-      summarise** — the source declarations are the tally's own, so this is a
-      statement about the tree the tally will actually read;
+    * **every record a published tally source covers is of a kind a
+      published cell may be over** — ``stats.measurable_run_kinds`` given
+      whether a campaign record exists: with the campaign present that is
+      ``campaign`` alone, and every gate or smoke record is outside every
+      published population *by kind*; without one it is ``campaign`` or
+      ``gate``.  The source declarations are the tally's own, so this is a
+      statement about the records the tables are actually over;
+    * **every campaign record is in a published source** — a campaign record
+      under ``runs/campaign/`` that no source names is a record no table
+      reads, which is what issue I-24 was;
     * **no record anywhere under ``runs/`` is stamped ``campaign``** while
       ``EXECUTION_APPROVED`` is False.  That is the whole-tree version, and it
       is what catches a campaign record made by a path nobody thought to check.
@@ -1226,25 +1416,44 @@ def separation_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
         if kind == "campaign":
             campaign_records.append(str(path.relative_to(root)))
 
+    present = tally_mod.campaign_present(campaign)
+    allowed = stats_mod.measurable_run_kinds(campaign_present=present)
+    published = tally_mod.published_sources(campaign)
     in_sources: dict[str, int] = {}
     unsummarisable: list[str] = []
     n_in_sources = 0
-    for source in tally_mod.SOURCES:
+    for source in published:
         rows, _ = tally_mod.source_rows(campaign, source)
         for row in rows:
             n_in_sources += 1
             kind = str(row.record.get("campaign_run_kind"))
             in_sources[kind] = in_sources.get(kind, 0) + 1
-            if kind not in stats_mod.MEASURABLE_RUN_KINDS:
+            if kind not in allowed:
                 unsummarisable.append(f"{source.name}: {row.path} is {kind!r}")
+    excluded: dict[str, int] = {}
+    n_excluded = 0
+    for source in tally_mod.unpublished_sources(campaign):
+        rows, _ = tally_mod.source_rows(campaign, source)
+        for row in rows:
+            n_excluded += 1
+            kind = str(row.record.get("campaign_run_kind"))
+            excluded[kind] = excluded.get(kind, 0) + 1
+    outside = tally_mod.campaign_records_outside_every_source(campaign)
+    n_campaign_outside = int(outside.get("n_outside_every_campaign_source") or 0)
 
     approved_campaign_records = EXECUTION_APPROVED
     failures: list[str] = []
     if unsummarisable:
         failures.append(
-            f"{len(unsummarisable)} record(s) a declared tally source covers "
-            f"are of a kind the tally may not summarise: "
-            f"{unsummarisable[:5]}"
+            f"{len(unsummarisable)} record(s) a published tally source covers "
+            f"are of a kind no published cell may be over "
+            f"(allowed: {list(allowed)}): {unsummarisable[:5]}"
+        )
+    if n_campaign_outside:
+        failures.append(
+            f"{n_campaign_outside} campaign record(s) under runs/campaign/ are "
+            f"in no campaign source and so in no published table: "
+            f"{outside.get('outside')}"
         )
     if campaign_records and not approved_campaign_records:
         failures.append(
@@ -1255,23 +1464,43 @@ def separation_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
         "passed": not failures,
         "population": (
             f"{total} run record(s) under {root.name}/, of which "
-            f"{n_in_sources} are covered by one of the tally's "
-            f"{len(tally_mod.SOURCES)} declared source(s); run kinds counted "
-            f"on every one"
+            f"{n_in_sources} are covered by the tally's {len(published)} "
+            f"published source(s) (the {'campaign' if present else 'gate'} "
+            f"family) and {n_excluded} by its "
+            f"{len(tally_mod.unpublished_sources(campaign))} unpublished; "
+            f"run kinds counted on every one; {len(campaign_records)} campaign "
+            f"record(s) checked against the campaign sources"
         ),
-        "n_compared": total + n_in_sources,
-        "n_mismatched": len(unsummarisable) + (
-            0 if approved_campaign_records else len(campaign_records)
-        ),
+        "n_compared": total + n_in_sources + len(campaign_records),
+        "n_mismatched": len(unsummarisable)
+        + n_campaign_outside
+        + (0 if approved_campaign_records else len(campaign_records)),
+        "campaign_present": present,
+        "published_family": "campaign" if present else "gate",
+        "published_sources": [s.name for s in published],
         "records_by_run_kind": dict(sorted(by_kind.items())),
-        "declared_source_records_by_run_kind": dict(sorted(in_sources.items())),
-        "measurable_run_kinds": list(stats_mod.MEASURABLE_RUN_KINDS),
+        "published_source_records_by_run_kind": dict(sorted(in_sources.items())),
+        "unpublished_source_records_by_run_kind": dict(sorted(excluded.items())),
+        "run_kinds_a_published_cell_may_be_over": list(allowed),
+        "campaign_records_outside_every_source": outside,
         "execution_approved": EXECUTION_APPROVED,
         "detail": failures
         or [
-            f"every record under {root.name}/ is of a declared kind; nothing a "
-            f"tally source covers is unsummarisable; no campaign record exists "
-            f"while EXECUTION_APPROVED is False"
+            f"every record under {root.name}/ is of a declared kind; every "
+            f"record a published source covers is of a kind in {list(allowed)}"
+            + (
+                f"; the {n_excluded} gate-family record(s) are excluded from "
+                f"every published cell by kind"
+                if present
+                else "; no campaign record exists"
+            )
+            + f"; {len(campaign_records)} campaign record(s), "
+            f"{n_campaign_outside} of them outside every campaign source"
+            + (
+                ""
+                if approved_campaign_records
+                else "; no campaign record exists while EXECUTION_APPROVED is False"
+            )
         ],
     }
 
@@ -1288,15 +1517,22 @@ def gate(campaign: Campaign) -> Gate:
         ),
         what_it_proves=(
             "that a one-seed test of the machinery is never summarised as a "
-            "measurement, and that a campaign record is never made by a path "
-            "the user has not approved"
+            "measurement; that once the campaign has run every published cell "
+            "is over campaign records and gate records are excluded by kind; "
+            "and that a campaign record is never made by a path the user has "
+            "not approved"
         ),
         body=lambda *, resume=False: separation_body(campaign, resume=resume),
         needs_runs=False,
         # Derived from the tally's own source declarations rather than retyped
         # (trap T12): the sources are job sets, and the pool resolves them.
+        # The published family's jobs are the runs the verdict is over.
         jobs=lambda: pool_mod.job_listing(
-            [job for source in tally_mod.SOURCES for job in tally_mod.source_jobs(campaign, source)],
+            [
+                job
+                for source in tally_mod.published_sources(campaign)
+                for job in tally_mod.source_jobs(campaign, source)
+            ],
             campaign,
         ),
         teeth=(
@@ -1314,19 +1550,52 @@ def gate(campaign: Campaign) -> Gate:
             ),
             Tooth(
                 name="a gate record is still summarised",
-                what="a record stamped 'gate' handed to the same population",
+                what=(
+                    "a record stamped 'gate' handed to the same population "
+                    "with no campaign record present"
+                ),
                 must="BE KEPT — the positive control for the refusal above",
                 check=_tooth_a_measurable_record_is_still_accepted,
             ),
             Tooth(
+                name="a gate record offered to the tally with the campaign present",
+                what=(
+                    "a record stamped 'gate' handed to stats.Population.of "
+                    "with campaign_present=True"
+                ),
+                must="REFUSE — the second direction of the separation",
+                check=_tooth_tally_refuses_a_gate_record_with_the_campaign_present,
+            ),
+            Tooth(
+                name="a gate record offered to the analysis with the campaign present",
+                what="the same record handed to analysis.Population.of",
+                must="REFUSE",
+                check=_tooth_analysis_refuses_a_gate_record_with_the_campaign_present,
+            ),
+            Tooth(
+                name="a campaign record is kept with the campaign present",
+                what=(
+                    "a record stamped 'campaign' handed to both populations "
+                    "with campaign_present=True"
+                ),
+                must="BE KEPT — the positive control for the two refusals above",
+                check=_tooth_a_campaign_record_is_kept_with_the_campaign_present,
+            ),
+            Tooth(
                 name="a campaign plan without approval",
-                what="the campaign plan composed while EXECUTION_APPROVED is False",
+                what=(
+                    "the campaign plan composed with EXECUTION_APPROVED read "
+                    "as False (patched in this module for the check only)"
+                ),
                 must="REFUSE",
                 check=_tooth_campaign_plan_refused(campaign),
             ),
             Tooth(
                 name="the smoke's plan forged into a campaign",
-                what="the smoke plan with its run kind changed to 'campaign'",
+                what=(
+                    "the smoke plan with its run kind changed to 'campaign', "
+                    "with EXECUTION_APPROVED read as False"
+                ),
                 must="REFUSE",
                 check=_tooth_smoke_plan_cannot_be_a_campaign(campaign),
             ),

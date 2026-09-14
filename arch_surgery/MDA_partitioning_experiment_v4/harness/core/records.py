@@ -666,10 +666,26 @@ def assert_attempt_summation(record: Mapping[str, Any], *, where: str = "") -> N
     crashed before the driver stamped anything has nothing to check — but a
     record carrying a cost for some attempts and not others is refused, because
     a partial decomposition cannot be summed.
+
+    **A record that did not finish has no run total to decompose**, so for it
+    only the all-or-none rule above is checked and the summation is not: the
+    driver stamps each attempt's cost at the attempt boundary (DR7) but the
+    run total is written at a finished exit, and a crashed optimisation
+    therefore carries per-attempt costs and no ``node_calls_solve_phase``.
+    That is the record's shape, not a defect in it — the crash is a taxonomy
+    row and its cost is never summarised (plan §3.5) — and refusing it would
+    refuse every crash out of the taxonomy.  *(A75 (campaign-tally-source):
+    at the first campaign press all 28 crashed optimisations, and 0 of the
+    921 finished records, were refused by this rule as it stood; the sibling
+    :func:`assert_sweep_decomposition` already passed unfinished records over.)*
     """
     attempts = record.get("attempts")
     if not isinstance(attempts, list) or not attempts:
         return
+    # Unfinished means the record *says* it did not finish; a record with no
+    # status at all (a synthetic one in a tooth) is held to the full rule.
+    status = record.get("status")
+    finished = status is None or status == "ok"
     for field, total_field in ATTEMPT_SUMS:
         per_attempt = [a.get(field) for a in attempts]
         if all(value is None for value in per_attempt):
@@ -683,6 +699,8 @@ def assert_attempt_summation(record: Mapping[str, Any], *, where: str = "") -> N
                 f"stamps them at every attempt boundary or at none; a partial "
                 f"decomposition cannot be summed."
             )
+        if not finished:
+            continue
         total = record.get(total_field)
         if total is None:
             raise RecordError(

@@ -43,7 +43,7 @@ from harness.core import framework
 from harness.core import records as records_mod
 from harness.gates import reference as reference_mod
 from harness.measurement import stats as stats_mod
-from harness.core.config import Campaign
+from harness.core.config import EXECUTION_APPROVED, Campaign
 
 __all__ = [
     "TallyError",
@@ -54,6 +54,15 @@ __all__ = [
     "population_for",
     "reference_cells",
     "GATE_RUNS_SUBPATH",
+    "CAMPAIGN_RUNS_SUBPATH",
+    "Source",
+    "GATE_SOURCES",
+    "CAMPAIGN_SOURCES",
+    "SOURCES",
+    "campaign_present",
+    "published_sources",
+    "unpublished_sources",
+    "why_not_published",
 ]
 
 
@@ -67,11 +76,17 @@ class TallyError(framework.GateError):
     """
 
 
-#: Where the runs a tally reads live, relative to the campaign's records
-#: directory.  Nothing here is a campaign record: ``EXECUTION_APPROVED`` is
-#: False, every record under this root is stamped ``gate`` or ``smoke``, and
-#: the tally states that in every population it publishes.
+#: Where the **gate** runs a tally may read live, relative to the campaign's
+#: records directory.  Every record under this root is stamped ``gate`` or
+#: ``smoke``; the campaign's own records live under :data:`CAMPAIGN_RUNS_SUBPATH`
+#: and are the tables' population once they exist (:func:`published_sources`).
 GATE_RUNS_SUBPATH = Path("gates")
+
+#: Where the campaign's records live, relative to the campaign's records
+#: directory: ``chain.campaign_plan``'s ``root_name``, re-derived at import
+#: rather than typed, so that a renamed root is a refusal here and not a
+#: tally that reads nothing (trap T12's shape, one directory up).
+CAMPAIGN_RUNS_SUBPATH = Path("campaign")
 
 
 # --------------------------------------------------------------------------
@@ -181,13 +196,15 @@ def population_for(
     what: str,
     denominator: int | None = None,
     predicate: Any = None,
+    campaign_present: bool = False,
 ) -> stats_mod.Population:
     """The records of one phase as a :class:`harness.measurement.stats.Population`.
 
     The population's own refusals apply: a record stamped ``force_maxcal`` is
-    excluded **by name** and counted in ``excluded``, and a mixture of phases is
-    refused.  ``what`` is the membership rule in one clause and becomes the
-    table caption's population field.
+    excluded **by name** and counted in ``excluded``, a mixture of phases is
+    refused, and with ``campaign_present`` a record of any kind but
+    ``campaign`` is refused by kind.  ``what`` is the membership rule in one
+    clause and becomes the table caption's population field.
     """
     selected = [
         row.record
@@ -195,7 +212,9 @@ def population_for(
         if row.record.get("campaign_phase") == phase
         and (predicate is None or predicate(row.record))
     ]
-    return stats_mod.Population.of(selected, what=what, denominator=denominator)
+    return stats_mod.Population.of(
+        selected, what=what, denominator=denominator, campaign_present=campaign_present
+    )
 
 
 # --------------------------------------------------------------------------
@@ -229,7 +248,8 @@ class Source:
     """
 
     name: str
-    #: The gate whose job set this is, for the caption and the provenance.
+    #: The gate — or the chain plan — whose job set this is, for the caption
+    #: and the provenance.
     owner: str
     #: The job set, composed from the records on disk exactly as the owning
     #: gate composes it; a job whose prerequisites are not made yet is not
@@ -239,6 +259,15 @@ class Source:
     phases: str
     #: The membership rule, in one clause, for the caption.
     what: str
+    #: Which **population** this source belongs to: ``"gate"`` — a
+    #: verification gate's job set, the tables' population for want of a
+    #: campaign — or ``"campaign"`` — one run stage of the campaign plan's job
+    #: set.  A table is over one family and says which (:func:`published_sources`).
+    family: str = "gate"
+    #: The run kind every record of this source must be stamped with.  Checked
+    #: on the composed jobs (:func:`source_jobs`) and on the records
+    #: (``Population.of``); a source whose jobs say otherwise is a refusal.
+    run_kind: str = "gate"
 
 
 def _reference_runs(campaign: Campaign) -> list[Any]:
@@ -253,9 +282,25 @@ def _paired_entries(campaign: Campaign) -> list[Any]:
     return gate_entry_mod.pairing_jobs(campaign)
 
 
-#: The sources this tally declares.  Two, because two gates' job sets are
-#: comparable populations and the rest are not.
-SOURCES: tuple[Source, ...] = (
+def _campaign_stage(stage: str, *, stencil_sign: int | None = None):
+    """The campaign plan's job set for one run stage, by the chain's own
+    composition (``chain.campaign_jobs``); a stencil source takes one sign."""
+
+    def jobs(campaign: Campaign) -> list[Any]:
+        from harness import chain as chain_mod  # noqa: PLC0415
+
+        composed = chain_mod.campaign_jobs(campaign, stage)
+        if stencil_sign is not None:
+            composed = [j for j in composed if j.stencil_sign == stencil_sign]
+        return composed
+
+    return jobs
+
+
+#: The **gate** sources: two, because two gates' job sets are comparable
+#: populations and the rest are not.  They are what the tables are over
+#: while no campaign record exists.
+GATE_SOURCES: tuple[Source, ...] = (
     Source(
         name="reference_runs",
         owner="reproduction",
@@ -266,11 +311,12 @@ SOURCES: tuple[Source, ...] = (
             "configuration and seed of the reference set, each made by the "
             "committed run path, the optimisations from the configuration's "
             "own starting point and the evaluations from the same displaced "
-            "entry state.  They are gate runs, never campaign runs: "
-            "EXECUTION_APPROVED is False and no campaign record exists at this "
-            "commit, so one or two seeds per arm is the whole population and "
-            "no cell is a campaign statistic"
+            "entry state.  The gate population, never the campaign: one or "
+            "two seeds per arm is the whole population and no cell is a "
+            "campaign statistic"
         ),
+        family="gate",
+        run_kind="gate",
     ),
     Source(
         name="paired_entries",
@@ -281,26 +327,181 @@ SOURCES: tuple[Source, ...] = (
             "the entry gate's paired evaluations — every evaluation-phase arm "
             "entered from the **same** displaced coupling state at one seed, "
             "which is the experiment plan's own Phase A entry construction.  "
-            "Gate runs, one seed per arm per configuration"
+            "The gate population, one seed per arm per configuration"
         ),
+        family="gate",
+        run_kind="gate",
     ),
 )
+
+#: The **campaign** sources: one per run stage of ``chain.campaign_plan`` —
+#: the stencil stage split into its forward and backward point sets, which
+#: the experiment plan publishes as the bracket (§3.4, §3.5's transfer) and
+#: which pair by design-vector column within a set, never across.  Each is
+#: the chain's own job set for that stage (rule (xi): a plan's job set is a
+#: tally population), every job stamped ``campaign``, resolved to
+#: ``runs/campaign/…`` by the pool.  Present only while ``EXECUTION_APPROVED``
+#: is True — with it False no campaign record may exist and a source over
+#: none would be a caption naming a population that is not there.
+CAMPAIGN_SOURCES: tuple[Source, ...] = (
+    Source(
+        name="campaign_entry_references",
+        owner="campaign plan, stage entry_references",
+        jobs=_campaign_stage("entry_references"),
+        phases="A",
+        what=(
+            "the campaign population: the entry references — one flat A0 "
+            "evaluation per configuration from the input file's own design "
+            "point, the once-per-run cold-start term (plan §3.4), reported "
+            "beside and never pooled with the displaced or stencil entries"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_displaced",
+        owner="campaign plan, stage evaluation_displaced",
+        jobs=_campaign_stage("evaluation_displaced"),
+        phases="A",
+        what=(
+            "the campaign population: the evaluation phase's displaced-entry "
+            "regime at δ = 0.10 — every arm active on the configuration "
+            "entered from the same seeded displacement of the reference fixed "
+            "point, seeds 1–25, one call_models each (plan §3.4); the "
+            "acceptance regime"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_stencil_forward",
+        owner="campaign plan, stage evaluation_stencil",
+        jobs=_campaign_stage("evaluation_stencil", stencil_sign=1),
+        phases="A",
+        what=(
+            "the campaign population: the evaluation phase's stencil regime, "
+            "the **forward** points x_i (1 + epsfcn) entered from the "
+            "reference fixed point, one per design-vector column per arm "
+            "(plan §3.4); paired across arms by column, not seed"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_stencil_backward",
+        owner="campaign plan, stage evaluation_stencil",
+        jobs=_campaign_stage("evaluation_stencil", stencil_sign=-1),
+        phases="A",
+        what=(
+            "the campaign population: the evaluation phase's stencil regime, "
+            "the **backward** points x_i (1 − epsfcn) each entered from its "
+            "own forward point's exit — the sequence the optimiser's "
+            "evaluator executes — one per design-vector column per arm (plan "
+            "§3.4); paired across arms by column, not seed"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+    Source(
+        name="campaign_optimisation",
+        owner="campaign plan, stage optimisation",
+        jobs=_campaign_stage("optimisation"),
+        phases="B",
+        what=(
+            "the campaign population: the optimisation phase — every arm "
+            "active on the configuration, one full optimisation per start, "
+            "seed000 unperturbed and seeds 1–24 displaced at δ = 0.10 on the "
+            "iteration variables' initial values (plan §3.5); a crashed start "
+            "is a taxonomy row, never a cost"
+        ),
+        family="campaign",
+        run_kind="campaign",
+    ),
+)
+
+#: Every source this tally declares.  The campaign family is declared only
+#: while execution is approved (see :data:`CAMPAIGN_SOURCES`).
+SOURCES: tuple[Source, ...] = GATE_SOURCES + (
+    CAMPAIGN_SOURCES if EXECUTION_APPROVED else ()
+)
+
+#: The composition refusals a source may swallow into "empty": the gates'
+#: (``GateError``, ``ReproductionError``) and the chain's (``ChainError``, a
+#: ``GateError`` subclass) — every one of them "a prerequisite record is not
+#: on disk".  Anything else is a bug and is raised.
+COMPOSITION_REFUSALS: tuple[str, ...] = ("GateError", "ReproductionError", "ChainError")
 
 
 def source_jobs(campaign: Campaign, source: Source) -> list[Any]:
     """The job set of *source*, or nothing where it is not composable yet.
 
     A dependent job's identity carries the reference record it is entered
-    from; with no reference on disk the owning gate refuses to compose it
-    (``GateError`` / ``ReproductionError``), and a source nobody can state is
-    empty — stated in the stage record's population, never a row.
+    from; with no reference on disk the owner refuses to compose it
+    (:data:`COMPOSITION_REFUSALS`), and a source nobody can state is empty —
+    stated in the stage record's population, never a row.  A composed job
+    whose run kind is not the source's is refused: the source would then
+    name a population its records are not.
     """
     try:
-        return list(source.jobs(campaign))
-    except Exception as exc:  # noqa: BLE001 - only the two composition refusals
-        if type(exc).__name__ not in ("GateError", "ReproductionError"):
+        jobs = list(source.jobs(campaign))
+    except Exception as exc:  # noqa: BLE001 - only the composition refusals
+        if type(exc).__name__ not in COMPOSITION_REFUSALS:
             raise
         return []
+    wrong = [job.key for job in jobs if job.run_kind != source.run_kind]
+    if wrong:
+        raise TallyError(
+            f"source {source.name!r} declares run kind {source.run_kind!r} and "
+            f"{len(wrong)} of its {len(jobs)} composed job(s) are stamped "
+            f"otherwise: {wrong[:3]}.  A source names one population."
+        )
+    return jobs
+
+
+def campaign_present(campaign: Campaign) -> bool:
+    """Does any campaign source have a record on disk?
+
+    The one question the population rule turns on: with a campaign record
+    present the tables are over the campaign family and a gate record is
+    refused by kind; without one the gate family is the population and says
+    so.  Read from the records, never from ``EXECUTION_APPROVED`` alone — an
+    approved campaign that has not run yet has no population.
+    """
+    return any(
+        (directory / "metrics.json").exists()
+        for source in SOURCES
+        if source.family == "campaign"
+        for directory in source_directories(campaign, source)
+    )
+
+
+def published_sources(campaign: Campaign) -> tuple[Source, ...]:
+    """The sources whose tables are published at this press: the campaign
+    family when a campaign record exists, the gate family otherwise.  Never
+    both — a table is over one population and its caption says which."""
+    family = "campaign" if campaign_present(campaign) else "gate"
+    return tuple(source for source in SOURCES if source.family == family)
+
+
+def unpublished_sources(campaign: Campaign) -> tuple[Source, ...]:
+    """The other family, for the stage record: counted and named, not tabled."""
+    published = {source.name for source in published_sources(campaign)}
+    return tuple(source for source in SOURCES if source.name not in published)
+
+
+def why_not_published(campaign: Campaign) -> str:
+    """The sentence the stage record carries beside the unpublished family."""
+    if campaign_present(campaign):
+        return (
+            "the campaign population exists, so the gate sources are not "
+            "published: a gate record is excluded by kind from every published "
+            "cell (stats.measurable_run_kinds with campaign_present=True); the "
+            "gate sources' records are still read by the gates that own them"
+        )
+    return (
+        "no campaign record exists, so the campaign sources are empty and the "
+        "gate sources are the tables' population, stated in every caption"
+    )
 
 
 def source_directories(campaign: Campaign, source: Source) -> list[Path]:
@@ -348,15 +549,50 @@ def source_rows(campaign: Campaign, source: Source) -> tuple[list[RunRow], list[
 
 
 def declared_paths(campaign: Campaign) -> list[Path]:
-    """The directories the declared sources resolve to, for the provenance survey."""
+    """The directories the **published** sources resolve to, for the provenance
+    survey: a stage's ``runs read`` line names the records its tables are over."""
     paths: list[Path] = []
     seen: set[str] = set()
-    for source in SOURCES:
+    for source in published_sources(campaign):
         for directory in source_directories(campaign, source):
             if str(directory) not in seen:
                 seen.add(str(directory))
                 paths.append(directory)
     return paths
+
+
+def campaign_records_outside_every_source(campaign: Campaign) -> dict[str, Any]:
+    """Records under ``runs/campaign/`` that no campaign source covers.
+
+    Expected 0: the campaign sources are the chain's own job sets, so every
+    record the chain wrote is in one.  A nonzero count is a record the chain
+    made under a directory no source names — a stage the tally does not read
+    — and is what issue I-24 looked like from the records' side.
+    """
+    root = Path(campaign.runs_dir) / CAMPAIGN_RUNS_SUBPATH
+    if not root.exists():
+        return {"n_records_under_runs_campaign": 0, "n_in_a_campaign_source": 0}
+    inside: set[Path] = set()
+    by_source: dict[str, int] = {}
+    for source in SOURCES:
+        if source.family != "campaign":
+            continue
+        rows, _ = source_rows(campaign, source)
+        by_source[source.name] = len(rows)
+        inside.update(row.path for row in rows)
+    outside: list[str] = []
+    total = 0
+    for path in sorted(root.rglob("metrics.json")):
+        total += 1
+        if path not in inside:
+            outside.append(str(path.parent.relative_to(root)))
+    return {
+        "n_records_under_runs_campaign": total,
+        "n_in_a_campaign_source": len(inside),
+        "n_outside_every_campaign_source": total - len(inside),
+        "by_source": by_source,
+        "outside": outside[:20],
+    }
 
 
 def records_outside_every_source(campaign: Campaign) -> dict[str, Any]:
@@ -373,6 +609,8 @@ def records_outside_every_source(campaign: Campaign) -> dict[str, Any]:
         return {"n_records_under_runs_gates": 0, "n_in_a_declared_source": 0}
     inside: set[Path] = set()
     for source in SOURCES:
+        if source.family != "gate":
+            continue
         for row in source_rows(campaign, source)[0]:
             inside.add(row.path)
     outside: dict[str, int] = {}

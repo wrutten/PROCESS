@@ -1321,11 +1321,22 @@ would be a mean over a set nobody can state.
 So the tally reads a **source**: a gate's **job set** whose records are a comparable set, declared in
 `tally.SOURCES` with the sentence that says why and resolved through the pool — named by job set, not
 by directory, because under the shared pool every gate's runs sit in one directory keyed by identity.
-Two exist — the reproduction gate's planned runs, and the entry gate's pairing runs — and every
-caption carries the source's sentence; `analysis.SOURCES` declares the same two independently.
-Records under `runs/gates/` that belong to no declared source are **counted and named** (by gate
-directory, or by phase and arm for the pool's) in the stage's own record, so the smaller denominator
-is a stated choice and not an omission.
+Two **gate** sources exist — the reproduction gate's planned runs, and the entry gate's pairing
+runs — and five **campaign** sources: the campaign plan's own job set for each run stage
+(`chain.campaign_jobs`), the stencil stage split into its forward and backward point sets, which pair
+across arms by design-vector column rather than by seed. The campaign sources are declared only while
+`EXECUTION_APPROVED` is True. **The tally publishes one family** (`tally.published_sources`): the
+campaign family once a campaign record exists, the gate family otherwise — never both — and once the
+campaign is present a gate record is *refused by kind* at the population's construction
+(`stats.measurable_run_kinds(campaign_present=True)`; gate `run_kind_separation` proves both
+directions). Every caption carries the source's sentence and names the kind of run it is over;
+`analysis.SOURCES` declares the same seven, and the same one-family rule, independently. Records
+under `runs/gates/` that belong to no gate source, and records under `runs/campaign/` that belong to
+no campaign source, are **counted and named** in the stage's own record, so the smaller denominator
+is a stated choice and not an omission. *(The campaign family was added by A75
+(campaign-tally-source), issue I-24: the first campaign press found the tally with no source for the
+949 records it had just made — the smoke could not expose it, because the tally refuses smoke
+records by design and read seeded gate records instead.)*
 
 Within a source, the optimisation phase is split again into **seed-complete arm groups**. The plan's
 "the seeds on which every arm converged" assumes what a campaign guarantees — every arm at every
@@ -1365,8 +1376,8 @@ agreeing without anything failing. The tally is one implementation. `analysis.py
 What makes it a second implementation and not a second copy: **`analysis.py` imports no part of the
 tally** — not `stats.py`, not either `tally*` module, not `tables.py`. Every construction in it is
 re-derived from the declaration (the docstring in `stats.py`, which the experiment plan's §3.4–§3.6
-wrote) and from the record fields `records.py` declares; the populations — the two declared sources,
-the `force_maxcal` filter, the seed-complete arm groups, `retried` from `attempts[]` — are re-derived
+wrote) and from the record fields `records.py` declares; the populations — the seven declared sources
+and the one-family rule, the `force_maxcal` filter, the seed-complete arm groups, `retried` from `attempts[]` — are re-derived
 the same way, and a population the two derive differently is reported as a **finding**, never
 reconciled silently. What the analysis *reads* from the tally is its **output**: the two stage
 records `runs/gates/tally_evaluation/measurements.json` and `…/tally_optimisation/measurements.json`,
@@ -1537,8 +1548,9 @@ covers is of an unsummarisable kind, and that no campaign record exists at all.
 ### Where its records go
 
 Under `runs/<plan name>/` — `runs/smoke/`, and `runs/campaign/` once there is one — never under
-`runs/gates/`. The tally reads *declared sources* under `runs/gates/`; putting the chain's own
-records anywhere under that tree would offer them to a stage that must refuse them, which would make
+`runs/gates/`. The tally reads *declared sources* — the gate sources under `runs/gates/`, the
+campaign sources under `runs/campaign/` — and never a directory as such; putting the chain's own
+records under the gate tree would offer them to a stage that must refuse them, which would make
 the refusal depend on a directory layout rather than on a decision. The chain also surveys its own
 tree at the end of a press and refuses if it holds two run kinds.
 

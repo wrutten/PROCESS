@@ -131,6 +131,8 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     # --- parts 2 and 3: every emitted table --------------------------------
     emitted: list[Mapping[str, Any]] = []
     tally_errors: list[str] = []
+    families: set[str] = set()
+    source_counts: list[str] = []
     for name, stage in (
         ("evaluation", tally_a.tally),
         ("optimisation", tally_b.tally),
@@ -141,8 +143,24 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             tally_errors.append(f"the {name} tally refused: {exc}")
             continue
         emitted.extend(block.get("tables") or [])
+        families.add(str(block.get("population_family")))
+        source_counts.extend(
+            f"{s['source']}: {s['n_records']}" for s in block.get("sources") or []
+        )
         for line in block.get("record_contract_refusals") or []:
             tally_errors.append(f"the {name} tally's population: {line}")
+    if len(families) > 1:
+        tally_errors.append(
+            f"the two tally stages published different population families: "
+            f"{sorted(families)}.  A table is over one population."
+        )
+    family = next(iter(families)) if len(families) == 1 else "?"
+    detail.append(
+        f"the tables are over the {family} population — "
+        + (", ".join(source_counts) or "no source")
+        + " record(s); the reference cells above are the reproduction gate's "
+        "twenty runs whatever the published family"
+    )
     for table in emitted:
         n_compared += 3
         if not table.get("caption"):
@@ -201,8 +219,10 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "passed": bool(passed),
         "population": (
             f"{cells['population']}; and {len(emitted)} table(s) emitted by "
-            f"the two tally stages over the gate records on disk"
+            f"the two tally stages over the {family} population "
+            f"({', '.join(source_counts) or 'no source'} record(s))"
         ),
+        "population_family": family,
         "n_reference_values_compared": cells["n_cells_compared"],
         "n_reference_values_differing": cells["n_cells_differing"],
         "n_compared": n_compared,
@@ -455,8 +475,20 @@ def _tooth_reference_cell_moved(campaign: Campaign) -> Callable[[], tuple[bool, 
     return look
 
 
+def pool_tally_jobs(campaign: Campaign) -> list[dict[str, Any]]:
+    """The jobs this gate reads: the published sources' and the reproduction gate's."""
+    jobs = [
+        job
+        for source in tally_mod.published_sources(campaign)
+        for job in tally_mod.source_jobs(campaign, source)
+    ]
+    reference = next(s for s in tally_mod.GATE_SOURCES if s.name == "reference_runs")
+    jobs += tally_mod.source_jobs(campaign, reference)
+    return pool_mod.job_listing(jobs, campaign)
+
+
 def gate(campaign: Campaign) -> Gate:
-    """The tally's gate, with its eight teeth."""
+    """The tally's gate, with its ten teeth."""
     return Gate(
         name="tally_contracts",
         binds="every table the tally emits, and the cells it reproduces",
@@ -470,18 +502,12 @@ def gate(campaign: Campaign) -> Gate:
         ),
         body=lambda *, resume=False: body(campaign, resume=resume),
         needs_runs=False,
-        # The runs it reads are the tally's declared sources' job sets — GR's
-        # planned runs and G6's pairing runs — resolved by the pool.  It used
-        # to name three gate directories, two of which (G8's, G9's) it read no
-        # run record under: the predicate trial's table reads G8's *verdict*.
-        jobs=lambda: pool_mod.job_listing(
-            [
-                job
-                for source in tally_mod.SOURCES
-                for job in tally_mod.source_jobs(campaign, source)
-            ],
-            campaign,
-        ),
+        # The runs it reads are the tally's **published** sources' job sets —
+        # the campaign plan's once a campaign record exists, GR's planned runs
+        # and G6's pairing runs otherwise — plus GR's runs whatever the family,
+        # since part 1 reproduces the previous revision's cells on them.
+        # Resolved by the pool; never a retyped directory (trap T12).
+        jobs=lambda: pool_tally_jobs(campaign),
         reads_from=("reproduction",),
         teeth=(
             Tooth(

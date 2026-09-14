@@ -32,12 +32,22 @@ Eight tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
 ``lift_closed``     check 3 — constraint 93's residual at every accepted
                     optimum, in seconds and relative to the burn time.
 
-**What the population is.** These tables are over the **gate runs** under
-``runs/gates/`` — ``EXECUTION_APPROVED`` is False and no campaign record
-exists.  They are one or two seeds per arm per configuration, so no cell is a
-campaign statistic and none may be quoted as one.
+``failure_taxonomy`` check 4 — every scheduled start a row, per arm, with the
+                    denominator and the traceback's last line as the detail.
 
-Written by task **A53 (harness-tally)**.
+**What the population is.** These tables are over **one declared population**
+(``tally.published_sources``): the **campaign** source
+``campaign_optimisation`` — the campaign plan's own optimisation job set, 25
+starts per arm per configuration under ``runs/campaign/optimisation/`` — once a
+campaign record exists, and the gate source ``reference_runs`` — one or two
+seeds per arm — while none does.  Never both: with the campaign present a gate
+record is refused by kind at the population's construction, and every caption
+and denominator sentence names the kind of run it is over, read from the
+records.  A crashed start is a taxonomy row and a failure-table row; it is
+never a cost (plan §3.5).
+
+Written by task **A53 (harness-tally)**; the campaign source and the phase's
+taxonomy table by task **A75 (campaign-tally-source)**.
 """
 
 from __future__ import annotations
@@ -348,6 +358,93 @@ def failure_table(
         rows=tuple(rows),
         denominator=len(seeds),
         denominator_is=f"distinct seeds run on {configuration}",
+        acceptance=True,
+    )
+
+
+def failure_taxonomy(
+    population: stats_mod.Population,
+    configuration: str,
+    source: str,
+) -> Table:
+    """Check 4's taxonomy — every scheduled start a row, per arm, with the
+    denominator stated and the traceback's last line as the class detail.
+
+    Over the **whole** source population of the configuration — every arm at
+    every start, before the seed-complete arm grouping — because the taxonomy
+    is what was scheduled and what became of it, and a grouping by which arms
+    converged would be the taxonomy filtering itself.  The same construction
+    as the evaluation phase's (``stats.failure_taxonomy``, ``stats.crash_detail``).
+    """
+    by_arm: dict[str, list[Mapping[str, Any]]] = {}
+    for record in population.records:
+        if record.get("campaign_configuration") != configuration:
+            continue
+        by_arm.setdefault(str(record.get("campaign_arm")), []).append(record)
+    classes = sorted(
+        {
+            str(record.get("failure_class"))
+            for records in by_arm.values()
+            for record in records
+        }
+    )
+    rows: list[dict[str, Any]] = []
+    for arm in _arm_order(by_arm):
+        taxonomy = stats_mod.failure_taxonomy(
+            by_arm[arm], denominator=len(by_arm[arm])
+        )
+        row: dict[str, Any] = {
+            "arm": arm,
+            "denominator": taxonomy["denominator"],
+            "sums": "yes" if taxonomy["rows_sum_to_denominator"] else "NO",
+        }
+        for name in classes:
+            row[name] = taxonomy["by_failure_class"].get(name, 0)
+        row["detail"] = stats_mod.crash_detail(by_arm[arm])
+        rows.append(row)
+    return Table(
+        name=f"failure taxonomy — {configuration} — {source}",
+        caption=Caption(
+            units="counts of runs; the detail column is text",
+            row_is="one arm on this configuration",
+            column_is="one disposition of the taxonomy, and the detail: the "
+            "last line of each unfinished run's traceback, distinct, with "
+            "its count",
+            population=(
+                f"{population.what}; every {population.runs_word[:-1]} of "
+                f"{configuration}, every start"
+            ),
+            construction=(
+                "stats.failure_taxonomy — every scheduled run is a row and a "
+                "run that wrote no record is counted as no_record, never "
+                "skipped; stats.crash_detail for the detail"
+            ),
+            clauses=(
+                "the rows sum to the denominator, and the table says so per "
+                "arm rather than leaving it to be added up",
+                "an arm inactive on a configuration is absent from this table "
+                "rather than reading 0: a skipped arm and a failing arm are "
+                "different results",
+                "a crashed start is counted here and in the failure table, and "
+                "reaches no cost cell: the cost tables are over the "
+                "every-arm-converged seed set (plan §3.5)",
+            ),
+            how_to_read=(
+                "a nonzero crashed column is a machinery result that must be "
+                "explained before any ratio on this configuration is cited; "
+                "the detail says whether one failure mode or several"
+            ),
+        ),
+        columns=(
+            Column("arm", "arm"),
+            Column("denominator", "scheduled", fmt=_fmt_int),
+            *[Column(name, name, fmt=_fmt_int) for name in classes],
+            Column("sums", "rows sum"),
+            Column("detail", "detail (traceback's last line × count)"),
+        ),
+        rows=tuple(rows),
+        denominator=sum(len(v) for v in by_arm.values()),
+        denominator_is=f"optimisation-phase {population.runs_word} of {configuration}",
         acceptance=True,
     )
 
@@ -766,7 +863,7 @@ def attempts(
         ),
         rows=tuple(rows),
         denominator=len(rows),
-        denominator_is=f"optimisation-phase gate runs of {configuration}",
+        denominator_is=f"optimisation-phase {population.runs_word} of {configuration}",
         acceptance=True,
     )
 
@@ -967,7 +1064,7 @@ def lift_closed(
         ),
         rows=tuple(rows),
         denominator=sum(len(v) for v in by_arm.values()),
-        denominator_is=f"optimisation-phase gate runs of {configuration}",
+        denominator_is=f"optimisation-phase {population.runs_word} of {configuration}",
         acceptance=True,
     )
 
@@ -1192,7 +1289,7 @@ def per_sweep_overhead(
             column_is="a counter of one **named** convergence test, or a sweep "
             "total",
             population=(
-                f"{population.what}; the finished optimisation-phase gate runs "
+                f"{population.what}; the finished optimisation-phase {population.runs_word} "
                 f"of {configuration}"
             ),
             construction=(
@@ -1242,7 +1339,7 @@ def per_sweep_overhead(
         rows=tuple(rows),
         denominator=len(rows),
         denominator_is=(
-            f"finished optimisation-phase gate runs of {configuration}"
+            f"finished optimisation-phase {population.runs_word} of {configuration}"
         ),
         acceptance=True,
     )
@@ -1264,27 +1361,33 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     paths = tally_mod.declared_paths(campaign)
     provenance = tally_mod.survey(paths)
     straddle = tally_mod.assert_one_commit(provenance, resume=resume)
+    present = tally_mod.campaign_present(campaign)
     emitted: list[Table] = []
     refusals: list[str] = []
     sources: list[dict[str, Any]] = []
     seed_sets: dict[str, list[int]] = {}
     not_produced: list[dict[str, str]] = []
-    for source in tally_mod.SOURCES:
+    for source in tally_mod.published_sources(campaign):
         if PHASE not in source.phases:
             continue
         rows, source_refusals = tally_mod.source_rows(campaign, source)
         refusals.extend(f"[{source.name}] {line}" for line in source_refusals)
         population = tally_mod.population_for(
-            rows, phase=PHASE, what=f"{source.name} — {source.what}"
+            rows,
+            phase=PHASE,
+            what=f"{source.name} — {source.what}",
+            campaign_present=present,
         )
         population.assert_no_forced_budget()
         sources.append(
             {
                 "source": source.name,
                 "owner": source.owner,
+                "family": source.family,
                 "what": source.what,
                 "n_records": len(population),
                 "n_excluded_as_demonstrations": len(population.excluded),
+                "run_kinds": list(population.run_kinds),
             }
         )
         if population.is_empty:
@@ -1293,6 +1396,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             whole = _by_arm_and_seed(population, config.name)
             if not whole:
                 continue
+            emitted.append(failure_taxonomy(population, config.name, source.name))
             groups = arm_groups(whole)
             for arms, seeds in groups:
                 label = f"{source.name} · {'·'.join(arms)}"
@@ -1351,15 +1455,23 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 emitted.append(
                     per_sweep_overhead(population, config.name, by_arm, label)
                 )
+    from harness.measurement.tally_evaluation import _not_published  # noqa: PLC0415
+
     return {
         "phase": PHASE,
+        "campaign_present": present,
+        "population_family": "campaign" if present else "gate",
         "sources": sources,
+        "sources_not_published": _not_published(campaign, PHASE),
         "population": "; ".join(
             f"{s['source']}: {s['n_records']} record(s)" for s in sources
         ),
         "n_records": sum(s["n_records"] for s in sources),
         "records_outside_every_source": tally_mod.records_outside_every_source(
             campaign
+        ),
+        "campaign_records_outside_every_source": (
+            tally_mod.campaign_records_outside_every_source(campaign)
         ),
         "runs_provenance": provenance,
         "runs_straddle_note": straddle,
