@@ -34,19 +34,42 @@ works is how a failure stops being reported.
 
 ``resume`` skips a run only where the directory holds a **complete record of the
 same job**.  A directory alone is never evidence: an interrupted run leaves one
-behind.  "The same job" includes the **run kind**: a campaign record is never
-kept for a gate's job nor a gate record for a one-seed smoke's, because the kind
-is the only thing that afterwards says what a record may be used for, and
-keeping one across kinds would launder that stamp by moving a directory.
+behind.  "The same job" is decided by the **job identity** — every field of
+:class:`Job` the pool composes into the run, listed once in
+:data:`JOB_IDENTITY_FIELDS` — rendered as one dictionary, digested
+(``records.job_digest``) and stamped into the record as ``job_identity`` and
+``job_digest``.  It includes the **run kind**: a campaign record is never kept
+for a gate's job nor a gate record for a one-seed smoke's, because the kind is
+the only thing that afterwards says what a record may be used for, and keeping
+one across kinds would launder that stamp by moving a directory.  It also
+includes δ, the predicate mode, the pin, the stencil point, the entry state,
+the overrides and the audit position: before task **A72
+(resume-identity-and-shared-pool)** the comparison was six fields and the
+directory layout was what kept two jobs differing only in one of those apart
+(issue I-23) — a rule held by convention, not by the record.
+
+The shared run pool (survey item B1)
+------------------------------------
+A job that names no ``outdir`` runs under **one directory per distinct job
+identity**, ``runs/gates/_runs/<phase>_<arm>_<configuration>_seed<NNN>_<kind>_<digest>``
+(:func:`directory_for`).  Two gates composing the same job therefore share one
+record instead of making it twice, and a gate that deliberately runs the same
+arm a second way — a hand-composed environment, a doctored entry state, a
+different audit position — differs in an identity field and gets its own
+directory by construction.  A job made once in this invocation is not made
+again by a later gate of the same press (:data:`_MADE_THIS_INVOCATION`; the
+record is still checked, as everywhere).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -105,7 +128,11 @@ class Job:
     arm: str
     config: Config
     seed: int
-    outdir: Path
+    #: Where the run goes.  ``None`` — the default for every gate job — means
+    #: the shared pool: :func:`directory_for` resolves it from the identity,
+    #: and :func:`run` writes the resolved path back here.  A chain job and
+    #: gate G1's two captures name theirs explicitly.
+    outdir: Path | None = None
     regime: str = "unperturbed"
     delta: float | None = None
     pin_hex: str | None = None
@@ -121,10 +148,6 @@ class Job:
     census_read: bool = True
     force_maxcal: int | None = None
     timeout: int = DEFAULT_TIMEOUT_S
-    #: Switch terms this tree does not implement that this job is allowed to
-    #: omit.  **Empty except in a gate that says why**; see
-    #: :func:`environment_for`.
-    allow_pending: tuple[str, ...] = ()
     #: Environment overrides applied *on top of* the arm's composition, for a
     #: gate that runs an arm with one switch deliberately wrong.  A value of
     #: None removes the variable.
@@ -149,9 +172,219 @@ class Job:
     #: declared position.
     audit_position_caller: str | None = None
 
+    def identity(self, runs_dir: Path | None = None) -> dict[str, Any]:
+        """Every identity field, rendered as JSON-safe values, in declared order.
+
+        The one construction of "the same job": :attr:`key`, the digest and the
+        shared pool's directory are all derived from this dictionary.  Paths
+        are rendered relative to *runs_dir* where they lie under it — a seeded
+        or relocated worktree carries its records under another absolute path
+        and is still the same job — and as given otherwise.  Mappings are
+        rendered with sorted keys and string values, ``None`` kept as null.
+        """
+        rendered: dict[str, Any] = {}
+        for name in JOB_IDENTITY_FIELDS:
+            if name == "configuration":
+                rendered[name] = self.config.name
+                continue
+            value = getattr(self, name)
+            if isinstance(value, Path):
+                value = _render_path(value, runs_dir)
+            elif isinstance(value, Mapping):
+                value = {
+                    str(k): (None if v is None else str(v))
+                    for k, v in sorted(value.items())
+                }
+            rendered[name] = value
+        return rendered
+
     @property
     def key(self) -> str:
-        return f"{self.arm}/{self.config.name}/seed{self.seed:03d}"
+        """The readable half of the identity, for messages and listings.
+
+        Derived from :meth:`identity`, not written beside it: the fields that
+        distinguish most jobs, in the order a reader wants them, with the ones
+        that are usually at their default appended only when they are not.
+        Paths and mappings are not rendered here — the digest carries them.
+        """
+        return readable_key(self.identity())
+
+
+def _render_path(path: Path, runs_dir: Path | None) -> str:
+    path = Path(path)
+    if runs_dir is not None:
+        try:
+            return path.resolve().relative_to(Path(runs_dir).resolve()).as_posix()
+        except ValueError:
+            pass
+    return path.as_posix()
+
+
+#: Every field of :class:`Job` the pool composes into a run — the command line
+#: (:func:`_command`), the environment (:func:`environment_for`), the entry
+#: state — **in one place**.  ``configuration`` stands for ``config.name``.
+#: :meth:`Job.identity`, :meth:`Job.key`, the record's ``job_digest`` and the
+#: shared pool's directory are all derived from this tuple, so there is one
+#: construction of "the same job" and :func:`records.is_complete_for` compares
+#: it.  A field added to :class:`Job` must be put here or in
+#: :data:`JOB_NON_IDENTITY_FIELDS`; the module refuses to import otherwise.
+JOB_IDENTITY_FIELDS: tuple[str, ...] = (
+    "phase",
+    "arm",
+    "configuration",
+    "seed",
+    "regime",
+    "run_kind",
+    "delta",
+    "pin_hex",
+    "entry_state",
+    "stencil_column",
+    "stencil_sign",
+    "predicate_mode",
+    "node_census",
+    "census_entry",
+    "census_read",
+    "force_maxcal",
+    "override_env",
+    "reproduction_overrides",
+    "audit_position",
+    "audit_position_caller",
+)
+
+#: The fields that are **not** identity, each with the reason: ``config`` is
+#: rendered as ``configuration``; ``outdir`` is what the identity *determines*;
+#: ``timeout`` is a limit on the run, not a property of it — a run that
+#: finished under a shorter limit is the same run, and one that reached the
+#: limit has no ``ok`` record and is never kept.
+JOB_NON_IDENTITY_FIELDS: tuple[str, ...] = ("config", "outdir", "timeout")
+
+
+def _assert_every_job_field_is_classified() -> None:
+    declared = {f.name for f in dataclasses.fields(Job)}
+    classified = (set(JOB_IDENTITY_FIELDS) - {"configuration"}) | set(
+        JOB_NON_IDENTITY_FIELDS
+    )
+    if declared != classified:
+        raise TypeError(
+            f"pool.Job has fields {sorted(declared ^ classified)} that "
+            f"JOB_IDENTITY_FIELDS and JOB_NON_IDENTITY_FIELDS do not classify.  "
+            f"A field the pool composes into a run and the identity does not "
+            f"name is a job --resume cannot tell from another (I-23)."
+        )
+
+
+_assert_every_job_field_is_classified()
+
+
+def readable_key(identity: Mapping[str, Any]) -> str:
+    """``phase/arm/configuration/seedNNN/regime/kind`` plus what is off default."""
+    parts = [
+        f"{identity['phase']}",
+        f"{identity['arm']}",
+        f"{identity['configuration']}",
+        f"seed{int(identity['seed']):03d}",
+        f"{identity['regime']}",
+        f"{identity['run_kind']}",
+    ]
+    if identity.get("predicate_mode") not in (None, "frozen"):
+        parts.append(f"mode={identity['predicate_mode']}")
+    if identity.get("audit_position") not in (None, records_mod.AUDIT_POSITION_DECLARED):
+        parts.append(f"audit={identity['audit_position']}")
+    if identity.get("audit_position_caller"):
+        parts.append(f"asked_by={identity['audit_position_caller']}")
+    if identity.get("stencil_column") is not None:
+        sign = "+" if int(identity.get("stencil_sign") or 1) > 0 else "-"
+        parts.append(f"stencil={identity['stencil_column']}{sign}")
+    if identity.get("force_maxcal") is not None:
+        parts.append(f"maxcal={identity['force_maxcal']}")
+    if identity.get("override_env"):
+        parts.append("overridden")
+    if identity.get("reproduction_overrides"):
+        parts.append("reproduction_overrides")
+    if identity.get("phase") == "census":
+        parts.append(f"census={identity.get('census_entry')}")
+    return "/".join(parts)
+
+
+def digest_for(job: Job, campaign: Campaign) -> str:
+    """The job digest: sha256 over the canonical JSON of :meth:`Job.identity`."""
+    return records_mod.job_digest(job.identity(Path(campaign.runs_dir)))
+
+
+#: Where the shared pool lives, relative to the campaign's ``runs/``.  Under
+#: ``gates/`` so that every survey of "the gate runs" (``survey_heads``, the
+#: run-kind gate, the stamp survey) sees it without a second root.
+POOL_SUBPATH = Path("gates") / "_runs"
+
+
+def pool_root(campaign: Campaign) -> Path:
+    return Path(campaign.runs_dir) / POOL_SUBPATH
+
+
+def directory_for(job: Job, campaign: Campaign) -> Path:
+    """The directory this job runs in: its own ``outdir``, or the pool's.
+
+    The pool's directory is a pure function of the identity, so a gate that
+    wants to *read* a job's record resolves it here without running anything,
+    and two gates composing the same job resolve to the same place.  The name
+    carries the readable fields first and the digest's first sixteen hex digits
+    last: the digest is what makes it unique, the rest is for a reader.
+    """
+    if job.outdir is not None:
+        return Path(job.outdir)
+    identity = job.identity(Path(campaign.runs_dir))
+    digest = records_mod.job_digest(identity)
+    name = (
+        f"{identity['phase']}_{identity['arm']}_{identity['configuration']}_"
+        f"seed{int(identity['seed']):03d}_{identity['run_kind']}_{digest[:16]}"
+    )
+    return pool_root(campaign) / name
+
+
+def directories_for(jobs: Sequence[Job], campaign: Campaign) -> list[Path]:
+    """One directory per **distinct** job, in first-seen order."""
+    seen: dict[str, Path] = {}
+    for job in jobs:
+        directory = directory_for(job, campaign)
+        seen.setdefault(str(directory), directory)
+    return list(seen.values())
+
+
+def job_listing(jobs: Sequence[Job], campaign: Campaign) -> list[dict[str, Any]]:
+    """One row per distinct job: key, digest, directory, and whether a complete
+    record of it is on disk — the resume decision, shown without running.
+
+    What a gate's ``jobs`` declaration returns to the framework and what
+    ``experiment_runner.py --jobs <gate>`` prints.  ``why_not_complete`` is
+    :func:`records.why_not_complete_for`'s sentence, or None where ``--resume``
+    would keep the record; it is computed from the record alone (rule (vii)).
+    """
+    runs_dir = Path(campaign.runs_dir)
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for job in jobs:
+        identity = job.identity(runs_dir)
+        digest = records_mod.job_digest(identity)
+        if digest in seen:
+            continue
+        seen.add(digest)
+        directory = directory_for(job, campaign)
+        if (directory / "metrics.json").exists():
+            why = records_mod.why_not_complete_for(
+                records_mod.read(directory), identity=identity, digest=digest
+            )
+        else:
+            why = "no record on disk"
+        rows.append(
+            {
+                "key": job.key,
+                "job_digest": digest,
+                "path": str(directory),
+                "identity": identity,
+                "why_not_complete": why,
+            }
+        )
+    return rows
 
 
 def seed_directory(seed: int) -> str:
@@ -167,20 +400,13 @@ def seed_directory(seed: int) -> str:
 def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]:
     """The environment this job runs under, and what it asked for.
 
-    Two things may make a run differ from what the matrix says, and neither is
-    silent.
-
-    ``allow_pending`` is the only way a run happens **without** a switch its arm
-    declares, and it is for a switch **no tree implements yet**:
-
-    * the terms allowed must be exactly the terms this tree cannot implement —
-      allowing a term the tree *does* implement, or failing to allow one it
-      does not, is a refusal either way;
-    * the allowed terms are written into the record, so a run made under the
-      allowance says so;
-    * campaign runs never pass it.  No arm of the matrix currently needs it;
-      the switch still waiting on its driver change is the convergence
-      predicate's mode, which only the trial composes.
+    A switch term the tree does not implement is **refused**, never dropped:
+    running without it would produce a successful run of a *different* arm
+    under the right name.  Until task **A72 (resume-identity-and-shared-pool)**
+    a job could carry an *allowance* naming such terms, for the interval when
+    an arm declared a switch no tree implemented yet; the last such switch
+    landed with A59 and the mechanism was retired (survey item B4).  The
+    refusal it guarded stays.
 
     ``reproduction_overrides`` is the only way a run happens with a switch set
     to something **other** than what its arm composes, and it is for a switch
@@ -199,23 +425,14 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         campaign=campaign,
         seed=job.seed,
     )
-    pending = set(switches_mod.unimplemented(terms))
-    allowed = set(job.allow_pending)
-    if allowed != pending:
-        unexpected = sorted(allowed - pending)
-        unallowed = sorted(pending - allowed)
-        if unexpected:
-            raise PoolError(
-                f"{job.key}: this run allows switch term(s) {unexpected} to be "
-                f"omitted, but the tree implements them.  An allowance that "
-                f"covers a switch the tree has is an allowance nobody checked."
-            )
+    pending = sorted(switches_mod.unimplemented(terms))
+    if pending:
         raise PoolError(
-            f"{job.key}: the tree implements no switch for {unallowed} "
+            f"{job.key}: the tree implements no switch for {pending} "
             + "; ".join(
                 f"{t} (needs "
                 f"{switches_mod.REGISTRY[t].pending_change or 'a driver change'})"
-                for t in unallowed
+                for t in pending
             )
             + " — refused rather than run without it, which would be a "
             "successful run of a different arm under this arm's name"
@@ -228,7 +445,6 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         pin_hex=job.pin_hex,
         predicate_mode=job.predicate_mode,
         campaign=campaign,
-        pending_ok=bool(allowed),
     )
     for term, value in (job.reproduction_overrides or {}).items():
         name = switches_mod.REGISTRY[term].driver_name
@@ -245,8 +461,8 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
 def _assert_audit_position_declared(job: Job) -> None:
     """Refuse an audit position off the declared one unless a declared caller asks.
 
-    The third way a run may differ from the campaign, beside ``allow_pending``
-    and ``reproduction_overrides``: **where its exit audit is taken**.  The
+    The second way a run may differ from the campaign, beside
+    ``reproduction_overrides``: **where its exit audit is taken**.  The
     plan declares one position for every arm; the other, ``after_run``, reads
     the state PROCESS wrote out rather than the state the solve handed over,
     and a residual table that mixed the two without saying so is the thing the
@@ -393,8 +609,6 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--switches-asked", json.dumps(dict(terms)),
         "--reproduction-overrides", json.dumps(dict(job.reproduction_overrides or {})),
     ]
-    if job.allow_pending:
-        command += ["--pending-allowed", ",".join(sorted(job.allow_pending))]
     if job.delta is not None:
         command += ["--delta", repr(job.delta)]
     if job.pin_hex is not None:
@@ -433,12 +647,95 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
     return command
 
 
-def run(job: Job, campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
+#: Digests of the jobs this process has already made or kept, with where.  A
+#: later gate of the same press composing the same job reads that record
+#: rather than making it again — which is the shared pool's saving, and what
+#: ``gates._ENTRY_REFERENCES_MADE`` did for one job set before A72.  It never
+#: decides on its own: :func:`run` still puts the record through
+#: :func:`records.is_complete_for`, so a directory this process wrote and then
+#: lost would be re-made, not trusted (rule (vii), trap T13).
+_MADE_THIS_INVOCATION: dict[str, str] = {}
+_LOCKS: dict[str, threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(directory: Path) -> threading.Lock:
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(str(directory), threading.Lock())
+
+
+def _kept(job: Job, identity: Mapping[str, Any], digest: str, outdir: Path) -> dict[str, Any] | None:
+    """The outcome of a kept run, or None where the record is not this job's."""
+    if not (outdir / "metrics.json").exists():
+        return None
+    previous = records_mod.read(outdir)
+    if not records_mod.is_complete_for(previous, identity=identity, digest=digest):
+        return None
+    print(
+        f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
+        f"resumed (complete record of this job kept; digest {digest[:12]})",
+        flush=True,
+    )
+    return {
+        "key": job.key,
+        "arm": job.arm,
+        "configuration": job.config.name,
+        "seed": job.seed,
+        "rc": 0,
+        "outdir": str(outdir),
+        "resumed": True,
+        "job_digest": digest,
+        "status": previous.get("status"),
+        "failure_class": previous.get("failure_class"),
+    }
+
+
+def stamp_identity(outdir: Path, identity: Mapping[str, Any], digest: str) -> None:
+    """Write ``job_identity`` and ``job_digest`` into the record on disk.
+
+    Stamped by the pool after the child returns, not by the child: the child
+    knows what it was asked for, the pool knows what it composed, and the
+    identity is the pool's construction.  The child's own ``completeness``
+    block was computed before these two fields existed, so it is re-evaluated
+    here over the record as it now stands.
+    """
+    path = Path(outdir) / "metrics.json"
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    record["job_identity"] = dict(identity)
+    record["job_digest"] = digest
+    if isinstance(record.get("completeness"), Mapping):
+        try:
+            records_mod.assert_usable(record, where="the pool's stamp")
+            record["completeness"] = {"complete": True, "missing": []}
+        except records_mod.RecordError as exc:
+            record["completeness"] = {
+                "complete": False,
+                "missing": records_mod.missing_fields(record)
+                if record.get("campaign_phase") in ("A", "B")
+                else [],
+                "refusal": str(exc),
+            }
+    path.write_text(json.dumps(record, indent=2))
+
+
+def run(
+    job: Job, campaign: Campaign, *, resume: bool = False, fresh: bool = False
+) -> dict[str, Any]:
     """One isolated run.  Counts are exact; wall clock is progress information.
 
     Returns the job's outcome, not its record: the record is on disk, and the
     summary reads it from there so that a summary can be recomputed without
-    re-running anything.
+    re-running anything.  Resolves ``job.outdir`` where the job named none.
+
+    Without ``resume`` a run is re-made — unless **this process** already made
+    or kept this job (:data:`_MADE_THIS_INVOCATION`), in which case the record
+    is checked and kept: one press makes each job once, whichever gates share
+    it.  ``fresh`` overrides that for a caller that wants the same job made
+    again in the same process — gate G7's tooth, which stales a record and
+    asks for the run again without resume to show it is re-made.
     """
     if not campaign.is_experiment_copy:
         raise PoolError(
@@ -448,111 +745,96 @@ def run(job: Job, campaign: Campaign, *, resume: bool = False) -> dict[str, Any]
             f"self-check, and a measurement of a tree nobody asked for is "
             f"exactly what that separation prevents."
         )
-    outdir = Path(job.outdir)
-    if resume and (outdir / "metrics.json").exists():
-        previous = records_mod.read(outdir)
-        if records_mod.is_complete_for(
-            previous,
-            arm=job.arm,
-            configuration=job.config.name,
-            seed=job.seed,
-            phase=job.phase,
-            regime=job.regime,
-            run_kind=job.run_kind,
-        ):
-            print(
-                f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
-                f"resumed (complete record kept)",
-                flush=True,
-            )
-            return {
-                "key": job.key,
-                "arm": job.arm,
-                "configuration": job.config.name,
-                "seed": job.seed,
-                "rc": 0,
-                "outdir": str(outdir),
-                "resumed": True,
-                "status": previous.get("status"),
-                "failure_class": previous.get("failure_class"),
-            }
-    if outdir.exists():
-        shutil.rmtree(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
+    outdir = directory_for(job, campaign)
+    job.outdir = outdir
+    identity = job.identity(Path(campaign.runs_dir))
+    digest = records_mod.job_digest(identity)
+    with _lock_for(outdir):
+        if resume or (digest in _MADE_THIS_INVOCATION and not fresh):
+            kept = _kept(job, identity, digest, outdir)
+            if kept is not None:
+                _MADE_THIS_INVOCATION[digest] = str(outdir)
+                return kept
+        if outdir.exists():
+            shutil.rmtree(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
 
-    env, terms = environment_for(job, campaign)
-    command = _command(job, campaign, terms)
-    (outdir / "command.json").write_text(
-        json.dumps(
-            {
-                "command": command,
-                "architecture_environment": {
-                    name: env[name]
-                    for name in switches_mod.all_names()
-                    if name in env
-                },
-                "pythonpath": env.get("PYTHONPATH"),
-                "cwd": str(outdir),
-                "allow_pending": list(job.allow_pending),
-                "override_env": dict(job.override_env or {}),
-                # Where the exit audit was asked to be taken and, when that is
-                # not the declared position, which declared stage asked.  The
-                # record carries the position itself (``audit_position``); the
-                # caller is stamped here, beside it, and in the caller's own
-                # record.
-                "audit_position": job.audit_position,
-                "audit_position_caller": job.audit_position_caller,
-            },
-            indent=2,
-        )
-    )
-
-    started = time.perf_counter()
-    try:
-        completed = subprocess.run(
-            command,
-            env=env,
-            capture_output=True,
-            text=True,
-            cwd=str(outdir),
-            timeout=job.timeout,
-        )
-        rc = completed.returncode
-        (outdir / "stdout.log").write_text(completed.stdout)
-        (outdir / "stderr.log").write_text(completed.stderr)
-    except subprocess.TimeoutExpired as exc:
-        rc = 124
-        (outdir / "stdout.log").write_text(exc.stdout or "")
-        (outdir / "stderr.log").write_text((exc.stderr or "") + "\nTIMEOUT")
-
-    path = outdir / "metrics.json"
-    if not path.exists():
-        # A run that wrote no record is a machinery failure, not a physics
-        # result.  Saying so here is the difference between "the reference arm
-        # did not converge" and "the subprocess never started".
-        path.write_text(
+        env, terms = environment_for(job, campaign)
+        command = _command(job, campaign, terms)
+        (outdir / "command.json").write_text(
             json.dumps(
                 {
-                    "record_format": records_mod.FORMAT,
-                    "campaign_phase": job.phase,
-                    "campaign_arm": job.arm,
-                    "campaign_configuration": job.config.name,
-                    "campaign_seed": job.seed,
-                    "campaign_run_kind": job.run_kind,
-                    "regime": job.regime,
-                    "status": "timeout" if rc == 124 else "no_record",
-                    "failure_class": "timeout" if rc == 124 else "machinery",
-                    "returncode": rc,
-                    "why": (
-                        "the subprocess wrote no record; this is a machinery "
-                        "failure, not a result about the models"
-                    ),
                     "command": command,
+                    "architecture_environment": {
+                        name: env[name]
+                        for name in switches_mod.all_names()
+                        if name in env
+                    },
+                    "pythonpath": env.get("PYTHONPATH"),
+                    "cwd": str(outdir),
+                    "override_env": dict(job.override_env or {}),
+                    # Where the exit audit was asked to be taken and, when that is
+                    # not the declared position, which declared stage asked.  The
+                    # record carries the position itself (``audit_position``); the
+                    # caller is stamped here, beside it, and in the caller's own
+                    # record.
+                    "audit_position": job.audit_position,
+                    "audit_position_caller": job.audit_position_caller,
+                    "job_identity": identity,
+                    "job_digest": digest,
                 },
                 indent=2,
             )
         )
-    record = records_mod.read(outdir)
+
+        started = time.perf_counter()
+        try:
+            completed = subprocess.run(
+                command,
+                env=env,
+                capture_output=True,
+                text=True,
+                cwd=str(outdir),
+                timeout=job.timeout,
+            )
+            rc = completed.returncode
+            (outdir / "stdout.log").write_text(completed.stdout)
+            (outdir / "stderr.log").write_text(completed.stderr)
+        except subprocess.TimeoutExpired as exc:
+            rc = 124
+            (outdir / "stdout.log").write_text(exc.stdout or "")
+            (outdir / "stderr.log").write_text((exc.stderr or "") + "\nTIMEOUT")
+
+        path = outdir / "metrics.json"
+        if not path.exists():
+            # A run that wrote no record is a machinery failure, not a physics
+            # result.  Saying so here is the difference between "the reference arm
+            # did not converge" and "the subprocess never started".
+            path.write_text(
+                json.dumps(
+                    {
+                        "record_format": records_mod.FORMAT,
+                        "campaign_phase": job.phase,
+                        "campaign_arm": job.arm,
+                        "campaign_configuration": job.config.name,
+                        "campaign_seed": job.seed,
+                        "campaign_run_kind": job.run_kind,
+                        "regime": job.regime,
+                        "status": "timeout" if rc == 124 else "no_record",
+                        "failure_class": "timeout" if rc == 124 else "machinery",
+                        "returncode": rc,
+                        "why": (
+                            "the subprocess wrote no record; this is a machinery "
+                            "failure, not a result about the models"
+                        ),
+                        "command": command,
+                    },
+                    indent=2,
+                )
+            )
+        stamp_identity(outdir, identity, digest)
+        record = records_mod.read(outdir)
+        _MADE_THIS_INVOCATION[digest] = str(outdir)
     wall = time.perf_counter() - started
     print(
         f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} rc={rc} "
@@ -568,6 +850,7 @@ def run(job: Job, campaign: Campaign, *, resume: bool = False) -> dict[str, Any]
         "rc": rc,
         "outdir": str(outdir),
         "resumed": False,
+        "job_digest": digest,
         "status": record.get("status"),
         "failure_class": record.get("failure_class"),
         "wall_s": wall,
@@ -575,16 +858,32 @@ def run(job: Job, campaign: Campaign, *, resume: bool = False) -> dict[str, Any]
 
 
 def run_all(
-    jobs: Sequence[Job], campaign: Campaign, *, resume: bool = False
+    jobs: Sequence[Job], campaign: Campaign, *, resume: bool = False, fresh: bool = False
 ) -> list[dict[str, Any]]:
     """Every job, W at a time.  Deterministic order; nothing is ever retried."""
     width = workers(campaign)
     (Path(campaign.runs_dir) / "_mplconfig").mkdir(parents=True, exist_ok=True)
+    # Two jobs of one identity in one list would race on one directory; the
+    # second is served the first's outcome (the per-directory lock in ``run``
+    # makes even that ordering safe, but there is no reason to start it).
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=width) as pool:
-        futures = [pool.submit(run, job, campaign, resume=resume) for job in jobs]
-        for future in futures:
-            results.append(future.result())
+        futures: list = []
+        first_by_dir: dict[str, int] = {}
+        for index, job in enumerate(jobs):
+            directory = str(directory_for(job, campaign))
+            if directory in first_by_dir:
+                futures.append(first_by_dir[directory])
+                continue
+            first_by_dir[directory] = index
+            futures.append(pool.submit(run, job, campaign, resume=resume, fresh=fresh))
+        for index, future in enumerate(futures):
+            if isinstance(future, int):
+                outcome = dict(futures[future].result())
+                jobs[index].outdir = Path(outcome["outdir"])
+                results.append(outcome)
+            else:
+                results.append(future.result())
     return results
 
 
