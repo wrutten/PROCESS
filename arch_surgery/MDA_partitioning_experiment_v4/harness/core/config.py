@@ -46,7 +46,7 @@ REPO_ROOT = EXPERIMENT_DIR.parent.parent
 #: Master switch.  While False the runner executes preflight, gates and smoke
 #: work only and refuses every campaign stage.  The user flips it in the same
 #: commit that records the dated approval in EXPERIMENT_PLAN.md.
-EXECUTION_APPROVED = False
+EXECUTION_APPROVED = True  # the user, 2026-09-14: "You can run the experiment"; dated approval in EXPERIMENT_PLAN.md's header, this commit
 
 
 # --------------------------------------------------------------------------

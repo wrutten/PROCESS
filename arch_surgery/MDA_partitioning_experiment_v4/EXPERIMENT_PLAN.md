@@ -1,6 +1,10 @@
 # MDA Partitioning Experiment V4 — Experiment Plan
 
-> **Document status** — **DRAFT · NOT APPROVED.** Written 2026-09-10 by the orchestrating
+> **Document status** — **APPROVED FOR EXECUTION, 2026-09-14** (the user: *"You can run the experiment"*, after the D27 rerun of every gate on the
+> final harness — 30 PASS, 152/152 teeth, GR 256/256, G1 byte-neutral, at `03f72479`; `EXECUTION_APPROVED` flipped in this commit). The campaign is
+> pressed from the button (`experiment_runner.py --campaign`) at this commit; its records are stamped `campaign` and §4 is re-rendered from them.
+> Methodology unchanged since the 2026-09-10 draft except by the dated amendments in the text (D24–D27). *Superseded header follows for the record:*
+> DRAFT · NOT APPROVED. Written 2026-09-10 by the orchestrating
 > session at the user's instruction, from
 > [`../docs/plans/V4_IMPROVEMENT_LIST.md`](../docs/plans/V4_IMPROVEMENT_LIST.md) (the candidate
 > list this plan selects from), the V3 plan and report in
