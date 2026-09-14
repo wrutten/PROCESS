@@ -1,11 +1,8 @@
 # A70 (simplify-code-moves) — the three code-move items of the simplification survey
 
-> **Document status**: OPEN — task report of **A70 (simplify-code-moves)**, branch
-> `A70-simplify-code-moves` off `architecture_surgery` at `3154faa3`. Carries survey items **A1**
-> (split `gates.py`), **A2** (retire the `predicate_counters` and `attempts` stages) and **A9**
-> (register the copy's gates) under ruling **D27**. Zero PROCESS runs, zero schema change, no gate
-> renamed, no behaviour change to any gate criterion. Paths below are relative to
-> `arch_surgery/MDA_partitioning_experiment_v4/` unless said otherwise.
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A70 (simplify-code-moves)** merged into `architecture_surgery`
+> at `bc53f4d6` (base `3154faa3`). Records relocated to `arch_surgery/idf_probe/runs/A70_runs/` (resumed, none made). The
+> orchestrator's critical assessment is the last section. Folder position records lifecycle, not validity (trap T3).
 
 ## 1. Verdict in one page
 
