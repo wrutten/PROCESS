@@ -1,6 +1,6 @@
 # MDA Partitioning Experiment V4 — Experiment Plan
 
-> **Document status** — **APPROVED FOR EXECUTION, 2026-09-14** (the user: *"You can run the experiment"*, after the D27 rerun of every gate on the
+> **Document status** — **EXECUTED AND REPORTED, 2026-09-14** — §4 is the campaign population (949 records at `57dc0c14`), §5 and §6 are written from it. Approval record: **APPROVED FOR EXECUTION, 2026-09-14** (the user: *"You can run the experiment"*, after the D27 rerun of every gate on the
 > final harness — 30 PASS, 152/152 teeth, GR 256/256, G1 byte-neutral, at `03f72479`; `EXECUTION_APPROVED` flipped in this commit). The campaign is
 > pressed from the button (`experiment_runner.py --campaign`) at this commit; its records are stamped `campaign` and §4 is re-rendered from them.
 > Methodology unchanged since the 2026-09-10 draft except by the dated amendments in the text (D24–D27). *Superseded header follows for the record:*
@@ -5397,25 +5397,201 @@ neutrality is not claimed. No timing is evidence.
 | 3 | BR · B0 · B3 | 25 | 22 | 0, 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24 | 1 | BR 5 · B0 3 · B3 2 |
 *n = 25 (distinct seeds run on st_regression).*
 
-## 5. Discussion *(placeholder)*
+## 5. Discussion
 
-To be written from §4 only, under the following pre-declared headings so that the discussion
-cannot drift toward what was hoped for: (i) what each rung measured, per configuration, against
-its pre-declared expectation, with refuted expectations named as such; (ii) the transfer — which
-factor carried the gap, and what that says about Phase A as a predictor; (iii) the stopping
-rule — where upstream's test leaves the coupling state, and what the predicate-matched control
-therefore is a control *for*; (iv) the trust step — what `B2 → B3` says about completeness of
-the decomposition after A43; (v) the per-sweep overhead — whether the counted term is of the
-size the wall-clock gap requires; (vi) the predicate trial's outcome and what it changes;
-(vii) threats to validity that survived the design: the objective/structure confound under
-decision (b), small denominators where a configuration is hostile, location non-identification,
-the prime's excluded cost.
+*Written 2026-09-14 by the orchestrating session from §4 only — the campaign population, 949
+records at `57dc0c14`, rendered by `--plan-tables` from the stage records at `004eb06b` after
+A75 (campaign-tally-source). Every number below is a cell of §4; the table it comes from is named.
+Denominators: 25 seeds offered per arm per configuration; Phase A tables are over 25 runs per arm
+(every evaluation finished), Phase B tables over the seed set on which every arm converged — 22 on
+`large_tokamak_nof`, **11** on `low_aspect_ratio_DEMO`, 22 on `st_regression` (§4.3 "the seed set").
+The pre-declared expectations are §3.4 and §3.5's; where a measurement refutes one it is named so.*
 
-## 6. Conclusion *(placeholder)*
+### 5.1 What each rung measured, per configuration
 
-One paragraph per research question RQ1–RQ5, each answered per configuration with its number,
-its denominator and its acceptance verdict, followed by the single sentence the experiment
-licenses about the research question in §1.2 — and the sentence it does not.
+**`A0p → A1` / `A0 → A1` — the partitioning, one evaluation (RQ1; §4.2 "cost per call",
+displaced regime).** The partitioned architecture costs **0.56 / 0.58 / 0.50** of the flat arm's
+model-node evaluations per call (pooled; medians 0.571 / 0.571 / 0.492) on the large tokamak, the
+low-aspect-ratio machine and the spherical tokamak, worse on 0 of 25 seeds each. V2's context
+figures were 0.522 / 0.568 / 0.502: reproduced to within a few hundredths, on a different entry
+construction. In the stencil regime the saving is smaller — **0.62 / 0.64 / 0.58** forward,
+0.64 / 0.66 / 0.56 backward — because a one-variable displacement from a fixed point leaves the flat
+arm little to iterate; the plan's transfer statement (§3.4) uses both regimes and both are on the
+page. Matched accuracy holds and is not a near thing: at the audit position the restricted maximum
+scaled residual is **identical** for `A0p` and `A1` on both pulsed configurations (median 3.8e-10,
+p90 1.7e-8 on the large tokamak; exactly 0 on every run of the low-aspect-ratio machine) and for
+`A0` and `A1` on the spherical tokamak (5.4e-9 / 2.0e-8), so the F = 10 similarity rule of §3.4
+check 1 is met with a factor of 1. The whole-state audit beside it is large for `A1` (median 2.4,
+0.18, 0.26): those are the components the configuration's once-per-run deferred nodes write, which a
+single evaluation of the reduced map does not update, excluded from the restricted statistic by the
+derived membership rule and published so the exclusion can be seen.
+
+**`A0 → A0p` — ownership of the burn time (§4.2 "ownership rung").** Pinning the burn time to a
+constant costs nothing measurable per call (pooled 0.93 / 0.98, median 1.00, worse on 0 seeds) and
+leaves the declared inconsistency: a burn-time residual at exit of 155 s / 526 s median (6.3 % /
+5.3 % relative), the rung's own statistic, published per run and never pooled into a cost.
+
+**`AR → A0` — the stopping rule (RQ4; §4.2 "cost per call" and "matched accuracy").** Upstream's
+objective/constraint test at its two-pass floor is cheaper per call than the coupling-state test at
+τ on two configurations (0.97 and 0.84 pooled against `A0`; equal on the low-aspect-ratio machine,
+where both stop after exactly five sweeps on every seed) — and it stops **further from the fixed
+point**: `AR`'s restricted residual is 2.6e-8 / 1.5e-7 median against `A0`'s 5.0e-10 / 5.4e-9 on the
+large and spherical tokamaks, a factor of 30–50, and 0 against 0 on the low-aspect-ratio machine.
+That is what the predicate-matched control is a control *for*: `B0` is `BR` with a stopping rule
+that reaches a stated accuracy, so that every rung above it compares arms at matched accuracy.
+
+**`B0 → B1` — ownership in the optimisation, and the output-time loop (§4.3 "cost", "iteration
+multiplier", "the lift closed").** Lifting the burn time to the optimiser and dropping upstream's
+output-time loop costs **1.008 / 0.692** pooled (medians 1.015 / 0.805) on the two pulsed
+configurations — no saving on the large tokamak, a third off on the low-aspect-ratio machine, where
+it also shortens the optimiser's path (summed iterations 0.81 median, 0.70 sum ratio). The output
+loop's own cost is exactly two sweeps per run in `BR` and `B0` and zero in `B1`/`B3` (§4.3
+"per-sweep overhead"), so it is not what moves the ratio. The lift closes: constraint 93's residual
+at every accepted optimum is 1.7e-5 s / 5.5e-6 s median (2.3e-9 / 6.7e-10 relative), in the
+equality block.
+
+**`B1 → B3` and `B0 → B3` — the partitioning inside the optimisation (RQ2; §4.3 "cost").** The
+headline: `B3` costs **0.640 / 0.450 / 0.533** of `B0`'s solve-phase model-node evaluations pooled
+(medians 0.645 / 0.524 / 0.591; worse on 0 / 2 / 0 seeds), against V3's pre-declared context
+0.64 / 0.45 / 0.53 — the same numbers to two decimals, from a rebuilt harness, a different entry
+construction and 25 seeds. Without the retried seeds the low-aspect-ratio ratio is 0.66 pooled
+(0.54 median), the reading §3.5 asked for beside the pooled one. `BR → B0` reads 0.976 / 1.030 /
+1.197 pooled against the expected 0.98 / 1.03 / 1.16. The `ε = 1` expectation holds where it was
+pre-declared: the summed-over-attempts iteration median is identical for `B1` and `B3` on both pulsed
+configurations (1.000 and 0.8125), so the partition changes what an evaluation costs and not how many
+the optimiser takes. The dispatch runs 2.7 / 2.1 / 2.8 times as many sweeps per run in `B3` (block
+sweeps, each over a third of the map), which is the mechanism, not a cost.
+
+**Refuted or qualified expectations, named.** (a) **Same optimum (check 1) FAILs on the
+low-aspect-ratio machine**: `B0 → B1` and `B0 → B3` both read a paired relative objective difference
+of 4.1e-7 median (passes) and **2.15e-6 p90 (fails the 1e-6 floor)**, with 1 hop of 11 and 2 pairs
+below cluster resolution; `BR → B0`'s yardstick is 2.0e-13. Since `B1` and `B3` read the same `r`
+to every digit, the difference sits on the ownership rung `B0 → B1` — the lifted formulation lands
+on a slightly different optimum on 2 of 11 seeds — and not on the partition. On the large tokamak
+(2.8e-11 / 4.6e-11) and the spherical tokamak (3.5e-13 / 3.5e-9) check 1 PASSes with margin.
+(b) **The low-aspect-ratio seed set is 11 of 25.** Thirteen seeds are configuration-invalid: 2
+crashed in every arm (§5.7), and the rest failed to converge in at least one arm, with 10–12 retried
+seeds per arm. Every low-aspect-ratio ratio above is over n = 11 and says so.
+
+### 5.2 The transfer (RQ3)
+
+Phase A's per-call ratio against the realised Phase B ratio, pooled: 0.56 → 0.64 (large tokamak),
+0.58 → 0.45 (low aspect ratio), 0.50 → 0.53 (spherical). The transfer factor is 1.14, 0.78 and 1.06:
+Phase A under-predicts the saving on one configuration and over-predicts on two, by up to a fifth.
+The factor decomposition that §3.4 declares — per-evaluation cost × evaluation count × the entry
+regime × ownership — is on the page (the stencil-regime per-call ratios 0.62–0.66 sit closer to the
+realised 0.64 on the large tokamak than the displaced-regime 0.56 does; the iteration multiplier is 1
+on two configurations and 0.81 on the third), but attributing the residual to one factor is issue
+**I-17**, which the user has reserved. What the campaign settles is that the transfer is not
+systematic in sign, exactly as V3's assessment (§2.2) said, and that Phase A's displaced-regime ratio
+is a predictor good to ±20 % here.
+
+### 5.3 The stopping rule (RQ4)
+
+Covered in §5.1 (`AR → A0`): upstream's test stops 30–50× further from the coupling-state fixed
+point on two configurations and at the same place on the third, for a per-call saving of 3–16 %.
+`BR → B0` in the optimisation reads 0.98 / 1.03 / 1.20 — the coupling-state test costs up to a fifth
+more on the spherical tokamak, where `BR` also retries more seeds (5 against 3). The control is
+therefore a control for *accuracy*, bought at that price, and the headline ratios are stated against
+it, never against `BR` (user, 2026-09-11).
+
+### 5.4 The trust step (RQ5)
+
+Not an arm of V4 (`B2` removed, §3.2). A43 (st-trust-gap) answered it on V3's records: a single
+schedule pass reaches the flat fixed point bit for bit once the blocks are solved exactly. The
+campaign's `B3` exit audit is consistent with that: 0 components above τ at the accepted point on
+every converged run on every configuration (§4.3 "achieved accuracy"), with the spherical tokamak's
+`B3` restricted median 7.5e-12 against `B0`'s 4.9e-14 — three orders larger, both far under
+τ = 1e-6.
+
+### 5.5 The per-sweep overhead
+
+Counted, not timed (§4.3 "per-sweep overhead"). `B3` evaluates the convergence predicate about 2.3×
+as often as `B0` per run (4 839 against 2 069 tests on the large tokamak at seed 0) over widths of
+239 against 840 components, so the components compared per run are **fewer** (1.16 M against 1.74 M).
+The counted overhead cannot be the source of a wall-clock gap; on the spherical tokamak 10.8 % of
+`B3`'s sweeps visit the empty `PULSE` block (I-20a), disclaimed where it bears and costing no model
+evaluation.
+
+### 5.6 The predicate trial
+
+`frozen` against `mixed` (§4.2 "the predicate trial"): on every pair tried the two rulers' runs are
+bit-identical and no decisive pass changed its verdict (0 verdicts changed over 9–15 predicate
+evaluations per run). The `mixed` ruler reads the same run's residual smaller (by up to 8× on the
+large tokamak's `A1`), so a threshold stated on it would be a looser threshold; the experiment's
+τ is stated on `frozen` and nothing in §4 depends on the choice. The trial changes nothing here and
+records that a future revision adopting `mixed` must restate τ.
+
+### 5.7 Robustness events, reported without a robustness claim
+
+Twenty-eight of 275 optimisations crashed (§4.3 "failure taxonomy"), all with PROCESS's own
+`RuntimeError: Failed to converge after 50 iterations, value is nan` from a model-internal Newton
+solve at a displaced start. On the large tokamak seeds 5, 20 and 21 crash in **all four arms** —
+configuration hardness, dropped paired. On the low-aspect-ratio machine `BR` crashes on 2 seeds,
+`B0` on 2 plus 2 unconverged, `B1` and `B3` on 2 plus 3 unconverged; the unconverged ones are the
+block solver's own exit (`ModuleSolveFailure: block FLAT / M1 did not converge in 20 sweeps`,
+`current_drive.eta_cd_dimensionless_hcd_primary` at `inf`), and on the same variable `BR` reaches
+the audit with an infinite residual on 2 runs. The spherical tokamak loses no seed to a crash. The
+intervention arms therefore fail on 1–3 more low-aspect-ratio starts than the incumbent, on a
+variable the incumbent also cannot hold finite; the plan makes no robustness claim and this report
+makes none.
+
+### 5.8 Threats to validity that survived the design
+
+- **The objective/structure confound (decision (b))** stands: `B1`/`B3` optimise the lifted
+  formulation, `B0`/`BR` the original. §5.1(a) shows it bites on the low-aspect-ratio machine at p90.
+- **Small denominators where a configuration is hostile:** n = 11 on the low-aspect-ratio machine.
+  Its ratios are the least certain in this report and its same-optimum check is the one that fails.
+- **Location non-identification:** correctness is gated on `norm_objf` and the feasibility audit
+  (D6), never on iteration variables; two optima closer than 1e-5 relative are "below resolution",
+  and 2 such pairs are counted on the low-aspect-ratio machine.
+- **The prime's excluded cost:** `n_arrangement_method_calls` is 13 per evaluation in `A1` and
+  117 281 / 157 504 / 280 776 per optimisation in `B3` (§4.3 "cost", column "arrangement·method
+  calls"), stamped beside every node-call table and never pooled into it (D19). A reader who
+  weights the prime as a model node must add it; it is not a model node.
+- **The written file** carries a post-write value of `tfcoil.insstrain` 0.7 % off the accepted
+  state in every Phase B arm (A67, I-21); no acceptance quantity reads it.
+
+## 6. Conclusion
+
+*Each research question of §1.2, per configuration (large tokamak / low aspect ratio / spherical
+tokamak), with its number, denominator and pre-declared verdict.*
+
+**RQ1 — per-call cost.** At matched achieved accuracy (identical restricted residuals, factor 1
+against the F = 10 rule), one MDA solve under the partitioned architecture costs **0.56 / 0.58 /
+0.50** of the flat arm's model-node evaluations from a displaced entry (n = 25 per arm, worse on
+0 seeds) and 0.62 / 0.64 / 0.58 from a stencil point. **Accepted.**
+
+**RQ2 — end-to-end cost and correctness.** Inside a full optimisation the partitioned architecture
+costs **0.640 / 0.450 / 0.533** of the control's solve-phase model-node evaluations (pooled; n = 22 /
+11 / 22 converged seeds), with the optimiser's summed iteration count unchanged (median ratio 1.00 /
+0.81 / 1.00 — **accepted** against ≤ 1.05) and the lifted constraint closed. **Same optimum:
+accepted** on the large and spherical tokamaks (paired relative objective difference ≤ 4.6e-11 /
+3.5e-9 at p90), **not accepted** on the low-aspect-ratio machine (2.15e-6 at p90 against the 1e-6
+floor, 1 hop of 11), where the difference sits on the ownership rung and not on the partition.
+
+**RQ3 — transfer.** Phase A's displaced-regime per-call ratio predicts the realised optimisation
+ratio to within 1.14 / 0.78 / 1.06; the transfer is not systematic in sign. The attribution to one
+factor is I-17, reserved by the user; the terms it needs are on the page.
+
+**RQ4 — the stopping rule.** Upstream's objective/constraint test saves 3–16 % of model-node
+evaluations per call against the coupling-state test at τ = 1e-6 and stops 30–50× further from the
+fixed point on two configurations (identical on the third); in the optimisation the coupling-state
+control costs 0.98 / 1.03 / 1.20 of the incumbent. The control buys stated accuracy at that price.
+
+**RQ5 — the trust step.** Not measured by a V4 arm; A43's answer on V3's records stands and the
+campaign's `B3` exit audits (0 components above τ on every converged run) are consistent with it.
+
+**The sentence the experiment licenses about §1.2:** *with every physics and engineering model
+byte-identical to upstream, rearranging the driver alone — solving the models in three blocks with
+the burn time owned by the optimiser — reaches the same accepted optimum on two of three
+configurations at 0.53–0.64 of the model evaluations, and a different optimum within 2.2e-6 relative
+on the third at 0.45; the per-call saving of roughly half measured without the optimiser transfers
+to the optimisation to within a fifth.*
+
+**The sentence it does not license:** that the partitioned architecture is more robust, or that it
+would save wall-clock time — no conclusion here rests on a timing, and on the hostile configuration
+the intervention arms fail on more displaced starts than the incumbent.
 
 ---
 
