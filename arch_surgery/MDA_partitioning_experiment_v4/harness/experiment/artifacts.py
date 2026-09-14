@@ -191,7 +191,7 @@ def rebuild_components_sha256(record: Mapping[str, Any]) -> str:
     would build*, not the bytes it would build it from.  A truncated, reordered
     or hand-edited artifact rebuilds to a different value and is refused.
     """
-    from .. import ystate  # noqa: PLC0415 - the predicate module, loaded lazily
+    from ..child import ystate  # noqa: PLC0415 - the predicate module, loaded lazily
 
     keys, category, scale = [], [], []
     for component in record["components"]:

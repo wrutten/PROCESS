@@ -1534,7 +1534,7 @@ def check_data(campaign: Campaign) -> Check:
     read back from the commit -- so regenerating the record cannot be the way a
     changed file becomes blessed.
 
-    The moved predicate module ``harness/ystate.py`` is checked on the criterion
+    The moved predicate module ``harness/child/ystate.py`` is checked on the criterion
     the copied driver carries: its whole diff against its source at the recorded
     commit must be exactly the hunks the record holds, **and** its post-edit
     sha256 must be the recorded one.  Both directions are exercised below --- an
@@ -1664,7 +1664,7 @@ def check_data(campaign: Campaign) -> Check:
             raw[3] = raw[3] ^ 0x20 if raw[3] != 0x20 else 0x09
             staged_module.write_bytes(bytes(raw))
             staged_prov = json.loads(json.dumps(prov))
-            what = "one byte of harness/ystate.py changed"
+            what = "one byte of harness/child/ystate.py changed"
             if bless:
                 staged_prov["module"]["sha256_in_copy"] = data_mod.sha256(
                     staged_module.read_bytes()

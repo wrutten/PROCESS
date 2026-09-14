@@ -586,7 +586,7 @@ byte-identical to `c0ae5b28`'s (the frozen physics, D5) and stays so at every V4
 the copy commit, the copy reproduces V3's records bit-exactly through the rewritten harness (gate
 GR, §3.9) — the one place the V3→V4 name map is needed. Because each experiment version now has
 exactly one implementation of everything it runs, the convergence-predicate module and the
-per-configuration artifacts live inside the V4 folder — **`harness/ystate.py` and
+per-configuration artifacts live inside the V4 folder — **`harness/child/ystate.py` (at `harness/ystate.py` until A66) and
 `harness/data/`** (user preference: do not modify the copied tree beyond necessity) — and the
 copied driver is re-pointed at them by one path constant each, the only edits the copy needs for
 them. The drift objection D14(c) raised against copies does not apply: the copy is the version,

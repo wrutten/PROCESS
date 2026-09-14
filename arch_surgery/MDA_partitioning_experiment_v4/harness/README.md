@@ -61,7 +61,7 @@ that.
 - `experiment/artifacts.py` and `experiment/data_provenance.py` resolve and check every committed
   artifact a run reads, with digests.
 
-### Layer 3 — inside a run: `harness/child/` (and `harness/ystate.py`)
+### Layer 3 — inside a run: `harness/child/`
 
 These modules run inside the measurement subprocess, and they are the set nobody may edit while a
 run executes (harness plan amendment 13, rule (vi)).
@@ -74,9 +74,10 @@ run executes (harness plan amendment 13, rule (vi)).
   the accepted point that measures how far the state would still move. Under ruling D25 it first puts
   the whole data structure back to the solve-phase state via `child/data_structure.py`, so the sweep
   evaluates the map the loop iterated rather than the one the write pass left behind.
-- `ystate.py` and `child/predicate.py` define the **coupling state**: the set of variables that flow
-  between models, their scales, and the convergence test at tolerance τ. The driver copy imports
-  `ystate.py` by a literal path, which is why it still sits at the package top (task A66 moves it).
+- `child/ystate.py` and `child/predicate.py` define the **coupling state**: the set of variables that
+  flow between models, their scales, and the convergence test at tolerance τ. The driver copy loads
+  `child/ystate.py` by a literal path (a permitted edit of the copy, asserted by `PROCESS/copy_gates.py`),
+  so the driver and the harness's exit audit use one predicate.
 - `child/perturb.py` is the seeded displacement stream. Every arm at a given seed starts from the same
   bytes, which is what makes cost differences paired.
 - `child/postsolve.py` derives which model nodes the optimiser never reads, so they can be deferred to
@@ -505,7 +506,7 @@ tidy — and because **the driver never pairs the two files by name**. It requir
 recorded hash of the component list to equal the loaded coupling-state description's own hash, and
 raises otherwise. A wrong pairing is caught by the bytes; a renamed file is not noticed at all.
 
-`harness/ystate.py` — the code that decides what "converged" means — was moved here from the
+`harness/child/ystate.py` — the code that decides what "converged" means — was moved here from the
 repository's research tree under the same rule, and is recorded in the same file. Its body is
 byte-identical to its source: the only difference is a paragraph in its docstring saying where it
 came from, and the check removes that paragraph again and compares the remainder byte for byte.
@@ -814,7 +815,7 @@ The transcription was measured once against the previous revision's own composit
 names the copy has since refused, so the check could neither go stale nor still run).
 
 **Why the predicate module is allowed to differ from its source at all, and what still refuses.**
-`harness/ystate.py` was moved whole out of the repository's research tree, and for a while the
+`harness/child/ystate.py` was moved whole out of the repository's research tree, and for a while the
 check on it could be the strongest one available: remove the one paragraph it had gained and the
 rest was byte-identical to the source. The approved driver change that gave the convergence test a
 second ruler is *in that module*, so that reconstruction no longer exists. The check was re-based
@@ -924,7 +925,7 @@ this list is the plain-language version of what it carries.
 What exists: the declarations (`core/config.py`), the switch vocabulary and the capability probe
 (`experiment/switches.py`), the arm matrix (`experiment/arms.py`), the provenance refusals
 (`core/provenance.py`), the committed data in `data/`, the coupling state and its predicate
-(`ystate.py`, `child/predicate.py`), the displacement streams (`child/perturb.py`), **the run path**
+(`child/ystate.py`, `child/predicate.py`), the displacement streams (`child/perturb.py`), **the run path**
 (`child/child.py`, `child/optimise.py`, `child/evaluate.py`, `core/pool.py`, `core/records.py`,
 `core/failure.py`), the committed reproduction reference (`gates/reference.py`) and **gate GR**
 (`gates/reproduction.py`), plus the self-check and the runner's preflight.
@@ -945,17 +946,18 @@ it had — this is a move, not a rename.*
 |---|---|---|
 | `core/` | `framework` (what a gate, a tooth, a check and a measurement *are*), `config` (every declared setting), `failure` (the taxonomy), `provenance` (interpreter, tree and git stamps), `records` (the run-record schema and its completeness contract), `pool` (one run in its own directory, and the decision to keep an existing record) | everything |
 | `experiment/` | `arms` (the switch matrix as data), `switches` (the driver's vocabulary and the capability probe), `input_files` (committed and lifted), `artifacts` (the committed per-configuration files), `data_provenance` (where the copied data came from) | everything but `core/` |
-| `child/` | `child`, `evaluate`, `optimise`, `census` (the three entry points a measurement subprocess is started as, and what they load), `predicate`, `perturb`, `data_structure`, `postsolve` | the pool spawns them; the gates import them |
+| `child/` | `child`, `evaluate`, `optimise`, `census` (the three entry points a measurement subprocess is started as, and what they load), `ystate` (the coupling state and its predicate; the copied driver loads it by path), `predicate`, `perturb`, `data_structure`, `postsolve` | the pool spawns them; the gates import them |
 | `gates/` | `registry` (every gate and stage by name, the derived order, the gate table, the printers and the module's own command line), `gates` (G0′, `copy_identity` and `edit_behaviour` loading `PROCESS/copy_gates.py` by path; the shared entry references and `_with_capture`; GR's wrapper; the promoted self-checks; the `self_containment` gate), `gate_neutrality` (G1 and the comparison machinery), `gate_output_path` (G9, and the restricted statistic's excluded set), `gate_predicate_mode` (G8), `exclusion_review` (the review of G1's and G8's exclusion tables), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `gate_written_file`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck` | the runner, and `chain.py` |
 | `measurement/` | `stats`, `tables`, `tally`, `tally_evaluation`, `tally_optimisation`, `analysis`, `plan_tables` | `gates/` imports it — a gate reads records, it does not decide what a record means |
-| *(top level)* | `__init__.py` (the one public import surface), `chain.py` (the sequence the campaign and the smoke both run), `ystate.py`, `data/`, `reference/` | — |
+| *(top level)* | `__init__.py` (the one public import surface), `chain.py` (the sequence the campaign and the smoke both run), `data/`, `reference/` | — |
 
-**Why `ystate.py` is not in `child/`.** It belongs to that set — a measurement child loads it — but
-the experiment's copied driver reaches it by the literal path
-`Path(__file__).resolve().parents[4] / "harness" / "ystate.py"`
-(`PROCESS/process/core/solver/module_solve.py`), and `PROCESS/copy_gates.py` asserts that literal as
-one of the copy's permitted edits.  Moving the file would mean editing the frozen copy, so it stays
-where the driver expects it.
+**`ystate.py` is in `child/` since task A66 (carried by A73 under D27).** A measurement child loads
+it, and so does the experiment's copied driver — by the literal path
+`Path(__file__).resolve().parents[4] / "harness" / "child" / "ystate.py"`
+(`PROCESS/process/core/solver/module_solve.py`), which `PROCESS/copy_gates.py` asserts as one of the
+copy's permitted edits and `PROCESS/PROVENANCE.json` records. The move was a driver-copy edit for that
+reason: the literal and the assertion changed in one commit, the provenance was regenerated, and
+gate G1 was run as a straddle across it.
 
 **Inside `gates/`, who imports whom.** `registry` imports every gate module and is imported by
 the runner, `chain.py`, `selfcheck.py` and the analysis's dependency tooth — and by no gate module,
@@ -968,8 +970,8 @@ at the split; the first found the moved line in `registry.py` and reported it un
 named the file.
 
 **The rule that makes the grouping worth having.** `child/` is exactly the set the harness
-implementation plan's amendment 13, rule (vi) forbids editing while any measurement run executes —
-plus `ystate.py`.  Before, that set was a list in a change log; now it is a directory.
+implementation plan's amendment 13, rule (vi) forbids editing while any measurement run executes.
+Before, that set was a list in a change log; now it is a directory.
 
 What is not here: **a campaign record**.  `EXECUTION_APPROVED` is `False`, every campaign stage
 refuses and says why, and the refusal is reachable from the same button as the successes.  The

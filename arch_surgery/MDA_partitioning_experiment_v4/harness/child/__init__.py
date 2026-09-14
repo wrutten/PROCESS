@@ -8,10 +8,9 @@ snapshot (``data_structure``) and the post-solve derivation (``postsolve``).
 **This subpackage is exactly the set the harness implementation plan's
 amendment 13, rule (vi) forbids editing while any measurement run executes** —
 the child imports these modules, so an edit here corrupts a population that is
-half-measured, and rule (v) already forbids the commit.  One module of that set
-is *not* here: ``harness/ystate.py`` stays at the top of the package because the
-copied driver reaches it by the literal path
-``parents[4] / "harness" / "ystate.py"`` (``PROCESS/process/core/solver/
-module_solve.py``), and that literal is itself asserted by
-``PROCESS/copy_gates.py``.  It belongs to this set for the purpose of rule (vi).
+half-measured, and rule (v) already forbids the commit.  The coupling-state
+module ``ystate`` is here too: the copied driver reaches it by the literal path
+``parents[4] / "harness" / "child" / "ystate.py"`` (``PROCESS/process/core/
+solver/module_solve.py``), a permitted edit ``PROCESS/copy_gates.py`` asserts
+and ``PROCESS/PROVENANCE.json`` records (task A66, carried by A73 under D27).
 """

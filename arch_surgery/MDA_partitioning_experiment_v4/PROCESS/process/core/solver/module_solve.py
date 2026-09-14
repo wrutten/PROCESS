@@ -489,7 +489,7 @@ class ModuleSolveFailure(RuntimeError):
 # Phase A's predicate, imported rather than reimplemented
 # --------------------------------------------------------------------------
 
-#: ``harness/ystate.py`` -- the coupling-state predicate in both of its
+#: ``harness/child/ystate.py`` -- the coupling-state predicate in both of its
 #: rulers, in the V4 harness beside this copy.  Reached by path for the same reason
 #: ``caller.NODE_MAP_PATH`` is: the harness is not an importable package.
 #: Re-pointed from ``arch_surgery/fixedpoint/ystate.py`` by A46 (process-copy)
@@ -501,6 +501,7 @@ class ModuleSolveFailure(RuntimeError):
 YSTATE_MODULE_PATH = (
     Path(__file__).resolve().parents[4]
     / "harness"
+    / "child"
     / "ystate.py"
 )
 

@@ -16,7 +16,7 @@ Two claims are made and both are checked rather than asserted:
 * the **file set** matches exactly, because a per-file hash loop that never
   compares the set passes on a removed file and on an added one.
 
-``harness/ystate.py`` is recorded here too.  It is code, not data, but it was
+``harness/child/ystate.py`` is recorded here too.  It is code, not data, but it was
 moved by the same task and under the same rule, and the claim about it has the
 same shape as the one ``PROCESS/copy_gates.py`` makes about the copied driver:
 **the file's whole diff against its source at the source commit is exactly the
@@ -112,7 +112,7 @@ DATA_DIR = HERE / "data"
 PROVENANCE = DATA_DIR / "PROVENANCE.json"
 
 #: The predicate module, moved whole from the repository's research tree.
-YSTATE = HERE / "ystate.py"
+YSTATE = HERE / "child" / "ystate.py"
 
 #: Where in the repository each class of source lives.  Relative to the
 #: repository root, because that is how ``git cat-file`` addresses a blob.
@@ -329,7 +329,7 @@ def source_bytes(item_source: str, commit: str | None) -> SourceBytes:
 # ---------------------------------------------------------------------------
 
 
-#: Every recorded change ``harness/ystate.py`` carries against its source, in
+#: Every recorded change ``harness/child/ystate.py`` carries against its source, in
 #: the order the tasks made them.  This is documentation *of* the hunks, not a
 #: substitute for them: the check compares the hunks and the digest, and this
 #: list is what lets a reviewer read one against a claim.  Same model, same
@@ -763,7 +763,7 @@ def build_provenance(commit: str, campaign: Campaign) -> dict:
             "reconstruction test still runs wherever the recorded hunks are a "
             "pure addition."
         ),
-        "name": "harness/ystate.py",
+        "name": "harness/child/ystate.py",
         "source": YSTATE_SOURCE,
         "sha256_at_source_commit": sha256(ystate_src.data),
         "sha256_in_copy": sha256(ystate_copy),

@@ -170,7 +170,7 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             ),
             task="A46 (process-copy)",
             was='Path(__file__).resolve().parents[3] / "arch_surgery" / "fixedpoint" / "ystate.py"',
-            now='Path(__file__).resolve().parents[4] / "harness" / "ystate.py"',
+            now='Path(__file__).resolve().parents[4] / "harness" / "child" / "ystate.py"',
         ),
         PermittedEdit(
             kind="comment",

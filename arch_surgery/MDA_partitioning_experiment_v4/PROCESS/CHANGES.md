@@ -555,13 +555,17 @@ The file does not exist at `c0ae5b28` (§3.3); the diff here is against `f2dc924
 -    / "fixedpoint"
 +    Path(__file__).resolve().parents[4]
 +    / "harness"
++    / "child"
      / "ystate.py"
  )
 ```
 
 **Why.** The coupling-state predicate is loaded by path (§5). The copy sits one directory deeper
 than the root tree and must reach the V4 harness's own module, not V3's research tree (decision
-D20: V4 runs its own copy and owes V3 no compatibility).
+D20: V4 runs its own copy and owes V3 no compatibility). The `/ "child"` segment is task A66
+(ystate-into-child), carried by A73 under D27 on 2026-09-14: the module moved into `harness/child/`
+with the rest of the set a measurement subprocess imports, and the literal, this row of
+`PERMITTED_EDIT_FILES` and `PROVENANCE.json` changed in one commit.
 
 **Driver, not model.** A path; which file defines "converged" for the loop.
 
@@ -1292,6 +1296,7 @@ writes half uses, in a module that is not even imported with `PROCESS_IDF_PROBE`
 YSTATE_MODULE_PATH = (
     Path(__file__).resolve().parents[4]
     / "harness"
+    / "child"
     / "ystate.py"
 )
 ```
@@ -1302,18 +1307,20 @@ unset the module is never loaded.
 **Why by path, and why the harness's module.** The harness is not an installed package, and
 vendoring a second copy of the predicate into `process/` would create exactly the drift decision
 D14(c) exists to prevent: there is one implementation of the predicate per revision of the
-experiment, and the driver and the harness's exit audit must use the same one. `harness/ystate.py`
+experiment, and the driver and the harness's exit audit must use the same one. `harness/child/ystate.py`
 is byte-identical to its source in the research tree bar a provenance paragraph in its docstring
 (`harness/data/PROVENANCE.json` records that and checks it), and it implements both rulers of
 §4.2.8; the driver checks the module's `RULERS` against its own literal the first time it loads
 the module.
 
-**The file will move.** Task A66 (ystate-into-child) moves `harness/ystate.py` into
-`harness/child/`, riding the next G0′/GR press. Because the driver reaches it by a literal, the
-move is a driver-copy edit: the literal above and the `YSTATE_MODULE_PATH` row of
-`PERMITTED_EDIT_FILES` change together, `PROVENANCE.json` is regenerated, and G1 is run as a
-straddle across the change. Until then the harness README's layer 3 lists the file at the package
-top for this reason.
+**The file moved.** Task A66 (ystate-into-child), carried by A73 (run-path-edits-and-the-press)
+under D27 on 2026-09-14, moved `harness/ystate.py` into `harness/child/` — a pure `git mv`, the
+module's bytes unchanged (`harness/data/PROVENANCE.json` still records the same hunks and digest
+under the new name). Because the driver reaches it by a literal, the move was a driver-copy edit:
+the literal above and the `YSTATE_MODULE_PATH` row of `PERMITTED_EDIT_FILES` changed in one commit,
+`PROVENANCE.json` was regenerated (`copy_gates.py provenance --force`), `copy_gates.py all` passed,
+and G1 was run as a straddle across the change in A73's press. The harness README's layer 3 now
+lists the file inside `child/`.
 
 ---
 

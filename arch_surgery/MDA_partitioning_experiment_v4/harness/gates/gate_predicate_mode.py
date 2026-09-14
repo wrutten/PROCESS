@@ -811,7 +811,7 @@ def _predicate_mode_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
 
 def _load_ystate():
     """The coupling-state module, the way everything else in the harness gets it."""
-    from harness import ystate as ystate_mod  # noqa: PLC0415
+    from harness.child import ystate as ystate_mod  # noqa: PLC0415
 
     return ystate_mod
 

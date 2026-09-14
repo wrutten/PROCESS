@@ -10,7 +10,7 @@ deliberate:
 * the previous revision reached the coupling-state module through an
   ``importlib`` load of a file two directories away, and reached
   ``_cross_residual`` by importing a **private** name across a package
-  boundary.  Here the module is :mod:`harness.ystate`, imported normally, and
+  boundary.  Here the module is :mod:`harness.child.ystate`, imported normally, and
   the cross-state comparison is public;
 * the spec rebuild caches nothing.  The driver's own ``load_spec`` caches, and
   a harness-side cache keyed on a path would be a second, differently-keyed
@@ -38,7 +38,7 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from .. import ystate
+from . import ystate
 
 
 class PredicateError(RuntimeError):
@@ -51,7 +51,7 @@ class PredicateError(RuntimeError):
 
 
 def load_spec(path: Path | str) -> ystate.YSpec:
-    """Rebuild a :class:`~harness.ystate.YSpec` from a committed artifact.
+    """Rebuild a :class:`~harness.child.ystate.YSpec` from a committed artifact.
 
     The artifact carries, per component, its key, its category and (for a
     continuous one) its scale — which is the whole of what the predicate needs.
