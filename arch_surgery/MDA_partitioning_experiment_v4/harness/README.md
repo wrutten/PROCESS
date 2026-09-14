@@ -5,6 +5,143 @@ read by someone who has not followed the project, so everything it assumes is sp
 
 ---
 
+## 0. The harness in plain language — an overview, layer by layer
+
+*Written 2026-09-14 at the user's request, from the orchestrator's chat explanation. Paths are
+relative to `MDA_partitioning_experiment_v4/`. The sections after this one go deeper; this one is
+the map.*
+
+**What it is for.** The experiment asks one question: does rearranging how PROCESS's models are
+solved, without changing any model, reduce the number of model evaluations needed to reach the same
+answer at the same accuracy? The harness exists to make that measurement honest. It composes each
+experimental arm, runs PROCESS in isolation, records what each run cost and how accurately it
+stopped, checks itself with gates, and renders the results into the plan. Nothing that reaches the
+plan is typed by hand.
+
+**The one button.** `experiment_runner.py` is the only entry point. Every flag selects a stage:
+`--gate` runs one or all gates, `--measure` runs the tally and analysis stages, `--plan-tables`
+renders the plan's results section, `--selfcheck` runs the harness's own tests, `--smoke` runs the
+campaign's chain at one seed, `--run` runs one PROCESS job by hand. Failure paths are reachable from
+the same button, so a refused start or a failed gate is a result rather than a crash.
+
+**The copy of PROCESS.** The harness never runs the repository-root PROCESS. It runs a copy under
+`PROCESS/`, whose driver files carry the architecture changes as environment-switched branches.
+`PROCESS/copy_gates.py` proves the copy differs from the frozen base only in the permitted driver
+files. With every switch unset the copy behaves byte-identically to upstream, and gate G1 measures
+that.
+
+### Layer 1 — the foundation: `harness/core/`
+
+- `core/config.py` holds every declared setting as frozen data: configurations, seeds, tolerance,
+  delta, and the `EXECUTION_APPROVED` flag that keeps the campaign from running until the user says
+  so.
+- `core/framework.py` defines what a gate, a tooth, a check and a measurement are. A gate checks
+  something about the tree or the records. A tooth is a deliberate fault the gate must catch, so
+  every gate is shown able to fail. A measurement stage declares which records it reads and stamps
+  them, so a consumer can refuse a stage record the records have outrun.
+- `core/records.py` is the schema of a run record and its completeness contract. A record missing a
+  declared field is refused, never summarised over.
+- `core/pool.py` is the only place a PROCESS run starts. Each job gets a fresh subprocess and its own
+  directory. With `--resume`, a record whose job matches and whose schema is complete is kept rather
+  than re-run.
+- `core/provenance.py` stamps the interpreter, tree and commit on every record, and refuses to run if
+  the imported PROCESS is not this tree.
+- `core/failure.py` classifies every exception into one taxonomy row, so dropped runs are counted by
+  cause.
+
+### Layer 2 — what the experiment is: `harness/experiment/`
+
+- `experiment/arms.py` is the switch matrix as data. Each arm — `BR`, `B0`, `B1`, `B3` and the Phase A
+  arms — is a row of switch values, and the environment for a run is composed from that row. Nothing
+  composes an arm by hand.
+- `experiment/switches.py` is the vocabulary the driver copy reads, and a probe that checks the copy
+  actually implements each switch.
+- `experiment/input_files.py` provides the committed input file per configuration, and the lifted
+  variant where the burn time is moved to the optimiser.
+- `experiment/artifacts.py` and `experiment/data_provenance.py` resolve and check every committed
+  artifact a run reads, with digests.
+
+### Layer 3 — inside a run: `harness/child/` (and `harness/ystate.py`)
+
+These modules run inside the measurement subprocess, and they are the set nobody may edit while a
+run executes (harness plan amendment 13, rule (vi)).
+
+- `child/optimise.py` is the optimisation-phase entry point: one full PROCESS optimisation.
+  `child/evaluate.py` is the evaluation-phase entry point: one pass through the models with no
+  optimiser. `child/census.py` records which model writes which variable.
+- `child/child.py` is the shared machinery: it reads the counters the driver copy keeps, reads the
+  acceptance values from the written file, and takes the **exit audit** — the one further sweep after
+  the accepted point that measures how far the state would still move. Under ruling D25 it first puts
+  the whole data structure back to the solve-phase state via `child/data_structure.py`, so the sweep
+  evaluates the map the loop iterated rather than the one the write pass left behind.
+- `ystate.py` and `child/predicate.py` define the **coupling state**: the set of variables that flow
+  between models, their scales, and the convergence test at tolerance τ. The driver copy imports
+  `ystate.py` by a literal path, which is why it still sits at the package top (task A66 moves it).
+- `child/perturb.py` is the seeded displacement stream. Every arm at a given seed starts from the same
+  bytes, which is what makes cost differences paired.
+- `child/postsolve.py` derives which model nodes the optimiser never reads, so they can be deferred to
+  once per run. `child/audit_map.py` checks that the audit sweep is the loop's own map.
+
+### Layer 4 — what the records mean: `harness/measurement/`
+
+- `measurement/tally_evaluation.py` and `measurement/tally_optimisation.py` read the run records and
+  build the published tables: cost per arm, cost ratios against the control, achieved accuracy per
+  arm, the output loop's sweeps as their own column, and the failure taxonomy. `measurement/tally.py`
+  declares which record directories each table is over.
+- `measurement/stats.py` holds every statistical construction once, with its declaration in the plan.
+  `measurement/tables.py` refuses to emit a table without a caption, denominator, audit position and
+  instrument version.
+- `measurement/analysis.py` is a **deliberate second implementation** of every published cell,
+  sharing no helper with the tally. Gate `recomputation` compares the two. Agreement means the tables
+  are not an artefact of one piece of code.
+- `measurement/plan_tables.py` renders the plan's §4 from the stage records, and its check mode diffs
+  the committed §4 without writing.
+
+### Layer 5 — the gates: `harness/gates/`
+
+`gates/gates.py` holds the registry, the ordering by declared dependency, the comparison machinery,
+and the gates that need no module of their own. The important ones:
+
+- **G1 switch neutrality** — with every switch unset, the copy's output is byte-identical to the
+  frozen base, on values and on every output-file line.
+- **G0′ copy integrity** — the copy differs from the base only in permitted files.
+- **G9 output path** — `B1` and `B3` write once with zero loop sweeps; `BR` and `B0` keep the loop.
+- **`run_kind_separation`** — every published cell is over campaign records only, with gate and smoke
+  records excluded by kind.
+- **`recomputation`** — tally and analysis agree.
+
+The dedicated modules: `gates/gate_entry.py` proves all Phase A arms start from the same bytes.
+`gates/gate_audit.py` proves the audit's restricted statistic excludes exactly the deferred nodes.
+`gates/gate_composition.py` proves an arm composed from the matrix equals one composed switch by
+switch. `gates/gate_records.py` proves a record carries what it declares even when the run fails.
+`gates/gate_tally.py` proves the tables land on their declared cells.
+
+`gates/reproduction.py` with `gates/reference.py` is gate **GR**: did rewriting the harness change the
+measurement? It re-runs twenty jobs from the previous revision and compares the reference values bit
+for bit, naming each excluded value and why.
+
+`gates/selfcheck.py` tests the harness itself with synthesised fixtures and no PROCESS run.
+
+### The chain
+
+`chain.py` is the sequence the campaign runs: entry references per configuration, displaced-entry
+evaluations of every Phase A arm, the stencil evaluations, the optimisations of every Phase B arm,
+then the tally, the analysis, the recomputation gate and the render. The **smoke** runs the same
+chain at one seed on one configuration, writing smoke-kind records. The **campaign** runs it at every
+seed on every configuration, writing campaign-kind records, and only when `EXECUTION_APPROVED` is
+true.
+
+### How a number reaches the plan
+
+A run record is written by `child/`, stamped by `core/`, kept or re-made by the pool. The tally reads
+a declared set of records and writes a stage record naming them. The analysis recomputes the same
+cells independently. The recomputation gate compares. The gate table stage collects every verdict.
+The renderer writes §4 from those stage records and refuses if any record it reads has been outrun.
+Every caption states the population, the audit position and the instrument version. That chain is
+what lets the plan's tables be read without trusting anyone's memory.
+
+---
+
 ## 1. What the experiment measures, and why the physics is frozen
 
 PROCESS is a fusion power-plant systems code. It wraps an optimiser around a loop that runs about
