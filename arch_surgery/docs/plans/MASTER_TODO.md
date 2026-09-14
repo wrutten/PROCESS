@@ -1,8 +1,16 @@
 # Master TO-DO — architecture surgery on PROCESS
 
+> **Document status** — **ARCHIVED 2026-09-14 as the historical record; superseded by
+> [`../MASTER_TODO_v2.md`](../MASTER_TODO_v2.md) for everything active.** Nothing below is edited
+> after this date; every row's last state is the state at archiving (A74 (queue-v2), the task that
+> archived it, was still DISPATCHED). The numbering continues in the v2 file (next free A75, D28,
+> I-24 at archiving); a number is never reused. Folder position records lifecycle, not validity
+> (trap T3): the decisions, issues and task findings recorded here remain authoritative history;
+> only their *current* state is read from the v2 file.
+
 | | |
 |---|---|
-| **Status** | ACTIVE — the standing execution queue for this repository |
+| **Status** | ARCHIVED 2026-09-14 — the historical record; the active queue is [`../MASTER_TODO_v2.md`](../MASTER_TODO_v2.md) *(cell changed at archiving by A74 (queue-v2); it read "ACTIVE — the standing execution queue for this repository")* |
 | **Owner** | W.J. Rutten (paces execution); orchestrating agent dispatches |
 | **Objective** | Determine whether **the arrangement of solvers and optimisers alone** — every physics and engineering model frozen at `c0ae5b28` — measurably changes the cost of solving PROCESS, by partitioning the global idempotence loop into per-module solvers |
 | **Base commit** | `c0ae5b28` — frozen (D2). Shared coordinate system with `functional_PROCESS` and with the dependency-analysis pin `PROCESS_at_36ac820e` |
