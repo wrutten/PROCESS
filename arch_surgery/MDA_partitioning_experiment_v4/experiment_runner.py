@@ -58,7 +58,6 @@ from harness.core.config import (  # noqa: E402
     EXECUTION_APPROVED,
     Campaign,
     default_campaign,
-    repository_tree_campaign,
 )
 
 WIDTH = 74
@@ -375,7 +374,6 @@ def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
     except chain_mod.ChainError as exc:
         print(f"  REFUSED — {exc}")
         return 3
-    gates_mod.REPRODUCTION_LIFTED_FROM["path"] = args.lifted_from
     gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
     press = chain_mod.run(
         campaign,
@@ -484,7 +482,6 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
     # show that nothing about the solve changed on the arms that keep the loop,
     # so moving those runs would break a cross-reference between two gates in
     # order to relocate a small JSON file.
-    gates_mod.REPRODUCTION_LIFTED_FROM["path"] = args.lifted_from
     gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
     if not args.resume:
         print(
@@ -864,15 +861,6 @@ def stage_extract_reference(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--tree",
-        choices=("copy", "repository"),
-        default="copy",
-        help="which tree to run against: the experiment's own copy of "
-        "PROCESS (the default, and the only tree a record is ever made "
-        "against), or the repository's, which is for preflight and the "
-        "self-check only and refuses every campaign stage",
-    )
-    parser.add_argument(
         "--draft",
         action="store_true",
         help="preflight and gates only, even once execution is approved",
@@ -1017,19 +1005,15 @@ def main(argv: list[str] | None = None) -> int:
                         "gate re-makes the runs it reads, so a verdict is "
                         "never computed over records made before the change "
                         "it is checking")
-    parser.add_argument("--lifted-from", type=Path, default=None,
-                        help="for --gate reproduction: a directory holding the "
-                        "derived lifted input files, staged after their bytes "
-                        "are checked against the recorded digests")
     parser.add_argument("--skip-runs", action="store_true",
                         help="for --gate reproduction: compare and run the "
                         "cost-free teeth against records that already exist")
     parser.add_argument("--json", type=Path, help="write the preflight record here")
     args = parser.parse_args(argv)
 
-    campaign = (
-        default_campaign() if args.tree == "copy" else repository_tree_campaign()
-    )
+    # The experiment's own copy of PROCESS is the only tree a record is ever
+    # made against; there is no flag to point the button anywhere else.
+    campaign = default_campaign()
 
     if args.selfcheck:
         checks = selfcheck_mod.run_all(

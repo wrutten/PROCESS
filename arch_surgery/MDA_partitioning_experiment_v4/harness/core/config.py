@@ -146,8 +146,8 @@ class Campaign:
 
     ``tree`` is the tree the harness runs against — the directory holding the
     ``process`` package.  It is a parameter because V4 runs its *own copy* of
-    PROCESS and because a task testing the harness may point it at the
-    repository root instead.  Whichever it is, it is asserted for equality in
+    PROCESS; the self-check constructs a campaign at another path to prove the
+    refusals that keep it so.  Whichever it is, it is asserted for equality in
     every measurement subprocess (trap T6).
     """
 
@@ -207,10 +207,10 @@ class Campaign:
     def is_experiment_copy(self) -> bool:
         """Whether this campaign runs against the experiment's own copy.
 
-        Records are only ever made against the copy.  Pointing the campaign
-        at another tree is for preflight and the self-check; the runner
-        refuses every campaign stage in that case, so a measurement of a tree
-        nobody asked for cannot be produced by forgetting a flag.
+        Records are only ever made against the copy.  A campaign pointed at
+        another tree exists only as a self-check fixture; ``pool.run`` and
+        every campaign stage refuse it, so a measurement of a tree nobody
+        asked for cannot be produced by forgetting a flag.
         """
         return Path(self.tree).resolve() == (EXPERIMENT_DIR / "PROCESS").resolve()
 
@@ -438,24 +438,3 @@ def default_campaign() -> Campaign:
         ),
     )
 
-
-def repository_tree_campaign() -> Campaign:
-    """The same campaign pointed at the repository's own tree and artifacts.
-
-    For preflight and the self-check only: it answers "does the harness still
-    compose against the tree the earlier revisions measured?".  **No record is
-    ever made against it** — :attr:`Campaign.is_experiment_copy` is False, and
-    the runner refuses every campaign stage on that ground.
-    """
-    data_dir = REPO_ROOT / "arch_surgery" / "docs" / "data"
-    input_dir = REPO_ROOT / "arch_surgery" / "idf_probe" / "scenarios"
-    return Campaign(
-        tree=REPO_ROOT,
-        data_dir=data_dir,
-        input_dir=input_dir,
-        runs_dir=EXPERIMENT_DIR / "runs",
-        derived_input_dir=EXPERIMENT_DIR / "runs" / "input_files",
-        configurations=default_configurations(
-            input_dir=input_dir, data_dir=data_dir, naming="repository"
-        ),
-    )
