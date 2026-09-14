@@ -261,18 +261,6 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             # stage leaves a verdict nobody read, and only the pattern finds it.
             reads_records=("*/gate.json",),
         ),
-        "self_containment": Measurement(
-            name="self_containment",
-            reports=(
-                "every mention of the two superseded directories in this "
-                "package and the runner beside it, classified — the "
-                "measurement behind 'nothing is imported from, and nothing is "
-                "invoked as a subprocess into, idf_probe/ or fixedpoint/'"
-            ),
-            guarded_by="the user's requirement in the harness plan §6",
-            body=lambda *, resume=False: gates_mod.self_containment(campaign),
-            printer=gates_mod.print_self_containment,
-        ),
         "exclusion_review": Measurement(
             name="exclusion_review",
             reports=(
@@ -363,6 +351,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries: dict[str, Any] = {}
     entries.update(_plan_gates(campaign))
     entries.update(gates_mod.copy_gates(campaign))
+    entries["self_containment"] = gates_mod.self_containment_gate(campaign)
     entries.update(gates_mod._selfcheck_gates(campaign))
     entries.update(gates_mod._artifact_gates(campaign))
     entries.update(_tally_gates(campaign))
@@ -578,6 +567,9 @@ GATE_ORDER: tuple[str, ...] = (
     # by path, no PROCESS run.
     "copy_identity",
     "edit_behaviour",
+    # The package scanned for the two superseded directories: a gate since
+    # the simplification survey's item B8, no PROCESS run.
+    "self_containment",
     "composition",
     "rungs",
     "provenance",
