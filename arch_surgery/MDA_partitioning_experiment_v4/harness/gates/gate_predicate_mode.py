@@ -158,6 +158,19 @@ PREDICATE_PAIR_EXCLUSIONS: dict[str, str] = {
         "the loaded spec's stamp of the same setting"
     ),
     "exit_audit.predicate_mode": "the audit's stamp of the same setting",
+    "job_identity.predicate_mode": (
+        "the pool's stamp of the setting being varied (rule (xiv): predicate_mode "
+        "is a Job field, so it is in the identity)"
+    ),
+    "job_digest": (
+        "sha256 of the identity, which changes whenever any identity field does "
+        "-- here exactly because job_identity.predicate_mode does.  Excluded on "
+        "the condition this gate's pairs differ in that one field and no other, "
+        "which the identity block's other leaves, all compared, hold; that two "
+        "distinct jobs carry distinct digests is gate resume_identity's claim, "
+        "not this one's (a fix of the same class as A62's instrument stamp: a "
+        "field the pair varies by construction; A73, the D27 press)"
+    ),
     "exit_audit.rulers_note": (
         "prose, identical on both sides, excluded beside the stamps it explains"
     ),
