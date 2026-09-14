@@ -386,6 +386,53 @@ def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
     return 3 if press.get("refused") else 0
 
 
+def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The campaign: the whole chain, every configuration, the plan's seeds.
+
+    The same functions the smoke runs (``chain.run`` on ``plan_for``), with the
+    campaign plan: every configuration, ``campaign.n_seeds`` seeds, records
+    stamped ``campaign``.  ``chain.plan_for`` refuses it until the user has
+    approved execution (``EXECUTION_APPROVED`` flipped in the same commit as the
+    dated approval in ``EXPERIMENT_PLAN.md``) and the tree is the experiment's
+    own copy; the refusal is printed and the exit code is 3, so pressing this
+    before approval is a reproducible refusal, not a crash (protocol §15).
+    Added 2026-09-14 when the user approved execution: until then the preflight
+    printed the budget and nothing on the button could ask for the campaign.
+    """
+    _rule("campaign — the chain, every configuration, the plan's seeds")
+    print("=" * WIDTH)
+    print("MDA partitioning experiment — plan: EXPERIMENT_PLAN.md")
+    print(f"execution approved: {EXECUTION_APPROVED}")
+    print("=" * WIDTH)
+    try:
+        plan = chain_mod.plan_for("campaign", campaign)
+    except chain_mod.ChainError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    budget = plan.budget(campaign)
+    print(
+        f"  will run: {budget['entry_references']} entry reference(s) + "
+        f"{budget['evaluation_displaced']} displaced-entry evaluations + "
+        f"{budget['evaluation_stencil']} stencil evaluations + "
+        f"{budget['optimisation']} optimisations = {budget['total']} runs, "
+        f"records stamped {plan.run_kind!r}, {campaign.workers} worker(s)"
+    )
+    gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
+    press = chain_mod.run(
+        campaign,
+        plan,
+        resume=args.resume,
+        records_dir=_gate_records_dir(args, campaign),
+        teeth=not args.no_teeth,
+    )
+    chain_mod.print_press(press)
+    out = args.json or (campaign.runs_dir / plan.root_name / "press.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(press, indent=2, default=str) + "\n")
+    print(f"\n  record: {out}")
+    return 3 if press.get("refused") else 0
+
+
 def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
     """One run, from the button: one arm, one configuration, one seed, one phase.
 
@@ -902,6 +949,14 @@ def main(argv: list[str] | None = None) -> int:
         help="preflight and gates only, even once execution is approved",
     )
     parser.add_argument(
+        "--campaign",
+        action="store_true",
+        help="run the campaign: the same chain as --smoke on every configuration "
+        "at the plan's seed count, records stamped 'campaign'.  Refused, with "
+        "the reasons printed, until EXECUTION_APPROVED is True in the commit that "
+        "records the user's dated approval in EXPERIMENT_PLAN.md",
+    )
+    parser.add_argument(
         "--smoke",
         action="store_true",
         help="run the campaign's own chain once, end to end, on one seed and "
@@ -1060,6 +1115,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.smoke:
         return stage_smoke(args, campaign)
+
+    if args.campaign:
+        return stage_campaign_press(args, campaign)
 
     if args.plan_tables:
         return stage_plan_tables(args, campaign)
