@@ -176,7 +176,16 @@ class Gate:
         that is not the one named, one level up.
         """
         outcome = self.body(resume=resume)
-        job_rows = list(self.jobs()) if self.jobs is not None else []
+        job_rows: list[Mapping[str, Any]] = []
+        jobs_not_composable: str | None = None
+        if self.jobs is not None:
+            try:
+                job_rows = list(self.jobs())
+            except Exception as exc:  # noqa: BLE001 - a body that refused leaves no prerequisites
+                # The job set is composed from records on disk; a body that
+                # refused before making its prerequisites has none, and the
+                # verdict says so rather than dying after the body reported.
+                jobs_not_composable = f"{type(exc).__name__}: {exc}"
         paths = [Path(records_dir) / sub for sub in self.runs_under]
         paths += [Path(row["path"]) for row in job_rows]
         provenance = survey_heads(paths, relative_to=Path(records_dir))
@@ -189,6 +198,8 @@ class Gate:
             for row in job_rows
         ]
         provenance["n_jobs"] = len(job_rows)
+        if jobs_not_composable is not None:
+            provenance["jobs_not_composable"] = jobs_not_composable
         stale = provenance["n_records"] > 0 and provenance["heads"] != [git_head()]
         outcome.setdefault("runs_provenance", provenance)
         if stale and not resume:
