@@ -499,8 +499,9 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
             campaign, args.capture, resume=args.resume
         )
         print(
-            f"  captured {manifest['n_runs']} run(s) as {args.capture!r} at "
-            f"{manifest['tree_git_head']}"
+            f"  captured {manifest['n_runs']} run(s) as {args.capture!r}; records "
+            f"at {manifest['tree_git_head'] or manifest['records_git_heads']}, "
+            f"pressed at {manifest['pressed_at_git_head']}"
         )
         for row in manifest["runs"]:
             print(f"    {row['arm']:<3} {row['configuration']:<22} {row['outdir']}")

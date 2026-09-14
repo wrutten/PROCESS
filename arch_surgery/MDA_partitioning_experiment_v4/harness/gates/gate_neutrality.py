@@ -699,10 +699,28 @@ def capture_neutrality(
                 )
             )
     results = pool_mod.run_all(jobs, campaign, resume=resume)
+    # The manifest carries the commit of the **records it indexes**, read from
+    # the records themselves, and names the pressing commit apart.  Under
+    # ``--resume`` the two differ whenever every record was kept -- the press
+    # is at a later commit than the runs -- and a manifest that stamped the
+    # pressing commit as ``tree_git_head`` misplaced its own records
+    # (improvement list item 13, found by A67 (written-file-gap)).  The
+    # straddle is between the records, so it is the records' commit that
+    # decides it; a capture whose records sit at two commits states both and
+    # names none as its own.
+    record_heads = sorted(
+        head
+        for head in {
+            records_mod.read(job.outdir).get("tree_git_head") for job in jobs
+        }
+        if head
+    )
     manifest = {
         "label": label,
         "captured": _dt.datetime.now().isoformat(timespec="seconds"),
-        "tree_git_head": _git_head(),
+        "tree_git_head": record_heads[0] if len(record_heads) == 1 else None,
+        "records_git_heads": record_heads,
+        "pressed_at_git_head": _git_head(),
         "tree": str(campaign.tree),
         "n_runs": len(jobs),
         "audit_position": NEUTRAL_AUDIT_POSITION,
