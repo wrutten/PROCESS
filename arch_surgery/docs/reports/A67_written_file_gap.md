@@ -444,3 +444,43 @@ Not edited by this task; proposed for the orchestrator.
 | 2026-09-14 | `d44ac1e8` — README §8 |
 | 2026-09-14 | `f1c29f26`, `1adeed66` — the gate publishes the argmax component written against solved (§5's table becomes a stage's output); `--gate written_file_gap --resume` (0 runs), `--measure gate_table --resume`, `--plan-tables write` / `check` (IDENTICAL, no change to the committed §4), stamp survey unchanged (184 records, 6 at `09cc9f3e`) |
 | 2026-09-14 | this report |
+
+---
+
+## 13. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `cb1ac35a`, before the merge. Checks chosen to differ from the
+agent's.*
+
+1. **The gap, computed by a different route.** The gate publishes the `after_run` audit residual. I
+   read each of the six run directories directly and compared three numbers the gate does not put
+   side by side: `tfcoil.insstrain` in the driver's snapshot at the entry to the output path (the
+   accepted state), the same component in `y_exit.json` (the state PROCESS finished with), and the
+   value on the MFILE's `(insstrain)` line. On all six runs the MFILE value equals the exit value to
+   every printed digit, and the relative distance from the accepted state is 7.18e-03 (`B1`/`B3`) and
+   7.20e-03 (`BR`) on `large_tokamak_nof`, 7.02e-03 on all three arms of `low_aspect_ratio_DEMO`. Same
+   conclusion as the gate's, reached without its code: the one-call path writes the same gap the loop
+   path writes, and the written file carries the post-write value, not the accepted one.
+2. **The refusal, probed with my own cases.** Calling the new `assert_audit_position_allowed` directly:
+   a campaign run asking for `after_run` is refused even from a declared caller; a gate run with no
+   caller or an undeclared one is refused; the declared gate run is allowed; a campaign run at the
+   declared position is allowed. The refusal names the caller table.
+3. **Trial merge onto trunk (`f8eeb750`)** is clean; the gate appears in `--gates` on the merged tree.
+4. **The fourth caller.** The brief named GR and G1; the agent found the `attempts` stage's ladder runs
+   also audit at `after_run` unrefused and declared it rather than leaving the table short. Correct,
+   and an argument for the table's existence: a rule written in prose had drifted from three callers
+   to one in its own comment.
+5. **Autonomous decision 3** (`audit_position_note` into G1's always-excluded set) is accepted: it is
+   harness prose stamped into the record, and G1 already excludes prose leaves the instrument rewrites
+   (A62). The compared count is unchanged (2 831 / 0). **Decision 1** (caller stamped in
+   `command.json` and the verdict, not the record) is accepted: it avoids a schema change and its
+   re-make of every record, and the stamp is still per run and on disk.
+6. **Read-only T7 finding** is the useful one for the plan: `norm_objf`, `sqsumsq`, `ifail` and the
+   iteration variables are written by the solver handler from the optimiser's state before any model's
+   `output()` runs, so no acceptance quantity of this experiment reads a post-write model value.
+   Goes into I-21's row and the plan's §3.3.
+7. **Observation 4** (G1's resume press rewrites the `after` manifest's commit while the records stay
+   at theirs) is filed as improvement item 13 at the merge.
+
+**Approved for merge.** Records relocate to `arch_surgery/idf_probe/runs/A67_runs/` (path from the
+retire script).
