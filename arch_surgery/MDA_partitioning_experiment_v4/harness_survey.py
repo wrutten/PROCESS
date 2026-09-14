@@ -753,12 +753,65 @@ def _print_prose(sec: dict[str, Any]) -> None:
         print(f"  {m:50s} {s:.2f}")
 
 
+def import_walk() -> dict[str, Any]:
+    """Import every harness module and the top-level scripts, live, and say which fail.
+
+    The static graph above says who imports whom; this says whether each
+    module *imports at all* in this tree — the check a refactor task runs
+    before and after (A71, A72).  Scripts are imported as modules by path,
+    so their ``main`` is not run.
+    """
+    import importlib
+    import importlib.util
+    import traceback
+
+    failures: dict[str, str] = {}
+    names: list[str] = []
+    for path in harness_modules():
+        name = _module_name(path)
+        names.append(name)
+        try:
+            importlib.import_module(name)
+        except Exception:  # noqa: BLE001 - the failure is the finding
+            failures[name] = traceback.format_exc().splitlines()[-1]
+    for path in TOP_LEVEL_SCRIPTS:
+        label = module_label(path)
+        names.append(label)
+        try:
+            # Registered in sys.modules before executing: a dataclass in the
+            # script looks its own module up there while being defined.
+            spec_name = f"_import_walk_{path.stem}"
+            spec = importlib.util.spec_from_file_location(spec_name, path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec_name] = module
+            spec.loader.exec_module(module)  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001
+            failures[label] = traceback.format_exc().splitlines()[-1]
+    return {"n_modules": len(names), "n_failures": len(failures), "failures": failures}
+
+
+def _print_import_walk(sec: dict[str, Any]) -> None:
+    print(f"\n== import walk: {sec['n_modules']} modules, {sec['n_failures']} failure(s)")
+    for name, why in sorted(sec["failures"].items()):
+        print(f"  FAIL {name}: {why}")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--records", type=Path, default=DEFAULT_RECORDS,
                     help="a directory of relocated gate records (read-only)")
     ap.add_argument("--json", type=Path, default=None, help="write the whole survey here")
+    ap.add_argument("--import-walk", action="store_true",
+                    help="import every module live and report failures, then stop")
     args = ap.parse_args(argv)
+
+    if args.import_walk:
+        walk = import_walk()
+        _print_import_walk(walk)
+        if args.json:
+            args.json.parent.mkdir(parents=True, exist_ok=True)
+            args.json.write_text(json.dumps(walk, indent=1, default=str))
+        return 0 if walk["n_failures"] == 0 else 1
 
     out: dict[str, Any] = {}
     out["lines"] = lines_section(); _print_lines(out["lines"])
