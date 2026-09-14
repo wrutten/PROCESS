@@ -21,24 +21,15 @@ fields are extracted once into
 records are then used only to *re-derive* that file and check it byte for
 byte.
 
-Two stages, both reachable from ``experiment_runner.py`` so that their
-failure paths are as reproducible as their successes (protocol §15):
-
-``extract``
-    Read the twenty records under a ``--previous-runs`` root and write the
-    committed file.  A missing record is a **refusal**, never a skip.  A
-    record that does not carry a field the harness plan names for its phase
-    is a refusal that names the record and the field.  A record made at any
-    commit other than the previous revision's campaign commit is a refusal.
-
-``verify``
-    Re-derive the file from the live records and require **byte-for-byte**
-    equality with the committed one.  A missing record is a FAIL, not a skip;
-    an absent committed file is a FAIL, not a skip.
-
-And ``--teeth``: four deliberate breaks, each of which must make one of those
-two stages refuse.  A check that has never been shown to fail is an
-assertion, not a measurement (protocol §12).
+The file was extracted **once** from those records, verified byte for byte
+against them, and committed (task A49 (harness-reference)); the extraction,
+verification and teeth stages that did it were retired by the simplification
+survey's item B7, because the reference is not regenerated (D25) and the
+records they read are the previous revision's untracked bulk.  What remains is
+the committed bytes, the reader (:func:`load`, :func:`lookup`), the compared
+field list and its translation (:data:`FIELD_NAME_MAP`), and the two printers
+(``--reference show`` / ``--reference tables``).  The file's provenance block
+names the extraction's source root, commit and date.
 
 The entry schema
 ----------------
@@ -77,25 +68,19 @@ Written by task **A49 (harness-reference)**.  No PROCESS run happens here.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import shutil
 import sys
-import tempfile
 from dataclasses import dataclass
-from datetime import date
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 _EXPERIMENT_DIR = Path(__file__).resolve().parents[2]
 if str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
 from harness.experiment import arms as arms_mod  # noqa: E402
-from harness.core import records as records_mod  # noqa: E402
 from harness.experiment import switches as sw  # noqa: E402
-from harness.core.config import REPO_ROOT, Campaign, default_campaign  # noqa: E402
-from harness.gates.selfcheck import Check  # noqa: E402
+from harness.core.config import Campaign, default_campaign  # noqa: E402
 
 #: This file's directory.
 HERE = Path(__file__).resolve().parent.parent
@@ -107,28 +92,6 @@ REFERENCE_PATH = HERE / "reference" / "reproduction_reference.json"
 #: Schema tag, so a later change to the entry shape is visible rather than
 #: silently absorbed by a reader that expected the old one.
 FORMAT = "reproduction-reference-1"
-
-#: Where the previous revision's records sit, relative to a repository root.
-#: They are untracked bulk: present in the main checkout, absent from a task
-#: worktree.  The extraction is therefore pointed at a root explicitly, and
-#: the root it used is recorded in the file.
-PREVIOUS_RUNS_SUBPATH = (
-    Path("arch_surgery") / "MDA_partitioning_experiment_v3" / "runs"
-)
-
-#: The commit the previous revision's campaign ran at.  Every one of the
-#: twenty records must carry it; a record made anywhere else is not part of
-#: that campaign and is refused rather than quietly averaged in.
-PREVIOUS_CAMPAIGN_COMMIT = "362c0b47dffcbfb8747338134a82d11985761d46"
-
-#: How the previous revision named a seed's run directory.  Its Phase B
-#: "start000" is seed 0 and its Phase A "start001" is seed 1; the word in V4
-#: is **seed**, in both phases (harness plan §11.2).
-_SEED_DIRECTORY = "start{seed:03d}"
-
-#: The previous revision's phase directories.
-_PHASE_DIRECTORY = {"A": "phase_a", "B": "phase_b"}
-
 
 class ReferenceError(RuntimeError):
     """A refusal.  Never downgraded to a warning and never to a skip."""
@@ -422,18 +385,6 @@ class ReferenceRun:
         """What the previous revision called this arm."""
         return previous_arm_name(self.arm)
 
-    @property
-    def source_path(self) -> Path:
-        """The record's path, relative to a runs root."""
-        return (
-            Path(_PHASE_DIRECTORY[self.phase])
-            / "campaign"
-            / self.configuration
-            / self.previous_arm
-            / _SEED_DIRECTORY.format(seed=self.seed)
-            / "metrics.json"
-        )
-
 
 #: The reference table of harness plan §7.1, as data.  One tuple per row:
 #: (phase, arm, seed, whether the row is restricted to pulsed configurations,
@@ -602,233 +553,6 @@ def assert_previous_arm_name(name: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# reading one record
-# --------------------------------------------------------------------------
-
-
-def _resolve(record: Mapping[str, Any], path: str) -> Any:
-    """The value at dotted *path*, or :class:`KeyError` naming what is missing.
-
-    One line, deliberately: the implementation lives in
-    :func:`harness.core.records.resolve_path`, which the run path's comparator also
-    reads its records through.  Two copies of "how a dotted field name is
-    resolved" is the shape of defect D14(c) exists to prevent — a path that
-    resolved for the gate and not for the reference it is compared against
-    would report a mismatch that is neither side's number.  *(Delegated by task
-    A50 (harness-run); the implementation is A49's, moved unchanged.)*
-    """
-    return records_mod.resolve_path(record, path)
-
-
-def sha256_of(path: Path) -> str:
-    """The sha256 of a file's bytes."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def extract_entry(run: ReferenceRun, runs_root: Path) -> dict[str, Any]:
-    """One entry of the committed reference, read from one live record.
-
-    Three refusals, each of which would otherwise become a silent hole in the
-    gate: the record is not there; the record was made at a different commit
-    from the rest of the campaign; the record does not carry a field the plan
-    names for its phase.
-    """
-    assert_previous_arm_name(run.previous_arm)
-    path = Path(runs_root) / run.source_path
-    if not path.exists():
-        raise ReferenceError(
-            f"missing record for {run.key}: {path} does not exist.  A missing "
-            f"record is a refusal, not a skip — a gate computed over a "
-            f"population smaller than the one it names is how a zero gets "
-            f"published over nothing (trap T11)."
-        )
-    digest = sha256_of(path)
-    try:
-        record = json.loads(path.read_text())
-    except json.JSONDecodeError as exc:
-        raise ReferenceError(f"unreadable record for {run.key}: {path}: {exc}") from exc
-
-    head = record.get("tree_git_head")
-    if head != PREVIOUS_CAMPAIGN_COMMIT:
-        raise ReferenceError(
-            f"{run.key}: the record at {path} was made at commit {head!r}, not "
-            f"at the previous revision's campaign commit "
-            f"{PREVIOUS_CAMPAIGN_COMMIT}.  A record from another commit is "
-            f"not part of that campaign and is refused rather than mixed in."
-        )
-
-    fields: dict[str, Any] = {}
-    for name in REFERENCE_FIELDS[run.phase]:
-        try:
-            fields[name] = _resolve(record, name)
-        except KeyError as exc:
-            raise ReferenceError(
-                f"{run.key}: the record at {path} does not carry the compared "
-                f"field {name!r} (missing at {exc.args[0]}).  A missing field "
-                f"is a refusal, not a skip: the gate would otherwise compare "
-                f"fewer things than it says it does."
-            ) from exc
-
-    return {
-        "arm": run.arm,
-        "previous_arm": run.previous_arm,
-        "configuration": run.configuration,
-        "phase": run.phase,
-        "seed": run.seed,
-        "group": run.group,
-        "source_path": run.source_path.as_posix(),
-        "source_sha256": digest,
-        "tree_git_head": head,
-        "fields": fields,
-    }
-
-
-# --------------------------------------------------------------------------
-# building the whole document
-# --------------------------------------------------------------------------
-
-
-def _field_population(entries: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Per phase, how many records carry each compared field.
-
-    Every count in this experiment carries the number of things it was taken
-    over (protocol §12).  Here that number is also the check: a field present
-    on fewer records than the phase has is a refusal upstream of this
-    function, so every entry below reads ``n / n``.
-    """
-    population: dict[str, Any] = {}
-    for phase, names in REFERENCE_FIELDS.items():
-        of_phase = [e for e in entries if e["phase"] == phase]
-        population[phase] = {
-            "n_records": len(of_phase),
-            "n_fields": len(names),
-            "carried_by": {
-                name: sum(1 for e in of_phase if name in e["fields"]) for name in names
-            },
-        }
-    return population
-
-
-def _applicability(entries: Sequence[Mapping[str, Any]]) -> dict[str, str]:
-    """What the block-solver fields mean on arms that never enter a block solver.
-
-    The reference arm runs upstream's own loop, so its block-solver totals are
-    present in the record and empty: no evaluations, no sweeps, no
-    histograms.  That is recorded here as the *value it has*, and compared
-    like any other value — never omitted, because an omitted field and a zero
-    field are the two things a reader must be able to tell apart.
-    """
-    notes: dict[str, str] = {}
-    for entry in entries:
-        arm = entry["arm"]
-        if arm in notes:
-            continue
-        blocks = entry["fields"].get("module_solve_totals.inner_sweeps_by_block")
-        calls = entry["fields"].get("module_solve_totals.n_call_models")
-        if not blocks:
-            notes[arm] = (
-                "the block solver is never entered on this arm (upstream's own "
-                f"loop runs instead), so module_solve_totals is present and "
-                f"empty: n_call_models = {calls}, no per-block histogram.  "
-                "Compared as the value it has, not omitted"
-            )
-        elif list(blocks) == ["FLAT"]:
-            notes[arm] = (
-                "one block over every in-loop node, so the per-block histogram "
-                "has the single entry 'FLAT'.  This is the flat arm's shape, "
-                "not a missing partition"
-            )
-        else:
-            notes[arm] = (
-                "the partitioned arm: one entry per block in the schedule "
-                f"({', '.join(blocks)})"
-            )
-    return notes
-
-
-def build(
-    runs_root: Path,
-    *,
-    extracted_on: str,
-    campaign: Campaign | None = None,
-) -> dict[str, Any]:
-    """The whole committed document, derived from the live records.
-
-    *extracted_on* is a parameter rather than today's date so that
-    re-derivation is a pure function of the records: ``verify`` re-derives
-    with the date the committed file already carries, and the byte comparison
-    then measures the records and nothing else.
-    """
-    campaign = campaign or default_campaign()
-    runs_root = Path(runs_root)
-    runs = reference_set(campaign)
-    entries = [extract_entry(run, runs_root) for run in runs]
-
-    n_optimisations = sum(1 for e in entries if e["phase"] == "B")
-    n_evaluations = sum(1 for e in entries if e["phase"] == "A")
-
-    return {
-        "format": FORMAT,
-        "provenance": {
-            "what": (
-                "the compared fields of the previous revision's twenty "
-                "reference runs, committed so that gate GR does not depend on "
-                "untracked run records"
-            ),
-            "gate": "GR (harness plan §7): the rewritten harness, driving the "
-            "experiment's own copy of PROCESS before any driver change, must "
-            "reproduce these values bit for bit",
-            "written_by": "harness/reference.py (task A49 (harness-reference))",
-            "extracted_on": extracted_on,
-            "source_revision": {
-                "name": "MDA_partitioning_experiment_v3",
-                "campaign_commit": PREVIOUS_CAMPAIGN_COMMIT,
-                "runs_root": str(runs_root),
-                "why_absolute": (
-                    "the records are untracked bulk and live only in the main "
-                    "checkout; naming the directory the numbers were read from "
-                    "is the point of recording it"
-                ),
-            },
-            "population": (
-                f"{len(entries)} records = {n_optimisations} optimisations + "
-                f"{n_evaluations} evaluations, over the "
-                f"{len(campaign.configurations)} configurations "
-                f"{', '.join(campaign.population)}; "
-                "seed 0 is the unperturbed start and seed 1 the first "
-                "perturbed one"
-            ),
-            "configurations": list(campaign.population),
-            "absent_from_the_set": absent_from_the_reference_set(campaign),
-            "compared_fields": {
-                phase: list(names) for phase, names in REFERENCE_FIELDS.items()
-            },
-            "compared_fields_why": FIELD_NOTES,
-            "compared_fields_beyond_the_plan": FIELDS_BEYOND_THE_PLAN,
-            "fields_the_gate_no_longer_compares": FIELDS_NOT_COMPARED,
-            "fields_the_gate_compares": {
-                phase: list(compared_fields(phase)) for phase in REFERENCE_FIELDS
-            },
-            "field_population": _field_population(entries),
-            "block_solver_field_applicability": _applicability(entries),
-            "not_covered_by_this_reference": ARMS_WITHOUT_PREVIOUS_RECORDS,
-            "how_to_re_derive": (
-                "python harness/gates/reference.py --extract --previous-runs "
-                "<repo>/arch_surgery/MDA_partitioning_experiment_v3/runs; "
-                "python harness/gates/reference.py --verify re-derives it and "
-                "requires byte-for-byte equality"
-            ),
-        },
-        "entries": entries,
-    }
-
-
-def serialise(document: Mapping[str, Any]) -> str:
-    """The document's committed text.  One spelling, so bytes can be compared."""
-    return json.dumps(document, indent=2, ensure_ascii=True) + "\n"
-
-
-# --------------------------------------------------------------------------
 # reading the committed file
 # --------------------------------------------------------------------------
 
@@ -838,10 +562,10 @@ def load(path: Path | None = None) -> dict[str, Any]:
     path = Path(path or REFERENCE_PATH)
     if not path.exists():
         raise ReferenceError(
-            f"the reproduction reference is not committed at {path}.  It is "
-            f"produced by 'harness/gates/reference.py --extract --previous-runs "
-            f"<root>' and committed; the gate reads the committed file, never "
-            f"the untracked records directly."
+            f"the reproduction reference is not committed at {path}.  It was "
+            f"extracted once from the previous revision's records and "
+            f"committed (its provenance block says from where and when); the "
+            f"gate reads the committed file and nothing regenerates it (D25)."
         )
     document = json.loads(path.read_text())
     if document.get("format") != FORMAT:
@@ -885,327 +609,6 @@ def lookup(
             )
         )
     )
-
-
-# --------------------------------------------------------------------------
-# stage: extract
-# --------------------------------------------------------------------------
-
-
-def default_previous_runs_root() -> Path:
-    """Where this checkout would look for the previous revision's records.
-
-    A task worktree has no such directory — the records are untracked bulk
-    and exist only in the main checkout — so the default is the path that
-    *would* hold them and the refusal names it.  Guessing at another checkout
-    would read numbers nobody asked for.
-    """
-    return REPO_ROOT / PREVIOUS_RUNS_SUBPATH
-
-
-def stage_extract(
-    *,
-    runs_root: Path | None = None,
-    out_path: Path | None = None,
-    extracted_on: str | None = None,
-    campaign: Campaign | None = None,
-) -> tuple[int, dict[str, Any]]:
-    """Write the committed reference from the live records.  0 written, 3 refused."""
-    runs_root = Path(runs_root or default_previous_runs_root())
-    out_path = Path(out_path or REFERENCE_PATH)
-    extracted_on = extracted_on or date.today().isoformat()
-    check = Check(
-        name="reference extraction",
-        binds="the twenty reference runs of harness plan §7.1, at the previous "
-        "revision's campaign commit",
-        population=f"records under {runs_root}",
-    )
-    if not runs_root.exists():
-        check.fail(
-            f"no such runs root: {runs_root}.  The previous revision's records "
-            f"are untracked bulk and live in the main checkout; point "
-            f"--previous-runs at it."
-        )
-        return 3, check.as_record()
-    try:
-        document = build(runs_root, extracted_on=extracted_on, campaign=campaign)
-    except ReferenceError as exc:
-        check.fail(str(exc))
-        return 3, check.as_record()
-    text = serialise(document)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(text)
-    check.n_compared = len(document["entries"])
-    check.note(f"wrote {out_path} ({len(text)} bytes)")
-    check.note(document["provenance"]["population"])
-    record = check.as_record()
-    record["path"] = str(out_path)
-    record["bytes"] = len(text)
-    record["sha256"] = hashlib.sha256(text.encode()).hexdigest()
-    record["provenance"] = document["provenance"]
-    return 0, record
-
-
-# --------------------------------------------------------------------------
-# stage: verify
-# --------------------------------------------------------------------------
-
-
-def _first_difference(a: str, b: str) -> str:
-    """Where two texts first differ, with a little context on both sides."""
-    limit = min(len(a), len(b))
-    index = next((i for i in range(limit) if a[i] != b[i]), limit)
-    lo, hi = max(0, index - 60), index + 60
-    return (
-        f"first difference at byte {index} of {len(a)} (committed) / "
-        f"{len(b)} (re-derived)\n"
-        f"    committed  : ...{a[lo:hi]!r}...\n"
-        f"    re-derived : ...{b[lo:hi]!r}..."
-    )
-
-
-def _field_differences(
-    committed: Mapping[str, Any], rederived: Mapping[str, Any]
-) -> list[str]:
-    """A readable account of what moved, entry by entry and field by field."""
-    def index(document: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
-        return {
-            f"{e['arm']}/{e['configuration']}/seed{e['seed']:03d}": e
-            for e in document.get("entries", [])
-        }
-
-    left, right = index(committed), index(rederived)
-    lines: list[str] = []
-    for key in sorted(set(left) - set(right)):
-        lines.append(f"{key}: in the committed file, absent from the re-derivation")
-    for key in sorted(set(right) - set(left)):
-        lines.append(f"{key}: re-derived, absent from the committed file")
-    for key in sorted(set(left) & set(right)):
-        a, b = left[key], right[key]
-        for name in ("source_sha256", "source_path", "tree_git_head"):
-            if a.get(name) != b.get(name):
-                lines.append(f"{key}: {name} {a.get(name)!r} -> {b.get(name)!r}")
-        for name in sorted(set(a["fields"]) | set(b["fields"])):
-            if a["fields"].get(name, "<absent>") != b["fields"].get(name, "<absent>"):
-                lines.append(
-                    f"{key}: {name} {a['fields'].get(name, '<absent>')!r} -> "
-                    f"{b['fields'].get(name, '<absent>')!r}"
-                )
-    if committed.get("provenance") != rederived.get("provenance"):
-        lines.append("the provenance block differs (see the byte difference above)")
-    return lines
-
-
-def stage_verify(
-    *,
-    runs_root: Path | None = None,
-    reference_path: Path | None = None,
-    campaign: Campaign | None = None,
-) -> tuple[int, dict[str, Any]]:
-    """Re-derive the committed reference and require byte-for-byte equality.
-
-    Returns 0 on PASS and 3 on FAIL.  Every way of not being able to compare
-    — the committed file absent, the records absent, a record missing, a
-    field missing — is a FAIL and never a skip.
-    """
-    reference_path = Path(reference_path or REFERENCE_PATH)
-    check = Check(
-        name="reference verification",
-        binds="the committed reproduction reference re-derives byte for byte "
-        "from the previous revision's live records",
-    )
-    try:
-        committed_text = reference_path.read_text()
-        committed = load(reference_path)
-    except (ReferenceError, OSError, json.JSONDecodeError) as exc:
-        check.fail(str(exc))
-        check.population = f"the committed file at {reference_path}"
-        return 3, check.as_record()
-
-    recorded_root = committed["provenance"]["source_revision"]["runs_root"]
-    runs_root = Path(runs_root or recorded_root)
-    check.population = (
-        f"{len(committed['entries'])} entries re-derived from {runs_root}"
-    )
-    if not runs_root.exists():
-        check.fail(
-            f"no such runs root: {runs_root}.  Verification needs the live "
-            f"records; not having them is a FAIL, not a skip — a gate that "
-            f"passes when its input is absent has no population."
-        )
-        return 3, check.as_record()
-
-    try:
-        rederived = build(
-            runs_root,
-            extracted_on=committed["provenance"]["extracted_on"],
-            campaign=campaign,
-        )
-    except ReferenceError as exc:
-        check.fail(str(exc))
-        return 3, check.as_record()
-
-    rederived_text = serialise(rederived)
-    check.n_compared = len(committed["entries"])
-    if rederived_text == committed_text:
-        check.note(
-            f"{len(committed_text)} bytes identical; "
-            f"{check.n_compared} entries, "
-            f"{sum(len(e['fields']) for e in committed['entries'])} compared "
-            f"field values"
-        )
-        check.note(
-            "the extraction date is taken from the committed file, so the "
-            "comparison measures the records and nothing else"
-        )
-        record = check.as_record()
-        record["sha256"] = hashlib.sha256(committed_text.encode()).hexdigest()
-        return 0, record
-
-    check.fail(_first_difference(committed_text, rederived_text))
-    for line in _field_differences(committed, rederived)[:40]:
-        check.fail(line)
-    return 3, check.as_record()
-
-
-# --------------------------------------------------------------------------
-# teeth (harness plan §7.3; protocol §12)
-# --------------------------------------------------------------------------
-
-
-def _shadow_root(runs_root: Path, destination: Path, campaign=None) -> Path:
-    """A throwaway copy holding only the twenty record files.
-
-    The real runs directory is gigabytes of PROCESS output; the teeth need
-    only the records, so they are copied at their own relative paths into a
-    temporary tree that can be broken freely.  Nothing under the real
-    directory is ever written to — it belongs to the main checkout.
-    """
-    for run in reference_set(campaign):
-        source = Path(runs_root) / run.source_path
-        target = Path(destination) / run.source_path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
-    return Path(destination)
-
-
-def stage_teeth(
-    *, runs_root: Path | None = None, campaign: Campaign | None = None
-) -> tuple[int, dict[str, Any]]:
-    """Four deliberate breaks, each of which must make a stage refuse.
-
-    A gate whose failure mode has never been exercised is an assertion, not a
-    measurement.  Two of these need the live records, so a teeth run without
-    them is reported as a FAIL rather than as a pass over three teeth.
-    """
-    runs_root = Path(runs_root or default_previous_runs_root())
-    check = Check(
-        name="reference teeth",
-        binds="each deliberate break makes the extraction or the verification "
-        "refuse",
-        population="four teeth: a missing record, a missing compared field, "
-        "the name map bypassed, one changed value in the committed file",
-    )
-
-    # ---- tooth 3 first: it needs no records at all -----------------------
-    refusals: list[str] = []
-    for name, what in (
-        ("BR", "this revision's name for the renamed reference arm"),
-        ("A1u", "an arm the previous revision ran and V4 retired"),
-        ("B2", "an arm the previous revision ran and V4 retired"),
-    ):
-        try:
-            if name == "BR":
-                assert_previous_arm_name(name)
-            else:
-                previous_arm_name(name)
-        except ReferenceError as exc:
-            refusals.append(f"{name} ({what}): {str(exc).splitlines()[0]}")
-        else:
-            refusals.append(f"{name}: DID NOT RAISE")
-    caught = all("DID NOT RAISE" not in line for line in refusals)
-    check.tooth(
-        "name map bypassed",
-        caught,
-        "asking the previous revision's records for BR, A1u or B2 by name: "
-        + " | ".join(refusals),
-    )
-
-    if not runs_root.exists():
-        check.fail(
-            f"no such runs root: {runs_root}.  Three of the four teeth need "
-            f"the live records; a teeth run that cannot construct its breaks "
-            f"is a FAIL, not a pass over the teeth it could run."
-        )
-        return 3, check.as_record()
-
-    with tempfile.TemporaryDirectory(prefix="reference-teeth-") as tmp:
-        tmp_path = Path(tmp)
-
-        # ---- tooth 1: a missing record ------------------------------------
-        root_missing = _shadow_root(runs_root, tmp_path / "missing", campaign)
-        victim = reference_set(campaign)[-1]
-        (root_missing / victim.source_path).unlink()
-        caught, message = _must_refuse(
-            lambda: build(root_missing, extracted_on="1970-01-01", campaign=campaign)
-        )
-        check.tooth(
-            "missing record",
-            caught and "missing record" in message,
-            f"{victim.key}'s record removed from a throwaway copy -> {message}",
-        )
-
-        # ---- tooth 2: a compared field deleted ----------------------------
-        root_field = _shadow_root(runs_root, tmp_path / "field", campaign)
-        target = reference_set(campaign)[0]
-        dropped = REFERENCE_FIELDS[target.phase][0]
-        record_path = root_field / target.source_path
-        record = json.loads(record_path.read_text())
-        record.pop(dropped)
-        record_path.write_text(json.dumps(record))
-        caught, message = _must_refuse(
-            lambda: build(root_field, extracted_on="1970-01-01", campaign=campaign)
-        )
-        check.tooth(
-            "missing compared field",
-            caught and dropped in message,
-            f"{dropped!r} deleted from {target.key}'s record -> {message}",
-        )
-
-        # ---- tooth 4: one value changed in the committed file -------------
-        broken = tmp_path / "reproduction_reference.json"
-        try:
-            document = load()
-        except ReferenceError as exc:
-            check.fail(f"cannot construct the fourth tooth: {exc}")
-            return 3, check.as_record()
-        first = document["entries"][0]
-        moved = REFERENCE_FIELDS[first["phase"]][0]
-        was = first["fields"][moved]
-        first["fields"][moved] = (was + 1) if isinstance(was, int) else f"{was}0"
-        broken.write_text(serialise(document))
-        code, record = stage_verify(
-            runs_root=runs_root, reference_path=broken, campaign=campaign
-        )
-        check.tooth(
-            "one value changed in the committed file",
-            code != 0,
-            f"{first['arm']}/{first['configuration']}: {moved} "
-            f"{was!r} -> {first['fields'][moved]!r} in a throwaway copy -> "
-            f"verification {record['verdict']}",
-        )
-
-    check.n_compared = len(check.teeth)
-    return (0 if check.passed else 3), check.as_record()
-
-
-def _must_refuse(call) -> tuple[bool, str]:
-    """Run *call*; report whether it refused, and with what first line."""
-    try:
-        call()
-    except ReferenceError as exc:
-        return True, str(exc).splitlines()[0]
-    return False, "DID NOT REFUSE"
 
 
 # --------------------------------------------------------------------------
@@ -1306,52 +709,14 @@ def tables(document: Mapping[str, Any]) -> str:
     return "\n".join(out)
 
 
-def report(name: str, code: int, record: Mapping[str, Any]) -> int:
-    """Print one stage's verdict in the same shape as the harness's own checks."""
-    width = 74
-    print("=" * width)
-    print(f"reproduction reference — {name}")
-    print("=" * width)
-    print(f"\n[{record['verdict']}] {record['check']} — {record['binds']}")
-    print(f"  population : {record['population']}")
-    print(f"  compared   : {record['n_compared']}   mismatched: "
-          f"{record['n_mismatched']}")
-    for line in record["detail"]:
-        print(f"  . {line}")
-    for tooth in record["teeth"]:
-        mark = "tripped" if tooth["caught"] else "DID NOT TRIP"
-        print(f"  tooth {mark}: {tooth['tooth']} — {tooth['what']}")
-    print("\n" + "=" * width)
-    print(f"verdict: {record['verdict']}")
-    print("=" * width)
-    return code
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     stage = parser.add_mutually_exclusive_group(required=True)
     stage.add_argument(
-        "--extract",
-        action="store_true",
-        help="read the twenty records and write the committed reference",
-    )
-    stage.add_argument(
-        "--verify",
-        action="store_true",
-        help="re-derive the committed reference and require byte-for-byte "
-        "equality with it",
-    )
-    stage.add_argument(
-        "--teeth",
-        action="store_true",
-        help="the four deliberate breaks, each of which must make a stage "
-        "refuse",
-    )
-    stage.add_argument(
         "--show",
         action="store_true",
         help="print what the committed reference holds and what it does not "
-        "cover, without touching the live records",
+        "cover",
     )
     stage.add_argument(
         "--tables",
@@ -1360,64 +725,25 @@ def main(argv: list[str] | None = None) -> int:
         "committed reference",
     )
     parser.add_argument(
-        "--previous-runs",
+        "--path",
         type=Path,
-        help="root of the previous revision's untracked run records "
-        "(default for --extract: this checkout's own, which a task worktree "
-        "does not have; default for --verify: the root the committed file "
-        "names)",
+        help=f"read this file instead of the committed one ({REFERENCE_PATH})",
     )
-    parser.add_argument(
-        "--out",
-        type=Path,
-        help=f"where to write the reference (default {REFERENCE_PATH})",
-    )
-    parser.add_argument(
-        "--extraction-date",
-        help="stamp this date instead of today's, so an extraction can be "
-        "reproduced exactly",
-    )
-    parser.add_argument("--json", type=Path, help="write the stage's record here")
     args = parser.parse_args(argv)
-
-    if args.show or args.tables:
-        try:
-            document = load(args.out)
-        except ReferenceError as exc:
-            print(f"[FAIL] {exc}")
-            return 3
-        if args.tables:
-            print(tables(document))
-            return 0
-        print("=" * 74)
-        print("reproduction reference — what is committed")
-        print("=" * 74)
-        for line in summary(document):
-            print(line)
+    try:
+        document = load(args.path)
+    except ReferenceError as exc:
+        print(f"[FAIL] {exc}")
+        return 3
+    if args.tables:
+        print(tables(document))
         return 0
-
-    if args.extract:
-        code, record = stage_extract(
-            runs_root=args.previous_runs,
-            out_path=args.out,
-            extracted_on=args.extraction_date,
-        )
-        name = "extract"
-    elif args.verify:
-        code, record = stage_verify(
-            runs_root=args.previous_runs, reference_path=args.out
-        )
-        name = "verify"
-    else:
-        code, record = stage_teeth(runs_root=args.previous_runs)
-        name = "teeth"
-
-    report(name, code, record)
-    if args.json:
-        args.json.parent.mkdir(parents=True, exist_ok=True)
-        args.json.write_text(json.dumps(record, indent=2, default=str))
-        print(f"record: {args.json}")
-    return code
+    print("=" * 74)
+    print("reproduction reference — what is committed")
+    print("=" * 74)
+    for line in summary(document):
+        print(line)
+    return 0
 
 
 if __name__ == "__main__":

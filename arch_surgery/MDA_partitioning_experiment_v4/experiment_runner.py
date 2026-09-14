@@ -231,9 +231,8 @@ def stage_reference(campaign: Campaign) -> tuple[int, dict[str, Any]]:
     reference runs, so that the reproduction gate reads a committed file
     rather than untracked run records that a retired working tree can delete
     — which has happened to this project three times.  This stage reports
-    what is committed; ``--reference verify`` re-derives it from the live
-    records and requires byte-for-byte equality, and ``--reference teeth``
-    shows the four ways it refuses.
+    what is committed; the file is not regenerated (D25) and its provenance
+    block names the records it was extracted from.
     """
     _rule("reproduction reference")
     try:
@@ -244,10 +243,6 @@ def stage_reference(campaign: Campaign) -> tuple[int, dict[str, Any]]:
     for line in reference_mod.summary(document):
         print(line)
     provenance = document["provenance"]
-    print(
-        "  re-derive  experiment_runner.py --reference verify "
-        "--previous-runs <root>"
-    )
     return 0, {
         "present": True,
         "path": str(reference_mod.REFERENCE_PATH),
@@ -817,45 +812,19 @@ def _artifact_teeth(campaign: Campaign) -> tuple[int, dict[str, Any]]:
 
 
 def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
-    """One reproduction-reference stage, from the button rather than by hand.
+    """The committed reproduction reference, shown or tabled, from the button.
 
-    Every stage of the experiment is reachable from this entry point,
-    successes and refusals alike: a run that can only be started by retyping a
-    module invocation with flags is not reproducible (protocol §15).  The
-    stage's own record goes under ``runs/reference/``, which is untracked.
+    Reachable here rather than by retyping a module invocation (protocol §15).
+    The ``show`` record goes under ``runs/reference/``, which is untracked.
     """
     if args.reference == "tables":
         return reference_mod.main(["--tables"])
-    if args.reference == "show":
-        code, record = stage_reference(campaign)
-        name = "show"
-    elif args.reference == "extract":
-        code, record = stage_extract_reference(args.previous_runs, campaign)
-        name = "extract"
-    elif args.reference == "verify":
-        code, record = reference_mod.stage_verify(
-            runs_root=args.previous_runs, campaign=campaign
-        )
-        name = "verify"
-    else:
-        code, record = reference_mod.stage_teeth(
-            runs_root=args.previous_runs, campaign=campaign
-        )
-        name = "teeth"
-    if name != "show":
-        reference_mod.report(name, code, record)
-    out = args.json or (campaign.runs_dir / "reference" / f"{name}.json")
+    code, record = stage_reference(campaign)
+    out = args.json or (campaign.runs_dir / "reference" / "show.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(record, indent=2, default=str))
     print(f"record: {out}")
     return code
-
-
-def stage_extract_reference(
-    previous_runs: Path | None, campaign: Campaign
-) -> tuple[int, dict[str, Any]]:
-    """Rebuild the committed reference from the previous revision's records."""
-    return reference_mod.stage_extract(runs_root=previous_runs, campaign=campaign)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -897,19 +866,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--reference",
-        choices=("show", "tables", "extract", "verify", "teeth"),
-        help="run one stage of the reproduction reference and stop: show what "
-        "is committed, emit the report's tables from it, extract it from the "
-        "previous revision's records, verify that it re-derives from them "
-        "byte for byte, or run its four teeth.  'extract', 'verify' and "
-        "'teeth' need --previous-runs",
-    )
-    parser.add_argument(
-        "--previous-runs",
-        type=Path,
-        help="root of the previous revision's untracked run records, for the "
-        "reference stages; they live in the main checkout, so a task worktree "
-        "must be pointed at it",
+        choices=("show", "tables"),
+        help="the committed reproduction reference, and stop: show what is "
+        "committed and what it does not cover, or emit the report's tables "
+        "from it.  The file is not regenerated (D25)",
     )
     parser.add_argument(
         "--artifacts",
