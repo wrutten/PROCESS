@@ -862,7 +862,7 @@ def assert_stages_exist(campaign: Campaign) -> dict[str, Any]:
     success over fewer stages than it names.  The refusal says which name is
     missing and which registry it was looked for in.
     """
-    from .gates import gates as gates_mod  # noqa: PLC0415
+    from .gates import registry as gates_mod  # noqa: PLC0415
 
     available_gates = gates_mod.gates_only(campaign)
     available_stages = gates_mod.measurements(campaign)
@@ -943,7 +943,7 @@ def run(
 
     press["run_records"] = _survey_own_records(campaign, plan)
 
-    from .gates import gates as gates_mod  # noqa: PLC0415
+    from .gates import registry as gates_mod  # noqa: PLC0415
 
     available_gates = gates_mod.gates_only(campaign)
     available_stages = gates_mod.measurements(campaign)

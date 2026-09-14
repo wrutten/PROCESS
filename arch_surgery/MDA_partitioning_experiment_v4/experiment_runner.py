@@ -43,7 +43,9 @@ from harness.experiment import arms as arms_mod  # noqa: E402
 from harness.experiment import artifacts as artifacts_mod  # noqa: E402
 from harness.child import census as census_mod  # noqa: E402
 from harness import chain as chain_mod  # noqa: E402
+from harness.gates import gate_neutrality as neutrality_mod  # noqa: E402
 from harness.gates import gates as gates_mod  # noqa: E402
+from harness.gates import registry as registry_mod  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.child import postsolve as postsolve_mod  # noqa: E402
 from harness.core import provenance as prov  # noqa: E402
@@ -501,7 +503,7 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
                 f"property of that gate and of no other."
             )
             return 3
-        manifest = gates_mod.capture_neutrality(
+        manifest = neutrality_mod.capture_neutrality(
             campaign, args.capture, resume=args.resume
         )
         print(
@@ -513,9 +515,9 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
         print(f"    manifest: {manifest['manifest']}")
         return 0
 
-    available = gates_mod.gates_only(campaign)
+    available = registry_mod.gates_only(campaign)
     names = (
-        gates_mod.ordered_gate_names(campaign)
+        registry_mod.ordered_gate_names(campaign)
         if args.gate == "all"
         else [args.gate]
     )
@@ -527,7 +529,7 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
             f"--measure, not --gate, because it has no verdict."
         )
         return 3
-    stages = gates_mod.measurements(campaign)
+    stages = registry_mod.measurements(campaign)
     made: set[str] = set()
     status = 0
     for name in names:
@@ -537,7 +539,7 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
         # before the gate and with the same --resume, so the gate is never
         # compared against a stage record nobody made — and, once made in this
         # press, not re-made for a second gate that declares it.
-        for dependency in gates_mod.measurement_dependencies(campaign, name):
+        for dependency in registry_mod.measurement_dependencies(campaign, name):
             if dependency in made:
                 continue
             _rule(f"measurement {dependency} — declared by gate {name}")
@@ -568,7 +570,7 @@ def stage_gate(args: argparse.Namespace, campaign: Campaign) -> int:
                 )
                 break
             continue
-        gates_mod.print_verdict(verdict)
+        registry_mod.print_verdict(verdict)
         if verdict["verdict"] != "PASS":
             status = 1
             if args.gate == "all":
@@ -588,7 +590,7 @@ def stage_measure(args: argparse.Namespace, campaign: Campaign) -> int:
     be read as a gate that is not one.
     """
     records_dir = _gate_records_dir(args, campaign)
-    available = gates_mod.measurements(campaign)
+    available = registry_mod.measurements(campaign)
     names = sorted(available) if args.measure == "all" else [args.measure]
     unknown = [n for n in names if n not in available]
     if unknown:
@@ -653,8 +655,8 @@ def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
 def stage_gate_catalogue(campaign: Campaign) -> int:
     """Every registered gate and measurement stage, with what it binds."""
     _rule("the gate registry")
-    entries = gates_mod.registry(campaign)
-    gates = gates_mod.ordered_gate_names(campaign)
+    entries = registry_mod.registry(campaign)
+    gates = registry_mod.ordered_gate_names(campaign)
     print(
         f"  {len(gates)} gate(s) and "
         f"{len(entries) - len(gates)} measurement stage(s)\n"
@@ -667,7 +669,7 @@ def stage_gate_catalogue(campaign: Campaign) -> int:
         print(f"    {name:<24} {label:<12} {len(gate.teeth):>2} teeth   {runs}")
         print(f"      binds: {gate.binds}")
     print("\n  measurement stages (--measure), which have no verdict:")
-    for name, stage in sorted(gates_mod.measurements(campaign).items()):
+    for name, stage in sorted(registry_mod.measurements(campaign).items()):
         print(f"    {name:<24} guarded by {stage.guarded_by}")
         print(f"      reports: {stage.reports}")
     return 0

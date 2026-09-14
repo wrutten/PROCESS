@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..experiment import arms as arms_mod
-from . import gates as gates_mod
+from . import gate_neutrality as gates_mod
 from ..child import audit_map as audit_map_mod
 from ..experiment import input_files as input_files_mod
 from ..core import pool as pool_mod

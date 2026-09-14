@@ -44,9 +44,20 @@ side, because the rename means the two trees spell them differently.  A60
 retry ladder lives.  Stdlib
 only, no PROCESS run, runs in seconds.
 
+**Where the verdicts live.**  The three criteria here are registered in the
+harness's gate registry (``harness/gates/registry.py``) as ``g0prime``,
+``copy_identity`` and ``edit_behaviour``, each loading this module by path;
+``experiment_runner.py --gate <name>`` runs them with the framework's commit
+stamp, ordering and teeth, and writes the verdict under ``runs/gates/<name>/``.
+This module's own command line is a second, thin entry to the same functions
+for a reader who wants the copy checked from inside ``PROCESS/``: it prints and
+exits, and **writes no record** -- the harness's verdict is the record.
+(``edit-behaviour`` gained a tooth with that registration: the permitted edit
+doctored in a throwaway copy must make the gate FAIL, ``run_edit_behaviour_tooth``.)
+
 Usage
 -----
-    python copy_gates.py all                # both gates + smoke import, with teeth
+    python copy_gates.py all                # every check below, with teeth
     python copy_gates.py copy-identity
     python copy_gates.py frozen-physics
     python copy_gates.py smoke-import       # PYTHONPATH selects the copy (trap T6)
@@ -76,11 +87,6 @@ COPY_ROOT = HERE  # holds process/ and PROVENANCE.json
 PROVENANCE = HERE / "PROVENANCE.json"
 SOURCE_PREFIX = "process"
 MODELS_PREFIX = "process/models"
-
-#: Where a gate record is written unless ``--records`` says otherwise.  Bulk run
-#: artifacts are untracked by design (CLAUDE.md); only the report's verdict is
-#: committed.
-DEFAULT_RECORDS = HERE.parent / "runs" / "gates"
 
 @dataclass(frozen=True)
 class PermittedEdit:
@@ -1058,8 +1064,12 @@ def _behaviour_child(
     return json.loads(body[1])
 
 
-def check_edit_behaviour(prov: dict) -> tuple[bool, dict]:
+def check_edit_behaviour(prov: dict, root: Path | None = None) -> tuple[bool, dict]:
     """The added existence check refuses by name, and changes nothing else.
+
+    *root* is the directory holding the copy's ``process/`` -- the real copy by
+    default; the tooth hands it a throwaway staging whose edit has been
+    doctored.  The committed artifacts are always the real tree's.
 
     The per-node write sets are read on two paths.  The per-call deferral path
     always checked the file was there and raised a ``RuntimeError`` naming it;
@@ -1076,10 +1086,12 @@ def check_edit_behaviour(prov: dict) -> tuple[bool, dict]:
       check is shown to be a guard on absence and not a new refusal on the
       path every run takes.
     """
+    root = COPY_ROOT if root is None else Path(root)
     data_dir = COPY_ROOT.parent / "harness" / "data"
     artifact = data_dir / "defer_per_run_large_tokamak_nof.json"
     result: dict = {
         "gate": "edit-behaviour",
+        "copy_root": str(root),
         "label": "the added existence check refuses by name, and only on absence",
         "artifact_used": str(artifact),
     }
@@ -1114,8 +1126,8 @@ def check_edit_behaviour(prov: dict) -> tuple[bool, dict]:
         at_source = _behaviour_child(
             source_tree, artifact, present=False, side="source"
         )
-    in_copy = _behaviour_child(COPY_ROOT, artifact, present=False)
-    tooth = _behaviour_child(COPY_ROOT, artifact, present=True)
+    in_copy = _behaviour_child(root, artifact, present=False)
+    tooth = _behaviour_child(root, artifact, present=True)
 
     failures = []
     if (
@@ -1152,6 +1164,74 @@ def check_edit_behaviour(prov: dict) -> tuple[bool, dict]:
         }
     )
     return not failures, result
+
+
+#: The permitted edit the edit-behaviour gate exercises, as it stands in the
+#: copy's ``process/core/caller.py``, anchored on its own refusal message so
+#: that the per-call path's identical ``if`` line one function up is not the
+#: one doctored; and what the tooth turns the ``if`` line into.  The doctored
+#: line keeps the file's length in lines and its syntax, and makes the
+#: existence check unreachable -- so with the artifact absent the doctored copy
+#: falls through to ``json.loads`` and raises the bare ``FileNotFoundError`` the
+#: source commit raises.  A copy whose permitted edit no longer does what the
+#: gate says it does must FAIL the gate; this tooth is what shows it would.
+EDIT_BEHAVIOUR_TOOTH_FILE = "process/core/caller.py"
+EDIT_BEHAVIOUR_TOOTH_LINE = (
+    "    if not NODE_WRITESET_PATH.exists():\n"
+    "        raise ArchitectureRefusal(\n"
+    '            f"PROCESS_ARCH_DEFER_PER_RUN needs the committed per-node write "\n'
+)
+EDIT_BEHAVIOUR_TOOTH_DOCTORED = (
+    "    if False:  # doctored by the edit-behaviour tooth\n"
+    "        raise ArchitectureRefusal(\n"
+    '            f"PROCESS_ARCH_DEFER_PER_RUN needs the committed per-node write "\n'
+)
+
+
+def run_edit_behaviour_tooth(prov: dict, root: Path) -> dict:
+    """Doctor the permitted edit in a throwaway staging and require FAIL.
+
+    The gate's criterion is a comparison of behaviour -- the copy refuses by
+    name where the source commit raised a bare ``FileNotFoundError`` -- so its
+    tooth is a copy whose behaviour has been made the source commit's again.
+    The real tree is never modified.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        staged = _staged(root, Path(td))
+        victim = staged / EDIT_BEHAVIOUR_TOOTH_FILE
+        source = victim.read_text()
+        if source.count(EDIT_BEHAVIOUR_TOOTH_LINE) != 1:
+            return {
+                "tooth": "permitted_edit_doctored",
+                "perturbation": (
+                    f"could not doctor {EDIT_BEHAVIOUR_TOOTH_FILE}: the anchor "
+                    f"{EDIT_BEHAVIOUR_TOOTH_LINE.splitlines()[0].strip()!r} occurs "
+                    f"{source.count(EDIT_BEHAVIOUR_TOOTH_LINE)} time(s), not once"
+                ),
+                "gate_verdict": None,
+                "tooth_result": "DID NOT TRIP",
+                "first_failure": None,
+            }
+        victim.write_text(
+            source.replace(EDIT_BEHAVIOUR_TOOTH_LINE, EDIT_BEHAVIOUR_TOOTH_DOCTORED)
+        )
+        passed, result = check_edit_behaviour(prov, root=staged)
+    return {
+        "tooth": "permitted_edit_doctored",
+        "perturbation": (
+            f"{EDIT_BEHAVIOUR_TOOTH_FILE}: "
+            f"{EDIT_BEHAVIOUR_TOOTH_LINE.splitlines()[0].strip()!r} -> "
+            f"{EDIT_BEHAVIOUR_TOOTH_DOCTORED.splitlines()[0].strip()!r} in a "
+            f"throwaway copy of the tree, so the per-run path's existence check "
+            f"is unreachable"
+        ),
+        "gate_verdict": result["verdict"],
+        "tooth_result": "TRIPPED" if not passed else "DID NOT TRIP",
+        "first_failure": (result.get("failures") or [None])[0],
+        "copy_artifact_absent_raised": (result.get("copy_artifact_absent") or {}).get(
+            "raised"
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1327,7 +1407,6 @@ def main(argv: list[str] | None = None) -> int:
         ],
     )
     ap.add_argument("--no-teeth", action="store_true", help="skip the teeth")
-    ap.add_argument("--records", default=str(DEFAULT_RECORDS), help="gate record dir")
     ap.add_argument("--force", action="store_true", help="provenance: overwrite")
     ap.add_argument(
         "--source-commit",
@@ -1379,10 +1458,6 @@ def main(argv: list[str] | None = None) -> int:
             f"copy {s['with_pythonpath']['process_version_recorded_not_asserted']} "
             f"/ root {s['tooth_without_pythonpath']['process_version_recorded_not_asserted']}"
         )
-        out = Path(args.records) / "smoke_import" / "gate.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(s, indent=2) + "\n")
-        print(f"    record            : {out}")
         if args.command == "smoke-import":
             return 0 if s["verdict"] == "PASS" else 1
         if s["verdict"] != "PASS":
@@ -1406,10 +1481,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         for failure in behaviour.get("failures", []):
             print(f"    FAILURE: {failure}")
-        out = Path(args.records) / "edit_behaviour" / "gate.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(behaviour, indent=2) + "\n")
-        print(f"    record            : {out}")
+        if not args.no_teeth:
+            doctored = run_edit_behaviour_tooth(prov, COPY_ROOT)
+            print(
+                f"    tooth {doctored['tooth']:<34} {doctored['tooth_result']:<13} "
+                f"({doctored['perturbation']})"
+            )
+            if doctored["tooth_result"] != "TRIPPED":
+                ok_behaviour = False
+                print(f"    TEETH FAILED: ['{doctored['tooth']}']")
         if args.command == "edit-behaviour":
             return 0 if ok_behaviour else 1
         if not ok_behaviour:
@@ -1430,21 +1510,6 @@ def main(argv: list[str] | None = None) -> int:
             ok = False
             print(f"    TEETH FAILED: {[t['tooth'] for t in blunt]}")
         ok = ok and res.passed
-        out = Path(args.records) / gate.replace("-", "_") / "gate.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(
-            json.dumps(
-                {
-                    **res.as_dict(),
-                    "teeth": teeth,
-                    "teeth_all_tripped": teeth is not None and not blunt,
-                    "run_at": _dt.datetime.now().isoformat(timespec="seconds"),
-                },
-                indent=2,
-            )
-            + "\n"
-        )
-        print(f"    record            : {out}")
 
     print(f"\n{'ALL GATES PASS' if ok else 'GATE FAILURE'}")
     return 0 if ok else 1

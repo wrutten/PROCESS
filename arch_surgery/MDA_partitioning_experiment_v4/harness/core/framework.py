@@ -588,7 +588,7 @@ def gate_from_check(
     The criterion is **not** restated: ``run`` is the same function that
     produced the check before the promotion, so the numbers a promoted gate
     reports are the numbers the check reported.  What the promotion adds is a
-    verdict record on disk, a place in :func:`harness.gates.gates.registry`, and a
+    verdict record on disk, a place in :func:`harness.gates.registry.registry`, and a
     *declared* tooth list.
 
     ``teeth`` names the deliberate breaks the criterion must exercise.  Each

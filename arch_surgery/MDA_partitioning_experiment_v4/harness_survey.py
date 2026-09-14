@@ -348,7 +348,7 @@ def duplicates_section() -> dict[str, Any]:
 
 def registry_section() -> dict[str, Any]:
     from harness.core.config import default_campaign
-    from harness.gates import gates as gates_mod
+    from harness.gates import registry as gates_mod
 
     campaign = default_campaign()
     reg = gates_mod.registry(campaign)

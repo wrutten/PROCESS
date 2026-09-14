@@ -1828,7 +1828,7 @@ def check_run_path(campaign: Campaign) -> Check:
         "refused rather than made",
         population=(
             "2 phases x the declared field list; 2 displacement streams; "
-            "4 refusals"
+            "5 refusals"
         ),
     )
 
@@ -1914,6 +1914,26 @@ def check_run_path(campaign: Campaign) -> Check:
         caught,
         f"a partial decomposition cannot be summed and must be refused "
         f"({message})",
+    )
+
+    # The sweep decomposition, the same shape of identity one level up: the
+    # run's sweep total against the parts that claim it.
+    undecomposed = json.loads(json.dumps(complete))
+    undecomposed["dispatch_sweeps"] = 5502
+    undecomposed["output_loop_sweeps"] = 2
+    undecomposed["block_loop_totals"] = {"block_sweeps": 5499}
+    undecomposed["defer_per_run_totals"] = {"executed_once": ["a_node"]}
+    records_mod.assert_sweep_decomposition(undecomposed, where="the baseline")
+    undecomposed["dispatch_sweeps"] = 5503
+    caught, message = _must_refuse_here(
+        lambda: records_mod.assert_sweep_decomposition(undecomposed, where="a tooth")
+    )
+    check.tooth(
+        "a sweep total that does not decompose into the parts that claim it",
+        caught,
+        f"5499 block sweeps + 2 output-time sweeps + 1 per-run deferral sweep "
+        f"against a total of 5503 must be refused: a sweep total nobody can "
+        f"decompose is a total nobody can attribute ({message})",
     )
 
     # --- the two displacement streams ------------------------------------
@@ -2218,7 +2238,7 @@ def check_run_path(campaign: Campaign) -> Check:
     # table does not name.  Both refusals are teeth, and the table's rows are
     # checked to be registered stages, so a caller nobody runs cannot be
     # declared.
-    from harness.gates import gates as gates_mod  # noqa: PLC0415 - cycle otherwise
+    from harness.gates import registry as gates_mod  # noqa: PLC0415 - cycle otherwise
 
     declared_callers = records_mod.AUDIT_POSITION_AFTER_RUN_CALLERS
     registered = set(gates_mod.registry(campaign))

@@ -3272,7 +3272,7 @@ def _tooth_an_undeclared_stage(
     nothing and letting it read whatever is on disk.
     """
     import dataclasses  # noqa: PLC0415 - the tooth's own doctored entry
-    from harness.gates import gates as gates_mod  # noqa: PLC0415 - the registry
+    from harness.gates import registry as gates_mod  # noqa: PLC0415 - the registry
 
     entries = dict(gates_mod.registry(campaign))
     entries["recomputation"] = dataclasses.replace(

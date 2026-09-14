@@ -96,6 +96,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from ..experiment import arms as arms_mod
+from . import gate_output_path
 from . import gates as gates_mod
 from ..core import pool as pool_mod
 from ..child import postsolve as postsolve_mod
@@ -333,7 +334,7 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
         baseline_restricted = _restricted(baseline)
         owned_by_x = baseline.get("spec_keys_owned_by_x") or []
 
-        excluded_keys, excluded_detail = gates_mod.excluded_by_the_per_run_nodes(
+        excluded_keys, excluded_detail = gate_output_path.excluded_by_the_per_run_nodes(
             campaign, config
         )
         namespaces = excluded_namespaces(campaign, config)
