@@ -345,3 +345,36 @@ Files changed: `harness/chain.py`, `harness/core/records.py`, `harness/measureme
 tally_evaluation,tally_optimisation,analysis,plan_tables}.py`, `harness/gates/gate_tally.py`,
 `harness/README.md`, `EXPERIMENT_PLAN.md`. Nothing under `harness/child/`, `ystate.py`, `PROCESS/`;
 `records.SCHEMA` unchanged; the queue, the harness plan, TRAPS and the improvement list unedited.
+
+---
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `95270651`, before the merge. Checks chosen to differ from the
+agent's.*
+
+1. **The cost table, recomputed from the records without the tally or the analysis.** Over the seeds
+   on which all four arms finished on `large_tokamak_nof` I get 41 479.8 / 42 515.5 / 42 841.9 /
+   27 187.5 solve-phase node calls per run for BR / B0 / B1 / B3 and ratios 0.976 / 1.008 / 0.640
+   against B0 — the rendered cells to the last digit. A third construction agreeing with two
+   independent ones is as much as a table can be checked.
+2. **The seed sets.** My status-only count gives 20 common finished seeds on `low_aspect_ratio_DEMO`;
+   the tally's seed set is 11, because its rule is "every arm converged" (`ifail = 1`), not "every arm
+   finished", and it names the 13 configuration-invalid seeds. The stricter rule is the plan's (§3.5)
+   and the table says which it used. Correct.
+3. **The contract loosening (autonomous decision 1).** A crashed run has no solve-phase total by
+   construction — the driver writes it at a finished exit — so asking the attempt-summation identity
+   of it refuses every crash for a reason that says nothing. Skipping the total check for
+   `status != "ok"` while keeping the all-or-none rule is right; the 28 crashed records are still
+   counted, by arm, seed and traceback line, in the taxonomy table, and never as a cost. Accepted.
+4. **Item 2 (`tally_contracts` part 1 wants GR's 20 records in the same tree).** Ruled: the campaign
+   worktree is seeded with GR's records from the gate population at the next press; a re-press of the
+   campaign chain there is not needed for this report, since every stage after the runs was pressed
+   here over the same 949 records. Filed as an issue for the chain (the campaign plan's stage list
+   should declare that dependency, or part 1 should move to the gate that owns it).
+5. **The stencil source split** (forward / backward, 198 each) is right for the reason given: every
+   stencil point carries seed 0, and a seed-keyed pairing would have paired one point per arm silently.
+6. **Recomputation 12 715 / 0 over 84 tables** and **run_kind_separation 2 994 / 0** read from their
+   verdicts; **0 PROCESS runs** by the stamp survey (1 096 records, 949 at `57dc0c14`, 0 changed).
+
+**Approved for merge.** With this, the campaign's records are the population of every §4.2–§4.4 cell.
