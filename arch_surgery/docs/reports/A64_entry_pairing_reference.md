@@ -315,3 +315,38 @@ Not edited here, per the brief. Proposed:
 | `fe504589` | `EXPERIMENT_PLAN.md` §4 re-rendered again, over the tally/analysis stages re-made for the new population (§7.1) |
 
 Base `9ffad6da`. Nothing pushed. `runs/` untracked.
+
+---
+
+## 12. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `c08446f6`, before the merge. Checks chosen to differ from
+the agent's own, not to repeat its presses.*
+
+1. **The diff, read.** One code file, 32 lines, all comment and the four-element tuple. No behaviour
+   other than the arm set changes; `_pin` is untouched and returns `None` for `AR` because its owner
+   is `loop` — confirmed by importing the merged module on a trial merge of the branch onto trunk
+   (`6e98a852`): `[('AR','loop'),('A0','loop'),('A0p','constant'),('A1','constant')]`.
+2. **The pairing, checked by a different instrument.** The gate compares `y_entry.json` key by key.
+   I took the SHA-256 of each pairing directory's `y_entry.json` whole: one digest per configuration
+   across `AR`, `A0`, `A0p`, `A1` (`f2570b0495e6`, `cf9fde19753b`, `b648299e79df`; `A0p` absent on
+   `st_regression` by its skip). Same conclusion, reached without the gate's code.
+3. **Merge and the record-less tree.** The trial merge onto trunk is clean (3 files). On that tree,
+   with no `runs/`, `--selfcheck` PASSes and `--plan-tables check` refuses by name for the missing
+   `gate_table` stage record — the refusal A63 built, working.
+4. **Autonomous decision 1 (re-making the tally stages) is right and was necessary.** Widening a
+   gate's arm set widens the tally population that gate's directory feeds; leaving §4.2–§4.4 over
+   33 records would have been trap T14's shape. The agent measured the disagreement before acting
+   and every re-made stage was a resume (0 PROCESS runs). Its proposed rule — *a gate's arm, seed or
+   configuration set is also a tally population; changing it re-makes every stage over that source
+   in the same press* — is written into the harness plan as amendment 21 at the merge.
+5. **Autonomous decision 2 (`AR` as anchor).** Accepted; bit-identity is transitive and the plan's
+   order is the tuple's declared order.
+6. **Decision 3 (plan prose).** Overruled in the small: D26 is the user's ruling, and the plan should
+   say in one sentence what the gate enforces. Added to §3.4 at the merge, quoting D26.
+7. **Numbers checked against the record, not the summary:** §4 shows the `AR` row at n = 1 per
+   configuration with `after_single_evaluation` as its audit position and "no snapshot recorded on
+   this record" — correct for a Phase A evaluation, which never reaches the output path.
+
+**Approved for merge.** Records relocate to `arch_surgery/idf_probe/runs/A64_runs/` (path from the
+retire script).
