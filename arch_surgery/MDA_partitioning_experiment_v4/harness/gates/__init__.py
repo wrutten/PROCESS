@@ -3,8 +3,8 @@
 The gate registry and the gates that need no dedicated module (``gates``), the
 gates that do (``gate_audit``, ``gate_composition``, ``gate_entry``,
 ``gate_prime``, ``gate_records``, ``gate_tally``), the reproduction gate and its
-committed reference (``reproduction``, ``reference``), the self-check suite
-(``selfcheck``) and the exit-audit diagnosis stage (``exit_audit_diagnosis``).
+committed reference (``reproduction``, ``reference``) and the self-check suite
+(``selfcheck``).
 
 A gate reads records; it never decides what a record means.  That is
 ``measurement``'s job, and this subpackage imports it rather than the other way

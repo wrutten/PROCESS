@@ -1579,7 +1579,6 @@ def take_exit_audit(
     from_snapshot: Mapping[str, Any] | None = None,
     structure_snapshots: Mapping[str, Any] | None = None,
     restore_from_position: str | None = None,
-    on_ready_to_sweep=None,
 ) -> dict[str, Any]:
     """One further full sweep past termination, and how far the state moved.
 
@@ -1647,8 +1646,6 @@ def take_exit_audit(
             restore_from_position=restore_from_position,
             coupling_names=coupling_names,
         )
-        if on_ready_to_sweep is not None:
-            on_ready_to_sweep(data)
         bound = spec.bind(data)
         y_before = spec.read(bound)
         predicate_mode = getattr(module_solve, "PREDICATE_MODE", "frozen")

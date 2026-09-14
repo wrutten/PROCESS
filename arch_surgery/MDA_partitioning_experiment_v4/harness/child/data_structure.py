@@ -25,10 +25,12 @@ cannot be written back is reported by name rather than counted as restored.
 Nothing here claims "all".
 
 Heritage: the three functions were written for the diagnosis trace of task
-**A61 (insstrain-diagnosis)** (``harness/child/audit_map.py``), which is a gate
-instrument refused on campaign runs.  Ruling **D25** makes the same mechanism
-part of the exit audit itself, which runs on every run, so it lives here and
-that module imports it.  Float serialisation is ``harness/child/predicate.py``'s, so
+**A61 (insstrain-diagnosis)** (``harness/child/audit_map.py``, a gate
+instrument refused on campaign runs; retired with its diagnosis stage by task
+A73 under D27's item B3 once the attribution it made was recorded in A61's
+and A62's reports and in ruling D25).  Ruling **D25** makes the same mechanism
+part of the exit audit itself, which runs on every run, so it lives here.
+Float serialisation is ``harness/child/predicate.py``'s, so
 a data-structure snapshot and a coupling-state snapshot are bit-exact in the
 same way and can be compared against each other.
 """

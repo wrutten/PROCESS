@@ -3,8 +3,7 @@
 The three child entry points (``evaluate``, ``optimise``, ``census``) and what
 they load: the in-child machinery (``child``), the coupling-state predicate
 layer (``predicate``), the seeded delta stream (``perturb``), the data-structure
-snapshot (``data_structure``), the exit-audit map (``audit_map``) and the
-post-solve derivation (``postsolve``).
+snapshot (``data_structure``) and the post-solve derivation (``postsolve``).
 
 **This subpackage is exactly the set the harness implementation plan's
 amendment 13, rule (vi) forbids editing while any measurement run executes** —

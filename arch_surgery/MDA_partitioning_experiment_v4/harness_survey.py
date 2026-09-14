@@ -521,14 +521,12 @@ def runs_section(records_dir: Path) -> dict[str, Any]:
     # (the comparison IS the second run).  Counted apart.
     # Also apart: the audit-restriction gate's doctored runs (the doctoring is
     # applied inside the child before the audit sweep, so the run must be made
-    # again even though the solve is identical) and the diagnosis stage, which
-    # is outside ``--gate all``.
+    # again even though the solve is identical).
     def by_design(path: str) -> bool:
         return (path.startswith("switch_neutrality/before/")
                 or path.startswith("switch_composition/") and "/switch_by_switch/" in path
                 or path.startswith("audit_restriction/") and "/per_run_" in path
-                or path.startswith("audit_restriction/") and "/in_loop/" in path
-                or path.startswith("exit_audit_diagnosis/"))
+                or path.startswith("audit_restriction/") and "/in_loop/" in path)
     n_redundant = 0
     n_by_design = 0
     for v in dup_groups.values():

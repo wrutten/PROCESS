@@ -80,7 +80,7 @@ run executes (harness plan amendment 13, rule (vi)).
 - `child/perturb.py` is the seeded displacement stream. Every arm at a given seed starts from the same
   bytes, which is what makes cost differences paired.
 - `child/postsolve.py` derives which model nodes the optimiser never reads, so they can be deferred to
-  once per run. `child/audit_map.py` checks that the audit sweep is the loop's own map.
+  once per run.
 
 ### Layer 4 — what the records mean: `harness/measurement/`
 
@@ -945,8 +945,8 @@ it had — this is a move, not a rename.*
 |---|---|---|
 | `core/` | `framework` (what a gate, a tooth, a check and a measurement *are*), `config` (every declared setting), `failure` (the taxonomy), `provenance` (interpreter, tree and git stamps), `records` (the run-record schema and its completeness contract), `pool` (one run in its own directory, and the decision to keep an existing record) | everything |
 | `experiment/` | `arms` (the switch matrix as data), `switches` (the driver's vocabulary and the capability probe), `input_files` (committed and lifted), `artifacts` (the committed per-configuration files), `data_provenance` (where the copied data came from) | everything but `core/` |
-| `child/` | `child`, `evaluate`, `optimise`, `census` (the three entry points a measurement subprocess is started as, and what they load), `predicate`, `perturb`, `data_structure`, `audit_map`, `postsolve` | the pool spawns them; the gates import them |
-| `gates/` | `registry` (every gate and stage by name, the derived order, the gate table, the printers and the module's own command line), `gates` (G0′, `copy_identity` and `edit_behaviour` loading `PROCESS/copy_gates.py` by path; the shared entry references and `_with_capture`; GR's wrapper; the promoted self-checks; the `self_containment` gate), `gate_neutrality` (G1 and the comparison machinery), `gate_output_path` (G9, and the restricted statistic's excluded set), `gate_predicate_mode` (G8), `exclusion_review` (the review of G1's and G8's exclusion tables), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `gate_written_file`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck`, `exit_audit_diagnosis` | the runner, and `chain.py` |
+| `child/` | `child`, `evaluate`, `optimise`, `census` (the three entry points a measurement subprocess is started as, and what they load), `predicate`, `perturb`, `data_structure`, `postsolve` | the pool spawns them; the gates import them |
+| `gates/` | `registry` (every gate and stage by name, the derived order, the gate table, the printers and the module's own command line), `gates` (G0′, `copy_identity` and `edit_behaviour` loading `PROCESS/copy_gates.py` by path; the shared entry references and `_with_capture`; GR's wrapper; the promoted self-checks; the `self_containment` gate), `gate_neutrality` (G1 and the comparison machinery), `gate_output_path` (G9, and the restricted statistic's excluded set), `gate_predicate_mode` (G8), `exclusion_review` (the review of G1's and G8's exclusion tables), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `gate_written_file`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck` | the runner, and `chain.py` |
 | `measurement/` | `stats`, `tables`, `tally`, `tally_evaluation`, `tally_optimisation`, `analysis`, `plan_tables` | `gates/` imports it — a gate reads records, it does not decide what a record means |
 | *(top level)* | `__init__.py` (the one public import surface), `chain.py` (the sequence the campaign and the smoke both run), `ystate.py`, `data/`, `reference/` | — |
 
@@ -962,8 +962,7 @@ the runner, `chain.py`, `selfcheck.py` and the analysis's dependency tooth — a
 so a gate never reaches the registry that holds it. `gate_output_path` and `gate_predicate_mode`
 import `gate_neutrality` (the comparison machinery) and `gates` (`_with_capture`);
 `exclusion_review` imports all three gate modules; `gate_prime` and `gate_audit` import
-`gate_output_path` for `excluded_by_the_per_run_nodes`; `exit_audit_diagnosis` imports
-`gate_neutrality`. Every source scanner that holds a module name as a string — `self_containment`'s
+`gate_output_path` for `excluded_by_the_per_run_nodes`. Every source scanner that holds a module name as a string — `self_containment`'s
 `DECLARED_OUTSIDE_REFERENCES` (keyed by file name), `analysis.FORBIDDEN_IMPORTS` — was re-checked
 at the split; the first found the moved line in `registry.py` and reported it until the table
 named the file.
