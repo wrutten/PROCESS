@@ -1,0 +1,1186 @@
+#!/usr/bin/env python
+"""The runtime census: what each model node writes, and what the predicate reads.
+
+A **census** here is a direct observation, not an inference.  The driver carries
+an instrument that, while it is switched on, attributes every read and every
+write of a data-structure field to the model node executing at the time.  This
+module runs one PROCESS run with that instrument on and turns what it recorded
+into two things:
+
+* the **write sets** — per node, which fields it wrote.  Three committed
+  artifacts rest on this: the per-node write census the driver reads to decide
+  which nodes may leave the loop, the per-block subsets each block's convergence
+  test is taken over, and the per-run deferral sets;
+* the **read census** — per node, which fields it read, including the
+  objective/constraint block, which is what the predicate layer reads for the
+  configuration's figure of merit.  The improvement list asks for this because
+  the strongest claim in the deferral derivation rested on a source scan plus a
+  crawl of the dependency model, and a runtime census turns that into a direct
+  observation.
+
+Two traps are structural here, not matters of care
+--------------------------------------------------
+Ten model objects call their own ``run()`` from inside their ``output()``
+method, three times each per run, during the final output idempotence check.  An
+instrument that hooks ``run()`` alone therefore attributes post-solve reporting
+traffic to the analysis loop and invents dependency edges — it produced two
+phantom back edges before it was fixed.  The driver's instrument closes the
+sweep at the boundary of one pass over the model sequence and **refuses**
+anything entering afterwards, so the exclusion is structural.  This module
+records the refusal count so a reader can see the mechanism worked rather than
+assume it (traps T1 and T7).
+
+What this module does not do
+----------------------------
+It does not write a committed artifact.  The committed write census is the one
+the earlier revisions measured, and the driver reads it; regenerating it here
+would change the definition of the coupling state under every residual figure
+this experiment has published.  What this stage does is **compare**: a
+difference between what a run does now and what the committed file says is a
+finding, reported with its content.
+
+Derived from the census probe ``process/core/_idf_probe_modules.py`` (read, not
+modified) and from ``arch_surgery/fixedpoint/gen_node_writesets.py`` and
+``arch_surgery/idf_probe/a25_writeset.py``, read at ``f1f90c20``; task
+**A51 (harness-artifacts)**.  Task **A63 (stage-provenance)** put the tree stamp
+on the record itself (``census-2``) and made an unstamped one a refusal.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import tempfile
+import time
+import traceback
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+_HERE = Path(__file__).resolve().parent
+_EXPERIMENT_DIR = _HERE.parent.parent
+if sys.path and Path(sys.path[0] or ".").resolve() == _HERE:
+    sys.path[0] = str(_EXPERIMENT_DIR)
+elif str(_EXPERIMENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_EXPERIMENT_DIR))
+
+from harness.experiment.artifacts import StageCheck  # noqa: E402
+from harness.core.config import Campaign, Config  # noqa: E402
+
+#: The probe mode that attributes reads and writes to nodes.
+PROBE_MODE = "modules"
+
+#: The probe's own environment variables.  These belong to the *instrument*,
+#: not to the architecture: they select what is observed, never what is
+#: computed.  They are named here literally, and only here, because the
+#: architecture switches are composed through the arm registry and a literal
+#: architecture name anywhere in this package would be a second place to change
+#: when one is renamed.
+PROBE_VARIABLE = "PROCESS_IDF_PROBE"
+PROBE_READ_BUDGET_VARIABLE = "PROCESS_IDF_PROBE_READ_BUDGET"
+PROBE_READ_STRIDE_VARIABLE = "PROCESS_IDF_PROBE_READ_STRIDE"
+
+#: The two pseudo-nodes the census records that are not model calls: the
+#: injection of the design vector, and the objective/constraint block.  The
+#: second is the **predicate layer**, and its read set is the direct
+#: observation of what the optimiser consumes.
+DESIGN_VECTOR_NODE = "<x_inject>"
+PREDICATE_NODE = "objective_constraints"
+
+#: Where this stage's records go.  Untracked, like every run artifact.
+RUNS_SUBPATH = "census"
+
+#: The schema tag of a census record.  ``census-1`` carried its provenance in a
+#: nested ``provenance`` block only, so ``tree_git_head`` was not where every
+#: other record in this package keeps it and a survey of the commits the records
+#: under ``runs/`` were made at could not place a census at all — six records
+#: read as "no stamp" in exactly the survey that catches a resume which kept
+#: what it should have re-made (trap T13).  ``census-2`` stamps the tree the way
+#: a run record does, at the top level, and keeps the nested block beside it so
+#: that nothing reading the old shape breaks (issue I-22 (b)).
+RECORD_FORMAT = "census-2"
+
+#: What a census record must carry about the tree it was taken in, by name: the
+#: same fields ``records.SCHEMA``'s "where it ran" group declares for a run
+#: record.  A census **is** a PROCESS run and is placed by the same evidence.
+STAMP_FIELDS: tuple[str, ...] = (
+    "tree",
+    "tree_git_head",
+    "tree_git_branch",
+    "tree_git_describe",
+    "tree_modified_tracked_n",
+    "tree_untracked_paths_n",
+    "tree_git_dirty",
+    "tree_contains_base_commit",
+    "base_commit",
+    "process_file",
+    "process_copy_provenance",
+    "python",
+    "python_version",
+    "pythonpath",
+)
+
+#: Which arm a census is taken under, per entry.  It is the **reference** arm
+#: in both cases — PROCESS as shipped, every architecture switch unset — because
+#: the committed census describes what the models write when nothing has been
+#: rearranged, and a census taken under an intervention arm would describe that
+#: arm's schedule instead.  The instrument itself is not an architecture switch:
+#: it observes, and the run it observes is byte-identical to one without it.
+CENSUS_ARM = {"evaluation": "AR", "optimisation": "BR"}
+
+#: What one run of the census costs, stated so a reader can choose.  Neither is
+#: evidence of anything; both are how long to wait.
+ENTRIES = {
+    "evaluation": (
+        "one evaluation of the model set at the input file's own design point "
+        "— every node runs, so every node's write set is observed, but only at "
+        "one point of the design space"
+    ),
+    "optimisation": (
+        "one full optimisation — the same population of design points the "
+        "committed census was measured over, and the only entry that can "
+        "reproduce it; far more expensive"
+    ),
+}
+
+
+class CensusError(RuntimeError):
+    """A refusal to census, or to compare one."""
+
+
+def missing_stamp_fields(record: Mapping[str, Any]) -> list[str]:
+    """Declared provenance fields this census record does not carry.
+
+    Present and null counts as carried, as it does for a run record: "the copy
+    has no provenance file, and here is the null that says so" is information,
+    and a missing key is not.
+    """
+    return [name for name in STAMP_FIELDS if name not in record]
+
+
+def assert_stamped(record: Mapping[str, Any], *, where: str = "") -> None:
+    """Refuse a census record that does not say which tree it was taken in.
+
+    A census is a PROCESS run, and every other run in this package is placed by
+    its own ``tree_git_head``: that is the key a stamp survey reads, and the
+    survey is what catches a ``--resume`` that kept a record it should have
+    re-made (trap T13).  The six records taken before this contract carried the
+    commit one level down, inside a nested block, so the survey placed them
+    nowhere and they read as "no stamp" — indistinguishable, in a survey, from
+    a record made by a tree with no git at all.
+
+    So the refusal is by **name**: the record, its schema tag and the fields it
+    lacks.  Re-taking the census is a PROCESS run, which is why this refuses
+    instead of quietly re-running: a stage asked to compare a census must not
+    decide on its own to make a new measurement.
+    """
+    absent = missing_stamp_fields(record)
+    if not absent:
+        return
+    raise CensusError(
+        f"the census record{' for ' + where if where else ''} is "
+        f"{record.get('record_format')!r} and carries no tree stamp: "
+        f"{len(absent)} of {len(STAMP_FIELDS)} declared provenance field(s) "
+        f"missing — {', '.join(absent)}.  A survey of which commit each record "
+        f"under runs/ was made at reads `tree_git_head` on the record itself, "
+        f"so this census can be placed nowhere and a resume that kept it could "
+        f"not be told from one that re-made it (trap T13).  Re-take it with "
+        f"`experiment_runner.py --artifacts census` (a PROCESS run), which "
+        f"writes it as {RECORD_FORMAT}."
+    )
+
+
+def tree_stamp(
+    tree: Path, *, process_file: str, pythonpath: str | None
+) -> dict[str, Any]:
+    """The provenance a census record carries, flattened as a run record's is.
+
+    One function rather than a few lines inside the child, so that the
+    self-check can run **this** code and find out whether a census taken now
+    would be complete — a re-implementation beside it would pass while the
+    child stamped nothing.
+    """
+    from harness.child import child as child_mod  # noqa: PLC0415 - one direction
+    from harness.core import provenance as prov  # noqa: PLC0415
+
+    stamp = prov.stamp(Path(tree), process_file=process_file)
+    return {
+        **stamp,
+        "tree": str(tree),
+        "process_file": process_file,
+        "pythonpath": pythonpath,
+        "process_copy_provenance": child_mod.copy_provenance(Path(tree)),
+        # The earlier shape, kept beside the flattened fields: it is what the
+        # records taken before this contract carry, and a reader comparing an
+        # old record with a new one should find the same block in both.
+        "provenance": stamp,
+    }
+
+
+def resume_keeps(
+    directory: Path,
+    *,
+    configuration: str,
+    entry: str,
+    read_census: bool,
+) -> tuple[bool, str]:
+    """Whether a census on disk may be kept under ``--resume``, and why not.
+
+    What ``--resume`` consults, and the **only** thing it consults: the census
+    and the record beside it.  A directory is never evidence, a census taken
+    with the read half off cannot stand in for one that needs it (trap T13) —
+    and a record that does not carry the current contract's tree stamp is
+    **incomplete under that contract and is re-taken**, exactly as
+    ``pool.run`` re-runs an incomplete run record (harness plan amendment 17's
+    standing property (a)).  It is the contract working, not a defect.
+
+    The refusal in :func:`assert_stamped` is not weakened by this: it applies
+    to every reader that is not the stage doing the taking — a comparison over
+    a census this call did not just make, and any survey placing records by
+    their commit.  A stage that *can* re-make the measurement re-makes it; a
+    stage that can only read it refuses.
+    """
+    census_path = Path(directory) / "census.json"
+    if not census_path.exists():
+        return False, f"there is no census at {directory}"
+    try:
+        previous = json.loads(census_path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{census_path} is not readable JSON: {exc}"
+    if previous.get("configuration") != configuration:
+        return False, (
+            f"the census on disk is {previous.get('configuration')!r}, not "
+            f"{configuration!r}"
+        )
+    if previous.get("entry") != entry:
+        return False, (
+            f"the census on disk was taken at entry {previous.get('entry')!r}, "
+            f"not {entry!r}"
+        )
+    if read_census and not previous.get("read_census"):
+        return False, (
+            "the census on disk was taken with the read half of the "
+            "instrument off and this call needs it"
+        )
+    try:
+        record = run_record(Path(directory))
+    except CensusError as exc:
+        return False, str(exc).splitlines()[0]
+    missing = missing_stamp_fields(record)
+    if missing:
+        return False, (
+            f"the record beside it is {record.get('record_format')!r} and "
+            f"carries {len(missing)} of {len(STAMP_FIELDS)} declared "
+            f"provenance field(s): {', '.join(missing)}.  A record incomplete "
+            f"under the current contract is re-taken, not kept — the stamp is "
+            f"what a survey places the record by (trap T13)"
+        )
+    return True, (
+        f"a matching census is already on disk, its record {RECORD_FORMAT} at "
+        f"{str(record.get('tree_git_head'))[:8]}"
+    )
+
+
+def run_record(directory: Path) -> dict[str, Any]:
+    """The census run's own record, beside its census.  Absent is a refusal.
+
+    Not ``records.read``: that returns a synthetic "no_record" row for an
+    absent file, which is right for a population being tallied and wrong here,
+    where a census present without its record is a directory somebody assembled
+    by hand.
+    """
+    path = Path(directory) / "metrics.json"
+    if not path.exists():
+        raise CensusError(
+            f"there is a census at {directory} with no run record beside it "
+            f"({path} does not exist), so nothing says which tree took it."
+        )
+    try:
+        return json.loads(path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        raise CensusError(f"{path} is not readable JSON: {exc}") from exc
+
+
+# ==========================================================================
+# the child: one PROCESS run with the instrument on
+# ==========================================================================
+
+
+def _reads_by_node(modules: Mapping[str, Any]) -> dict[str, list[str]]:
+    """The read census, per node, from the instrument's own **report**.
+
+    Until task A58 (driver-predicate-counters) this function reached into the
+    instrument's module-level ``_reads_all`` dictionary, because the summary
+    reported the *count* of a node's reads and not the field names, and the
+    names are what the deferral derivation needs.  Task A51
+    (harness-artifacts) recorded that as a handover rather than making the
+    one-line driver change itself: a driver change made from a harness task
+    would land outside its own neutrality gate.
+
+    A58 made it.  ``summary()`` now carries ``reads_by_node`` beside
+    ``writes_by_node``, this function reads the report, and the harness is no
+    longer coupled to the instrument's internal names.  The read sets are
+    identical either way — the report is built from the same dictionary by the
+    same expression — and that was measured before and after the change rather
+    than asserted (task A58's report, section 4).
+
+    A summary that does not carry the key is a refusal, not an empty read set:
+    a census silently reporting that no node read anything would look like a
+    passing comparison against nothing.
+    """
+    reads = modules.get("reads_by_node")
+    if reads is None:
+        raise CensusError(
+            "the census instrument's summary carries no 'reads_by_node': the "
+            "tree under test is older than the one-line addition task A58 "
+            "(driver-predicate-counters) made to "
+            "process/core/_idf_probe_modules.py::summary().  Refused rather "
+            "than defaulted to an empty read set, which would compare as a "
+            "pass against nothing."
+        )
+    return {node: list(fields) for node, fields in reads.items()}
+
+
+def run_child(args: argparse.Namespace) -> int:
+    """One PROCESS run with the census instrument on, inside this process.
+
+    Reached only as a subprocess started by the pool: the tree is asserted for
+    equality before anything else happens, and this file never runs a model in
+    the parent.
+    """
+    import os
+
+    outdir = Path(args.outdir).resolve()
+    outdir.mkdir(parents=True, exist_ok=True)
+    os.environ[PROBE_VARIABLE] = PROBE_MODE
+    if args.read_census:
+        os.environ.pop(PROBE_READ_BUDGET_VARIABLE, None)
+        os.environ.pop(PROBE_READ_STRIDE_VARIABLE, None)
+    else:
+        # The read hooks override attribute *access* on every data-structure
+        # object, which is the expensive half of the instrument.  A write-only
+        # census switches them off rather than paying for names it will not use.
+        os.environ[PROBE_READ_BUDGET_VARIABLE] = "0"
+        os.environ[PROBE_READ_STRIDE_VARIABLE] = "0"
+
+    from harness.core import provenance as prov
+
+    record: dict[str, Any] = {
+        "record_format": RECORD_FORMAT,
+        "campaign_phase": "census",
+        "campaign_configuration": args.configuration,
+        "campaign_arm": args.arm,
+        "campaign_seed": 0,
+        "campaign_run_kind": args.run_kind,
+        "regime": "unperturbed",
+        "entry": args.entry,
+        "read_census": bool(args.read_census),
+        "probe_mode": PROBE_MODE,
+        "status": "started",
+    }
+    started = time.perf_counter()
+    try:
+        process_file = prov.assert_tree(Path(args.tree))
+        # Flattened, not nested.  Every other record in this package keeps the
+        # commit at ``tree_git_head`` on the record itself, and a survey of
+        # what was made where reads exactly that key; a census that kept it one
+        # level down was invisible to the survey rather than wrong in it.
+        record.update(
+            tree_stamp(
+                Path(args.tree),
+                process_file=str(process_file),
+                pythonpath=os.environ.get("PYTHONPATH"),
+            )
+        )
+
+        source = Path(args.input)
+        local_input = outdir / f"{args.configuration}.IN.DAT"
+        local_input.write_text(source.read_text())
+
+        from process.core import _idf_probe as probe
+        from process.core.caller import Caller
+        from process.core.solver.iteration_variables import (
+            load_iteration_variables,
+            load_scaled_bounds,
+        )
+        from process.main import SingleRun
+
+        if not probe.ENABLED or probe.MODE != PROBE_MODE:
+            raise CensusError(
+                f"the census instrument is not on: {PROBE_VARIABLE} resolved "
+                f"to {probe.MODE!r} inside the child.  A census taken with the "
+                f"instrument off would report an empty write set for every "
+                f"node and look like a passing comparison against nothing."
+            )
+
+        single_run = SingleRun(
+            str(local_input), solver="vmcon", update_obsolete=True
+        )
+        data = single_run.data
+        load_iteration_variables(data)
+        load_scaled_bounds(data)
+        numerics = data.numerics
+        n = int(numerics.n_iteration_variables)
+        m = int(numerics.n_equality_constraints) + int(
+            numerics.n_inequality_constraints
+        )
+        record["nvar"] = n
+        record["n_constraints"] = m
+        record["i_figure_merit"] = int(numerics.i_figure_merit)
+
+        if args.entry == "evaluation":
+            caller = Caller(single_run.models, data)
+            caller.call_models(numerics.xcm[:n], m)
+        elif args.entry == "optimisation":
+            single_run.run()
+        else:  # pragma: no cover - argparse restricts it
+            raise CensusError(f"unknown census entry {args.entry!r}")
+        record["status"] = "ok"
+        record["failure_class"] = "ok"
+    except BaseException as exc:  # noqa: BLE001 - recorded, then reported
+        record["status"] = "crashed"
+        record["failure_class"] = "machinery"
+        record["error"] = f"{type(exc).__name__}: {exc}"
+        record["traceback"] = traceback.format_exc()
+        (outdir / "metrics.json").write_text(json.dumps(record, indent=2))
+        return 1
+
+    summary = probe.summary()
+    modules = summary.get("modules") or {}
+    census = {
+        "configuration": args.configuration,
+        "entry": args.entry,
+        "read_census": bool(args.read_census),
+        "probe_mode": PROBE_MODE,
+        "sweeps_total": modules.get("sweeps_total"),
+        "read_sweeps": modules.get("read_sweeps"),
+        "output_path_calls_refused": modules.get("output_path_calls_refused"),
+        "node_calls": {
+            entry["name"]: entry["calls"] for entry in modules.get("nodes", [])
+        },
+        "writes_by_node": {
+            node: fields
+            for node, fields in (modules.get("writes_by_node") or {}).items()
+        },
+        "reads_by_node": _reads_by_node(modules) if args.read_census else None,
+        "n_call_models": len(modules.get("calls") or []),
+    }
+    (outdir / "census.json").write_text(json.dumps(census, indent=2))
+    record["census_written_to"] = "census.json"
+    record["sweeps_total"] = census["sweeps_total"]
+    record["n_nodes_with_writes"] = sum(
+        1 for fields in census["writes_by_node"].values() if fields
+    )
+    record["wall_s"] = time.perf_counter() - started
+    (outdir / "metrics.json").write_text(json.dumps(record, indent=2))
+    return 0
+
+
+# ==========================================================================
+# the parent: run one census through the pool, then compare it
+# ==========================================================================
+
+
+def take(
+    config: Config,
+    campaign: Campaign,
+    *,
+    entry: str = "evaluation",
+    read_census: bool = True,
+    outdir: Path | None = None,
+    resume: bool = False,
+) -> dict[str, Any]:
+    """One census of one configuration, through the pool.
+
+    Fresh subprocess, own working directory, ``PYTHONPATH`` naming the tree
+    under test, the exact tree asserted inside the child — the same isolation
+    every PROCESS run in this package gets, for the same reason: the output-file
+    manager holds its handles as class attributes and initialisation mutates a
+    global, so two runs in one interpreter contaminate each other.
+    """
+    from ..core import pool as pool_mod  # noqa: PLC0415 - pool imports this module
+
+    directory = Path(
+        outdir or (Path(campaign.runs_dir) / RUNS_SUBPATH / config.name / entry)
+    )
+    existing = directory / "census.json"
+    superseded: dict[str, Any] | None = None
+    if resume and existing.exists():
+        keep, why = resume_keeps(
+            directory,
+            configuration=config.name,
+            entry=entry,
+            read_census=read_census,
+        )
+        if keep:
+            print(
+                f"  {config.name:24s} census   entry={entry:<12s} resumed "
+                f"({why})",
+                flush=True,
+            )
+            previous = json.loads(existing.read_text())
+            previous.setdefault("run", {})["resumed"] = True
+            previous["run"]["outdir"] = str(directory)
+            return previous
+        # Not kept, and named before it is replaced: the pool clears the
+        # directory, so what the superseded record said has to be read out
+        # here or it is gone without a trace.
+        was = {}
+        try:
+            was = run_record(directory)
+        except CensusError:
+            was = {}
+        superseded = {
+            "why": why,
+            "record_format": was.get("record_format"),
+            "tree_git_head": was.get("tree_git_head")
+            or (was.get("provenance") or {}).get("tree_git_head"),
+            "outdir": str(directory),
+        }
+        print(
+            f"  {config.name:24s} census   entry={entry:<12s} RE-TAKEN — "
+            f"{why}",
+            flush=True,
+        )
+    job = pool_mod.Job(
+        phase="census",
+        arm=CENSUS_ARM[entry],
+        config=config,
+        seed=0,
+        outdir=directory,
+        regime="unperturbed",
+        run_kind="gate",
+        census_entry=entry,
+        census_read=read_census,
+        node_census=False,
+    )
+    result = pool_mod.run(job, campaign, resume=False)
+    path = directory / "census.json"
+    if not path.exists():
+        raise CensusError(
+            f"{config.name}: the census run wrote no census "
+            f"(status {result.get('status')!r}, taxonomy "
+            f"{result.get('failure_class')!r}, directory {directory}).  "
+            f"Refused rather than compared against nothing: a comparison over "
+            f"an empty census reports zero differences and means nothing."
+        )
+    taken = run_record(directory)
+    assert_stamped(taken, where=f"{config.name} ({entry})")
+    census = json.loads(path.read_text())
+    census["run"] = {
+        "outdir": str(directory),
+        "status": result.get("status"),
+        "wall_s": result.get("wall_s"),
+        "resumed": result.get("resumed", False),
+        "record_format": taken.get("record_format"),
+        "tree_git_head": taken.get("tree_git_head"),
+        "superseded": superseded,
+    }
+    return census
+
+
+# --------------------------------------------------------------------------
+# comparisons
+# --------------------------------------------------------------------------
+
+
+def compare_write_sets(
+    census: Mapping[str, Any], committed: Mapping[str, Any], configuration: str
+) -> dict[str, Any]:
+    """The measured write sets against the committed per-node census.
+
+    Reported with both denominators, because the two directions mean different
+    things.  A field the committed census has and this run did not write is a
+    field written somewhere else in the design space (or under a branch this
+    entry did not take): the committed set is the larger, and nothing that reads
+    it is wrong.  A field this run wrote that the committed census does **not**
+    have is the dangerous direction — a node writing state nobody recorded — and
+    is reported node by node.
+    """
+    per_configuration = committed.get("per_scenario", {}).get(configuration)
+    if per_configuration is None:
+        raise CensusError(
+            f"the committed write census has no entry for {configuration}; it "
+            f"covers {sorted(committed.get('per_scenario', {}))}"
+        )
+    committed_writes = {
+        node: set(fields)
+        for node, fields in per_configuration["writes_by_node"].items()
+    }
+    measured_writes = {
+        node: set(fields)
+        for node, fields in census["writes_by_node"].items()
+        if fields
+    }
+    nodes = sorted(set(committed_writes) | set(measured_writes))
+    rows = []
+    n_fields_committed = n_fields_measured = 0
+    n_only_committed = n_only_measured = 0
+    for node in nodes:
+        committed_fields = committed_writes.get(node, set())
+        measured_fields = measured_writes.get(node, set())
+        only_committed = sorted(committed_fields - measured_fields)
+        only_measured = sorted(measured_fields - committed_fields)
+        n_fields_committed += len(committed_fields)
+        n_fields_measured += len(measured_fields)
+        n_only_committed += len(only_committed)
+        n_only_measured += len(only_measured)
+        rows.append(
+            {
+                "node": node,
+                "n_committed": len(committed_fields),
+                "n_measured": len(measured_fields),
+                "n_in_both": len(committed_fields & measured_fields),
+                "only_in_committed": only_committed,
+                "only_in_this_run": only_measured,
+                "identical": not only_committed and not only_measured,
+            }
+        )
+    return {
+        "configuration": configuration,
+        "n_nodes_compared": len(nodes),
+        "n_nodes_identical": sum(1 for row in rows if row["identical"]),
+        "n_fields_committed": n_fields_committed,
+        "n_fields_measured": n_fields_measured,
+        "n_fields_only_in_committed": n_only_committed,
+        "n_fields_only_in_this_run": n_only_measured,
+        "nodes_in_committed_only": sorted(set(committed_writes) - set(measured_writes)),
+        "nodes_in_this_run_only": sorted(set(measured_writes) - set(committed_writes)),
+        "per_node": rows,
+        "caption": (
+            "One row per model node; a field is one data-structure field the "
+            "node wrote. 'committed' is the per-node write census this "
+            "experiment reads; 'this run' is the census just taken. The two "
+            "directions are not symmetric: a field only in the committed set "
+            "was written at a design point this entry did not visit, while a "
+            "field only in this run is state nobody recorded."
+        ),
+    }
+
+
+def compare_block_subsets(
+    census: Mapping[str, Any],
+    node_map: Mapping[str, Any],
+    write_sets: Mapping[str, Any],
+    coupling_state: Mapping[str, Any],
+    configuration: str,
+) -> dict[str, Any]:
+    """The measured write sets, mapped to blocks, against the committed subsets.
+
+    The mapping is the committed module node map's, and the intersection is with
+    the coupling state's component list: a block's convergence test is taken
+    over the components that block writes, so the subset is *writes ∩ state* and
+    nothing else.  That is the construction the committed file used, restated
+    here rather than imported.
+    """
+    nodes = node_map["nodes"]
+    keys = {component["key"] for component in coupling_state["components"]}
+    measured: dict[str, set[str]] = {}
+    unmapped: list[str] = []
+    for node, fields in census["writes_by_node"].items():
+        if node == DESIGN_VECTOR_NODE or not fields:
+            continue
+        module = (nodes.get(node) or {}).get("module")
+        if not module:
+            unmapped.append(node)
+            continue
+        measured.setdefault(module, set()).update(set(fields) & keys)
+    committed = {
+        module: set(module_keys)
+        for module, module_keys in write_sets["subsets"].items()
+    }
+    blocks = sorted(set(committed) | set(measured))
+    rows = []
+    n_committed = n_measured = n_only_committed = n_only_measured = 0
+    for block in blocks:
+        committed_keys = committed.get(block, set())
+        measured_keys = measured.get(block, set())
+        only_committed = sorted(committed_keys - measured_keys)
+        only_measured = sorted(measured_keys - committed_keys)
+        n_committed += len(committed_keys)
+        n_measured += len(measured_keys)
+        n_only_committed += len(only_committed)
+        n_only_measured += len(only_measured)
+        rows.append(
+            {
+                "block": block,
+                "n_committed": len(committed_keys),
+                "n_measured": len(measured_keys),
+                "only_in_committed": only_committed,
+                "only_in_this_run": only_measured,
+                "identical": not only_committed and not only_measured,
+            }
+        )
+    return {
+        "configuration": configuration,
+        "n_blocks_compared": len(blocks),
+        "n_blocks_identical": sum(1 for row in rows if row["identical"]),
+        "n_components": len(keys),
+        "n_component_slots_committed": n_committed,
+        "n_component_slots_measured": n_measured,
+        "n_only_in_committed": n_only_committed,
+        "n_only_in_this_run": n_only_measured,
+        "nodes_with_no_module": sorted(unmapped),
+        "per_block": rows,
+        "caption": (
+            "One row per block of the partition; an entry is one coupling-state "
+            "component that block writes. 'committed' is the per-block subset "
+            "the block solves test over; 'this run' is the census just taken, "
+            "mapped node -> block through the committed module node map and "
+            "intersected with the coupling state's own component list."
+        ),
+    }
+
+
+def compare_predicate_reads(
+    census: Mapping[str, Any],
+    tree: Path,
+    i_figure_merit: int,
+    *,
+    written_fields: set[str],
+) -> dict[str, Any]:
+    """What the predicate layer actually read, against what the source says.
+
+    The routing rule that decides which nodes may leave the loop is derived from
+    a source scan of the objective and constraint layers.  This is the direct
+    observation of the same thing: the instrument attributes the
+    objective/constraint block's reads to their own node, so the census names
+    the fields the optimiser's own layer touched during the run.
+
+    The expected relation is **containment, not equality**, and the direction
+    matters.  The source scan takes the whole constraint layer rather than the
+    configuration's own constraints, so it over-reports on purpose: a field it
+    lists and the run never read is a constraint this configuration does not
+    activate.  A field the run *read* and the scan does not list is the
+    dangerous direction — it would mean the routing rule is derived from an
+    incomplete read set.
+
+    Two constructions, and the second is the one that binds
+    -------------------------------------------------------
+    The runtime window is slightly wider than the two source files: the
+    instrument opens it at the driver's own call site, so a field the *driver*
+    reads while dispatching into the objective is attributed to this node too.
+    The raw comparison therefore reports such reads, and the raw numbers are
+    published.  But the routing rule only ever asks about fields **a model node
+    writes** — a field no node writes cannot make a node live, whatever reads it
+    — so the binding construction restricts both sides to the write census's own
+    field set, and every read excluded by that restriction is listed by name
+    rather than counted away.
+    """
+    from ..experiment.artifacts import compare_with_driver, predicate_read_fields  # noqa: PLC0415
+
+    reads = census.get("reads_by_node") or {}
+    if PREDICATE_NODE not in reads:
+        return {
+            "available": False,
+            "why": (
+                f"this census carries no read set for {PREDICATE_NODE!r}: it "
+                f"was taken with the read half of the instrument off"
+            ),
+        }
+    observed = set(reads[PREDICATE_NODE])
+    declared = set(predicate_read_fields(tree, i_figure_merit))
+    unlisted = sorted(observed - declared)
+    routing = sorted((observed - declared) & written_fields)
+    not_written = sorted((observed - declared) - written_fields)
+    return {
+        "available": True,
+        "i_figure_merit": i_figure_merit,
+        "n_read_at_runtime": len(observed),
+        "n_in_source_scan": len(declared),
+        "n_read_and_listed": len(observed & declared),
+        "n_listed_but_not_read": len(declared - observed),
+        "n_read_but_not_listed": len(unlisted),
+        "read_but_not_listed": unlisted[:50],
+        "containment_holds_over_every_field": not unlisted,
+        "n_written_by_some_node": len(written_fields),
+        "n_read_but_not_listed_and_written_by_some_node": len(routing),
+        "read_but_not_listed_and_written_by_some_node": routing,
+        "read_but_not_listed_and_written_by_no_node": not_written,
+        "containment_holds_where_it_binds": not routing,
+        "restatement_against_the_driver": compare_with_driver(tree, i_figure_merit),
+        "caption": (
+            "The objective/constraint block's own read set, observed during one "
+            "run, against the read set the source scan derives for the same "
+            "figure of merit. Two constructions: over every field the block "
+            "read, and over only those fields some model node writes — the "
+            "second is what the routing rule uses, and the fields the "
+            "restriction removes are listed by name. 'restatement against the "
+            "driver' compares this package's copy of the scan rule with the "
+            "driver's own, in a child process."
+        ),
+    }
+
+
+# ==========================================================================
+# the stage
+# ==========================================================================
+
+
+def stage(
+    campaign: Campaign,
+    *,
+    configurations: Sequence[str] | None = None,
+    entry: str = "evaluation",
+    read_census: bool = True,
+    resume: bool = False,
+) -> tuple[int, dict[str, Any]]:
+    """Take a census of every configuration and compare it with the committed one."""
+    from ..experiment.artifacts import load  # noqa: PLC0415 - one direction
+
+    check = StageCheck(
+        name="census",
+        binds=(
+            "the committed per-node write census, the per-block subsets built "
+            "from it, and the read set the routing rule is derived from"
+        ),
+    )
+    names = list(configurations) if configurations else list(campaign.population)
+    committed_census = load(
+        campaign.data_dir / "node_writesets.json", role="node_write_sets"
+    )
+    node_map = load(campaign.data_dir / "dsm_node_map.json", role="node_map")
+    rows: list[dict[str, Any]] = []
+    for name in names:
+        config = campaign.configuration(name)
+        try:
+            census = take(
+                config,
+                campaign,
+                entry=entry,
+                read_census=read_census,
+                resume=resume,
+            )
+        except (CensusError, RuntimeError) as exc:
+            check.fail(f"{name}: REFUSED — {exc}")
+            rows.append({"configuration": name, "verdict": "REFUSED", "error": str(exc)})
+            continue
+        writes = compare_write_sets(census, committed_census, name)
+        blocks = compare_block_subsets(
+            census,
+            node_map,
+            load(config.write_sets_path, role="write_sets"),
+            load(config.coupling_state_path, role="coupling_state"),
+            name,
+        )
+        written_fields: set[str] = set()
+        for fields in committed_census["per_scenario"][name]["writes_by_node"].values():
+            written_fields |= set(fields)
+        for fields in census["writes_by_node"].values():
+            written_fields |= set(fields)
+        reads = compare_predicate_reads(
+            census,
+            Path(campaign.tree),
+            config.figure_of_merit,
+            written_fields=written_fields,
+        )
+        check.n_compared += writes["n_nodes_compared"] + blocks["n_blocks_compared"]
+        rows.append(
+            {
+                "configuration": name,
+                "entry": entry,
+                "sweeps_total": census.get("sweeps_total"),
+                "output_path_calls_refused": census.get("output_path_calls_refused"),
+                "write_sets": writes,
+                "block_subsets": blocks,
+                "predicate_reads": reads,
+                "run": census.get("run"),
+            }
+        )
+        check.note(
+            f"{name}: {writes['n_nodes_identical']}/{writes['n_nodes_compared']} "
+            f"node write sets identical; "
+            f"{writes['n_fields_measured']} field(s) written in this run "
+            f"against {writes['n_fields_committed']} committed "
+            f"({writes['n_fields_only_in_committed']} committed-only, "
+            f"{writes['n_fields_only_in_this_run']} this-run-only); "
+            f"{blocks['n_blocks_identical']}/{blocks['n_blocks_compared']} "
+            f"block subsets identical over "
+            f"{blocks['n_components']} coupling components; "
+            f"{census.get('sweeps_total')} sweep(s), "
+            f"{sum((census.get('output_path_calls_refused') or {}).values())} "
+            f"output-path call(s) refused by the sweep boundary"
+        )
+        if writes["n_fields_only_in_this_run"]:
+            check.fail(
+                f"{name}: {writes['n_fields_only_in_this_run']} field(s) written "
+                f"in this run that the committed census does not record — "
+                f"state nobody recorded, reported node by node in the stage "
+                f"record and not absorbed"
+            )
+        if blocks["nodes_with_no_module"]:
+            check.fail(
+                f"{name}: node(s) {blocks['nodes_with_no_module']} wrote state "
+                f"and are not in the committed module node map, so their "
+                f"components belong to no block"
+            )
+        if reads.get("available"):
+            check.note(
+                f"{name}: the predicate layer read "
+                f"{reads['n_read_at_runtime']} field(s) at run time; "
+                f"{reads['n_read_and_listed']} of them are in the "
+                f"{reads['n_in_source_scan']}-field source scan the routing "
+                f"rule uses, and "
+                f"{reads['n_read_but_not_listed_and_written_by_some_node']} of "
+                f"the {reads['n_read_but_not_listed']} that are not are "
+                f"written by some model node "
+                f"(not written by any node: "
+                f"{reads['read_but_not_listed_and_written_by_no_node']}); the "
+                f"restatement of the scan rule agrees with the driver's own on "
+                f"{reads['restatement_against_the_driver'].get('n_driver')} "
+                f"field(s): "
+                f"{reads['restatement_against_the_driver'].get('agrees')}"
+            )
+            if not reads["containment_holds_where_it_binds"]:
+                check.fail(
+                    f"{name}: the predicate layer read "
+                    f"{reads['n_read_but_not_listed_and_written_by_some_node']} "
+                    f"field(s) that a model node writes and the source scan "
+                    f"does not list: "
+                    f"{reads['read_but_not_listed_and_written_by_some_node']} — "
+                    f"the routing rule would be derived from an incomplete "
+                    f"read set"
+                )
+            if reads["restatement_against_the_driver"].get("agrees") is not True:
+                check.fail(
+                    f"{name}: this package's restatement of the predicate read "
+                    f"rule does not agree with the driver's own: "
+                    f"{reads['restatement_against_the_driver']}"
+                )
+    check.population = (
+        f"{len(names)} configuration(s) ({', '.join(names)}); one "
+        f"{entry} census each, taken with the read half of the instrument "
+        f"{'on' if read_census else 'off'}"
+    )
+    return (0 if check.passed else 3), {
+        **check.as_record(),
+        "entry": entry,
+        "entry_meaning": ENTRIES[entry],
+        "read_census": read_census,
+        "committed_census": {
+            "path": str(campaign.data_dir / "node_writesets.json"),
+            "union_sha256": committed_census.get("union_sha256"),
+            "derived_from": committed_census.get("derived_from"),
+            "tree_git_head": committed_census.get("tree_git_head"),
+        },
+        "configurations": rows,
+    }
+
+
+def stage_teeth(
+    campaign: Campaign,
+    *,
+    record: Mapping[str, Any] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Two ways the census comparison must fail.  No PROCESS run.
+
+    Both breaks are made on a throwaway copy of a census taken by the stage
+    above; nothing on disk is written to.
+    """
+    from ..experiment.artifacts import load  # noqa: PLC0415 - one direction
+
+    check = StageCheck(
+        name="census — teeth",
+        binds="the census comparison's own ability to fail",
+        population="2 deliberate breaks, on a throwaway copy of one census",
+    )
+    census = _one_census_for_teeth(campaign, record)
+    if census is None:
+        check.fail(
+            "no census is available to break: run the census stage first.  A "
+            "tooth that runs over nothing proves nothing, so this refuses "
+            "rather than reporting a vacuous pass."
+        )
+        return 3, check.as_record()
+    configuration = census["configuration"]
+    committed = load(
+        campaign.data_dir / "node_writesets.json", role="node_write_sets"
+    )
+
+    # 1. a node's write removed from the measured census: the committed set
+    #    then has a field this run did not write, which is the benign
+    #    direction — so the tooth is on the *count*, which must move.
+    baseline = compare_write_sets(census, committed, configuration)
+    broken = json.loads(json.dumps(census))
+    node = next(
+        name
+        for name, fields in sorted(broken["writes_by_node"].items())
+        if fields and name != DESIGN_VECTOR_NODE
+    )
+    removed = broken["writes_by_node"][node].pop(0)
+    after = compare_write_sets(broken, committed, configuration)
+    check.tooth(
+        "one node's write removed from the census",
+        after["n_fields_only_in_committed"]
+        == baseline["n_fields_only_in_committed"] + 1
+        and after["n_nodes_identical"] < baseline["n_nodes_identical"],
+        f"{removed!r} removed from {node!r} in a throwaway copy; the "
+        f"comparison must report one more committed-only field and one fewer "
+        f"identical node",
+    )
+
+    # 2. a node writing state nobody recorded: the dangerous direction, which
+    #    must fail the stage rather than be counted.
+    broken = json.loads(json.dumps(census))
+    broken["writes_by_node"].setdefault(node, []).append("physics.a_field_nobody_recorded")
+    after = compare_write_sets(broken, committed, configuration)
+    check.tooth(
+        "a node writing a field the committed census does not have",
+        after["n_fields_only_in_this_run"] == 1,
+        "an invented field added to a throwaway copy; the comparison must "
+        "report it as this-run-only, which is what fails the stage",
+    )
+
+    # 3. a census record that does not say which tree took it.  The stage reads
+    #    a census through ``take``, which asserts the stamp on the record beside
+    #    it; a record without one can be placed nowhere by a stamp survey, and
+    #    the survey is what catches a resume that kept what it should have
+    #    re-made (trap T13).  Both halves, because a check that refuses
+    #    everything is not a check: the stripped record must be refused **and**
+    #    the stamped one accepted.
+    unstamped, source = _a_census_record_for_teeth(campaign)
+    stamped = dict(unstamped)
+    stamped.update({name: None for name in STAMP_FIELDS})
+    refused, why = _must_refuse(lambda: assert_stamped(unstamped, where=source))
+    accepted, _ = _must_refuse(lambda: assert_stamped(stamped, where=source))
+    check.tooth(
+        "a census record carrying no tree stamp",
+        refused and not accepted,
+        f"the record at {source} ({unstamped.get('record_format')}) with "
+        f"{len(missing_stamp_fields(unstamped))} of {len(STAMP_FIELDS)} "
+        f"declared provenance field(s) missing: "
+        + (f"refused — {why}" if refused else "NOT refused")
+        + "; the same record with the fields present is "
+        + ("accepted" if not accepted else "REFUSED TOO, so the check does not "
+           "discriminate"),
+    )
+
+    # 3b. the other half of the same contract: a census whose record is
+    #     unstamped is not *kept* by --resume — it is re-taken, exactly as
+    #     pool.run re-runs an incomplete run record.  The decision is what the
+    #     tooth exercises; the re-take itself is a PROCESS run and belongs to
+    #     the press, not to a tooth.  Both cases are built in a scratch
+    #     directory from a real census, so the tooth reads the same whether or
+    #     not the records on disk have been re-taken yet.
+    with tempfile.TemporaryDirectory(prefix="census_resume_") as scratch:
+        directory = Path(scratch)
+        (directory / "census.json").write_text(json.dumps(census))
+        stripped = {
+            name: value
+            for name, value in unstamped.items()
+            if name not in STAMP_FIELDS
+        }
+        (directory / "metrics.json").write_text(json.dumps(stripped))
+        kept_unstamped, why_unstamped = resume_keeps(
+            directory,
+            configuration=configuration,
+            entry=census["entry"],
+            read_census=bool(census.get("read_census")),
+        )
+        complete = dict(stripped)
+        complete.update({name: None for name in STAMP_FIELDS})
+        complete["record_format"] = RECORD_FORMAT
+        (directory / "metrics.json").write_text(json.dumps(complete))
+        kept_stamped, why_stamped = resume_keeps(
+            directory,
+            configuration=configuration,
+            entry=census["entry"],
+            read_census=bool(census.get("read_census")),
+        )
+    check.tooth(
+        "an unstamped census record offered to --resume",
+        (not kept_unstamped) and kept_stamped,
+        "a scratch copy of this census beside an unstamped record: "
+        + (
+            f"not kept, so it is re-taken — {why_unstamped[:150]}"
+            if not kept_unstamped
+            else "KEPT, so a resume would carry a record no survey can place"
+        )
+        + "; the same census beside a stamped record: "
+        + ("kept" if kept_stamped else f"NOT KEPT either — {why_stamped[:120]}"),
+    )
+
+    # 4. a census sitting beside no run record at all — a directory somebody
+    #    assembled by hand, which has no tree to be placed in.
+    refused, why = _must_refuse(
+        lambda: run_record(Path(campaign.runs_dir) / RUNS_SUBPATH / "_no_such_census")
+    )
+    check.tooth(
+        "a census with no run record beside it",
+        refused,
+        "a directory holding no metrics.json: "
+        + (f"refused — {why}" if refused else "NOT refused"),
+    )
+    return (0 if check.passed else 3), check.as_record()
+
+
+def _must_refuse(call) -> tuple[bool, str]:
+    """Whether *call* refused, and what it said.  A success is a tooth failure."""
+    try:
+        call()
+    except Exception as exc:  # noqa: BLE001 - the refusal is the result
+        return True, f"{type(exc).__name__}: {str(exc).splitlines()[0][:120]}"
+    return False, "it did not refuse"
+
+
+def _a_census_record_for_teeth(campaign: Campaign) -> tuple[dict[str, Any], str]:
+    """A census run record to break a copy of, and where it came from.
+
+    The one on disk where there is one — a tooth on the real shape is worth
+    more than a tooth on an invented one — and an explicitly synthetic record
+    otherwise, named as such so no reader mistakes which was used.
+    """
+    root = Path(campaign.runs_dir) / RUNS_SUBPATH
+    for path in sorted(root.glob("*/*/metrics.json")):
+        try:
+            record = json.loads(path.read_text())
+        except Exception:  # noqa: BLE001 - a half-written record is not a tooth
+            continue
+        if missing_stamp_fields(record):
+            return record, str(path)
+    return (
+        {"record_format": "census-1", "campaign_phase": "census"},
+        "a synthetic record (no unstamped census is on disk)",
+    )
+
+
+def _one_census_for_teeth(
+    campaign: Campaign, record: Mapping[str, Any] | None
+) -> dict[str, Any] | None:
+    """A census already on disk, for the teeth to break a copy of."""
+    if record:
+        for row in record.get("configurations", []):
+            path = Path((row.get("run") or {}).get("outdir", "")) / "census.json"
+            if path.exists():
+                return json.loads(path.read_text())
+    root = Path(campaign.runs_dir) / RUNS_SUBPATH
+    for path in sorted(root.glob("*/*/census.json")):
+        return json.loads(path.read_text())
+    return None
+
+
+# ==========================================================================
+# entry point (child only; the stage is reached from experiment_runner.py)
+# ==========================================================================
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--child", action="store_true", required=True)
+    parser.add_argument("--tree", required=True)
+    parser.add_argument("--configuration", required=True)
+    parser.add_argument("--arm", required=True)
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--outdir", required=True)
+    parser.add_argument("--entry", default="evaluation", choices=tuple(ENTRIES))
+    parser.add_argument("--read-census", action="store_true")
+    parser.add_argument("--run-kind", default="gate", choices=("gate", "smoke"))
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_child(build_parser().parse_args(argv))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

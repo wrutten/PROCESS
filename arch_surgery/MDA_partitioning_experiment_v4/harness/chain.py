@@ -64,12 +64,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import arms as arms_mod
-from . import framework
-from . import pool as pool_mod
-from . import records as records_mod
-from .config import EXECUTION_APPROVED, Campaign, Config
-from .framework import Gate, GateError, Tooth
+from .experiment import arms as arms_mod
+from .core import framework
+from .core import pool as pool_mod
+from .core import records as records_mod
+from .core.config import EXECUTION_APPROVED, Campaign, Config
+from .core.framework import Gate, GateError, Tooth
 
 __all__ = [
     "ChainError",
@@ -532,7 +532,7 @@ def _pin_for(
     constant and the state the run is entered with move together.  Both routes
     are the harness's one implementation of that rule.
     """
-    from . import reproduction as reproduction_mod  # noqa: PLC0415
+    from .gates import reproduction as reproduction_mod  # noqa: PLC0415
 
     if not config.pulsed:
         return None
@@ -862,7 +862,7 @@ def assert_stages_exist(campaign: Campaign) -> dict[str, Any]:
     success over fewer stages than it names.  The refusal says which name is
     missing and which registry it was looked for in.
     """
-    from . import gates as gates_mod  # noqa: PLC0415
+    from .gates import gates as gates_mod  # noqa: PLC0415
 
     available_gates = gates_mod.gates_only(campaign)
     available_stages = gates_mod.measurements(campaign)
@@ -943,7 +943,7 @@ def run(
 
     press["run_records"] = _survey_own_records(campaign, plan)
 
-    from . import gates as gates_mod  # noqa: PLC0415
+    from .gates import gates as gates_mod  # noqa: PLC0415
 
     available_gates = gates_mod.gates_only(campaign)
     available_stages = gates_mod.measurements(campaign)
@@ -1104,7 +1104,7 @@ def _doctored(kind: str) -> dict[str, Any]:
 
 
 def _tooth_tally_refuses_a_smoke_record() -> tuple[bool, str]:
-    from . import stats as stats_mod  # noqa: PLC0415
+    from .measurement import stats as stats_mod  # noqa: PLC0415
 
     try:
         stats_mod.Population.of(
@@ -1119,7 +1119,7 @@ def _tooth_tally_refuses_a_smoke_record() -> tuple[bool, str]:
 
 
 def _tooth_analysis_refuses_a_smoke_record() -> tuple[bool, str]:
-    from . import analysis as analysis_mod  # noqa: PLC0415
+    from .measurement import analysis as analysis_mod  # noqa: PLC0415
 
     try:
         analysis_mod.Population.of(
@@ -1140,7 +1140,7 @@ def _tooth_a_measurable_record_is_still_accepted() -> tuple[bool, str]:
     A refusal that fires on every record would pass both teeth above and make
     every table empty.  This is the positive control.
     """
-    from . import stats as stats_mod  # noqa: PLC0415
+    from .measurement import stats as stats_mod  # noqa: PLC0415
 
     try:
         population = stats_mod.Population.of(
@@ -1217,8 +1217,8 @@ def separation_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
       ``EXECUTION_APPROVED`` is False.  That is the whole-tree version, and it
       is what catches a campaign record made by a path nobody thought to check.
     """
-    from . import stats as stats_mod  # noqa: PLC0415
-    from . import tally as tally_mod  # noqa: PLC0415
+    from .measurement import stats as stats_mod  # noqa: PLC0415
+    from .measurement import tally as tally_mod  # noqa: PLC0415
 
     root = Path(campaign.runs_dir)
     by_kind: dict[str, int] = {}
@@ -1287,7 +1287,7 @@ def separation_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
 
 def gate(campaign: Campaign) -> Gate:
     """Gate ``run_kind_separation``: the smoke and the campaign stay apart."""
-    from . import tally as tally_mod  # noqa: PLC0415
+    from .measurement import tally as tally_mod  # noqa: PLC0415
 
     return Gate(
         name="run_kind_separation",
