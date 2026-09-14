@@ -1,12 +1,8 @@
 # A68 (harness-simplification-survey) — where the V4 harness can be simplified
 
-> **Document status** — **OPEN TASK REPORT · INVESTIGATION ONLY.** Written 2026-09-14 by task
-> **A68 (harness-simplification-survey)** on branch `A68-harness-simplification-survey` off
-> `architecture_surgery` at `6a0e69f6`. Nothing was implemented, no queue, plan or improvement-list
-> file was edited, and **no PROCESS run was made**. Every number below comes from one committed
-> script, `arch_surgery/MDA_partitioning_experiment_v4/harness_survey.py` (committed at `dd3f6ee4`,
-> run at that commit), except where a sentence names another committed script and the flag it was
-> run with. Folder position records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED at merge, 2026-09-14; its items live on in the queue.** Task **A68 (harness-simplification-survey)**
+> merged into `architecture_surgery` at `047d3b43` (branch tip `dee8e55c` + assessment, base `6a0e69f6`). No records (no PROCESS run).
+> The orchestrator's critical assessment is §11. Folder position records lifecycle, not validity (trap T3).
 
 **The question (the user, 2026-09-14):** *"investigate where the whole v4 harness can be simplified
 … compile a list of simplification items, with impact, risk and associated costs (what functionality
