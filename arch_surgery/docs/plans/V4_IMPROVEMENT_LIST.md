@@ -715,3 +715,7 @@ pass leaves inconsistent in the written file). The three PROCESS findings were f
 ### 12. Gate G4's doctored runs bypass `--resume` *(A65 (harness-folders), 2026-09-14)*
 
 `gates/gate_audit.py` passes `resume=False` to `run_all` for its doctored runs, so every press of `--gate all` makes **12 PROCESS runs** there whatever the tree holds (A65's stamp survey: 16 re-made of 178, 12 of them G4's). Gate G7's own tooth adds one by design. If the doctored runs' inputs are stamped like any job's, the pool can keep them under `--resume` and the fixed cost of a press falls from 13 runs to 1. Not a correctness matter — the gate passes either way — a run-budget one (the user, 2026-09-11: reduce PROCESS runs where not necessary). A small harness task; no schema change expected.
+
+### 13. Gate G1's `--resume` press rewrites the `after` manifest's commit *(A67 (written-file-gap), 2026-09-14)*
+
+Under `--gate switch_neutrality --resume` with every record kept, the `after` capture's manifest is rewritten with the pressing commit while the records it indexes stay at theirs (`b784158c` in A67's press). The verdict prints both lines, so nothing is hidden, but a manifest should carry the commit of the records it indexes, or state both fields by name. Cosmetic to the verdict; a trap for a reader of the manifest alone. Small harness task; no runs.

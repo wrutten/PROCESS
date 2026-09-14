@@ -1,11 +1,8 @@
 # A67 (written-file-gap) — the one-call output path writes the same gap
 
-> **Document status** — **OPEN.** Task **A67 (written-file-gap)**, branch `A67-written-file-gap` off
-> `architecture_surgery` at base `e159d9b6`; branch tip `1adeed66`. Every run in this report was made at
-> `09cc9f3e` (the gate's verdict was re-taken at `1adeed66` with `--resume`, 0 runs re-made) in the
-> worktree `/home/wrutten/projects/PROCESS_surgery_worktrees/A67-written-file-gap`; the records are
-> under `arch_surgery/MDA_partitioning_experiment_v4/runs/gates/written_file_gap/` (untracked) until the
-> retire script relocates them, and the path it prints replaces this sentence at merge. Folder position
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A67 (written-file-gap)** merged into
+> `architecture_surgery` at `f8d67eb4` (branch tip `ec6e5d62`, base `e159d9b6`). Records relocated to
+> `arch_surgery/idf_probe/runs/A67_runs/`. The orchestrator's critical assessment is §13. Folder position
 > records lifecycle, not validity (trap T3).
 
 ---
