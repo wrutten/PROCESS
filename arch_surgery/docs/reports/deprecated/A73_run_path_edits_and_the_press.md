@@ -1,11 +1,9 @@
 # A73 (run-path-edits-and-the-press) — B3, A66, the child-side remainder, and the one press of D27
 
-> **Document status** — **OPEN.** Task **A73 (run-path-edits-and-the-press)**, branch
-> `A73-run-path-edits-and-the-press` off `architecture_surgery` at **`2969fe66`** (after A70–A72
-> merged). The last task of ruling D27's programme and the one that presses the gates. Nothing
-> here has been merged; the queue, the harness plan and the improvement list are **not** edited by
-> this task (§12 says what each should gain). Folder position records lifecycle, not validity
-> (trap T3).
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A73 (run-path-edits-and-the-press)** merged into `architecture_surgery`
+> at `03f72479` (branch tip `bb34cee8`, base `2969fe66`). Records relocated to `arch_surgery/idf_probe/runs/A73_runs/` — **the D27 from-scratch
+> population** (126 pool records at `0677a9b3`/`4ca8cff5`, G1's before capture at `fd480aff`). The orchestrator's critical assessment is
+> the last section. Folder position records lifecycle, not validity (trap T3).
 
 *Vocabulary is the harness README's §3. "Job", "identity", "digest", "shared pool" as A72's
 report §2 defines them; "press", "tooth", `--resume`, "straddle" as in A68's preamble and A62 §7.
