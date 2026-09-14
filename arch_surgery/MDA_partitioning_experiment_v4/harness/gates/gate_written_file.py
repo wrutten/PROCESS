@@ -477,6 +477,57 @@ def declared_position_beside(
     return out
 
 
+def written_against_solved(directory: Path, record: Mapping[str, Any], argmax: str | None) -> dict[str, Any]:
+    """The argmax component as the solve accepted it, against what the run wrote to its MFILE.
+
+    The solved value is read from the run's own snapshot at the declared
+    position (``y_entry_to_write_output_files.json``, hex, exact); the written
+    value from the ``(<name>)`` line of the run's MFILE, where ``<name>`` is
+    the component's attribute name.  Information beside the residual, in the
+    units A61 §8 used, so the same difference is readable as a relative
+    number; never a criterion.  A component the MFILE does not carry is
+    stated as such.
+    """
+    out: dict[str, Any] = {"component": argmax}
+    if not argmax:
+        out["why_not"] = "no argmax to look up"
+        return out
+    snapshot = Path(directory) / "y_entry_to_write_output_files.json"
+    if not snapshot.exists():
+        out["why_not"] = f"{snapshot.name} is not beside the record"
+        return out
+    state = json.loads(snapshot.read_text()).get("state") or {}
+    entry = state.get(argmax) or {}
+    solved_hex = entry.get("hex")
+    out["solved_hex"] = solved_hex
+    configuration = record.get("campaign_configuration")
+    mfile = Path(directory) / f"{configuration}.MFILE.DAT"
+    tag = f"({argmax.split('.')[-1]})"
+    written = None
+    if mfile.exists():
+        for line in mfile.read_text().splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[1] == tag:
+                try:
+                    written = float(parts[2])
+                except ValueError:
+                    written = None
+                break
+    out["mfile_tag"] = tag
+    out["written"] = written
+    out["written_hex"] = None if written is None else written.hex()
+    if solved_hex is None or written is None:
+        out["why_not"] = "the snapshot or the MFILE does not carry the component"
+        return out
+    solved = float.fromhex(solved_hex)
+    out["solved"] = solved
+    out["identical"] = solved.hex() == written.hex()
+    out["relative_difference"] = (
+        None if solved == 0 else (written - solved) / abs(solved)
+    )
+    return out
+
+
 def body(campaign: Campaign) -> dict[str, Any]:
     """Every planned run, read and checked; the residuals published beside."""
     kept, excluded = configurations(campaign)
@@ -502,6 +553,10 @@ def body(campaign: Campaign) -> dict[str, Any]:
             checks, row = evaluate_run(record, command, arm=arm, key=key)
             row["declared_position_residual"] = declared_position_beside(
                 campaign, config.name, arm, row
+            )
+            frozen = (row["after_run_residual"].get("frozen") or {}).get("restricted") or {}
+            row["argmax_written_against_solved"] = written_against_solved(
+                directory, record, frozen.get("argmax")
             )
             row["outdir"] = str(directory)
             n_checks += len(checks)
@@ -556,6 +611,9 @@ def body(campaign: Campaign) -> dict[str, Any]:
                 "frozen_whole_argmax": r["after_run_residual"]["frozen"]["whole_state"]["argmax"],
                 "frozen_whole_n_above_tau": r["after_run_residual"]["frozen"]["whole_state"]["n_above_tau"],
                 "instrument": r["instrument"]["restores"],
+                "argmax_written_relative_to_solved": r["argmax_written_against_solved"].get(
+                    "relative_difference"
+                ),
                 "passed": r["passed"],
             }
             for r in finished
