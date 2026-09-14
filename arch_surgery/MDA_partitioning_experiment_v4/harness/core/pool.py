@@ -293,9 +293,14 @@ def readable_key(identity: Mapping[str, Any]) -> str:
         f"{identity['regime']}",
         f"{identity['run_kind']}",
     ]
+    if identity.get("delta") is not None:
+        parts.append(f"delta={identity['delta']}")
     if identity.get("predicate_mode") not in (None, "frozen"):
         parts.append(f"mode={identity['predicate_mode']}")
-    if identity.get("audit_position") not in (None, records_mod.AUDIT_POSITION_DECLARED):
+    usual_position = records_mod.effective_audit_position(
+        str(identity.get("phase")), records_mod.AUDIT_POSITION_DECLARED
+    )
+    if identity.get("audit_position") not in (None, usual_position):
         parts.append(f"audit={identity['audit_position']}")
     if identity.get("audit_position_caller"):
         parts.append(f"asked_by={identity['audit_position_caller']}")
