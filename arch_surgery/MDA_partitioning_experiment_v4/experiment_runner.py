@@ -39,20 +39,20 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from harness import arms as arms_mod  # noqa: E402
-from harness import artifacts as artifacts_mod  # noqa: E402
-from harness import census as census_mod  # noqa: E402
+from harness.experiment import arms as arms_mod  # noqa: E402
+from harness.experiment import artifacts as artifacts_mod  # noqa: E402
+from harness.child import census as census_mod  # noqa: E402
 from harness import chain as chain_mod  # noqa: E402
-from harness import gates as gates_mod  # noqa: E402
-from harness import input_files as input_files_mod  # noqa: E402
-from harness import postsolve as postsolve_mod  # noqa: E402
-from harness import provenance as prov  # noqa: E402
-from harness import plan_tables as plan_tables_mod  # noqa: E402
-from harness import pool as pool_mod  # noqa: E402
-from harness import records as records_mod  # noqa: E402
-from harness import reference as reference_mod  # noqa: E402
-from harness import selfcheck as selfcheck_mod  # noqa: E402
-from harness.config import (  # noqa: E402
+from harness.gates import gates as gates_mod  # noqa: E402
+from harness.experiment import input_files as input_files_mod  # noqa: E402
+from harness.child import postsolve as postsolve_mod  # noqa: E402
+from harness.core import provenance as prov  # noqa: E402
+from harness.measurement import plan_tables as plan_tables_mod  # noqa: E402
+from harness.core import pool as pool_mod  # noqa: E402
+from harness.core import records as records_mod  # noqa: E402
+from harness.gates import reference as reference_mod  # noqa: E402
+from harness.gates import selfcheck as selfcheck_mod  # noqa: E402
+from harness.core.config import (  # noqa: E402
     EXECUTION_APPROVED,
     Campaign,
     default_campaign,

@@ -17,7 +17,7 @@ from __future__ import annotations
 #: changes; stamped into every record so a record says which harness wrote it.
 __version__ = "0.2.0"
 
-from .arms import (  # noqa: F401
+from .experiment.arms import (  # noqa: F401
     ARMS,
     MATRIX_FIELDS,
     MATRIX_ORDER,
@@ -35,7 +35,7 @@ from .arms import (  # noqa: F401
     rung,
     skipped_arms,
 )
-from .config import (  # noqa: F401
+from .core.config import (  # noqa: F401
     ARTIFACT_NAMES,
     DRIVER_FIXED_ARTIFACTS,
     EXECUTION_APPROVED,
@@ -47,18 +47,18 @@ from .config import (  # noqa: F401
     default_configurations,
     repository_tree_campaign,
 )
-from .perturb import (  # noqa: F401
+from .child.perturb import (  # noqa: F401
     coupling_state_factor,
     design_vector_factor,
     is_perturbed,
 )
-from .pool import (  # noqa: F401
+from .core.pool import (  # noqa: F401
     Job,
     PoolError,
     run_all,
     seed_directory,
 )
-from .provenance import (  # noqa: F401
+from .core.provenance import (  # noqa: F401
     BASE_COMMIT,
     ProvenanceError,
     assert_interpreter,
@@ -67,7 +67,7 @@ from .provenance import (  # noqa: F401
     git_stamp,
     stamp,
 )
-from .records import (  # noqa: F401
+from .core.records import (  # noqa: F401
     FAILURE_CLASSES,
     REGIMES,
     RUN_KINDS,
@@ -75,7 +75,7 @@ from .records import (  # noqa: F401
     assert_usable,
     resolve_path,
 )
-from .switches import (  # noqa: F401
+from .experiment.switches import (  # noqa: F401
     PREVIOUS_ARM_NAMES,
     PROBE_VARIABLES,
     REGISTRY,
