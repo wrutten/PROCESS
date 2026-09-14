@@ -5,7 +5,7 @@ A **tally** summarises the records into the tables the experiment plan's §4
 asks for.  It has nothing to pass — what passes is the gate over the same
 records — so it is registered as a *measurement stage* and runs under
 ``--measure``, never under ``--gate``.  Where the tally *checks* something,
-that check is a gate with teeth and lives in ``harness/gate_tally.py``.
+that check is a gate with teeth and lives in ``harness/gates/gate_tally.py``.
 
 Five tables, each the shape of one of the plan's §4.2 placeholders:
 

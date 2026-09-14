@@ -48,7 +48,7 @@ kind is **refused** at the population's construction, not filtered out of it.
 user's switch and the smoke does not reach it: :func:`plan_for` refuses a
 campaign plan while the switch is False or while the tree is not the
 experiment's own copy, and the smoke asks for the smoke plan by name.  Resume is
-closed the same way — :func:`harness.records.is_complete_for` compares the run
+closed the same way — :func:`harness.core.records.is_complete_for` compares the run
 kind, so a campaign record left in a directory cannot be kept as a smoke run's,
 or the reverse.
 
@@ -318,7 +318,7 @@ def refusals(plan: ChainPlan, campaign: Campaign) -> list[str]:
     if plan.needs_approval and not EXECUTION_APPROVED:
         reasons.append(
             "the plan's execution is not approved: the user flips "
-            "EXECUTION_APPROVED in harness/config.py in the same commit that "
+            "EXECUTION_APPROVED in harness/core/config.py in the same commit that "
             "records the dated approval in EXPERIMENT_PLAN.md.  The smoke does "
             "not reach this switch — it runs the same chain with the run kind "
             "'smoke', one seed and one configuration"

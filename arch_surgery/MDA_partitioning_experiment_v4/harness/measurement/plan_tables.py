@@ -334,7 +334,7 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
         "",
         "**Where these cells come from.** Every table below is emitted by a "
         "measurement stage of `experiment_runner.py` and rendered into this "
-        "document by `harness/plan_tables.py`, which reads the stages' own "
+        "document by `harness/measurement/plan_tables.py`, which reads the stages' own "
         "records under `runs/gates/<stage>/measurements.json`. No cell is "
         "typed by hand (protocol §15), and nothing in this section is "
         "computed here: each caption, denominator and grid is the stage's.",

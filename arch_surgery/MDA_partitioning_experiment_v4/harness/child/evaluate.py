@@ -4,7 +4,7 @@
 Derived from ``arch_surgery/idf_probe/v2_eval_one.py`` and its one-option
 extension ``arch_surgery/idf_probe/a44_eval_one.py`` (which added the stencil
 entry), both read at ``9a8defa6``; task **A50 (harness-run)**.  Everything shared
-with the optimisation phase now lives in :mod:`harness.child`.
+with the optimisation phase now lives in :mod:`harness.child.child`.
 
 What this measures, and what it deliberately does not
 -----------------------------------------------------
@@ -42,7 +42,7 @@ is the sequence the evaluator itself executes.
 
 Usage::
 
-    PYTHONPATH=<tree> python harness/evaluate.py \\
+    PYTHONPATH=<tree> python harness/child/evaluate.py \\
         --tree <tree> --configuration <name> --arm A1 --seed 1 \\
         --input <input file> --coupling-state <artifact> --outdir <dir> \\
         [--delta 0.10] [--entry-state <y_exit.json>] \\

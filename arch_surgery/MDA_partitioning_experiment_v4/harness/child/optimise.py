@@ -3,7 +3,7 @@
 
 Derived from ``arch_surgery/idf_probe/run_one.py`` at ``9a8defa6`` — a single
 1 000-line ``main()`` — split so that everything shared with the evaluation
-phase lives in :mod:`harness.child` and only what is particular to running an
+phase lives in :mod:`harness.child.child` and only what is particular to running an
 optimisation lives here; task **A50 (harness-run)**.  Four capabilities of the
 original are gone because the campaign never used them: the four in-driver probe
 modes, the alternative model sequences reached through them, the call-indexed
@@ -19,7 +19,7 @@ This module is never imported by the pool that starts it — it is executed.
 
 Usage::
 
-    PYTHONPATH=<tree> python harness/optimise.py \\
+    PYTHONPATH=<tree> python harness/child/optimise.py \\
         --tree <tree> --configuration <name> --arm B3 --seed 1 \\
         --input <input file> --coupling-state <artifact> --outdir <dir>
 """
@@ -53,12 +53,12 @@ from harness.core import records as records_mod  # noqa: E402
 #: the entry to the output path, before any output-time sweep — the state the
 #: solve handed over.  It is reached by a snapshot the driver takes there, with
 #: the residual computed afterwards from the restored snapshot; see
-#: :data:`harness.records.AUDIT_POSITION_HOW`.
+#: :data:`harness.core.records.AUDIT_POSITION_HOW`.
 #:
 #: A run may be asked for ``after_run`` instead, which is where the previous
 #: revision audited.  Exactly one caller may ask — the reproduction gate, whose
 #: whole purpose is to reproduce that revision's recorded residuals — and the
-#: run record says so; see :data:`harness.records.AUDIT_POSITION_AFTER_RUN_WHY`.
+#: run record says so; see :data:`harness.core.records.AUDIT_POSITION_AFTER_RUN_WHY`.
 AUDIT_POSITION_DECLARED = "entry_to_write_output_files"
 AUDIT_POSITION = AUDIT_POSITION_DECLARED
 

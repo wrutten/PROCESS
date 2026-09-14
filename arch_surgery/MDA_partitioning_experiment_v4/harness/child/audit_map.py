@@ -101,7 +101,7 @@ class AuditMapError(RuntimeError):
 #
 # The three functions this section used to define — snapshot the whole data
 # structure, compare two snapshots, write one back — now live in
-# ``harness/data_structure.py``, because ruling **D25** makes the same
+# ``harness/child/data_structure.py``, because ruling **D25** makes the same
 # mechanism part of the exit audit, which runs on every run.  This module is a
 # gate instrument refused on campaign runs; a definition both need cannot live
 # in it.  The names below are this module's own spelling of that module's

@@ -53,7 +53,7 @@ the copied driver loads *this* file by a fixed path, and an unrecorded edit to
 it still fails the gate.
 
 The mapping from a role to a file name is **not** decided here.  It is
-:func:`harness.config.artifact_file_names`, the same function the arms use to
+:func:`harness.core.config.artifact_file_names`, the same function the arms use to
 hand a switch its artifact, read under both naming schemes: the experiment's
 own names on one side, the repository's older spellings on the other.  If the
 two disagree with the declared source list below, this module refuses rather
@@ -75,10 +75,10 @@ Standard library only, no PROCESS run, runs in a second.
 
 Usage
 -----
-    python harness/data_provenance.py verify      # compare, print, exit 0/1
-    python harness/data_provenance.py plan        # the declared mapping only
-    python harness/data_provenance.py copy --force --source-commit <sha>
-    python harness/data_provenance.py record --force   # re-record, copy nothing
+    python harness/experiment/data_provenance.py verify      # compare, print, exit 0/1
+    python harness/experiment/data_provenance.py plan        # the declared mapping only
+    python harness/experiment/data_provenance.py copy --force --source-commit <sha>
+    python harness/experiment/data_provenance.py record --force   # re-record, copy nothing
 
 Exit status: 0 everything matches, 1 a comparison failed, 2 setup error.
 """
@@ -134,7 +134,7 @@ class DataFile:
     """One copied file: its role, its name here, and where it came from."""
 
     #: What the file is for.  ``input_file`` for the committed input file; the
-    #: artifact roles of :meth:`harness.config.Config.artifact_roles`; and the
+    #: artifact roles of :meth:`harness.core.config.Config.artifact_roles`; and the
     #: two roles whose file name a path constant in the copied driver fixes.
     role: str
     #: The configuration it belongs to, or ``None`` for the two shared files.
@@ -259,7 +259,7 @@ def assert_mapping_agrees(files: list[DataFile]) -> None:
             k: v for k, v in EXPECTED_MAPPING.items() if got.get(k) != v
         }
         raise SystemExit(
-            "the artifact mapping in harness/config.py and the mapping this "
+            "the artifact mapping in harness/core/config.py and the mapping this "
             "module declares disagree, so neither is used.  From the code: "
             f"{only_code}.  Declared here: {only_declared}."
         )
@@ -466,7 +466,7 @@ _ICC = re.compile(rb"^[ \t]*icc[ \t]*=", re.MULTILINE)
 def declaration_checks(campaign: Campaign, root: Path) -> list[dict]:
     """Three numbers per configuration, compared against the files themselves.
 
-    ``harness/config.py`` states each configuration's coupling-state component
+    ``harness/core/config.py`` states each configuration's coupling-state component
     count, its iteration-variable count and its constraint count.  All three
     are properties of committed files, so all three are read back from the
     files rather than trusted: the component count from the coupling-state
@@ -673,7 +673,7 @@ def verify(
         disagree = [r for r in rows if not r["agrees"]]
         for row in disagree:
             res.failures.append(
-                f"{row['configuration']}: harness/config.py declares "
+                f"{row['configuration']}: harness/core/config.py declares "
                 f"{row['declared']} {row['quantity']}, {row['read_from']} has "
                 f"{row['in_the_file']}"
             )
@@ -778,7 +778,7 @@ def build_provenance(commit: str, campaign: Campaign) -> dict:
             "Provenance of the committed data this experiment reads.  Every "
             "file in harness/data/ was copied from the source below at the "
             "source commit, not from a working tree, and is byte-identical to "
-            "it.  harness/selfcheck.py's data check verifies both claims and "
+            "it.  harness/gates/selfcheck.py's data check verifies both claims and "
             "is runnable at any later commit."
         ),
         "task": "A48 (harness-data)",

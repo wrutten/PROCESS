@@ -44,7 +44,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-# dataclasses are no longer used here: the check record moved to harness/framework.py
+# dataclasses are no longer used here: the check record moved to harness/core/framework.py
 from pathlib import Path
 from typing import Any
 
@@ -75,7 +75,7 @@ from harness.core.config import (  # noqa: E402
 # --------------------------------------------------------------------------
 
 
-#: The check record's shape, defined once in ``harness/framework.py`` and named
+#: The check record's shape, defined once in ``harness/core/framework.py`` and named
 #: here because this module's six checks are written against it.  It was defined
 #: in this file until task **A52 (harness-gates)** promoted it: the class moved,
 #: field for field, and nothing about what a check computes changed.
@@ -1523,7 +1523,7 @@ def check_data(campaign: Campaign) -> Check:
     (driver-predicate-mode) implemented driver change DR5 in this module; the
     re-basing, and why the reconstruction test cannot apply to a module that is
     changed rather than only added to, is recorded in
-    ``harness/data_provenance.py``'s docstring and in the record itself
+    ``harness/experiment/data_provenance.py``'s docstring and in the record itself
     (``module.criterion_rebased_by``).
 
     The *campaign* argument selects the tree the rest of the self-check runs
@@ -1778,7 +1778,7 @@ def crosscheck_previous(campaign: Campaign) -> Check:
 # the record's own contract, the displacement streams' keying, and the
 # refusals that stop a run being made against the wrong tree or without a
 # switch its arm declares.  The runs themselves are gate GR's business
-# (harness/reproduction.py), which is a measurement and takes an hour and a
+# (harness/gates/reproduction.py), which is a measurement and takes an hour and a
 # half; these are the parts that can be shown to fail in a second.
 
 

@@ -4,7 +4,7 @@
 What the gate is about
 ----------------------
 Every number this experiment publishes is read out of a run record.  The record
-schema is declared as data in ``harness/records.py``: a list of fields, each
+schema is declared as data in ``harness/core/records.py``: a list of fields, each
 saying which phases carry it and whether it is there always or only when the run
 finished.  A **completeness contract** refuses a record that is missing one, so
 that a summary is never computed over records missing different fields — a

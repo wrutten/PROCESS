@@ -4,16 +4,16 @@
 Two implementations of one declared definition drifted apart twice in this
 project (queue issues **I-18** and **I-19**): a rule was written down once, and
 the two places that computed it stopped agreeing without anything failing.  The
-tally (``harness/tally_evaluation.py``, ``harness/tally_optimisation.py``) is
+tally (``harness/measurement/tally_evaluation.py``, ``harness/measurement/tally_optimisation.py``) is
 one implementation.  This module is the other, and ``--verify`` is the only
 thing that can catch the drift.
 
 **What makes it a second implementation and not a second copy.**  This module
-imports **no** part of the tally: not ``harness/stats.py``, not either
-``tally*`` module, not ``harness/tables.py``.  Every construction below is
+imports **no** part of the tally: not ``harness/measurement/stats.py``, not either
+``tally*`` module, not ``harness/measurement/tables.py``.  Every construction below is
 re-derived from the declaration — the docstring in ``stats.py``, which the
 experiment plan's §3.4–§3.6 wrote — and from the record fields
-``harness/records.py`` declares.  An analysis that imported the constructions
+``harness/core/records.py`` declares.  An analysis that imported the constructions
 would agree with the tally by construction and would prove nothing.  What it
 *does* read is the tally's **output**: the two stage records
 ``runs/gates/tally_evaluation/measurements.json`` and
@@ -49,9 +49,9 @@ that table's **shaping** from the same gate verdict the tally read
 see that those cells are a check on the table and not on the measurement.
 
 Heritage: the constructions are the V4 experiment plan's §3.4, §3.5 and §3.6 as
-declared in ``harness/stats.py``'s docstrings; the populations are the
-declarations in ``harness/tally.py`` (the two sources) and
-``harness/tally_optimisation.py`` (seed-complete arm groups), re-derived here.
+declared in ``harness/measurement/stats.py``'s docstrings; the populations are the
+declarations in ``harness/measurement/tally.py`` (the two sources) and
+``harness/measurement/tally_optimisation.py`` (seed-complete arm groups), re-derived here.
 Written by task **A54 (harness-analysis)**, plan item H7.
 """
 
@@ -695,7 +695,7 @@ class Source:
 
 
 #: The two declared sources, re-derived from the declaration in
-#: ``harness/tally.py``.  Re-derived rather than imported: if this module's
+#: ``harness/measurement/tally.py``.  Re-derived rather than imported: if this module's
 #: population and the tally's differ, that difference is a finding the verify
 #: reports, and importing the tally's list would hide it.
 SOURCES: tuple[Source, ...] = (
@@ -2618,11 +2618,11 @@ def _compare_beside(
 #: the table builders, and ``tables`` holds the emission rules — all three are
 #: the things a second implementation exists to disagree with.
 FORBIDDEN_IMPORTS: tuple[str, ...] = (
-    "harness.stats",
-    "harness.tally",
-    "harness.tally_evaluation",
-    "harness.tally_optimisation",
-    "harness.tables",
+    "harness.measurement.stats",
+    "harness.measurement.tally",
+    "harness.measurement.tally_evaluation",
+    "harness.measurement.tally_optimisation",
+    "harness.measurement.tables",
 )
 
 
@@ -3180,11 +3180,11 @@ def _tooth_an_imported_construction(
     """
     doctored = (
         "from harness.measurement.stats import median\n"
-        "from harness import tally_optimisation\n"
-        "import harness.tables\n"
+        "from harness.measurement import tally_optimisation\n"
+        "import harness.measurement.tables\n"
     )
     found = forbidden_imports(doctored)
-    clean = forbidden_imports("from harness import framework\nimport json\n")
+    clean = forbidden_imports("from harness.core import framework\nimport json\n")
     caught = bool(found) and not clean
     return (
         TEETH[6],
@@ -3391,7 +3391,7 @@ def print_tables(block: Mapping[str, Any]) -> None:
 def gate(campaign: Campaign) -> framework.Gate:
     """The ``recomputation`` gate: ``--verify`` with its six teeth.
 
-    Promoted from the criterion by :func:`harness.framework.gate_from_check`,
+    Promoted from the criterion by :func:`harness.core.framework.gate_from_check`,
     which does not restate it: the numbers the gate reports are the numbers the
     criterion computed, and what the promotion adds is the verdict record, the
     registry entry and the **declared** tooth list — a declared tooth the

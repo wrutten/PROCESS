@@ -27,7 +27,7 @@ Three things live here and nothing else does:
     the previous revision's published cells, reproduced from *this* revision's
     records through the committed reproduction reference and the field-name map
     — never by regenerating the reference.  This is a check, so it is a gate
-    with teeth and lives in ``harness/gate_tally.py``; what lives here is the
+    with teeth and lives in ``harness/gates/gate_tally.py``; what lives here is the
     comparison it runs.
 
 Written by task **A53 (harness-tally)**.
@@ -136,7 +136,7 @@ def gather(
 def survey(paths: Sequence[Path]) -> dict[str, Any]:
     """Which commit every record under *paths* was made at.
 
-    A thin pass-through to :func:`harness.framework.survey_heads`, kept here so
+    A thin pass-through to :func:`harness.core.framework.survey_heads`, kept here so
     that a tally stage and a gate survey the same way and a reader comparing
     two records' provenance blocks is comparing like with like.
     """
@@ -182,7 +182,7 @@ def population_for(
     denominator: int | None = None,
     predicate: Any = None,
 ) -> stats_mod.Population:
-    """The records of one phase as a :class:`harness.stats.Population`.
+    """The records of one phase as a :class:`harness.measurement.stats.Population`.
 
     The population's own refusals apply: a record stamped ``force_maxcal`` is
     excluded **by name** and counted in ``excluded``, and a mixture of phases is
@@ -394,7 +394,7 @@ CONSTRUCTION_NOTES: dict[str, str] = {
 def cells_for(phase: str, published: Mapping[str, Any]) -> list[str]:
     """The previous revision's published cells this tally compares, in order.
 
-    Derived: :func:`harness.reference.compared_fields` — the reference's own
+    Derived: :func:`harness.gates.reference.compared_fields` — the reference's own
     field list **less what the reproduction gate excludes by name** — restricted
     to the fields the entry actually published.  A field named by the list and
     absent from the entry is **not** silently skipped (:func:`reference_cells`

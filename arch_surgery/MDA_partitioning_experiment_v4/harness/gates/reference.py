@@ -610,7 +610,7 @@ def _resolve(record: Mapping[str, Any], path: str) -> Any:
     """The value at dotted *path*, or :class:`KeyError` naming what is missing.
 
     One line, deliberately: the implementation lives in
-    :func:`harness.records.resolve_path`, which the run path's comparator also
+    :func:`harness.core.records.resolve_path`, which the run path's comparator also
     reads its records through.  Two copies of "how a dotted field name is
     resolved" is the shape of defect D14(c) exists to prevent — a path that
     resolved for the gate and not for the reference it is compared against
@@ -813,9 +813,9 @@ def build(
             "block_solver_field_applicability": _applicability(entries),
             "not_covered_by_this_reference": ARMS_WITHOUT_PREVIOUS_RECORDS,
             "how_to_re_derive": (
-                "python harness/reference.py --extract --previous-runs "
+                "python harness/gates/reference.py --extract --previous-runs "
                 "<repo>/arch_surgery/MDA_partitioning_experiment_v3/runs; "
-                "python harness/reference.py --verify re-derives it and "
+                "python harness/gates/reference.py --verify re-derives it and "
                 "requires byte-for-byte equality"
             ),
         },
@@ -839,7 +839,7 @@ def load(path: Path | None = None) -> dict[str, Any]:
     if not path.exists():
         raise ReferenceError(
             f"the reproduction reference is not committed at {path}.  It is "
-            f"produced by 'harness/reference.py --extract --previous-runs "
+            f"produced by 'harness/gates/reference.py --extract --previous-runs "
             f"<root>' and committed; the gate reads the committed file, never "
             f"the untracked records directly."
         )

@@ -44,9 +44,9 @@ stage record when those files have moved under it.
 
 Written by task **A52 (harness-gates)**; the stage-provenance block and its
 refusal by task **A63 (stage-provenance)**.  :class:`Gate` and :class:`Tooth` are
-moved verbatim from ``harness/gates.py``, where task **A56 (driver-renames)**
-wrote them; :class:`Check` is moved verbatim from ``harness/selfcheck.py``
-(task **A47 (harness-skeleton)**), which ``harness/artifacts.py`` (task **A51
+moved verbatim from ``harness/gates/gates.py``, where task **A56 (driver-renames)**
+wrote them; :class:`Check` is moved verbatim from ``harness/gates/selfcheck.py``
+(task **A47 (harness-skeleton)**), which ``harness/experiment/artifacts.py`` (task **A51
 (harness-artifacts)**) had duplicated as ``StageCheck``.
 """
 
@@ -588,7 +588,7 @@ def gate_from_check(
     The criterion is **not** restated: ``run`` is the same function that
     produced the check before the promotion, so the numbers a promoted gate
     reports are the numbers the check reported.  What the promotion adds is a
-    verdict record on disk, a place in :func:`harness.gates.registry`, and a
+    verdict record on disk, a place in :func:`harness.gates.gates.registry`, and a
     *declared* tooth list.
 
     ``teeth`` names the deliberate breaks the criterion must exercise.  Each

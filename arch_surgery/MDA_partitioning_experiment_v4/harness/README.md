@@ -100,7 +100,7 @@ wording, kept only so that documents written before the rename remain readable. 
 | **capability probe** | a child process that imports the driver under an arm's environment and reports what it resolved, so that an unimplemented switch is refused rather than ignored | the instrumentation ledger · **added** |
 | **pending switch** | something an arm declares that no tree implements yet, because the driver change that supplies it has not been made. Composing the arm without it is refused | — · **added** |
 | **tally** | the summary computed from the records: the experiment plan's §4 tables, each with its caption and its denominator. It has nothing to pass, so it is a measurement stage and not a gate | — |
-| **construction** | one declared way of computing a published number — which median, which population, what counts as an accepted optimum. Each is one function in `harness/stats.py` and **its docstring is the declaration** a caption quotes | — · **added** |
+| **construction** | one declared way of computing a published number — which median, which population, what counts as an accepted optimum. Each is one function in `harness/measurement/stats.py` and **its docstring is the declaration** a caption quotes | — · **added** |
 | **source** | a named subtree of `runs/gates/` whose records are a comparable set, with the sentence saying why. The tally reads a source, never "the gate runs": several gates run the same arm at the same seed from different entries and three run it doctored | — · **added** |
 | **caption** | the five things a table cannot be emitted without — units, what a row is, what a column is, the population, the construction — plus the clauses the plan requires in that particular caption | — |
 | **denominator** | the count of things actually compared, stated beside every count. A table built with a letter where a count belongs is refused | — |
@@ -407,7 +407,7 @@ $PY experiment_runner.py --tree repository
 
 # the harness's own gates, with their teeth
 $PY experiment_runner.py --selfcheck
-$PY harness/selfcheck.py --tree repository --json runs/selfcheck.json
+$PY harness/gates/selfcheck.py --tree repository --json runs/selfcheck.json
 
 # quickly, without starting a child process per arm
 $PY experiment_runner.py --no-capability
@@ -434,7 +434,7 @@ $PY experiment_runner.py --gate tally_contracts
 # the analysis: the same cells recomputed by a second implementation, compared
 $PY experiment_runner.py --gate recomputation --resume   # the verdict, with six teeth
 $PY experiment_runner.py --measure recomputed_tables     # its own tables, beside the tally's
-$PY -m harness.analysis --teeth                          # the six deliberate breaks alone
+$PY -m harness.measurement.analysis --teeth                          # the six deliberate breaks alone
 
 # THE CHAIN, once, on one seed and the cheapest configuration: both phases,
 # every arm, then the tally, the analysis and its --verify.  Records stamped
@@ -603,7 +603,7 @@ measurement. This project has published a zero over a population quietly smaller
 named, and has once had a check that returned "pass" over an empty set, which is why every count
 below carries the number of things actually compared.
 
-`harness/selfcheck.py` runs seven checks, each with its teeth, in about half a minute, and starts no
+`harness/gates/selfcheck.py` runs seven checks, each with its teeth, in about half a minute, and starts no
 PROCESS run.
 
 *Caption: one row per check. "Compares" is the population; "teeth" are the deliberate breaks it is
@@ -711,18 +711,45 @@ The record's schema and the code that reads it are a later task; this list is wh
 
 ## 10. What is here, and what is not
 
-What exists: the declarations (`config.py`), the switch vocabulary and the capability probe
-(`switches.py`), the arm matrix (`arms.py`), the provenance refusals (`provenance.py`), the
-committed data in `data/`, the coupling state and its predicate (`ystate.py`, `predicate.py`), the
-displacement streams (`perturb.py`), **the run path** (`child.py`, `optimise.py`, `evaluate.py`,
-`pool.py`, `records.py`, `failure.py`), the committed reproduction reference (`reference.py`) and
-**gate GR** (`reproduction.py`), plus the self-check and the runner's preflight.
+What exists: the declarations (`core/config.py`), the switch vocabulary and the capability probe
+(`experiment/switches.py`), the arm matrix (`experiment/arms.py`), the provenance refusals
+(`core/provenance.py`), the committed data in `data/`, the coupling state and its predicate
+(`ystate.py`, `child/predicate.py`), the displacement streams (`child/perturb.py`), **the run path**
+(`child/child.py`, `child/optimise.py`, `child/evaluate.py`, `core/pool.py`, `core/records.py`,
+`core/failure.py`), the committed reproduction reference (`gates/reference.py`) and **gate GR**
+(`gates/reproduction.py`), plus the self-check and the runner's preflight.
 
-The **tally** is here too (§13): the declared constructions in `stats.py`, the table module that
-refuses a table without a caption or a denominator, and the two stages that emit the experiment
-plan's §4.2 and §4.3 tables from the records.  So is the **analysis** (§14): the second, independent
-recomputation the tally's cells are verified against, in `analysis.py`.  And so is **the chain**
-(§15): the sequence the campaign runs, which the one-seed smoke runs too.
+The **tally** is here too (§13): the declared constructions in `measurement/stats.py`, the table
+module that refuses a table without a caption or a denominator, and the two stages that emit the
+experiment plan's §4.2 and §4.3 tables from the records.  So is the **analysis** (§14): the second,
+independent recomputation the tally's cells are verified against, in `measurement/analysis.py`.  And
+so is **the chain** (§15): the sequence the campaign runs, which the one-seed smoke runs too.
+
+### 10.1 The package layout — five subpackages, grouped by who imports them and when they run
+
+*The grouping is by role, not by subject.  A subpackage imports the ones above it in this table and
+never the ones below; the one exception is named in the `gates/` row.  Every module keeps the name
+it had — this is a move, not a rename.*
+
+| directory | what it holds | who imports it |
+|---|---|---|
+| `core/` | `framework` (what a gate, a tooth, a check and a measurement *are*), `config` (every declared setting), `failure` (the taxonomy), `provenance` (interpreter, tree and git stamps), `records` (the run-record schema and its completeness contract), `pool` (one run in its own directory, and the decision to keep an existing record) | everything |
+| `experiment/` | `arms` (the switch matrix as data), `switches` (the driver's vocabulary and the capability probe), `input_files` (committed and lifted), `artifacts` (the committed per-configuration files), `data_provenance` (where the copied data came from) | everything but `core/` |
+| `child/` | `child`, `evaluate`, `optimise`, `census` (the three entry points a measurement subprocess is started as, and what they load), `predicate`, `perturb`, `data_structure`, `audit_map`, `postsolve` | the pool spawns them; the gates import them |
+| `gates/` | `gates` (the registry), `gate_audit`, `gate_composition`, `gate_entry`, `gate_prime`, `gate_records`, `gate_tally`, `reproduction` and `reference` (gate GR and its committed reference), `selfcheck`, `exit_audit_diagnosis` | the runner, and `chain.py` |
+| `measurement/` | `stats`, `tables`, `tally`, `tally_evaluation`, `tally_optimisation`, `analysis`, `plan_tables` | `gates/` imports it — a gate reads records, it does not decide what a record means |
+| *(top level)* | `__init__.py` (the one public import surface), `chain.py` (the sequence the campaign and the smoke both run), `ystate.py`, `data/`, `reference/` | — |
+
+**Why `ystate.py` is not in `child/`.** It belongs to that set — a measurement child loads it — but
+the experiment's copied driver reaches it by the literal path
+`Path(__file__).resolve().parents[4] / "harness" / "ystate.py"`
+(`PROCESS/process/core/solver/module_solve.py`), and `PROCESS/copy_gates.py` asserts that literal as
+one of the copy's permitted edits.  Moving the file would mean editing the frozen copy, so it stays
+where the driver expects it.
+
+**The rule that makes the grouping worth having.** `child/` is exactly the set the harness
+implementation plan's amendment 13, rule (vi) forbids editing while any measurement run executes —
+plus `ystate.py`.  Before, that set was a list in a change log; now it is a directory.
 
 What is not here: **a campaign record**.  `EXECUTION_APPROVED` is `False`, every campaign stage
 refuses and says why, and the refusal is reachable from the same button as the successes.  The
@@ -759,7 +786,7 @@ Fifteen numbers are compared per optimisation and ten per evaluation — model e
 solve, evaluations the optimiser asked for, sweeps per block, the objective at the exit as a hex
 float, how far the coupling state still was from converged, the optimiser's exit code and iteration
 count, and the per-attempt iteration counts the plan's second construction of check 2 needs. The
-list lives in `REFERENCE_FIELDS` in `harness/reference.py` and each field's one-line meaning is in
+list lives in `REFERENCE_FIELDS` in `harness/gates/reference.py` and each field's one-line meaning is in
 the committed file itself, so a reader does not have to open the plan to know what a cell is.
 
 ### Why it is committed rather than read from the records
@@ -804,7 +831,7 @@ $PY experiment_runner.py --reference tables
 ```
 
 Exit codes are the runner's: `0` pass, `3` fail. Each stage writes its own record under `../runs/`,
-which is untracked. `harness/reference.py` takes the same flags directly if you want the module on
+which is untracked. `harness/gates/reference.py` takes the same flags directly if you want the module on
 its own.
 
 **Everything that could stop the comparison is a failure, never a skip.** A record that is not
@@ -1183,7 +1210,7 @@ denominator beside the cells.
 | a demonstration record in a population | a record stamped `force_maxcal` | refuse |
 | a retried flag trusted from a stored field | a record whose `attempt_accounting.retried` disagrees with `attempts[]`, in both directions | follow `attempts[]` and never the stored flag |
 | a population straddling two commits | two records carrying different `tree_git_head` values | refuse without `--resume`; state the straddle with it |
-| a construction imported from the tally | a source importing `harness.stats`, `harness.tally_optimisation` and `harness.tables` | name all three, and name nothing in a source that imports only the framework |
+| a construction imported from the tally | a source importing `harness.measurement.stats`, `harness.measurement.tally_optimisation` and `harness.measurement.tables` | name all three, and name nothing in a source that imports only the framework |
 | a tally stage record over another run population | a stage record doctored to another commit, and one doctored to a smaller record count | refuse both, and accept one that agrees |
 | a gate declaring a stage the registry does not hold | a gate whose `reads_from` names `a_stage_nobody_runs` | refuse as the registry is built |
 
@@ -1311,7 +1338,7 @@ tree at the end of a press and refuses if it holds two run kinds.
 
 `EXPERIMENT_PLAN.md` §4 carried a template — every cell a *format*, `0.xxx` where a ratio belongs
 and `n` where a count belongs — so the shape could be reviewed before anything was measured.
-`harness/plan_tables.py` replaces that template with the tables the measurement stages actually
+`harness/measurement/plan_tables.py` replaces that template with the tables the measurement stages actually
 emitted, by reading their records under `runs/gates/<stage>/measurements.json`:
 
 | §4 subsection | rendered from |

@@ -154,7 +154,7 @@ class Caption:
     #: The population the cells summarise, in one clause.
     population: str
     #: Which construction produced them — the name of the function in
-    #: ``harness/stats.py``, or the sentence its docstring declares.
+    #: ``harness/measurement/stats.py``, or the sentence its docstring declares.
     construction: str
     #: Clauses the plan requires in *this* caption: the audit position, the
     #: empty-visit disclaimer with its sweep share, the configuration confound.

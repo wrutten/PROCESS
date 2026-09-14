@@ -4,7 +4,7 @@
 A **tally** summarises the records into the tables the experiment plan's §4
 asks for.  It has nothing to pass, so it is a *measurement stage* and runs
 under ``--measure``; the checks it depends on are gates with teeth and live in
-``harness/gate_tally.py``.
+``harness/gates/gate_tally.py``.
 
 Eight tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
 

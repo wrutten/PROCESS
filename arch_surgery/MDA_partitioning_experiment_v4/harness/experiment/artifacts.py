@@ -72,7 +72,7 @@ class ArtifactError(RuntimeError):
 
 #: One stage's verdict.  The same shape the harness's own self-check uses --
 #: literally the same class since task **A52 (harness-gates)** promoted it into
-#: ``harness/framework.py``; this file defined its own copy, field for field
+#: ``harness/core/framework.py``; this file defined its own copy, field for field
 #: identical, until then.  Three fields are not optional decoration:
 #: ``population`` says what the numbers are over, ``n_compared`` is the
 #: denominator every count needs, and ``teeth`` records the deliberate breaks --

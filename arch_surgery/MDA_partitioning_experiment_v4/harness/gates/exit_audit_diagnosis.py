@@ -3,13 +3,13 @@
 One entry point, three stages, every number it publishes produced by running
 it.  Nothing here is typed at a shell prompt: the census reads committed
 artifacts and the experiment's own copy of PROCESS, the runs go through
-:mod:`harness.pool` like every other PROCESS run this package starts, and the
+:mod:`harness.core.pool` like every other PROCESS run this package starts, and the
 report is rendered from what those runs wrote.
 
-    python -m harness.exit_audit_diagnosis census
-    python -m harness.exit_audit_diagnosis runs
-    python -m harness.exit_audit_diagnosis report
-    python -m harness.exit_audit_diagnosis all
+    python -m harness.gates.exit_audit_diagnosis census
+    python -m harness.gates.exit_audit_diagnosis runs
+    python -m harness.gates.exit_audit_diagnosis report
+    python -m harness.gates.exit_audit_diagnosis all
 
 The question
 ------------

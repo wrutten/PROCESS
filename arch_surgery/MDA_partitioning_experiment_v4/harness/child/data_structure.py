@@ -2,7 +2,7 @@
 
 The coupling state is the set of fields the in-loop models write and read from
 each other — what the fixed-point loop converges, and what the harness already
-serialises component by component in ``harness/predicate.py``.  It is a few
+serialises component by component in ``harness/child/predicate.py``.  It is a few
 hundred fields.  The **data structure** is everything: every field of every
 namespace of the object PROCESS threads through its models, some two thousand
 of them, most of which no loop ever compares.
@@ -25,10 +25,10 @@ cannot be written back is reported by name rather than counted as restored.
 Nothing here claims "all".
 
 Heritage: the three functions were written for the diagnosis trace of task
-**A61 (insstrain-diagnosis)** (``harness/audit_map.py``), which is a gate
+**A61 (insstrain-diagnosis)** (``harness/child/audit_map.py``), which is a gate
 instrument refused on campaign runs.  Ruling **D25** makes the same mechanism
 part of the exit audit itself, which runs on every run, so it lives here and
-that module imports it.  Float serialisation is ``harness/predicate.py``'s, so
+that module imports it.  Float serialisation is ``harness/child/predicate.py``'s, so
 a data-structure snapshot and a coupling-state snapshot are bit-exact in the
 same way and can be compared against each other.
 """

@@ -3,7 +3,7 @@
 
 What the gate is about
 ----------------------
-``harness/arms.py`` transcribes the experiment plan's switch matrix into a table
+``harness/experiment/arms.py`` transcribes the experiment plan's switch matrix into a table
 of frozen dataclasses, and ``env_for`` walks that table to build one arm's
 environment.  That is one program reading one table.  If the table were
 mis-transcribed, or ``env_for`` combined two fields wrongly, the campaign would

@@ -33,21 +33,21 @@ file starts the framework they land in.  *(One line for A52: give
 :func:`registry`; nothing else here needs the runner.)*
 
 Written by task **A56 (driver-renames)**.  It derives from no earlier file; the
-``Check`` record it writes is shaped like ``harness/selfcheck.py``'s so that a
+``Check`` record it writes is shaped like ``harness/gates/selfcheck.py``'s so that a
 reader of one recognises the other.
 
 Usage
 -----
-    python -m harness.gates g0prime
-    python -m harness.gates switch-neutrality --capture before
-    python -m harness.gates switch-neutrality --capture after
-    python -m harness.gates switch-neutrality --compare
-    python -m harness.gates all            # every gate that needs no capture
-    python -m harness.gates predicate-counters   # a measurement, not a gate
-    python -m harness.gates attempts --capture runs  # the ladder, made to retry
-    python -m harness.gates attempts             # a measurement, not a gate
-    python -m harness.gates predicate-mode --capture runs
-    python -m harness.gates predicate-mode
+    python -m harness.gates.gates g0prime
+    python -m harness.gates.gates switch-neutrality --capture before
+    python -m harness.gates.gates switch-neutrality --capture after
+    python -m harness.gates.gates switch-neutrality --compare
+    python -m harness.gates.gates all            # every gate that needs no capture
+    python -m harness.gates.gates predicate-counters   # a measurement, not a gate
+    python -m harness.gates.gates attempts --capture runs  # the ladder, made to retry
+    python -m harness.gates.gates attempts             # a measurement, not a gate
+    python -m harness.gates.gates predicate-mode --capture runs
+    python -m harness.gates.gates predicate-mode
 
 Exit status: 0 every gate passed with every tooth tripping, 1 otherwise.
 """
@@ -88,7 +88,7 @@ from harness.core.config import Campaign, default_campaign  # noqa: E402
 #: into the report.
 GATES_SUBPATH = framework.GATES_SUBPATH
 
-#: The framework lives in ``harness/framework.py`` so that the self-check and
+#: The framework lives in ``harness/core/framework.py`` so that the self-check and
 #: the artifact stages can import ``Check`` without importing this module -- the
 #: promotion task **A52 (harness-gates)** moved the three shapes there and left
 #: these names here, because the plan names ``gates.Gate`` and ``gates.Tooth``
@@ -1160,7 +1160,7 @@ def compare_records(
         "n_renamed_leaves_differing": len(renamed_differing),
         "renamed_leaves_differing": renamed_differing,
         "name_map_used": (
-            "harness.reference.FIELD_NAME_MAP"
+            "harness.gates.reference.FIELD_NAME_MAP"
             if name_map
             else "none: the two captures share one record vocabulary"
         ),
@@ -1405,7 +1405,7 @@ def neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[str, An
             f"one, and compared again the moment the two stamps agree.  "
             f"{n_renamed} leaf/leaves of the earlier capture were **renamed** "
             f"into this revision's vocabulary through "
-            f"harness.reference.FIELD_NAME_MAP "
+            f"harness.gates.reference.FIELD_NAME_MAP "
             f"({len(reference_mod.FIELD_NAME_MAP)} entries) and then compared "
             f"as values, never excluded: {n_renamed_compared} compared, "
             f"{n_renamed_differing} differing"
@@ -3628,7 +3628,7 @@ def attempt_measurements(
                 (abs(r["sweeps_residual"] or 0) for r in checked), default=None
             ),
             "refused_by": (
-                "harness.records.assert_attempt_summation, which every record "
+                "harness.core.records.assert_attempt_summation, which every record "
                 "of every run goes through before it is summarised; a record "
                 "whose parts do not add up is REFUSED, not rounded"
             ),
@@ -3662,7 +3662,7 @@ def _ladder_block(campaign: Campaign) -> dict[str, Any]:
             "made": False,
             "why": (
                 "the demonstration runs have not been made; run "
-                "'python -m harness.gates attempts --capture runs'.  Until "
+                "'python -m harness.gates.gates attempts --capture runs'.  Until "
                 "they are, every run in this block converged on its first "
                 "attempt and the decomposition has been checked with one term "
                 "per sum only"
@@ -4787,7 +4787,7 @@ def _with_capture(
 # gate GR, wrapped into the framework
 # --------------------------------------------------------------------------
 #
-# GR is implemented in ``harness/reproduction.py`` and was reachable only from
+# GR is implemented in ``harness/gates/reproduction.py`` and was reachable only from
 # ``experiment_runner.py --gate reproduction``.  It is registered here so that
 # ``registry`` really is *every* gate, and so that ``--gate all`` runs it with
 # the rest.  The criterion is not restated: the body calls the same stage, and
