@@ -1,12 +1,8 @@
 # A71 (simplify-refactors-and-teeth) — the pure refactors and the zero-schema B items of the simplification survey
 
-> **Document status** — **OPEN.** Task **A71 (simplify-refactors-and-teeth)**, branch
-> `A71-simplify-refactors-and-teeth` off `architecture_surgery` at base **`34c5c3e4`** (A70
-> (simplify-code-moves) merged). Ruling D27. Items carried: **A3, A4, A5, A6, A7, A8, A10, A11, A12,
-> B2, B5, B6, B7, B8** of [`deprecated/A68_harness_simplification_survey.md`](deprecated/A68_harness_simplification_survey.md).
-> No `records.SCHEMA` change; nothing under `harness/child/`, `ystate.py`, `PROCESS/process/` or the
-> repository-root `process/` touched. **0 PROCESS runs made by this task** (§4.8). Folder position
-> records lifecycle, not validity (trap T3).
+> **Document status** — **ARCHIVED at merge, 2026-09-14.** Task **A71 (simplify-refactors-and-teeth)** merged into `architecture_surgery`
+> at `24e5fe2f` (base `34c5c3e4`). Records relocated to `arch_surgery/idf_probe/runs/A71_runs/` (resumed, none made). The orchestrator's
+> critical assessment is the last section. Folder position records lifecycle, not validity (trap T3).
 
 *Vocabulary is the harness README's §3 (which A12 made the one vocabulary). "Tooth", "gate",
 "measurement stage", "press", `--resume` as in A68's preamble.*

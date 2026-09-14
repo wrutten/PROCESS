@@ -1494,6 +1494,8 @@ proposal (C2, C3 of the survey; the user's).*
 | protocol §16 | — | every table carries a caption with units, row, column, population, construction | `tables.Caption` / `tables.Table` constructors; `tally_contracts` teeth 1–6 | mechanical |
 | plan §6 | — | nothing in `harness/` imports or spawns into `idf_probe/` or `fixedpoint/` | gate `self_containment` (A71, item B8): 0 imports, 0 unclassified executable lines, 0 stale declarations; one tooth (a scratch module importing `idf_probe` must be counted) | mechanical since A71 — was a measurement that could not fail |
 
+- **Amendment 23 (2026-09-14, at A71 (simplify-refactors-and-teeth)'s merge, `24e5fe2f`).** A70 added a tooth to gate `run_path`'s check without adding it to the gate's declared list; the framework refuses an undeclared tooth, but every seeded verdict predated the tooth and `--measure gate_table --resume` reads verdicts, so the FAIL was invisible to A70's presses and to the orchestrator's assessment until A71 pressed the gate itself. **Rule (xiii): a gate whose code changed is pressed once in the task that changed it, even when its run records are kept** — `--gate <name> --resume` re-runs the check over kept records at no PROCESS cost; a kept *verdict* is not a press. The twelve-rules table (A12) gains this row. D27's items also landed here: 14 of the survey's 20 (A70: 3; A71: 13 + A7 in part), 0 PROCESS runs so far.
+
 ---
 
 ## 11. Approval, and the user's three notes (2026-09-10) — binding on every rebuild task
