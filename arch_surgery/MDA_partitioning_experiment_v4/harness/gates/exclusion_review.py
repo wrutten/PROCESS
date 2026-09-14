@@ -257,10 +257,15 @@ def _predicate_pairs(campaign: Campaign) -> list[tuple[dict, dict]]:
     pairs: list[tuple[dict, dict]] = []
     for pair in predicate_mode_pairs(campaign):
         config, arm, seed = pair["config"], pair["arm"], pair["seed"]
-        directories = [
-            predicate_mode_run_dir(campaign, mode, config.name, arm, seed)
-            for mode in campaign.predicate_modes
-        ]
+        try:
+            directories = [
+                predicate_mode_run_dir(campaign, mode, config.name, arm, seed)
+                for mode in campaign.predicate_modes
+            ]
+        except GateError:
+            # The pair's directory is a function of the reference record it is
+            # entered from; no reference yet means no pair yet.
+            continue
         if not all((d / "metrics.json").exists() for d in directories):
             continue
         pairs.append(

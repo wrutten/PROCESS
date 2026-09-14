@@ -188,8 +188,8 @@ class PlannedRun:
     job: pool_mod.Job
 
 
-def phase_a_reference_directory(root: Path, configuration: str) -> Path:
-    """Where a configuration's evaluation-phase reference run lives.
+def entry_reference_job(config: Config) -> pool_mod.Job:
+    """A configuration's evaluation-phase reference run, as **the one job**.
 
     The evaluation phase's entries are displacements **of a converged state**,
     not of the input file's cold values, so each configuration needs one
@@ -198,8 +198,26 @@ def phase_a_reference_directory(root: Path, configuration: str) -> Path:
     entry is built from, and its converged burn time is what a constant owns.
     Its own cost is the once-per-run cold-start term, reported beside and never
     pooled.
+
+    This gate, ``gates.entry_references`` (G2, G4, G6 and the cold chain) and
+    the predicate trial (G8) all compose it **here**, so under the shared pool
+    it is one identity and one record — where before A72 it was three
+    directories holding the same run (survey §2).
     """
-    return Path(root) / "phase_a_reference" / configuration
+    return pool_mod.Job(
+        phase="A",
+        arm="A0",
+        config=config,
+        seed=0,
+        regime="unperturbed",
+        delta=None,
+        run_kind="gate",
+    )
+
+
+def phase_a_reference_directory(campaign: Campaign, config: Config) -> Path:
+    """Where the configuration's reference record is: the pool's directory."""
+    return pool_mod.directory_for(entry_reference_job(config), campaign)
 
 
 def plan(campaign: Campaign, root: Path) -> tuple[list[PlannedRun], list[pool_mod.Job]]:
@@ -207,21 +225,10 @@ def plan(campaign: Campaign, root: Path) -> tuple[list[PlannedRun], list[pool_mo
 
     Returns ``(planned, prerequisites)``.  The prerequisites run first and
     serially per configuration, because the runs that follow are entered from
-    their exit state.
+    their exit state.  Every job runs in the shared pool (``outdir`` None);
+    *root* is where the verdict and the teeth's scratch files go.
     """
-    prerequisites = [
-        pool_mod.Job(
-            phase="A",
-            arm="A0",
-            config=config,
-            seed=0,
-            outdir=phase_a_reference_directory(root, config.name),
-            regime="unperturbed",
-            delta=None,
-            run_kind="gate",
-        )
-        for config in campaign.configurations
-    ]
+    prerequisites = [entry_reference_job(config) for config in campaign.configurations]
     planned: list[PlannedRun] = []
     for run in reference_mod.reference_set(campaign):
         config = campaign.configuration(run.configuration)
@@ -232,13 +239,6 @@ def plan(campaign: Campaign, root: Path) -> tuple[list[PlannedRun], list[pool_mo
 def _job_for(
     run: reference_mod.ReferenceRun, config: Config, campaign: Campaign, root: Path
 ) -> pool_mod.Job:
-    outdir = (
-        Path(root)
-        / "runs"
-        / run.configuration
-        / run.arm
-        / pool_mod.seed_directory(run.seed)
-    )
     displaced = run.seed != 0
     if run.phase == "B":
         return pool_mod.Job(
@@ -246,7 +246,6 @@ def _job_for(
             arm=run.arm,
             config=config,
             seed=run.seed,
-            outdir=outdir,
             regime="perturbed" if displaced else "unperturbed",
             delta=campaign.delta,
             run_kind="gate",
@@ -259,7 +258,6 @@ def _job_for(
         arm=run.arm,
         config=config,
         seed=run.seed,
-        outdir=outdir,
         regime="perturbed" if displaced else "unperturbed",
         delta=campaign.delta,
         run_kind="gate",
@@ -316,7 +314,7 @@ def attach_phase_a_entries(
     """
     references: dict[str, dict[str, Any]] = {}
     for config in campaign.configurations:
-        directory = phase_a_reference_directory(root, config.name)
+        directory = phase_a_reference_directory(campaign, config)
         record = records_mod.read(directory)
         references[config.name] = {
             "outdir": str(directory),
@@ -349,7 +347,143 @@ def attach_phase_a_entries(
             item.job.pin_hex = pin_for(
                 entry["t_plant_pulse_burn_hex"], item.job.seed, campaign.delta
             )
+    # The identity is complete now, so the pool's directory is known: resolve
+    # it here so that a comparison over kept records (``--skip-runs``) reads
+    # the same place a run would have written.
+    for item in planned:
+        item.job.outdir = pool_mod.directory_for(item.job, campaign)
     return references
+
+
+def substitute_a0p_jobs(
+    campaign: Campaign, references: Mapping[str, Any]
+) -> list[tuple[Config, pool_mod.Job]]:
+    """The §7.5 substitute for ``A0p``: one warm pinned evaluation per pulsed configuration."""
+    jobs: list[tuple[Config, pool_mod.Job]] = []
+    for config in campaign.configurations:
+        if "A0p" in config.skips:
+            continue
+        entry = references[config.name]
+        jobs.append(
+            (
+                config,
+                pool_mod.Job(
+                    phase="A",
+                    arm="A0p",
+                    config=config,
+                    seed=0,
+                    regime="unperturbed",
+                    delta=None,
+                    pin_hex=entry["t_plant_pulse_burn_hex"],
+                    entry_state=Path(entry["snapshot"]),
+                    run_kind="gate",
+                ),
+            )
+        )
+    return jobs
+
+
+def substitute_ar_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    """The §7.5 substitute for ``AR``: one cold evaluation per configuration."""
+    return [
+        pool_mod.Job(
+            phase="A",
+            arm="AR",
+            config=config,
+            seed=0,
+            regime="unperturbed",
+            delta=None,
+            run_kind="gate",
+        )
+        for config in campaign.configurations
+    ]
+
+
+COMPOSITION_TOOTH_WRONG_VALUE = "flat"
+
+
+def composition_tooth_job(
+    planned: Sequence[PlannedRun], campaign: Campaign
+) -> tuple[PlannedRun | None, pool_mod.Job | None]:
+    """The positive control's job: ``B3`` with its analysis-loop switch wrong.
+
+    Its ``override_env`` puts it in the identity apart from the planned ``B3``
+    run it is compared against, so the shared pool never hands the tooth the
+    very record it exists to differ from.
+    """
+    candidates = [
+        item
+        for item in planned
+        if item.run.arm == "B3" and item.run.seed == 0
+    ]
+    # The cheapest configuration, by the previous revision's own cost figures:
+    # the steady-state one, which has the shortest design vector.
+    chosen = next(
+        (item for item in candidates if not campaign.configuration(
+            item.run.configuration).pulsed),
+        candidates[0] if candidates else None,
+    )
+    if chosen is None:
+        return None, None
+    config = campaign.configuration(chosen.run.configuration)
+    switch = switches_mod.REGISTRY["mda"].driver_name
+    return chosen, pool_mod.Job(
+        phase="B",
+        arm="B3",
+        config=config,
+        seed=0,
+        regime="unperturbed",
+        delta=campaign.delta,
+        run_kind="gate",
+        reproduction_overrides=reproduction_overrides("B3"),
+        audit_position=REPRODUCTION_AUDIT_POSITION,
+        audit_position_caller=GATE_NAME,
+        override_env={switch: COMPOSITION_TOOTH_WRONG_VALUE},
+    )
+
+
+def planned_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    """The twenty planned runs as jobs, entries attached from the reference records.
+
+    The tally's ``reference_runs`` source (rule (xi)): the gate's own job set,
+    read by the tally through the pool rather than through a directory.
+    """
+    root = Path(campaign.runs_dir) / RUNS_SUBPATH
+    planned, _prerequisites = plan(campaign, root)
+    attach_phase_a_entries(planned, root, campaign)
+    return [item.job for item in planned]
+
+
+def planned_directories(campaign: Campaign) -> dict[tuple[str, str, int], Path]:
+    """Each planned run's directory, by (configuration, arm, seed)."""
+    root = Path(campaign.runs_dir) / RUNS_SUBPATH
+    planned, _prerequisites = plan(campaign, root)
+    attach_phase_a_entries(planned, root, campaign)
+    return {
+        (item.run.configuration, item.run.arm, item.run.seed): Path(item.job.outdir)
+        for item in planned
+    }
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job this gate reads, by identity, composed from records on disk.
+
+    The references first, then the twenty planned runs with their entries
+    attached from the reference records, the two substitutes and the
+    composition tooth's run.  Refuses (``ReproductionError``) where a reference
+    record is not there yet, because the dependent jobs' identities carry its
+    exit state and burn time.
+    """
+    root = Path(campaign.runs_dir) / RUNS_SUBPATH
+    planned, prerequisites = plan(campaign, root)
+    references = attach_phase_a_entries(planned, root, campaign)
+    jobs = list(prerequisites) + [item.job for item in planned]
+    jobs += [job for _config, job in substitute_a0p_jobs(campaign, references)]
+    jobs += substitute_ar_jobs(campaign)
+    _chosen, tooth_job = composition_tooth_job(planned, campaign)
+    if tooth_job is not None:
+        jobs.append(tooth_job)
+    return jobs
 
 
 # --------------------------------------------------------------------------
@@ -538,7 +672,6 @@ def substitute_pinned_flat_arm(
         "configurations": [],
         "passed": True,
     }
-    jobs: list[tuple[Config, pool_mod.Job]] = []
     for config in campaign.configurations:
         if "A0p" in config.skips:
             record["configurations"].append(
@@ -547,25 +680,7 @@ def substitute_pinned_flat_arm(
                     "skipped": config.skips["A0p"],
                 }
             )
-            continue
-        entry = references[config.name]
-        jobs.append(
-            (
-                config,
-                pool_mod.Job(
-                    phase="A",
-                    arm="A0p",
-                    config=config,
-                    seed=0,
-                    outdir=Path(root) / "substitute_a0p" / config.name,
-                    regime="unperturbed",
-                    delta=None,
-                    pin_hex=entry["t_plant_pulse_burn_hex"],
-                    entry_state=Path(entry["snapshot"]),
-                    run_kind="gate",
-                ),
-            )
-        )
+    jobs = substitute_a0p_jobs(campaign, references)
     pool_mod.run_all([job for _config, job in jobs], campaign, resume=resume)
     for config, job in jobs:
         entry = references[config.name]
@@ -681,19 +796,7 @@ def substitute_reference_evaluation(
         for item in planned
         if item.run.arm == "BR" and item.run.seed == 0
     }
-    jobs = [
-        pool_mod.Job(
-            phase="A",
-            arm="AR",
-            config=config,
-            seed=0,
-            outdir=Path(root) / "substitute_ar" / config.name,
-            regime="unperturbed",
-            delta=None,
-            run_kind="gate",
-        )
-        for config in campaign.configurations
-    ]
+    jobs = substitute_ar_jobs(campaign)
     pool_mod.run_all(jobs, campaign, resume=resume)
     n_values = 0
     n_mismatched = 0
@@ -956,19 +1059,8 @@ def _composition_tooth(
     — but it does mean the positive control now perturbs a different switch,
     and this is where a reader is told so.
     """
-    candidates = [
-        item
-        for item in planned
-        if item.run.arm == "B3" and item.run.seed == 0
-    ]
-    # The cheapest configuration, by the previous revision's own cost figures:
-    # the steady-state one, which has the shortest design vector.
-    chosen = next(
-        (item for item in candidates if not campaign.configuration(
-            item.run.configuration).pulsed),
-        candidates[0] if candidates else None,
-    )
-    if chosen is None:
+    chosen, job = composition_tooth_job(planned, campaign)
+    if chosen is None or job is None:
         return {
             "tooth": "composition",
             "caught": False,
@@ -976,21 +1068,7 @@ def _composition_tooth(
         }
     config = campaign.configuration(chosen.run.configuration)
     switch = switches_mod.REGISTRY["mda"].driver_name
-    wrong_value = "flat"
-    job = pool_mod.Job(
-        phase="B",
-        arm="B3",
-        config=config,
-        seed=0,
-        outdir=Path(root) / "_teeth" / "composition",
-        regime="unperturbed",
-        delta=campaign.delta,
-        run_kind="gate",
-        reproduction_overrides=reproduction_overrides("B3"),
-        audit_position=REPRODUCTION_AUDIT_POSITION,
-        audit_position_caller=GATE_NAME,
-        override_env={switch: wrong_value},
-    )
+    wrong_value = COMPOSITION_TOOTH_WRONG_VALUE
     pool_mod.run_all([job], campaign, resume=resume)
     result = compare_one(chosen.run, job.outdir)
     record = records_mod.read(job.outdir)

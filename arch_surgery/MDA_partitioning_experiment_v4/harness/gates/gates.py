@@ -384,22 +384,20 @@ def copy_gates(campaign: Campaign) -> dict[str, Gate]:
 # owns.  It is made once, here, and shared, because three gates making their own
 # would be three fixed points that have to be argued to be the same one.
 #
-# The directory shape is `reproduction.phase_a_reference_directory`'s, imported
-# rather than restated, so the reproduction gate's references and these are the
-# same construction and can be read side by side.
+# The job is `reproduction.entry_reference_job`'s, imported rather than
+# restated, so the reproduction gate's references, the predicate trial's and
+# these are **one job identity** and, under the shared pool (survey item B1),
+# one record.
 
 
-def entry_reference_root(campaign: Campaign) -> Path:
-    return Path(campaign.runs_dir) / GATES_SUBPATH / "entry_references"
+def entry_reference_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    """The cold flat evaluation, one per configuration, as pool jobs."""
+    from . import reproduction as reproduction_mod
 
-
-#: Which run roots this process has already made its shared cold-flat
-#: references under.  Three gates are anchored on them, and without this the
-#: second and third gate of one ``--gate all`` would re-make what the first just
-#: made — so the references are made **once per invocation** and shared, which
-#: is what they were for.  The memo is per process: a new invocation makes them
-#: again unless ``--resume`` says otherwise.
-_ENTRY_REFERENCES_MADE: set[str] = set()
+    return [
+        reproduction_mod.entry_reference_job(config)
+        for config in campaign.configurations
+    ]
 
 
 def entry_references(
@@ -412,40 +410,45 @@ def entry_references(
     cost.  A configuration whose reference did not finish **refuses** -- every
     warm run is entered from its exit state, so there is nothing to enter from,
     and that is a result rather than a reason to enter from somewhere else.
-    """
-    from . import reproduction as reproduction_mod
 
-    root = entry_reference_root(campaign)
-    jobs = [
-        pool_mod.Job(
-            phase="A",
-            arm="A0",
-            config=config,
-            seed=0,
-            outdir=reproduction_mod.phase_a_reference_directory(root, config.name),
-            regime="unperturbed",
-            delta=None,
-            run_kind="gate",
-        )
-        for config in campaign.configurations
-    ]
-    already = str(root) in _ENTRY_REFERENCES_MADE
-    pool_mod.run_all(jobs, campaign, resume=resume or already)
-    _ENTRY_REFERENCES_MADE.add(str(root))
+    Made once per invocation and shared: the pool remembers the jobs it has
+    made in this process (``pool._MADE_THIS_INVOCATION``) and keeps the record,
+    which is what a per-gate memo here used to do for this one job set before
+    the shared pool generalised it.
+    """
+    jobs = entry_reference_jobs(campaign)
+    pool_mod.run_all(jobs, campaign, resume=resume)
+    return entry_references_from_records(campaign, jobs)
+
+
+def entry_references_from_records(
+    campaign: Campaign, jobs: Sequence[pool_mod.Job] | None = None
+) -> dict[str, dict[str, Any]]:
+    """The references as :func:`entry_references` returns them, from disk only.
+
+    For composing a gate's job list without running anything: a dependent job
+    (a warm entry, a displaced pairing) carries the reference's exit snapshot
+    and burn time in its identity, so the gate's job set is composable only
+    once the reference records exist.  Refuses, naming the configuration, when
+    one does not.
+    """
+    jobs = list(jobs) if jobs is not None else entry_reference_jobs(campaign)
     references: dict[str, dict[str, Any]] = {}
     for job in jobs:
-        record = records_mod.read(job.outdir)
+        outdir = pool_mod.directory_for(job, campaign)
+        record = records_mod.read(outdir)
         if record.get("status") != "ok":
             raise GateError(
-                f"the entry reference for {job.config.name} did not finish "
-                f"(status {record.get('status')!r}, taxonomy row "
-                f"{record.get('failure_class')!r}).  Every warm run of every "
-                f"gate is entered from its exit state, so the gates that need "
-                f"it stop here rather than entering from somewhere else."
+                f"the entry reference for {job.config.name} did not finish or "
+                f"is not made (status {record.get('status')!r}, taxonomy row "
+                f"{record.get('failure_class')!r}, {outdir}).  Every warm run "
+                f"of every gate is entered from its exit state, so the gates "
+                f"that need it stop here rather than entering from somewhere "
+                f"else."
             )
         references[job.config.name] = {
-            "outdir": str(job.outdir),
-            "snapshot": str(Path(job.outdir) / "y_exit.json"),
+            "outdir": str(outdir),
+            "snapshot": str(Path(outdir) / "y_exit.json"),
             "t_plant_pulse_burn_hex": record.get("t_plant_pulse_burn_hex"),
             "audit_residual_max_hex": (record.get("exit_audit") or {}).get(
                 "residual_max_hex"
@@ -605,8 +608,27 @@ def reproduction_gate(campaign: Campaign) -> Gate:
             "experiment compares on"
         ),
         body=lambda *, resume=False: _reproduction_body(campaign, resume=resume),
+        jobs=lambda: job_rows(_reproduction_jobs, campaign),
         teeth=_reproduction_teeth(),
     )
+
+
+def _reproduction_jobs(campaign: Campaign) -> list[pool_mod.Job]:
+    from . import reproduction as reproduction_mod
+
+    return reproduction_mod.jobs_read(campaign)
+
+
+def job_rows(
+    jobs_of: Any, campaign: Campaign
+) -> list[dict[str, Any]]:
+    """A gate's ``jobs`` declaration: *jobs_of(campaign)* resolved by the pool.
+
+    One helper so that every gate declares its job set the same way — a
+    function of the campaign returning ``pool.Job``s — and the framework gets
+    the rows (key, digest, path, and whether a complete record is on disk).
+    """
+    return pool_mod.job_listing(list(jobs_of(campaign)), campaign)
 
 
 # --------------------------------------------------------------------------
@@ -688,7 +710,6 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "the two streams sharing a namespace",
             "a run against a tree that is not the experiment's copy",
             "a run asking for a switch the tree does not implement",
-            "an allowance naming a switch the tree does implement",
             "a campaign run carrying the reproduction gate's override",
             "a reproduction override that changes nothing",
             "a campaign run asking for the after_run audit position",

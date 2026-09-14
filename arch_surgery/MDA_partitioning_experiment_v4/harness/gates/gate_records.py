@@ -93,7 +93,45 @@ _HELD: dict[str, Any] = {}
 
 
 def record_root(campaign: Campaign) -> Path:
+    """Where G7's verdict goes.  Its two runs are shared-pool jobs."""
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH / "record_completeness"
+
+
+def forced_job(campaign: Campaign) -> pool_mod.Job:
+    """The optimisation forced to stop unconverged: ``force_maxcal`` is in
+    its identity, so it is never mistaken for a converged run of the arm."""
+    return pool_mod.Job(
+        phase="B",
+        arm=FORCED_ARM,
+        config=fewest_variables_configuration(campaign),
+        seed=0,
+        regime="unperturbed",
+        delta=None,
+        run_kind="smoke",
+        force_maxcal=FORCED_MAXCAL,
+    )
+
+
+def evaluation_job(campaign: Campaign) -> pool_mod.Job:
+    """The one smoke evaluation whose record the field list is checked on.
+
+    A ``smoke`` job, so it shares no record with any gate's ``A0`` evaluation
+    of the same configuration: the run kind is in the identity, and the tooth
+    below stales and re-makes this record, which must never touch a gate's.
+    """
+    return pool_mod.Job(
+        phase="A",
+        arm=EVALUATION_ARM,
+        config=fewest_variables_configuration(campaign),
+        seed=0,
+        regime="unperturbed",
+        delta=None,
+        run_kind="smoke",
+    )
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    return [forced_job(campaign), evaluation_job(campaign)]
 
 
 def fewest_variables_configuration(campaign: Campaign):
@@ -162,28 +200,8 @@ def record_completeness_body(
 ) -> dict[str, Any]:
     """G7: the declared fields are there, and a missing one is refused."""
     config = fewest_variables_configuration(campaign)
-    root = record_root(campaign)
-    forced = pool_mod.Job(
-        phase="B",
-        arm=FORCED_ARM,
-        config=config,
-        seed=0,
-        outdir=root / config.name / "forced_unconverged",
-        regime="unperturbed",
-        delta=None,
-        run_kind="smoke",
-        force_maxcal=FORCED_MAXCAL,
-    )
-    evaluation = pool_mod.Job(
-        phase="A",
-        arm=EVALUATION_ARM,
-        config=config,
-        seed=0,
-        outdir=root / config.name / "evaluation",
-        regime="unperturbed",
-        delta=None,
-        run_kind="smoke",
-    )
+    forced = forced_job(campaign)
+    evaluation = evaluation_job(campaign)
     pool_mod.run_all([forced, evaluation], campaign, resume=resume)
 
     rows: list[dict[str, Any]] = []
@@ -383,28 +401,21 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         because resume keeps a complete record of the same job; without it the
         stamp must be gone, because the run was re-made.
         """
-        config = fewest_variables_configuration(campaign)
-        directory = record_root(campaign) / config.name / "evaluation"
+        job = evaluation_job(campaign)
+        directory = pool_mod.directory_for(job, campaign)
         path = directory / "metrics.json"
         if not path.exists():
             return False, "the gate made no evaluation run to stale"
-        job = pool_mod.Job(
-            phase="A",
-            arm=EVALUATION_ARM,
-            config=config,
-            seed=0,
-            outdir=directory,
-            regime="unperturbed",
-            delta=None,
-            run_kind="smoke",
-        )
         stale = "0000000000000000000000000000000000000000"
         record = json.loads(path.read_text())
         record["tree_git_head"] = stale
         path.write_text(json.dumps(record))
         pool_mod.run_all([job], campaign, resume=True)
         kept = json.loads(path.read_text()).get("tree_git_head") == stale
-        pool_mod.run_all([job], campaign, resume=False)
+        # ``fresh``: this process made the job minutes ago and the pool would
+        # otherwise keep it as this press's copy; the tooth is about what
+        # happens without resume, so it asks for a fresh run explicitly.
+        pool_mod.run_all([job], campaign, resume=False, fresh=True)
         re_made = json.loads(path.read_text()).get("tree_git_head") != stale
         return kept and re_made, (
             f"one run's record stamped with a commit that is not this tree's: "
@@ -474,5 +485,6 @@ def record_completeness_gate(campaign: Campaign) -> Gate:
             "is refused by name rather than summarised over"
         ),
         body=lambda *, resume=False: record_completeness_body(campaign, resume=resume),
+        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
         teeth=_teeth(campaign),
     )

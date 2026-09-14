@@ -115,13 +115,35 @@ def root(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir) / GATES_SUBPATH / GATE_NAME
 
 
+def written_file_job(campaign: Campaign, config: Config, arm: str) -> pool_mod.Job:
+    """One run at seed 0, audited after the run, asked for by this gate."""
+    return pool_mod.Job(
+        phase="B",
+        arm=arm,
+        config=config,
+        seed=0,
+        regime="unperturbed",
+        delta=campaign.delta,
+        run_kind="gate",
+        audit_position=AUDIT_POSITION,
+        audit_position_caller=GATE_NAME,
+    )
+
+
 def run_directory(campaign: Campaign, configuration: str, arm: str) -> Path:
-    return root(campaign) / "runs" / configuration / arm / pool_mod.seed_directory(0)
+    """Where this gate's run is: the pool's directory for its job.  The audit
+    position and this gate's name as the caller are in the identity, so it is
+    never G9's record of the same arm, nor GR's."""
+    return pool_mod.directory_for(
+        written_file_job(campaign, campaign.configuration(configuration), arm), campaign
+    )
 
 
 def output_path_record_directory(campaign: Campaign, configuration: str, arm: str) -> Path:
     """Gate G9's run of the same arm at seed 0, at the declared position."""
-    return Path(campaign.runs_dir) / GATES_SUBPATH / "output_path" / "runs" / configuration / arm
+    from . import gate_output_path as gate_output_path_mod  # noqa: PLC0415
+
+    return gate_output_path_mod.output_path_run_dir(campaign, configuration, arm)
 
 
 def configurations(campaign: Campaign) -> tuple[list[Config], dict[str, str]]:
@@ -149,21 +171,22 @@ def jobs(campaign: Campaign) -> list[pool_mod.Job]:
         for arm in ARMS:
             if arm not in active:
                 continue
-            planned.append(
-                pool_mod.Job(
-                    phase="B",
-                    arm=arm,
-                    config=config,
-                    seed=0,
-                    outdir=run_directory(campaign, config.name, arm),
-                    regime="unperturbed",
-                    delta=campaign.delta,
-                    run_kind="gate",
-                    audit_position=AUDIT_POSITION,
-                    audit_position_caller=GATE_NAME,
-                )
-            )
+            planned.append(written_file_job(campaign, config, arm))
     return planned
+
+
+def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+    """Every job this gate reads: its six, and G9's record of each for the beside column."""
+    from . import gate_output_path as gate_output_path_mod  # noqa: PLC0415
+
+    kept, _ = configurations(campaign)
+    beside = [
+        gate_output_path_mod.output_path_job(campaign, config, arm)
+        for config in kept
+        for arm in ARMS
+        if arm in arms_mod.active_arms(config, "B")
+    ]
+    return jobs(campaign) + beside
 
 
 def capture(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
@@ -764,7 +787,7 @@ def gate(campaign: Campaign) -> Gate:
         body=lambda *, resume=False: gates_mod._with_capture(
             capture, body, campaign, resume=resume
         ),
-        runs_under=(f"{GATE_NAME}/runs",),
+        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
         # It reads gate G9's records for the declared-position column beside
         # its own, so it follows that gate in the derived order.
         reads_from=("output_path",),
