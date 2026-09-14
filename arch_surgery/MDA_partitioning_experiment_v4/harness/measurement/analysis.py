@@ -683,15 +683,35 @@ class Source:
     ``runs/gates/`` is **not one population**: several gates run the same arm at
     the same seed from different entries and three of them run it deliberately
     doctored, so a mean over that tree is a mean over a set nobody can state.  A
-    source is a named subtree whose records are a comparable set, with the
-    sentence that says why.
+    source is a **gate's job set** — the jobs that gate declares it reads, each
+    resolved by the pool to the one directory its record can be in — with the
+    sentence that says why they are comparable.  Named by job set and not by
+    directory since task A72 (resume-identity-and-shared-pool): under the
+    shared pool every gate's runs share one directory keyed by job identity.
     """
 
     name: str
-    subpath: str
+    #: The gate whose job set this is.
+    owner: str
+    #: That gate's own job composition, called by name here — the gate owns its
+    #: population (harness plan amendment 21, rule (xi)); what this module
+    #: declares independently of the tally is **which** gates' job sets are
+    #: sources and what each one is.
+    jobs: Callable[[Campaign], Sequence[Any]]
     phases: str
     what: str
-    keep: Callable[[Path], bool] | None = None
+
+
+def _reference_runs(campaign: Campaign) -> list[Any]:
+    from harness.gates import reproduction as reproduction_mod  # noqa: PLC0415
+
+    return reproduction_mod.planned_jobs(campaign)
+
+
+def _paired_entries(campaign: Campaign) -> list[Any]:
+    from harness.gates import gate_entry as gate_entry_mod  # noqa: PLC0415
+
+    return gate_entry_mod.pairing_jobs(campaign)
 
 
 #: The two declared sources, re-derived from the declaration in
@@ -701,7 +721,8 @@ class Source:
 SOURCES: tuple[Source, ...] = (
     Source(
         name="reference_runs",
-        subpath="gates/reproduction/runs",
+        owner="reproduction",
+        jobs=_reference_runs,
         phases="AB",
         what=(
             "the reproduction gate's own runs: one record per arm, "
@@ -711,16 +732,41 @@ SOURCES: tuple[Source, ...] = (
     ),
     Source(
         name="paired_entries",
-        subpath="gates/entry_and_warm",
+        owner="entry_and_warm",
+        jobs=_paired_entries,
         phases="A",
         what=(
             "the entry gate's paired evaluations: every evaluation-phase arm "
             "entered from the same displaced coupling state at one seed"
         ),
-        keep=lambda relative: len(relative.parts) > 1
-        and relative.parts[1] == "pairing",
     ),
 )
+
+
+def source_directories(campaign: Campaign, source: Source) -> list[Path]:
+    """One directory per job of *source*, resolved by the pool; empty where
+    the job set is not composable yet (no reference record to enter from)."""
+    from harness.core import pool as pool_mod  # noqa: PLC0415
+
+    try:
+        jobs = list(source.jobs(campaign))
+    except Exception as exc:  # noqa: BLE001 - a missing prerequisite, stated
+        if type(exc).__name__ not in ("GateError", "ReproductionError"):
+            raise
+        return []
+    return pool_mod.directories_for(jobs, campaign)
+
+
+def declared_paths(campaign: Campaign) -> list[Path]:
+    """Every directory the declared sources resolve to, once each."""
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for source in SOURCES:
+        for directory in source_directories(campaign, source):
+            if str(directory) not in seen:
+                seen.add(str(directory))
+                paths.append(directory)
+    return paths
 
 
 @dataclass(frozen=True)
@@ -810,42 +856,30 @@ def label_of(record: Mapping[str, Any]) -> str:
     )
 
 
-def read_records(root: Path) -> list[tuple[Path, Mapping[str, Any]]]:
-    """Every run record under *root*, in path order, read as JSON.
-
-    A record that will not parse is a row whose status says so, never an
-    exception: a crashed subprocess that wrote half a file is a taxonomy row,
-    and raising on it is how a class of failures once left a tally silently.
-    """
-    out: list[tuple[Path, Mapping[str, Any]]] = []
-    for path in sorted(Path(root).rglob("metrics.json")):
-        try:
-            record = json.loads(path.read_text())
-        except Exception:  # noqa: BLE001 - an unreadable record is a row
-            record = {
-                "status": "no_record",
-                "failure_class": "machinery",
-                "record_path": str(path),
-            }
-        out.append((path, record))
-    return out
-
-
 def source_records(
     campaign: Campaign, source: Source
 ) -> list[Mapping[str, Any]]:
-    """Every record of one declared source, in path order."""
-    root = Path(campaign.runs_dir) / source.subpath
-    if not root.exists():
-        return []
-    rows = read_records(root)
-    if source.keep is None:
-        return [record for _, record in rows]
-    return [
-        record
-        for path, record in rows
-        if source.keep(path.parent.relative_to(root))
-    ]
+    """Every record of one declared source, in job order.
+
+    A job whose directory holds no record yet is not a row: the source is the
+    records that exist of the job set.
+    """
+    out: list[Mapping[str, Any]] = []
+    for directory in source_directories(campaign, source):
+        path = Path(directory) / "metrics.json"
+        if not path.exists():
+            continue
+        try:
+            out.append(json.loads(path.read_text()))
+        except Exception:  # noqa: BLE001 - an unreadable record is a row
+            out.append(
+                {
+                    "status": "no_record",
+                    "failure_class": "machinery",
+                    "record_path": str(path),
+                }
+            )
+    return out
 
 
 def arm_order(names: Iterable[str]) -> list[str]:
@@ -2277,7 +2311,7 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                 {
                     "source": source.name,
                     "phase": phase,
-                    "subpath": source.subpath,
+                    "owner": source.owner,
                     "n_records": len(population),
                     "n_excluded_as_demonstrations": len(population.excluded),
                 }
@@ -2775,9 +2809,7 @@ def verify(campaign: Campaign, *, resume: bool = False) -> framework.Check:
     )
     records_dir = Path(campaign.runs_dir) / framework.GATES_SUBPATH
 
-    provenance = framework.survey_heads(
-        [Path(campaign.runs_dir) / source.subpath for source in SOURCES]
-    )
+    provenance = framework.survey_heads(declared_paths(campaign))
     here = framework.git_head()
     heads = list(provenance.get("heads") or [])
     straddle = assert_one_commit(provenance, resume=resume)
@@ -3330,9 +3362,7 @@ def tables(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     it is the ``recomputation`` gate over the same records, which is where the
     verdict lives.
     """
-    provenance = framework.survey_heads(
-        [Path(campaign.runs_dir) / source.subpath for source in SOURCES]
-    )
+    provenance = framework.survey_heads(declared_paths(campaign))
     recomputed = recompute(campaign)
     produced = recomputed["tables"]
     return {
@@ -3366,7 +3396,7 @@ def print_tables(block: Mapping[str, Any]) -> None:
     for row in block.get("populations") or []:
         print(
             f"  population {row['source']}/{row['phase']}: "
-            f"{row['n_records']} record(s) under {row['subpath']}"
+            f"{row['n_records']} record(s) of gate {row['owner']}'s job set"
         )
     provenance = block.get("runs_provenance") or {}
     print(
@@ -3413,14 +3443,23 @@ def gate(campaign: Campaign) -> framework.Gate:
         run=lambda *, resume=False: verify(campaign, resume=resume),
         teeth=TEETH,
         needs_runs=False,
-        # Relative to ``runs/gates``, which is what ``Gate.run`` joins them to
-        # — not to ``runs/``, which is what a ``Source.subpath`` is relative
-        # to.  The two are one directory apart and a wrong one here surveys an
-        # empty tree and reports "0 record(s)" instead of the straddle.
-        runs_under=tuple(
-            str(Path(source.subpath).relative_to("gates")) for source in SOURCES
-        ),
+        # The sources are job sets; the pool resolves each to its directory
+        # (trap T12: never a retyped path).
+        jobs=lambda: _job_rows(campaign),
     )
+
+
+def _job_rows(campaign: Campaign) -> list[dict[str, Any]]:
+    from harness.core import pool as pool_mod  # noqa: PLC0415
+
+    jobs: list[Any] = []
+    for source in SOURCES:
+        try:
+            jobs += list(source.jobs(campaign))
+        except Exception as exc:  # noqa: BLE001
+            if type(exc).__name__ not in ("GateError", "ReproductionError"):
+                raise
+    return pool_mod.job_listing(jobs, campaign)
 
 
 def measurement(campaign: Campaign) -> framework.Measurement:

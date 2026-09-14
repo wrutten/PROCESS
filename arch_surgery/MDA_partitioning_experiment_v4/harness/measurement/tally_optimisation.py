@@ -1281,7 +1281,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         sources.append(
             {
                 "source": source.name,
-                "subpath": source.subpath,
+                "owner": source.owner,
                 "what": source.what,
                 "n_records": len(population),
                 "n_excluded_as_demonstrations": len(population.excluded),

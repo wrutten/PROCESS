@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from harness.core import framework
 from harness.core import records as records_mod
@@ -85,7 +85,8 @@ class RunRow:
 
     record: Mapping[str, Any]
     path: Path
-    #: The gate directory the record was found under, e.g. ``reproduction``.
+    #: The declared source the record belongs to, e.g. ``reference_runs``; the
+    #: gate directory for a record read outside a source.
     source: str
     #: The refusal ``records.assert_usable`` raised, or None.
     refusal: str | None = None
@@ -216,25 +217,49 @@ def population_for(
 
 @dataclass(frozen=True)
 class Source:
-    """One named, statable set of records the tally may summarise."""
+    """One named, statable set of records the tally may summarise.
+
+    Named by **job set**, not by directory (task A72 (resume-identity-and-
+    shared-pool), survey item B1): under the shared pool every gate's runs
+    live in one directory keyed by job identity, so a subtree no longer picks
+    out a gate's population.  ``jobs`` is the gate's own declaration of the
+    jobs it reads — harness plan amendment 21, rule (xi): a gate's arm, seed
+    or configuration set *is* a tally population — and the pool resolves each
+    job to the one directory its record can be in.
+    """
 
     name: str
-    #: Where the records live, relative to the campaign's records directory.
-    subpath: str
+    #: The gate whose job set this is, for the caption and the provenance.
+    owner: str
+    #: The job set, composed from the records on disk exactly as the owning
+    #: gate composes it; a job whose prerequisites are not made yet is not
+    #: composable and the source is then empty, which is stated, not hidden.
+    jobs: Callable[[Campaign], Sequence[Any]]
     #: Which phases this source carries: "A", "B" or "AB".
     phases: str
     #: The membership rule, in one clause, for the caption.
     what: str
-    #: An optional filter on the path **relative to** ``subpath``.
-    keep: Any = None
 
 
-#: The sources this tally declares.  Two, because two subtrees of
-#: ``runs/gates/`` are comparable sets and the rest are not.
+def _reference_runs(campaign: Campaign) -> list[Any]:
+    from harness.gates import reproduction as reproduction_mod  # noqa: PLC0415
+
+    return reproduction_mod.planned_jobs(campaign)
+
+
+def _paired_entries(campaign: Campaign) -> list[Any]:
+    from harness.gates import gate_entry as gate_entry_mod  # noqa: PLC0415
+
+    return gate_entry_mod.pairing_jobs(campaign)
+
+
+#: The sources this tally declares.  Two, because two gates' job sets are
+#: comparable populations and the rest are not.
 SOURCES: tuple[Source, ...] = (
     Source(
         name="reference_runs",
-        subpath="gates/reproduction/runs",
+        owner="reproduction",
+        jobs=_reference_runs,
         phases="AB",
         what=(
             "the reproduction gate's own runs — one record per arm, "
@@ -249,7 +274,8 @@ SOURCES: tuple[Source, ...] = (
     ),
     Source(
         name="paired_entries",
-        subpath="gates/entry_and_warm",
+        owner="entry_and_warm",
+        jobs=_paired_entries,
         phases="A",
         what=(
             "the entry gate's paired evaluations — every evaluation-phase arm "
@@ -257,38 +283,90 @@ SOURCES: tuple[Source, ...] = (
             "which is the experiment plan's own Phase A entry construction.  "
             "Gate runs, one seed per arm per configuration"
         ),
-        keep=lambda relative: len(relative.parts) > 1 and relative.parts[1] == "pairing",
     ),
 )
 
 
+def source_jobs(campaign: Campaign, source: Source) -> list[Any]:
+    """The job set of *source*, or nothing where it is not composable yet.
+
+    A dependent job's identity carries the reference record it is entered
+    from; with no reference on disk the owning gate refuses to compose it
+    (``GateError`` / ``ReproductionError``), and a source nobody can state is
+    empty — stated in the stage record's population, never a row.
+    """
+    try:
+        return list(source.jobs(campaign))
+    except Exception as exc:  # noqa: BLE001 - only the two composition refusals
+        if type(exc).__name__ not in ("GateError", "ReproductionError"):
+            raise
+        return []
+
+
+def source_directories(campaign: Campaign, source: Source) -> list[Path]:
+    """The one directory per job of *source*, resolved by the pool."""
+    from harness.core import pool as pool_mod  # noqa: PLC0415
+
+    return pool_mod.directories_for(source_jobs(campaign, source), campaign)
+
+
+def gather_directories(
+    directories: Sequence[Path], *, source: str, contract: bool = True
+) -> tuple[list[RunRow], list[str]]:
+    """The record in each of *directories*, read and put through the contract.
+
+    :func:`gather`'s shape over an explicit list of run directories: a
+    directory with no record is a ``no_record`` row, never an exception.
+    """
+    rows: list[RunRow] = []
+    refusals: list[str] = []
+    for directory in directories:
+        path = Path(directory) / "metrics.json"
+        record = records_mod.read(path.parent)
+        refusal: str | None = None
+        if contract and record.get("status") != "no_record":
+            try:
+                records_mod.assert_usable(record, where=str(path.parent.name))
+            except records_mod.RecordError as exc:
+                refusal = str(exc)
+                refusals.append(f"{path.parent.name}: {exc}")
+        rows.append(RunRow(record=record, path=path, source=source, refusal=refusal))
+    return rows, refusals
+
+
 def source_rows(campaign: Campaign, source: Source) -> tuple[list[RunRow], list[str]]:
-    """Every record of one declared source, with the contract's refusals."""
-    root = Path(campaign.runs_dir) / source.subpath
-    if not root.exists():
-        return [], []
-    rows, refusals = gather(root)
-    if source.keep is None:
-        return rows, refusals
-    kept = [
-        row
-        for row in rows
-        if source.keep(row.path.parent.relative_to(root))
+    """Every record of one declared source, with the contract's refusals.
+
+    A job whose directory holds no record yet is **not** a row: the source is
+    the records that exist of the job set, and a missing record is the owning
+    gate's failure to report, not a ``no_record`` row in a table.
+    """
+    directories = [
+        d for d in source_directories(campaign, source) if (d / "metrics.json").exists()
     ]
-    return kept, refusals
+    return gather_directories(directories, source=source.name)
 
 
 def declared_paths(campaign: Campaign) -> list[Path]:
-    """The roots the declared sources cover, for the provenance survey."""
-    return [Path(campaign.runs_dir) / source.subpath for source in SOURCES]
+    """The directories the declared sources resolve to, for the provenance survey."""
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for source in SOURCES:
+        for directory in source_directories(campaign, source):
+            if str(directory) not in seen:
+                seen.add(str(directory))
+                paths.append(directory)
+    return paths
 
 
 def records_outside_every_source(campaign: Campaign) -> dict[str, Any]:
     """Records under ``runs/gates/`` that no declared source covers.
 
-    Counted and named by their gate directory rather than left out silently: a
-    reader must be able to see that the tally read 28 of 150 records **because
-    the other 122 are not a comparable set**, not because they were missed.
+    Counted and named rather than left out silently: a reader must be able to
+    see that the tally read 28 of 150 records **because the other 122 are not
+    a comparable set**, not because they were missed.  Under the shared pool
+    most records sit in ``_runs/``; those are named by phase and arm from
+    their own stamps, the rest by the gate directory they sit under.
     """
     root = Path(campaign.runs_dir) / GATE_RUNS_SUBPATH
     if not root.exists():
@@ -305,6 +383,12 @@ def records_outside_every_source(campaign: Campaign) -> dict[str, Any]:
             continue
         relative = path.parent.relative_to(root)
         gate = relative.parts[0] if relative.parts else "."
+        if gate == "_runs":
+            record = records_mod.read(path.parent)
+            gate = (
+                f"_runs: phase {record.get('campaign_phase')} arm "
+                f"{record.get('campaign_arm')}"
+            )
         outside[gate] = outside.get(gate, 0) + 1
     return {
         "n_records_under_runs_gates": total,
@@ -418,18 +502,21 @@ def cells_for(phase: str, published: Mapping[str, Any]) -> list[str]:
     ]
 
 
-def reproduction_runs_root(campaign: Campaign) -> Path:
-    """Where the reproduction gate's own twenty runs live."""
+def reproduction_run_directories(campaign: Campaign) -> dict[tuple[str, str, int], Path]:
+    """Where each of the reproduction gate's twenty runs is, by (configuration, arm, seed).
+
+    Resolved through the gate's own job set and the pool, not through a
+    directory layout this module knows.
+    """
     from harness.gates import reproduction as reproduction_mod  # noqa: PLC0415
 
-    return Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH / "runs"
+    return reproduction_mod.planned_directories(campaign)
 
 
 def reference_cells(
     campaign: Campaign,
     *,
     document: Mapping[str, Any] | None = None,
-    root: Path | None = None,
 ) -> dict[str, Any]:
     """Reproduce the previous revision's published cells, cell by cell.
 
@@ -449,16 +536,24 @@ def reference_cells(
       must refuse, never pass over nothing (trap T11).
     """
     document = document or reference_mod.load()
-    base = Path(root) if root is not None else reproduction_runs_root(campaign)
+    # The gate's runs, by their job identities; where the references are not
+    # made yet no run is composable and every row reads as ``no_record``,
+    # which the caller refuses on (trap T11), never as an empty comparison.
+    try:
+        directories = reproduction_run_directories(campaign)
+    except Exception as exc:  # noqa: BLE001 - a missing prerequisite is stated
+        if type(exc).__name__ not in ("GateError", "ReproductionError"):
+            raise
+        directories = {}
     rows: list[dict[str, Any]] = []
-    from harness.core import pool as pool_mod  # noqa: PLC0415
 
     for run in reference_mod.reference_set(campaign):
         entry = reference_mod.lookup(
             run.arm, run.configuration, run.seed, document=document
         )
-        directory = (
-            base / run.configuration / run.arm / pool_mod.seed_directory(run.seed)
+        directory = directories.get(
+            (run.configuration, run.arm, run.seed),
+            Path(campaign.runs_dir) / "_no_such_run" / run.key,
         )
         record = records_mod.read(directory)
         published = entry["fields"]
