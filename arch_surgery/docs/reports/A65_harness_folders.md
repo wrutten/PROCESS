@@ -358,3 +358,41 @@ decision this task took that a reviewer could reasonably have taken differently.
   not move. §4.1's target tree is a 2026-09-10 record of the approved target and is left as it stands.
 - **The improvement list**: nothing — this task adds no item. It removes one reading of the old one:
   "the harness is forty files in one directory" is no longer true.
+
+---
+
+## 12. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip, before the merge. Checks chosen to differ from the agent's.*
+
+1. **Is it a pure move?** I filtered the branch's whole harness diff for changed lines that are not
+   imports, comments, path references or cross-references: 80 lines remain, and every one is a
+   subpackage docstring, the README's package map, an `_EXPERIMENT_DIR` anchor gaining one parent
+   level (three modules), the child spawn going through `pool.CHILD_DIR`, or the two fixture strings
+   of the independence gate's tooth. No expression, branch or constant changed. Git detects all
+   38 moves as renames.
+2. **Does it import?** On a trial merge of the branch onto trunk (`486fa9ad`) I walked the package
+   with `pkgutil` from outside it: 45 modules, 0 failures. `--selfcheck` on that record-less tree:
+   PASS.
+3. **The 16 re-made runs.** The agent's account is right and each cause is in the code: gate G4's
+   doctored runs pass `resume=False` (`gate_audit.py`, the `run_all` call), so **every press of
+   `--gate all` makes 12 PROCESS runs there regardless of the tree**; G7's own tooth makes one; the
+   three `entry=optimisation` censuses are `census-1` and refused by name per amendment 17. None is
+   caused by the move. G4's fixed cost goes to the improvement list at the merge.
+4. **`ystate.py` staying at the package top** is the right call. The frozen driver copy reaches it by a
+   literal path that `copy_gates.py` asserts as a permitted edit; moving it is a driver-copy change
+   with G0′ and GR behind it, not a folder task. The README and `child/__init__.py` both say it
+   belongs to the amendment-13 set.
+5. **§4** was stale against the branch's own stage records (the agent left the render to the merge,
+   correctly refusing to guess). I rendered it on the branch from those records: 137 lines, the
+   classes the agent's word-diff named; `--plan-tables check` is clean at the tip.
+6. **A fault of mine, recorded here because the report is where the run budget is accounted for.**
+   Probing the button's failure path, I pressed `--gate all --resume` on the record-less trial tree.
+   That is not a failure path: with no records the pool starts every run. It ran about ten minutes at
+   three workers before I killed it and deleted the tree; the records were not counted before
+   deletion (my counter keyed on the wrong field), so the waste is bounded only as "under one press".
+   The rule I broke is my own memory's (re-make only what a change alters). Nothing outside the
+   throwaway tree was touched.
+
+**Approved for merge.** Records relocate to `arch_surgery/idf_probe/runs/A65_runs/` (path from the
+retire script).
