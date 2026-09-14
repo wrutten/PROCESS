@@ -391,3 +391,37 @@ gate, chain · `cacf3f78` gate `resume_identity`, `--jobs`, `--allow-pending` re
 `1114773d` the phase-A audit position (the defect of §6) · `78c76654` README, `Job.key` · `b42c003e`
 the evaluation tally's printer · `8d5099a1` `Gate.run` records an uncomposable job set. Base
 `77d3c2fd`.
+
+---
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-14 at the branch tip `e31e5f83`, before the merge. Checks chosen to differ from the
+agent's.*
+
+1. **The identity list against the `Job` dataclass, by introspection.** Every `Job` field is either in
+   `JOB_IDENTITY_FIELDS` or in the declared non-identity trio (`config`, `outdir`, `timeout`);
+   `configuration` in the list is `config` rendered as its name. The module's import-time refusal of
+   an unclassified field is the right shape: a new `Job` field cannot silently escape the identity.
+2. **The refusal, probed with doctored records rather than the agent's teeth.** On a real shared
+   record: the genuine record is complete; the same record with one identity field (δ) changed and
+   the digest kept is refused; with the digest removed it is incomplete by name; with the child's own
+   δ stamp changed it is refused. I-23's hazard is closed by construction.
+3. **On a trial merge onto trunk (`77d3c2fd`)**: clean (28 files); import walk 52 modules, 0 failures;
+   `--jobs all` on the record-less tree stops by name at the gates that need a reference before they
+   can compose — the failure path, reachable from the button.
+4. **The 57-versus-19 run overshoot.** The first resume re-made all 19 because the Phase A job's
+   default audit position did not match what the child stamps; the agent found it with its own new
+   dry-run (`--jobs`), fixed it, and re-pressed. The overshoot is 38 runs, recorded here and in the
+   report, and the dry-run before a resume press is now the obvious habit; it goes to the improvement
+   list. The defect it found is exactly the class I-23 exists to catch, found on the first real press
+   of the mechanism — the mechanism working, at a price.
+5. **The projected saving is ~20 runs per press, not the survey's 44.** The survey counted
+   bit-identical records; some are distinct jobs by identity (G8's observer, G2's prime override, δ at
+   seed 0 composed two ways) and are correctly *not* shared. A73's press measures the real figure.
+   The δ-at-seed-0 convention is queued as an item for the press after A73, since normalising it
+   reaches G1's kept before-capture.
+6. **Rule (xiii) debt** is stated by name in the hand-over: ten gates' code changed and only three
+   were pressed here. A73's from-scratch press presses all of them, so the debt is discharged there.
+
+**Approved for merge.**
