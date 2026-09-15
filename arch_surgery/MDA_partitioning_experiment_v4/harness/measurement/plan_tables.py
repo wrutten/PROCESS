@@ -237,6 +237,12 @@ class Merged:
         so a column every run agreed on reads ``4`` and not ``4 [4, 4]``.
     ``"slash"``
         ``median / p90``: two order statistics of one distribution.
+
+    ``"fraction"``
+        ``k/n``: a count and the denominator it is out of, which the previous
+        revision printed in **one** cell (``0/22``) and this rendering had as
+        two columns.  An empty or absent denominator leaves the count alone,
+        so a row that carries no pair count still prints its count.
     """
 
     #: The merged column's key and heading.
@@ -271,9 +277,40 @@ def _merge_cells(parts: Sequence[str], join: str) -> str:
         if not any(values):
             # every part empty: a group heading row, not a missing value.
             return ""
+        if all(v == "—" for v in values):
+            # every part a missing value: one dash, as the previous revision
+            # printed an arm a configuration does not carry — never `— / —`.
+            return "—"
         return " / ".join(values)
-    raise PlanTablesError(f"no cell join {join!r}: it is 'bracket' or 'slash'")
+    if join == "fraction":
+        count, denominator = (values + ["", ""])[:2]
+        if not count and not denominator:
+            return ""
+        if denominator in ("", "—"):
+            return count
+        return f"{count}/{denominator}"
+    raise PlanTablesError(
+        f"no cell join {join!r}: it is 'bracket', 'slash' or 'fraction'"
+    )
 
+
+#: The arm set a table states in its caption where the grid does not carry
+#: an *arms* column — the previous revision's grids never did, and the four
+#: one-quantity tables of the optimiser's path drop theirs into the caption
+#: (``Layout.omit``, task A86 (v3-tables-remainder)).
+ARM_SET = (
+    " The arms are `BR`, `B0`, `B1` and `B2`; `B1` is inactive on "
+    "`st_regression` and its column reads — there."
+)
+
+#: Each phase's whole ladder, by the stage that emits it.  A block heading
+#: line names its arm set only where the block does not carry all of it —
+#: the previous revision's `st` block, whose heading said *"no B1"* (task
+#: A86 (v3-tables-remainder)).
+LADDERS: dict[str, tuple[str, ...]] = {
+    "tally_evaluation": ("AR", "A0", "A1", "A2"),
+    "tally_optimisation": ("BR", "B0", "B1", "B2"),
+}
 
 #: How a configuration is written in a block heading line and in a row group
 #: label: the report's own short names (§4), not the previous revision's.
@@ -396,6 +433,18 @@ class Layout:
     #: continuation rows empty, as the previous revision's §4.4, §5.1, §5.2
     #: and §5.5 tables did.
     blank_repeats: tuple[str, ...] = ()
+    #: **Columns this rendering drops into the caption** — a column whose cell
+    #: is the same label on every row the grid keeps, which the previous
+    #: revision's grid did not have because the label was its caption's
+    #: (the quantity of a one-quantity table, the arm set of a block).  A
+    #: rendering declaration like ``merges``: the cells are not changed, they
+    #: are stated once above the grid instead of once per row, and
+    #: ``report_cells_preserved.py`` reads the same declaration so the check
+    #: still proves every remaining cell present.  A column named here that
+    #: the tables do not have is a refusal; **the caption must carry what the
+    #: column carried**, which is the entry's own job to write (task A86
+    #: (v3-tables-remainder)).
+    omit: tuple[str, ...] = ()
 
 
 #: The source families, in the order their tables print, with the label the
@@ -417,7 +466,74 @@ _EVALUATION_REGIMES = ("campaign_displaced", *_STENCILS)
 
 
 LAYOUTS: tuple[Layout, ...] = (
-    # ---------------- the main text: the three headline shapes -------------
+    # ---------------- the main text: the previous revision's §4 and §5 shapes ----
+    Layout(
+        name="matched_accuracy_headline",
+        title="check 1, matched accuracy",
+        stage="tally_evaluation",
+        kinds=("matched_accuracy_headline",),
+        sources=("campaign_displaced",),
+        where="main",
+        mode="single",
+        merges=(
+            Merged(key="AR", heading="AR", parts=("AR_median", "AR_p90"), join="slash"),
+            Merged(key="A0", heading="A0", parts=("A0_median", "A0_p90"), join="slash"),
+            Merged(key="A1", heading="A1", parts=("A1_median", "A1_p90"), join="slash"),
+            Merged(key="A2", heading="A2", parts=("A2_median", "A2_p90"), join="slash"),
+        ),
+        bold=("A2_over_A1_verdict", "A2_over_A0_verdict"),
+        caption=(
+            "**Check 1 — matched accuracy**, the headline evaluation-phase "
+            "check: the restricted audit maximum as `median / p90` per arm, "
+            "one row per configuration, over that configuration's 25 "
+            "displaced-entry runs per arm on the frozen ruler. The declared "
+            "pair is `A2/A1` on a pulsed configuration and `A2/A0` on "
+            "`st_regression` — the *reference* column names it — and the rule "
+            "is within F = 10 at median **and** p90; the other pair is "
+            "published beside and is not the acceptance. The mixed ruler's "
+            "distributions are in Appendix D."
+        ),
+        why=(
+            "**The previous revision's §4 check-1 table, reproduced** (the "
+            "user's ruling of 2026-09-15).  Its grid is one row per "
+            "configuration and one column per arm as `median / p90`, with "
+            "the ratio pair and the verdict beside; the stencil regimes it "
+            "never had are the companion file's, in the same form."
+        ),
+    ),
+    Layout(
+        name="per_call_cost_headline",
+        title="per-call cost",
+        stage="tally_evaluation",
+        kinds=("cost_per_call_headline",),
+        sources=("campaign_displaced",),
+        where="main",
+        mode="single",
+        merges=(
+            Merged(key="AR", heading="AR", parts=("AR_mean", "AR_bracket")),
+            Merged(key="A0", heading="A0", parts=("A0_mean", "A0_bracket")),
+            Merged(key="A1", heading="A1", parts=("A1_mean", "A1_bracket")),
+            Merged(key="A2", heading="A2", parts=("A2_mean", "A2_bracket")),
+        ),
+        bold=("A1_to_A2", "A0_to_A2"),
+        caption=(
+            "**Per-call cost**: mean model-node executions per `call_models` "
+            "evaluation with the `[min, max]` seed bracket in one cell, one "
+            "row per configuration over its 25 displaced-entry runs per arm, "
+            "then the ladder's rungs as pooled ratios — `AR→A0` the stopping "
+            "rule, `A0→A1` the ownership of the burn time, `A1→A2` the "
+            "partition, with `A0→A2` standing in where the ownership rung "
+            "does not exist. The partitioned arm's prime calls per evaluation "
+            "are the last column and are in **no** node-call cell (D19)."
+        ),
+        why=(
+            "**The previous revision's check-3 table, reproduced**, in the "
+            "per-run form its own §4.5 rewrite moved to: it summed node "
+            "calls over 25 seeds, and the sums hid both the denominator and "
+            "the run-to-run spread.  One rung per column, because V4's "
+            "ladder has three where the previous revision's had one."
+        ),
+    ),
     Layout(
         name="node_calls_per_block",
         title="node calls per block",
@@ -435,153 +551,6 @@ LAYOUTS: tuple[Layout, ...] = (
             "configurations, so there is nothing to combine: the layout's "
             "work is to place it in the main text and keep it out of the "
             "appendix, where it would be the same grid twice."
-        ),
-    ),
-    Layout(
-        name="node_calls_per_module",
-        title="node calls per module",
-        stage="tally_optimisation",
-        kinds=("node_calls_per_module",),
-        where="report",
-        mode="stack",
-        merges=(
-            Merged(
-                key="BR",
-                heading="BR",
-                parts=("BR_mean", "BR_bracket"),
-            ),
-            Merged(
-                key="B0",
-                heading="B0",
-                parts=("B0_mean", "B0_bracket"),
-            ),
-            Merged(
-                key="B1",
-                heading="B1",
-                parts=("B1_mean", "B1_bracket"),
-            ),
-            Merged(
-                key="B2",
-                heading="B2",
-                parts=("B2_mean", "B2_bracket"),
-            ),
-        ),
-        bold=("pooled",),
-        caption=(
-            "Node calls per run by node group and arm, the three "
-            "configurations stacked, each over its own seed set (mean, "
-            "[min, max]); `B2` against `B0` pooled, as the per-run median "
-            "with its bracket and as runs on which `B2` cost more. These are "
-            "whole-run census counts: a group's last row is the part outside "
-            "the solve phase, so the row above it less that row is check 4's "
-            "solve-phase total. `B1` is inactive on `st_regression`."
-        ),
-        why=(
-            "The per-module construction in **node-call** units, which check "
-            "4's solve-phase total is read from (its last row is the part "
-            "outside the solve phase).  Task **A85 (v3-table-formats)** moved "
-            "it out of the main text: the previous revision's per-module "
-            "headline — the one the user asked for — states module **sweeps** "
-            "per run, and that table is now §4.3's.  Kept here whole, because "
-            "the solve-phase decomposition is a cell set the sweeps table "
-            "does not carry.  Each arm's mean and bracket are one cell, as "
-            "the previous revision printed them."
-        ),
-    ),
-    Layout(
-        name="iteration_multiplier_headline",
-        title="the iteration multiplier",
-        stage="tally_optimisation",
-        kinds=("optimiser_path",),
-        where="main",
-        mode="single",
-        select=(("quantity", ("iterations (summed over attempts)",)),),
-        merges=(
-            Merged(
-                key="ratio_median",
-                heading="B2/B0 median [min, max]",
-                parts=("ratio_median", "ratio_bracket"),
-            ),
-        ),
-        bold=("ratio_median",),
-        blank_repeats=("quantity",),
-        caption=(
-            "Optimiser iterations per run, summed over the optimiser's retry attempts, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` as the mean of the per-seed ratios, as their median with the observed [min, max] seed bracket — the check-2 acceptance quantity, bound ≤ 1.05 — and as the count of seeds on which `B2` took strictly more iterations. `B1` is inactive on `st_regression`."
-        ),
-        why=(
-            "The previous revision's §5.3 table, reproduced (task A85 (v3-table-formats), the user's ruling of 2026-09-15).  Its shape holds **one quantity per table**, so the optimiser's path — which the tally emits as four quantities stacked — is rendered as four tables of that shape, each taking its own rows by a declared selection.  This is the first, and it is the one check 2 is read from."
-        ),
-    ),
-    Layout(
-        name="evaluation_count",
-        title="the evaluation count ε",
-        stage="tally_optimisation",
-        kinds=("optimiser_path",),
-        where="main",
-        mode="single",
-        select=(("quantity", ("evaluations of the model set, ε",)),),
-        merges=(
-            Merged(
-                key="ratio_median",
-                heading="B2/B0 median [min, max]",
-                parts=("ratio_median", "ratio_bracket"),
-            ),
-        ),
-        bold=("ratio_median",),
-        blank_repeats=("quantity",),
-        caption=(
-            "Evaluations of the model set per run (`sweeps_per_eval.n_evaluations`, the field issue I-26 named as the correct one), one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same three ways. This is the ε of R = ρ × ε and it is a count of optimiser probes, not a cost."
-        ),
-        why=(
-            "The same shape as the iteration multiplier, one quantity over: the previous revision's §5.3 form holds one quantity per table, and ε and ρ were rows of task A79's Table 9.  Selected from the same stage table."
-        ),
-    ),
-    Layout(
-        name="node_calls_per_evaluation",
-        title="node calls per evaluation ρ",
-        stage="tally_optimisation",
-        kinds=("optimiser_path",),
-        where="main",
-        mode="single",
-        select=(("quantity", ("node calls per evaluation, ρ",)),),
-        merges=(
-            Merged(
-                key="ratio_median",
-                heading="B2/B0 median [min, max]",
-                parts=("ratio_median", "ratio_bracket"),
-            ),
-        ),
-        bold=("ratio_median",),
-        blank_repeats=("quantity",),
-        caption=(
-            "Model-node executions per evaluation of the model set, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same three ways. This is the ρ of R = ρ × ε — the per-call term the partition acts on, and the stable one."
-        ),
-        why=(
-            "The third quantity of the optimiser's path, in the previous revision's one-quantity-per-table shape."
-        ),
-    ),
-    Layout(
-        name="node_calls_per_run",
-        title="node calls per run R",
-        stage="tally_optimisation",
-        kinds=("optimiser_path",),
-        where="main",
-        mode="single",
-        select=(("quantity", ("node calls per run, R = ρ × ε",)),),
-        merges=(
-            Merged(
-                key="ratio_median",
-                heading="B2/B0 median [min, max]",
-                parts=("ratio_median", "ratio_bracket"),
-            ),
-        ),
-        bold=("ratio_median",),
-        blank_repeats=("quantity",),
-        caption=(
-            "Model-node executions per run, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same three ways. R = ρ × ε per seed, so this row reproduces check 4's cost ratio by another road."
-        ),
-        why=(
-            "The fourth quantity of the optimiser's path, in the previous revision's one-quantity-per-table shape; read against check 4's cost table, which sums the solve phase alone."
         ),
     ),
     Layout(
@@ -628,6 +597,192 @@ LAYOUTS: tuple[Layout, ...] = (
         ),
     ),
     Layout(
+        name="per_arm_success",
+        title="per-arm success, the seed set and the failure taxonomy",
+        stage="tally_optimisation",
+        kinds=("per_arm_success", "failure_taxonomy", "seed_set"),
+        where="main",
+        mode="merge",
+        join="arm",
+        caption=(
+            "Reliability read both ways, configurations stacked. Per arm, of "
+            "the 25 starts offered: accepted optima (status ok and the output "
+            "file's `ifail == 1`), the other starts by outcome class, and the "
+            "starts lost that another arm accepted. Beside them, per "
+            "configuration and repeated down its arm rows: the **seed set** — "
+            "the seeds on which *every* arm reached an accepted optimum, "
+            "which every other optimisation table's n is — with the "
+            "configuration-invalid seeds and the retried seeds per arm. "
+            "Reported, not accepted on (D29, 2026-09-15)."
+        ),
+        why=(
+            "Three constructions × three configurations = nine tables, three "
+            "of them a single row, all about one question: which starts each "
+            "arm accepted, and which seeds survive into every other table's "
+            "denominator.  Per-arm success is the host; the failure taxonomy "
+            "aligns on the arm; the seed set has no arm and is broadcast "
+            "across the configuration's rows, which is what *stated once per "
+            "configuration* means here."
+        ),
+    ),
+    Layout(
+        name="same_optimum",
+        title="same optimum (check 1)",
+        stage="tally_optimisation",
+        kinds=("same_optimum",),
+        where="main",
+        mode="stack",
+        merges=(
+            Merged(
+                key="r_median",
+                heading="relative Δ objf, median / p90",
+                parts=("r_median", "r_p90"),
+                join="slash",
+            ),
+            Merged(
+                key="threshold_median",
+                heading="threshold median / p90",
+                parts=("threshold_median", "threshold_p90"),
+                join="slash",
+            ),
+        ),
+        bold=("verdict",),
+        caption=(
+            "Check 1 by configuration and arm pair: the paired relative "
+            "objective difference at median and p90 against the pair's own "
+            "threshold, with the verdict, the count of seeds whose optima sit "
+            "in different objective clusters (*hops*) and the count below "
+            "cluster resolution. The yardstick pair `BR → B0` is published "
+            "beside and never accepted on."
+        ),
+        why="Three tables of two or three rows, one per configuration.",
+    ),
+    Layout(
+        name="iteration_multiplier_headline",
+        title="the iteration multiplier",
+        stage="tally_optimisation",
+        kinds=("optimiser_path",),
+        where="main",
+        mode="single",
+        select=(("quantity", ("iterations (summed over attempts)",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        omit=("quantity", "arms"),
+        caption=(
+            "**Optimiser iterations per run**, summed over the optimiser's retry attempts, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` as the ratio of those means — equal to the ratio of the sums over the same seeds, the campaign-cost statistic — as the mean of the per-seed ratios, as their median with the observed [min, max] seed bracket (the check-2 acceptance quantity, bound ≤ 1.05) and as the count of seeds on which `B2` took strictly more iterations." + ARM_SET
+        ),
+        why=(
+            "The previous revision's §5.3 table, reproduced (task A85 (v3-table-formats), the user's ruling of 2026-09-15).  Its shape holds **one quantity per table**, so the optimiser's path — which the tally emits as four quantities stacked — is rendered as four tables of that shape, each taking its own rows by a declared selection.  This is the first, and it is the one check 2 is read from."
+        ),
+    ),
+    Layout(
+        name="evaluation_count",
+        title="the evaluation count ε",
+        stage="tally_optimisation",
+        kinds=("optimiser_path",),
+        where="main",
+        mode="single",
+        select=(("quantity", ("evaluations of the model set, ε",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        omit=("quantity", "arms"),
+        caption=(
+            "**Evaluations of the model set per run**, ε (`sweeps_per_eval.n_evaluations`, the field issue I-26 named as the correct one), one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same four ways — the ratio of the means, the mean of the per-seed ratios, their median with the bracket, and the count above 1. This is the ε of R = ρ × ε and it is a count of optimiser probes, not a cost." + ARM_SET
+        ),
+        why=(
+            "The same shape as the iteration multiplier, one quantity over: the previous revision's §5.3 form holds one quantity per table, and ε and ρ were rows of task A79's Table 9.  Selected from the same stage table."
+        ),
+    ),
+    Layout(
+        name="node_calls_per_evaluation",
+        title="node calls per evaluation ρ",
+        stage="tally_optimisation",
+        kinds=("optimiser_path",),
+        where="main",
+        mode="single",
+        select=(("quantity", ("node calls per evaluation, ρ",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        omit=("quantity", "arms"),
+        caption=(
+            "**Model-node executions per evaluation of the model set**, ρ, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same four ways. This is the ρ of R = ρ × ε — the per-call term the partition acts on, and the stable one." + ARM_SET
+        ),
+        why=(
+            "The third quantity of the optimiser's path, in the previous revision's one-quantity-per-table shape."
+        ),
+    ),
+    Layout(
+        name="node_calls_per_run",
+        title="node calls per run R",
+        stage="tally_optimisation",
+        kinds=("optimiser_path",),
+        where="main",
+        mode="single",
+        select=(("quantity", ("node calls per run, R = ρ × ε",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        omit=("quantity", "arms"),
+        caption=(
+            "**Model-node executions per run**, R, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same four ways. R = ρ × ε per seed, so this table reproduces check 4's cost ratio by another road; check 4's own table sums the solve phase over the set instead." + ARM_SET
+        ),
+        why=(
+            "The fourth quantity of the optimiser's path, in the previous revision's one-quantity-per-table shape; read against check 4's cost table, which sums the solve phase alone."
+        ),
+    ),
+    Layout(
+        name="cost_sums",
+        title="cost as sums (check 4)",
+        stage="tally_optimisation",
+        kinds=("cost_sums",),
+        where="main",
+        mode="single",
+        bold=("ratio",),
+        blank_repeats=("configuration",),
+        caption=(
+            "**Check 4 — the cost**: solve-phase model-node executions "
+            "**summed** over each configuration's seed set, one column per "
+            "arm, with the partitioned arm's ratio to the flat control. Two "
+            "sets per configuration: the seeds on which every arm reached an "
+            "accepted optimum, and the same set less the seeds on which any "
+            "arm retried. Sums, so the claim is about total work over the "
+            "set and not about every run — the per-run reading is Table 18's "
+            "last columns. Prime calls are not model nodes and are in no "
+            "column here (D19)."
+        ),
+        why=(
+            "**The previous revision's §5.5 table, reproduced**: rows "
+            "configuration × set, arms as columns, summed solve-phase node "
+            "calls.  The per-arm cost table (Appendix D) has the same "
+            "quantity with the arms as *rows* and a per-run mean in the cell; "
+            "this is the campaign-cost reading, which is what a deployment "
+            "question asks and what the report's headline ratio is."
+        ),
+    ),
+    Layout(
         name="module_sweeps_optimisation",
         title="module sweeps per run, the optimisation phase",
         stage="tally_optimisation",
@@ -644,6 +799,12 @@ LAYOUTS: tuple[Layout, ...] = (
                 key="median",
                 heading="B2/B0 per-run median [min, max]",
                 parts=("median", "bracket"),
+            ),
+            Merged(
+                key="n_above_one",
+                heading="runs B2 > B0",
+                parts=("n_above_one", "n_pairs"),
+                join="fraction",
             ),
         ),
         bold=("pooled",),
@@ -671,6 +832,33 @@ LAYOUTS: tuple[Layout, ...] = (
         ),
     ),
     # ---------------- Appendix D: the evaluation phase ---------------------
+    # ---------------- Appendix D: the evaluation phase ---------------------
+    Layout(
+        name="module_scope",
+        title="module scope",
+        stage="tally_evaluation",
+        kinds=("module_scope",),
+        where="report",
+        mode="single",
+        caption=(
+            "What the partition **is** on each configuration: each node "
+            "group's collapsed-DSM row count and whether the committed map "
+            "places it inside the iterated loop, then how many of its model "
+            "nodes execute on each configuration and which. Static — derived "
+            "from the committed node map and each configuration's per-run "
+            "artifact, with no cell read from a run's statistics. The "
+            "once-per-run group is the configuration's deferred nodes "
+            "whatever module the map assigns them, which is why it carries no "
+            "row count of its own (trap T9)."
+        ),
+        why=(
+            "**The previous revision's §4.5 module-scope table, reproduced.** "
+            "It is the table every per-module grid is read against: `models` "
+            "in those grids is this table's *DSM rows* column, and the "
+            "executing-node columns are what a sweep of that group actually "
+            "runs."
+        ),
+    ),
     Layout(
         name="node_calls_per_block_other_regimes",
         title="node calls per block, the other three regimes",
@@ -807,6 +995,60 @@ LAYOUTS: tuple[Layout, ...] = (
         ),
     ),
     Layout(
+        name="full_distributions",
+        title="full distributions",
+        stage="tally_evaluation",
+        kinds=("full_distributions",),
+        sources=_EVALUATION_REGIMES,
+        where="report",
+        mode="stack",
+        blank_repeats=("configuration",),
+        caption=(
+            "The full restricted-audit distributions by configuration, arm "
+            "and regime: minimum, median and maximum on the frozen ruler, "
+            "the components left above τ = 1e-6 summed over the arm's runs "
+            "and in its worst single run, the mixed ruler's median and p90 "
+            "beside, and the per-evaluation sweeps and node calls as observed "
+            "ranges. The count column needs no ruler and says whether "
+            "anything at all was left unconverged; compare an arm's minimum "
+            "with another's maximum to see whether the two populations "
+            "overlap at all."
+        ),
+        why=(
+            "**The previous revision's §4.4 table, reproduced** — the full "
+            "picture behind §4's medians, which is what it was added for.  "
+            "The regime is a row key here for the same reason as in the cost "
+            "and accuracy tables: a regime column group would drop the count "
+            "and range columns out of the report."
+        ),
+    ),
+    Layout(
+        name="excluded_namespaces",
+        title="the excluded namespaces",
+        stage="tally_evaluation",
+        kinds=("excluded_namespaces",),
+        sources=_EVALUATION_REGIMES,
+        where="report",
+        mode="stack",
+        bold=("restricted",),
+        blank_repeats=("configuration",),
+        caption=(
+            "**What the exclusion set is load-bearing for**: the p90 across "
+            "runs of the per-run maximum scaled residual, for the restricted "
+            "set and for each namespace the restriction removes, by "
+            "configuration, arm and regime, from every run's own residual "
+            "vector. Had a namespace been wrongly excluded, the restricted "
+            "column would read that namespace's number instead of its own — "
+            "which is the size of what the headline rests on."
+        ),
+        why=(
+            "**The previous revision's second §4.5 table, reproduced.**  Its "
+            "point is that the headline's exclusion is load-bearing rather "
+            "than cosmetic, and the only way to show that is to print what "
+            "the excluded components hold."
+        ),
+    ),
+    Layout(
         name="fixed_point_distance",
         title="fixed-point distance",
         stage="tally_evaluation",
@@ -901,66 +1143,134 @@ LAYOUTS: tuple[Layout, ...] = (
         ),
     ),
     # ---------------- Appendix D: the optimisation phase --------------------
+    # ---------------- Appendix D: the optimisation phase --------------------
     Layout(
-        name="per_arm_success",
-        title="per-arm success, the seed set and the failure taxonomy",
+        name="problem_definition",
+        title="the problem each configuration poses",
         stage="tally_optimisation",
-        kinds=("per_arm_success", "failure_taxonomy", "seed_set"),
+        kinds=("problem_definition",),
         where="report",
-        mode="merge",
-        join="arm",
+        mode="single",
         caption=(
-            "Reliability read both ways, configurations stacked. Per arm, of "
-            "the 25 starts offered: accepted optima (status ok and the output "
-            "file's `ifail == 1`), the other starts by outcome class, and the "
-            "starts lost that another arm accepted. Beside them, per "
-            "configuration and repeated down its arm rows: the **seed set** — "
-            "the seeds on which *every* arm reached an accepted optimum, "
-            "which every other optimisation table's n is — with the "
-            "configuration-invalid seeds and the retried seeds per arm. "
-            "Reported, not accepted on (D29, 2026-09-15)."
+            "**The three configurations do not optimise the same thing.** "
+            "From the runs' own stamps: the figure of merit and its name and "
+            "sense (read from the frozen tree's `FiguresOfMerit`; a negative "
+            "figure of merit means *maximise*), the iteration variables and "
+            "the constraints as total (equality / inequality) as the unlifted "
+            "arms solve them, the same after the burn-time lift, and whether "
+            "the configuration is pulsed. Every cross-configuration "
+            "comparison in this report is three answers to three questions, "
+            "never one sample of three."
         ),
         why=(
-            "Three constructions × three configurations = nine tables, three "
-            "of them a single row, all about one question: which starts each "
-            "arm accepted, and which seeds survive into every other table's "
-            "denominator.  Per-arm success is the host; the failure taxonomy "
-            "aligns on the arm; the seed set has no arm and is broadcast "
-            "across the configuration's rows, which is what *stated once per "
-            "configuration* means here."
+            "**The previous revision's §5.6 table, reproduced**, with the "
+            "problem *after* the lift beside the configuration's own: the "
+            "lift adds an iteration variable and a constraint, which is a "
+            "change of problem and not only of architecture (I-20 (b)), and "
+            "the previous revision's single `vars` column could not show it."
         ),
     ),
     Layout(
-        name="same_optimum",
-        title="same optimum (check 1)",
+        name="node_calls_per_module",
+        title="node calls per module",
         stage="tally_optimisation",
-        kinds=("same_optimum",),
+        kinds=("node_calls_per_module",),
         where="report",
         mode="stack",
         merges=(
             Merged(
-                key="r_median",
-                heading="relative Δ objf, median / p90",
-                parts=("r_median", "r_p90"),
-                join="slash",
+                key="BR",
+                heading="BR",
+                parts=("BR_mean", "BR_bracket"),
             ),
             Merged(
-                key="threshold_median",
-                heading="threshold median / p90",
-                parts=("threshold_median", "threshold_p90"),
-                join="slash",
+                key="B0",
+                heading="B0",
+                parts=("B0_mean", "B0_bracket"),
+            ),
+            Merged(
+                key="B1",
+                heading="B1",
+                parts=("B1_mean", "B1_bracket"),
+            ),
+            Merged(
+                key="B2",
+                heading="B2",
+                parts=("B2_mean", "B2_bracket"),
             ),
         ),
-        bold=("verdict",),
+        bold=("pooled",),
         caption=(
-            "Check 1 by configuration and arm pair: the paired relative "
-            "objective difference at median and p90 against the pair's own "
-            "threshold, with the verdict, the count of seeds whose optima sit "
-            "in different objective clusters (*hops*) and the count below "
-            "cluster resolution. The yardstick pair `BR → B0` is published "
-            "beside and never accepted on."
+            "Node calls per run by node group and arm, the three "
+            "configurations stacked, each over its own seed set (mean, "
+            "[min, max]); `B2` against `B0` pooled, as the per-run median "
+            "with its bracket and as runs on which `B2` cost more. These are "
+            "whole-run census counts: a group's last row is the part outside "
+            "the solve phase, so the row above it less that row is check 4's "
+            "solve-phase total. `B1` is inactive on `st_regression`."
         ),
-        why="Three tables of two or three rows, one per configuration.",
+        why=(
+            "The per-module construction in **node-call** units, which check "
+            "4's solve-phase total is read from (its last row is the part "
+            "outside the solve phase).  Task **A85 (v3-table-formats)** moved "
+            "it out of the main text: the previous revision's per-module "
+            "headline — the one the user asked for — states module **sweeps** "
+            "per run, and that table is now §4.3's.  Kept here whole, because "
+            "the solve-phase decomposition is a cell set the sweeps table "
+            "does not carry.  Each arm's mean and bracket are one cell, as "
+            "the previous revision printed them."
+        ),
+    ),
+    Layout(
+        name="location_diagnostic",
+        title="the location diagnostic",
+        stage="tally_optimisation",
+        kinds=("location_diagnostic",),
+        where="report",
+        mode="single",
+        blank_repeats=("configuration",),
+        caption=(
+            "Where each pair of arms landed, by configuration: check 1's "
+            "objective difference repeated for direct comparison, then the "
+            "maximum relative difference over the **iteration variables** the "
+            "two runs share by name, as median, p90 and maximum, with the "
+            "variable it sat on most often and any variable one side alone "
+            "carries. **A diagnostic. D6 forbids gating on it, and nothing in "
+            "this report's verdicts rests on it** — some iteration variables "
+            "are not identified by the problem and differ at an unchanged "
+            "optimum. The yardstick pair is a change of stopping rule and "
+            "nothing else."
+        ),
+        why=(
+            "**The previous revision's §5.2.2 table, reproduced.**  It is the "
+            "answer to the easiest available misreading of this campaign — "
+            "that *same optimum* means *same machine* — and it is published "
+            "precisely because D6 refuses to gate on it."
+        ),
+    ),
+    Layout(
+        name="identity",
+        title="the identity B1 → B2",
+        stage="tally_optimisation",
+        kinds=("identity",),
+        where="report",
+        mode="single",
+        bold=("objf_identical",),
+        caption=(
+            "**The partition at an unchanged trajectory**: over the pairs on "
+            "which both `B1` and `B2` reached an accepted optimum, how many "
+            "agree exactly on evaluations of the model set, on optimiser "
+            "iterations summed over the attempts, and on a **bit-identical** "
+            "`norm_objf` — compared as the hex float the record stamps, so "
+            "identity is exact and not agreement to a printed precision. "
+            "`B1` is inactive on `st_regression`, which therefore has no row."
+        ),
+        why=(
+            "**The previous revision's identity table, one rung over.**  Its "
+            "proved that removing the outer verification loop left the "
+            "optimiser's path unchanged; this proves the **partition** does, "
+            "which is the claim this experiment is about."
+        ),
     ),
     Layout(
         name="iteration_multiplier",
@@ -1013,6 +1323,57 @@ LAYOUTS: tuple[Layout, ...] = (
         why="Three tables of three or four rows, one per configuration.",
     ),
     Layout(
+        name="cost_anchors",
+        title="cost against both anchors",
+        stage="tally_optimisation",
+        kinds=("cost_anchors",),
+        where="report",
+        mode="single",
+        bold=("partition_to_reference",),
+        blank_repeats=("configuration",),
+        caption=(
+            "The partitioned arm's cost ratio against **both** anchors, by "
+            "configuration and set, from the same sums as check 4's cost "
+            "table: `BR→B0` is the stopping-rule change alone, `B2/B0` "
+            "isolates the architecture at a matched stopping rule and is the "
+            "ladder's number, and `B2/BR` is the end-to-end change a user "
+            "switching from PROCESS as shipped would see. Neither of the last "
+            "two is more correct; they answer different questions, and the "
+            "gap between them is exactly what the stopping rule is worth."
+        ),
+        why=(
+            "**The previous revision's second §5.5 table, reproduced.**  "
+            "*Cheaper than the predicate-matched flat baseline* and *cheaper "
+            "than the code as shipped* are different claims, and a "
+            "deployment question wants the second."
+        ),
+    ),
+    Layout(
+        name="sweeps_and_prime_calls",
+        title="sweeps and prime calls",
+        stage="tally_optimisation",
+        kinds=("sweeps_and_prime_calls",),
+        where="report",
+        mode="single",
+        blank_repeats=("configuration",),
+        caption=(
+            "The accounting that explains how node calls fall while dispatch "
+            "sweeps rise, by configuration and arm over the seed set: summed "
+            "solve-phase node calls, summed dispatch sweeps (`n_model_calls`, "
+            "the field issue I-26 named as the sweep count), summed prime "
+            "calls, and the two rates. `prime/sweep` is the prime's contract "
+            "— one `set_fw_geometry()` per sweep — read as a check; "
+            "`prime/node` is the quantity D19 excludes from every cost ratio "
+            "in this report, named here so the exclusion has a size (trap "
+            "T11). Both are **counts**, never costs."
+        ),
+        why=(
+            "**The previous revision's third §5.5 table, reproduced.**  The "
+            "cost tables state that node calls fall; this states what rose "
+            "instead, and it is where the excluded prime calls are counted."
+        ),
+    ),
+    Layout(
         name="achieved_accuracy",
         title="achieved accuracy at the accepted optimum",
         stage="tally_optimisation",
@@ -1061,6 +1422,65 @@ LAYOUTS: tuple[Layout, ...] = (
         why="Two tables of two rows.",
     ),
     # ---------------- the companion file ------------------------------------
+    # ---------------- the companion file ------------------------------------
+    Layout(
+        name="matched_accuracy_headline_other_regimes",
+        title="check 1, matched accuracy, the stencil regimes",
+        stage="tally_evaluation",
+        kinds=("matched_accuracy_headline",),
+        sources=_STENCILS,
+        where="companion",
+        mode="stack",
+        merges=(
+            Merged(key="AR", heading="AR", parts=("AR_median", "AR_p90"), join="slash"),
+            Merged(key="A0", heading="A0", parts=("A0_median", "A0_p90"), join="slash"),
+            Merged(key="A1", heading="A1", parts=("A1_median", "A1_p90"), join="slash"),
+            Merged(key="A2", heading="A2", parts=("A2_median", "A2_p90"), join="slash"),
+        ),
+        bold=("A2_over_A1_verdict", "A2_over_A0_verdict"),
+        caption=(
+            "Check 1's grid at the two **stencil** entry points — the "
+            "optimiser's own finite-difference points, one per design-vector "
+            "column, paired across arms by column — in the report's form. "
+            "These are not the acceptance regime: the displaced entries are, "
+            "and their table is in §4.2. A stencil point is a far smaller "
+            "displacement, so a ratio there is over two very small numbers "
+            "and swings widely; the verdict column is printed for "
+            "completeness and the regime is not one the plan accepts on."
+        ),
+        why=(
+            "The acceptance regime's grid is the report's; these confirm it "
+            "and belong beside the other per-regime detail, in the same form "
+            "so the two are read the same way — as the per-module blocks are."
+        ),
+    ),
+    Layout(
+        name="per_call_cost_headline_other_regimes",
+        title="per-call cost, the stencil regimes",
+        stage="tally_evaluation",
+        kinds=("cost_per_call_headline",),
+        sources=_STENCILS,
+        where="companion",
+        mode="stack",
+        merges=(
+            Merged(key="AR", heading="AR", parts=("AR_mean", "AR_bracket")),
+            Merged(key="A0", heading="A0", parts=("A0_mean", "A0_bracket")),
+            Merged(key="A1", heading="A1", parts=("A1_mean", "A1_bracket")),
+            Merged(key="A2", heading="A2", parts=("A2_mean", "A2_bracket")),
+        ),
+        bold=("A1_to_A2", "A0_to_A2"),
+        caption=(
+            "Per-call cost at the two **stencil** entry points, in the "
+            "report's form: mean node calls per evaluation with the observed "
+            "bracket, the ladder's rungs as pooled ratios, and the "
+            "partitioned arm's prime calls per evaluation. Pairs are keyed by "
+            "design-vector column here, not by seed."
+        ),
+        why=(
+            "The displaced regime's grid is §4.2's; these are the same "
+            "construction at the other two entry points."
+        ),
+    ),
     Layout(
         name="module_sweeps_other_regimes",
         title="module sweeps per run, the other three regimes",
@@ -1275,10 +1695,13 @@ GROUPS: tuple[Group, ...] = (
             "tables and the predicate trial are in the companion file."
         ),
         layouts=(
+            "module_scope",
             "node_calls_per_block_other_regimes",
             "reference_entries",
             "cost_per_call",
             "matched_accuracy",
+            "full_distributions",
+            "excluded_namespaces",
             "fixed_point_distance",
             "ownership_rung",
             "failure_taxonomy_evaluation",
@@ -1312,11 +1735,14 @@ GROUPS: tuple[Group, ...] = (
             "repeated here."
         ),
         layouts=(
+            "problem_definition",
             "node_calls_per_module",
-            "per_arm_success",
-            "same_optimum",
+            "location_diagnostic",
+            "identity",
             "iteration_multiplier",
             "cost",
+            "cost_anchors",
+            "sweeps_and_prime_calls",
             "achieved_accuracy",
             "lift_closed",
         ),
@@ -1341,6 +1767,8 @@ COMPANION_GROUPS: tuple[dict[str, Any], ...] = (
             "the report."
         ),
         "layouts": (
+            "matched_accuracy_headline_other_regimes",
+            "per_call_cost_headline_other_regimes",
             "module_sweeps_other_regimes",
             "per_sweep_overhead_evaluation",
             "predicate_trial",
@@ -2087,14 +2515,20 @@ def _block_label(placed: Placed, layout: Layout) -> str:
     table that renamed it would be a table the prose cannot cite.
     """
     name = SHORT_NAMES.get(str(placed.configuration), str(placed.configuration or ""))
-    parts = [f"n = {placed.table.get('denominator')}"]
-    what = str(placed.table.get("denominator_is") or "").strip()
-    if what:
-        parts.append(what)
+    block = placed.table.get("block_denominator")
+    if block:
+        parts = [f"n = {block[0]} {block[1]}"]
+    else:
+        parts = [f"n = {placed.table.get('denominator')}"]
+    # The arm set only where the block does not carry the phase's whole
+    # ladder — the previous revision's `st` block, whose heading said "no B1".
     source = str(placed.source or "")
     if " · " in source:
-        parts.append(f"arms {source.split(' · ', 1)[1]}")
-    return f"**`{name}`** ({' — '.join(parts)})"
+        arms = source.split(" · ", 1)[1].split("·")
+        ladder = LADDERS.get(str(placed.stage))
+        if ladder and len(arms) != len(ladder):
+            parts.append("arms " + "·".join(arms))
+    return f"**`{name}`** ({'; '.join(parts)})"
 
 
 def _apply_select(
@@ -2247,16 +2681,50 @@ def _apply_blank_repeats(
     return out
 
 
+def _apply_omit(
+    layout: Layout, columns: Sequence[Mapping[str, str]], grid: Sequence[Sequence[str]]
+) -> tuple[list[dict[str, str]], list[list[str]]]:
+    """The declared columns dropped, their content stated in the caption.
+
+    The previous revision's grids carry no column for a label that is the
+    same on every row — the quantity of a one-quantity table, the arm set of
+    a block — because that label is the caption's.  Declaring the drop here
+    keeps it a rendering: the layout's own caption says what the column said,
+    and the preservation check applies the same declaration before looking
+    for an old row.
+    """
+    if not layout.omit:
+        return [dict(c) for c in columns], [list(row) for row in grid]
+    keys = [c["key"] for c in columns]
+    missing = [k for k in layout.omit if k not in keys]
+    if missing:
+        raise PlanTablesError(
+            f"layout {layout.name!r} omits column(s) {missing}, which its "
+            f"tables do not have (they have {keys})"
+        )
+    keep = [i for i, key in enumerate(keys) if key not in set(layout.omit)]
+    if not keep:
+        raise PlanTablesError(
+            f"layout {layout.name!r} omits every column it has; a grid with "
+            f"no column is a section with a hole in it"
+        )
+    return (
+        [dict(columns[i]) for i in keep],
+        [[str(row[i]) for i in keep] for row in grid],
+    )
+
+
 def _transform(
     layout: Layout,
     columns: Sequence[Mapping[str, str]],
     grid: Sequence[Sequence[str]],
 ) -> tuple[list[dict[str, str]], list[list[str]]]:
-    """The V3 forms, in one order: rows selected, cells merged, results
-    bolded, repeated keys blanked.  Every step is a **rendering** of cells a
-    stage record already carries."""
+    """The V3 forms, in one order: rows selected, cells merged, declared
+    columns dropped into the caption, results bolded, repeated keys blanked.
+    Every step is a **rendering** of cells a stage record already carries."""
     rows = _apply_select(layout, columns, grid)
     out_columns, rows = _apply_merges(layout, columns, rows)
+    out_columns, rows = _apply_omit(layout, out_columns, rows)
     rows = _apply_bold(layout, out_columns, rows)
     rows = _apply_blank_repeats(layout, out_columns, rows)
     return out_columns, rows
@@ -2639,6 +3107,13 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
         )
     for index, c in enumerate(report_tables):
         c.number = f"{REPORT_PREFIX}.{index + 2}"  # D.1 is the gate table
+    # **Every** table that leaves a per-seed column out gets its full version
+    # in the companion, the main text's as well as the appendix's: a table
+    # moved into §4 must not take its omitted columns out of the documents
+    # altogether (task A86 (v3-tables-remainder), which moved two).
+    omitting = [
+        c for c in [*main_tables, *report_tables] if c.table.get("report_omits")
+    ]
     full_versions = [
         Combined(
             layout=c.layout,
@@ -2646,8 +3121,7 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
             table=c.table,
             where="companion",
         )
-        for c in report_tables
-        if c.table.get("report_omits")
+        for c in omitting
     ]
     companion_groups: list[tuple[Mapping[str, Any], list[Combined]]] = []
     for group in COMPANION_GROUPS:
@@ -2661,10 +3135,8 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
         for c in chosen:
             m += 1
             c.number = f"{COMPANION_PREFIX}.{m}"
-    for report_table, full in zip(
-        [c for c in report_tables if c.table.get("report_omits")], full_versions
-    ):
-        report_table.full_version = full.number
+    for omitted_from, full in zip(omitting, full_versions):
+        omitted_from.full_version = full.number
     numbers_by_layout = {
         c.layout.name: c.number for c in combined if c.number
     }

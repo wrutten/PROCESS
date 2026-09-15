@@ -1772,6 +1772,15 @@ def module_sweeps(
             f"finished evaluation-phase {population.runs_word} of "
             f"{configuration} in this source"
         ),
+        # The previous revision's block heading line states the per-arm count
+        # — its `tok` block read `(n = 25)` — while this table's own
+        # denominator is every arm's finished runs in the source.  Both are
+        # counts of a real population, so the per-arm one is declared with the
+        # sentence that says what it counts (trap T11).
+        block_denominator=(
+            max((len(v) for v in finished.values()), default=0),
+            "runs per arm",
+        ),
         kind="module_sweeps",
     )
 
