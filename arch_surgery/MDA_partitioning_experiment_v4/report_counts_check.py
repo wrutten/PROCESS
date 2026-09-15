@@ -6,7 +6,7 @@ Task **A80 (report-accuracy-audit)**, pass 7 of its brief: *every ratio's
 population is the one its caption states*.  The report's denominators — 949 /
 921 / 28 records, 25 runs per arm per evaluation-phase source, the seed sets
 22 / 11 / 22, the crash taxonomy, the retried-seed counts, the 30 gates and
-163 teeth — are here re-derived from the records **through the harness**
+167 teeth — are here re-derived from the records **through the harness**
 (``records.read`` applies the arm-name translation of 2026-09-15, trap T16;
 ``tally.published_sources`` names the populations) and printed beside the
 number the report carries, with a ``same`` / ``DIFFERS`` mark.  Where the
@@ -28,7 +28,7 @@ Also here, because the audit needed them and no table carried them:
   on each configuration, which the report's §5.3 and §6 state as ranges;
 - the frozen-to-mixed ratio of the predicate trial's audit columns, which
   §5.6 states as "up to 8×";
-- **the per-arm success counts** of §4.3, §5.7 and Tables D.67–D.69 — accepted
+- **the per-arm success counts** of §4.3, §5.7 and Table 11 — accepted
   optima of the 25 starts offered, every other start by outcome class and the
   starts lost that another arm accepted — re-derived here from ``status``,
   ``mfile.ifail``, ``failure_class`` and the traceback **without the tally's
@@ -147,7 +147,7 @@ def main() -> int:
     )
     print(f"           status ok with ifail != 1 (finished, not accepted), by configuration: {dict(ifail5)}")
 
-    print("\n== 2. Evaluation phase: 25 per arm; 2·nvar stencil points per arm (§3.4, §3.10, D.49–D.60) ==")
+    print("\n== 2. Evaluation phase: 25 per arm; 2·nvar stencil points per arm (§3.4, §3.10, Tables 7 and 8, D.5) ==")
     for name in ("campaign_displaced",):
         idx = by_config_arm_seed(sources[name])
         for config in CONFIGS:
@@ -161,7 +161,7 @@ def main() -> int:
         for config in CONFIGS:
             counts = {arm: len(seeds) for arm, seeds in sorted(idx[config].items())}
             line(
-                f"{name} {config}: points per arm (Tables D.55–D.60: nvar per arm)",
+                f"{name} {config}: points per arm (Table D.5: nvar per arm)",
                 counts,
                 {a: nvar[config] for a in counts},
                 "the plan's §3.4 says 2(nvar + 1) per arm 'plus the lifted column on the pinned arms'; as built every Phase A arm reads the committed input file and has nvar points per sign",
@@ -169,7 +169,7 @@ def main() -> int:
     n_stencil = len(sources["campaign_stencil_forward"]) + len(sources["campaign_stencil_backward"])
     line("stencil evaluations in all (plan §3.10 budget: 418)", n_stencil, 418)
 
-    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, D.64–D.66) ==")
+    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, Table 11) ==")
     idx = by_config_arm_seed(sources["campaign_optimisation"])
     reported_n = {"large_tokamak_nof": 22, "low_aspect_ratio_DEMO": 11, "st_regression": 22}
     reported_invalid = {"large_tokamak_nof": 3, "low_aspect_ratio_DEMO": 13, "st_regression": 1}
@@ -211,7 +211,7 @@ def main() -> int:
                 )
             print(f"             seed {s:>2}: " + "; ".join(disp))
 
-    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, D.61–D.63) ==")
+    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, Table 11, D.11) ==")
     for config in CONFIGS:
         by_arm = idx[config]
         crashed = {arm: sorted(s for s, r in rows.items() if r.get("failure_class") == "crashed") for arm, rows in sorted(by_arm.items())}
@@ -260,7 +260,7 @@ def main() -> int:
         if "campaign" in str(root) or label.startswith("this"):
             line(f"{label}: y_exit.json under campaign/ (= ok records: 674 evaluations + 247 optimisations)", len(under_campaign), 921)
 
-    print("\n== 6. One prime (arrangement-method) call per dispatch sweep on the partitioned optimisation arm (§4.3, §5.8, D.76–D.78) ==")
+    print("\n== 6. One prime (arrangement-method) call per dispatch sweep on the partitioned optimisation arm (§4.3, §5.8, D.17 and D.19) ==")
     for config in CONFIGS:
         rows = idx[config].get("B2", {})
         seeds = sorted({s for arm_rows in idx[config].values() for s in arm_rows})
@@ -272,7 +272,7 @@ def main() -> int:
             diffs[int(r["n_arrangement_method_calls"]) - int(r["dispatch_sweeps"])] += 1
             total += int(r["n_arrangement_method_calls"])
         print(f"  {config} B2 over the seed set (n = {len(converged)}): n_arrangement_method_calls − dispatch_sweeps, histogram {dict(diffs)}")
-        line(f"{config} B2: Σ arrangement-method calls over the seed set (Tables D.76–D.78's cell)", total, {"large_tokamak_nof": 117281, "low_aspect_ratio_DEMO": 157504, "st_regression": 280776}[config])
+        line(f"{config} B2: Σ arrangement-method calls over the seed set (Table D.19's cell)", total, {"large_tokamak_nof": 117281, "low_aspect_ratio_DEMO": 157504, "st_regression": 280776}[config])
         print(f"           per run: mean {total / max(len(converged), 1):.1f}; per evaluation (Σ calls / Σ ε): {total / max(sum(stats_mod.n_evaluations(rows[s]) or 0 for s in converged), 1):.2f}  — the report's §4.3 said 13.2 / 12.9 / 14.8 (the evaluation phase's figure)")
     # the evaluation phase's figure, for the record
     idxA = by_config_arm_seed(sources["campaign_displaced"])
@@ -333,13 +333,13 @@ def main() -> int:
     else:
         print(f"  could not read the audit pair from the verdict record (keys: {sorted(verdict)[:20]}) — read companion Table F.13's hex columns instead")
 
-    print("\n== 10. The gate table: 30 gates, 163 teeth (§4.1, D.1) ==")
+    print("\n== 10. The gate table: 30 gates, 167 teeth (§4.1, D.1) ==")
     gate_table = json.loads((Path(campaign.runs_dir) / "gates" / "gate_table" / "measurements.json").read_text())
     line("registered gates", gate_table["n_gates"], 30)
     line("PASS", gate_table["n_pass"], 30)
     # 161 until task A85 (v3-table-formats) gave `tally_contracts` two more.
-    line("teeth declared", gate_table["n_teeth"], 163)
-    line("teeth tripped", gate_table["n_teeth_tripped"], 163)
+    line("teeth declared", gate_table["n_teeth"], 167)
+    line("teeth tripped", gate_table["n_teeth_tripped"], 167)
     nonzero = [(r["gate"], r["n_mismatched"]) for r in gate_table["rows"] if r.get("n_mismatched")]
     line("PASS rows with a nonzero mismatched count", nonzero, [("g0prime", 1)], "§4.1 names one such row; copy_identity's 7 are its recorded permitted-edit files")
     summed = [(r["gate"], r["denominators_summed"]) for r in gate_table["rows"] if len(r.get("denominators_summed") or []) > 1]
@@ -364,7 +364,7 @@ def main() -> int:
         )
     print("           the report's §5.1 (a) said 'a slightly different optimum on 2 of 11 seeds'; §6 said 'within 2.2e-6 relative' (the p90)")
 
-    print("\n== 12. Per-arm success: the accepted optima of 25 per arm, by a second route (§4.3, §5.7, D.67–D.69) ==")
+    print("\n== 12. Per-arm success: the accepted optima of 25 per arm, by a second route (§4.3, §5.7, Table 11) ==")
     published = {
         t["table"]: t
         for t in json.loads(
