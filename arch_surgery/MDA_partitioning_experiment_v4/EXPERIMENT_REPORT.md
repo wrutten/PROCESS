@@ -774,7 +774,7 @@ which counts the seven driver files the experiment's permitted edits touched, by
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | large_tokamak_nof | 100 | 2.624e-08 / 1.542e-07 | 5.042e-10 / 2.963e-09 | 3.833e-10 / 1.671e-08 | 3.833e-10 / 1.671e-08 | A1 | 1.0000 | 1.0000 | **PASS** | 1.3154 | 5.6408 | **PASS** | declared pair A2/A1 |
 | low_aspect_ratio_DEMO | 100 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | A1 | — | — | **PASS** | — | — | **PASS** | A2/A1: both quantiles exactly 0 — the trivially-similar clause |
-| st_regression | 75 | 1.539e-07 / 2.793e-07 | 5.372e-09 / 2.023e-08 | — | 5.372e-09 / 2.023e-08 | A0 | — | — | — | 1.0000 | 1.0000 | **PASS** | declared pair A2/A0 |
+| st_regression | 75 | 1.539e-07 / 2.793e-07 | 5.372e-09 / 2.023e-08 | — / — | 5.372e-09 / 2.023e-08 | A0 | — | — | — | 1.0000 | 1.0000 | **PASS** | declared pair A2/A0 |
 
 <sub>`check 1, matched accuracy`</sub>
 
@@ -1059,15 +1059,15 @@ it had described the 13 as "2 crash in every arm and the rest fail to converge i
 | pair | n | relative Δ objf, median / p90 | threshold median / p90 | verdict | hops | below resolution | retried seeds in pair |
 |---|---|---|---|---|---|---|---|
 | **large_tokamak_nof · campaign_optimisation · BR·B0·B1·B2 — n = 22 (seeds on which every arm of large_tokamak_nof converged)** |  |  |  |  |  |  |  |
-| BR → B0 (yardstick) | 22 | 2.082e-15 / 6.893e-13 | — | — | 0/22 (0.00) | 0 | 0 |
+| BR → B0 (yardstick) | 22 | 2.082e-15 / 6.893e-13 | — / — | — | 0/22 (0.00) | 0 | 0 |
 | B0 → B1 | 22 | 2.823e-11 / 4.570e-11 | 1.000e-06 / 1.000e-06 | **PASS** | 0/22 (0.00) | 0 | 0 |
 | B0 → B2 | 22 | 2.823e-11 / 4.570e-11 | 1.000e-06 / 1.000e-06 | **PASS** | 0/22 (0.00) | 0 | 0 |
 | **low_aspect_ratio_DEMO · campaign_optimisation · BR·B0·B1·B2 — n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged)** |  |  |  |  |  |  |  |
-| BR → B0 (yardstick) | 11 | 1.982e-14 / 1.976e-13 | — | — | 0/11 (0.00) | 0 | 1 |
+| BR → B0 (yardstick) | 11 | 1.982e-14 / 1.976e-13 | — / — | — | 0/11 (0.00) | 0 | 1 |
 | B0 → B1 | 11 | 4.101e-07 / 2.148e-06 | 1.000e-06 / 1.000e-06 | **FAIL** | 1/11 (0.09) | 2 | 1 |
 | B0 → B2 | 11 | 4.101e-07 / 2.148e-06 | 1.000e-06 / 1.000e-06 | **FAIL** | 1/11 (0.09) | 2 | 1 |
 | **st_regression · campaign_optimisation · BR·B0·B2 — n = 22 (seeds on which every arm of st_regression converged)** |  |  |  |  |  |  |  |
-| BR → B0 (yardstick) | 22 | 1.553e-13 / 5.908e-09 | — | — | 2/22 (0.09) | 0 | 3 |
+| BR → B0 (yardstick) | 22 | 1.553e-13 / 5.908e-09 | — / — | — | 2/22 (0.09) | 0 | 3 |
 | B0 → B2 | 22 | 3.467e-13 / 3.510e-09 | 1.000e-06 / 1.000e-06 | **PASS** | 1/22 (0.05) | 0 | 1 |
 
 <sub>`same optimum (check 1)`</sub>

@@ -236,7 +236,11 @@ class Merged:
         **bare value** where the bracket is degenerate and equals the mean,
         so a column every run agreed on reads ``4`` and not ``4 [4, 4]``.
     ``"slash"``
-        ``median / p90``: two order statistics of one distribution.
+        ``median / p90``: two order statistics of one distribution.  Two
+        missing values read ``— / —`` and are **not** collapsed to one dash:
+        the same-optimum table's yardstick rows already print that pair, and
+        a rendering change may move a cell, never rewrite one (task A86
+        (v3-tables-remainder)).
 
     ``"fraction"``
         ``k/n``: a count and the denominator it is out of, which the previous
@@ -277,10 +281,6 @@ def _merge_cells(parts: Sequence[str], join: str) -> str:
         if not any(values):
             # every part empty: a group heading row, not a missing value.
             return ""
-        if all(v == "—" for v in values):
-            # every part a missing value: one dash, as the previous revision
-            # printed an arm a configuration does not carry — never `— / —`.
-            return "—"
         return " / ".join(values)
     if join == "fraction":
         count, denominator = (values + ["", ""])[:2]

@@ -15,11 +15,11 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | **campaign_stencil_forward — n = 198 (finished evaluation-phase campaign runs over every configuration in this source)** |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | large_tokamak_nof | 80 | 2.974e-12 / 1.869e-08 | 2.974e-12 / 3.592e-10 | 4.523e-13 / 2.783e-09 | 2.363e-11 / 2.783e-09 | A1 | 52.2421 | 1.0000 | **FAIL** | 7.9446 | 7.7491 | **PASS** | declared pair A2/A1 |
 | low_aspect_ratio_DEMO | 76 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | A1 | — | — | **PASS** | — | — | **PASS** | A2/A1: both quantiles exactly 0 — the trivially-similar clause |
-| st_regression | 42 | 3.779e-11 / 3.920e-07 | 3.779e-11 / 2.137e-08 | — | 1.116e-10 / 2.137e-08 | A0 | — | — | — | 2.9533 | 1.0000 | **PASS** | declared pair A2/A0 |
+| st_regression | 42 | 3.779e-11 / 3.920e-07 | 3.779e-11 / 2.137e-08 | — / — | 1.116e-10 / 2.137e-08 | A0 | — | — | — | 2.9533 | 1.0000 | **PASS** | declared pair A2/A0 |
 | **campaign_stencil_backward — n = 198 (finished evaluation-phase campaign runs over every configuration in this source)** |  |  |  |  |  |  |  |  |  |  |  |  |  |
 | large_tokamak_nof | 80 | 5.339e-15 / 1.730e-10 | 0 / 5.339e-15 | 0 / 8.309e-16 | 8.309e-16 / 4.523e-13 | A1 | — | 544.3285 | **FAIL** | — | 84.7128 | **FAIL** | A2/A1: one side exactly 0 and the other not: unbounded |
 | low_aspect_ratio_DEMO | 76 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | A1 | — | — | **PASS** | — | — | **PASS** | A2/A1: both quantiles exactly 0 — the trivially-similar clause |
-| st_regression | 42 | 6.459e-14 / 4.272e-08 | 0 / 2.670e-08 | — | 1.560e-11 / 2.670e-08 | A0 | — | — | — | — | 1.0000 | **FAIL** | A2/A0: one side exactly 0 and the other not: unbounded |
+| st_regression | 42 | 6.459e-14 / 4.272e-08 | 0 / 2.670e-08 | — / — | 1.560e-11 / 2.670e-08 | A0 | — | — | — | — | 1.0000 | **FAIL** | A2/A0: one side exactly 0 and the other not: unbounded |
 
 <sub>`check 1, matched accuracy, the stencil regimes`</sub>
 
