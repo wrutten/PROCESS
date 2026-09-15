@@ -25,7 +25,7 @@
 The rules that bind every task. One line each; the archived queue's protocol section carries the
 rationale and the incident that produced each rule. [`../../CLAUDE.md`](../../CLAUDE.md) states the
 hard rules (sandbox never overridden; base commit and models frozen; never write in a sibling clone;
-never commit to `main`; never push without per-push approval) and is not repeated here.
+never commit to `main`; never push without per-push approval) and is not repeated here. **§1 is how a task runs; §5.1 is what stands ruled about the project** — the base commit, the frozen models, the copy, the registry, who rules, the run budget.
 
 | § | Rule (verbatim where quoted elsewhere as binding) |
 |---|---|
@@ -46,33 +46,22 @@ never commit to `main`; never push without per-push approval) and is not repeate
 | §14 | Standing rules: see `CLAUDE.md`. |
 | §15 | **Every published number is produced by executing a committed Python script, never by an ad-hoc command line** (user, 2026-09-02: *"Experiment results should always be created by execution of a reproducible python script. I don't want future experiments to be run manually in command line. I want committed traceability of the results."*). The script is committed before the numbers are published and the report names it and the commit; no stage exists only as a shell invocation; failure paths are reachable from the same entry point. |
 | §16 | Every table carries a concise caption: units, what a row and a column are, the population, the construction (user, 2026-09-04). |
-| — | **"One heavy slot at a time on our side"** (user, 2026-09-01): at most one task running PROCESS solves at a time; classify before dispatching and when unsure treat it as heavy. Measurement work runs when the machine is otherwise idle (user, 2026-08-31). |
 | — | Gate records are reused: worktrees are seeded with the latest relocated records and tasks press `--gate all --resume`; a from-scratch press only when the change alters what a gate reads; the orchestrator verifies by differing checks, never by repeating the agent's press (harness plan amendment 15; the user, 2026-09-11). No commit and no edit to `harness/child/` while measurement runs execute (amendments 13, 16, 22). |
 | — | Work-item terms: **Task** `A<n>` (one branch, one report, one merge decision); **Subtask** `A<n>.<k>` (the agent's own, never its own branch); **Issue** `I-<n>` (defect in this repository or its environment, filed not fixed in passing); **PROCESS finding** (critique of PROCESS itself: architecture here, implementation defects to `PROCESS_code_analysis/docs/bug_reports/`); **Decision** `D<n>` (a recorded user decision, append-only; a reversal is a new decision). |
 | — | Optimiser-registry allocation is administered in [`plans/REGISTRY_ALLOCATIONS.md`](plans/REGISTRY_ALLOCATIONS.md), append-only (D10). Constraints append from 93 (`lablcc` extended in step); iteration variables from 178 (the cap is derived, I-7). |
 
 ---
 
-## 2. Decisions register
+## 2. Decisions register — methodology
 
-Every ruling D1–D28, one row each. *Status:* **in force** (still binds), **discharged** (carried
-out; still binds as a record of what was done), **amended by** / **reversed by**. The user's words
-are verbatim where the archived queue quotes them. Full text: the archived queue's "Decisions (live
-set)" table, row by number.
+Every ruling on **what the experiment measures and how**, one row each. *Status:* **in force**, **discharged** (carried out; still binds as a record), **amended by** / **reversed by**. The user's words are verbatim where the archived queue quotes them. Full text: the archived queue's "Decisions (live set)" table, row by number. **The project-administration rulings — D1, D2, D3, D4, D5, D10, D11, D20, D24, D28 — are standing rules and live in §5.1, unified by subject with their numbers kept**; a number is never reused, so the gaps below are those rows.
 
 | # | Date | Ruling (one line) | Status | Pointer |
 |---|---|---|---|---|
-| **D1** | 2026-08-31 | `wrutten/PROCESS` is the canonical fork; the research artifacts live in `arch_surgery/` inside it; the `IPP-SRS` branches are archived, not merged | in force | archived queue D1 |
-| **D2** | 2026-08-31 | **The base commit is `c0ae5b28`, frozen** — the shared coordinate system with `functional_PROCESS` and the dependency-analysis pin; `upstream` fetched for drift only | in force | archived queue D2; `CLAUDE.md` |
-| **D3** | 2026-08-31 | A fresh rewrite: the `PROCESS_rewritten/` scaffolding on `stage0-probe` is not ported | discharged | archived queue D3 |
-| **D4** | 2026-08-31 | The `710a75c9` evidence is discarded; every number is rederived at `c0ae5b28` (recoverable from `adf863d7`) | in force | archived queue D4 |
-| **D5** | 2026-08-31 | **The models are frozen; only the driver changes** — what distinguishes this study from `functional_PROCESS` | in force, refined by D11 | archived queue D5 |
 | **D6** | 2026-08-31 | Correctness is gated on `norm_objf` plus a post-solve feasibility audit, never on iteration variables | in force | archived queue D6 |
 | **D7** | 2026-08-31 | A full IDF / MDF / SAND comparison is deferred to a later study on the `functional_PROCESS` back-end; this experiment is its control | in force | archived queue D7 |
 | **D8** | 2026-08-31 | The module partition is derived from the collapsed DSM (M1 Physics rows 4, 6–28; M2 Coils 5, 29–37; M3 Plant 40–51; `Pulse` the articulation point) | in force | archived queue D8; `reports/DSM_VALIDATION.md` |
 | **D9** | 2026-08-31 | The archived scenario deck is patched in place (`st_regression.IN.DAT` + `i_tf_turn_type = 2` and four tape geometries), not re-pointed at upstream | discharged (A1) | archived queue D9; `reports/deprecated/A1_stage0_rebaseline.md` |
-| **D10** | 2026-08-31 | Registry numbers are appended, never fitted into gaps; constraints from 93 with `lablcc` extended, iteration variables from 178 | in force | archived queue D10; `plans/REGISTRY_ALLOCATIONS.md` |
-| **D11** | 2026-08-31 | D5 refined: minimal *structural* edits to `process/models/` are permitted, **every one needing the user's approval before merging**; changing what a model computes stays forbidden | in force | archived queue D11; `CLAUDE.md` |
 | **D12** | 2026-08-31 | The partition experiment proceeds despite A2's STOP gate under the plan's 10–25 % rule; the feed-forward hoist (A13) is folded in as Stage 1b and taken first; A4/A5 reinstated | discharged (A13, A25) | archived queue D12; `reports/deprecated/A13_feedforward_hoist.md` |
 | **D13** | 2026-09-01 | The partition is measured in two phases: fixed-point first (flat vs block Gauss-Seidel on the coupling state, counts not wall clock, hard cut 20 ⇒ invalid), VMCON second | discharged (A18–A28); the two-phase shape carries into V2–V4 | archived queue D13; `plans/MDA_PARTITION_EXPERIMENT.md` |
 | **D14** | 2026-09-01 | Phase B implementation: (a) `lablcc` extension approved; (b) D11 approval for the `pulse.py` residual extraction; (c) the baseline is PROCESS as shipped, with `check_agreement`'s defects reproduced deliberately; the variant's per-module predicate is entailed by the architecture, not a confound | (a),(b) discharged (A24); (c) amended by D18 | archived queue D14; `reports/deprecated/A24_phase_b_scaffold.md` |
@@ -81,15 +70,12 @@ set)" table, row by number.
 | **D17** | 2026-09-01 | Methodology fixed before Phase B re-runs; **`large_tokamak_eval` dropped** (0 solver iterations); timings return as context only with an uncertainty band; merged reports are not retro-edited | in force (three configurations since) | archived queue D17; `reports/deprecated/A26_method_fixes.md` |
 | **D18** | 2026-09-02 | Phase B gains a predicate-matched control `A0′`; **`A0′ → A1′` is the headline**, `R → A1′` beside it; D14(c)'s "single-variable" claim withdrawn | discharged (A28); the three-arm shape persists as `BR / B0 / …` | archived queue D18; `reports/deprecated/A28_phase_b_rerun.md` |
 | **D19** | 2026-09-03/04 | The prime (`fw.set_fw_geometry()` at the head of every sweep, `PROCESS_ARCH_PRIME`) is part of the V3 intervention — method-level, no model edit, stamped never pooled | in force (V3, V4) | archived queue D19; `plans/V3_DEVELOPMENT_PLAN.md` §2; `reports/deprecated/A40_v3_prime.md` |
-| **D20** | 2026-09-10 | **V4 runs its own copy of PROCESS and owes V3 no backward compatibility** (*"Duplicate the code into MDA_partitioning_experiment_v4/PROCESS"*); the copy's `models/` byte-identical to `c0ae5b28`, gated (G0′) | in force | archived queue D20; `plans/V4_HARNESS_IMPLEMENTATION_PLAN.md` amendment 2; `reports/deprecated/A46_process_copy.md` |
 | **D21** | 2026-09-10 | V4 methodology on the plan's §3.7: stencil entry regime; no fourth configuration; one seed set and format; `MDA_Output` out of the intervention arms; **empty-block skipping rejected** (disclaimed); renames and predicate mode accepted; (e) `B2` held for A43 | in force; (e) reversed by D22 | archived queue D21; `plans/V4_IMPROVEMENT_LIST.md` |
 | **D22** | 2026-09-10 | `B2` removed from V4 (Phase B is `BR / B0 / B1 / B3`); `st_regression` conditional on A43 (answered: it stays); no errata to the V3 report; DR4 counters accepted | in force | archived queue D22; `reports/deprecated/A43_st_trust_gap.md` |
 | **D23** | 2026-09-10 | One tolerance τ = 1e-6 for every MDA converger in every arm and phase; no "inner" tolerance; A43's exchange rate recorded should τ ever tighten | in force | archived queue D23 |
-| **D24** | 2026-09-10 | A47's two rulings approved and the rebuild delegated (*"you're on your own now, take autonomous decisions to finish the implementation … Give me a report … when everything is done"*): H0–H8 and DR1/2/4/5/7 minted in advance, driver changes merged on G1/G0′ without per-change approval; the campaign still waits for `EXECUTION_APPROVED` | discharged (A48–A63; `reports/V4_IMPLEMENTATION_ASSESSMENT.md`); approval came 2026-09-14 (`57dc0c14`) | archived queue D24 |
 | **D25** | 2026-09-11 | The exit audit restores the whole data structure (derived restored set; `numerics` held back by a named rule; instrument stamp `child.EXIT_AUDIT_RESTORE`). Minted and implemented before it was put to the user — a process fault, recorded; approved "for now" 2026-09-11; **confirmed 2026-09-14** (*"i think the current approach of measuring before the audit pass makes sense. I don't want to rewrite PROCESS at this point to fix the issue."*). No accuracy comparison against `BR` is wanted | in force; discharged at A62 (`a3407d5d`) | archived queue D25; `reports/deprecated/A62_exit_audit_restore.md`; I-21 |
 | **D26** | 2026-09-14 | The reference arm `AR` is entered from the same displaced snapshot as every other Phase A arm (*"we compare just the stopping rule, so thats fine"*); `PAIRED_ARMS` gains `AR` | discharged (A64, `dc437a82`) | archived queue D26; `reports/deprecated/A64_entry_pairing_reference.md` |
 | **D27** | 2026-09-14 | Simplification survey tiers A and B approved with the `ystate.py` move and one gate rerun at the end (*"A and B changes are approved. Implement it, with the delayed file move of ystate.py. Rerun the gates once after the full changes"*). **Tier C (C1–C3) deferred by the user** (*"I'd like to defer tier c items."*) — not ruled, kept in A68's report §4 for a later ruling; C4 done by A67 | discharged for A/B (A70–A73, `03f72479`, amendment 25); **tier C open, awaiting the user** | archived queue D27; `reports/deprecated/A68_harness_simplification_survey.md` §4; `plans/V4_HARNESS_IMPLEMENTATION_PLAN.md` Appendix A.1 rows (v), (vi), (xii) |
-| **D28** | 2026-09-15 | **Queue cleanup rulings** (the user, on reading v2): *"closed issues can be removed from the new master todo. refer to the old list for that. I-17 I also considered closed with the transfer gap explanation from A44. I-7 can also be closed I think. Cancel the subdriver tasks A9,A10,A11,A12. A8 is moot I think with the new file structure. A6 is moot, we've done the experiment that gets usefull results. A74 can be the last task of master todo v1. A15 is closed. All other historical tasks can be cleaned out of v2 as well. (including the scheduled not yet minted task. Merged tasks can also be emptied, refer to the old document for that. … Clean up the open questions. I think 3 has also been answered. The change log can also be further cleaned, leaving one item for the v2 creation and refer to v1 otherwise"*. Applied: I-7, I-13, I-17 closed; A9–A12 **cancelled**; A6, A8 **moot**; A14–A17 closed as deferred-then-not-authorised (A15 named by the user); the experiment-v2 and sequencing-comparison rows, and the scheduled-not-minted paragraph, removed; every task ≤ A74 lives only in the archived queue; open questions 1–3 removed as answered, 4 kept; change log one line | in force — the shape of this file | this row |
 
 ---
 
@@ -129,17 +115,34 @@ Rows are filed by state. A task appears in exactly one table. **Tasks A1–A74 l
 
 ---
 
-## 5. Standing items
+## 5. Standing items — project administration
 
-### 5.1 User-facing standing items (not tasks)
+### 5.1 Standing rules of project administration
+
+Every rule here binds every task and every session. The rows unify the administrative rulings that
+were D-rows (numbers kept in the *Rulings* column — a number is never reused) with the working rules
+the user gave in conversation. `CLAUDE.md` restates the hard rules for agents; this table is their
+register.
+
+| Rule | What it says | Rulings, date, words |
+|---|---|---|
+| **The repository and its history** | `wrutten/PROCESS` is the canonical fork; the research lives in `arch_surgery/`; the `IPP-SRS` branches are archived, not merged; the `PROCESS_rewritten/` scaffolding was not ported; **every number measured at `710a75c9` is discarded** and rederived at the base — nothing from the superseded study is cited as evidence | D1, D3, D4 (2026-08-31), in force |
+| **The base commit is frozen** | `c0ae5b28` is the experiment's base and is never rebased, merged forward or re-pinned: the shared coordinate system with `functional_PROCESS` and the dependency-analysis pin; `upstream` is fetched for drift measurement only (open question 4) | D2 (2026-08-31), in force; `CLAUDE.md` |
+| **Only the driver changes; the models are frozen** | The independent variable is the arrangement of solvers and optimisers; every model under `process/models/` stays byte-identical to the base (gate G0′). Minimal *structural* edits to a model — extracting a residual so its solution method becomes a driver choice — are permitted, **each needing the user's approval before merging**; changing what a model computes is forbidden. The two approvals given: D14(a) `lablcc`, D14(b) the `pulse.py` residual | D5, D11 (2026-08-31), in force; `CLAUDE.md` |
+| **V4 runs its own copy of PROCESS** | `MDA_partitioning_experiment_v4/PROCESS/` (*"Duplicate the code into MDA_partitioning_experiment_v4/PROCESS"*), owing V3 no backward compatibility; its `models/` byte-identical to the base, gated; its permitted driver edits recorded in `copy_gates.py` and `PROCESS/CHANGES.md` | D20 (2026-09-10), in force |
+| **Registry numbers are appended, never fitted into gaps** | Constraints from 93 (`lablcc` extended), iteration variables from 178; the allocation table is `plans/REGISTRY_ALLOCATIONS.md` | D10 (2026-08-31), in force |
+| **Rulings are the user's** | Anything decision-worthy is written as a proposal and stamped by the user before an implementing task is dispatched; the orchestrator's autonomous decisions are implementation-level, each recorded with its reversal. Origin: D25 was minted and implemented before it was put to the user (2026-09-11, a process fault, recorded) | user, 2026-09-11 (*"Rulings that are documented should always be my rulings"*); in force |
+| **Delegation mode** | 2026-09-10 → 2026-09-14 the rebuild ran under a standing delegation (*"you're on your own now, take autonomous decisions to finish the implementation … Give me a report … when everything is done"*): tasks minted in advance, driver changes merged on G1/G0′ without per-change approval, one whole-implementation assessment. Since 2026-09-14 the mode is **collaborative** (user: *"We're in collaborative mode now"*): the user is asked at every decision-worthy fork | D24 (2026-09-10), discharged; collaborative since 2026-09-14 |
+| **Merged reports are not retro-edited** | A merged task report is archived under `reports/deprecated/` with its status header replaced and is never rewritten; corrections are new rows, amendments or reports that point back | D17 (2026-09-01), in force; trap T3 |
+| **The queue itself** | Closed and historical rows leave this file for the archive; decisions, open issues, open tasks and standing rules stay; the change log is one line | D28 (2026-09-15), in force |
+| **One heavy slot at a time; measure on an idle machine** | One heavy PROCESS press at a time on our side (written after A13 and A23 ran concurrently); measurement work when the machine is otherwise idle; the run budget is reduced wherever a change does not alter what a gate reads (`--resume` on kept records, a dry-run with `--jobs` before a resume press) | user 2026-09-01, 2026-08-31, 2026-09-11 (*"try to reduce the number of PROCESS runs for gates in general if it's not necessary"*); in force; I-8/I-10 context |
+| **Pushes** | Every push of `architecture_surgery` needs the user's explicit approval, per push; `main` is never committed to | user; `CLAUDE.md` |
+| **One-time setup, done** | `upstream` added read-only for drift; the first push of `architecture_surgery`; the deletion of `github.com/wrutten/PROCESS_surgery` (reported by the user, not verifiable from a session) | archived queue, "User-facing standing items" |
+
+**Live pointers** — things that change state without a task:
 
 | Item | State |
 |---|---|
-| Add `upstream` read-only for drift measurement | **DONE**, verified (`upstream https://github.com/ukaea/PROCESS.git`) |
-| Push `architecture_surgery` | **DONE** at the time (0 ahead); every later push needs the user's per-push approval |
-| Delete `github.com/wrutten/PROCESS_surgery` | Reported done by the user; **not verifiable from a session** (no GitHub access) |
-| **One heavy slot at a time on our side** (user, 2026-09-01) | **In force** — see Protocol; written after A13 and A23 were dispatched concurrently |
-| Run measurement work when the machine is otherwise idle (user, 2026-08-31) | **In force** — I-8/I-10 context |
 | The V4 campaign (pressed 2026-09-14 at `57dc0c14`, 949 runs) | **Done and reported** — `EXPERIMENT_PLAN.md` §4–§6, header EXECUTED AND REPORTED; records `../idf_probe/runs/campaign_57dc0c14/` (3 GB, untracked) |
 | Survey tier C (C1 duplication caveat beside decision (6); C2 rule (iii)'s `-P` text vs the pool children; C3 rules (v)/(vi)/(xii) prose-only → pool-level refusal) | **Awaiting the user's ruling** (D27, deferred 2026-09-14); text in `reports/deprecated/A68_harness_simplification_survey.md` §4 |
 | V4 improvement list (`plans/V4_IMPROVEMENT_LIST.md`, items 0–15) | **The list is the authority on each item's state.** Its headings mark 3 (closed in the negative, A58), 12 (A71) and 13 (A73) discharged; 5a is a pre-declared trial (G8 built by A59; adoption is decided on the campaign); 5b requires the user's review and approval; 11 was diagnosed by A61/A62 with the PROCESS-side fix upstream's; 14 and 15 were filed 2026-09-14 by A72/A73 |
