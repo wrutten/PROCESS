@@ -1,6 +1,6 @@
 # A80 (report-accuracy-audit) — the V4 report, sentence by sentence against its tables
 
-> **Document status** — **OPEN.** Task report of **A80 (report-accuracy-audit)**, branch
+> **Document status** — **MERGED 2026-09-15** at `e746a4a6` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A80_runs/` (latest resume-compatible). Orchestrator's assessment §11. Task report of **A80 (report-accuracy-audit)**, branch
 > `A80-report-accuracy-audit` off `architecture_surgery` at `589138ef` (after A79 (report-captions)).
 > The user's instruction (2026-09-15): *"critically reassess the accuracy of the experiment_report
 > v4."* The auditor is not the author of §5/§6. **Zero PROCESS runs**; every number below is a cell of
