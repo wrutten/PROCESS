@@ -2476,19 +2476,24 @@ def _iteration_multiplier(
     """
     if BASE_ARM not in index:
         return None
+    # Every arm against the flat control, then the plan's own "B1 → B2
+    # reported beside" (§3.5) where both arms are present — the row the
+    # pre-declared ε = 1 is read from (task A80 (report-accuracy-audit)).
+    steps: list[tuple[str, str]] = [(BASE_ARM, a) for a in arm_order(index) if a != BASE_ARM]
+    if all(a in index for a in ACCEPTANCE_PAIRS):
+        steps.append((ACCEPTANCE_PAIRS[0], ACCEPTANCE_PAIRS[1]))
     rows: list[dict[str, Any]] = []
-    for arm in arm_order(index):
-        if arm == BASE_ARM:
-            continue
-        seeds = [s for s in converged if s in index[arm] and s in index[BASE_ARM]]
+    for base_arm, arm in steps:
+        seeds = [s for s in converged if s in index[arm] and s in index[base_arm]]
         final_ratios: list[float] = []
         summed_ratios: list[float] = []
         evaluation_ratios: list[float] = []
+        sweep_ratios: list[float] = []
         final_totals = [0, 0]
         summed_totals = [0, 0]
         disagreements = 0
         for seed in seeds:
-            base_record, arm_record = index[BASE_ARM][seed], index[arm][seed]
+            base_record, arm_record = index[base_arm][seed], index[arm][seed]
             fa = iterations_of_the_final_attempt(base_record)
             fb = iterations_of_the_final_attempt(arm_record)
             sa = iterations_summed(base_record)
@@ -2503,14 +2508,19 @@ def _iteration_multiplier(
                 summed_totals[1] += sb
             if (fa, fb) != (sa, sb):
                 disagreements += 1
-            ea, eb = base_record.get("n_model_calls"), arm_record.get("n_model_calls")
+            # ε re-derived from attempts[] (issue I-26, closed by task A80
+            # (report-accuracy-audit)): the tally reads the run-level field.
+            ea, eb = _evaluations(base_record), _evaluations(arm_record)
             if ea and eb:
                 evaluation_ratios.append(eb / ea)
+            wa, wb = base_record.get("n_model_calls"), arm_record.get("n_model_calls")
+            if wa and wb:
+                sweep_ratios.append(wb / wa)
         summed_median = middle(summed_ratios)
-        accepted_on = arm in ACCEPTANCE_PAIRS
+        accepted_on = base_arm == BASE_ARM and arm in ACCEPTANCE_PAIRS
         rows.append(
             {
-                "pair": f"{BASE_ARM} → {arm}" + ("" if accepted_on else " (beside)"),
+                "pair": f"{base_arm} → {arm}" + ("" if accepted_on else " (beside)"),
                 "n": len(seeds),
                 "summed_median": summed_median,
                 "summed_sum_ratio": (
@@ -2527,8 +2537,10 @@ def _iteration_multiplier(
                     (final_totals[1] / final_totals[0]) if final_totals[0] else None
                 ),
                 "evaluations_median": middle(evaluation_ratios),
+                "evaluations_equal": len([r for r in evaluation_ratios if r == 1.0]),
+                "sweeps_median": middle(sweep_ratios),
                 "attempts": ", ".join(
-                    f"{seed}:{attempt_count(index[BASE_ARM][seed])}/"
+                    f"{seed}:{attempt_count(index[base_arm][seed])}/"
                     f"{attempt_count(index[arm][seed])}"
                     for seed in seeds
                 ) or "—",
@@ -2550,11 +2562,16 @@ def _iteration_multiplier(
             f"the previous revision's construction, published beside.  Both are "
             f"read from attempts[], so a disagreement between them is a "
             f"disagreement about that list.  The sum ratio is beside every "
-            f"median because the two can point in opposite directions."
+            f"median because the two can point in opposite directions.  ε is "
+            f"the evaluation count summed over attempts[].sweeps_per_eval."
+            f"n_evaluations (issue I-26), with the seeds on which it is "
+            f"exactly 1; the sweep ratio (n_model_calls) is its own column; "
+            f"the B1 → B2 row is the plan's step reported beside."
         ),
         columns=(
             "pair", "n", "summed_median", "summed_sum_ratio", "acceptance",
             "final_median", "final_sum_ratio", "evaluations_median",
+            "evaluations_equal", "sweeps_median",
             "attempts", "constructions_disagree",
         ),
         key_columns=("pair",),
@@ -2667,6 +2684,9 @@ def _cost(
                 "arrangement_method_calls": sum(
                     (r.get("n_arrangement_method_calls") or 0) for r in finished
                 ),
+                "arrangement_method_calls_per_run": arithmetic_mean(
+                    [(r.get("n_arrangement_method_calls") or 0) for r in finished]
+                ),
                 "with_pooled": both["with_retried"]["pooled"],
                 "with_median": both["with_retried"]["median"],
                 "with_worse": both["with_retried"]["worse"],
@@ -2691,11 +2711,13 @@ def _cost(
             f"seeds on which the arm cost more.  Retries are a term, not a "
             f"footnote: the ratio is published with and without the retried "
             f"seeds, and a seed counts as retried when **either** side of the "
-            f"pair retried.  The arrangement-method calls are a column of their "
-            f"own and are never pooled into the node calls."
+            f"pair retried.  The arrangement-method calls are two columns of "
+            f"their own — the per-run mean and the sum over the set — and are "
+            f"never pooled into the node calls."
         ),
         columns=(
             "arm", "n", "node_calls_mean", "bracket",
+            "arrangement_method_calls_per_run",
             "arrangement_method_calls", "with_pooled", "with_median",
             "with_worse", "n_retried", "without_pooled", "without_median",
             "without_n",
@@ -3357,11 +3379,11 @@ def _optimiser_path(
     """Headline shape 2 re-derived: the optimiser's path over the configurations."""
     base, arm = "B0", "B2"
     rows: list[dict[str, Any]] = []
-    n_total = 0
+    per_configuration: list[tuple[str, int]] = []
     for configuration, arms, index, converged in groups:
         if base not in index or arm not in index:
             continue
-        n_total += len(converged)
+        per_configuration.append((configuration, len(converged)))
         for text, quantity in PATH_ROWS:
             row: dict[str, Any] = {
                 "quantity": text,
@@ -3411,8 +3433,14 @@ def _optimiser_path(
         columns=("quantity", "configuration", "arms", "n", *OPTIMISATION_LADDER, "ratio_mean", "ratio_median", "ratio_bracket", "n_above_one"),
         key_columns=("quantity", "configuration", "arms"),
         rows=tuple(rows),
-        denominator=n_total,
-        denominator_is="seeds on which every arm converged, summed over the configurations",
+        # never the seeds summed over the configurations (D21 (b)): one
+        # denominator per configuration, carried by the n column
+        denominator=len(per_configuration),
+        denominator_is=(
+            "configurations stacked, each over its own seed set — the n column: "
+            + " / ".join(f"{c} {n}" for c, n in per_configuration)
+            + " seeds on which every arm converged; never pooled"
+        ),
         composite=("arms", "ratio_bracket"),
     )
 

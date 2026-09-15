@@ -492,8 +492,11 @@ def gate_table(campaign: Campaign, records_dir: Path | None = None) -> dict[str,
             "the criterion and every tooth, what it compared (the denominator) "
             "and how many differed, teeth tripped / declared. No number in "
             "this appendix is cited unless every row is PASS with its teeth "
-            "tripped; the one 1-mismatched PASS is the frozen-physics gate "
-            "counting the one approved model file by name."
+            "tripped; the two PASS rows with a nonzero mismatched count are "
+            "the frozen-physics gate (1: the one approved model file, by name) "
+            "and the copy-identity gate (7: the recorded permitted driver-edit "
+            "files, by name and digest). A compared count that sums more than "
+            "one kind of thing shows its parts in brackets."
         ),
         "population": (
             f"{len(rows)} registered gate(s): {len(plan_rows)} of the "
@@ -526,10 +529,19 @@ def _gate_table_markdown(rows: Sequence[Mapping[str, Any]]) -> str:
         population = str(row["population"]).replace("|", "/")
         if len(population) > 150:
             population = population[:147] + "…"
+        # A 'compared' count summed over more than one kind of thing shows its
+        # parts, so that 559 reads as 303 table checks + 256 reference cells
+        # and not as one population (task A80 (report-accuracy-audit), on A79's
+        # finding; the declaration's 'denominators summed' clause made concrete).
+        compared = "—" if row["n_compared"] is None else str(row["n_compared"])
+        summed = row.get("denominators_summed") or []
+        if len(summed) > 1:
+            parts = " + ".join(item.split("=")[-1].strip() for item in summed)
+            compared = f"{compared} ({parts})"
         lines.append(
             f"| `{row['gate']}` | {row['plan_name'] or '—'} | "
             f"{str(row['binds'])[:90]} | **{row['verdict']}** | {population} | "
-            f"{row['n_compared'] if row['n_compared'] is not None else '—'} | "
+            f"{compared} | "
             f"{row['n_mismatched'] if row['n_mismatched'] is not None else '—'} | "
             f"{teeth} | `{row['record']}` |"
         )
