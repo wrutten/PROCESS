@@ -88,7 +88,22 @@ Written by task **A55 (harness-smoke)**; the freshness refusal and the
 comparison mode by task **A63 (stage-provenance)**; the appendix, the companion
 file, the numbering and the caption rule by task **A79 (report-captions)**;
 the layouts, the main-text headline tables and the withdrawal of the
-recomputed copies by task **A83 (headline-tables-in-text)**.
+recomputed copies by task **A83 (headline-tables-in-text)**; the previous
+revision's cell forms (``merges``, ``select``, ``blocks``, ``bold``,
+``blank_repeats``) by task **A85 (v3-table-formats)** and (``omit``,
+``fraction``, the reduced block heading line) by task **A86
+(v3-tables-remainder)**.
+
+**Task A87 (v3-grid-polish)** finished the grids: a ratio pair and its verdict
+in **one** cell (``Merged`` join ``"verdict"``, ``0.76, 5.64 → PASS``); a
+**reduced sub-heading row** — the group's configuration, its regime where a
+table holds more than one, and its own n, with what that n counts moved into
+the caption and the tally's table name left to the construction line under the
+grid; a declared ``column_order``; and two layouts that **share** their stage
+tables by naming each other (``shares_tables_with``), so per-arm success is the
+main text's grid in the previous revision's §5.1 form *and* a constituent of
+the appendix's merged reliability table.  A cell may appear in more than one
+table; it may never be lost or changed.
 """
 
 from __future__ import annotations
@@ -247,6 +262,19 @@ class Merged:
         revision printed in **one** cell (``0/22``) and this rendering had as
         two columns.  An empty or absent denominator leaves the count alone,
         so a row that carries no pair count still prints its count.
+
+    ``"verdict"``
+        ``med, p90 -> **PASS**``: a ratio at two quantiles and the verdict it
+        was read against, which the previous revision printed in **one** cell
+        (``0.76, 5.64 -> PASS``, its §4 check-1 grid) and this rendering had
+        as three columns.  The verdict is emboldened by the join, because the
+        previous revision bolded the word and not the ratios; a verdict
+        already bold — which is what an earlier rendering of the same cell
+        printed — is left as it is, so the join is the same on a stage
+        record's raw cell and on a published one.  A triple whose parts are
+        all missing reads ``—``: nothing was ever published for that pair, as
+        against the ``— / —`` of a pair that exists and has no value (task
+        A86 (v3-tables-remainder)'s deviation xi).
     """
 
     #: The merged column's key and heading.
@@ -289,8 +317,21 @@ def _merge_cells(parts: Sequence[str], join: str) -> str:
         if denominator in ("", "—"):
             return count
         return f"{count}/{denominator}"
+    if join == "verdict":
+        head, tail, verdict = (values + ["", "", ""])[:3]
+        if not any(values):
+            # every part empty: a group heading row, not a missing value.
+            return ""
+        if not any(v not in ("", "—") for v in (head, tail, verdict)):
+            # the pair does not exist on this row — the previous revision
+            # left such a cell blank and this rendering prints one dash.
+            return "—"
+        if verdict and verdict != "—" and not verdict.startswith("**"):
+            verdict = f"**{verdict}**"
+        return f"{head or '—'}, {tail or '—'} → {verdict or '—'}"
     raise PlanTablesError(
-        f"no cell join {join!r}: it is 'bracket', 'slash' or 'fraction'"
+        f"no cell join {join!r}: it is 'bracket', 'slash', 'fraction' or "
+        f"'verdict'"
     )
 
 
@@ -445,6 +486,34 @@ class Layout:
     #: column carried**, which is the entry's own job to write (task A86
     #: (v3-tables-remainder)).
     omit: tuple[str, ...] = ()
+    #: **The order this grid's columns print in**, by column key; the
+    #: columns not named keep the order the constituents gave them, after the
+    #: named ones.  A combined grid's columns are otherwise the order the
+    #: constituents happen to carry them in, which is the order the *first*
+    #: configuration to exhibit an outcome class put it in — so a class only
+    #: `low_aspect_ratio_DEMO` has lands after a column that belongs to the
+    #: right of every class.  A key named here that the tables do not have is
+    #: a refusal (task A87 (v3-grid-polish)).
+    column_order: tuple[str, ...] = ()
+    #: **The other layouts this one deliberately shares its stage tables
+    #: with**, by name, each of which must name this one back.  Normally a
+    #: stage table is rendered by exactly one layout, and two claims are a
+    #: declaration that has fallen behind the tally; the exception is a
+    #: construction the report prints twice on purpose — per-arm success is
+    #: the main text's grid in the previous revision's §5.1 form *and* a
+    #: constituent of the appendix's merged reliability table.  **A cell may
+    #: appear in more than one table; it may never be lost or changed**, and
+    #: ``report_cells_preserved.py`` looks for an old row in every grid that
+    #: names its stage table, so a shared table is found in either (task A87
+    #: (v3-grid-polish)).
+    shares_tables_with: tuple[str, ...] = ()
+    #: The layout whose companion **full version** already prints this one's
+    #: per-seed columns.  A table that leaves a per-seed column out is
+    #: rendered again in the companion with every column; where two layouts
+    #: are built from the same stage tables, the second would be a strict
+    #: copy of the first's full version, so it names that one instead and its
+    #: caption points the reader at that table (task A87 (v3-grid-polish)).
+    per_seed_columns_in: str = ""
 
 
 #: The source families, in the order their tables print, with the label the
@@ -480,8 +549,28 @@ LAYOUTS: tuple[Layout, ...] = (
             Merged(key="A0", heading="A0", parts=("A0_median", "A0_p90"), join="slash"),
             Merged(key="A1", heading="A1", parts=("A1_median", "A1_p90"), join="slash"),
             Merged(key="A2", heading="A2", parts=("A2_median", "A2_p90"), join="slash"),
+            Merged(
+                key="A2_over_A1",
+                heading="A2/A1 med, p90 → verdict",
+                parts=(
+                    "A2_over_A1_median",
+                    "A2_over_A1_p90",
+                    "A2_over_A1_verdict",
+                ),
+                join="verdict",
+            ),
+            Merged(
+                key="A2_over_A0",
+                heading="A2/A0 med, p90 → verdict",
+                parts=(
+                    "A2_over_A0_median",
+                    "A2_over_A0_p90",
+                    "A2_over_A0_verdict",
+                ),
+                join="verdict",
+            ),
         ),
-        bold=("A2_over_A1_verdict", "A2_over_A0_verdict"),
+        omit=("note",),
         caption=(
             "**Check 1 — matched accuracy**, the headline evaluation-phase "
             "check: the restricted audit maximum as `median / p90` per arm, "
@@ -490,15 +579,24 @@ LAYOUTS: tuple[Layout, ...] = (
             "pair is `A2/A1` on a pulsed configuration and `A2/A0` on "
             "`st_regression` — the *reference* column names it — and the rule "
             "is within F = 10 at median **and** p90; the other pair is "
-            "published beside and is not the acceptance. The mixed ruler's "
-            "distributions are in Appendix D."
+            "published beside and is not the acceptance. A ratio cell reads "
+            "`med, p90 → verdict`, and `—` where the pair has no ratio to "
+            "report. The dropped *verdict note* column said which pair is the "
+            "declared one, which the *reference* column says, and carried one "
+            "note of its own: on `low_aspect_ratio_DEMO` both quantiles of "
+            "both pairs are exactly 0, so the ratios read `—` and the pair "
+            "passes under the **trivially-similar clause**, not on a measured "
+            "ratio. The mixed ruler's distributions are in Appendix D."
         ),
         why=(
             "**The previous revision's §4 check-1 table, reproduced** (the "
             "user's ruling of 2026-09-15).  Its grid is one row per "
             "configuration and one column per arm as `median / p90`, with "
-            "the ratio pair and the verdict beside; the stencil regimes it "
-            "never had are the companion file's, in the same form."
+            "the ratio pair and the verdict beside — **in one cell**, "
+            "`0.76, 5.64 → PASS`, which this rendering had spread over a "
+            "`med` / `p90` / `verdict` triple and a note column (task A87 "
+            "(v3-grid-polish)); the stencil regimes it never had are the "
+            "companion file's, in the same form."
         ),
     ),
     Layout(
@@ -598,31 +696,54 @@ LAYOUTS: tuple[Layout, ...] = (
     ),
     Layout(
         name="per_arm_success",
-        title="per-arm success, the seed set and the failure taxonomy",
+        title="per-arm success",
         stage="tally_optimisation",
-        kinds=("per_arm_success", "failure_taxonomy", "seed_set"),
+        kinds=("per_arm_success",),
         where="main",
-        mode="merge",
-        join="arm",
+        mode="stack",
+        shares_tables_with=("reliability_and_taxonomy",),
+        per_seed_columns_in="reliability_and_taxonomy",
+        column_order=(
+            "arm",
+            "offered",
+            "accepted",
+            "finished, ifail = 5",
+            "crashed (RuntimeError)",
+            "coupling-loop cap (ModuleSolveFailure)",
+            "lost_another_arm_accepted",
+            "seed_set",
+        ),
+        blank_repeats=("seed_set",),
         caption=(
-            "Reliability read both ways, configurations stacked. Per arm, of "
-            "the 25 starts offered: accepted optima (status ok and the output "
-            "file's `ifail == 1`), the other starts by outcome class, and the "
-            "starts lost that another arm accepted. Beside them, per "
-            "configuration and repeated down its arm rows: the **seed set** — "
-            "the seeds on which *every* arm reached an accepted optimum, "
-            "which every other optimisation table's n is — with the "
-            "configuration-invalid seeds and the retried seeds per arm. "
-            "Reported, not accepted on (D29, 2026-09-15)."
+            "**Reliability per arm**, the configurations stacked: of the 25 "
+            "starts offered to each arm, the **accepted optima** (status ok "
+            "and the output file's `ifail == 1`), then every other start by "
+            "its outcome class — finished with the optimiser's own exit code "
+            "`ifail = 5` after its four attempts; crashed inside PROCESS "
+            "(`RuntimeError`); refused by the coupling-state loop's 20-sweep "
+            "cap (`ModuleSolveFailure`) — and last the starts **lost**, which "
+            "this arm did not accept and another did. A class column is empty "
+            "where the configuration has no start of that class. The **seed "
+            "set** is the last column, stated once at the head of each "
+            "configuration's arm rows and blank below it: the seeds on which "
+            "*every* arm reached an accepted optimum, which is the n of every "
+            "other optimisation table. The seeds behind each class, the "
+            "configuration-invalid seeds, the retried seeds and the failure "
+            "taxonomy's tracebacks are the merged table in Appendix D, and "
+            "per seed in the companion file. Reported, not accepted on (D29, "
+            "2026-09-15)."
         ),
         why=(
-            "Three constructions × three configurations = nine tables, three "
-            "of them a single row, all about one question: which starts each "
-            "arm accepted, and which seeds survive into every other table's "
-            "denominator.  Per-arm success is the host; the failure taxonomy "
-            "aligns on the arm; the seed set has no arm and is broadcast "
-            "across the configuration's rows, which is what *stated once per "
-            "configuration* means here."
+            "**The previous revision's §5.1 grid, reproduced** — "
+            "`config | invalid seeds | arm | ok | converged | not-converged` "
+            "— with V4's finer outcome classes in place of its two (task A87 "
+            "(v3-grid-polish)).  The main text carries this construction "
+            "alone: merged with the failure taxonomy and the seed set it is "
+            "twenty-three columns, three of them one label repeated down a "
+            "configuration's rows, which is a bookkeeping table and not a "
+            "grid a paragraph reads.  The merged table keeps every one of "
+            "those cells, in Appendix D; a cell may appear in more than one "
+            "table, it may never be lost."
         ),
     ),
     Layout(
@@ -1144,6 +1265,46 @@ LAYOUTS: tuple[Layout, ...] = (
     ),
     # ---------------- Appendix D: the optimisation phase --------------------
     # ---------------- Appendix D: the optimisation phase --------------------
+    Layout(
+        name="reliability_and_taxonomy",
+        title="per-arm success, the seed set and the failure taxonomy",
+        stage="tally_optimisation",
+        kinds=("per_arm_success", "failure_taxonomy", "seed_set"),
+        where="report",
+        mode="merge",
+        join="arm",
+        shares_tables_with=("per_arm_success",),
+        caption=(
+            "Reliability read both ways, configurations stacked — **the whole "
+            "of it**, of which the main text's per-arm success grid is the "
+            "first seven columns. Per arm, of the 25 starts offered: accepted "
+            "optima (status ok and the output file's `ifail == 1`), the other "
+            "starts by outcome class, and the starts lost that another arm "
+            "accepted. Beside them, the failure taxonomy over every "
+            "optimisation-phase run of the configuration — scheduled, "
+            "crashed, ok, the all-or-none *rows sum* check and the last line "
+            "of each traceback with its count — and, per configuration and "
+            "repeated down its arm rows, the **seed set**: the seeds on which "
+            "*every* arm reached an accepted optimum, which every other "
+            "optimisation table's n is, with the configuration-invalid seeds "
+            "and the retried seeds per arm. The three constructions have "
+            "three different denominators and each sub-heading row states "
+            "them. Reported, not accepted on (D29, 2026-09-15)."
+        ),
+        why=(
+            "Three constructions × three configurations = nine tables, three "
+            "of them a single row, all about one question: which starts each "
+            "arm accepted, and which seeds survive into every other table's "
+            "denominator.  Per-arm success is the host; the failure taxonomy "
+            "aligns on the arm; the seed set has no arm and is broadcast "
+            "across the configuration's rows, which is what *stated once per "
+            "configuration* means here.  **It is the appendix's** (task A87 "
+            "(v3-grid-polish)): twenty-three columns of bookkeeping is not a "
+            "grid the main text's paragraphs read, and the main text carries "
+            "per-arm success alone in the previous revision's §5.1 form.  No "
+            "cell is lost by the move — every one of them is here."
+        ),
+    ),
     Layout(
         name="problem_definition",
         title="the problem each configuration poses",
@@ -1678,10 +1839,12 @@ GROUPS: tuple[Group, ...] = (
             "**One construction, one table**: each table below combines the "
             "tally's per-configuration and per-source tables of one "
             "construction into one grid, the configurations and regimes as "
-            "row groups under a bold sub-heading row that names each group's "
-            "own population and n. The acceptance regime's headline table — "
-            "node calls per block on the displaced entries — is Table 7 in "
-            "§4.2 and is not repeated here. Absolute cost cells are per-run "
+            "row groups under a bold sub-heading row that names the group's "
+            "configuration, its regime where a table holds more than one, "
+            "and its own n; what that n counts is in the caption. The "
+            "acceptance regime's headline table — node calls per block on "
+            "the displaced entries — is Table 9 in §4.2 and is not repeated "
+            "here. Absolute cost cells are per-run "
             "means with the seed bracket; a ratio against the reference is "
             "read three ways — pooled (Σ arm / Σ reference), per-run median, "
             "and the count of runs on which the arm cost more. The reference "
@@ -1716,8 +1879,8 @@ GROUPS: tuple[Group, ...] = (
             "δ = 0.10). Every check is over **the seed set** — the seeds on "
             "which every arm reached an accepted optimum (status ok and the "
             "output file's `ifail == 1`) — whose size the per-arm success "
-            "table states per configuration and every other table repeats as "
-            "its n; the seeds outside it are the failure table's, in the "
+            "grid in §4.3 (Table 11) states once per configuration and every "
+            "other table repeats as its n; the seeds outside it are the failure table's, in the "
             "companion file, so the filter cannot flatter an arm that fails "
             "on expensive seeds. Every ratio is against the flat control "
             "`B0`; `BR → B0` is published beside as the yardstick, never "
@@ -1727,14 +1890,18 @@ GROUPS: tuple[Group, ...] = (
             "the seeds on which either side retried; the attempt-summation "
             "identity that licenses this is printed per run in the companion "
             "file. **One construction, one table**: the three configurations "
-            "are row groups of each table, under a sub-heading row stating "
-            "the group's own n; `B1` is inactive on `st_regression`, so its "
-            "rows are absent from that group and its columns empty there. The "
-            "phase's two headline tables — node calls per module and the "
-            "optimiser's path — are Tables 8 and 9 in §4.3 and are not "
-            "repeated here."
+            "are row groups of each table, under a sub-heading row naming the "
+            "configuration and stating its own n; `B1` is inactive on "
+            "`st_regression`, so its rows are absent from that group and its "
+            "columns empty there. The phase's headline tables are in §4.3 "
+            "and are not repeated here — per-arm success (Table 11), whose "
+            "merged whole with the failure taxonomy and the seed set is "
+            "Table D.12 below, the same optimum (Table 12), the optimiser's "
+            "path (Tables 13–16), check 4's cost sums (Table 17) and module "
+            "sweeps per run (Table 18)."
         ),
         layouts=(
+            "reliability_and_taxonomy",
             "problem_definition",
             "node_calls_per_module",
             "location_diagnostic",
@@ -2231,6 +2398,16 @@ def _layout_for(placed: Placed) -> list[Layout] | None:
         and (not layout.sources or placed.source_family in layout.sources)
     ]
     if len(matches) > 1:
+        # Or when each names the others as a table it **shares**: a
+        # construction the report prints twice on purpose — per-arm success,
+        # which is the main text's grid in the previous revision's §5.1 form
+        # and a constituent of the appendix's merged reliability table.  A
+        # cell may appear in more than one table; it may never be lost or
+        # changed, and the naming must be mutual so one layout cannot take a
+        # share of another's table without that other saying so.
+        names = {m.name for m in matches}
+        if all(names - {m.name} <= set(m.shares_tables_with) for m in matches):
+            return matches
         # Several layouts may claim one stage table when each takes a
         # declared, disjoint set of its rows: the previous revision published
         # the iteration multiplier, the evaluation count and the node-call
@@ -2381,24 +2558,89 @@ def _union_columns(
             f"labelled with one constituent's heading states the wrong thing "
             f"about the others."
         )
+    if layout.column_order:
+        keys = [c["key"] for c in columns]
+        missing = [k for k in layout.column_order if k not in keys]
+        if missing:
+            raise PlanTablesError(
+                f"layout {layout.name!r} orders column(s) {missing}, which "
+                f"its tables do not have (they have {keys})"
+            )
+        named = list(layout.column_order)
+        columns = [
+            c for key in named for c in columns if c["key"] == key
+        ] + [c for c in columns if c["key"] not in set(named)]
     return columns
 
 
-def _group_label(placed: Placed) -> str:
+def _arm_set_note(placed: Placed) -> str | None:
+    """``arms BR·B0·B2`` where this group does not carry the phase's whole
+    ladder — the previous revision's `st` block, whose heading said *"no
+    B1"*.  ``None`` where it does, because naming a set that is the whole of
+    the ladder distinguishes nothing."""
+    source = str(placed.source or "")
+    if " · " not in source:
+        return None
+    arms = source.split(" · ", 1)[1].split("·")
+    ladder = LADDERS.get(str(placed.stage))
+    if ladder and len(arms) != len(ladder):
+        return "arms " + "·".join(arms)
+    return None
+
+
+def _group_label(placed: Placed, *, with_regime: bool) -> str:
     """The bold sub-heading row over one constituent's rows.
 
-    It carries what the reader needs to know the rows are over — the
-    configuration, the source, and **this group's own n with what it counts**
-    — because a combined table has no single denominator and a pooled one
-    would be a count over a population nobody asked for (trap T11).
+    **The configuration and its own n, and nothing more** — the previous
+    revision's grids put the configuration in the first column and its ``n``
+    in the bold line over the block, and said what that ``n`` counts in the
+    caption.  This row used to carry the tally's whole table name and the
+    population sentence with it
+    (``large_tokamak_nof · campaign_optimisation · BR·B0·B1·B2 — n = 22
+    (seeds on which every arm of large_tokamak_nof converged)``); the table
+    name is under the grid, where the renderer names every stage table it
+    combines, and the population sentence is in the caption, where the
+    denominator sentence names what a group's n counts (task A87
+    (v3-grid-polish), as task A86 (v3-tables-remainder) did for the block
+    heading lines).
+
+    *with_regime* is true where one table combines more than one **source
+    regime**, and the regime is then named beside the configuration because
+    it is the other half of what a row group is over.  The arm set is named
+    only where the group does not carry the phase's whole ladder, exactly as
+    a block heading line names it.
     """
-    where = " · ".join(
-        part for part in (placed.configuration, placed.source) if part
-    )
-    return (
-        f"**{where or placed.construction} — n = {placed.table.get('denominator')} "
-        f"({placed.table.get('denominator_is')})**"
-    )
+    name = str(placed.configuration or "")
+    family = str(placed.source_family or "")
+    if with_regime and name and family:
+        name = f"{name} · {family}"
+    elif not name:
+        name = family or placed.construction
+    parts = [f"n = {placed.table.get('denominator')}"]
+    arms = _arm_set_note(placed)
+    if arms:
+        parts.append(arms)
+    return f"**{name} ({'; '.join(parts)})**"
+
+
+def _population_sentences(constituents: Sequence[Placed]) -> list[str]:
+    """What each group's ``n`` counts, once per distinct sentence.
+
+    The constituents' own ``denominator_is`` strings, with the configuration
+    named in them replaced by *that configuration* so that three sentences
+    differing only in a configuration name are one sentence.  Nothing is
+    rewritten in a record: this is the caption's half of the sub-heading
+    reduction, and it is the constituents' own words.
+    """
+    out: list[str] = []
+    for placed in constituents:
+        text = str(placed.table.get("denominator_is") or "").strip()
+        configuration = str(placed.configuration or "")
+        if configuration:
+            text = text.replace(configuration, "that configuration")
+        if text and text not in out:
+            out.append(text)
+    return out
 
 
 def _cells_by_key(placed: Placed, overrides: Mapping[str, str]) -> list[dict[tuple[str, str], str]]:
@@ -2425,9 +2667,12 @@ def _cells_by_key(placed: Placed, overrides: Mapping[str, str]) -> list[dict[tup
 def _stack(constituents: Sequence[Placed], columns, overrides) -> list[list[str]]:
     """The constituents one after another, each under its sub-heading row."""
     keys = [(c["key"], c["heading"]) for c in columns]
+    with_regime = len({p.source_family for p in constituents}) > 1
     grid: list[list[str]] = []
     for placed in constituents:
-        grid.append([_group_label(placed)] + [""] * (len(keys) - 1))
+        grid.append(
+            [_group_label(placed, with_regime=with_regime)] + [""] * (len(keys) - 1)
+        )
         for row in _cells_by_key(placed, overrides):
             grid.append([row.get(key, "") for key in keys])
     return grid
@@ -2522,12 +2767,9 @@ def _block_label(placed: Placed, layout: Layout) -> str:
         parts = [f"n = {placed.table.get('denominator')}"]
     # The arm set only where the block does not carry the phase's whole
     # ladder — the previous revision's `st` block, whose heading said "no B1".
-    source = str(placed.source or "")
-    if " · " in source:
-        arms = source.split(" · ", 1)[1].split("·")
-        ladder = LADDERS.get(str(placed.stage))
-        if ladder and len(arms) != len(ladder):
-            parts.append("arms " + "·".join(arms))
+    arms = _arm_set_note(placed)
+    if arms:
+        parts.append(arms)
     return f"**`{name}`** ({'; '.join(parts)})"
 
 
@@ -2730,6 +2972,37 @@ def _transform(
     return out_columns, rows
 
 
+def _denominator_is(layout: Layout, constituents: Sequence[Placed]) -> str:
+    """What the combined table's own ``n`` counts, for its caption.
+
+    A combined table has no single denominator: its ``n`` is the number of
+    groups, and each group carries its own.  The **sub-heading row** carries
+    the configuration, the regime where there is more than one, and the
+    group's ``n``; what that ``n`` counts is said here, once, instead of once
+    per group — which is the caption's half of the heading reduction (task
+    A87 (v3-grid-polish)).
+    """
+    if layout.blocks:
+        return (
+            "block(s) of this table, each over its own population with its "
+            "own n in its heading line; never pooled"
+        )
+    if layout.mode == "merge":
+        return (
+            "row group(s) of this table, each over its own population with "
+            "its own n in its sub-heading row; never pooled"
+        )
+    with_regime = len({p.source_family for p in constituents}) > 1
+    names = "its configuration" + (" and source regime" if with_regime else "")
+    sentences = _population_sentences(constituents)
+    counts = "; ".join(sentences)
+    return (
+        f"row group(s) of this table, each over its own population and never "
+        f"pooled; a group's sub-heading row names {names} and its own n, and "
+        f"that n counts {counts}"
+    )
+
+
 def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
     """One construction's tables as one table, under the layout's mode."""
     constituents = list(constituents)
@@ -2792,7 +3065,14 @@ def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
         for key in (placed.table.get("report_omits") or [])
     })
     merged_away = {part for m in layout.merges for part in m.parts}
-    omits = [key for key in omits if key not in merged_away]
+    # A column the layout has merged into another, or dropped into its
+    # caption, is not a per-seed column held back for the companion: it is
+    # not in this grid at all, and the caption already says where it went.
+    omits = [
+        key
+        for key in omits
+        if key not in merged_away and key not in set(layout.omit)
+    ]
     audit_positions = sorted({
         position
         for placed in constituents
@@ -2806,13 +3086,7 @@ def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
         "caption_summary": layout.caption,
         "caption": layout.caption,
         "denominator": len(constituents),
-        "denominator_is": (
-            "block(s) of this table, each over its own population with its "
-            "own n in its heading line; never pooled"
-            if layout.blocks
-            else "row group(s) of this table, each over its own population "
-            "with its own n in its sub-heading row; never pooled"
-        ),
+        "denominator_is": _denominator_is(layout, constituents),
         "acceptance": any(p.table.get("acceptance") for p in constituents),
         "audit_positions": audit_positions,
         "columns": columns,
@@ -2921,7 +3195,7 @@ def _declaration_lines(
         variants.setdefault(key, []).append(p)
     where: list[str] = []
     for name in dict.fromkeys(
-        p.layout.name for p in placed if p.layout is not None
+        layout.name for p in placed for layout in p.layouts
     ):
         number = numbers.get(name)
         if number:
@@ -2998,7 +3272,9 @@ def _constructions(
         "renderer combines the tables of one construction into one grid under "
         "a declared layout (`plan_tables.LAYOUTS`), with the configurations "
         "and source regimes as row groups under a bold sub-heading row that "
-        "states each group's own population and n — never a pooled one. Every "
+        "names the group and states its own n — never a pooled one; what that n "
+        "counts is in the table's caption, said once for the grid rather than "
+        "once per group. Every "
         "cell of a combined grid is a cell one of those stage tables already "
         "held, rendered by that table's own columns; the stage tables it "
         "combines are named under the grid, and are the stable citation "
@@ -3112,7 +3388,9 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
     # moved into §4 must not take its omitted columns out of the documents
     # altogether (task A86 (v3-tables-remainder), which moved two).
     omitting = [
-        c for c in [*main_tables, *report_tables] if c.table.get("report_omits")
+        c
+        for c in [*main_tables, *report_tables]
+        if c.table.get("report_omits") and not c.layout.per_seed_columns_in
     ]
     full_versions = [
         Combined(
@@ -3137,6 +3415,22 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
             c.number = f"{COMPANION_PREFIX}.{m}"
     for omitted_from, full in zip(omitting, full_versions):
         omitted_from.full_version = full.number
+    # A layout whose per-seed columns another layout's full version already
+    # prints names that table rather than adding a second copy of the same
+    # cells to the companion (``per_seed_columns_in``).
+    numbers_of_full = {c.layout.name: c.full_version for c in omitting}
+    for c in [*main_tables, *report_tables]:
+        wanted = c.layout.per_seed_columns_in
+        if not wanted:
+            continue
+        if wanted not in numbers_of_full:
+            raise PlanTablesError(
+                f"layout {c.layout.name!r} says its per-seed columns are "
+                f"printed in full by {wanted!r}, which renders no full "
+                f"version in the companion; a column left out of both "
+                f"documents is a cell lost"
+            )
+        c.full_version = numbers_of_full[wanted]
     numbers_by_layout = {
         c.layout.name: c.number for c in combined if c.number
     }
@@ -3254,7 +3548,8 @@ def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any
         "evaluation, and the full versions of the report's tables whose "
         "per-seed columns the report omits — **one construction, one table**, "
         "with the configurations and source regimes as row groups under a "
-        "bold sub-heading row stating each group's own n. The second "
+        "bold sub-heading row naming the group and stating its own n. The "
+        "second "
         "implementation's recomputed copies are not rendered here: gate "
         "`recomputation`'s row of the report's Table D.1 is that check, and "
         "the gate's record holds the cells. Tables are numbered `Table F.n` "
