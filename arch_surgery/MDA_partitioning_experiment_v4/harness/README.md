@@ -51,7 +51,7 @@ that.
 
 ### Layer 2 — what the experiment is: `harness/experiment/`
 
-- `experiment/arms.py` is the switch matrix as data. Each arm — `BR`, `B0`, `B1`, `B3` and the Phase A
+- `experiment/arms.py` is the switch matrix as data. Each arm — `BR`, `B0`, `B1`, `B2` and the Phase A
   arms — is a row of switch values, and the environment for a run is composed from that row. Nothing
   composes an arm by hand.
 - `experiment/switches.py` is the vocabulary the driver copy reads, and a probe that checks the copy
@@ -118,7 +118,7 @@ for the shared reference, to agree); five teeth. The important ones:
   line.
 - **G0′ copy integrity** — the copy differs from the base only in permitted files.
 - **G9 output path** (`gates/gate_output_path.py`, which also holds the restricted statistic's
-  excluded set G2/G3 and G4 import) — `B1` and `B3` write once with zero loop sweeps; `BR` and `B0`
+  excluded set G2/G3 and G4 import) — `B1` and `B2` write once with zero loop sweeps; `BR` and `B0`
   keep the loop. The output-loop sweep count is the tally's `output_loop_sweeps` column.
 - **G8 predicate mode** (`gates/gate_predicate_mode.py`) — the two convergence rulers, one
   implementation.
@@ -675,9 +675,9 @@ from harness import ARMS, default_campaign, env_for, input_file_for, rung
 campaign = default_campaign()
 nof = campaign.configuration("large_tokamak_nof")
 
-rung("B0", "B3")                       # what separates the two arms, field by field
-input_file_for("B3", nof, campaign=campaign)  # which input file B3 reads
-env_for("A1", nof, seed=0, pin_hex=float(3600.0).hex(), campaign=campaign)
+rung("B0", "B2")                       # what separates the two arms, field by field
+input_file_for("B2", nof, campaign=campaign)  # which input file B2 reads
+env_for("A2", nof, seed=0, pin_hex=float(3600.0).hex(), campaign=campaign)
 ```
 
 **Stopping something that is running**: use the session's own task-stop mechanism, never `pkill`.
@@ -838,7 +838,7 @@ and the `run path` self-check has a tooth for each refusal. The caller is stampe
 `command.json` beside its record and in the caller's own verdict.
 
 **Gate `written_file_gap`** is the one gate that exists to read that position. It runs the
-reference arm and the two one-call arms (`BR`, `B1`, `B3`) at seed 0 on the pulsed
+reference arm and the two one-call arms (`BR`, `B1`, `B2`) at seed 0 on the pulsed
 configurations, composed exactly as the campaign composes them, and publishes the written-file
 gap per run with the component that carries it named. It passes or fails only on whether the runs
 finished as the arms the matrix describes and audited where asked; **the size of the gap is a
@@ -859,11 +859,11 @@ cannot. Both are recorded; only the first marks the tree dirty.
   it is the step already declared to differ in kind between the two phases, so the *headline*
   step, the partitioning intervention, keeps a switch set identical to its evaluation-phase twin.
   The harness declares both fields and carries that reason.
-- The matrix gave the partitioned evaluation-phase arm `A1` the output-time loop, while the prose
-  listing the arms that keep it left `A1` out. **Ruling: the evaluation-phase arms carry no switch
+- The matrix gave the partitioned evaluation-phase arm `A2` the output-time loop, while the prose
+  listing the arms that keep it left `A2` out. **Ruling: the evaluation-phase arms carry no switch
   for it at all** — an evaluation never reaches the output path — so the row reads `n/a` for all
   four of them, and the arms that keep the loop are the two optimisation-phase controls. One
-  consequence matters: `A1` is runnable now, and only `B1` and `B3` wait on the driver change that
+  consequence matters: `A2` is runnable now, and only `B1` and `B2` wait on the driver change that
   supplies the switch.
 
 ---
@@ -917,6 +917,26 @@ A record of one run carries, at minimum:
 The record's schema is `core/records.py`'s `SCHEMA` (101 declared fields: 90 in the optimisation
 phase, 83 in the evaluation phase) and every reader goes through its contract (`assert_usable`);
 this list is the plain-language version of what it carries.
+
+**A record's arm name is the name at the time of the run.** The arms were renamed on 2026-09-15 at
+the user's ruling, so that the two phases read rung for rung — `AR/A0/A1/A2` against
+`BR/B0/B1/B2` — and the campaign's 949 records and every earlier gate record were **not** re-made:
+they stamp the old names in `campaign_arm` and `job_identity.arm`, and their directories keep the
+old names too. One table says what each old name is today — `core/records.py`'s
+`RECORDED_ARM_NAMES`, the only place the old spellings are written — and it is applied in **one**
+place, `records.read`, so every reader of a record sees today's names. A record made after the
+renaming stamps the naming scheme (`arm_naming`, written by the pool beside `job_identity`) and is
+read as written; a record without the stamp is translated, its `job_digest` re-derived over the
+translated identity with the stamped digest kept beside it as `job_digest_as_stamped`, so that
+`--resume` keeps it (the pool's job computes the same digest). Nothing is written back to disk. A
+record naming an arm neither the table nor the matrix knows is **refused by name** where it is
+read. The pool resolves a job's directory by that digest (`pool.directory_for`) wherever a record
+exists, and only otherwise by the layout, so a renamed arm finds its records under its old
+directory name and never re-makes them on top of another arm's; a canonical directory occupied by
+another job's record is refused, not removed. The `resume_identity` gate surveys every record
+under `runs/` by how its name was read and has four teeth on this. Why a stamp and not a rule: two
+of the three renamed arms took names that were another arm's before, so the bare string cannot say
+which arm a record means.
 
 ---
 
@@ -1066,7 +1086,7 @@ the committed file states both rather than leaving a reader to notice an arm mis
 | arm | why the reference cannot cover it | covered instead by |
 |---|---|---|
 | `AR` — the evaluation-phase reference | the previous revision had no such arm | one evaluation with every architecture switch cleared must reproduce the first `call_models` of `BR` at seed 0, on that call's node calls, sweeps and objective hex |
-| `A0p` — flat, with the burn time owned by a constant | the previous revision never ran that combination | the warm-equivalence gate: pinned at the reference's converged burn time it must reproduce the reference fixed point, with the cross-state residual below the tolerance and the pinned component bit-identical |
+| `A1` — flat, with the burn time owned by a constant | the previous revision never ran that combination | the warm-equivalence gate: pinned at the reference's converged burn time it must reproduce the reference fixed point, with the cross-state residual below the tolerance and the pinned component bit-identical |
 
 *Caption: one row per arm outside the reference's reach; "covered instead by" names the check that
 does test the path. Neither substitute is a comparison against a prior record, because no prior
@@ -1392,7 +1412,7 @@ cell by cell over `rows` keyed by `columns`.
 how many **cells** were compared, how many **tables** they came from, and how many **run records**
 were read — with the commits those records were made at, from `framework.survey_heads`. The cell
 count is split again into cells produced by a **construction** and cells **composed as a string**
-(`"3/3"`, `"[18, 68]"`, `"BR 0 · B0 0 · B3 0"`): agreement on a rendered string is weaker evidence
+(`"3/3"`, `"[18, 68]"`, `"BR 0 · B0 0 · B2 0"`): agreement on a rendered string is weaker evidence
 than agreement on a computed quantity, so the two are reported apart rather than added into one
 number.
 
