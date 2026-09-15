@@ -102,7 +102,19 @@ run executes (harness plan amendment 13, rule (vi)).
   n; `merge` aligns several constructions of one configuration on a join column, so a fact stated
   once per configuration (the seed set, the entry reference) is a column of the table it qualifies
   rather than a table of its own; `single` passes through a construction the tally already emits
-  whole. Three **headline tables** are rendered into the report's §4 itself, between
+  whole. **The previous revision's cell formats** are the layouts' too (task A85
+  (v3-table-formats), the user's ruling of 2026-09-15 that the report's tables are the V3 report's
+  §4 and §5 tables): `merges` puts a mean and its seed bracket in one cell (`1978 [1758, 2280]`,
+  and a bare value where every run agreed) and a median and its p90 in one; `select` takes a
+  declared, disjoint set of a stage table's rows, so a construction the previous revision published
+  as several tables of one quantity each — the optimiser's path — renders as several tables and
+  not as one stacked grid; `blocks` prints one grid per configuration under a bold heading line
+  (``**`nof`** (n = 22 — …)``), which is the per-module form; `bold` marks the result column and
+  the verdict; `blank_repeats` blanks a repeated key on continuation rows. Every one of them is a
+  rendering of cells a stage record already carries, and
+  `report_cells_preserved.py` puts each old row through the same declarations before looking for
+  it, so a merge that dropped or swapped a part would not reproduce the cell. Seven **headline
+  tables** are rendered into the report's §4 itself, between
   `MAIN_START` / `MAIN_END` marker pairs carrying the layout's name and numbered `Table n` after
   §3's six; everything else is **Appendix D — Results tables** (`Table D.n`, one short caption
   each, the constructions declared once in D.0) and the companion file `RESULTS_TABLES_FULL.md`
@@ -1630,7 +1642,7 @@ by number. `harness/measurement/plan_tables.py` reads the stages' records under
 
 | document | holds | rendered from |
 |---|---|---|
-| `EXPERIMENT_REPORT.md`, the block between `## Appendix D — Results tables` and the end marker `<!-- plan_tables: end of the rendered results tables -->` | D.0 the constructions and populations, declared once per table kind from the stages' own records; D.1 the gate table; D.2 the three headline tables; D.3 the evaluation phase's and D.4 the optimisation phase's **summarising** tables (per arm or arm pair and configuration), `Table D.1`–`D.n` in emission order, one caption of a few lines each, the construction name printed under each grid | `--measure gate_table`, `tally_evaluation`, `tally_optimisation` |
+| `EXPERIMENT_REPORT.md`, the block between `## Appendix D — Results tables` and the end marker `<!-- plan_tables: end of the rendered results tables -->` | D.0 the constructions and populations, declared once per table kind from the stages' own records; D.1 the gate table; D.2 the evaluation phase's and D.4 the optimisation phase's **summarising** tables (per arm or arm pair and configuration), `Table D.1`–`D.n` in emission order, one caption of a few lines each, the construction name printed under each grid | `--measure gate_table`, `tally_evaluation`, `tally_optimisation` |
 | `RESULTS_TABLES_FULL.md`, whole | F.1–F.2 every table with a row per run, seed or pair of runs; F.3 the full versions of the report's tables whose per-seed columns it omits; F.4 every table of the second implementation; `Table F.1`–`F.m`; generated, never hand-edited | the same three stages and `--measure recomputed_tables` |
 
 *Caption: one row per document the renderer writes; the middle column is what it holds and how it
