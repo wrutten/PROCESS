@@ -1,89 +1,158 @@
-"""Re-point every table citation in EXPERIMENT_REPORT.md at the new set."""
-import sys
+"""Re-point every table citation in the report at the table set A85 renders.
 
-PAIRS = [
-    # citations split across a line break, and the ones whose first half the
-    # pairs above already moved
-    ("Table D.4 and D.25–D.27", "Tables D.4 and D.5"),
-    ("companion\nTables F.53–F.55", "companion Table F.12"),
-    ("companion\nTables F.15, F.19 and F.23", "companion Table F.4"),
-    ("the recomputed tables themselves are companion Tables F.56–F.162",
-     "the recomputed copies themselves are not rendered — that row is the check, and the gate's record holds the cells"),
-    ("headline Tables\nD.2–D.5", "headline Tables 8 and 9"),
-    ("companion Tables F.14,\nF.18 and F.22", "companion Table F.3"),
-    ("companion Tables F.14, F.18 and F.22", "companion Table F.3"),
-    ("the three headline shapes as Tables D.2–D.9", "the three headline shapes as Tables D.2\u2013D.9 of that day"),
-    # --- phrases that name several old tables at once -----------------------
-    ("Tables F.16, F.20 and F.24 (the identity) and F.17, F.21 and F.25 (the per-run overhead)",
-     "companion Table F.5 (the identity) and companion Table F.6 (the per-run overhead)"),
-    ("companion Tables F.17, F.21 and F.25", "companion Table F.6"),
-    ("companion Tables F.15, F.19 and F.23", "companion Table F.4"),
-    ("companion Tables F.14,\nF.18 and F.22", "companion Table F.3"),
-    ("companion Tables F.14, F.18\nand F.22", "companion Table F.3"),
-    ("Tables F.1–F.12", "companion Table F.1"),
-    ("companion Tables F.53–F.55", "companion Table F.12"),
-    ("companion Tables F.47–F.49", "companion Table F.10"),
-    ("companion Table F.54", "companion Table F.12"),
-    ("companion Table F.13", "companion Table F.2"),
-    ("companion Table F.19", "companion Table F.4"),
-    ("companion Table F.23", "companion Table F.4"),
-    ("companion Table F.17's", "companion Table F.6's"),
-    ("Table F.19;", "companion Table F.4;"),
-    ("companion Table F.7", "companion Table F.12"),
-    # --- the appendix's own tables -----------------------------------------
-    ("Tables D.2–D.83", "Tables 7–9 and Tables D.2–D.14"),
-    ("Tables D.55–D.60", "Table D.8"),
-    ("Tables D.49–D.60", "Tables D.3 and D.8"),
-    ("Tables D.61–D.63", "Table D.9"),
-    ("Tables D.61–D.66", "Table D.9"),
-    ("Tables D.64–D.66", "Table D.9"),
-    ("Tables D.67–D.69", "Table D.9"),
-    ("Tables D.62, D.65", "Table D.9"),
-    ("Table D.62", "Table D.9"),
-    ("Tables D.13–D.15", "Table D.4"),
-    ("Tables D.16–D.21", "Table D.4"),
-    ("Table D.13's", "Table D.4's"),
-    ("Tables D.25–D.27", "Table D.5"),
-    ("Tables D.34–D.36", "Table D.6"),
-    ("Tables D.34–D.35", "Table D.6"),
-    ("Tables D.37–D.42", "Table D.6"),
-    ("Tables D.34–D.42", "Table D.6"),
-    ("Table D.40", "Table D.6"),
-    ("Tables D.43–D.44", "Table D.7"),
-    ("Tables D.70–D.72", "Table D.10"),
-    ("Table D.71's", "Table D.10's"),
-    ("Tables D.73–D.74", "Table D.11"),
-    ("Tables D.73–D.75", "Table D.11"),
-    ("Tables D.76–D.78", "Table D.12"),
-    ("Tables D.79–D.81", "Table D.13"),
-    ("Tables D.82–D.83", "Table D.14"),
-    # --- the three headline tables, now in §4 -------------------------------
-    ("Tables D.2–D.4", "Table 8"),
-    ("Table D.5's", "Table 9's"),
-    ("Table D.5", "Table 9"),
-    ("Table D.7's", "Table 7's"),
-    ("Table D.7", "Table 7"),
+**A table number is a position, not a name** (trap T17).  Task **A85
+(v3-table-formats)** put the previous revision's §4 and §5 forms back, which
+added two per-module tables to the main text, split the optimiser's path into
+the four one-quantity tables the previous revision's §5.3 shape holds, and
+moved the node-call per-module table into Appendix D.  Every number after
+those moves shifted, and the hand-written text cites them.
+
+This script is that re-pointing, committed and executed (protocol §15) rather
+than done by hand: it names each move, applies the shifts **from the highest
+number down** so a shifted number is never shifted twice, and prints what it
+changed and what it could not find.  A phrase it cannot find is reported, not
+skipped silently — the previous revision of this script left three citations
+behind (``Table 9 and D.34–D.36`` among them), which this run also repairs.
+
+Run from the V4 folder, after ``--plan-tables write``:
+
+    python report_citations_repoint.py
+"""
+
+import re
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPORT = HERE / "EXPERIMENT_REPORT.md"
+
+#: Citations naming a table by an old number, longest first.  Applied before
+#: the numeric shifts, because each names a table the shifts would move.
+PHRASES: list[tuple[str, str]] = [
+    # --- citations left behind by the previous re-pointing (stale) ---------
+    ("(Table 9 and D.34–D.36)", "(Tables D.5 and D.6)"),
+    ("(Table 9, frozen ruler; the mixed ruler reads the same or lower on every row)",
+     "(Table D.5, frozen ruler; the mixed ruler reads the same or lower on every row)"),
+    ("(median 2.435 / 0.1816 / 0.2575, Table 9)",
+     "(median 2.435 / 0.1816 / 0.2575, Table D.5)"),
+    ("Table D.4 the stencil regime; Table 9 matched accuracy",
+     "Table D.4 the stencil regime; Table D.5 matched accuracy"),
+    # --- the optimiser's path, now four tables of one quantity each --------
+    ("headline Tables 8 and 9", "headline Tables 11 and 13"),
+    ("**The optimiser's path decomposes that ratio (Table 9).**",
+     "**The optimiser's path decomposes that ratio (Tables 8–11).**"),
+    ("the same numbers as Table 9's ε row", "the same numbers as Table 9"),
+    ("the per-run\nmean over Table 9's ε", "the per-run\nmean over Table 9"),
+    # --- node calls per module, now Appendix D -----------------------------
+    ("Per module (Table 8, the whole run's census)",
+     "Per module (Table 13 in sweeps, Table D.9 in node calls — the whole run's "
+     "census)"),
+    # A stale citation the previous re-pointing left: the sentence is about
+    # the optimisation's evaluation counts, which are check 2's table, not
+    # the evaluation phase's matched accuracy.
+    ("(three took more evaluations, Table\nD.5)",
+     "(three took more evaluations, Table\nD.12)"),
+    # The solve-phase decomposition is the node-call per-module table's, now
+    # in the appendix.
+    ("The census total less its\nlast row",
+     "The node-call census total of Table D.9 less its\nlast row"),
+    # --- the placeholders this task's own new prose left ------------------
+    ("MODULE_EVAL_REF", "Table 12"),
 ]
 
+#: ``prefix`` → the lowest old number that moved, and by how much.  Applied
+#: from the highest number down.
+SHIFTS: list[tuple[str, int, int]] = [
+    # Appendix D gained `node calls per module` at D.9, so D.9 and up move up
+    # one; the companion gained `module sweeps, the other three regimes` at
+    # F.1, so every F number moves up one.
+    ("D", 9, 1),
+    ("F", 1, 1),
+]
 
-def main(path: str) -> int:
-    text = open(path).read()
-    head, sep, rest = text.partition("## Appendix D — Results tables")
-    if not sep:
-        raise SystemExit("no Appendix D heading")
-    applied = []
-    for old, new in PAIRS:
-        n = head.count(old)
-        if n:
-            head = head.replace(old, new)
-        applied.append((old, new, n))
-    open(path, "w").write(head + sep + rest)
-    total = sum(n for _o, _n, n in applied)
-    for old, new, n in applied:
-        print(f"  {n:>3} × {old!r} → {new!r}")
-    print(f"  {total} citation(s) re-pointed in the hand-written text")
-    return 0
+#: The highest number of each prefix before the move, so the descending sweep
+#: covers every one of them.
+CEILING = {"D": 14, "F": 12}
+
+
+def apply_phrases(text: str) -> tuple[str, list[str], list[str]]:
+    done: list[str] = []
+    missing: list[str] = []
+    for old, new in PHRASES:
+        if old in text:
+            text = text.replace(old, new)
+            done.append(f"{old!r} → {new!r}")
+        else:
+            missing.append(repr(old))
+    return text, done, missing
+
+
+def apply_shifts(text: str) -> tuple[str, list[str]]:
+    done: list[str] = []
+    for prefix, lowest, by in SHIFTS:
+        for number in range(CEILING[prefix], lowest - 1, -1):
+            old = f"{prefix}.{number}"
+            new = f"{prefix}.{number + by}"
+            # A number is a citation only where a table is named: `Table D.9`,
+            # `Tables D.9 and D.10`, `companion Table F.4`.  Bare `D.9` also
+            # names the appendix's own sub-section headings, which move with
+            # their tables and must not be rewritten here, so the pattern
+            # requires the number to follow `Table`, `Tables`, `and` or a
+            # comma inside a citation.
+            pattern = re.compile(
+                rf"(?<![A-Za-z0-9.])(?<!### ){re.escape(old)}(?![0-9])"
+            )
+            hits = len(pattern.findall(text))
+            if hits:
+                text = pattern.sub(new, text)
+                done.append(f"{old} → {new} ({hits})")
+    return text, done
+
+
+def main() -> int:
+    text = REPORT.read_text(encoding="utf-8")
+    # The rendered blocks are the renderer's and are rewritten by it; the
+    # shifts must not touch them, so they are lifted out and put back.
+    held: list[str] = []
+
+    def hold(match: re.Match[str]) -> str:
+        held.append(match.group(0))
+        return f"\x00HELD{len(held) - 1}\x00"
+
+    block = re.compile(
+        r"<!-- plan_tables: main-text table (\w+) -->.*?"
+        r"<!-- plan_tables: end of main-text table \1 -->",
+        re.S,
+    )
+    text = block.sub(hold, text)
+    appendix = re.compile(
+        r"## Appendix D — Results tables.*?"
+        r"<!-- plan_tables: end of the rendered results tables -->",
+        re.S,
+    )
+    text = appendix.sub(hold, text)
+
+    # The shifts run **first**, so a phrase's replacement may name the final
+    # number and will not itself be shifted afterwards.
+    text, shifts = apply_shifts(text)
+    text, phrases, missing = apply_phrases(text)
+
+    for index, kept in enumerate(held):
+        text = text.replace(f"\x00HELD{index}\x00", kept)
+    REPORT.write_text(text, encoding="utf-8")
+
+    print(f"re-pointed {REPORT.name}")
+    print(f"  phrases applied : {len(phrases)}")
+    for line in phrases:
+        print(f"    {line}")
+    print(f"  phrases not found: {len(missing)}")
+    for line in missing:
+        print(f"    {line}")
+    print(f"  number shifts   : {len(shifts)}")
+    for line in shifts:
+        print(f"    {line}")
+    return 1 if missing else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1]))
+    sys.exit(main())
