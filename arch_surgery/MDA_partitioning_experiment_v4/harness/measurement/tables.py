@@ -60,6 +60,7 @@ __all__ = [
     "TIMING_WORDS",
     "CELL_SEPARATOR",
     "cell_list",
+    "sweep_cell",
 ]
 
 
@@ -121,6 +122,25 @@ def cell_list(
     nothing in it.
     """
     return separator.join(str(value) for value in values) if values else empty
+
+
+def sweep_cell(value: Any) -> str:
+    """**A sweep count as the previous revision printed it**: four significant
+    figures, never scientific notation, and the nearest integer once the
+    integer part has four digits of its own.
+
+    ``5.52``, ``4.96``, ``243.0``, ``1978``, ``96933`` — the spellings of the
+    V3 report's §4.5 and §5.5.1 cells, which task **A85 (v3-table-formats)**
+    reproduces.  One formatter, in one place, because a cell format that
+    lives beside each table is a cell format that drifts (the same reason
+    :data:`CELL_SEPARATOR` is here).
+    """
+    if value is None:
+        return "—"
+    number = float(value)
+    if abs(number) >= 1000:
+        return f"{number:.0f}"
+    return f"{number:.4g}"
 
 
 _WORD = re.compile(r"[a-zA-Z_µ/]+")
