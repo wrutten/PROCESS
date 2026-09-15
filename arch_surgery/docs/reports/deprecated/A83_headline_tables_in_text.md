@@ -1,6 +1,6 @@
 # A83 (headline-tables-in-text) — the headline tables back in §4, and one construction, one table
 
-> **Document status** — **OPEN task report.** Task **A83 (headline-tables-in-text)**, branch
+> **Document status** — **MERGED 2026-09-15** at `a7aaa956` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A83_runs/` (latest resume-compatible). Orchestrator's assessment at the end. Task **A83 (headline-tables-in-text)**, branch
 > `A83-headline-tables-in-text` off `architecture_surgery` at **`c45cac1c`**. Base commit of the
 > experiment: `c0ae5b28` (frozen). Written 2026-09-15. Archive to
 > `docs/reports/deprecated/` at merge; folder position records lifecycle, not validity (trap T3).
