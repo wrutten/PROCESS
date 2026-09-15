@@ -141,3 +141,13 @@ paths, no `git add -A`.
 | date | entry |
 |---|---|
 | 2026-09-15 | Paper read in full; criteria extracted; report at `589138ef` read (§1, §3, §4–§6, Appendix D, companion failure tables F.14/F.17/F.20); record fields checked in `harness/core/records.py` and `harness/child/child.py` (`stamp_resources`) for what is recorded but unpublished; document and this report written; two commits |
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `22333d31` by the orchestrating session, by checks that differ from the agent's; gates the merge.*
+
+**Checks.** (1) **F1's hand-counted success rates re-derived from the campaign records by a script of my own** (`status == ok` and `mfile.ifail == 1`, read from `metrics.json`, the records at `57dc0c14`): `low_aspect_ratio_DEMO` `BR`/`B0` 12 of 25, `B1`/`B2` 11 of 25, seed 10 failing in the intervention arms alone — every count the document flagged as a hand tally is right; `st_regression` `BR` 24, `B0` 23 (seeds 10, 17), `B2` 23 (seeds 5, 17) — the two asymmetric failures as stated. (2) **The paper's threshold** quoted for C6 is in its §3: *"at least 20 test problems (preferably more)"*, and fewer is *"a case study or a proof of concept, but not benchmarking"* — the reading is the paper's, not the agent's. (3) **F2**: the report's §3.5 check 5 promises *"wall-clock context (3 serial repetitions, median and range) is reported in its own section"*; no such section exists in the report or the companion, and no timing, hardware or OS line — confirmed by search. (4) Doc-only by diff: two files, nothing in the experiment folder, the V5 list untouched.
+
+**Remarks.** The evaluation is fair in both directions: it credits what the paper does not ask for (teeth, recomputation, bit-comparison) without leaning on it, and it does not let the study's design (one architecture change, models frozen) excuse the test-set size. Its strongest finding, F1, is a genuine gap in how V4 states its result: the seed set "every arm converged" is disclosed, but the per-arm success rate over 25 — the paper's reliability measure — is nowhere a cell, and on lad the intervention arms fail one start the flat arms solve. Whether that enters the V4 report is the user's ruling (V4's rules were not to change after the numbers; a *success table* adds a descriptive cell, as A76's distance did, and changes no verdict).
+
+**Verdict: merge.** The document is evidence-based to the paper's sections and the report's tables; the three rulings it needs are the user's and are put to them at the merge.
