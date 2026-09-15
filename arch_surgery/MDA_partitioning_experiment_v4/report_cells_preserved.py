@@ -370,12 +370,76 @@ def compare(base: str) -> dict[str, Any]:
             if len([row for row in grid.rows if not _group_row(row)]) == 1
         )
 
+    def _main(these: list[Grid]) -> list[Grid]:
+        """The report's §4 grids: the headline tables and §4's own prose
+        tables.  A grid is placed by the heading above it, which is `4.n` in
+        the main text and `D.n` in the appendix — the same key a reader
+        uses."""
+        return [g for g in these if g.section.startswith("4.")]
+
+    def _appendix(these: list[Grid]) -> list[Grid]:
+        return [g for g in these if g.section.startswith("D.")]
+
+    def _widest(these: list[Grid]) -> int:
+        """The widest grid's column count.  A table is unreadable by width
+        before it is unreadable by anything else, and the width of the widest
+        table in the main text is the one number that says whether a
+        bookkeeping grid is sitting in the middle of the argument (task A87
+        (v3-grid-polish))."""
+        return max((len(g.headings) for g in these), default=0)
+
     census = {
         "report_grids": [len(old_report), len(new_report)],
         "companion_grids": [len(old_companion), len(new_companion)],
         "one_row_grids": [_one_row(old), _one_row(new)],
         "one_row_grids_in_the_report": [_one_row(old_report), _one_row(new_report)],
+        "grids_in_section_4": [len(_main(old_report)), len(_main(new_report))],
+        "grids_in_appendix_d": [
+            len(_appendix(old_report)), len(_appendix(new_report))
+        ],
+        "widest_grid_in_section_4": [
+            _widest(_main(old_report)), _widest(_main(new_report))
+        ],
+        "widest_grid_in_appendix_d": [
+            _widest(_appendix(old_report)), _widest(_appendix(new_report))
+        ],
+        "widest_grid_in_the_companion": [
+            _widest(old_companion), _widest(new_companion)
+        ],
     }
+
+    # --- the same stage table rendered into more than one grid --------------
+    # **A cell may appear in more than one table; it may never be lost or
+    # changed** (task A87 (v3-grid-polish)): per-arm success is the main
+    # text's grid in the previous revision's §5.1 form and a constituent of
+    # the appendix's merged reliability table.  A republication is a
+    # declaration (`Layout.shares_tables_with`) and is counted here, so that
+    # a construction quietly printed twice is visible in the output rather
+    # than passing as a larger document.
+    # The declaration is the layout's, not a count of names: a report table
+    # whose per-seed columns the companion prints in full, and a blocks-mode
+    # table whose grids all name the same constituents, are one table
+    # rendered once and are not republications.
+    republished: list[dict[str, Any]] = []
+    for grid in new:
+        layout = layouts.get(grid.name)
+        shared = list(getattr(layout, "shares_tables_with", ()) or ())
+        if not shared:
+            continue
+        rows = [row for row in grid.rows if not _group_row(row)]
+        republished.append(
+            {
+                "grid": grid.name,
+                "section": grid.section,
+                "shares_with": shared,
+                "stage_tables": list(grid.combines),
+                "n_rows": len(rows),
+                "n_cells": sum(len(row) for row in rows),
+                "n_cells_with_a_value": sum(
+                    1 for row in rows for cell in row.values() if cell
+                ),
+            }
+        )
 
     where: dict[str, list[Grid]] = collections.defaultdict(list)
     for grid in new:
@@ -493,6 +557,7 @@ def compare(base: str) -> dict[str, Any]:
         "n_rows_differing": len(differing),
         "differing": differing[:20],
         "cells_stated_in_the_caption": dict(sorted(into_the_caption.items())),
+        "republished": republished,
         "withdrawn_by_kind": dict(sorted(withdrawn.items())),
         "constructions_rendered_fewer_times": dict(sorted(fewer.items())),
         "heading_translations": {
@@ -524,6 +589,21 @@ def main(argv: Iterable[str] | None = None) -> int:
         f"{census['one_row_grids'][1]} "
         f"({census['one_row_grids_in_the_report'][0]} → "
         f"{census['one_row_grids_in_the_report'][1]} of them in the report)"
+    )
+    print(
+        f"  by section: §4 "
+        f"{census['grids_in_section_4'][0]} → {census['grids_in_section_4'][1]} "
+        f"grid(s), Appendix D "
+        f"{census['grids_in_appendix_d'][0]} → "
+        f"{census['grids_in_appendix_d'][1]}"
+    )
+    print(
+        f"  widest    : §4 {census['widest_grid_in_section_4'][0]} → "
+        f"{census['widest_grid_in_section_4'][1]} column(s), Appendix D "
+        f"{census['widest_grid_in_appendix_d'][0]} → "
+        f"{census['widest_grid_in_appendix_d'][1]}, the companion "
+        f"{census['widest_grid_in_the_companion'][0]} → "
+        f"{census['widest_grid_in_the_companion'][1]}"
     )
     print(
         f"  compared  : {result['n_old_rows_compared']} row(s), "
@@ -567,6 +647,19 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         for key, n in result["cells_stated_in_the_caption"].items():
             print(f"    {n:>5} cell(s)  {key}")
+    if result["republished"]:
+        print(
+            "  stage table(s) rendered into more than one grid (declared; a "
+            "cell may appear twice, it may never be lost or changed):"
+        )
+        for entry in result["republished"]:
+            print(
+                f"    {entry['grid']!r} (§{entry['section']}): "
+                f"{len(entry['stage_tables'])} stage table(s) it shares "
+                f"with {entry['shares_with']}, "
+                f"{entry['n_rows']} row(s), {entry['n_cells']} cell(s) of "
+                f"which {entry['n_cells_with_a_value']} carry a value"
+            )
     if result["withdrawn_by_kind"]:
         print("  rendered fewer times than before, by kind (expected):")
         for kind, n in result["withdrawn_by_kind"].items():
