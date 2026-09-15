@@ -477,7 +477,7 @@ SCHEMA: tuple[Field, ...] = (
     # --- the optimisation phase ------------------------------------------
     _f("node_calls_solve_phase", "B", "finished", "model executions during the solve: the cost unit"),
     _f("dispatch_sweeps_solve_phase", "B", "finished", "sweeps of the dispatch body during the solve: the whole the per-attempt sweeps decompose"),
-    _f("n_model_calls", "B", "finished", "evaluations of the model set the optimiser asked for"),
+    _f("n_model_calls", "B", "finished", "sweeps of the dispatch body over the whole run (numerics.n_model_calls, incremented once per _call_models_once) — not evaluations: a block sweep runs one module, so it is not comparable between a flat loop and a block schedule; the evaluations of the model set are sweeps_per_eval.n_evaluations (issue I-26, task A80 (report-accuracy-audit))"),
     _f("n_solver_iterations", "B", "finished", "the optimiser's iterations on its final attempt"),
     _f("sweeps_per_eval", "B", "finished", "sweeps per evaluation, binned"),
     _f("first_call_models", "B", "finished", "the first evaluation's own counts and objective"),

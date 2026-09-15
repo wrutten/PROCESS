@@ -1416,9 +1416,10 @@ def n_evaluations(record: Mapping[str, Any]) -> int | None:
     the solve, output path excluded, summed over every attempt (the driver
     accumulates the histogram across the retry ladder).  This is the ε of
     R = ρ × ε (the V5 improvement list, item 1) and the field issue **I-26**
-    names as the correct one: ``n_model_calls`` counts something else.  Check
-    2's existing *evaluations median* column still reads ``n_model_calls`` and
-    is task A80's to correct; this construction does not touch it.
+    names as the correct one: ``n_model_calls`` counts sweeps of the dispatch
+    body (``numerics.n_model_calls``), not evaluations.  Check 2's ε column
+    reads this construction too since task A80 (report-accuracy-audit) closed
+    I-26; the sweep ratio it used to print is kept there as its own column.
     """
     block = record.get("sweeps_per_eval") or {}
     value = block.get("n_evaluations")

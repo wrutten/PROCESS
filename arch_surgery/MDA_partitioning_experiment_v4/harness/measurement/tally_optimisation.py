@@ -694,26 +694,48 @@ def iterations(
     which neither iteration construction captures: iterations miss the lifted
     arm's extra stencil column and the line-search evaluations that vary at
     equal iteration count.
+
+    **The evaluation column reads ε** — ``sweeps_per_eval.n_evaluations``
+    through :func:`stats.n_evaluations`, the count of ``call_models``
+    evaluations summed over the attempts — since task A80
+    (report-accuracy-audit) closed issue **I-26**: until then the column read
+    the record field ``n_model_calls``, which is the driver's count of
+    *sweeps* of the dispatch body (``numerics.n_model_calls``; the copied
+    driver declares it not comparable between a flat loop and a block
+    schedule), under a heading that said evaluations.  That sweep ratio is
+    kept as its own column, **sweeps median**, because the discussion reads
+    it (the partitioned arm's dispatch runs ~2.7× as many sweeps, each over a
+    third of the map) and a reader wants both numbers side by side.
+
+    The rows are every arm against the flat control, and — as the plan's
+    §3.5 declared ("``B1 → B2`` and ``B0 → BR`` reported beside, outside the
+    acceptance rule") — the **``B1 → B2`` step itself**, beside, where both
+    arms are present: it is the row the pre-declared ``ε = 1`` expectation is
+    read from, per seed.
     """
     if BASE_ARM not in by_arm:
         return None
+    pairs: list[tuple[str, str]] = [
+        (BASE_ARM, arm) for arm in _arm_order(by_arm) if arm != BASE_ARM
+    ]
+    if all(arm in by_arm for arm in ACCEPTANCE_PAIRS):
+        pairs.append(tuple(ACCEPTANCE_PAIRS[:2]))  # the plan's B1 → B2, beside
     rows: list[dict[str, Any]] = []
-    for arm in _arm_order(by_arm):
-        if arm == BASE_ARM:
-            continue
+    for base_arm, arm in pairs:
         seeds = [
             s
             for s in converged
-            if s in by_arm[arm] and s in by_arm[BASE_ARM]
+            if s in by_arm[arm] and s in by_arm[base_arm]
         ]
         final_ratios: list[float] = []
         summed_ratios: list[float] = []
         evaluation_ratios: list[float] = []
+        sweep_ratios: list[float] = []
         final_sums = [0, 0]
         summed_sums = [0, 0]
         disagreements = 0
         for seed in seeds:
-            base_record, arm_record = by_arm[BASE_ARM][seed], by_arm[arm][seed]
+            base_record, arm_record = by_arm[base_arm][seed], by_arm[arm][seed]
             fa = stats_mod.iterations_final_attempt(base_record)
             fb = stats_mod.iterations_final_attempt(arm_record)
             sa = stats_mod.iterations_summed_over_attempts(base_record)
@@ -728,15 +750,19 @@ def iterations(
                 summed_sums[1] += sb
             if (fa, fb) != (sa, sb):
                 disagreements += 1
-            ea = base_record.get("n_model_calls")
-            eb = arm_record.get("n_model_calls")
+            ea = stats_mod.n_evaluations(base_record)
+            eb = stats_mod.n_evaluations(arm_record)
             if ea and eb:
                 evaluation_ratios.append(eb / ea)
+            wa = base_record.get("n_model_calls")
+            wb = arm_record.get("n_model_calls")
+            if wa and wb:
+                sweep_ratios.append(wb / wa)
         summed_median = stats_mod.median(summed_ratios)
-        accepted_on = arm in ACCEPTANCE_PAIRS
+        accepted_on = base_arm == BASE_ARM and arm in ACCEPTANCE_PAIRS
         rows.append(
             {
-                "pair": f"{BASE_ARM} → {arm}"
+                "pair": f"{base_arm} → {arm}"
                 + ("" if accepted_on else " (beside)"),
                 "n": len(seeds),
                 "final_median": stats_mod.median(final_ratios),
@@ -761,8 +787,10 @@ def iterations(
                     )
                 ),
                 "evaluations_median": stats_mod.median(evaluation_ratios),
+                "evaluations_equal": sum(1 for r in evaluation_ratios if r == 1.0),
+                "sweeps_median": stats_mod.median(sweep_ratios),
                 "attempts": ", ".join(
-                    f"{seed}:{stats_mod.n_attempts(by_arm[BASE_ARM][seed])}/"
+                    f"{seed}:{stats_mod.n_attempts(by_arm[base_arm][seed])}/"
                     f"{stats_mod.n_attempts(by_arm[arm][seed])}"
                     for seed in seeds
                 )
@@ -774,9 +802,11 @@ def iterations(
         name=f"iteration multiplier (check 2) — {configuration} — {source}",
         caption=Caption(
             units="dimensionless ratios of counts",
-            row_is="one arm against the flat control over the seed set",
+            row_is="one arm against the flat control over the seed set, and "
+            "the B1 → B2 step beside where both arms are present",
             column_is="one of check 2's two iteration constructions, its sum "
-            "ratio, or the evaluation-count ratio beside them",
+            "ratio, the evaluation-count ratio ε beside them, the seeds on "
+            "which ε is exactly 1, and the sweep ratio",
             population=(
                 f"{population.what}; {len(converged)} seed(s) on which every "
                 f"arm of {configuration} reached an accepted optimum"
@@ -795,9 +825,21 @@ def iterations(
                 "the sum ratio is published beside every median because a "
                 "median of per-seed ratios and the ratio of the sums can point "
                 "in opposite directions",
-                "the evaluation-count ratio is beside both: iterations, even "
+                "the evaluation-count ratio ε is beside both: iterations, even "
                 "summed, miss the lifted arm's extra stencil column and the "
-                "line-search evaluations that vary at equal iteration count",
+                "line-search evaluations that vary at equal iteration count.  "
+                "It reads stats.n_evaluations (sweeps_per_eval.n_evaluations, "
+                "call_models evaluations summed over the attempts) — issue "
+                "I-26, closed by task A80 (report-accuracy-audit): until then "
+                "this column read n_model_calls, the driver's count of sweeps "
+                "of the dispatch body, under a heading that said evaluations",
+                "the sweep ratio (n_model_calls, sweeps of the dispatch body "
+                "over the whole run) is its own column: a block sweep runs one "
+                "module, not all of them, so it is a mechanism, not a cost, and "
+                "is never read as ε",
+                "*ε = 1 on* counts the seeds on which the two arms took exactly "
+                "the same number of evaluations; on the B1 → B2 row it is the "
+                "plan's §3.5 pre-declared expectation, per seed",
                 "*constructions disagree* counts the seeds on which the final "
                 "attempt's pair and the summed pair are not the same numbers — "
                 "0 means no run in this population retried",
@@ -812,9 +854,10 @@ def iterations(
                 f"against B0 over the seed set, summed over attempts (the "
                 f"acceptance statistic, median against "
                 f"{campaign.iteration_ratio_max:g}) and on the final attempt, "
-                f"with the ratio of sums beside. The *evaluations median* "
-                f"column reads n_model_calls, not ε (issue I-26); the "
-                f"optimiser's-path table reads the declared field."
+                f"with the ratio of sums beside; ε is the evaluation-count "
+                f"ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the "
+                f"seeds on which it is exactly 1, and the sweep ratio is its "
+                f"own column. The B1 → B2 row is the plan's pre-declared ε = 1."
             ),
         ),
         columns=(
@@ -825,7 +868,9 @@ def iterations(
             Column("acceptance", "verdict"),
             Column("final_median", "final-attempt median", fmt=_fmt_ratio),
             Column("final_sum_ratio", "final-attempt sum ratio", fmt=_fmt_ratio),
-            Column("evaluations_median", "evaluations median", fmt=_fmt_ratio),
+            Column("evaluations_median", "ε median (evaluations)", fmt=_fmt_ratio),
+            Column("evaluations_equal", "ε = 1 on", fmt=_fmt_int),
+            Column("sweeps_median", "sweeps median", fmt=_fmt_ratio),
             Column("attempts", "attempts per seed (base/arm)"),
             Column("constructions_disagree", "constructions disagree", fmt=_fmt_int),
         ),
@@ -979,6 +1024,16 @@ def cost(
                     (r.get("n_arrangement_method_calls") or 0)
                     for r in finished
                 ),
+                # The same count per run, so that it sits beside 'node calls /
+                # run' in the row's own unit (a per-run mean, D21 (c)); the sum
+                # over the set stays beside it and its heading says it is a sum
+                # (task A80 (report-accuracy-audit), on A79's finding §7.9).
+                "arrangement_method_calls_per_run": (
+                    sum((r.get("n_arrangement_method_calls") or 0) for r in finished)
+                    / len(finished)
+                    if finished
+                    else None
+                ),
                 "with_pooled": both["with_retried"]["pooled"],
                 "with_median": both["with_retried"]["median"],
                 "with_worse": both["with_retried"]["worse"],
@@ -1015,8 +1070,11 @@ def cost(
                 "is a robustness event rather than a per-evaluation cost",
                 "a seed counts as retried when **either** side of the pair "
                 "retried: the pair is what the ratio is over",
-                "the arrangement-method calls are a column of their own and "
-                "are never pooled into the node calls",
+                "the arrangement-method (prime) calls are two columns of their "
+                "own — the per-run mean, in the unit of the node-call column "
+                "beside it, and the sum over the arm's runs in the seed set — "
+                "and are never pooled into the node calls; on the partitioned "
+                "arm there is one such call per sweep of the dispatch body",
                 "the output-time and audit sweeps are excluded from this unit "
                 "symmetrically in every arm",
             ),
@@ -1030,8 +1088,8 @@ def cost(
                 f"by arm over the seed set (mean, bracket) and the ratio "
                 f"against B0 pooled and as the per-seed median, with and "
                 f"without the seeds on which either side retried. Prime calls "
-                f"are a column of their own; the output path and audit are "
-                f"excluded in every arm."
+                f"are columns of their own (per-run mean, and the sum over the "
+                f"set); the output path and audit are excluded in every arm."
             ),
         ),
         columns=(
@@ -1039,7 +1097,8 @@ def cost(
             Column("n", "n", fmt=_fmt_int),
             Column("node_calls_mean", "node calls / run", fmt=lambda v: "—" if v is None else f"{v:.1f}"),
             Column("bracket", "bracket"),
-            Column("arrangement_method_calls", "arrangement·method calls", fmt=_fmt_int),
+            Column("arrangement_method_calls_per_run", "arrangement·method calls / run", fmt=lambda v: "—" if v is None else f"{v:.1f}"),
+            Column("arrangement_method_calls", "arrangement·method calls, Σ over the set", fmt=_fmt_int),
             Column("with_pooled", "with retried: pooled", fmt=_fmt_ratio),
             Column("with_median", "with retried: median", fmt=_fmt_ratio),
             Column("with_worse", "worse", fmt=_fmt_int),
@@ -1706,11 +1765,11 @@ def optimiser_path(
     """
     base, arm = HEADLINE_PAIR
     rows: list[dict[str, Any]] = []
-    n_total = 0
+    per_configuration_n: list[tuple[str, int]] = []
     for configuration, arms, by_arm, converged in groups:
         if base not in by_arm or arm not in by_arm:
             continue
-        n_total += len(converged)
+        per_configuration_n.append((configuration, len(converged)))
         for label, quantity in PATH_QUANTITIES:
             row: dict[str, Any] = {
                 "quantity": label,
@@ -1768,7 +1827,8 @@ def optimiser_path(
             "and the count of seeds on which the ratio exceeds 1",
             population=(
                 f"{population.what}; the seed set of each configuration "
-                f"(every arm converged), {n_total} seed(s) in all"
+                f"(every arm converged), stated per row and never summed: "
+                + ", ".join(f"{c} {n}" for c, n in per_configuration_n)
             ),
             construction=(
                 "stats.iterations_summed_over_attempts (check 2's declared "
@@ -1786,8 +1846,10 @@ def optimiser_path(
                 "four rows decompose check 4's cost ratio into how many "
                 "evaluations the optimiser took and what each cost",
                 "the iteration row is the same construction as check 2's "
-                "acceptance column; check 2's *evaluations median* column "
-                "reads n_model_calls and is not ε (issue I-26)",
+                "acceptance column, and the ε row the same field as check 2's "
+                "ε column (issue I-26, closed by task A80 (report-accuracy-"
+                "audit): until then that column read n_model_calls, the "
+                "driver's sweep count)",
                 "B1 is absent on a steady-state configuration and reads —",
             ),
             how_to_read=(
@@ -1800,9 +1862,10 @@ def optimiser_path(
                 f"The optimiser's path per configuration over the seed set, "
                 f"{tally_mod.source_phrase(source)}: per arm the mean "
                 f"iterations (summed over attempts), evaluations ε "
-                f"(sweeps_per_eval.n_evaluations, I-26's field), node calls per "
+                f"(sweeps_per_eval.n_evaluations), node calls per "
                 f"evaluation ρ and per run R; B2/B0 as the per-seed ratio's "
-                f"mean, median [min, max] and count above 1. R = ρ × ε per seed."
+                f"mean, median [min, max] and count above 1. R = ρ × ε per seed; "
+                f"n is per configuration, never summed."
             ),
         ),
         columns=(
@@ -1817,9 +1880,15 @@ def optimiser_path(
             Column("n_above_one", "seeds B2/B0 > 1", fmt=_fmt_int),
         ),
         rows=tuple(rows),
-        denominator=n_total,
+        # One denominator per configuration — the n column — and never their
+        # sum: configurations are not pooled (D21 (b)).  The table's own count
+        # is the number of configurations it stacks (task A80
+        # (report-accuracy-audit), on A79's assessment).
+        denominator=len(per_configuration_n),
         denominator_is=(
-            "seeds on which every arm converged, summed over the configurations"
+            "configurations stacked, each over its own seed set — the n column: "
+            + " / ".join(f"{configuration} {n}" for configuration, n in per_configuration_n)
+            + " seeds on which every arm converged; never pooled"
         ),
         acceptance=True,
         kind="optimiser_path",

@@ -240,7 +240,13 @@ FIELD_NOTES: dict[str, str] = {
         "table; excludes the output-time and audit sweeps"
     ),
     "node_calls_total": "model executions including the output-time and audit sweeps",
-    "n_model_calls": "call_models evaluations the optimiser asked for",
+    "n_model_calls": (
+        "sweeps of the dispatch body over the whole run (numerics.n_model_calls); "
+        "the committed file's own note for this field still reads 'call_models "
+        "evaluations the optimiser asked for' — its bytes are never regenerated "
+        "(D25) — and that reading is wrong: the evaluations are "
+        "sweeps_per_eval.n_evaluations (issue I-26, task A80 (report-accuracy-audit))"
+    ),
     "n_prime_calls": (
         "executions of the run-constant first-wall geometry method at the head "
         "of a sweep (the arrangement-by-method change); 0 where it is off"
