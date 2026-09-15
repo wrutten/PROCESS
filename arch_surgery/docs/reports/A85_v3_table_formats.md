@@ -1,7 +1,7 @@
 # A85 (v3-table-formats) — the report's tables in the V3 report's forms
 
 > **Document status** — **OPEN**, task **A85 (v3-table-formats)**, branch `A85-v3-table-formats`
-> (worktree `.claude/worktrees/A85-v3-table-formats`), base `4b902124`, tip `3aa1ffb8`.
+> (worktree `.claude/worktrees/A85-v3-table-formats`), base `4b902124`, tip `a6692664`.
 > Specification: [`../plans/REPORT_TABLE_FORMATS.md`](../plans/REPORT_TABLE_FORMATS.md) (RULING,
 > 2026-09-15). **Zero PROCESS runs**; `EXECUTION_APPROVED` untouched; no file under
 > `MDA_partitioning_experiment_v4/PROCESS/`, `harness/child/` or the root `process/` changed.
@@ -217,22 +217,63 @@ could not find:
 
 ## 5. Verification
 
-Worktree root, everything committed, nothing running, seeded with the A83 records tree.
-**Zero PROCESS runs.**
+**The first press was on an uncommitted tree and is superseded.** The stage records and the two
+cell gates were pressed while the edits were still in the working tree, so their verdicts carried
+the *base* commit's stamp — `recomputation`'s `gate.json` at `4b902124` and `tally_contracts`' at
+`d6e8c229` — while the code that produced them lived at later commits, and nothing was re-pressed
+after the renderer commit `a5e180be`. A verdict must name the commit whose code produced it
+(protocol rule xiii). Found by the orchestrator. **Everything below is the second press, run in
+order with `git status` empty at every step**, and it is the only press this report stands on.
+
+The sequence, worktree root, tree clean at `a6692664`. **Zero PROCESS runs.**
+
+| # | step | result |
+|---|---|---|
+| 1 | `--measure all --resume` | five stages re-pressed: `tally_evaluation` 80 tables, `tally_optimisation` 42, `recomputed_tables` **122**, `gate_table`, `exclusion_review`; **0 runs made** |
+| 2 | `--plan-tables write` | one line changed — see the correction below |
+| 3 | `--plan-tables check` | **IDENTICAL** for all seven §4 blocks, Appendix D (879/879 lines) and the companion (1 671/1 671); **0 dangling** references |
+| 4 | `--gate recomputation --resume` | **PASS** at `a6692664` — 122 tables, **16 276 compared, 0 mismatched**, 9/9 teeth |
+| 5 | `--gate tally_contracts --resume` | **PASS** at `a6692664` — **622 compared (366 + 256), 0 mismatched**, **13/13 teeth**, both new teeth tripped |
+| 6 | `--gate run_kind_separation --resume` | **PASS** at `a6692664` — 3 000 compared, 0 mismatched, 9/9 teeth |
+| 7 | `--gate self_containment --resume` | **PASS** at `a6692664` — 52 files, 0 mismatched, 1/1 tooth |
+| 8 | `--measure gate_table --resume` | **30 PASS, 0 FAIL, 163 of 163 teeth tripped** |
+| 9 | `--plan-tables write`, then `check` again | **IDENTICAL** everywhere, **0 dangling**; nothing re-rendered, tree clean |
+| 10 | `--selfcheck` | **PASS** |
+
+**The correction the re-press found.** Step 2 changed exactly one line of
+`RESULTS_TABLES_FULL.md`: its closing sentence read *"The second implementation emitted 107
+table(s)"*. The `recomputed_tables` stage had never been re-pressed after the new constructions
+were added, so that number was stale; it is now **122**, and it agrees with the `recomputation`
+row of Table D.1. Committed as `a6692664`. This is the whole of what the first press had wrong in
+a published document — no cell of any table moved — and it is exactly the kind of thing pressing
+on an uncommitted tree hides.
+
+### 5.1 The stamps
+
+| verdict | `tree_git_head` | is that the tip's code? |
+|---|---|---|
+| `recomputation` | **`a6692664`** | yes — the tip |
+| `tally_contracts` | **`a6692664`** | yes — the tip |
+| `run_kind_separation` | **`a6692664`** | yes — the tip |
+| `self_containment` | **`a6692664`** | yes — the tip |
+
+`a6692664` **is** the branch tip, so the question of later commits changing the code does not
+arise for these four. The `gate_table` stage record's `records_read` names the commit of each of
+the thirty verdicts it read: **4 at `a6692664`** (the four above, the only gates this task's
+change alters what they read) and 26 at the commits they were pressed at in the seeded records
+tree — `8996b843` 23, `6f5ba612` 2, `350a58c4` 1 — which is the records-reuse rule (a from-scratch
+press only where the change alters what a gate reads).
+
+The two tally stage records and `recomputed_tables` carry no commit of their own by design: a
+stage over **run** records is provenanced by `runs_provenance`, which the analysis compares
+against its own survey of the same runs. All three were re-pressed at `a6692664` in steps 1 and 4–5.
+
+### 5.2 The standing checks, re-run at the tip
 
 | check | result |
 |---|---|
-| `--measure tally_evaluation --resume` | 80 tables (68 before); 0 runs made |
-| `--measure tally_optimisation --resume` | 42 tables (39 before); 0 runs made |
-| `--gate recomputation --resume` | **PASS** — 122 tables, **16 276 compared, 0 mismatched**, 9/9 teeth |
-| `--gate tally_contracts --resume` | **PASS** — **622 compared (366 + 256), 0 mismatched**, **13/13 teeth**, both new teeth tripped |
-| `--gate run_kind_separation --resume` | **PASS** — 3 000 compared, 0 mismatched, 9/9 teeth |
-| `--gate self_containment --resume` | **PASS** — 52 files compared, 0 mismatched, 1/1 tooth |
-| `--measure gate_table --resume` | **30 PASS, 0 FAIL, 163 of 163 teeth tripped** (161 before) |
-| `--plan-tables write` then `--plan-tables check` | **IDENTICAL** for all seven §4 blocks, for Appendix D (879 of 879 lines) and for the companion (1 671 of 1 671); **0 dangling** references |
-| `report_cells_preserved.py --base 4b902124` | **1 761 of 1 761 rows and 19 426 of 19 426 cells preserved** (14 689 of them carrying a number); **0 missing**; **2 differing**, both rows of the gate table |
-| `run_stamp_survey.py`, before and after | **1 102 records**, the same nine commits, 949 at `57dc0c14`; **0 re-made, 0 new** |
-| `--selfcheck` | **PASS** (after the fixture fix of §6) |
+| `report_cells_preserved.py --base 4b902124` | **1 761 of 1 761 rows and 19 426 of 19 426 cells preserved** (14 689 carrying a number); **0 missing**; **2 differing**, both rows of the gate table |
+| `run_stamp_survey.py`, before and after the whole press | **1 102 records**, the same nine commits, 949 at `57dc0c14`; byte-identical output — **0 re-made, 0 new** |
 | `report_counts_check.py` | runs; **4 lines differ**, the same four that differed at the base — down from 6, the two teeth lines now agreeing |
 
 **The two differing rows, with their denominators.** Both are rows of Table D.1, and both are the
@@ -369,3 +410,5 @@ verification presses.
 | `94206ffa` | §4.1 and §4.4's gate counts and `report_counts_check.py`'s constants |
 | `ca2d0033` | the self-check's scratch tally tables given their layout's columns |
 | `3aa1ffb8` | `harness/README.md` §0 |
+| `3893d9f1` | this report |
+| `a6692664` | the companion's closing line, 107 → 122: `--measure all --resume` at the clean tip re-pressed `recomputed_tables`, which the first press had left stale. **The first press was on an uncommitted tree and is superseded** (§5); every verdict this report cites is from the second press, all four stamped `a6692664` |
