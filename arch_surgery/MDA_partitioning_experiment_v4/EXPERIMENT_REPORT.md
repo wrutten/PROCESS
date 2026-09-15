@@ -1018,20 +1018,6 @@ D.1; the per-pair table is companion Table F.5). The per-run convergence-test co
 
 <!-- plan_tables: end of main-text table per_arm_success -->
 
-**The three configurations do not optimise the same thing (Table D.12).** `large_tokamak_nof`
-minimises the plasma major radius (`i_figure_merit` 1) over 20 iteration variables and 26
-constraints (3 equality); `low_aspect_ratio_DEMO` **maximises the pulse length** (−14) over 19 and
-25 (4 equality); `st_regression` maximises the fusion gain (−5) over 14 and 18 (3 equality) and is
-steady state. The consequence that matters is the second one: **on `low_aspect_ratio_DEMO` the
-lifted quantity *is* the objective**, so `B0` computes the burn time through the coupling loop and
-reports it, while `B1` and `B2` let the optimiser choose it and enforce consistency through
-constraint 93 — 20 variables and 26 constraints after the lift, against 19 and 25 before. Those
-are not the same optimisation problem (I-20 (b)), which is why `B0` is the odd arm out on that
-configuration and why every cross-configuration statement below is three answers to three
-questions rather than one sample of three. On the large tokamak the same switch is a pure
-architectural change (21 variables and 27 constraints after the lift, the burn time being a
-constraint-side quantity) and on the spherical tokamak it is absent entirely.
-
 **The population (Table 11).** On nof seeds 5, 20 and 21 crash in all four arms with
 PROCESS's own `RuntimeError: Failed to converge after 50 iterations, value is nan`, leaving a seed
 set of **22**; no arm retried on any of them. On lad 14 seeds are outside the set and 13 of them are
@@ -1051,6 +1037,20 @@ on st for `BR` / `B0` / `B1` / `B2`** — 88 %, 48 % / 44 % and 96 % / 92 % — 
 named by outcome class in Table 11 (per-arm success) and per seed in companion Table F.6; the table is reported, not accepted on (D29, 2026-09-15). *(A80 corrected this paragraph:
 it had described the 13 as "2 crash in every arm and the rest fail to converge in at least one".)*
 *(A82 added the per-arm sentence and its table, 2026-09-15.)*
+
+**The three configurations do not optimise the same thing (Table D.12).** `large_tokamak_nof`
+minimises the plasma major radius (`i_figure_merit` 1) over 20 iteration variables and 26
+constraints (3 equality); `low_aspect_ratio_DEMO` **maximises the pulse length** (−14) over 19 and
+25 (4 equality); `st_regression` maximises the fusion gain (−5) over 14 and 18 (3 equality) and is
+steady state. The consequence that matters is the second one: **on `low_aspect_ratio_DEMO` the
+lifted quantity *is* the objective**, so `B0` computes the burn time through the coupling loop and
+reports it, while `B1` and `B2` let the optimiser choose it and enforce consistency through
+constraint 93 — 20 variables and 26 constraints after the lift, against 19 and 25 before. Those
+are not the same optimisation problem (I-20 (b)), which is why `B0` is the odd arm out on that
+configuration and why every cross-configuration statement below is three answers to three
+questions rather than one sample of three. On the large tokamak the same switch is a pure
+architectural change (21 variables and 27 constraints after the lift, the burn time being a
+constraint-side quantity) and on the spherical tokamak it is absent entirely.
 
 <!-- plan_tables: main-text table same_optimum -->
 
