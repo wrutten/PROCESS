@@ -1289,8 +1289,8 @@ def achieved_accuracy(
                 "statement about the audit instrument, not about the arm"
             ),
             summary=(
-                f"Exit accuracy at the accepted optimum by arm on "
-                f"{configuration} over the seed set: the restricted maximum "
+                f"Exit accuracy by arm on {configuration} over the arm "
+                f"group's finished runs (accepted or not): the restricted maximum "
                 f"scaled residual (median, max) on both rulers, the argmax and "
                 f"the whole-state maximum; audit position "
                 + (", ".join(positions) if positions else "not recorded")
