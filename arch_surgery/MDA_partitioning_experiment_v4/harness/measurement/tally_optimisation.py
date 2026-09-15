@@ -14,6 +14,13 @@ Eight tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
 ``failure_table``   §4.3.1 — every seed **outside** that set, with each failed
                     arm's exit code, attempts and cost beside the other arms'
                     cost at the same start.
+``per_arm_success`` §4.3 — reliability per arm over the 25 starts offered:
+                    accepted optima, the other starts by outcome class (exit
+                    code; PROCESS's own exception; the coupling-loop cap), the
+                    starts lost that another arm accepted, the seed set beside;
+                    reported, not accepted on (decision D29).  Its per-seed
+                    companion ``per_arm_success_by_seed`` is one row per seed.
+                    *(Task A82 (per-arm-success), 2026-09-15.)*
 ``same_optimum``    §4.3.2 / check 1 — the paired relative objective difference
                     against the threshold the campaign's own yardstick sets,
                     with clusters, hops and the below-resolution category.
@@ -289,6 +296,182 @@ def seed_set(
         ),
         converged,
     )
+
+
+def _seeds_text(seeds: Sequence[int]) -> str:
+    return ", ".join(str(s) for s in seeds) or "—"
+
+
+def per_arm_success(
+    population: stats_mod.Population,
+    configuration: str,
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    source: str,
+) -> tuple[Table, Table]:
+    """§4.3 — reliability per arm over the starts offered, and its per-seed
+    companion.  ``stats.per_arm_success`` is the declaration; this is its
+    shape.  The first table is the report's (counts per arm, the seed-naming
+    columns left to the companion file); the second is one row per seed and
+    goes to the companion file whole."""
+    order = _arm_order(by_arm)
+    seeds = sorted({seed for rows in by_arm.values() for seed in rows})
+    built = stats_mod.per_arm_success({arm: by_arm[arm] for arm in order}, seeds)
+    classes: list[str] = built["classes"]
+    n_set = len(built["seed_set"])
+    rows: list[dict[str, Any]] = []
+    for arm in order:
+        part = built["arms"][arm]
+        row: dict[str, Any] = {
+            "arm": arm,
+            "offered": part["offered"],
+            "accepted": part["accepted"],
+        }
+        for label in classes:
+            row[label] = part["by_class"][label]
+        row["lost_another_arm_accepted"] = len(part["lost_another_arm_accepted"])
+        row["seed_set"] = n_set
+        row["seeds_not_accepted"] = cell_list(
+            [
+                f"{label}: {_seeds_text(part['seeds_by_class'][label])}"
+                for label in classes
+                if part["seeds_by_class"][label]
+            ]
+        )
+        row["lost_seeds"] = _seeds_text(part["lost_another_arm_accepted"])
+        rows.append(row)
+    arms_text = " · ".join(order)
+    summary_table = Table(
+        name=f"per-arm success — {configuration} — {source}",
+        caption=Caption(
+            units="counts of starts",
+            row_is="one optimisation arm on this configuration",
+            column_is="the starts offered, the accepted optima, every other "
+            "start by its outcome class, the starts lost that another arm "
+            "accepted, and the seed set beside",
+            population=(
+                f"{population.what}; the arms present here are {arms_text} at "
+                f"seeds {_seeds_text(seeds)}"
+            ),
+            construction=(
+                "stats.per_arm_success — accepted is stats.accepted_optimum "
+                "(status ok AND the output file's ifail == 1); every other "
+                "start carries one stats.outcome_class (finished with the "
+                "optimiser's exit code; crashed in PROCESS's own code, the "
+                "exception named; refused by the coupling-state loop's sweep "
+                "cap, ModuleSolveFailure); a start is lost when this arm did "
+                "not accept and another arm did; the seed set is "
+                "stats.every_arm_converged"
+            ),
+            clauses=(
+                "**reported, not accepted on**: no pre-declared rule of the "
+                "plan reads a per-arm rate; the cost tables stay over the seed "
+                "set and this table states what that filter leaves out "
+                "(decision D29, 2026-09-15, on A81 (benchmarking-practices)'s "
+                "finding F1)",
+                "the classes partition the offered starts: accepted plus the "
+                "class columns sum to the starts offered in every row",
+                "a seed no arm accepted is configuration hardness (the seed-set "
+                "table's configuration-invalid column) and is not a lost start "
+                "of any arm; the lost starts are the asymmetric failures",
+                "the harness stamps a coupling-loop refusal and a PROCESS "
+                "exception both as status crashed; the failure class and the "
+                "traceback separate them here, as in the taxonomy table",
+            ),
+            how_to_read=(
+                "read accepted over offered as the arm's success rate with its "
+                "denominator; the lost column is what the seed-set filter hides "
+                "from a cost ratio"
+            ),
+            summary=(
+                f"Per-arm success on {configuration}: of the 25 starts offered "
+                f"to each arm ({arms_text}), the accepted optima (status ok and "
+                f"ifail == 1), the other starts by outcome class (finished with "
+                f"the optimiser's exit code; crashed in PROCESS's own code; "
+                f"refused at the coupling-state loop's sweep cap), the starts "
+                f"lost that another arm accepted, and the seed set beside. "
+                f"Reported, not accepted on: no pre-declared rule reads it "
+                f"(D29, 2026-09-15)."
+            ),
+        ),
+        columns=(
+            Column("arm", "arm"),
+            Column("offered", "starts offered", fmt=_fmt_int),
+            Column("accepted", "accepted optima", fmt=_fmt_int),
+            *[Column(label, label, fmt=_fmt_int) for label in classes],
+            Column(
+                "lost_another_arm_accepted", "lost, another arm accepted",
+                fmt=_fmt_int,
+            ),
+            Column("seed_set", "seed set (every arm accepted)", fmt=_fmt_int),
+            Column("seeds_not_accepted", "seeds not accepted, by class"),
+            Column("lost_seeds", "seeds lost that another arm accepted"),
+        ),
+        rows=tuple(rows),
+        denominator=len(seeds),
+        denominator_is=f"starts offered per arm on {configuration}",
+        acceptance=True,
+        kind="per_arm_success",
+        report_omits=("seeds_not_accepted", "lost_seeds"),
+    )
+    seed_rows: list[dict[str, Any]] = []
+    for entry in built["per_seed"]:
+        row = {"seed": entry["seed"]}
+        for arm in order:
+            row[arm] = entry["classes"].get(arm, "not run")
+        row["n_accepted"] = entry["n_accepted"]
+        row["in_seed_set"] = "yes" if entry["in_seed_set"] else "no"
+        row["lost_by"] = ", ".join(entry["lost_by"]) or "—"
+        seed_rows.append(row)
+    by_seed_table = Table(
+        name=f"per-arm success by seed — {configuration} — {source}",
+        caption=Caption(
+            units="outcome classes (text) and counts of arms",
+            row_is="one seed offered to every arm of the group",
+            column_is="each arm's outcome class at that seed, how many arms "
+            "accepted, whether the seed is in the seed set, and which arms "
+            "lost it while another accepted",
+            population=(
+                f"{population.what}; the arms present here are {arms_text} at "
+                f"seeds {_seeds_text(seeds)}"
+            ),
+            construction=(
+                "stats.per_arm_success (per-seed part) — stats.outcome_class "
+                "per record; in the seed set when every arm accepted "
+                "(stats.every_arm_converged); lost by an arm when it did not "
+                "accept and another did"
+            ),
+            clauses=(
+                "the per-seed detail behind the per-arm success table: the "
+                "report carries the counts, this table the seeds",
+                "a seed no arm accepted is configuration-invalid and reads 0 "
+                "arms accepted with no arm losing it",
+            ),
+            how_to_read=(
+                "read down an arm's column for its failures; read the lost-by "
+                "column for the asymmetric ones"
+            ),
+            summary=(
+                f"Per-arm success on {configuration} by seed: each arm's "
+                f"outcome class at every start offered, the count of arms that "
+                f"accepted, membership of the seed set, and the arms that lost "
+                f"the start while another accepted."
+            ),
+        ),
+        columns=(
+            Column("seed", "seed", fmt=_fmt_int),
+            *[Column(arm, arm) for arm in order],
+            Column("n_accepted", "arms accepted", fmt=_fmt_int),
+            Column("in_seed_set", "in the seed set"),
+            Column("lost_by", "lost by (another arm accepted)"),
+        ),
+        rows=tuple(seed_rows),
+        denominator=len(seeds),
+        denominator_is=f"distinct seeds run on {configuration}",
+        acceptance=True,
+        kind="per_arm_success_by_seed",
+        detail=True,
+    )
+    return summary_table, by_seed_table
 
 
 def failure_table(
@@ -1958,6 +2141,9 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 seed_sets[f"{label}/{config.name}"] = converged
                 path_groups.append((config.name, arms, by_arm, converged))
                 emitted.append(table)
+                emitted.extend(
+                    per_arm_success(population, config.name, by_arm, label)
+                )
                 emitted.append(
                     failure_table(population, config.name, by_arm, converged, label)
                 )

@@ -27,7 +27,14 @@ Also here, because the audit needed them and no table carried them:
 - the pooled ``AR/A0`` per-call ratio and the ``AR``-to-``A0`` residual factor
   on each configuration, which the report's §5.3 and §6 state as ranges;
 - the frozen-to-mixed ratio of the predicate trial's audit columns, which
-  §5.6 states as "up to 8×".
+  §5.6 states as "up to 8×";
+- **the per-arm success counts** of §4.3, §5.7 and Tables D.67–D.69 — accepted
+  optima of the 25 starts offered, every other start by outcome class and the
+  starts lost that another arm accepted — re-derived here from ``status``,
+  ``mfile.ifail``, ``failure_class`` and the traceback **without the tally's
+  constructions**, and printed beside the cells the tally published in
+  ``runs/gates/tally_optimisation/measurements.json`` (task **A82
+  (per-arm-success)**, 2026-09-15).
 
 Usage::
 
@@ -253,7 +260,7 @@ def main() -> int:
         if "campaign" in str(root) or label.startswith("this"):
             line(f"{label}: y_exit.json under campaign/ (= ok records: 674 evaluations + 247 optimisations)", len(under_campaign), 921)
 
-    print("\n== 6. One prime (arrangement-method) call per dispatch sweep on the partitioned optimisation arm (§4.3, §5.8, D.73–D.75) ==")
+    print("\n== 6. One prime (arrangement-method) call per dispatch sweep on the partitioned optimisation arm (§4.3, §5.8, D.76–D.78) ==")
     for config in CONFIGS:
         rows = idx[config].get("B2", {})
         seeds = sorted({s for arm_rows in idx[config].values() for s in arm_rows})
@@ -265,7 +272,7 @@ def main() -> int:
             diffs[int(r["n_arrangement_method_calls"]) - int(r["dispatch_sweeps"])] += 1
             total += int(r["n_arrangement_method_calls"])
         print(f"  {config} B2 over the seed set (n = {len(converged)}): n_arrangement_method_calls − dispatch_sweeps, histogram {dict(diffs)}")
-        line(f"{config} B2: Σ arrangement-method calls over the seed set (Tables D.73–D.75's cell)", total, {"large_tokamak_nof": 117281, "low_aspect_ratio_DEMO": 157504, "st_regression": 280776}[config])
+        line(f"{config} B2: Σ arrangement-method calls over the seed set (Tables D.76–D.78's cell)", total, {"large_tokamak_nof": 117281, "low_aspect_ratio_DEMO": 157504, "st_regression": 280776}[config])
         print(f"           per run: mean {total / max(len(converged), 1):.1f}; per evaluation (Σ calls / Σ ε): {total / max(sum(stats_mod.n_evaluations(rows[s]) or 0 for s in converged), 1):.2f}  — the report's §4.3 said 13.2 / 12.9 / 14.8 (the evaluation phase's figure)")
     # the evaluation phase's figure, for the record
     idxA = by_config_arm_seed(sources["campaign_displaced"])
@@ -355,6 +362,98 @@ def main() -> int:
             f" (B0 attempts {stats_mod.n_attempts(idx['low_aspect_ratio_DEMO']['B0'][pairs[-1][1]])})"
         )
     print("           the report's §5.1 (a) said 'a slightly different optimum on 2 of 11 seeds'; §6 said 'within 2.2e-6 relative' (the p90)")
+
+    print("\n== 12. Per-arm success: the accepted optima of 25 per arm, by a second route (§4.3, §5.7, D.67–D.69) ==")
+    published = {
+        t["table"]: t
+        for t in json.loads(
+            (Path(campaign.runs_dir) / "gates" / "tally_optimisation" / "measurements.json").read_text()
+        )["tables"]
+    }
+    reported_accepted = {
+        "large_tokamak_nof": {"BR": 22, "B0": 22, "B1": 22, "B2": 22},
+        "low_aspect_ratio_DEMO": {"BR": 12, "B0": 12, "B1": 11, "B2": 11},
+        "st_regression": {"BR": 24, "B0": 23, "B2": 23},
+    }
+    for config in CONFIGS:
+        by_arm = idx[config]
+        arms = sorted(by_arm, key=lambda a: ("BR", "B0", "B1", "B2").index(a))
+        seeds = sorted({s for rows in by_arm.values() for s in rows})
+        # the classification, written out here rather than imported
+        def outcome(r):
+            if r["status"] == "ok" and (r.get("mfile") or {}).get("ifail") == 1.0:
+                return "accepted"
+            if r["status"] == "ok":
+                ifail = (r.get("mfile") or {}).get("ifail")
+                return f"finished, ifail = {int(ifail) if isinstance(ifail, float) else ifail}"
+            text = (r.get("traceback") or "").strip().splitlines()
+            head = (text[-1].strip().split(":", 1)[0] if text else "no traceback")
+            if r.get("failure_class") == "unconverged":
+                return "coupling-loop cap (ModuleSolveFailure)"
+            if r.get("failure_class") == "crashed":
+                return f"crashed ({head.rsplit('.', 1)[-1]})"
+            return str(r.get("failure_class"))
+        labels = {(arm, s): outcome(by_arm[arm][s]) for arm in arms for s in seeds if s in by_arm[arm]}
+        accepted_here = {
+            arm: sum(1 for s in seeds if labels.get((arm, s)) == "accepted") for arm in arms
+        }
+        line(f"{config}: accepted optima per arm of 25 offered", accepted_here, reported_accepted[config])
+        table_name = (
+            f"per-arm success — {config} — campaign_optimisation · "
+            + "·".join(arms)
+        )
+        block = published.get(table_name)
+        if block is None:
+            print(f"           the tally published no table named {table_name!r}")
+            continue
+        published_rows = {row["arm"]: row for row in block["rows"]}
+        line(
+            f"{config}: accepted optima per arm — this script beside the table's cells",
+            accepted_here,
+            {arm: published_rows[arm]["accepted"] for arm in arms},
+        )
+        classes = [c for c in block["columns"] if c["key"] not in {
+            "arm", "offered", "accepted", "lost_another_arm_accepted", "seed_set",
+            "seeds_not_accepted", "lost_seeds",
+        }]
+        for column in classes:
+            label = column["key"]
+            here = {arm: sum(1 for s in seeds if labels.get((arm, s)) == label) for arm in arms}
+            line(
+                f"{config}: {label} per arm",
+                here,
+                {arm: published_rows[arm][label] for arm in arms},
+            )
+        accepted_at = {s: [a for a in arms if labels.get((a, s)) == "accepted"] for s in seeds}
+        lost_here = {
+            arm: sorted(
+                s for s in seeds
+                if (arm, s) in labels and labels[(arm, s)] != "accepted" and accepted_at[s]
+            )
+            for arm in arms
+        }
+        line(
+            f"{config}: starts lost that another arm accepted",
+            {arm: len(v) for arm, v in lost_here.items()},
+            {arm: published_rows[arm]["lost_another_arm_accepted"] for arm in arms},
+        )
+        print(f"           the lost starts, by arm: { {a: v for a, v in lost_here.items() if v} }")
+        offered_here = {arm: sum(1 for s in seeds if (arm, s) in labels) for arm in arms}
+        line(
+            f"{config}: starts offered per arm",
+            offered_here,
+            {arm: published_rows[arm]["offered"] for arm in arms},
+        )
+        sums = {
+            arm: published_rows[arm]["accepted"]
+            + sum(published_rows[arm][c["key"]] for c in classes)
+            for arm in arms
+        }
+        line(
+            f"{config}: accepted + the class columns sum to the starts offered",
+            sums,
+            offered_here,
+        )
 
     print(f"\n{_differs} line(s) DIFFER from the report's figure.")
     return 0 if _differs == 0 else 3

@@ -148,7 +148,10 @@ that V4 inherits as prior context (V3 report, §4–§8; all at `c0ae5b28`, camp
   relocates the point as much.
 - **The node-call win does not reach wall clock**: V3's `B3` is 0–15 % slower despite far fewer node
   evaluations, and a non-node-proportional cost term must exist (V3 §7–§8). Timings are
-  never evidence in this project; the term is to be *counted* (item 3).
+  never evidence in this project; the term is to be *counted* (item 3). *(As built, 2026-09-15: the
+  counting is §5.5 and that is where this line ends — **the non-node cost term and wall clock are out
+  of scope for V4** by ruling D29 (2); the study is an existence proof in node calls, for applications
+  dominated by node-call runtime, not a claim about run time.)*
 - **The trust step is free on the pulsed configurations and not on st**: V3's `B2 → B3` (its joint-test arm to its partitioned arm) iteration
   counts are identical seed for seed on nof and lad; on `st_regression` 7 of 23 both-converged
   seeds differ, V3's `B3` worse on 6 (summed 501 → 587). The outer loop still does work there that
@@ -495,7 +498,12 @@ headline unreadable. The failure table carries the retried seeds with each arm's
    per run per arm. Published beside the node-call table with the dispatch-sweep count. This
    settles on counts alone whether a non-node-proportional term of the hypothesised size
    exists; wall-clock context (3 serial repetitions, median and range) is reported in its own
-   section and is never evidence.
+   section and is never evidence. *(As built, 2026-09-15: **that section is not written and the
+   promise is withdrawn**, ruling D29 (2) — the user: "the non-node cost term is not relevant, as is
+   the wall-clock time. Because this is an existance proof, not a claim that we really improved
+   process this much … the impact on node calls is enough, as it is reasonable to see the impact for
+   applications dominated by node call runtime". The counted per-sweep overhead is §5.5 and no
+   timing is published; the plan text above is not rewritten.)*
 
 **The transfer (RQ3; I-17), restated** *(amended 2026-09-10 on A44; pending review)*. No V4
 number is derived through the transfer; Phase B's realised ratio stands as the deployment result.
@@ -556,7 +564,8 @@ Only a gate failure blocks adoption. Adoption makes `mixed` V4's predicate and a
 with `frozen` selectable for cross-study comparison; V3's numbers are not retro-edited. *(As
 built, 2026-09-15 (A80): gates 1–3 passed and the 12 pairs were neutral, which under this rule adopts
 `mixed`; the campaign nevertheless ran and is reported on `frozen`, and the rule was not applied —
-§5.6 records the departure for the user's ruling rather than adopting retroactively.)*
+§5.6 records the departure for the user's ruling rather than adopting retroactively — ruled D30,
+2026-09-15: the departure stands.)*
 
 **Matched accuracy is verified per run, never assumed from a shared τ.** The exit audit is the
 same full sweep on the same ruler for every arm; a pair whose audit residuals differ beyond the
@@ -819,19 +828,24 @@ PROCESS's own `RuntimeError: Failed to converge after 50 iterations, value is na
 set of **22**; no arm retried on any of them. On lad 14 seeds are outside the set and 13 of them are
 configuration-invalid — no arm reached an accepted optimum there: on 2 every arm crashes, on 9 every arm
 exhausts VMCON's four-attempt retry ladder and finishes with `ifail = 5` (a finished run, counted *ok*
-in Table D.62 and *failed* in companion Table F.17), and on 2 `BR` exhausts the ladder while `B0`, `B1`
+in Table D.62 and *failed* in companion Table F.19), and on 2 `BR` exhausts the ladder while `B0`, `B1`
 and `B2` are refused by their coupling-state loop's 20-sweep cap (`ModuleSolveFailure`, block `FLAT` /
 `M1`, `current_drive.eta_cd_dimensionless_hcd_primary` at `inf`; `B0` 2, `B1` 3, `B2` 3 such exits in
 all). The fourteenth, seed 10, is the one start lost to the intervention arms alone: `BR` and `B0`
 accepted, `B1` and `B2` hit the cap. That leaves **11**, with accepted optima on 12 / 12 / 11 / 11 seeds
 per arm and 12 / 10 / 10 / 10 retried seeds per arm across the 25 offered (Tables D.62, D.65; companion
-Table F.17; `report_counts_check.py` §3). On st every start finished (25 of 25 per arm); one seed is
+Table F.19; `report_counts_check.py` §3). On st every start finished (25 of 25 per arm); one seed is
 configuration-invalid (every arm `ifail = 5` after four attempts) and two more are lost to one arm's
 `ifail = 5` each (`B2` on seed 5, `B0` on seed 10), so the set is **22**; 5 / 3 / 2 seeds retried in
-`BR` / `B0` / `B2`. Every ratio below is over these sets and says so. *(A80 corrected this paragraph:
+`BR` / `B0` / `B2`. Every ratio below is over these sets and says so. **Per arm, of the 25 starts
+offered, accepted optima are 22 / 22 / 22 / 22 on nof, 12 / 12 / 11 / 11 on lad and 24 / 23 / — / 23
+on st for `BR` / `B0` / `B1` / `B2`** — 88 %, 48 % / 44 % and 96 % / 92 % — with every other start
+named by outcome class in Tables D.67–D.69 (per-arm success) and per seed in companion Tables F.14,
+F.18 and F.22; the table is reported, not accepted on (D29, 2026-09-15). *(A80 corrected this paragraph:
 it had described the 13 as "2 crash in every arm and the rest fail to converge in at least one".)*
+*(A82 added the per-arm sentence and its table, 2026-09-15.)*
 
-**RQ2 — the partitioning inside the optimisation, `B0 → B2` (Tables D.73–D.75, headline Tables
+**RQ2 — the partitioning inside the optimisation, `B0 → B2` (Tables D.76–D.78, headline Tables
 D.2–D.5).** `B2` costs **0.6395 / 0.4504 / 0.5331** of `B0`'s solve-phase model-node executions
 pooled (medians 0.6452 / 0.5237 / 0.5911; `B2` cost more on **0 / 2 / 0** seeds), against V3's
 pre-declared context 0.64 / 0.45 / 0.53. Without the seeds on which either side retried the lad
@@ -856,14 +870,14 @@ a stencil column, and `B1` shows the same 640; on lad the median is 0.8468 (3 of
 the largest 6.450, which is why the mean reads 1.4816); on st 1.0000 (5 of 22 above 1). The R rows
 reproduce check 4 (medians 0.6452 / 0.5237 / 0.5911). **The ε = 1 expectation of §3.5 was pre-declared
 on `B1 → B2`, and there it holds exactly**: `B1` and `B2` take the same number of evaluations on 22 of 22
-and 11 of 11 seeds (Tables D.70–D.71, the `B1 → B2` row's *ε = 1 on* column, added by A80). The 1.0476
+and 11 of 11 seeds (Tables D.73–D.74, the `B1 → B2` row's *ε = 1 on* column, added by A80). The 1.0476
 above is `B0 → B2`, and it is the ownership rung's formulation — one design variable more, one stencil
 column more, (nvar + 2)/(nvar + 1) = 22/21 = 1.0476 on nof exactly — not the partition, that adds it; on
 lad the same rung reads 0.8468 because the lift shortens the optimiser's path (0.8125 iterations) by more
 than the column adds. *(A80: this paragraph had read the expectation against `B0 → B2` and called it
 refuted in evaluations.)*
 
-**The same optimum — check 1 (Tables D.67–D.69).** The paired relative objective difference
+**The same optimum — check 1 (Tables D.70–D.72).** The paired relative objective difference
 `B0 → B2` is **2.823e-11 / 4.101e-07 / 3.467e-13** median and **4.570e-11 / 2.148e-06 /
 3.510e-09** at p90 against a threshold of 1.000e-06 on every configuration (the F × yardstick term
 never exceeds the floor: the `BR → B0` yardstick reads 2.082e-15 / 1.982e-14 / 1.553e-13 median).
@@ -872,7 +886,7 @@ objective clusters and 2 pairs below cluster resolution. `B0 → B1` reads the s
 digit on lad (4.101e-07 / 2.148e-06, FAIL), so the difference sits on the ownership rung and not on
 the partition. On st the yardstick pair itself hops on 2 of 22 seeds and `B0 → B2` on 1 of 22.
 
-**The path — check 2 (Tables D.70–D.72).** The summed-over-attempts iteration median of `B0 → B2`
+**The path — check 2 (Tables D.73–D.75).** The summed-over-attempts iteration median of `B0 → B2`
 is **1.0000 / 0.8125 / 1.0000**, PASS against ≤ 1.05 on every configuration; the ratio of sums
 0.9942 / 0.7012 / 0.9530. `B0 → B1` reads identically on the pulsed configurations (1.0000 /
 0.8125), so the partition adds no iteration; the final-attempt construction agrees on nof (0
@@ -884,23 +898,23 @@ the driver's count of dispatch-body sweeps, under a heading that said evaluation
 a mechanism (block sweeps over a third of the map) and not a cost.
 
 **The other rungs.** `BR → B0`, the stopping rule inside the optimisation, reads **0.9756 / 1.0300
-/ 1.1968** pooled (Tables D.73–D.75); `B0 → B1`, ownership plus the removal of the output-time
+/ 1.1968** pooled (Tables D.76–D.78); `B0 → B1`, ownership plus the removal of the output-time
 loop, reads **1.0077 / 0.6919** pooled (medians 1.0151 / 0.8049; `B1` worse on 18 of 22 seeds on
 nof) — no saving on nof, a third off on lad, where it also shortens the path (0.8125 median
 iterations). The lift closes: constraint 93's residual at every accepted optimum of `B1` and `B2`
 is **1.659e-05 s / 5.480e-06 s** median (relative 2.304e-09 / 6.744e-10), in the equality block
-(Tables D.79–D.80).
+(Tables D.82–D.83).
 
-**Accuracy at exit (Tables D.76–D.78).** Over the arm group's finished runs the restricted maximum
+**Accuracy at exit (Tables D.79–D.81).** Over the arm group's finished runs the restricted maximum
 residual of `B2` is 0 / 0 / 7.497e-12 median and **7.257e-16 / 5.315e-15 / 3.587e-11** at its
 maximum on the frozen ruler — every value far below τ = 1e-6 — against `B0`'s 1.150e-11 / 0 /
 4.894e-14 median. `BR`'s maximum on lad is `inf` on `current_drive.eta_cd_dimensionless_hcd_primary`
-(the per-run components-above-τ column, companion Table F.48, reads 1 on two of its 23 runs;
-§5.7). The per-run components-above-τ columns are companion Tables F.47–F.49.
+(the per-run components-above-τ column, companion Table F.54, reads 1 on two of its 23 runs;
+§5.7). The per-run components-above-τ columns are companion Tables F.53–F.55.
 
 **Cost beside the node calls.** The arrangement-method (prime) calls `B2` adds are one per sweep of
 the dispatch body — **5 331.0 / 14 318.5 / 12 762.5 per run** on average, 117 281 / 157 504 / 280 776
-summed over its 22 / 11 / 22 runs in the seed set (Tables D.73–D.75, two columns of their own, never
+summed over its 22 / 11 / 22 runs in the seed set (Tables D.76–D.78, two columns of their own, never
 pooled into the node calls; `report_counts_check.py` §6 finds the per-run count equal to the run's
 dispatch sweeps on every one of the 55 runs). Per evaluation that is about 8.3 / 8.4 / 9.1 (the per-run
 mean over Table D.5's ε), the optimisation's sweeps per evaluation — **not** the 13.2 / 12.9 / 14.8 of
@@ -908,14 +922,14 @@ the displaced single evaluations (Tables D.13–D.15), whose entries sit 100× f
 point. *(A80: the sentence had carried the evaluation phase's figure over.)* The output-time loop costs exactly two sweeps per run in `BR` and `B0` and none in `B1`
 and `B2`; the attempt-summation identity holds with residual 0 on every run that finished with
 status ok, while a crashed or unconverged start carries no solve-phase total and reads NO with no
-residual — both are per-run tables and are companion Tables F.15–F.22.
+residual — both are per-run tables and are companion Tables F.16, F.20 and F.24 (the identity) and F.17, F.21 and F.25 (the per-run overhead).
 
 ### 4.4 The same cells, computed a second time
 
-Every cell of Tables D.2–D.80 and of the companion's tally tables was recomputed from the run
+Every cell of Tables D.2–D.83 and of the companion's tally tables was recomputed from the run
 records by `harness/measurement/analysis.py`, which imports none of the tally's constructions, and
 compared without tolerance: **101 tables, 14 394 cells, 0 mismatched** (gate `recomputation`, one
-row of Table D.1); the recomputed tables themselves are companion Tables F.50–F.150.
+row of Table D.1); the recomputed tables themselves are companion Tables F.56–F.162.
 
 ## 5. Discussion
 
@@ -989,17 +1003,17 @@ the sentence had read "0.97 and 0.84 against `A0`" — the 0.97 is against `A1` 
 That is what the predicate-matched control is a control *for*: `B0` is `BR` with a stopping rule
 that reaches a stated accuracy, so that every rung above it compares arms at matched accuracy.
 
-**`B0 → B1` — ownership in the optimisation, and the output-time loop (Tables D.73–D.75,
-D.70–D.72, D.79–D.80).** Lifting the burn time to the optimiser and dropping upstream's
+**`B0 → B1` — ownership in the optimisation, and the output-time loop (Tables D.76–D.78,
+D.73–D.75, D.82–D.83).** Lifting the burn time to the optimiser and dropping upstream's
 output-time loop costs **1.008 / 0.692** pooled (medians 1.015 / 0.805) on the two pulsed
 configurations — no saving on the large tokamak, a third off on the low-aspect-ratio machine, where
 it also shortens the optimiser's path (summed iterations 0.81 median, 0.70 sum ratio). The output
 loop's own cost is exactly two sweeps per run in `BR` and `B0` and zero in `B1`/`B2` (the
-per-run overhead tables, companion Tables F.16, F.19 and F.22), so it is not what moves the ratio. The lift closes: constraint 93's residual
+per-run overhead tables, companion Tables F.17, F.21 and F.25), so it is not what moves the ratio. The lift closes: constraint 93's residual
 at every accepted optimum is 1.7e-5 s / 5.5e-6 s median (2.3e-9 / 6.7e-10 relative), in the
 equality block.
 
-**`B1 → B2` and `B0 → B2` — the partitioning inside the optimisation (RQ2; Tables D.73–D.75;
+**`B1 → B2` and `B0 → B2` — the partitioning inside the optimisation (RQ2; Tables D.76–D.78;
 per module Tables D.2–D.4; the path Table D.5).** The
 headline: `B2` costs **0.640 / 0.450 / 0.533** of `B0`'s solve-phase model-node evaluations pooled
 (medians 0.645 / 0.524 / 0.591; worse on 0 / 2 / 0 seeds), against V3's pre-declared context
@@ -1008,10 +1022,10 @@ construction and 25 seeds. Without the retried seeds the low-aspect-ratio ratio 
 (0.54 median), the reading §3.5 asked for beside the pooled one. `BR → B0` reads 0.976 / 1.030 /
 1.197 pooled against the expected 0.98 / 1.03 / 1.16. The `ε = 1` expectation holds where it was
 pre-declared and in the quantity it was declared in: `B1` and `B2` take exactly the same number of
-evaluations on every seed of the set — 22 of 22 and 11 of 11 (Tables D.70–D.71, the `B1 → B2` row) —
+evaluations on every seed of the set — 22 of 22 and 11 of 11 (Tables D.73–D.74, the `B1 → B2` row) —
 and the same summed iterations (1.000 and 0.8125 against `B0` for both), so the partition changes what
 an evaluation costs and not how many the optimiser takes. The dispatch runs 2.7 / 2.1 / 2.8 times as
-many sweeps per run in `B2` (the *sweeps median* column of Tables D.70–D.72, 2.6524 / 2.1169 / 2.7767:
+many sweeps per run in `B2` (the *sweeps median* column of Tables D.73–D.75, 2.6524 / 2.1169 / 2.7767:
 block sweeps, each over a third of the map), which is the mechanism, not a cost.
 
 **Refuted or qualified expectations, named.** (a) **Same optimum (check 1) FAILs on the
@@ -1021,7 +1035,7 @@ below cluster resolution; `BR → B0`'s yardstick is 2.0e-13. Since `B1` and `B2
 to every digit, the difference sits on the ownership rung `B0 → B1` — the lifted formulation lands
 on a different optimum on 3 of 11 seeds: the 2 pairs below cluster resolution (1.26e-6 and 2.15e-6
 relative) and the 1 hop between objective clusters, 3.1e-4 relative, on the one seed of the set on
-which `B0` retried (`report_counts_check.py` §11; Table D.68's *hops*, *below resolution* and *retried*
+which `B0` retried (`report_counts_check.py` §11; Table D.71's *hops*, *below resolution* and *retried*
 columns) — and not on the partition. On the large tokamak
 (2.8e-11 / 4.6e-11) and the spherical tokamak (3.5e-13 / 3.5e-9) check 1 PASSes with margin.
 (b) **The low-aspect-ratio seed set is 11 of 25.** Fourteen seeds are outside the set, 13 of them
@@ -1043,7 +1057,7 @@ on two configurations and 0.81 on the third), but attributing the residual to on
 **I-17**, which the user has reserved. What the campaign settles is that the transfer is not
 systematic in sign, exactly as V3's assessment (§2.2) said, and that Phase A's displaced-regime ratio
 is a predictor good to within 22 % here (the transfer factors are quotients of the pooled cells of
-Table D.7's TOTAL rows and Tables D.73–D.75, not cells themselves).
+Table D.7's TOTAL rows and Tables D.76–D.78, not cells themselves).
 
 ### 5.3 The stopping rule (RQ4)
 
@@ -1060,15 +1074,15 @@ it, never against `BR` (user, 2026-09-11).
 No V4 arm measures it (V3's joint-test arm — V3's `B2`, not today's `B2` — was removed, §3.2). A43 (st-trust-gap) answered it on V3's records: a single
 schedule pass reaches the flat fixed point bit for bit once the blocks are solved exactly. The
 campaign's `B2` (the partitioned arm) exit audit is consistent with that: 0 components above τ at the accepted point on
-every converged run on every configuration (Tables D.76–D.78; the per-run column is companion
-Tables F.47–F.49), with the spherical tokamak's
+every converged run on every configuration (Tables D.79–D.81; the per-run column is companion
+Tables F.53–F.55), with the spherical tokamak's
 `B2` restricted median 7.5e-12 against `B0`'s 4.9e-14 — a factor 150, two orders, both far under
 τ = 1e-6.
 
 ### 5.5 The per-sweep overhead
 
-Counted, not timed (the per-run overhead tables, companion Tables F.16, F.19 and F.22; the
-numbers here are companion Table F.16's seed-0 rows). `B2` evaluates the convergence predicate about 2.3×
+Counted, not timed (the per-run overhead tables, companion Tables F.17, F.21 and F.25; the
+numbers here are companion Table F.17's seed-0 rows). `B2` evaluates the convergence predicate about 2.3×
 as often as `B0` per run (4 839 against 2 069 tests on the large tokamak at seed 0) over widths of
 239 against 840 components, so the components compared per run are **fewer** (1.16 M against 1.74 M).
 The counted overhead cannot be the source of a wall-clock gap; on the spherical tokamak 10.8 % of
@@ -1089,14 +1103,22 @@ measurement is neutral → `mixed` is adopted as V4's predicate and audit ruler.
 teeth and the 12 pairs it measured were neutral, so the rule as written adopts `mixed`; the campaign
 was pressed and is reported on `frozen`, and the trial's measurement was also smaller than §3.6
 declared (`A0`/`A2` at 2 seeds as a gate, not `A0`/`A1`/`A2` at 25 seeds in the campaign). The
-departure is recorded here (A80, 2026-09-15) for the user's ruling — a dated amendment either way —
-rather than adopted retroactively: nothing in the tables moves with the ruler except the exit-audit
-columns, which are printed on both. A future revision adopting `mixed` must restate τ.
+departure is recorded here (A80, 2026-09-15) rather than repaired. **Ruled (D30, the user,
+2026-09-15: "I am fine with recording the departure, please do"): V4 stands on the `frozen` ruler
+and the departure is recorded, not repaired.** V4's numbers are therefore frozen-ruler numbers: the
+rule was met (G8, 12 of 12 pairs bit-identical) and not applied because the campaign was pressed
+before the rule was re-read. Nothing acceptance-bearing depends on it — the exit audit is printed on
+both rulers, and every cost quantity is a count of model-node executions of runs that were made under
+`frozen`; since `mixed` is never tighter than `frozen`, a change of ruler could only have stopped some
+runs earlier, which cannot be applied to runs already made, only to their reporting. Keeping `frozen`
+also keeps V4 on V3's ruler, so the V3 context numbers (0.64 / 0.45 / 0.53) stay comparable. V5
+applies the adoption rule before its campaign or drops it; a future revision adopting `mixed` must
+restate τ.
 
 ### 5.7 Robustness events, reported without a robustness claim
 
 Twenty-eight of 275 optimisations did not finish (Tables D.61–D.63; the failure tables are companion
-Tables F.14, F.17 and F.20): 20 crashed with PROCESS's own
+Tables F.15, F.19 and F.23): 20 crashed with PROCESS's own
 `RuntimeError: Failed to converge after 50 iterations, value is nan` from a model-internal Newton
 solve at a displaced start, and 8 — on the low-aspect-ratio machine only — were refused by their
 coupling-state loop's 20-sweep cap (the harness stamps both `crashed`; the taxonomy tables split them;
@@ -1111,6 +1133,13 @@ on a variable the incumbent also cannot hold finite; counted in accepted optima 
 start — 11 for `B1` and `B2` against 12 for `BR` and `B0` (seed 10, §4.3) — because on the other lost
 seeds no arm reached one: 9 of them are VMCON exhausting its retry ladder (`ifail = 5` after four
 attempts) in every arm, a failure the taxonomy tables count as finished (`report_counts_check.py` §3).
+**Stated per arm over the 25 starts offered rather than through the seed-set filter** (Tables
+D.67–D.69, added 2026-09-15 under D29): the rates are 22 / 22 / 22 / 22 on the large tokamak,
+12 / 12 / 11 / 11 on the low-aspect-ratio machine — the intervention arms lose one start (seed 10)
+that the flat arms solve — and 24 / 23 / — / 23 on the spherical tokamak, where the two asymmetric
+failures cancel in count and not in cost: `B2` gives up on seed 5 after 479 630 node calls where
+`B0` accepts at 175 413, and `B0` gives up on seed 10 after 667 989 where `B2` accepts at 129 012
+(companion Table F.23). The seed set drops both starts and neither cost enters a ratio.
 The plan makes no robustness claim and this report makes none.
 
 ### 5.8 Threats to validity that survived the design
@@ -1125,7 +1154,7 @@ The plan makes no robustness claim and this report makes none.
 - **The prime's excluded cost:** `n_arrangement_method_calls` is 13.2 / 12.9 / 14.8 per evaluation in
   `A2` (Tables D.13–D.15) and 5 331 / 14 319 / 12 763 per optimisation on average in `B2` — one per
   dispatch sweep; 117 281 / 157 504 / 280 776 summed over the 22 / 11 / 22 runs of the seed set (Tables
-  D.73–D.75, columns *arrangement·method calls / run* and *Σ over the set*; *A80: the sentence had
+  D.76–D.78, columns *arrangement·method calls / run* and *Σ over the set*; *A80: the sentence had
   called the sum "per optimisation"*), stamped beside every node-call table and never pooled into it
   (D19). A reader who
   weights the prime as a model node must add it; it is not a model node.
@@ -1135,7 +1164,9 @@ The plan makes no robustness claim and this report makes none.
 ## 6. Conclusion
 
 *Each research question of §1.2, per configuration (large tokamak / low aspect ratio / spherical
-tokamak), with its number, denominator and pre-declared verdict.*
+tokamak), with its number, denominator and pre-declared verdict — three configurations, so this is a
+case study and not a benchmark set, and the conclusion it licenses is an existence proof that the
+architecture alone changes the cost in model-node evaluations (D29, 2026-09-15).*
 
 **RQ1 — per-call cost.** At matched achieved accuracy (identical restricted residuals, factor 1
 against the F = 10 rule), one MDA solve under the partitioned architecture costs **0.56 / 0.58 /
@@ -1361,6 +1392,7 @@ joint-test arm, not today's partitioned optimisation arm (the renaming entry of 
 | 2026-09-15 | **A78 (arm-renames): the arms renamed so the rungs read rung for rung — `A0p → A1`, `A1 → A2`, `B3 → B2`; `AR/A0/A1/A2` against `BR/B0/B1/B2`** (the user, 2026-09-15: *"In the v4 report, rename A0p and A1 to A1 and A2, and B3 to B2. That makes the naming of the rungs reflect the parallelism in the switch matrix … it should be applied consistently throughout the v4 folder"*). A rename, not a method change: no number changed. Applied in place in §1–§3, §5–§6 and Appendices A–B; §4 re-rendered by `--plan-tables write` after the tally stages were re-run over the same 949 campaign records (`check` IDENTICAL); every mention of V3's removed joint-test arm now reads "V3's `B2`" so today's `B2` cannot be read as it; §2.1 quotes V3's results under V3's names and says so; this appendix's earlier entries keep their day's names (the line at its head). Harness: the matrix, the registry's V3 name map (`switches.PREVIOUS_ARM_NAMES = {R: BR, A1: A2, B3: B2}`), every gate, both tallies, the analysis, the README, `PROCESS/CHANGES.md` (no `.py` under `PROCESS/` changed: `copy_identity` and `g0prime` PASS). **The records were not re-made.** The 949 campaign records and the 139 seeded gate records stamp the old names; one declared table, `records.RECORDED_ARM_NAMES`, is applied in `records.read` — the one reader — so every consumer sees today's names; a record made after the renaming stamps `arm_naming` (by the pool) and is read as written; a translated record's `job_digest` is re-derived over the translated identity, the stamped one kept in the in-memory trace `arm_name_translation`; the pool resolves a job's directory by that digest (`pool.directory_for`) where a record exists and refuses to remove another job's record; a record naming an arm nobody declared is refused by name. Gate `resume_identity` surveys every record by how its name was read — 1099 records: 458 translated (`A0p → A1` 132, `A1 → A2` 233, `B3 → B2` 93), 641 unchanged or stamped, 0 refused — and has four new teeth (160 teeth in all). `--jobs all`: 1075 distinct jobs, `--resume` would keep 1044 before and after the renaming (the 31 not kept are the 28 crashed campaign optimisations and G5's three hand-composed jobs, both as at the base). The reproduction reference's `arm` fields regenerated names-only (`reference.py --rename-arms`; 9 fields, 3 provenance keys) and GR pressed once: 256 / 0. **The press in this worktree (`--gate all --resume`, then the gates the stopped chain did not reach, one press each): 30 PASS, 0 FAIL, 161 of 161 teeth** — after one fix on the branch: at the first press `switch_composition` (G5) FAILed 3 of 141, its kept from-the-matrix records (`0677a9b3`, made in the A73 worktree) against its hand-composed records re-made here differing only in `resolved_switches`' absolute artifact paths under the two worktrees, every physics value equal; the gate now compares those paths relative to the experiment directory of the record that carries them (its own `tree` stamp), with a tooth (a resolved value flipped disagrees; the paths re-rooted under another worktree agree), and the pool renders path-valued `override_env` identity entries tree-relative so the hand-composed job's identity — the reason `--jobs all` at the base listed those three jobs "no record on disk" in every worktree but A73's — is portable (digest changed for those 3 jobs only; `--jobs all` keeps 1044 of 1075 before and after, 1047 once their records exist). G5 pressed once after: 141 / 0. Runs made: 7 (G7's tooth evaluation, re-made by design every press; G5's three hand-composed `B2` optimisations twice — once under the old identity, once under the portable one, ~29–52 s each); every other record kept, 1096 → 1102. §4 against the base with the names reversed (`renamed_section_diff.py`): 1439 tokens reversed, 13 of 4966 line positions differ, all of them the §4.1 gate table and marker re-made by this press (the new records and their commits, `resume_identity`'s new population, the census entry pressed as `optimisation`, G8's excluded-value count 240 → 294 from the translation trace) — 0 in a measurement cell. |
 | 2026-09-15 | **A79 (report-captions): the report's presentation brought to an academic paper's** (the user, 2026-09-15: *"Captions in the report should be much more concise a few lines at most. the rest should be clear from the main text"*; *"the report should mimic academic paper style in terms of how the captions are handled"*; *"move the big tables to an appendix (with some explanation/context there), report only the conclusions in the main text"*; *"there should simply not be any tables listing results per seed. I don't want full result matrices, but summarizing tables"*; the three headline shapes of `docs/plans/REPORT_HEADLINE_TABLES.md`). **§4 is now hand-written conclusions** — per research question and rung, the numbers that carry a verdict, each pointing at its table by number — and **the rendered tables are Appendix D — Results tables**: 80 summarising tables numbered `Table D.1`–`D.80` (the gate table; the three headline shapes as Tables D.2–D.9 — node calls per module per configuration with per-run brackets, pooled `B2/B0`, per-run median and the runs `B2 > B0`; the optimiser's path over the configurations as iterations, ε from `sweeps_per_eval.n_evaluations` (issue I-26's field), ρ and R = ρ × ε; node calls per block, configurations stacked, per evaluation-phase source; then cost per call, matched accuracy, fixed-point distance, the ownership rung, the failure taxonomies, the seed sets, checks 1–4 and the accepted-optimum accuracy), each under **one caption of a few lines** (median 368 characters, at most 485 — `caption_census.py`), with every construction's declaration printed once in D.0 from the stages' own records and a hand-written context paragraph per group. **No table with a row per run, seed, pair of runs or predicate evaluation is in the report**: the per-sweep overhead (both phases), the attempt-summation identity, the failure table and the predicate trial, the full versions of the five table kinds whose per-seed columns the report omits, and the second implementation's 101 tables are rendered, unchanged in content, into the generated companion file [`RESULTS_TABLES_FULL.md`](RESULTS_TABLES_FULL.md) as `Table F.1`–`F.150`, guarded by the same `--plan-tables check`, which now compares both documents and resolves every `Table D.n` / `Table F.n` reference in the hand-written text. The doubled-caption defect (373 `*Caption:` lines for 187 tables at `4dac585e`: the record's `markdown` carried the caption and the renderer printed it again) is fixed at its cause — the record carries the grid alone. The pooled `n = 100` line under per-row tables is gone. §3's tables are `Table 1`–`Table 6`, Appendix A's and B's `Table A.1` / `B.1`, with captions of a few lines. §5's and §6's table references re-pointed at the numbered tables; no number in them changed. **No number changed:** `results_cells_unchanged.py --base 4dac585e` — every one of the 33 467 cells of the old §4 is a cell of Appendix D or the companion file with the same value (0 absent, 0 differing); the 16 new tables (8 tally + 8 recomputed) are the headline shapes; the gate table's `recomputation` row moved from 93 tables / 13 174 cells to 101 / 14 394 because the table set grew, and `tally_contracts` correspondingly. Records translate arm names at read; the tally stages were re-run over the same 949 records at `57dc0c14`, **0 PROCESS runs**. |
 | 2026-09-15 | **A80 (report-accuracy-audit): the report audited sentence by sentence against Appendix D and the companion file** (the user: *"critically reassess the accuracy of the experiment_report v4"*); the findings table is `docs/reports/A80_report_accuracy_audit.md`. **Corrected in place** (each corrected sentence says so): the population — 28 records stamped `crashed` are 20 PROCESS `RuntimeError` crashes and 8 refusals by the coupling-state loop's 20-sweep cap, not "28 crashed … all with PROCESS's own RuntimeError" (header, §4, §5.7); the low-aspect-ratio seed set — 14 seeds outside, 13 configuration-invalid, of which 9 are VMCON exhausting its retry ladder with `ifail = 5` in every arm and 2 the incumbent's ladder exhaustion beside the coupling-state arms' cap, and one seed (10) lost to the intervention arms alone; accepted optima 12 / 12 / 11 / 11 per arm (§4.3, §5.1 (b), §5.7); **the pre-declared `ε = 1` expectation is on `B1 → B2` and holds exactly on 22 of 22 and 11 of 11 seeds** — §4.3 had read it against `B0 → B2` and called it refuted in evaluations, §5.1 had substituted iterations for evaluations (the `B1 → B2` row the plan's §3.5 declared "reported beside" is now in Tables D.70–D.72, with an *ε = 1 on* column); `AR → A0`'s per-call saving is 10 % / 0 / 16 % and its residual factor 52× / — / 29×, not "3–16 %" and "30–50×" (§5.1, §5.3, §6 RQ4; §5.1's "0.97 against `A0`" was against `A1`); check 1 on lad differs on 3 of 11 seeds with the worst pair 3.1e-4 on the one retried seed, not "2 of 11" and not "within 2.2e-6" (§5.1 (a), §6); the transfer factor 0.78 is 22 % off, not "a fifth" / "±20 %" (§5.2, §6); `B2`'s st exit residual is two orders above `B0`'s, not three (§5.4); the predicate trial ran 8–16 evaluations per run and the rulers differ by up to 5.4×, not 9–15 and 8× (§5.6); the prime calls of Tables D.73–D.75 are a sum over the seed set, 5 331 / 14 319 / 12 763 per optimisation on average and 8.3 / 8.4 / 9.1 per evaluation, not "per optimisation" and not the evaluation phase's 13.2 / 12.9 / 14.8 (§4.3, §5.8); `copy_identity` is the second PASS row with a nonzero mismatched count (7 permitted-edit files; §4.1); G1's 54 144 are 2 825 record values + 51 319 output-file lines and `tally_contracts`' 559 are 303 + 256, now shown in the cell (§4.1, D.1); the evaluation-phase denominators are 25 per arm in the displaced regime only — 20 / 19 / 14 at the stencil points, 1 in the entry reference (§4 intro, §4.2, §5 intro); "63 / 63 / 21 / 24" outside the solve phase is 25 for `B2` on st; the 2 lad seeds above 1 in Tables D.2–D.4 are node calls, 3 took more evaluations (§4.3). **As-built brackets in the plan (§3, text unchanged):** the stencil regime is 2·nvar points per arm — no lifted column exists in Phase A — 396 evaluations, not 418 (§3.4, §3.10); the predicate trial ran as gate G8 on 12 pairs, not 150 campaign runs, and **its pre-declared adoption rule was not applied** — neutral on a passed gate adopts `mixed`, the campaign ran on `frozen`; recorded in §5.6 for the user's ruling (§3.6, §3.10, App. B item 5a); G7's teeth 9/9 not 5/5 and G5's compared set as built (Table 5); the 20-sweep cap binds the flat control's one block too (Table 6); §3.5's transfer identity still spelled `B3` — renamed `B2`; the format-review and "every table in §4" sentences bracketed (§3.7, §3.8 (iii)). **Appendix D and the companion, through the renderer only:** issue **I-26 closed** — check 2's evaluation column reads `sweeps_per_eval.n_evaluations` (ε) in `tally_optimisation.py` and `analysis.py`, the old `n_model_calls` ratio kept beside as *sweeps median*, the plan's `B1 → B2` row added, the `n_model_calls` schema sentence in `records.py` corrected (the driver's sweep count, not evaluations); check 4 gains *arrangement·method calls / run* beside the sum; Table D.5's caption states n per configuration, never summed (D21 (b)); the gate table shows a summed *compared* count's parts and names both nonzero-mismatched PASS rows; the predicate-trial declaration's dangling "§4.2.5" re-pointed. Gates re-pressed with `--resume` at `86430cb6` and `1f378e58`: `recomputation` 14 445 compared / 0 mismatched over 101 tables (from 14 394; the 51 new cells are the new columns and rows), `tally_contracts` 559 / 0 (303 + 256), `run_kind_separation` 3 000 / 0, `self_containment` 52 / 0; `--measure gate_table --resume` 30 PASS, 0 FAIL, 161 of 161 teeth; `--plan-tables write`, `check` IDENTICAL, 80 tables in Appendix D before and after (no number shifted, T17), 150 in the companion; stamp survey before and after: 1 102 records, 0 whose commit changed, 0 new — **0 PROCESS runs**. Every count the report states re-derived from the records by `report_counts_check.py` (committed) and printed beside the report's figure; the two `y_exit.json` files under the campaign tree that are not campaign records are the lifted-input derivation's baseline evaluations (`input_files/<configuration>/baseline_evaluation/`), so 921 under `campaign/` = 674 + 247 exactly. Appendix A gains `report_counts_check.py` and the `harness/data/`, `harness/reference/` folders; Appendix B's item statuses brought to the improvement list's current state, rows 9–15 added. Not changed: the merged reports and this appendix's earlier entries (their "28 crashed" stands as the record of its day, D17). |
+| 2026-09-15 | **A82 (per-arm-success): reliability stated per arm, the case study named, the wall-clock section withdrawn** (rulings **D29** and **D30**, the user, 2026-09-15). D29 (1) (*"I follow your advice here"*, on A81 (benchmarking-practices)'s finding F1): a **per-arm success table** — one declared construction `stats.per_arm_success`, computed in `tally_optimisation.py`, re-derived independently in `analysis.py` under `recomputation` — states, per configuration and optimisation arm, the 25 starts offered, the accepted optima (status ok and `ifail == 1`), every other start by outcome class (finished with the optimiser's exit code; crashed in PROCESS's own code; refused at the coupling-state loop's 20-sweep cap) and the starts lost that another arm accepted, with the seed set beside; **Tables D.67–D.69**, the seeds named in companion Tables F.47–F.49 and per seed in companion Tables F.14, F.18 and F.22. Accepted optima of 25: nof 22 / 22 / 22 / 22, lad 12 / 12 / 11 / 11, st 24 / 23 / — / 23. Reported, not accepted on — no pre-declared rule reads it and no verdict changes. §4.3 and §5.7 gain one sentence each. D29 (2) (*"the non-node cost term is not relevant, as is the wall-clock time. Because this is an existance proof …"*): §3.5 check 5's promised wall-clock section and §1's non-node-cost-term line carry a dated as-built bracket **withdrawing the promise**; no timing is published and the plan text is not rewritten. D29 (3) (*"yes, this is a case study, not a full benchmark indeed"*): §6's preamble gains one clause — three configurations, a case study, the conclusion an existence proof in node calls. **D30** (*"I am fine with recording the departure, please do"*): §5.6 states the ruling — V4 stands on the `frozen` ruler, the predicate trial's adoption rule was met (G8, 12 of 12 pairs bit-identical) and not applied, nothing acceptance-bearing depends on it, V5 applies the rule before its campaign or drops it — and §3.6's as-built bracket says the departure stands. Appendix D grew 80 → 83 tables and the companion file 150 → 162, so every `Table D.n` ≥ D.67 moved by 3 and the companion's F.14 onward moved; **30 citations were re-pointed** in §4.3, §4.4, §5.1, §5.3, §5.5, §5.6, §5.7 and §5.8 (trap T17). The entries above keep the numbers of their day. `recomputation` 15 122 / 0 over 107 tables; `tally_contracts` 577 / 0; `run_kind_separation` 3 000 / 0; `self_containment` 52 / 0; 30 PASS / 0 FAIL, 161 of 161 teeth; 0 PROCESS runs and 0 of 1 102 run records re-made. |
 
 ## Appendix D — Results tables *(rendered by `harness/measurement/plan_tables.py` from the stage records; the **campaign** population — 949 run records at `57dc0c14`)*
 
@@ -1414,7 +1446,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - the arrangement-method (prime) calls are not model nodes and are not in any row.
 - *How to read:* read down a configuration's block rows to see where the partition's saving sits; a ratio near 1 on a block means the block is solved about as often as the flat arm sweeps it.
 
-**cost per call** (`cost_per_call`, stage `tally_evaluation`; Tables D.10–D.21; companion Tables F.23–F.34; 12 table(s)).
+**cost per call** (`cost_per_call`, stage `tally_evaluation`; Tables D.10–D.21; companion Tables F.26–F.37; 12 table(s)).
 
 - *Units:* model-node executions per `call_models` evaluation; sweeps are walks of the model sequence; ratios are dimensionless.
 - *A row is* one arm of the evaluation phase on this configuration.
@@ -1452,7 +1484,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - the whole-state distance is large for the partitioned arm by design — its once-per-run nodes run at the end, so their outputs are stale at exit — and is published to show the exclusion's size, not judged.
 - *How to read:* a restricted median far below τ with 0 pairs above τ means the two arms stopped at the same fixed point to within the tolerance they were asked for; a pair above τ names an entry on which they did not, and the worst-pair column says which.
 
-**the ownership rung** (`ownership_rung`, stage `tally_evaluation`; Tables D.43–D.48; companion Tables F.35–F.40; 6 table(s)).
+**the ownership rung** (`ownership_rung`, stage `tally_evaluation`; Tables D.43–D.48; companion Tables F.38–F.43; 6 table(s)).
 
 - *Units:* node-call ratio dimensionless; the burn-time residual in seconds and relative to the burn time.
 - *A row is* this configuration's rung.
@@ -1483,7 +1515,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - a crashed start is counted here and in the failure table, and reaches no cost cell: the cost tables are over the every-arm-converged seed set (plan §3.5).
 - *How to read:* a nonzero crashed column is a machinery result that must be explained before any ratio on this configuration is cited; the detail says whether one failure mode or several.
 
-**the seed set** (`seed_set`, stage `tally_optimisation`; Tables D.64–D.66; companion Tables F.41–F.43; 3 table(s)).
+**the seed set** (`seed_set`, stage `tally_optimisation`; Tables D.64–D.66; companion Tables F.44–F.46; 3 table(s)).
 
 - *Units:* counts of seeds.
 - *A row is* this configuration.
@@ -1494,7 +1526,19 @@ Every table of this appendix and of the companion file is an instance of one **c
 - a seed on which **no** arm converged is configuration hardness, counted in its own column and not against any arm.
 - *How to read:* this n is the denominator of every other optimisation-phase table on this configuration.
 
-**same optimum (check 1)** (`same_optimum`, stage `tally_optimisation`; Tables D.67–D.69; 3 table(s)).
+**per-arm success** (`per_arm_success`, stage `tally_optimisation`; Tables D.67–D.69; companion Tables F.47–F.49; 3 table(s)).
+
+- *Units:* counts of starts.
+- *A row is* one optimisation arm on this configuration.
+- *A column is* the starts offered, the accepted optima, every other start by its outcome class, the starts lost that another arm accepted, and the seed set beside.
+- *Construction:* stats.per_arm_success — accepted is stats.accepted_optimum (status ok AND the output file's ifail == 1); every other start carries one stats.outcome_class (finished with the optimiser's exit code; crashed in PROCESS's own code, the exception named; refused by the coupling-state loop's sweep cap, ModuleSolveFailure); a start is lost when this arm did not accept and another arm did; the seed set is stats.every_arm_converged.
+- **reported, not accepted on**: no pre-declared rule of the plan reads a per-arm rate; the cost tables stay over the seed set and this table states what that filter leaves out (decision D29, 2026-09-15, on A81 (benchmarking-practices)'s finding F1).
+- the classes partition the offered starts: accepted plus the class columns sum to the starts offered in every row.
+- a seed no arm accepted is configuration hardness (the seed-set table's configuration-invalid column) and is not a lost start of any arm; the lost starts are the asymmetric failures.
+- the harness stamps a coupling-loop refusal and a PROCESS exception both as status crashed; the failure class and the traceback separate them here, as in the taxonomy table.
+- *How to read:* read accepted over offered as the arm's success rate with its denominator; the lost column is what the seed-set filter hides from a cost ratio.
+
+**same optimum (check 1)** (`same_optimum`, stage `tally_optimisation`; Tables D.70–D.72; 3 table(s)).
 
 - *Units:* dimensionless: a relative difference of the normalised objective.
 - *A row is* one arm pair over the seed set.
@@ -1505,7 +1549,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - the retried column is computed from attempts[], never from a stored flag, so a pair containing a retry is visible here as well as in the cost table.
 - *How to read:* a verdict is read only where a threshold exists; a hop is a seed whose two sides landed in different objective clusters, and the yardstick pair's own hop rate is the comparator.
 
-**iteration multiplier (check 2)** (`iteration_multiplier`, stage `tally_optimisation`; Tables D.70–D.72; companion Tables F.44–F.46; 3 table(s)).
+**iteration multiplier (check 2)** (`iteration_multiplier`, stage `tally_optimisation`; Tables D.73–D.75; companion Tables F.50–F.52; 3 table(s)).
 
 - *Units:* dimensionless ratios of counts.
 - *A row is* one arm against the flat control over the seed set, and the B1 → B2 step beside where both arms are present.
@@ -1518,7 +1562,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - *constructions disagree* counts the seeds on which the final attempt's pair and the summed pair are not the same numbers — 0 means no run in this population retried.
 - *How to read:* read the acceptance column against the summed median; a final-attempt median that differs from it names the retried seeds, which the attempts column lists.
 
-**cost (check 4)** (`cost`, stage `tally_optimisation`; Tables D.73–D.75; 3 table(s)).
+**cost (check 4)** (`cost`, stage `tally_optimisation`; Tables D.76–D.78; 3 table(s)).
 
 - *Units:* model executions during the solve; ratios dimensionless.
 - *A row is* one arm over the seed set.
@@ -1530,7 +1574,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - the output-time and audit sweeps are excluded from this unit symmetrically in every arm.
 - *How to read:* where *retried* is 0 the with- and without- columns are the same number, and the pair of columns is the statement that nothing in this population depended on a retry.
 
-**achieved accuracy at the accepted optimum** (`achieved_accuracy`, stage `tally_optimisation`; Tables D.76–D.78; companion Tables F.47–F.49; 3 table(s)).
+**achieved accuracy at the accepted optimum** (`achieved_accuracy`, stage `tally_optimisation`; Tables D.79–D.81; companion Tables F.53–F.55; 3 table(s)).
 
 - *Units:* dimensionless: the largest scaled coupling-state residual found by one further full sweep past termination.
 - *A row is* one arm on one ruler.
@@ -1543,7 +1587,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - **n counts runs, not values** (stats.accuracy_population, the same construction the evaluation phase's table uses): a run whose audit carries no restricted block is counted in n and shows in the column beside it, rather than vanishing from the denominator of a median, which is trap T11; the caption says whether every run of the population carried it.
 - *How to read:* read the argmax beside the maximum: a residual above the tolerance whose argmax is the component A61 named is a statement about the audit instrument, not about the arm.
 
-**the lift closed (check 3)** (`lift_closed`, stage `tally_optimisation`; Tables D.79–D.80; 2 table(s)).
+**the lift closed (check 3)** (`lift_closed`, stage `tally_optimisation`; Tables D.82–D.83; 2 table(s)).
 
 - *Units:* seconds for the residual; the relative column is dimensionless (residual / burn time).
 - *A row is* one arm whose runs name the burn-time consistency constraint.
@@ -1575,7 +1619,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - the size of |y|/s on the components that made a pass decisive, or the absence of any such component, is stated per population in the caption.
 - *How to read:* a pair with no verdict change must be bit-identical, which is the gate's identity; every difference in this table is attributable to the named components.
 
-**the attempt-summation identity** (`attempt_summation`, stage `tally_optimisation`; companion Tables F.15–F.21; 3 table(s)).
+**the attempt-summation identity** (`attempt_summation`, stage `tally_optimisation`; companion Tables F.16–F.24; 3 table(s)).
 
 - *Units:* counts: model executions and sweeps of the model sequence.
 - *A row is* one optimisation run.
@@ -1585,7 +1629,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - the record contract already refuses a record whose parts do not add up; this table is the same identity stated as a number a reader can see.
 - *How to read:* every residual column reads 0, or the run is refused before it reaches any other table here.
 
-**the failure table** (`failure_table`, stage `tally_optimisation`; companion Tables F.14–F.20; 3 table(s)).
+**the failure table** (`failure_table`, stage `tally_optimisation`; companion Tables F.15–F.23; 3 table(s)).
 
 - *Units:* counts: model executions for the cost columns, optimiser exit codes for ifail.
 - *A row is* one seed outside the converged set.
@@ -1595,7 +1639,17 @@ Every table of this appendix and of the companion file is an instance of one **c
 - a seed on which every arm failed or was absent is marked configuration-invalid.
 - *How to read:* the converged set is the fairer cost population but can flatter an arm that fails on expensive seeds; this table is what keeps it honest.
 
-**per-sweep overhead** (`per_sweep_overhead`, stage `tally_optimisation`; companion Tables F.16–F.22; 3 table(s)).
+**per-arm success by seed** (`per_arm_success_by_seed`, stage `tally_optimisation`; companion Tables F.14–F.22; 3 table(s)).
+
+- *Units:* outcome classes (text) and counts of arms.
+- *A row is* one seed offered to every arm of the group.
+- *A column is* each arm's outcome class at that seed, how many arms accepted, whether the seed is in the seed set, and which arms lost it while another accepted.
+- *Construction:* stats.per_arm_success (per-seed part) — stats.outcome_class per record; in the seed set when every arm accepted (stats.every_arm_converged); lost by an arm when it did not accept and another did.
+- the per-seed detail behind the per-arm success table: the report carries the counts, this table the seeds.
+- a seed no arm accepted is configuration-invalid and reads 0 arms accepted with no arm losing it.
+- *How to read:* read down an arm's column for its failures; read the lost-by column for the asymmetric ones.
+
+**per-sweep overhead** (`per_sweep_overhead`, stage `tally_optimisation`; companion Tables F.17–F.25; 3 table(s)).
 
 - *Units:* counts: evaluations of a convergence test, components compared summed over them, and sweeps of the model sequence.
 - *A row is* one optimisation run.
@@ -1640,8 +1694,8 @@ The gate table is the appendix's licence: every table below is read only if ever
 | `output_path` | G9 | the removal of the output-time loop from the arms whose matrix cell turns it off, on every | **PASS** | 11 run(s) at seed 0 = every optimisation-phase arm on every configuration where it is active, each composed from the experiment's matrix; 3825 coup… | 3879 (3825 + 54) | 0 | 4/4 | `runs/gates/output_path/gate.json` |
 | `written_file_gap` | — | the written-file gap on the one-call output path: BR, B1 and B2 at seed 0 on the pulsed co | **PASS** | 6 run(s) at seed 0, unperturbed = 3 arm(s) (BR, B1, B2) x 2 pulsed configuration(s), each composed from the experiment's matrix with no override bu… | 42 | 0 | 4/4 | `runs/gates/written_file_gap/gate.json` |
 | `predicate_mode` | G8 | the convergence predicate's second ruler, on the evaluation-phase arms of every configurat | **PASS** | 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A2) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.… | 8152 (8068 + 84) | 0 | 4/4 | `runs/gates/predicate_mode/gate.json` |
-| `tally_contracts` | — | every table the tally emits, and the cells it reproduces | **PASS** | 20 reference run(s) (14 optimisations + 6 evaluations) over 3 configurations; 256 published cells, no tolerance on any of them; and 101 table(s) em… | 559 (303 + 256) | 0 | 11/11 | `runs/gates/tally_contracts/gate.json` |
-| `recomputation` | — | every cell the tally publishes, recomputed from the run records by a second implementation | **PASS** | 101 table(s) emitted by the two tally stages, recomputed cell by cell from 949 run record(s) under the 5 published source(s) of the campaign popula… | 14445 | 0 | 9/9 | `runs/gates/recomputation/gate.json` |
+| `tally_contracts` | — | every table the tally emits, and the cells it reproduces | **PASS** | 20 reference run(s) (14 optimisations + 6 evaluations) over 3 configurations; 256 published cells, no tolerance on any of them; and 107 table(s) em… | 577 (321 + 256) | 0 | 11/11 | `runs/gates/tally_contracts/gate.json` |
+| `recomputation` | — | every cell the tally publishes, recomputed from the run records by a second implementation | **PASS** | 107 table(s) emitted by the two tally stages, recomputed cell by cell from 949 run record(s) under the 5 published source(s) of the campaign popula… | 15122 | 0 | 9/9 | `runs/gates/recomputation/gate.json` |
 | `run_kind_separation` | — | every record this package makes, and every population the tally and the analysis build | **PASS** | 1102 run record(s) under runs/, of which 949 are covered by the tally's 5 published source(s) (the campaign family) and 31 by its 2 unpublished; ru… | 3000 | 0 | 9/9 | `runs/gates/run_kind_separation/gate.json` |
 | `stage_provenance` | — | the harness itself, before any PROCESS run | **PASS** | a scratch records directory this check writes itself — 3 verdict record(s) and 4 stage record(s) — broken 4 ways; a scratch census record, stamped … | 17 | 0 | 5/5 | `runs/gates/stage_provenance/gate.json` |
 
@@ -1813,7 +1867,7 @@ The three tables §4 is written from, in the shapes the user asked for (`docs/pl
 
 One `call_models` evaluation per run, no optimiser. Four sources, never pooled: the **entry reference** (one flat `A0` evaluation per configuration from the input file's own point), the **displaced entries** (δ = 0.10, seeds 1–25 — the acceptance regime), and the **forward** and **backward stencil points** (one per design-vector column, paired across arms by column). Within a source the tables run configuration by configuration in the fixed order nof / lad / st. Absolute cost cells are per-run means with the seed bracket; a ratio against the reference is read three ways — pooled (Σ arm / Σ reference), per-run median, and the count of runs on which the arm cost more. The reference is `A1` on a pulsed configuration and `A0` on a steady-state one; where a population carries no `A1` run the caption says the ratio is a fallback against `A0`. The accuracy tables are on both rulers and carry the audit position as a column; their whole-state column is large for `A2` by design and is not judged. Denominators are runs of the configuration in the source (25 per arm in the displaced regime; one per design-vector column per arm in a stencil source); every caption states its own. The per-run overhead tables and the predicate trial are in the companion file.
 
-**Table D.10.** *Node calls per evaluation by arm on large_tokamak_nof, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A0 at seeds*: companion Table F.23.*
+**Table D.10.** *Node calls per evaluation by arm on large_tokamak_nof, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A0 at seeds*: companion Table F.26.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1821,7 +1875,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — large_tokamak_nof — campaign_entry_references`</sub>
 
-**Table D.11.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A0 at seeds*: companion Table F.24.*
+**Table D.11.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A0 at seeds*: companion Table F.27.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1829,7 +1883,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_entry_references`</sub>
 
-**Table D.12.** *Node calls per evaluation by arm on st_regression, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at seeds*: companion Table F.25.*
+**Table D.12.** *Node calls per evaluation by arm on st_regression, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at seeds*: companion Table F.28.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1837,7 +1891,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — st_regression — campaign_entry_references`</sub>
 
-**Table D.13.** *Node calls per evaluation by arm on large_tokamak_nof, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A1 at seeds*: companion Table F.26.*
+**Table D.13.** *Node calls per evaluation by arm on large_tokamak_nof, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A1 at seeds*: companion Table F.29.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1848,7 +1902,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table D.14.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A1 at seeds*: companion Table F.27.*
+**Table D.14.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A1 at seeds*: companion Table F.30.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1859,7 +1913,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table D.15.** *Node calls per evaluation by arm on st_regression, the displaced entries (δ = 0.10), with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 75 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at seeds*: companion Table F.28.*
+**Table D.15.** *Node calls per evaluation by arm on st_regression, the displaced entries (δ = 0.10), with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 75 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at seeds*: companion Table F.31.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1869,7 +1923,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — st_regression — campaign_displaced`</sub>
 
-**Table D.16.** *Node calls per evaluation by arm on large_tokamak_nof, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A1 at columns*: companion Table F.29.*
+**Table D.16.** *Node calls per evaluation by arm on large_tokamak_nof, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A1 at columns*: companion Table F.32.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1880,7 +1934,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table D.17.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A1 at columns*: companion Table F.30.*
+**Table D.17.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A1 at columns*: companion Table F.33.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1891,7 +1945,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table D.18.** *Node calls per evaluation by arm on st_regression, the forward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at columns*: companion Table F.31.*
+**Table D.18.** *Node calls per evaluation by arm on st_regression, the forward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at columns*: companion Table F.34.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1901,7 +1955,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — st_regression — campaign_stencil_forward`</sub>
 
-**Table D.19.** *Node calls per evaluation by arm on large_tokamak_nof, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A1 at columns*: companion Table F.32.*
+**Table D.19.** *Node calls per evaluation by arm on large_tokamak_nof, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof). Per-seed column(s) *paired with A1 at columns*: companion Table F.35.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1912,7 +1966,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table D.20.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A1 at columns*: companion Table F.33.*
+**Table D.20.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired with A1 at columns*: companion Table F.36.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1923,7 +1977,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table D.21.** *Node calls per evaluation by arm on st_regression, the backward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at columns*: companion Table F.34.*
+**Table D.21.** *Node calls per evaluation by arm on st_regression, the backward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression). Per-seed column(s) *paired with A0 at columns*: companion Table F.37.*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|
@@ -2182,7 +2236,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`fixed-point distance — st_regression — campaign_stencil_backward`</sub>
 
-**Table D.43.** *The rung A0 → A1 on large_tokamak_nof, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of large_tokamak_nof). Per-seed column(s) *paired at seeds*: companion Table F.35.*
+**Table D.43.** *The rung A0 → A1 on large_tokamak_nof, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of large_tokamak_nof). Per-seed column(s) *paired at seeds*: companion Table F.38.*
 
 | n | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|
@@ -2190,7 +2244,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table D.44.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired at seeds*: companion Table F.36.*
+**Table D.44.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired at seeds*: companion Table F.39.*
 
 | n | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|
@@ -2198,7 +2252,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table D.45.** *The rung A0 → A1 on large_tokamak_nof, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof). Per-seed column(s) *paired at columns*: companion Table F.37.*
+**Table D.45.** *The rung A0 → A1 on large_tokamak_nof, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof). Per-seed column(s) *paired at columns*: companion Table F.40.*
 
 | n | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|
@@ -2206,7 +2260,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table D.46.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired at columns*: companion Table F.38.*
+**Table D.46.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired at columns*: companion Table F.41.*
 
 | n | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|
@@ -2214,7 +2268,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table D.47.** *The rung A0 → A1 on large_tokamak_nof, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof). Per-seed column(s) *paired at columns*: companion Table F.39.*
+**Table D.47.** *The rung A0 → A1 on large_tokamak_nof, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof). Per-seed column(s) *paired at columns*: companion Table F.42.*
 
 | n | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|
@@ -2222,7 +2276,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table D.48.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired at columns*: companion Table F.40.*
+**Table D.48.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO). Per-seed column(s) *paired at columns*: companion Table F.43.*
 
 | n | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|
@@ -2352,7 +2406,7 @@ One `call_models` evaluation per run, no optimiser. Four sources, never pooled: 
 
 ### D.4 The optimisation phase
 
-One full optimisation per start, 25 starts per arm per configuration (seed 0 unperturbed, seeds 1–24 displaced at δ = 0.10). Every check is over **the seed set** — the seeds on which every arm reached an accepted optimum (status ok and the output file's `ifail == 1`) — whose size the seed-set table states per configuration and every other table repeats as its n; the seeds outside it are the failure table's, in the companion file, so the filter cannot flatter an arm that fails on expensive seeds. Every ratio is against the flat control `B0`; `BR → B0` is published beside as the yardstick, never accepted on. Cost is solve-phase model-node executions summed over the optimiser's attempts (the output path and the exit audit excluded alike in every arm), published with and without the seeds on which either side retried; the attempt-summation identity that licenses this is printed per run in the companion file. Configurations run in the fixed order nof / lad / st; `B1` is inactive on `st_regression`, so its tables carry three arms.
+One full optimisation per start, 25 starts per arm per configuration (seed 0 unperturbed, seeds 1–24 displaced at δ = 0.10). Every check is over **the seed set** — the seeds on which every arm reached an accepted optimum (status ok and the output file's `ifail == 1`) — whose size the seed-set table states per configuration and every other table repeats as its n; the seeds outside it are the failure table's, in the companion file, so the filter cannot flatter an arm that fails on expensive seeds. Every ratio is against the flat control `B0`; `BR → B0` is published beside as the yardstick, never accepted on. Cost is solve-phase model-node executions summed over the optimiser's attempts (the output path and the exit audit excluded alike in every arm), published with and without the seeds on which either side retried; the attempt-summation identity that licenses this is printed per run in the companion file. Beside each seed-set table, the **per-arm success** table states reliability the other way round — per arm over the 25 starts offered: accepted optima, the other starts by outcome class, the starts lost that another arm accepted; reported, not accepted on (D29, 2026-09-15). Configurations run in the fixed order nof / lad / st; `B1` is inactive on `st_regression`, so its tables carry three arms.
 
 **Table D.61.** *Every scheduled optimisation of large_tokamak_nof, the optimisations (25 starts per arm), by arm and disposition; the detail is each crashed run's last traceback line. A crashed start is never a cost. n = 100 (optimisation-phase campaign runs of large_tokamak_nof).*
 
@@ -2386,7 +2440,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`failure taxonomy — st_regression — campaign_optimisation`</sub>
 
-**Table D.64.** *The seed set of large_tokamak_nof: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on large_tokamak_nof). Per-seed column(s) *seeds in the set*: companion Table F.41.*
+**Table D.64.** *The seed set of large_tokamak_nof: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on large_tokamak_nof). Per-seed column(s) *seeds in the set*: companion Table F.44.*
 
 | arms | which | seeds offered | n (every arm converged) | configuration-invalid seeds | retried seeds per arm |
 |---|---|---|---|---|---|
@@ -2394,7 +2448,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`the seed set — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.65.** *The seed set of low_aspect_ratio_DEMO: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on low_aspect_ratio_DEMO). Per-seed column(s) *seeds in the set*: companion Table F.42.*
+**Table D.65.** *The seed set of low_aspect_ratio_DEMO: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on low_aspect_ratio_DEMO). Per-seed column(s) *seeds in the set*: companion Table F.45.*
 
 | arms | which | seeds offered | n (every arm converged) | configuration-invalid seeds | retried seeds per arm |
 |---|---|---|---|---|---|
@@ -2402,7 +2456,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`the seed set — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.66.** *The seed set of st_regression: seeds offered, seeds on which every arm (BR · B0 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on st_regression). Per-seed column(s) *seeds in the set*: companion Table F.43.*
+**Table D.66.** *The seed set of st_regression: seeds offered, seeds on which every arm (BR · B0 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on st_regression). Per-seed column(s) *seeds in the set*: companion Table F.46.*
 
 | arms | which | seeds offered | n (every arm converged) | configuration-invalid seeds | retried seeds per arm |
 |---|---|---|---|---|---|
@@ -2410,7 +2464,39 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`the seed set — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.67.** *Check 1 on large_tokamak_nof: the paired relative objective difference of each arm against B0 over the seed set (median, p90) against max(F × yardstick, floor), the yardstick being BR → B0 in this population, with hops and pairs below cluster resolution. The yardstick row carries no verdict. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table D.67.** *Per-arm success on large_tokamak_nof: of the 25 starts offered to each arm (BR · B0 · B1 · B2), the accepted optima (status ok and ifail == 1), the other starts by outcome class (finished with the optimiser's exit code; crashed in PROCESS's own code; refused at the coupling-state loop's sweep cap), the starts lost that another arm accepted, and the seed set beside. Reported, not accepted on: no pre-declared rule reads it (D29, 2026-09-15). n = 25 (starts offered per arm on large_tokamak_nof). Per-seed column(s) *seeds not accepted, by class*, *seeds lost that another arm accepted*: companion Table F.47.*
+
+| arm | starts offered | accepted optima | crashed (RuntimeError) | lost, another arm accepted | seed set (every arm accepted) |
+|---|---|---|---|---|---|
+| BR | 25 | 22 | 3 | 0 | 22 |
+| B0 | 25 | 22 | 3 | 0 | 22 |
+| B1 | 25 | 22 | 3 | 0 | 22 |
+| B2 | 25 | 22 | 3 | 0 | 22 |
+
+<sub>`per-arm success — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table D.68.** *Per-arm success on low_aspect_ratio_DEMO: of the 25 starts offered to each arm (BR · B0 · B1 · B2), the accepted optima (status ok and ifail == 1), the other starts by outcome class (finished with the optimiser's exit code; crashed in PROCESS's own code; refused at the coupling-state loop's sweep cap), the starts lost that another arm accepted, and the seed set beside. Reported, not accepted on: no pre-declared rule reads it (D29, 2026-09-15). n = 25 (starts offered per arm on low_aspect_ratio_DEMO). Per-seed column(s) *seeds not accepted, by class*, *seeds lost that another arm accepted*: companion Table F.48.*
+
+| arm | starts offered | accepted optima | finished, ifail = 5 | crashed (RuntimeError) | coupling-loop cap (ModuleSolveFailure) | lost, another arm accepted | seed set (every arm accepted) |
+|---|---|---|---|---|---|---|---|
+| BR | 25 | 12 | 11 | 2 | 0 | 0 | 11 |
+| B0 | 25 | 12 | 9 | 2 | 2 | 0 | 11 |
+| B1 | 25 | 11 | 9 | 2 | 3 | 1 | 11 |
+| B2 | 25 | 11 | 9 | 2 | 3 | 1 | 11 |
+
+<sub>`per-arm success — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table D.69.** *Per-arm success on st_regression: of the 25 starts offered to each arm (BR · B0 · B2), the accepted optima (status ok and ifail == 1), the other starts by outcome class (finished with the optimiser's exit code; crashed in PROCESS's own code; refused at the coupling-state loop's sweep cap), the starts lost that another arm accepted, and the seed set beside. Reported, not accepted on: no pre-declared rule reads it (D29, 2026-09-15). n = 25 (starts offered per arm on st_regression). Per-seed column(s) *seeds not accepted, by class*, *seeds lost that another arm accepted*: companion Table F.49.*
+
+| arm | starts offered | accepted optima | finished, ifail = 5 | lost, another arm accepted | seed set (every arm accepted) |
+|---|---|---|---|---|---|
+| BR | 25 | 24 | 1 | 0 | 22 |
+| B0 | 25 | 23 | 2 | 1 | 22 |
+| B2 | 25 | 23 | 2 | 1 | 22 |
+
+<sub>`per-arm success — st_regression — campaign_optimisation · BR·B0·B2`</sub>
+
+**Table D.70.** *Check 1 on large_tokamak_nof: the paired relative objective difference of each arm against B0 over the seed set (median, p90) against max(F × yardstick, floor), the yardstick being BR → B0 in this population, with hops and pairs below cluster resolution. The yardstick row carries no verdict. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
 | pair | n | r median | r p90 | threshold median | threshold p90 | verdict | hops | below resolution | retried seeds in pair |
 |---|---|---|---|---|---|---|---|---|---|
@@ -2420,7 +2506,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`same optimum (check 1) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.68.** *Check 1 on low_aspect_ratio_DEMO: the paired relative objective difference of each arm against B0 over the seed set (median, p90) against max(F × yardstick, floor), the yardstick being BR → B0 in this population, with hops and pairs below cluster resolution. The yardstick row carries no verdict. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table D.71.** *Check 1 on low_aspect_ratio_DEMO: the paired relative objective difference of each arm against B0 over the seed set (median, p90) against max(F × yardstick, floor), the yardstick being BR → B0 in this population, with hops and pairs below cluster resolution. The yardstick row carries no verdict. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
 | pair | n | r median | r p90 | threshold median | threshold p90 | verdict | hops | below resolution | retried seeds in pair |
 |---|---|---|---|---|---|---|---|---|---|
@@ -2430,7 +2516,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`same optimum (check 1) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.69.** *Check 1 on st_regression: the paired relative objective difference of each arm against B0 over the seed set (median, p90) against max(F × yardstick, floor), the yardstick being BR → B0 in this population, with hops and pairs below cluster resolution. The yardstick row carries no verdict. n = 22 (seeds on which every arm of st_regression converged).*
+**Table D.72.** *Check 1 on st_regression: the paired relative objective difference of each arm against B0 over the seed set (median, p90) against max(F × yardstick, floor), the yardstick being BR → B0 in this population, with hops and pairs below cluster resolution. The yardstick row carries no verdict. n = 22 (seeds on which every arm of st_regression converged).*
 
 | pair | n | r median | r p90 | threshold median | threshold p90 | verdict | hops | below resolution | retried seeds in pair |
 |---|---|---|---|---|---|---|---|---|---|
@@ -2439,7 +2525,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`same optimum (check 1) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.70.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of large_tokamak_nof converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.44.*
+**Table D.73.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of large_tokamak_nof converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.50.*
 
 | pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | constructions disagree |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2450,7 +2536,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`iteration multiplier (check 2) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.71.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.45.*
+**Table D.74.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.51.*
 
 | pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | constructions disagree |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2461,7 +2547,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`iteration multiplier (check 2) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.72.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of st_regression converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.46.*
+**Table D.75.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of st_regression converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.52.*
 
 | pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | constructions disagree |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2470,7 +2556,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`iteration multiplier (check 2) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.73.** *Check 4 on large_tokamak_nof: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table D.76.** *Check 4 on large_tokamak_nof: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
 | arm | n | node calls / run | bracket | arrangement·method calls / run | arrangement·method calls, Σ over the set | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2481,7 +2567,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`cost (check 4) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.74.** *Check 4 on low_aspect_ratio_DEMO: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table D.77.** *Check 4 on low_aspect_ratio_DEMO: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
 | arm | n | node calls / run | bracket | arrangement·method calls / run | arrangement·method calls, Σ over the set | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2492,7 +2578,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`cost (check 4) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.75.** *Check 4 on st_regression: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of st_regression converged).*
+**Table D.78.** *Check 4 on st_regression: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of st_regression converged).*
 
 | arm | n | node calls / run | bracket | arrangement·method calls / run | arrangement·method calls, Σ over the set | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2502,7 +2588,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`cost (check 4) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.76.** *Exit accuracy by arm on large_tokamak_nof over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group). Per-seed column(s) *components above τ*: companion Table F.47.*
+**Table D.79.** *Exit accuracy by arm on large_tokamak_nof over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group). Per-seed column(s) *components above τ*: companion Table F.53.*
 
 | arm | ruler | n (runs) | with a restricted statistic | restricted median | restricted max | restricted argmax | whole-state median | components excluded | audit position | audit instrument |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2517,7 +2603,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`achieved accuracy at the accepted optimum — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.77.** *Exit accuracy by arm on low_aspect_ratio_DEMO over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group). Per-seed column(s) *components above τ*: companion Table F.48.*
+**Table D.80.** *Exit accuracy by arm on low_aspect_ratio_DEMO over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group). Per-seed column(s) *components above τ*: companion Table F.54.*
 
 | arm | ruler | n (runs) | with a restricted statistic | restricted median | restricted max | restricted argmax | whole-state median | components excluded | audit position | audit instrument |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2532,7 +2618,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`achieved accuracy at the accepted optimum — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.78.** *Exit accuracy by arm on st_regression over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 75 (optimisation-phase runs of st_regression in this arm group). Per-seed column(s) *components above τ*: companion Table F.49.*
+**Table D.81.** *Exit accuracy by arm on st_regression over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 75 (optimisation-phase runs of st_regression in this arm group). Per-seed column(s) *components above τ*: companion Table F.55.*
 
 | arm | ruler | n (runs) | with a restricted statistic | restricted median | restricted max | restricted argmax | whole-state median | components excluded | audit position | audit instrument |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2545,7 +2631,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`achieved accuracy at the accepted optimum — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.79.** *Check 3 on large_tokamak_nof: the burn-time consistency residual (constraint 93) at the accepted optima of the arms that own the burn time, in seconds and relative to the burn time; an arm not naming the constraint is absent, not 0. n = 100 (optimisation-phase campaign runs of large_tokamak_nof).*
+**Table D.82.** *Check 3 on large_tokamak_nof: the burn-time consistency residual (constraint 93) at the accepted optima of the arms that own the burn time, in seconds and relative to the burn time; an arm not naming the constraint is absent, not 0. n = 100 (optimisation-phase campaign runs of large_tokamak_nof).*
 
 | arm | n accepted | residual, s (median) | bracket, s | relative (median) | in the equality block |
 |---|---|---|---|---|---|
@@ -2554,7 +2640,7 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`the lift closed (check 3) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.80.** *Check 3 on low_aspect_ratio_DEMO: the burn-time consistency residual (constraint 93) at the accepted optima of the arms that own the burn time, in seconds and relative to the burn time; an arm not naming the constraint is absent, not 0. n = 100 (optimisation-phase campaign runs of low_aspect_ratio_DEMO).*
+**Table D.83.** *Check 3 on low_aspect_ratio_DEMO: the burn-time consistency residual (constraint 93) at the accepted optima of the arms that own the burn time, in seconds and relative to the burn time; an arm not naming the constraint is absent, not 0. n = 100 (optimisation-phase campaign runs of low_aspect_ratio_DEMO).*
 
 | arm | n accepted | residual, s (median) | bracket, s | relative (median) | in the equality block |
 |---|---|---|---|---|---|

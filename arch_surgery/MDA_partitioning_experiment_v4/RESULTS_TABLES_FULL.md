@@ -787,9 +787,41 @@ The per-run tables of the evaluation phase: what each finished run's convergence
 
 ## F.2 The optimisation phase — one row per seed or per run
 
-The per-seed and per-run tables of the optimisation phase: the failure table (every seed outside the seed set, with what failed there and what the other arms cost at the same start), the attempt-summation identity (every run's per-attempt costs against its solve-phase total) and the per-run overhead.
+The per-seed and per-run tables of the optimisation phase: per-arm success by seed (every start offered, each arm's outcome class there), the failure table (every seed outside the seed set, with what failed there and what the other arms cost at the same start), the attempt-summation identity (every run's per-attempt costs against its solve-phase total) and the per-run overhead.
 
-**Table F.14.** *Seeds of large_tokamak_nof outside the seed set: which arm failed there and how (ifail, attempts), its cost and the other arms' at the same start; a seed every arm failed on is configuration-invalid. n = 25 (distinct seeds run on large_tokamak_nof).*
+**Table F.14.** *Per-arm success on large_tokamak_nof by seed: each arm's outcome class at every start offered, the count of arms that accepted, membership of the seed set, and the arms that lost the start while another accepted. n = 25 (distinct seeds run on large_tokamak_nof).*
+
+| seed | BR | B0 | B1 | B2 | arms accepted | in the seed set | lost by (another arm accepted) |
+|---|---|---|---|---|---|---|---|
+| 0 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 1 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 2 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 3 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 4 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 5 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 6 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 7 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 8 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 9 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 10 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 11 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 12 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 13 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 14 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 15 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 16 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 17 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 18 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 19 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 20 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 21 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 22 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 23 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 24 | accepted | accepted | accepted | accepted | 4 | yes | — |
+
+<sub>`per-arm success by seed — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.15.** *Seeds of large_tokamak_nof outside the seed set: which arm failed there and how (ifail, attempts), its cost and the other arms' at the same start; a seed every arm failed on is configuration-invalid. n = 25 (distinct seeds run on large_tokamak_nof).*
 
 | seed | failed arm(s) | not run | ifail | attempts | failed arm node calls | other arms' node calls | configuration-invalid |
 |---|---|---|---|---|---|---|---|
@@ -799,7 +831,7 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`the failure table — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.15.** *The attempt-summation identity per run on large_tokamak_nof: each attempt's node calls and sweeps against the solve-phase totals and the residual, which the record contract requires to be 0 before a run reaches any other table. n = 100 (optimisation-phase campaign runs of large_tokamak_nof).*
+**Table F.16.** *The attempt-summation identity per run on large_tokamak_nof: each attempt's node calls and sweeps against the solve-phase totals and the residual, which the record contract requires to be 0 before a run reaches any other table. n = 100 (optimisation-phase campaign runs of large_tokamak_nof).*
 
 | arm | seed | attempts | retried | node calls per attempt | = solve-phase total | residual | sweeps per attempt | = solve-phase total | residual | decomposes |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -906,7 +938,7 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`the attempt summation identity — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.16.** *Convergence-test cost per finished optimisation on large_tokamak_nof: dispatch sweeps (solve phase and output-time loop apart), and for the test the arm stops on its evaluations, components compared and mean width; the two predicates are never summed. Empty-visit sweep share: 0 %. n = 88 (finished optimisation-phase campaign runs of large_tokamak_nof).*
+**Table F.17.** *Convergence-test cost per finished optimisation on large_tokamak_nof: dispatch sweeps (solve phase and output-time loop apart), and for the test the arm stops on its evaluations, components compared and mean width; the two predicates are never summed. Empty-visit sweep share: 0 %. n = 88 (finished optimisation-phase campaign runs of large_tokamak_nof).*
 
 | arm | seed | stops on | dispatch sweeps | of which solve phase | output-time loop | coupling-state tests | components compared | mean width | width by block | objective/constraint tests | values compared | mean width | empty-visit sweep share |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1001,7 +1033,39 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`per-sweep overhead — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.17.** *Seeds of low_aspect_ratio_DEMO outside the seed set: which arm failed there and how (ifail, attempts), its cost and the other arms' at the same start; a seed every arm failed on is configuration-invalid. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
+**Table F.18.** *Per-arm success on low_aspect_ratio_DEMO by seed: each arm's outcome class at every start offered, the count of arms that accepted, membership of the seed set, and the arms that lost the start while another accepted. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
+
+| seed | BR | B0 | B1 | B2 | arms accepted | in the seed set | lost by (another arm accepted) |
+|---|---|---|---|---|---|---|---|
+| 0 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 1 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 2 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 3 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 4 | finished, ifail = 5 | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | 0 | no | — |
+| 5 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 6 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 7 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 8 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 9 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 10 | accepted | accepted | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | 2 | no | B1, B2 |
+| 11 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 12 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 13 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 14 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 15 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 16 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 17 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 18 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 19 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 20 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 21 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 22 | finished, ifail = 5 | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | 0 | no | — |
+| 23 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 24 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+
+<sub>`per-arm success by seed — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.19.** *Seeds of low_aspect_ratio_DEMO outside the seed set: which arm failed there and how (ifail, attempts), its cost and the other arms' at the same start; a seed every arm failed on is configuration-invalid. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
 
 | seed | failed arm(s) | not run | ifail | attempts | failed arm node calls | other arms' node calls | configuration-invalid |
 |---|---|---|---|---|---|---|---|
@@ -1022,7 +1086,7 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`the failure table — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.18.** *The attempt-summation identity per run on low_aspect_ratio_DEMO: each attempt's node calls and sweeps against the solve-phase totals and the residual, which the record contract requires to be 0 before a run reaches any other table. n = 100 (optimisation-phase campaign runs of low_aspect_ratio_DEMO).*
+**Table F.20.** *The attempt-summation identity per run on low_aspect_ratio_DEMO: each attempt's node calls and sweeps against the solve-phase totals and the residual, which the record contract requires to be 0 before a run reaches any other table. n = 100 (optimisation-phase campaign runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | attempts | retried | node calls per attempt | = solve-phase total | residual | sweeps per attempt | = solve-phase total | residual | decomposes |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1129,7 +1193,7 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`the attempt summation identity — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.19.** *Convergence-test cost per finished optimisation on low_aspect_ratio_DEMO: dispatch sweeps (solve phase and output-time loop apart), and for the test the arm stops on its evaluations, components compared and mean width; the two predicates are never summed. Empty-visit sweep share: 0 %. n = 84 (finished optimisation-phase campaign runs of low_aspect_ratio_DEMO).*
+**Table F.21.** *Convergence-test cost per finished optimisation on low_aspect_ratio_DEMO: dispatch sweeps (solve phase and output-time loop apart), and for the test the arm stops on its evaluations, components compared and mean width; the two predicates are never summed. Empty-visit sweep share: 0 %. n = 84 (finished optimisation-phase campaign runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | stops on | dispatch sweeps | of which solve phase | output-time loop | coupling-state tests | components compared | mean width | width by block | objective/constraint tests | values compared | mean width | empty-visit sweep share |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1220,7 +1284,39 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`per-sweep overhead — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.20.** *Seeds of st_regression outside the seed set: which arm failed there and how (ifail, attempts), its cost and the other arms' at the same start; a seed every arm failed on is configuration-invalid. n = 25 (distinct seeds run on st_regression).*
+**Table F.22.** *Per-arm success on st_regression by seed: each arm's outcome class at every start offered, the count of arms that accepted, membership of the seed set, and the arms that lost the start while another accepted. n = 25 (distinct seeds run on st_regression).*
+
+| seed | BR | B0 | B2 | arms accepted | in the seed set | lost by (another arm accepted) |
+|---|---|---|---|---|---|---|
+| 0 | accepted | accepted | accepted | 3 | yes | — |
+| 1 | accepted | accepted | accepted | 3 | yes | — |
+| 2 | accepted | accepted | accepted | 3 | yes | — |
+| 3 | accepted | accepted | accepted | 3 | yes | — |
+| 4 | accepted | accepted | accepted | 3 | yes | — |
+| 5 | accepted | accepted | finished, ifail = 5 | 2 | no | B2 |
+| 6 | accepted | accepted | accepted | 3 | yes | — |
+| 7 | accepted | accepted | accepted | 3 | yes | — |
+| 8 | accepted | accepted | accepted | 3 | yes | — |
+| 9 | accepted | accepted | accepted | 3 | yes | — |
+| 10 | accepted | finished, ifail = 5 | accepted | 2 | no | B0 |
+| 11 | accepted | accepted | accepted | 3 | yes | — |
+| 12 | accepted | accepted | accepted | 3 | yes | — |
+| 13 | accepted | accepted | accepted | 3 | yes | — |
+| 14 | accepted | accepted | accepted | 3 | yes | — |
+| 15 | accepted | accepted | accepted | 3 | yes | — |
+| 16 | accepted | accepted | accepted | 3 | yes | — |
+| 17 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 18 | accepted | accepted | accepted | 3 | yes | — |
+| 19 | accepted | accepted | accepted | 3 | yes | — |
+| 20 | accepted | accepted | accepted | 3 | yes | — |
+| 21 | accepted | accepted | accepted | 3 | yes | — |
+| 22 | accepted | accepted | accepted | 3 | yes | — |
+| 23 | accepted | accepted | accepted | 3 | yes | — |
+| 24 | accepted | accepted | accepted | 3 | yes | — |
+
+<sub>`per-arm success by seed — st_regression — campaign_optimisation · BR·B0·B2`</sub>
+
+**Table F.23.** *Seeds of st_regression outside the seed set: which arm failed there and how (ifail, attempts), its cost and the other arms' at the same start; a seed every arm failed on is configuration-invalid. n = 25 (distinct seeds run on st_regression).*
 
 | seed | failed arm(s) | not run | ifail | attempts | failed arm node calls | other arms' node calls | configuration-invalid |
 |---|---|---|---|---|---|---|---|
@@ -1230,7 +1326,7 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`the failure table — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.21.** *The attempt-summation identity per run on st_regression: each attempt's node calls and sweeps against the solve-phase totals and the residual, which the record contract requires to be 0 before a run reaches any other table. n = 75 (optimisation-phase campaign runs of st_regression).*
+**Table F.24.** *The attempt-summation identity per run on st_regression: each attempt's node calls and sweeps against the solve-phase totals and the residual, which the record contract requires to be 0 before a run reaches any other table. n = 75 (optimisation-phase campaign runs of st_regression).*
 
 | arm | seed | attempts | retried | node calls per attempt | = solve-phase total | residual | sweeps per attempt | = solve-phase total | residual | decomposes |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1312,7 +1408,7 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 <sub>`the attempt summation identity — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.22.** *Convergence-test cost per finished optimisation on st_regression: dispatch sweeps (solve phase and output-time loop apart), and for the test the arm stops on its evaluations, components compared and mean width; the two predicates are never summed. Empty-visit sweep share: 0 %, 10.7 %, 10.8 %, 10.82 %, 10.83 %, 10.84 %, 10.85 %, 10.86 %, 10.87 %, 10.9 %, 10.91 %, 10.92 %, 10.94 %, 11.15 %, 11.18 %, 11.22 %, 11.3 %, 11.57 %. n = 75 (finished optimisation-phase campaign runs of st_regression).*
+**Table F.25.** *Convergence-test cost per finished optimisation on st_regression: dispatch sweeps (solve phase and output-time loop apart), and for the test the arm stops on its evaluations, components compared and mean width; the two predicates are never summed. Empty-visit sweep share: 0 %, 10.7 %, 10.8 %, 10.82 %, 10.83 %, 10.84 %, 10.85 %, 10.86 %, 10.87 %, 10.9 %, 10.91 %, 10.92 %, 10.94 %, 11.15 %, 11.18 %, 11.22 %, 11.3 %, 11.57 %. n = 75 (finished optimisation-phase campaign runs of st_regression).*
 
 | arm | seed | stops on | dispatch sweeps | of which solve phase | output-time loop | coupling-state tests | components compared | mean width | width by block | objective/constraint tests | values compared | mean width | empty-visit sweep share |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1398,7 +1494,7 @@ The per-seed and per-run tables of the optimisation phase: the failure table (ev
 
 The full versions of the report's tables whose columns listing a value per seed inside one cell (the paired seeds, the seeds of the set, the attempts per seed, the components above τ per run) the report omits. Every other cell is identical to the report's.
 
-**Table F.23.** *Node calls per evaluation by arm on large_tokamak_nof, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of large_tokamak_nof).*
+**Table F.26.** *Node calls per evaluation by arm on large_tokamak_nof, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of large_tokamak_nof).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A0 at seeds | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1406,7 +1502,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — large_tokamak_nof — campaign_entry_references`</sub>
 
-**Table F.24.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
+**Table F.27.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. **Fallback**: no A1 run here, so the ratio is against A0, not the declared pair. Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A0 at seeds | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1414,7 +1510,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_entry_references`</sub>
 
-**Table F.25.** *Node calls per evaluation by arm on st_regression, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of st_regression).*
+**Table F.28.** *Node calls per evaluation by arm on st_regression, the entry reference, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 1 (evaluation-phase campaign runs of st_regression).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A0 at seeds | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1422,7 +1518,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — st_regression — campaign_entry_references`</sub>
 
-**Table F.26.** *Node calls per evaluation by arm on large_tokamak_nof, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of large_tokamak_nof).*
+**Table F.29.** *Node calls per evaluation by arm on large_tokamak_nof, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of large_tokamak_nof).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A1 at seeds | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1433,7 +1529,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.27.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
+**Table F.30.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10), with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 100 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A1 at seeds | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1444,7 +1540,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.28.** *Node calls per evaluation by arm on st_regression, the displaced entries (δ = 0.10), with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 75 (evaluation-phase campaign runs of st_regression).*
+**Table F.31.** *Node calls per evaluation by arm on st_regression, the displaced entries (δ = 0.10), with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 75 (evaluation-phase campaign runs of st_regression).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A0 at seeds | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1454,7 +1550,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — st_regression — campaign_displaced`</sub>
 
-**Table F.29.** *Node calls per evaluation by arm on large_tokamak_nof, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof).*
+**Table F.32.** *Node calls per evaluation by arm on large_tokamak_nof, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A1 at columns | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1465,7 +1561,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.30.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
+**Table F.33.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the forward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A1 at columns | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1476,7 +1572,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.31.** *Node calls per evaluation by arm on st_regression, the forward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression).*
+**Table F.34.** *Node calls per evaluation by arm on st_regression, the forward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A0 at columns | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1486,7 +1582,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — st_regression — campaign_stencil_forward`</sub>
 
-**Table F.32.** *Node calls per evaluation by arm on large_tokamak_nof, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof).*
+**Table F.35.** *Node calls per evaluation by arm on large_tokamak_nof, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 80 (evaluation-phase campaign runs of large_tokamak_nof).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A1 at columns | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1497,7 +1593,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.33.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
+**Table F.36.** *Node calls per evaluation by arm on low_aspect_ratio_DEMO, the backward stencil points, with the ratio against A1 pooled, as the per-run median and as runs on which the arm cost more. A1 is the declared reference (the same reduced map as A2). Prime calls stand beside the node calls, not in them. n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A1 at columns | vs A1 pooled | vs A1 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1508,7 +1604,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.34.** *Node calls per evaluation by arm on st_regression, the backward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression).*
+**Table F.37.** *Node calls per evaluation by arm on st_regression, the backward stencil points, with the ratio against A0 pooled, as the per-run median and as runs on which the arm cost more. A0 is the reference (steady state: no burn-time coupling). Prime calls stand beside the node calls, not in them. n = 42 (evaluation-phase campaign runs of st_regression).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A0 at columns | vs A0 pooled | vs A0 median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1518,7 +1614,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`cost per call — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.35.** *The rung A0 → A1 on large_tokamak_nof, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of large_tokamak_nof).*
+**Table F.38.** *The rung A0 → A1 on large_tokamak_nof, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of large_tokamak_nof).*
 
 | n | paired at seeds | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|---|
@@ -1526,7 +1622,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.36.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of low_aspect_ratio_DEMO).*
+**Table F.39.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the displaced entries (δ = 0.10): the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 50 (A0 and A1 campaign runs of low_aspect_ratio_DEMO).*
 
 | n | paired at seeds | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|---|
@@ -1534,7 +1630,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.37.** *The rung A0 → A1 on large_tokamak_nof, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof).*
+**Table F.40.** *The rung A0 → A1 on large_tokamak_nof, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof).*
 
 | n | paired at columns | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|---|
@@ -1542,7 +1638,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.38.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO).*
+**Table F.41.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the forward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO).*
 
 | n | paired at columns | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|---|
@@ -1550,7 +1646,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.39.** *The rung A0 → A1 on large_tokamak_nof, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof).*
+**Table F.42.** *The rung A0 → A1 on large_tokamak_nof, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 40 (A0 and A1 campaign runs of large_tokamak_nof).*
 
 | n | paired at columns | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|---|
@@ -1558,7 +1654,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.40.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO).*
+**Table F.43.** *The rung A0 → A1 on low_aspect_ratio_DEMO, the backward stencil points: the per-call cost of pinning the burn time (A1/A0) and the residual the constant leaves at exit, in seconds and relative to the burn time. Not a claim about the partition. n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO).*
 
 | n | paired at columns | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
 |---|---|---|---|---|---|---|---|
@@ -1566,7 +1662,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.41.** *The seed set of large_tokamak_nof: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on large_tokamak_nof).*
+**Table F.44.** *The seed set of large_tokamak_nof: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on large_tokamak_nof).*
 
 | arms | which | seeds offered | n (every arm converged) | seeds in the set | configuration-invalid seeds | retried seeds per arm |
 |---|---|---|---|---|---|---|
@@ -1574,7 +1670,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`the seed set — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.42.** *The seed set of low_aspect_ratio_DEMO: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
+**Table F.45.** *The seed set of low_aspect_ratio_DEMO: seeds offered, seeds on which every arm (BR · B0 · B1 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
 
 | arms | which | seeds offered | n (every arm converged) | seeds in the set | configuration-invalid seeds | retried seeds per arm |
 |---|---|---|---|---|---|---|
@@ -1582,7 +1678,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`the seed set — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.43.** *The seed set of st_regression: seeds offered, seeds on which every arm (BR · B0 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on st_regression).*
+**Table F.46.** *The seed set of st_regression: seeds offered, seeds on which every arm (BR · B0 · B2) reached an accepted optimum (n, the denominator of every check on this configuration), configuration-invalid seeds and retried seeds per arm. n = 25 (distinct seeds run on st_regression).*
 
 | arms | which | seeds offered | n (every arm converged) | seeds in the set | configuration-invalid seeds | retried seeds per arm |
 |---|---|---|---|---|---|---|
@@ -1590,7 +1686,39 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`the seed set — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.44.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table F.47.** *Per-arm success on large_tokamak_nof: of the 25 starts offered to each arm (BR · B0 · B1 · B2), the accepted optima (status ok and ifail == 1), the other starts by outcome class (finished with the optimiser's exit code; crashed in PROCESS's own code; refused at the coupling-state loop's sweep cap), the starts lost that another arm accepted, and the seed set beside. Reported, not accepted on: no pre-declared rule reads it (D29, 2026-09-15). n = 25 (starts offered per arm on large_tokamak_nof).*
+
+| arm | starts offered | accepted optima | crashed (RuntimeError) | lost, another arm accepted | seed set (every arm accepted) | seeds not accepted, by class | seeds lost that another arm accepted |
+|---|---|---|---|---|---|---|---|
+| BR | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+| B0 | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+| B1 | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+| B2 | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+
+<sub>`per-arm success — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.48.** *Per-arm success on low_aspect_ratio_DEMO: of the 25 starts offered to each arm (BR · B0 · B1 · B2), the accepted optima (status ok and ifail == 1), the other starts by outcome class (finished with the optimiser's exit code; crashed in PROCESS's own code; refused at the coupling-state loop's sweep cap), the starts lost that another arm accepted, and the seed set beside. Reported, not accepted on: no pre-declared rule reads it (D29, 2026-09-15). n = 25 (starts offered per arm on low_aspect_ratio_DEMO).*
+
+| arm | starts offered | accepted optima | finished, ifail = 5 | crashed (RuntimeError) | coupling-loop cap (ModuleSolveFailure) | lost, another arm accepted | seed set (every arm accepted) | seeds not accepted, by class | seeds lost that another arm accepted |
+|---|---|---|---|---|---|---|---|---|---|
+| BR | 25 | 12 | 11 | 2 | 0 | 0 | 11 | finished, ifail = 5: 2, 4, 7, 8, 14, 16, 17, 20, 22, 23, 24; crashed (RuntimeError): 3, 21 | — |
+| B0 | 25 | 12 | 9 | 2 | 2 | 0 | 11 | finished, ifail = 5: 2, 7, 8, 14, 16, 17, 20, 23, 24; crashed (RuntimeError): 3, 21; coupling-loop cap (ModuleSolveFailure): 4, 22 | — |
+| B1 | 25 | 11 | 9 | 2 | 3 | 1 | 11 | finished, ifail = 5: 2, 7, 8, 14, 16, 17, 20, 23, 24; crashed (RuntimeError): 3, 21; coupling-loop cap (ModuleSolveFailure): 4, 10, 22 | 10 |
+| B2 | 25 | 11 | 9 | 2 | 3 | 1 | 11 | finished, ifail = 5: 2, 7, 8, 14, 16, 17, 20, 23, 24; crashed (RuntimeError): 3, 21; coupling-loop cap (ModuleSolveFailure): 4, 10, 22 | 10 |
+
+<sub>`per-arm success — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.49.** *Per-arm success on st_regression: of the 25 starts offered to each arm (BR · B0 · B2), the accepted optima (status ok and ifail == 1), the other starts by outcome class (finished with the optimiser's exit code; crashed in PROCESS's own code; refused at the coupling-state loop's sweep cap), the starts lost that another arm accepted, and the seed set beside. Reported, not accepted on: no pre-declared rule reads it (D29, 2026-09-15). n = 25 (starts offered per arm on st_regression).*
+
+| arm | starts offered | accepted optima | finished, ifail = 5 | lost, another arm accepted | seed set (every arm accepted) | seeds not accepted, by class | seeds lost that another arm accepted |
+|---|---|---|---|---|---|---|---|
+| BR | 25 | 24 | 1 | 0 | 22 | finished, ifail = 5: 17 | — |
+| B0 | 25 | 23 | 2 | 1 | 22 | finished, ifail = 5: 10, 17 | 10 |
+| B2 | 25 | 23 | 2 | 1 | 22 | finished, ifail = 5: 5, 17 | 5 |
+
+<sub>`per-arm success — st_regression — campaign_optimisation · BR·B0·B2`</sub>
+
+**Table F.50.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
 | pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | attempts per seed (base/arm) | constructions disagree |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1601,7 +1729,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`iteration multiplier (check 2) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.45.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table F.51.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
 | pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | attempts per seed (base/arm) | constructions disagree |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1612,7 +1740,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`iteration multiplier (check 2) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.46.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of st_regression converged).*
+**Table F.52.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of st_regression converged).*
 
 | pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | attempts per seed (base/arm) | constructions disagree |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1621,7 +1749,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`iteration multiplier (check 2) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.47.** *Exit accuracy by arm on large_tokamak_nof over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group).*
+**Table F.53.** *Exit accuracy by arm on large_tokamak_nof over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group).*
 
 | arm | ruler | n (runs) | with a restricted statistic | restricted median | restricted max | restricted argmax | components above τ | whole-state median | components excluded | audit position | audit instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1636,7 +1764,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`achieved accuracy at the accepted optimum — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.48.** *Exit accuracy by arm on low_aspect_ratio_DEMO over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group).*
+**Table F.54.** *Exit accuracy by arm on low_aspect_ratio_DEMO over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group).*
 
 | arm | ruler | n (runs) | with a restricted statistic | restricted median | restricted max | restricted argmax | components above τ | whole-state median | components excluded | audit position | audit instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1651,7 +1779,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`achieved accuracy at the accepted optimum — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.49.** *Exit accuracy by arm on st_regression over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 75 (optimisation-phase runs of st_regression in this arm group).*
+**Table F.55.** *Exit accuracy by arm on st_regression over the arm group's finished runs (accepted or not): the restricted maximum scaled residual (median, max) on both rulers, the argmax and the whole-state maximum; audit position entry_to_write_output_files. The whole-state column is large for B2 by design and is not judged. n = 75 (optimisation-phase runs of st_regression in this arm group).*
 
 | arm | ruler | n (runs) | with a restricted statistic | restricted median | restricted max | restricted argmax | components above τ | whole-state median | components excluded | audit position | audit instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1668,7 +1796,7 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 Every table of the tally recomputed by `harness/measurement/analysis.py`, a second implementation that imports none of the tally's constructions. Column headings are the record keys, not the report's headings; the verdict on whether the two agree — table by table, row by row, cell by cell, without tolerance — is gate `recomputation`'s, one row of the report's gate table.
 
-**Table F.50.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state audit maximum over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase runs of large_tokamak_nof in this arm group.  Construction: median nearest-rank upper-middle; the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: entry_to_write_output_files.  The audit instrument's version is **read from the record**: task A62 (exit-audit-restore) widens the snapshot to the whole data structure under decision D25, which moves every value in these columns, and this column is what tells two otherwise identical tables apart.  Both rulers or neither. n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group).*
+**Table F.56.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state audit maximum over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase runs of large_tokamak_nof in this arm group.  Construction: median nearest-rank upper-middle; the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: entry_to_write_output_files.  The audit instrument's version is **read from the record**: task A62 (exit-audit-restore) widens the snapshot to the whole data structure under decision D25, which moves every value in these columns, and this column is what tells two otherwise identical tables apart.  Both rulers or neither. n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_max | argmax | n_above_tau | whole_median | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1683,7 +1811,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`achieved accuracy at the accepted optimum — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.51.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state audit maximum over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase runs of low_aspect_ratio_DEMO in this arm group.  Construction: median nearest-rank upper-middle; the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: entry_to_write_output_files.  The audit instrument's version is **read from the record**: task A62 (exit-audit-restore) widens the snapshot to the whole data structure under decision D25, which moves every value in these columns, and this column is what tells two otherwise identical tables apart.  Both rulers or neither. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group).*
+**Table F.57.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state audit maximum over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase runs of low_aspect_ratio_DEMO in this arm group.  Construction: median nearest-rank upper-middle; the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: entry_to_write_output_files.  The audit instrument's version is **read from the record**: task A62 (exit-audit-restore) widens the snapshot to the whole data structure under decision D25, which moves every value in these columns, and this column is what tells two otherwise identical tables apart.  Both rulers or neither. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_max | argmax | n_above_tau | whole_median | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1698,7 +1826,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`achieved accuracy at the accepted optimum — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.52.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state audit maximum over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase runs of st_regression in this arm group.  Construction: median nearest-rank upper-middle; the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: entry_to_write_output_files.  The audit instrument's version is **read from the record**: task A62 (exit-audit-restore) widens the snapshot to the whole data structure under decision D25, which moves every value in these columns, and this column is what tells two otherwise identical tables apart.  Both rulers or neither. n = 75 (optimisation-phase runs of st_regression in this arm group).*
+**Table F.58.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state audit maximum over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase runs of st_regression in this arm group.  Construction: median nearest-rank upper-middle; the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: entry_to_write_output_files.  The audit instrument's version is **read from the record**: task A62 (exit-audit-restore) widens the snapshot to the whole data structure under decision D25, which moves every value in these columns, and this column is what tells two otherwise identical tables apart.  Both rulers or neither. n = 75 (optimisation-phase runs of st_regression in this arm group).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_max | argmax | n_above_tau | whole_median | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1711,39 +1839,39 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`achieved accuracy at the accepted optimum — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.53.** *units: model executions during the solve; ratios dimensionless.  A row is one arm over the seed set.  A column is an absolute per-run mean with its bracket, or one reading of the ratio against the flat control.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of large_tokamak_nof reached an accepted optimum.  Construction: solve-phase node calls **summed over attempts[]** per run, so the ratio is over the quantity the attempts decompose; pooled = Σ arm / Σ base, median nearest-rank upper-middle of the per-seed ratios, worse = seeds on which the arm cost more.  Retries are a term, not a footnote: the ratio is published with and without the retried seeds, and a seed counts as retried when **either** side of the pair retried.  The arrangement-method calls are a column of their own and are never pooled into the node calls. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table F.59.** *units: model executions during the solve; ratios dimensionless.  A row is one arm over the seed set.  A column is an absolute per-run mean with its bracket, or one reading of the ratio against the flat control.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of large_tokamak_nof reached an accepted optimum.  Construction: solve-phase node calls **summed over attempts[]** per run, so the ratio is over the quantity the attempts decompose; pooled = Σ arm / Σ base, median nearest-rank upper-middle of the per-seed ratios, worse = seeds on which the arm cost more.  Retries are a term, not a footnote: the ratio is published with and without the retried seeds, and a seed counts as retried when **either** side of the pair retried.  The arrangement-method calls are two columns of their own — the per-run mean and the sum over the set — and are never pooled into the node calls. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
-| arm | n | node_calls_mean | bracket | arrangement_method_calls | with_pooled | with_median | with_worse | n_retried | without_pooled | without_median | without_n |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| BR | 22 | 41479.8 | [36855, 47817] | 0 | 0.97564 | 0.979422 | 0 | 0 | 0.97564 | 0.979422 | 22 |
-| B0 | 22 | 42515.5 | [37590, 50253] | 0 | 1 | 1 | 0 | 0 | 1 | 1 | 22 |
-| B1 | 22 | 42841.9 | [38220, 49980] | 0 | 1.00768 | 1.01505 | 18 | 0 | 1.00768 | 1.01505 | 22 |
-| B2 | 22 | 27187.5 | [24296, 31813] | 117281 | 0.639472 | 0.645152 | 0 | 0 | 0.639472 | 0.645152 | 22 |
+| arm | n | node_calls_mean | bracket | arrangement_method_calls_per_run | arrangement_method_calls | with_pooled | with_median | with_worse | n_retried | without_pooled | without_median | without_n |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| BR | 22 | 41479.8 | [36855, 47817] | 0 | 0 | 0.97564 | 0.979422 | 0 | 0 | 0.97564 | 0.979422 | 22 |
+| B0 | 22 | 42515.5 | [37590, 50253] | 0 | 0 | 1 | 1 | 0 | 0 | 1 | 1 | 22 |
+| B1 | 22 | 42841.9 | [38220, 49980] | 0 | 0 | 1.00768 | 1.01505 | 18 | 0 | 1.00768 | 1.01505 | 22 |
+| B2 | 22 | 27187.5 | [24296, 31813] | 5330.95 | 117281 | 0.639472 | 0.645152 | 0 | 0 | 0.639472 | 0.645152 | 22 |
 
 <sub>`cost (check 4) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.54.** *units: model executions during the solve; ratios dimensionless.  A row is one arm over the seed set.  A column is an absolute per-run mean with its bracket, or one reading of the ratio against the flat control.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 11 seed(s) on which every arm of low_aspect_ratio_DEMO reached an accepted optimum.  Construction: solve-phase node calls **summed over attempts[]** per run, so the ratio is over the quantity the attempts decompose; pooled = Σ arm / Σ base, median nearest-rank upper-middle of the per-seed ratios, worse = seeds on which the arm cost more.  Retries are a term, not a footnote: the ratio is published with and without the retried seeds, and a seed counts as retried when **either** side of the pair retried.  The arrangement-method calls are a column of their own and are never pooled into the node calls. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table F.60.** *units: model executions during the solve; ratios dimensionless.  A row is one arm over the seed set.  A column is an absolute per-run mean with its bracket, or one reading of the ratio against the flat control.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 11 seed(s) on which every arm of low_aspect_ratio_DEMO reached an accepted optimum.  Construction: solve-phase node calls **summed over attempts[]** per run, so the ratio is over the quantity the attempts decompose; pooled = Σ arm / Σ base, median nearest-rank upper-middle of the per-seed ratios, worse = seeds on which the arm cost more.  Retries are a term, not a footnote: the ratio is published with and without the retried seeds, and a seed counts as retried when **either** side of the pair retried.  The arrangement-method calls are two columns of their own — the per-run mean and the sum over the set — and are never pooled into the node calls. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
-| arm | n | node_calls_mean | bracket | arrangement_method_calls | with_pooled | with_median | with_worse | n_retried | without_pooled | without_median | without_n |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| BR | 11 | 169943 | [60921, 669207] | 0 | 1.02998 | 1.03517 | 11 | 1 | 1.03508 | 1.03518 | 10 |
-| B0 | 11 | 164997 | [58947, 655473] | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 10 |
-| B1 | 11 | 114154 | [53214, 360591] | 0 | 0.691856 | 0.804931 | 3 | 1 | 1.01291 | 0.825733 | 10 |
-| B2 | 11 | 74312.4 | [34628, 234616] | 157504 | 0.450386 | 0.523683 | 2 | 1 | 0.659427 | 0.537118 | 10 |
+| arm | n | node_calls_mean | bracket | arrangement_method_calls_per_run | arrangement_method_calls | with_pooled | with_median | with_worse | n_retried | without_pooled | without_median | without_n |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| BR | 11 | 169943 | [60921, 669207] | 0 | 0 | 1.02998 | 1.03517 | 11 | 1 | 1.03508 | 1.03518 | 10 |
+| B0 | 11 | 164997 | [58947, 655473] | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 10 |
+| B1 | 11 | 114154 | [53214, 360591] | 0 | 0 | 0.691856 | 0.804931 | 3 | 1 | 1.01291 | 0.825733 | 10 |
+| B2 | 11 | 74312.4 | [34628, 234616] | 14318.5 | 157504 | 0.450386 | 0.523683 | 2 | 1 | 0.659427 | 0.537118 | 10 |
 
 <sub>`cost (check 4) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.55.** *units: model executions during the solve; ratios dimensionless.  A row is one arm over the seed set.  A column is an absolute per-run mean with its bracket, or one reading of the ratio against the flat control.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of st_regression reached an accepted optimum.  Construction: solve-phase node calls **summed over attempts[]** per run, so the ratio is over the quantity the attempts decompose; pooled = Σ arm / Σ base, median nearest-rank upper-middle of the per-seed ratios, worse = seeds on which the arm cost more.  Retries are a term, not a footnote: the ratio is published with and without the retried seeds, and a seed counts as retried when **either** side of the pair retried.  The arrangement-method calls are a column of their own and are never pooled into the node calls. n = 22 (seeds on which every arm of st_regression converged).*
+**Table F.61.** *units: model executions during the solve; ratios dimensionless.  A row is one arm over the seed set.  A column is an absolute per-run mean with its bracket, or one reading of the ratio against the flat control.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of st_regression reached an accepted optimum.  Construction: solve-phase node calls **summed over attempts[]** per run, so the ratio is over the quantity the attempts decompose; pooled = Σ arm / Σ base, median nearest-rank upper-middle of the per-seed ratios, worse = seeds on which the arm cost more.  Retries are a term, not a footnote: the ratio is published with and without the retried seeds, and a seed counts as retried when **either** side of the pair retried.  The arrangement-method calls are two columns of their own — the per-run mean and the sum over the set — and are never pooled into the node calls. n = 22 (seeds on which every arm of st_regression converged).*
 
-| arm | n | node_calls_mean | bracket | arrangement_method_calls | with_pooled | with_median | with_worse | n_retried | without_pooled | without_median | without_n |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| BR | 22 | 126868 | [39627, 838929] | 0 | 1.19679 | 0.990627 | 3 | 3 | 0.89988 | 0.990627 | 19 |
-| B0 | 22 | 106007 | [39732, 295701] | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 21 |
-| B2 | 22 | 56507.3 | [23484, 169358] | 280776 | 0.533052 | 0.59106 | 0 | 1 | 0.543877 | 0.59106 | 21 |
+| arm | n | node_calls_mean | bracket | arrangement_method_calls_per_run | arrangement_method_calls | with_pooled | with_median | with_worse | n_retried | without_pooled | without_median | without_n |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| BR | 22 | 126868 | [39627, 838929] | 0 | 0 | 1.19679 | 0.990627 | 3 | 3 | 0.89988 | 0.990627 | 19 |
+| B0 | 22 | 106007 | [39732, 295701] | 0 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 21 |
+| B2 | 22 | 56507.3 | [23484, 169358] | 12762.5 | 280776 | 0.533052 | 0.59106 | 0 | 1 | 0.543877 | 0.59106 | 21 |
 
 <sub>`cost (check 4) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.56.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 100 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.62.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 100 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1754,7 +1882,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.57.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 1 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.63.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 1 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1762,7 +1890,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — large_tokamak_nof — campaign_entry_references`</sub>
 
-**Table F.58.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 80 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.64.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 80 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1773,7 +1901,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.59.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 80 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.65.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 80 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1784,7 +1912,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.60.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 100 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.66.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 100 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1795,7 +1923,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.61.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 1 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.67.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 1 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1803,7 +1931,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_entry_references`</sub>
 
-**Table F.62.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.68.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1814,7 +1942,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.63.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.69.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A1.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1825,7 +1953,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.64.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 75 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 75 (evaluation-phase runs of st_regression).*
+**Table F.70.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 75 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 75 (evaluation-phase runs of st_regression).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1835,7 +1963,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — st_regression — campaign_displaced`</sub>
 
-**Table F.65.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 1 (evaluation-phase runs of st_regression).*
+**Table F.71.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 1 (evaluation-phase runs of st_regression).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1843,7 +1971,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — st_regression — campaign_entry_references`</sub>
 
-**Table F.66.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 42 (evaluation-phase runs of st_regression).*
+**Table F.72.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 42 (evaluation-phase runs of st_regression).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1853,7 +1981,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.67.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 42 (evaluation-phase runs of st_regression).*
+**Table F.73.** *units: model-node executions per evaluation; sweeps are walks of the model sequence; ratios dimensionless.  A row is one arm of the evaluation phase on this configuration.  A column is a per-run mean over that arm's finished runs with the observed bracket, or one of the three readings of the ratio against the reference arm A0.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: pooled = Σ arm / Σ reference over the seed-paired runs, median = nearest-rank upper-middle of the per-run ratios, worse = runs on which the arm cost more, keyed by seed (displaced entries) or by design-vector column (stencil points).  The population is the one named and no other. n = 42 (evaluation-phase runs of st_regression).*
 
 | arm | ok | calls_per_eval | calls_bracket | sweeps_per_eval | sweeps_by_block | arrangement_method_calls | paired_seeds | pooled | median | worse |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1863,7 +1991,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`cost per call — st_regression — campaign_stencil_forward`</sub>
 
-**Table F.68.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.74.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1874,7 +2002,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.69.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 1 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.75.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 1 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1882,7 +2010,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — large_tokamak_nof — campaign_entry_references`</sub>
 
-**Table F.70.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (optimisation-phase runs of large_tokamak_nof).*
+**Table F.76.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (optimisation-phase runs of large_tokamak_nof).*
 
 | arm | denominator | crashed | ok | sums | detail |
 |---|---|---|---|---|---|
@@ -1893,7 +2021,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — large_tokamak_nof — campaign_optimisation`</sub>
 
-**Table F.71.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 80 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.77.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 80 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1904,7 +2032,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.72.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 80 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.78.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; every run of large_tokamak_nof.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 80 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1915,7 +2043,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.73.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.79.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1926,7 +2054,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.74.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 1 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.80.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 1 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1934,7 +2062,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — low_aspect_ratio_DEMO — campaign_entry_references`</sub>
 
-**Table F.75.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.81.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | denominator | crashed | ok | unconverged | sums | detail |
 |---|---|---|---|---|---|---|
@@ -1945,7 +2073,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — low_aspect_ratio_DEMO — campaign_optimisation`</sub>
 
-**Table F.76.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.82.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1956,7 +2084,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.77.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.83.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; every run of low_aspect_ratio_DEMO.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1967,7 +2095,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.78.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 75 (evaluation-phase runs of st_regression).*
+**Table F.84.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 75 (evaluation-phase runs of st_regression).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1977,7 +2105,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — st_regression — campaign_displaced`</sub>
 
-**Table F.79.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 1 (evaluation-phase runs of st_regression).*
+**Table F.85.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 1 (evaluation-phase runs of st_regression).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1985,7 +2113,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — st_regression — campaign_entry_references`</sub>
 
-**Table F.80.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 75 (optimisation-phase runs of st_regression).*
+**Table F.86.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 75 (optimisation-phase runs of st_regression).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -1995,7 +2123,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — st_regression — campaign_optimisation`</sub>
 
-**Table F.81.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 42 (evaluation-phase runs of st_regression).*
+**Table F.87.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 42 (evaluation-phase runs of st_regression).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -2005,7 +2133,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.82.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 42 (evaluation-phase runs of st_regression).*
+**Table F.88.** *units: counts of runs; the detail column is text.  A row is one arm on this configuration.  A column is one disposition of the taxonomy, and the detail is the last line of each unfinished run's traceback, distinct, with its count.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; every run of st_regression.  Construction: every scheduled run is a row and a run that wrote no record is counted as no_record, never skipped.  An arm inactive on a configuration is absent from this table rather than reading 0: a skipped arm and a failing arm are different results.  A crashed start reaches no cost cell. n = 42 (evaluation-phase runs of st_regression).*
 
 | arm | denominator | ok | sums | detail |
 |---|---|---|---|---|
@@ -2015,7 +2143,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`failure taxonomy — st_regression — campaign_stencil_forward`</sub>
 
-**Table F.83.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by seeds), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 pair(s) of large_tokamak_nof.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 100 (evaluation-phase pairs of large_tokamak_nof over the ladder's rungs).*
+**Table F.89.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by seeds), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 pair(s) of large_tokamak_nof.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 100 (evaluation-phase pairs of large_tokamak_nof over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2026,7 +2154,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.84.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 80 pair(s) of large_tokamak_nof.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 80 (evaluation-phase pairs of large_tokamak_nof over the ladder's rungs).*
+**Table F.90.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 80 pair(s) of large_tokamak_nof.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 80 (evaluation-phase pairs of large_tokamak_nof over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2037,7 +2165,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.85.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 80 pair(s) of large_tokamak_nof.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 80 (evaluation-phase pairs of large_tokamak_nof over the ladder's rungs).*
+**Table F.91.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 80 pair(s) of large_tokamak_nof.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 80 (evaluation-phase pairs of large_tokamak_nof over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2048,7 +2176,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.86.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by seeds), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 pair(s) of low_aspect_ratio_DEMO.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 100 (evaluation-phase pairs of low_aspect_ratio_DEMO over the ladder's rungs).*
+**Table F.92.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by seeds), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 pair(s) of low_aspect_ratio_DEMO.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 100 (evaluation-phase pairs of low_aspect_ratio_DEMO over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2059,7 +2187,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.87.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 76 pair(s) of low_aspect_ratio_DEMO.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 76 (evaluation-phase pairs of low_aspect_ratio_DEMO over the ladder's rungs).*
+**Table F.93.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 76 pair(s) of low_aspect_ratio_DEMO.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 76 (evaluation-phase pairs of low_aspect_ratio_DEMO over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2070,7 +2198,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.88.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 76 pair(s) of low_aspect_ratio_DEMO.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 76 (evaluation-phase pairs of low_aspect_ratio_DEMO over the ladder's rungs).*
+**Table F.94.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A1; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 76 pair(s) of low_aspect_ratio_DEMO.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 76 (evaluation-phase pairs of low_aspect_ratio_DEMO over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2081,7 +2209,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.89.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A0; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by seeds), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 50 pair(s) of st_regression.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 50 (evaluation-phase pairs of st_regression over the ladder's rungs).*
+**Table F.95.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A0; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by seeds), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 50 pair(s) of st_regression.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 50 (evaluation-phase pairs of st_regression over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2090,7 +2218,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — st_regression — campaign_displaced`</sub>
 
-**Table F.90.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A0; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 28 pair(s) of st_regression.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 28 (evaluation-phase pairs of st_regression over the ladder's rungs).*
+**Table F.96.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A0; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 28 pair(s) of st_regression.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 28 (evaluation-phase pairs of st_regression over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2099,7 +2227,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.91.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A0; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 28 pair(s) of st_regression.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 28 (evaluation-phase pairs of st_regression over the ladder's rungs).*
+**Table F.97.** *units: dimensionless — the largest scaled difference between two arms' exit coupling states at the same entry, in the units τ = 1e-06 is stated in.  A row is one pair of arms: each rung of the evaluation phase's ladder and, marked headline, the partitioned arm against A0; A2/A0 beside on a pulsed configuration.  A column is the pairs the two arms share (by columns), how many were compared and why the rest were not, the restricted distance's median, p90 and worst pair, the components the maximum sat on, the pairs with any restricted component at or above τ, the pairs where a discrete component differs or a constant moved, and the whole-state distance beside.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 28 pair(s) of st_regression.  Construction (re-derived here from the coupling-state artifact and the exit-state files, importing no line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the continuous components not written by the once-per-run deferred nodes, s_i the committed scale; median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not accepted on: no acceptance rule was pre-declared for this quantity (added by task A76 (fixed-point-distance)). n = 28 (evaluation-phase pairs of st_regression over the ladder's rungs).*
 
 | pair | role | n | n_compared | not_compared | restricted_median | restricted_p90 | restricted_max | worst_pair | argmax | n_pairs_above_tau | n_pairs_unclean | whole_median | whole_p90 | n_excluded |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2108,36 +2236,38 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`fixed-point distance — st_regression — campaign_stencil_forward`</sub>
 
-**Table F.92.** *units: dimensionless ratios of counts.  A row is one arm against the flat control over the seed set.  A column is one of check 2's two iteration constructions, its sum ratio, or the evaluation-count ratio beside them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of large_tokamak_nof reached an accepted optimum.  Construction: iterations summed over attempts[] is the declared acceptance statistic, nearest-rank upper-middle median against 1.05; the final attempt's count is the previous revision's construction, published beside.  Both are read from attempts[], so a disagreement between them is a disagreement about that list.  The sum ratio is beside every median because the two can point in opposite directions. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table F.98.** *units: dimensionless ratios of counts.  A row is one arm against the flat control over the seed set.  A column is one of check 2's two iteration constructions, its sum ratio, or the evaluation-count ratio beside them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of large_tokamak_nof reached an accepted optimum.  Construction: iterations summed over attempts[] is the declared acceptance statistic, nearest-rank upper-middle median against 1.05; the final attempt's count is the previous revision's construction, published beside.  Both are read from attempts[], so a disagreement between them is a disagreement about that list.  The sum ratio is beside every median because the two can point in opposite directions.  ε is the evaluation count summed over attempts[].sweeps_per_eval.n_evaluations (issue I-26), with the seeds on which it is exactly 1; the sweep ratio (n_model_calls) is its own column; the B1 → B2 row is the plan's step reported beside. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
-| pair | n | summed_median | summed_sum_ratio | acceptance | final_median | final_sum_ratio | evaluations_median | attempts | constructions_disagree |
-|---|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 22 | 1 | 1 | beside | 1 | 1 | 0.979456 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
-| B0 → B1 | 22 | 1 | 0.994186 | PASS | 1 | 0.994186 | 1.01391 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
-| B0 → B2 | 22 | 1 | 0.994186 | PASS | 1 | 0.994186 | 2.65239 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| pair | n | summed_median | summed_sum_ratio | acceptance | final_median | final_sum_ratio | evaluations_median | evaluations_equal | sweeps_median | attempts | constructions_disagree |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 22 | 1 | 1 | beside | 1 | 1 | 1 | 22 | 0.979456 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B0 → B1 | 22 | 1 | 0.994186 | PASS | 1 | 0.994186 | 1.04762 | 0 | 1.01391 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B0 → B2 | 22 | 1 | 0.994186 | PASS | 1 | 0.994186 | 1.04762 | 0 | 2.65239 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B1 → B2 (beside) | 22 | 1 | 1 | beside | 1 | 1 | 1 | 22 | 2.61579 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
 
 <sub>`iteration multiplier (check 2) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.93.** *units: dimensionless ratios of counts.  A row is one arm against the flat control over the seed set.  A column is one of check 2's two iteration constructions, its sum ratio, or the evaluation-count ratio beside them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 11 seed(s) on which every arm of low_aspect_ratio_DEMO reached an accepted optimum.  Construction: iterations summed over attempts[] is the declared acceptance statistic, nearest-rank upper-middle median against 1.05; the final attempt's count is the previous revision's construction, published beside.  Both are read from attempts[], so a disagreement between them is a disagreement about that list.  The sum ratio is beside every median because the two can point in opposite directions. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table F.99.** *units: dimensionless ratios of counts.  A row is one arm against the flat control over the seed set.  A column is one of check 2's two iteration constructions, its sum ratio, or the evaluation-count ratio beside them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 11 seed(s) on which every arm of low_aspect_ratio_DEMO reached an accepted optimum.  Construction: iterations summed over attempts[] is the declared acceptance statistic, nearest-rank upper-middle median against 1.05; the final attempt's count is the previous revision's construction, published beside.  Both are read from attempts[], so a disagreement between them is a disagreement about that list.  The sum ratio is beside every median because the two can point in opposite directions.  ε is the evaluation count summed over attempts[].sweeps_per_eval.n_evaluations (issue I-26), with the seeds on which it is exactly 1; the sweep ratio (n_model_calls) is its own column; the B1 → B2 row is the plan's step reported beside. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
-| pair | n | summed_median | summed_sum_ratio | acceptance | final_median | final_sum_ratio | evaluations_median | attempts | constructions_disagree |
-|---|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 11 | 1 | 1 | beside | 1 | 1 | 1.03515 | 0:1/1, 1:2/2, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
-| B0 → B1 | 11 | 0.8125 | 0.70122 | PASS | 0.833333 | 1.00877 | 0.804589 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
-| B0 → B2 | 11 | 0.8125 | 0.70122 | PASS | 0.833333 | 1.00877 | 2.11691 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| pair | n | summed_median | summed_sum_ratio | acceptance | final_median | final_sum_ratio | evaluations_median | evaluations_equal | sweeps_median | attempts | constructions_disagree |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 11 | 1 | 1 | beside | 1 | 1 | 1 | 11 | 1.03515 | 0:1/1, 1:2/2, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B0 → B1 | 11 | 0.8125 | 0.70122 | PASS | 0.833333 | 1.00877 | 0.846774 | 0 | 0.804589 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B0 → B2 | 11 | 0.8125 | 0.70122 | PASS | 0.833333 | 1.00877 | 0.846774 | 0 | 2.11691 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B1 → B2 (beside) | 11 | 1 | 1 | beside | 1 | 1 | 1 | 11 | 2.63353 | 0:1/1, 1:1/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 0 |
 
 <sub>`iteration multiplier (check 2) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.94.** *units: dimensionless ratios of counts.  A row is one arm against the flat control over the seed set.  A column is one of check 2's two iteration constructions, its sum ratio, or the evaluation-count ratio beside them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of st_regression reached an accepted optimum.  Construction: iterations summed over attempts[] is the declared acceptance statistic, nearest-rank upper-middle median against 1.05; the final attempt's count is the previous revision's construction, published beside.  Both are read from attempts[], so a disagreement between them is a disagreement about that list.  The sum ratio is beside every median because the two can point in opposite directions. n = 22 (seeds on which every arm of st_regression converged).*
+**Table F.100.** *units: dimensionless ratios of counts.  A row is one arm against the flat control over the seed set.  A column is one of check 2's two iteration constructions, its sum ratio, or the evaluation-count ratio beside them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of st_regression reached an accepted optimum.  Construction: iterations summed over attempts[] is the declared acceptance statistic, nearest-rank upper-middle median against 1.05; the final attempt's count is the previous revision's construction, published beside.  Both are read from attempts[], so a disagreement between them is a disagreement about that list.  The sum ratio is beside every median because the two can point in opposite directions.  ε is the evaluation count summed over attempts[].sweeps_per_eval.n_evaluations (issue I-26), with the seeds on which it is exactly 1; the sweep ratio (n_model_calls) is its own column; the B1 → B2 row is the plan's step reported beside. n = 22 (seeds on which every arm of st_regression converged).*
 
-| pair | n | summed_median | summed_sum_ratio | acceptance | final_median | final_sum_ratio | evaluations_median | attempts | constructions_disagree |
-|---|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 22 | 1 | 1.24051 | beside | 1 | 0.922053 | 0.990635 | 0:1/1, 1:1/1, 2:2/2, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/2, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/3 | 3 |
-| B0 → B2 | 22 | 1 | 0.952984 | PASS | 1 | 1.0019 | 2.77666 | 0:1/1, 1:1/1, 2:2/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/1 | 1 |
+| pair | n | summed_median | summed_sum_ratio | acceptance | final_median | final_sum_ratio | evaluations_median | evaluations_equal | sweeps_median | attempts | constructions_disagree |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 22 | 1 | 1.24051 | beside | 1 | 0.922053 | 1 | 15 | 0.990635 | 0:1/1, 1:1/1, 2:2/2, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/2, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/3 | 3 |
+| B0 → B2 | 22 | 1 | 0.952984 | PASS | 1 | 1.0019 | 1 | 14 | 2.77666 | 0:1/1, 1:1/1, 2:2/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/1 | 1 |
 
 <sub>`iteration multiplier (check 2) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.95.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 100 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.101.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 100 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2152,7 +2282,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.96.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 1 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.102.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 1 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2161,7 +2291,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — large_tokamak_nof — campaign_entry_references`</sub>
 
-**Table F.97.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 80 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.103.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 80 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2176,7 +2306,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.98.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 80 (evaluation-phase runs of large_tokamak_nof).*
+**Table F.104.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 80 run(s) of large_tokamak_nof.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 80 (evaluation-phase runs of large_tokamak_nof).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2191,7 +2321,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.99.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 100 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.105.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 100 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 100 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2206,7 +2336,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.100.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 1 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.106.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 1 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2215,7 +2345,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — low_aspect_ratio_DEMO — campaign_entry_references`</sub>
 
-**Table F.101.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.107.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2230,7 +2360,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.102.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.108.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 76 run(s) of low_aspect_ratio_DEMO.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 76 (evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2245,7 +2375,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.103.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 75 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 75 (evaluation-phase runs of st_regression).*
+**Table F.109.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 75 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 75 (evaluation-phase runs of st_regression).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2258,7 +2388,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — st_regression — campaign_displaced`</sub>
 
-**Table F.104.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 1 (evaluation-phase runs of st_regression).*
+**Table F.110.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; 1 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 1 (evaluation-phase runs of st_regression).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2267,7 +2397,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — st_regression — campaign_entry_references`</sub>
 
-**Table F.105.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 42 (evaluation-phase runs of st_regression).*
+**Table F.111.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 42 (evaluation-phase runs of st_regression).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2280,7 +2410,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.106.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 42 (evaluation-phase runs of st_regression).*
+**Table F.112.** *units: dimensionless — the largest scaled coupling-state residual found by one further full sweep past termination.  A row is one arm on one ruler.  A column is the restricted or whole-state maximum's median and p90 over that arm's finished runs, the component the restricted maximum sat on, and how many components the restriction removed.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 42 run(s) of st_regression.  Construction: median = nearest-rank upper-middle, p90 = nearest-rank ceil(0.9 n); the restricted maximum excludes the components the configuration's once-per-run deferred nodes write.  Audit position: after_single_evaluation — a residual taken at the entry to the output path and one taken after the run are different quantities.  The audit instrument's version is read from the record, never assumed: task A62 (exit-audit-restore) widens the snapshot under decision D25 and moves every value in these columns.  Both rulers or neither. n = 42 (evaluation-phase runs of st_regression).*
 
 | arm | ruler | n | n_with_the_statistic | restricted_median | restricted_p90 | argmax | whole_median | whole_p90 | n_excluded | audit_position | instrument |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2293,7 +2423,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`matched accuracy — st_regression — campaign_stencil_forward`</sub>
 
-**Table F.107.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 275 (finished evaluation-phase runs of every configuration in this source).*
+**Table F.113.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 275 (finished evaluation-phase runs of every configuration in this source).*
 
 | configuration | block | n_nodes | nodes | AR | A0 | A1 | A2 | reference | ratio | n_pairs |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2317,7 +2447,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`node calls per block — campaign_displaced`</sub>
 
-**Table F.108.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 3 (finished evaluation-phase runs of every configuration in this source).*
+**Table F.114.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 3 (finished evaluation-phase runs of every configuration in this source).*
 
 | configuration | block | n_nodes | nodes | AR | A0 | A1 | A2 | reference | ratio | n_pairs |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2341,7 +2471,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`node calls per block — campaign_entry_references`</sub>
 
-**Table F.109.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 198 (finished evaluation-phase runs of every configuration in this source).*
+**Table F.115.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 198 (finished evaluation-phase runs of every configuration in this source).*
 
 | configuration | block | n_nodes | nodes | AR | A0 | A1 | A2 | reference | ratio | n_pairs |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2365,7 +2495,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`node calls per block — campaign_stencil_backward`</sub>
 
-**Table F.110.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 198 (finished evaluation-phase runs of every configuration in this source).*
+**Table F.116.** *recomputed: the measured evaluation's per-node census summed over the node map's groups (the once-per-run nodes apart), mean per arm over finished runs, and Σ A2 / Σ reference over the pairs both sides finished n = 198 (finished evaluation-phase runs of every configuration in this source).*
 
 | configuration | block | n_nodes | nodes | AR | A0 | A1 | A2 | reference | ratio | n_pairs |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -2389,7 +2519,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`node calls per block — campaign_stencil_forward`</sub>
 
-**Table F.111.** *recomputed: the whole run's per-node census summed over the node map's groups (the once-per-run nodes apart), per-run mean and [min, max] per arm over the seed set, B2/B0 pooled, per-run median with [min, max] and the count of runs above 1; the last row is the census total less the solve-phase calls summed over attempts n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table F.117.** *recomputed: the whole run's per-node census summed over the node map's groups (the once-per-run nodes apart), per-run mean and [min, max] per arm over the seed set, B2/B0 pooled, per-run median with [min, max] and the count of runs above 1; the last row is the census total less the solve-phase calls summed over attempts n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
 | module | n_nodes | nodes | BR_mean | BR_bracket | B0_mean | B0_bracket | B1_mean | B1_bracket | B2_mean | B2_bracket | pooled | median | bracket | n_above_one | n_pairs |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2403,7 +2533,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`node calls per module — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.112.** *recomputed: the whole run's per-node census summed over the node map's groups (the once-per-run nodes apart), per-run mean and [min, max] per arm over the seed set, B2/B0 pooled, per-run median with [min, max] and the count of runs above 1; the last row is the census total less the solve-phase calls summed over attempts n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table F.118.** *recomputed: the whole run's per-node census summed over the node map's groups (the once-per-run nodes apart), per-run mean and [min, max] per arm over the seed set, B2/B0 pooled, per-run median with [min, max] and the count of runs above 1; the last row is the census total less the solve-phase calls summed over attempts n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
 | module | n_nodes | nodes | BR_mean | BR_bracket | B0_mean | B0_bracket | B1_mean | B1_bracket | B2_mean | B2_bracket | pooled | median | bracket | n_above_one | n_pairs |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2417,7 +2547,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`node calls per module — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.113.** *recomputed: the whole run's per-node census summed over the node map's groups (the once-per-run nodes apart), per-run mean and [min, max] per arm over the seed set, B2/B0 pooled, per-run median with [min, max] and the count of runs above 1; the last row is the census total less the solve-phase calls summed over attempts n = 22 (seeds on which every arm of st_regression converged).*
+**Table F.119.** *recomputed: the whole run's per-node census summed over the node map's groups (the once-per-run nodes apart), per-run mean and [min, max] per arm over the seed set, B2/B0 pooled, per-run median with [min, max] and the count of runs above 1; the last row is the census total less the solve-phase calls summed over attempts n = 22 (seeds on which every arm of st_regression converged).*
 
 | module | n_nodes | nodes | BR_mean | BR_bracket | B0_mean | B0_bracket | B1_mean | B1_bracket | B2_mean | B2_bracket | pooled | median | bracket | n_above_one | n_pairs |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2430,7 +2560,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`node calls per module — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.114.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 25 flat-control and 25 pinned run(s) of large_tokamak_nof.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 50 (A0 and A1 runs of large_tokamak_nof).*
+**Table F.120.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 25 flat-control and 25 pinned run(s) of large_tokamak_nof.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 50 (A0 and A1 runs of large_tokamak_nof).*
 
 | n | paired_seeds | pooled | median | worse | residual_s_median | residual_s_bracket | relative_median |
 |---|---|---|---|---|---|---|---|
@@ -2438,7 +2568,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.115.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 20 flat-control and 20 pinned run(s) of large_tokamak_nof.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 40 (A0 and A1 runs of large_tokamak_nof).*
+**Table F.121.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 20 flat-control and 20 pinned run(s) of large_tokamak_nof.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 40 (A0 and A1 runs of large_tokamak_nof).*
 
 | n | paired_seeds | pooled | median | worse | residual_s_median | residual_s_bracket | relative_median |
 |---|---|---|---|---|---|---|---|
@@ -2446,7 +2576,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.116.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 20 flat-control and 20 pinned run(s) of large_tokamak_nof.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 40 (A0 and A1 runs of large_tokamak_nof).*
+**Table F.122.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 20 flat-control and 20 pinned run(s) of large_tokamak_nof.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 40 (A0 and A1 runs of large_tokamak_nof).*
 
 | n | paired_seeds | pooled | median | worse | residual_s_median | residual_s_bracket | relative_median |
 |---|---|---|---|---|---|---|---|
@@ -2454,7 +2584,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.117.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 25 flat-control and 25 pinned run(s) of low_aspect_ratio_DEMO.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 50 (A0 and A1 runs of low_aspect_ratio_DEMO).*
+**Table F.123.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; 25 flat-control and 25 pinned run(s) of low_aspect_ratio_DEMO.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 50 (A0 and A1 runs of low_aspect_ratio_DEMO).*
 
 | n | paired_seeds | pooled | median | worse | residual_s_median | residual_s_bracket | relative_median |
 |---|---|---|---|---|---|---|---|
@@ -2462,7 +2592,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.118.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 19 flat-control and 19 pinned run(s) of low_aspect_ratio_DEMO.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 38 (A0 and A1 runs of low_aspect_ratio_DEMO).*
+**Table F.124.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; 19 flat-control and 19 pinned run(s) of low_aspect_ratio_DEMO.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 38 (A0 and A1 runs of low_aspect_ratio_DEMO).*
 
 | n | paired_seeds | pooled | median | worse | residual_s_median | residual_s_bracket | relative_median |
 |---|---|---|---|---|---|---|---|
@@ -2470,7 +2600,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.119.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 19 flat-control and 19 pinned run(s) of low_aspect_ratio_DEMO.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 38 (A0 and A1 runs of low_aspect_ratio_DEMO).*
+**Table F.125.** *units: the node-call ratio is dimensionless; the burn-time residual is in seconds and relative to the burn time.  A row is this configuration's rung.  A column is the cost of taking the burn time out of the flat loop, or the inconsistency the constant leaves behind.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; 19 flat-control and 19 pinned run(s) of low_aspect_ratio_DEMO.  Construction: the ratio triple on node calls of the single evaluation; the residual is the lifted component's own inconsistency at exit, |value|, median nearest-rank upper-middle.  Neither column is a claim about the partition: this rung moves one thing only. n = 38 (A0 and A1 runs of low_aspect_ratio_DEMO).*
 
 | n | paired_seeds | pooled | median | worse | residual_s_median | residual_s_bracket | relative_median |
 |---|---|---|---|---|---|---|---|
@@ -2478,7 +2608,135 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.120.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 100 (finished evaluation-phase runs of large_tokamak_nof).*
+**Table F.126.** *units: outcome labels (text) and counts of arms.  A row is one seed offered to every arm of the group.  A column is each arm's outcome at that seed, how many arms accepted, whether the seed is in the seed set, and which arms lost it while another accepted.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR · B0 · B1 · B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: the per-seed part of the per-arm success table, same labels. n = 25 (distinct seeds run on large_tokamak_nof).*
+
+| seed | BR | B0 | B1 | B2 | n_accepted | in_seed_set | lost_by |
+|---|---|---|---|---|---|---|---|
+| 0 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 1 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 2 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 3 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 4 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 5 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 6 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 7 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 8 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 9 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 10 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 11 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 12 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 13 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 14 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 15 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 16 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 17 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 18 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 19 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 20 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 21 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 22 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 23 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 24 | accepted | accepted | accepted | accepted | 4 | yes | — |
+
+<sub>`per-arm success by seed — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.127.** *units: outcome labels (text) and counts of arms.  A row is one seed offered to every arm of the group.  A column is each arm's outcome at that seed, how many arms accepted, whether the seed is in the seed set, and which arms lost it while another accepted.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR · B0 · B1 · B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: the per-seed part of the per-arm success table, same labels. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
+
+| seed | BR | B0 | B1 | B2 | n_accepted | in_seed_set | lost_by |
+|---|---|---|---|---|---|---|---|
+| 0 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 1 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 2 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 3 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 4 | finished, ifail = 5 | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | 0 | no | — |
+| 5 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 6 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 7 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 8 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 9 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 10 | accepted | accepted | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | 2 | no | B1, B2 |
+| 11 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 12 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 13 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 14 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 15 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 16 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 17 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 18 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 19 | accepted | accepted | accepted | accepted | 4 | yes | — |
+| 20 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 21 | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | crashed (RuntimeError) | 0 | no | — |
+| 22 | finished, ifail = 5 | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | coupling-loop cap (ModuleSolveFailure) | 0 | no | — |
+| 23 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 24 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+
+<sub>`per-arm success by seed — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.128.** *units: outcome labels (text) and counts of arms.  A row is one seed offered to every arm of the group.  A column is each arm's outcome at that seed, how many arms accepted, whether the seed is in the seed set, and which arms lost it while another accepted.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR · B0 · B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: the per-seed part of the per-arm success table, same labels. n = 25 (distinct seeds run on st_regression).*
+
+| seed | BR | B0 | B2 | n_accepted | in_seed_set | lost_by |
+|---|---|---|---|---|---|---|
+| 0 | accepted | accepted | accepted | 3 | yes | — |
+| 1 | accepted | accepted | accepted | 3 | yes | — |
+| 2 | accepted | accepted | accepted | 3 | yes | — |
+| 3 | accepted | accepted | accepted | 3 | yes | — |
+| 4 | accepted | accepted | accepted | 3 | yes | — |
+| 5 | accepted | accepted | finished, ifail = 5 | 2 | no | B2 |
+| 6 | accepted | accepted | accepted | 3 | yes | — |
+| 7 | accepted | accepted | accepted | 3 | yes | — |
+| 8 | accepted | accepted | accepted | 3 | yes | — |
+| 9 | accepted | accepted | accepted | 3 | yes | — |
+| 10 | accepted | finished, ifail = 5 | accepted | 2 | no | B0 |
+| 11 | accepted | accepted | accepted | 3 | yes | — |
+| 12 | accepted | accepted | accepted | 3 | yes | — |
+| 13 | accepted | accepted | accepted | 3 | yes | — |
+| 14 | accepted | accepted | accepted | 3 | yes | — |
+| 15 | accepted | accepted | accepted | 3 | yes | — |
+| 16 | accepted | accepted | accepted | 3 | yes | — |
+| 17 | finished, ifail = 5 | finished, ifail = 5 | finished, ifail = 5 | 0 | no | — |
+| 18 | accepted | accepted | accepted | 3 | yes | — |
+| 19 | accepted | accepted | accepted | 3 | yes | — |
+| 20 | accepted | accepted | accepted | 3 | yes | — |
+| 21 | accepted | accepted | accepted | 3 | yes | — |
+| 22 | accepted | accepted | accepted | 3 | yes | — |
+| 23 | accepted | accepted | accepted | 3 | yes | — |
+| 24 | accepted | accepted | accepted | 3 | yes | — |
+
+<sub>`per-arm success by seed — st_regression — campaign_optimisation · BR·B0·B2`</sub>
+
+**Table F.129.** *units: counts of starts.  A row is one optimisation arm on this configuration.  A column is the starts offered, the accepted optima, every other start by its outcome, the starts lost that another arm accepted, and the seed set beside.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR · B0 · B1 · B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: accepted is status ok AND the output file's ifail == 1; a finished start with another exit code carries it; a crashed start is PROCESS's own exception, named from the traceback, or the coupling-state loop's sweep cap (ModuleSolveFailure) by the harness's failure class; a start is lost when this arm did not accept and another did.  Reported, not accepted on (D29). n = 25 (starts offered per arm on large_tokamak_nof).*
+
+| arm | offered | accepted | crashed (RuntimeError) | lost_another_arm_accepted | seed_set | seeds_not_accepted | lost_seeds |
+|---|---|---|---|---|---|---|---|
+| BR | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+| B0 | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+| B1 | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+| B2 | 25 | 22 | 3 | 0 | 22 | crashed (RuntimeError): 5, 20, 21 | — |
+
+<sub>`per-arm success — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.130.** *units: counts of starts.  A row is one optimisation arm on this configuration.  A column is the starts offered, the accepted optima, every other start by its outcome, the starts lost that another arm accepted, and the seed set beside.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR · B0 · B1 · B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: accepted is status ok AND the output file's ifail == 1; a finished start with another exit code carries it; a crashed start is PROCESS's own exception, named from the traceback, or the coupling-state loop's sweep cap (ModuleSolveFailure) by the harness's failure class; a start is lost when this arm did not accept and another did.  Reported, not accepted on (D29). n = 25 (starts offered per arm on low_aspect_ratio_DEMO).*
+
+| arm | offered | accepted | finished, ifail = 5 | crashed (RuntimeError) | coupling-loop cap (ModuleSolveFailure) | lost_another_arm_accepted | seed_set | seeds_not_accepted | lost_seeds |
+|---|---|---|---|---|---|---|---|---|---|
+| BR | 25 | 12 | 11 | 2 | 0 | 0 | 11 | finished, ifail = 5: 2, 4, 7, 8, 14, 16, 17, 20, 22, 23, 24; crashed (RuntimeError): 3, 21 | — |
+| B0 | 25 | 12 | 9 | 2 | 2 | 0 | 11 | finished, ifail = 5: 2, 7, 8, 14, 16, 17, 20, 23, 24; crashed (RuntimeError): 3, 21; coupling-loop cap (ModuleSolveFailure): 4, 22 | — |
+| B1 | 25 | 11 | 9 | 2 | 3 | 1 | 11 | finished, ifail = 5: 2, 7, 8, 14, 16, 17, 20, 23, 24; crashed (RuntimeError): 3, 21; coupling-loop cap (ModuleSolveFailure): 4, 10, 22 | 10 |
+| B2 | 25 | 11 | 9 | 2 | 3 | 1 | 11 | finished, ifail = 5: 2, 7, 8, 14, 16, 17, 20, 23, 24; crashed (RuntimeError): 3, 21; coupling-loop cap (ModuleSolveFailure): 4, 10, 22 | 10 |
+
+<sub>`per-arm success — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
+
+**Table F.131.** *units: counts of starts.  A row is one optimisation arm on this configuration.  A column is the starts offered, the accepted optima, every other start by its outcome, the starts lost that another arm accepted, and the seed set beside.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR · B0 · B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: accepted is status ok AND the output file's ifail == 1; a finished start with another exit code carries it; a crashed start is PROCESS's own exception, named from the traceback, or the coupling-state loop's sweep cap (ModuleSolveFailure) by the harness's failure class; a start is lost when this arm did not accept and another did.  Reported, not accepted on (D29). n = 25 (starts offered per arm on st_regression).*
+
+| arm | offered | accepted | finished, ifail = 5 | lost_another_arm_accepted | seed_set | seeds_not_accepted | lost_seeds |
+|---|---|---|---|---|---|---|---|
+| BR | 25 | 24 | 1 | 0 | 22 | finished, ifail = 5: 17 | — |
+| B0 | 25 | 23 | 2 | 1 | 22 | finished, ifail = 5: 10, 17 | 10 |
+| B2 | 25 | 23 | 2 | 1 | 22 | finished, ifail = 5: 5, 17 | 5 |
+
+<sub>`per-arm success — st_regression — campaign_optimisation · BR·B0·B2`</sub>
+
+**Table F.132.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 100 (finished evaluation-phase runs of large_tokamak_nof).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2585,7 +2843,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — large_tokamak_nof — campaign_displaced`</sub>
 
-**Table F.121.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 1 (finished evaluation-phase runs of large_tokamak_nof).*
+**Table F.133.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 1 (finished evaluation-phase runs of large_tokamak_nof).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2593,7 +2851,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — large_tokamak_nof — campaign_entry_references`</sub>
 
-**Table F.122.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished optimisation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 88 (finished optimisation-phase runs of large_tokamak_nof).*
+**Table F.134.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished optimisation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 88 (finished optimisation-phase runs of large_tokamak_nof).*
 
 | arm | seed | stops_on | dispatch_sweeps | solve_sweeps | output_loop_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2688,7 +2946,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.123.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 80 (finished evaluation-phase runs of large_tokamak_nof).*
+**Table F.135.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 80 (finished evaluation-phase runs of large_tokamak_nof).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2775,7 +3033,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — large_tokamak_nof — campaign_stencil_backward`</sub>
 
-**Table F.124.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 80 (finished evaluation-phase runs of large_tokamak_nof).*
+**Table F.136.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of large_tokamak_nof.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 80 (finished evaluation-phase runs of large_tokamak_nof).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2862,7 +3120,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — large_tokamak_nof — campaign_stencil_forward`</sub>
 
-**Table F.125.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 100 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.137.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 100 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2969,7 +3227,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — low_aspect_ratio_DEMO — campaign_displaced`</sub>
 
-**Table F.126.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 1 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.138.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 1 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2977,7 +3235,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — low_aspect_ratio_DEMO — campaign_entry_references`</sub>
 
-**Table F.127.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished optimisation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 84 (finished optimisation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.139.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished optimisation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 84 (finished optimisation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | stops_on | dispatch_sweeps | solve_sweeps | output_loop_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3068,7 +3326,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.128.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 76 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.140.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 76 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3151,7 +3409,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.129.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 76 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.141.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of low_aspect_ratio_DEMO.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 76 (finished evaluation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3234,7 +3492,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — low_aspect_ratio_DEMO — campaign_stencil_forward`</sub>
 
-**Table F.130.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 6.67 %, 7.14 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 75 (finished evaluation-phase runs of st_regression).*
+**Table F.142.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_displaced — the campaign population: the displaced-entry regime, every arm from the same seeded displacement of the reference fixed point, seeds 1–25; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 6.67 %, 7.14 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 75 (finished evaluation-phase runs of st_regression).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3316,7 +3574,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — st_regression — campaign_displaced`</sub>
 
-**Table F.131.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 1 (finished evaluation-phase runs of st_regression).*
+**Table F.143.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_entry_references — the campaign population: one flat A0 evaluation per configuration from the input file's design point — the cold-start term, beside and never pooled; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 1 (finished evaluation-phase runs of st_regression).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3324,7 +3582,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — st_regression — campaign_entry_references`</sub>
 
-**Table F.132.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished optimisation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 10.7 %, 10.8 %, 10.82 %, 10.83 %, 10.84 %, 10.85 %, 10.86 %, 10.87 %, 10.9 %, 10.91 %, 10.92 %, 10.94 %, 11.15 %, 11.18 %, 11.22 %, 11.3 %, 11.57 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 75 (finished optimisation-phase runs of st_regression).*
+**Table F.144.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished optimisation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the finished optimisation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 10.7 %, 10.8 %, 10.82 %, 10.83 %, 10.84 %, 10.85 %, 10.86 %, 10.87 %, 10.9 %, 10.91 %, 10.92 %, 10.94 %, 11.15 %, 11.18 %, 11.22 %, 11.3 %, 11.57 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 75 (finished optimisation-phase runs of st_regression).*
 
 | arm | seed | stops_on | dispatch_sweeps | solve_sweeps | output_loop_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3406,7 +3664,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.133.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 9.09 %, 10 %, 11.11 %, 12.5 %, 16.67 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 42 (finished evaluation-phase runs of st_regression).*
+**Table F.145.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_backward — the campaign population: the stencil regime's backward points, each from its forward point's exit, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 9.09 %, 10 %, 11.11 %, 12.5 %, 16.67 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 42 (finished evaluation-phase runs of st_regression).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3455,7 +3713,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.134.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 10 %, 11.11 %, 12.5 %, 16.67 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 42 (finished evaluation-phase runs of st_regression).*
+**Table F.146.** *units: counts — evaluations of a convergence test, and components compared summed over them; sweeps are walks of the model sequence.  A row is one finished evaluation-phase run.  A column is a counter of one **named** convergence test, or a sweep total.  Population: campaign_stencil_forward — the campaign population: the stencil regime's forward points, one per design-vector column per arm, paired by column; the finished evaluation-phase gate runs of st_regression.  Construction: the driver's own counters, exact and concurrency-invariant.  The two predicates are never pooled.  The empty block visits are counted and disclaimed, never repaired, and the share quoted is the SWEEP share — over this population 0 %, 10 %, 11.11 %, 12.5 %, 16.67 %.  The visit share is larger and is never quoted.  No conclusion rests on a timing: the question is asked in counts alone. n = 42 (finished evaluation-phase runs of st_regression).*
 
 | arm | seed | stops_on | dispatch_sweeps | coupling_evaluations | coupling_components | coupling_width | coupling_width_by_block | upstream_evaluations | upstream_components | upstream_width | empty_sweep_share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3504,7 +3762,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`per-sweep overhead — st_regression — campaign_stencil_forward`</sub>
 
-**Table F.135.** *units: dimensionless — a relative difference of the normalised objective.  A row is one arm pair over the seed set.  A column is the paired relative objective difference's median and p90, the threshold they are judged against, and the clustering statistics.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of large_tokamak_nof reached an accepted optimum.  Construction: |Δ norm_objf| / max(|a|, |b|) per pair from the hex floats; median nearest-rank upper-middle, p90 nearest-rank ceil(0.9 n); threshold = max(F × yardstick, floor) with F = 10 and floor = 1e-06, the yardstick being the BR → B0 spread in this same population; clusters at a relative gap of 1e-05.  The yardstick row carries no threshold and no verdict: it *is* the calibration.  *Below resolution* is a named category — distinct optima closer than the cluster gap and further apart than the correctness floor.  The retried column is computed from attempts[], never from a stored flag. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table F.147.** *units: dimensionless — a relative difference of the normalised objective.  A row is one arm pair over the seed set.  A column is the paired relative objective difference's median and p90, the threshold they are judged against, and the clustering statistics.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of large_tokamak_nof reached an accepted optimum.  Construction: |Δ norm_objf| / max(|a|, |b|) per pair from the hex floats; median nearest-rank upper-middle, p90 nearest-rank ceil(0.9 n); threshold = max(F × yardstick, floor) with F = 10 and floor = 1e-06, the yardstick being the BR → B0 spread in this same population; clusters at a relative gap of 1e-05.  The yardstick row carries no threshold and no verdict: it *is* the calibration.  *Below resolution* is a named category — distinct optima closer than the cluster gap and further apart than the correctness floor.  The retried column is computed from attempts[], never from a stored flag. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
 | pair | n | r_median | r_p90 | threshold_median | threshold_p90 | verdict | hops | below_resolution | retried_in_pair |
 |---|---|---|---|---|---|---|---|---|---|
@@ -3514,7 +3772,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`same optimum (check 1) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.136.** *units: dimensionless — a relative difference of the normalised objective.  A row is one arm pair over the seed set.  A column is the paired relative objective difference's median and p90, the threshold they are judged against, and the clustering statistics.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 11 seed(s) on which every arm of low_aspect_ratio_DEMO reached an accepted optimum.  Construction: |Δ norm_objf| / max(|a|, |b|) per pair from the hex floats; median nearest-rank upper-middle, p90 nearest-rank ceil(0.9 n); threshold = max(F × yardstick, floor) with F = 10 and floor = 1e-06, the yardstick being the BR → B0 spread in this same population; clusters at a relative gap of 1e-05.  The yardstick row carries no threshold and no verdict: it *is* the calibration.  *Below resolution* is a named category — distinct optima closer than the cluster gap and further apart than the correctness floor.  The retried column is computed from attempts[], never from a stored flag. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table F.148.** *units: dimensionless — a relative difference of the normalised objective.  A row is one arm pair over the seed set.  A column is the paired relative objective difference's median and p90, the threshold they are judged against, and the clustering statistics.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 11 seed(s) on which every arm of low_aspect_ratio_DEMO reached an accepted optimum.  Construction: |Δ norm_objf| / max(|a|, |b|) per pair from the hex floats; median nearest-rank upper-middle, p90 nearest-rank ceil(0.9 n); threshold = max(F × yardstick, floor) with F = 10 and floor = 1e-06, the yardstick being the BR → B0 spread in this same population; clusters at a relative gap of 1e-05.  The yardstick row carries no threshold and no verdict: it *is* the calibration.  *Below resolution* is a named category — distinct optima closer than the cluster gap and further apart than the correctness floor.  The retried column is computed from attempts[], never from a stored flag. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
 | pair | n | r_median | r_p90 | threshold_median | threshold_p90 | verdict | hops | below_resolution | retried_in_pair |
 |---|---|---|---|---|---|---|---|---|---|
@@ -3524,7 +3782,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`same optimum (check 1) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.137.** *units: dimensionless — a relative difference of the normalised objective.  A row is one arm pair over the seed set.  A column is the paired relative objective difference's median and p90, the threshold they are judged against, and the clustering statistics.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of st_regression reached an accepted optimum.  Construction: |Δ norm_objf| / max(|a|, |b|) per pair from the hex floats; median nearest-rank upper-middle, p90 nearest-rank ceil(0.9 n); threshold = max(F × yardstick, floor) with F = 10 and floor = 1e-06, the yardstick being the BR → B0 spread in this same population; clusters at a relative gap of 1e-05.  The yardstick row carries no threshold and no verdict: it *is* the calibration.  *Below resolution* is a named category — distinct optima closer than the cluster gap and further apart than the correctness floor.  The retried column is computed from attempts[], never from a stored flag. n = 22 (seeds on which every arm of st_regression converged).*
+**Table F.149.** *units: dimensionless — a relative difference of the normalised objective.  A row is one arm pair over the seed set.  A column is the paired relative objective difference's median and p90, the threshold they are judged against, and the clustering statistics.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 22 seed(s) on which every arm of st_regression reached an accepted optimum.  Construction: |Δ norm_objf| / max(|a|, |b|) per pair from the hex floats; median nearest-rank upper-middle, p90 nearest-rank ceil(0.9 n); threshold = max(F × yardstick, floor) with F = 10 and floor = 1e-06, the yardstick being the BR → B0 spread in this same population; clusters at a relative gap of 1e-05.  The yardstick row carries no threshold and no verdict: it *is* the calibration.  *Below resolution* is a named category — distinct optima closer than the cluster gap and further apart than the correctness floor.  The retried column is computed from attempts[], never from a stored flag. n = 22 (seeds on which every arm of st_regression converged).*
 
 | pair | n | r_median | r_p90 | threshold_median | threshold_p90 | verdict | hops | below_resolution | retried_in_pair |
 |---|---|---|---|---|---|---|---|---|---|
@@ -3533,7 +3791,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`same optimum (check 1) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.138.** *units: counts — model executions and sweeps of the model sequence.  A row is one optimisation run.  A column is the per-attempt costs, the run's solve-phase total they decompose, and the residual between them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 100 optimisation run(s) of large_tokamak_nof, of which 100 carry a per-attempt cost the identity can be checked on.  Construction: Σ over attempts[] against node_calls_solve_phase and dispatch_sweeps_solve_phase.  This identity is why the with- and without-retried-seeds cost ratios may be published: they are over quantities that visibly decompose the published total. n = 100 (optimisation-phase runs of large_tokamak_nof).*
+**Table F.150.** *units: counts — model executions and sweeps of the model sequence.  A row is one optimisation run.  A column is the per-attempt costs, the run's solve-phase total they decompose, and the residual between them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 100 optimisation run(s) of large_tokamak_nof, of which 100 carry a per-attempt cost the identity can be checked on.  Construction: Σ over attempts[] against node_calls_solve_phase and dispatch_sweeps_solve_phase.  This identity is why the with- and without-retried-seeds cost ratios may be published: they are over quantities that visibly decompose the published total. n = 100 (optimisation-phase runs of large_tokamak_nof).*
 
 | arm | seed | attempts | retried | node_per_attempt | node_total | node_residual | sweeps_per_attempt | sweeps_total | sweeps_residual | decomposes |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -3640,7 +3898,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the attempt summation identity — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.139.** *units: counts — model executions and sweeps of the model sequence.  A row is one optimisation run.  A column is the per-attempt costs, the run's solve-phase total they decompose, and the residual between them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 100 optimisation run(s) of low_aspect_ratio_DEMO, of which 100 carry a per-attempt cost the identity can be checked on.  Construction: Σ over attempts[] against node_calls_solve_phase and dispatch_sweeps_solve_phase.  This identity is why the with- and without-retried-seeds cost ratios may be published: they are over quantities that visibly decompose the published total. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.151.** *units: counts — model executions and sweeps of the model sequence.  A row is one optimisation run.  A column is the per-attempt costs, the run's solve-phase total they decompose, and the residual between them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 100 optimisation run(s) of low_aspect_ratio_DEMO, of which 100 carry a per-attempt cost the identity can be checked on.  Construction: Σ over attempts[] against node_calls_solve_phase and dispatch_sweeps_solve_phase.  This identity is why the with- and without-retried-seeds cost ratios may be published: they are over quantities that visibly decompose the published total. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | seed | attempts | retried | node_per_attempt | node_total | node_residual | sweeps_per_attempt | sweeps_total | sweeps_residual | decomposes |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -3747,7 +4005,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the attempt summation identity — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.140.** *units: counts — model executions and sweeps of the model sequence.  A row is one optimisation run.  A column is the per-attempt costs, the run's solve-phase total they decompose, and the residual between them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 75 optimisation run(s) of st_regression, of which 75 carry a per-attempt cost the identity can be checked on.  Construction: Σ over attempts[] against node_calls_solve_phase and dispatch_sweeps_solve_phase.  This identity is why the with- and without-retried-seeds cost ratios may be published: they are over quantities that visibly decompose the published total. n = 75 (optimisation-phase runs of st_regression).*
+**Table F.152.** *units: counts — model executions and sweeps of the model sequence.  A row is one optimisation run.  A column is the per-attempt costs, the run's solve-phase total they decompose, and the residual between them.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 75 optimisation run(s) of st_regression, of which 75 carry a per-attempt cost the identity can be checked on.  Construction: Σ over attempts[] against node_calls_solve_phase and dispatch_sweeps_solve_phase.  This identity is why the with- and without-retried-seeds cost ratios may be published: they are over quantities that visibly decompose the published total. n = 75 (optimisation-phase runs of st_regression).*
 
 | arm | seed | attempts | retried | node_per_attempt | node_total | node_residual | sweeps_per_attempt | sweeps_total | sweeps_residual | decomposes |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -3829,7 +4087,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the attempt summation identity — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.141.** *units: counts — model executions for the cost columns, optimiser exit codes for ifail.  A row is one seed outside the converged set.  A column is which arm failed there, how it failed, what it cost, and what the other arms cost at the same start.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 3 of 25 seed(s) on large_tokamak_nof lie outside the every-arm-converged set.  Construction: membership by accepted optimum; the cost column is node_calls_solve_phase, the same unit the cost table uses.  An arm the gate did not run at a seed reads *not run* rather than *failed*. n = 25 (distinct seeds run on large_tokamak_nof).*
+**Table F.153.** *units: counts — model executions for the cost columns, optimiser exit codes for ifail.  A row is one seed outside the converged set.  A column is which arm failed there, how it failed, what it cost, and what the other arms cost at the same start.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 3 of 25 seed(s) on large_tokamak_nof lie outside the every-arm-converged set.  Construction: membership by accepted optimum; the cost column is node_calls_solve_phase, the same unit the cost table uses.  An arm the gate did not run at a seed reads *not run* rather than *failed*. n = 25 (distinct seeds run on large_tokamak_nof).*
 
 | seed | failed | not_run | ifail | attempts | failed_cost | other_cost | configuration_invalid |
 |---|---|---|---|---|---|---|---|
@@ -3839,7 +4097,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the failure table — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.142.** *units: counts — model executions for the cost columns, optimiser exit codes for ifail.  A row is one seed outside the converged set.  A column is which arm failed there, how it failed, what it cost, and what the other arms cost at the same start.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 14 of 25 seed(s) on low_aspect_ratio_DEMO lie outside the every-arm-converged set.  Construction: membership by accepted optimum; the cost column is node_calls_solve_phase, the same unit the cost table uses.  An arm the gate did not run at a seed reads *not run* rather than *failed*. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
+**Table F.154.** *units: counts — model executions for the cost columns, optimiser exit codes for ifail.  A row is one seed outside the converged set.  A column is which arm failed there, how it failed, what it cost, and what the other arms cost at the same start.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 14 of 25 seed(s) on low_aspect_ratio_DEMO lie outside the every-arm-converged set.  Construction: membership by accepted optimum; the cost column is node_calls_solve_phase, the same unit the cost table uses.  An arm the gate did not run at a seed reads *not run* rather than *failed*. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
 
 | seed | failed | not_run | ifail | attempts | failed_cost | other_cost | configuration_invalid |
 |---|---|---|---|---|---|---|---|
@@ -3860,7 +4118,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the failure table — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.143.** *units: counts — model executions for the cost columns, optimiser exit codes for ifail.  A row is one seed outside the converged set.  A column is which arm failed there, how it failed, what it cost, and what the other arms cost at the same start.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 3 of 25 seed(s) on st_regression lie outside the every-arm-converged set.  Construction: membership by accepted optimum; the cost column is node_calls_solve_phase, the same unit the cost table uses.  An arm the gate did not run at a seed reads *not run* rather than *failed*. n = 25 (distinct seeds run on st_regression).*
+**Table F.155.** *units: counts — model executions for the cost columns, optimiser exit codes for ifail.  A row is one seed outside the converged set.  A column is which arm failed there, how it failed, what it cost, and what the other arms cost at the same start.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; 3 of 25 seed(s) on st_regression lie outside the every-arm-converged set.  Construction: membership by accepted optimum; the cost column is node_calls_solve_phase, the same unit the cost table uses.  An arm the gate did not run at a seed reads *not run* rather than *failed*. n = 25 (distinct seeds run on st_regression).*
 
 | seed | failed | not_run | ifail | attempts | failed_cost | other_cost | configuration_invalid |
 |---|---|---|---|---|---|---|---|
@@ -3870,7 +4128,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the failure table — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.144.** *units: seconds for the residual; the relative column is dimensionless (residual / burn time).  A row is one arm whose runs name the burn-time consistency constraint.  A column is the residual of that constraint at the accepted optima.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the accepted optima of large_tokamak_nof whose input file names the constraint.  Construction: the model's own extracted consistency relation evaluated on the returned state, |value|, median nearest-rank upper-middle.  An arm whose input file does not name the constraint is absent from this table rather than reading 0; residuals at unconverged exits are never pooled with these. n = 100 (optimisation-phase runs of large_tokamak_nof).*
+**Table F.156.** *units: seconds for the residual; the relative column is dimensionless (residual / burn time).  A row is one arm whose runs name the burn-time consistency constraint.  A column is the residual of that constraint at the accepted optima.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the accepted optima of large_tokamak_nof whose input file names the constraint.  Construction: the model's own extracted consistency relation evaluated on the returned state, |value|, median nearest-rank upper-middle.  An arm whose input file does not name the constraint is absent from this table rather than reading 0; residuals at unconverged exits are never pooled with these. n = 100 (optimisation-phase runs of large_tokamak_nof).*
 
 | arm | n | residual_s_median | bracket | relative_median | in_equality_block |
 |---|---|---|---|---|---|
@@ -3879,7 +4137,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the lift closed (check 3) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.145.** *units: seconds for the residual; the relative column is dimensionless (residual / burn time).  A row is one arm whose runs name the burn-time consistency constraint.  A column is the residual of that constraint at the accepted optima.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the accepted optima of low_aspect_ratio_DEMO whose input file names the constraint.  Construction: the model's own extracted consistency relation evaluated on the returned state, |value|, median nearest-rank upper-middle.  An arm whose input file does not name the constraint is absent from this table rather than reading 0; residuals at unconverged exits are never pooled with these. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO).*
+**Table F.157.** *units: seconds for the residual; the relative column is dimensionless (residual / burn time).  A row is one arm whose runs name the burn-time consistency constraint.  A column is the residual of that constraint at the accepted optima.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the accepted optima of low_aspect_ratio_DEMO whose input file names the constraint.  Construction: the model's own extracted consistency relation evaluated on the returned state, |value|, median nearest-rank upper-middle.  An arm whose input file does not name the constraint is absent from this table rather than reading 0; residuals at unconverged exits are never pooled with these. n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO).*
 
 | arm | n | residual_s_median | bracket | relative_median | in_equality_block |
 |---|---|---|---|---|---|
@@ -3888,7 +4146,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the lift closed (check 3) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.146.** *recomputed: iterations summed over attempts, evaluations summed over attempts[].sweeps_per_eval.n_evaluations, solve-phase node calls summed over attempts and their quotient, per arm over the seed set, with the B2/B0 per-seed ratio's mean, median, [min, max] and count above 1 n = 55 (seeds on which every arm converged, summed over the configurations).*
+**Table F.158.** *recomputed: iterations summed over attempts, evaluations summed over attempts[].sweeps_per_eval.n_evaluations, solve-phase node calls summed over attempts and their quotient, per arm over the seed set, with the B2/B0 per-seed ratio's mean, median, [min, max] and count above 1 n = 3 (configurations stacked, each over its own seed set — the n column: large_tokamak_nof 22 / low_aspect_ratio_DEMO 11 / st_regression 22 seeds on which every arm converged; never pooled).*
 
 | quantity | configuration | arms | n | BR | B0 | B1 | B2 | ratio_mean | ratio_median | ratio_bracket | n_above_one |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -3907,7 +4165,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the optimiser's path over the configurations — campaign_optimisation`</sub>
 
-**Table F.147.** *units: counts of predicate evaluations; the audit columns are hex floats of the largest scaled residual.  A row is one pair of runs — the same arm, configuration and seed under each ruler.  A column is a count of the trial, or one run's exit audit read on one named ruler.  Population: 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A2) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.1; 8068 deterministic record values and 84 output-file lines compared without tolerance, 294 record values excluded as the setting being varied or as run metadata (each named, with its reason, in this record); 143 predicate evaluations observed on both rulers.  Construction: **read from the trial gate's verdict, not from run records** — the decisive-pass counts come from an observer that watches the run's own predicate evaluations and cannot be reconstructed from a record afterwards, so this recomputation checks the table's shaping and not the measurement.  Decisive passes are two counts, never one: crossings, and the verdict changes that alone can make two runs differ. n = 12 (pairs of runs, one per ruler).*
+**Table F.159.** *units: counts of predicate evaluations; the audit columns are hex floats of the largest scaled residual.  A row is one pair of runs — the same arm, configuration and seed under each ruler.  A column is a count of the trial, or one run's exit audit read on one named ruler.  Population: 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A2) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.1; 8068 deterministic record values and 84 output-file lines compared without tolerance, 294 record values excluded as the setting being varied or as run metadata (each named, with its reason, in this record); 143 predicate evaluations observed on both rulers.  Construction: **read from the trial gate's verdict, not from run records** — the decisive-pass counts come from an observer that watches the run's own predicate evaluations and cannot be reconstructed from a record afterwards, so this recomputation checks the table's shaping and not the measurement.  Decisive passes are two counts, never one: crossings, and the verdict changes that alone can make two runs differ. n = 12 (pairs of runs, one per ruler).*
 
 | configuration | arm | seed | evaluations | crossings | verdict_changes | identical | audit_frozen_run_frozen_ruler | audit_frozen_run_mixed_ruler | audit_mixed_run_frozen_ruler | audit_mixed_run_mixed_ruler |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -3926,7 +4184,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the predicate trial — frozen against mixed`</sub>
 
-**Table F.148.** *units: counts of seeds.  A row is this configuration.  A column is the size of the one population every optimisation-phase table on this configuration is over, or a per-arm count of the seeds on which the optimiser was called more than once.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR, B0, B1, B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: a seed is in the set when every arm present reached an accepted optimum (status ok AND the output file's ifail == 1); the retried count is computed from attempts[] and never from a stored flag.  This is one seed-complete arm group of the source — the plan's construction assumes every arm at every seed, which a gate's runs do not guarantee.  The seeds outside the set are the failure table, published beside. n = 25 (distinct seeds run on large_tokamak_nof).*
+**Table F.160.** *units: counts of seeds.  A row is this configuration.  A column is the size of the one population every optimisation-phase table on this configuration is over, or a per-arm count of the seeds on which the optimiser was called more than once.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR, B0, B1, B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: a seed is in the set when every arm present reached an accepted optimum (status ok AND the output file's ifail == 1); the retried count is computed from attempts[] and never from a stored flag.  This is one seed-complete arm group of the source — the plan's construction assumes every arm at every seed, which a gate's runs do not guarantee.  The seeds outside the set are the failure table, published beside. n = 25 (distinct seeds run on large_tokamak_nof).*
 
 | arms | arm_names | seeds_offered | n | seeds | configuration_invalid | retried |
 |---|---|---|---|---|---|---|
@@ -3934,7 +4192,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the seed set — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.149.** *units: counts of seeds.  A row is this configuration.  A column is the size of the one population every optimisation-phase table on this configuration is over, or a per-arm count of the seeds on which the optimiser was called more than once.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR, B0, B1, B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: a seed is in the set when every arm present reached an accepted optimum (status ok AND the output file's ifail == 1); the retried count is computed from attempts[] and never from a stored flag.  This is one seed-complete arm group of the source — the plan's construction assumes every arm at every seed, which a gate's runs do not guarantee.  The seeds outside the set are the failure table, published beside. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
+**Table F.161.** *units: counts of seeds.  A row is this configuration.  A column is the size of the one population every optimisation-phase table on this configuration is over, or a per-arm count of the seeds on which the optimiser was called more than once.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR, B0, B1, B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: a seed is in the set when every arm present reached an accepted optimum (status ok AND the output file's ifail == 1); the retried count is computed from attempts[] and never from a stored flag.  This is one seed-complete arm group of the source — the plan's construction assumes every arm at every seed, which a gate's runs do not guarantee.  The seeds outside the set are the failure table, published beside. n = 25 (distinct seeds run on low_aspect_ratio_DEMO).*
 
 | arms | arm_names | seeds_offered | n | seeds | configuration_invalid | retried |
 |---|---|---|---|---|---|---|
@@ -3942,7 +4200,7 @@ Every table of the tally recomputed by `harness/measurement/analysis.py`, a seco
 
 <sub>`the seed set — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.150.** *units: counts of seeds.  A row is this configuration.  A column is the size of the one population every optimisation-phase table on this configuration is over, or a per-arm count of the seeds on which the optimiser was called more than once.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR, B0, B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: a seed is in the set when every arm present reached an accepted optimum (status ok AND the output file's ifail == 1); the retried count is computed from attempts[] and never from a stored flag.  This is one seed-complete arm group of the source — the plan's construction assumes every arm at every seed, which a gate's runs do not guarantee.  The seeds outside the set are the failure table, published beside. n = 25 (distinct seeds run on st_regression).*
+**Table F.162.** *units: counts of seeds.  A row is this configuration.  A column is the size of the one population every optimisation-phase table on this configuration is over, or a per-arm count of the seeds on which the optimiser was called more than once.  Population: campaign_optimisation — the campaign population: every optimisation-phase arm, 25 starts per configuration, seed000 unperturbed; a crashed start is a taxonomy row and never a cost; the arms here are BR, B0, B2 at seeds 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.  Construction: a seed is in the set when every arm present reached an accepted optimum (status ok AND the output file's ifail == 1); the retried count is computed from attempts[] and never from a stored flag.  This is one seed-complete arm group of the source — the plan's construction assumes every arm at every seed, which a gate's runs do not guarantee.  The seeds outside the set are the failure table, published beside. n = 25 (distinct seeds run on st_regression).*
 
 | arms | arm_names | seeds_offered | n | seeds | configuration_invalid | retried |
 |---|---|---|---|---|---|---|
