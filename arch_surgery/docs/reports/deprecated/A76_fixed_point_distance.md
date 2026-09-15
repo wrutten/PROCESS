@@ -1,6 +1,6 @@
 # A76 (fixed-point-distance) — do the arms reach the *same* fixed point, not merely an equally converged one
 
-> **Document status** — **OPEN.** Task **A76 (fixed-point-distance)**, branch `A76-fixed-point-distance`,
+> **Document status** — **MERGED 2026-09-15** at `8422dc38` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A76_runs/` (gates, stamp surveys, and a copy of the campaign tree seeded from A75). Orchestrator's assessment §11. Task **A76 (fixed-point-distance)**, branch `A76-fixed-point-distance`,
 > base `14342a72` (the `architecture_surgery` tip at dispatch, 2026-09-15). Minted by the orchestrator
 > at the user's instruction in this session (*"Register a second task to add the between-arm distance
 > of phase A as an additional analysis to the analysis scripts, and add the results to the report.

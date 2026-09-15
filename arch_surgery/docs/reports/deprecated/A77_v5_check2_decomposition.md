@@ -1,6 +1,6 @@
 # A77 (v5-check2-decomposition) — the V5 improvement list opened, with item 1
 
-> **Document status** — **OPEN.** Task **A77 (v5-check2-decomposition)**, branch
+> **Document status** — **MERGED 2026-09-15** at `f276fbb5` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). No records (doc-only). Orchestrator's assessment §6. Task **A77 (v5-check2-decomposition)**, branch
 > `A77-v5-check2-decomposition`, base `14342a72` (2026-09-15). Doc-only: one new file,
 > [`plans/V5_IMPROVEMENT_LIST.md`](../plans/V5_IMPROVEMENT_LIST.md), in the V4 list's format, with a
 > status header and item 1. Minted by the orchestrator at the user's instruction in the requesting
