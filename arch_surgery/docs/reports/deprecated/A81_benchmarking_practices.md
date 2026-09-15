@@ -1,6 +1,6 @@
 # A81 (benchmarking-practices) — the V4 method against Beiranvand, Hare & Lucet 2017
 
-> **Document status** — **OPEN TASK REPORT, 2026-09-15.** Task **A81 (benchmarking-practices)**,
+> **Document status** — **MERGED 2026-09-15** at `95bd8d08` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3); doc-only, no records; orchestrator's assessment at the end. Task **A81 (benchmarking-practices)**,
 > branch `A81-benchmarking-practices` off `architecture_surgery` at `589138ef`. Minted at the user's
 > instruction (*"this article suggest best practises for comparing optimisation
 > algorithms/approaches. Can you evaluate the v4 methodology based on the criteria outlined in the
