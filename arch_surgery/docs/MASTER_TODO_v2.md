@@ -81,8 +81,7 @@ Every ruling on **what the experiment measures and how**, one row each. *Status:
 
 ## 3. Issue register
 
-Traps — recurring ways to be misled rather than defects — live in [`TRAPS.md`](TRAPS.md) (T1–T15)
-and bind every task. **Closed issues are not listed here**: the archived queue's "Issue register" table carries every issue I-1–I-23 with its closure (I-7, I-13 and I-17 closed by the user's D28 ruling of 2026-09-15 — I-17 with A44 (transfer-gap)'s explanation of the transfer gap). Issues numbered from I-24 on belong to this file; I-24 (the tally had no campaign source) was closed 2026-09-14 by A75 (`004eb06b`, amendment 26, TRAPS T15).
+Traps — recurring ways to be misled rather than defects — live in [`TRAPS.md`](TRAPS.md) (T1–T15) and bind every task. Issues I-1–I-23 are recorded in full in the archived queue's "Issue register"; their closures are there too, except the three ruled after the archive (index below). Issues from I-24 on belong to this file; a closed one keeps an index line (§5.1, rule Q2).
 
 ### 3.1 Open
 
@@ -95,23 +94,34 @@ and bind every task. **Closed issues are not listed here**: the archived queue's
 | **I-20** | (a) On `st_regression` the `PULSE` block is swept empty (10.84 % of `B3` block sweeps at seed 0, 11.12 % campaign-wide in V3; all three configurations visit it, only st pays a sweep); (b) `low_aspect_ratio_DEMO`'s objective (`i_figure_merit = -14`) is literally the lifted variable, so after the lift the problem lives in constraint 93 | **OPEN.** (a) the user ruled the visits stay and are disclaimed (D21 d) — quote the *sweep* share on the table's own population, never the 40 % visit share; a driver-side skip would be a later task needing approval. (b) needs no fix: a reporting obligation (rung labels not comparable across configurations). Archived queue I-20; `reports/deprecated/A58_driver_predicate_counters.md` |
 | **I-25** | **The campaign chain's `tally_contracts` part 1 wants GR's records in the same tree.** A campaign worktree with no `runs/gates/` stops at `tally_contracts` even with the campaign sources, because part 1 checks the reference cells over GR's 20 runs (A75 report, item 2). Options: the campaign plan declares the dependency and the press seeds or makes GR's records; or part 1 moves to the gate that owns it. Filed 2026-09-14 at A75's merge. | **OPEN** — small harness task; no runs if seeded |
 
+### 3.2 Closed — the index
+
+| # | Was | Closed | Recorded in |
+|---|---|---|---|
+| **I-7** | "no free iteration-variable number" — overstated; the cap is derived | 2026-09-15, D28 (the user) | archived queue I-7 (downgraded there); D28 |
+| **I-13** | Phase A's `hoisted_nodes()` vs the production hoist on `large_tokamak_eval` | 2026-09-14 as moot (A26 fix 4, D17); confirmed by D28 | archived queue I-13; `reports/deprecated/A74_queue_v2.md` |
+| **I-17** | the V2 Phase A → B transfer over-predicted B3's saving | 2026-09-15, D28 (the user), with A44 (transfer-gap)'s explanation | archived queue I-17; `reports/deprecated/A44_transfer_gap.md`; plan §5.2 |
+| **I-24** | the tally had no campaign source; the first campaign press read 0 of 949 records | 2026-09-14, A75 | `reports/deprecated/A75_campaign_tally_source.md`; harness plan amendment 26; TRAPS T15 |
+
 ---
 
 ## 4. The queue
 
 Rows are filed by state. A task appears in exactly one table. **Tasks A1–A74 live only in the archived queue** (its "The queue" tables: live chain, parked, optional/deferred, merged — one row each, with the merge commit, the report and the records path); A74 (queue-v2) is the last task of that file. By D28 (the user, 2026-09-15): A9–A12 (the subdriver line) are **cancelled**, A6 and A8 are **moot**, A14–A17 are **closed** (deferred, never authorised), the experiment-v2 and sequencing-comparison rows are history. Numbering continues from A76.
 
-### 4.1 Open — dispatched, queued, proposed
+### 4.1 Open — PROPOSED, QUEUED, DISPATCHED, BLOCKED
 
 | # | Task | Prereqs | State |
 |---|---|---|---|
 | — | *(none)* | | |
 
-### 4.2 Merged since this file was created
+### 4.2 Merged — the index
 
-| # | Keyword | Merged | Commit | Report / records | Delivered |
-|---|---|---|---|---|---|
-| **A75** | campaign-tally-source | 2026-09-14 | `004eb06b` | `A75_campaign_tally_source.md`; `runs/A75_runs/` | I-24 closed: the campaign source family in tally and analysis; 949/949 read; tally_contracts 252/0, recomputation 12 715/0, run_kind_separation 2 994/0; §4 = the campaign population; amendment 26; TRAPS T15 |
+One line per task merged since this file was created (rule Q2); what a task delivered is its report's job.
+
+| # | Keyword | Merged | Recorded in |
+|---|---|---|---|
+| **A75** | campaign-tally-source | 2026-09-14, `004eb06b` | `reports/deprecated/A75_campaign_tally_source.md`; `../idf_probe/runs/A75_runs/`; the campaign's own records `../idf_probe/runs/campaign_57dc0c14/` (949 at `57dc0c14`: 921 ok, 28 crashed; a first press was killed with the shell before any record and left nothing) |
 
 ---
 
@@ -134,7 +144,7 @@ register.
 | **Rulings are the user's** | Anything decision-worthy is written as a proposal and stamped by the user before an implementing task is dispatched; the orchestrator's autonomous decisions are implementation-level, each recorded with its reversal. Origin: D25 was minted and implemented before it was put to the user (2026-09-11, a process fault, recorded) | user, 2026-09-11 (*"Rulings that are documented should always be my rulings"*); in force |
 | **Delegation mode** | 2026-09-10 → 2026-09-14 the rebuild ran under a standing delegation (*"you're on your own now, take autonomous decisions to finish the implementation … Give me a report … when everything is done"*): tasks minted in advance, driver changes merged on G1/G0′ without per-change approval, one whole-implementation assessment. Since 2026-09-14 the mode is **collaborative** (user: *"We're in collaborative mode now"*): the user is asked at every decision-worthy fork | D24 (2026-09-10), discharged; collaborative since 2026-09-14 |
 | **Merged reports are not retro-edited** | A merged task report is archived under `reports/deprecated/` with its status header replaced and is never rewritten; corrections are new rows, amendments or reports that point back | D17 (2026-09-01), in force; trap T3 |
-| **The queue itself** | Closed and historical rows leave this file for the archive; decisions, open issues, open tasks and standing rules stay; the change log is one line | D28 (2026-09-15), in force |
+| **The queue itself** | **Q1 States.** A task is PROPOSED, QUEUED, DISPATCHED, MERGED, CANCELLED, MOOT or BLOCKED; an issue OPEN, CLOSED or DOWNGRADED; a decision in force, discharged, amended by or reversed by. A row changes state in the same commit as the fact it records, never in a later tidying commit. **Q2 Leaving the file.** A row leaves v2 when its state is terminal (MERGED, CANCELLED, MOOT, CLOSED, DOWNGRADED), and only if its closure is recorded in a committed document the removing commit names — a task's archived report; the report or amendment that closed an issue. Decisions never leave. What remains is one index line (§3.2, §4.2): number, keyword or one clause, date, pointer. **Q3 Numbers.** Never reused; the numbering line is updated in the commit that consumes the number; the archived queue's line is never touched. **Q4 Dated events.** Every dated event attaches to the row it concerns; an event about the experiment rather than the queue goes in the experiment plan's Appendix C; this file's change log stays one line. **Q5 At every merge**, in the follow-up commit: the task row → §4.2 with the merge commit and the records path the retire script printed; every issue the task resolved closed with its pointer; the report archived with its status header replaced; every document that named a moved file re-pointed; any amendment or trap the task earned added. A rule the user gives in conversation enters this table with the date and the user's words; a live pointer leaves when what it points at reaches a terminal state. | D28 (2026-09-15), in force; Q1–Q5 proposed by the orchestrator and **accepted by the user 2026-09-15** (*"all accepted"*) |
 | **One heavy slot at a time; measure on an idle machine** | One heavy PROCESS press at a time on our side (written after A13 and A23 ran concurrently); measurement work when the machine is otherwise idle; the run budget is reduced wherever a change does not alter what a gate reads (`--resume` on kept records, a dry-run with `--jobs` before a resume press) | user 2026-09-01, 2026-08-31, 2026-09-11 (*"try to reduce the number of PROCESS runs for gates in general if it's not necessary"*); in force; I-8/I-10 context |
 | **Pushes** | Every push of `architecture_surgery` needs the user's explicit approval, per push; `main` is never committed to | user; `CLAUDE.md` |
 | **One-time setup, done** | `upstream` added read-only for drift; the first push of `architecture_surgery`; the deletion of `github.com/wrutten/PROCESS_surgery` (reported by the user, not verifiable from a session) | archived queue, "User-facing standing items" |
