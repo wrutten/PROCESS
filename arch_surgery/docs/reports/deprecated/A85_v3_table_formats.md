@@ -1,7 +1,7 @@
 # A85 (v3-table-formats) — the report's tables in the V3 report's forms
 
-> **Document status** — **OPEN**, task **A85 (v3-table-formats)**, branch `A85-v3-table-formats`
-> (worktree `.claude/worktrees/A85-v3-table-formats`), base `4b902124`, tip `7c5a3b48` (the report; `69f53191` its §5) — the
+> **Document status** — **MERGED 2026-09-15** at `bfc8a20e` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A85_runs/` (latest resume-compatible). Orchestrator's assessment at the end; the eleven unbuilt tables of §7 are task A86 (v3-tables-remainder). Task **A85 (v3-table-formats)**, branch `A85-v3-table-formats`
+> (worktree `.claude/worktrees/A85-v3-table-formats`, retired), base `4b902124`, tip `7c5a3b48` (the report; `69f53191` its §5) — the
 > last commit to touch code or a generated document is `a6692664`, which is where every gate
 > verdict this report cites was pressed; `69f53191` is this document.
 > Specification: [`../plans/REPORT_TABLE_FORMATS.md`](../plans/REPORT_TABLE_FORMATS.md) (RULING,
