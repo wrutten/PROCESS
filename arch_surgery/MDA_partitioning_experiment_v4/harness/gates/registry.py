@@ -128,8 +128,9 @@ def _tally_measurements(campaign: Campaign) -> dict[str, Measurement]:
             reports=(
                 "the evaluation phase's tables of the experiment plan's "
                 "section 4.2 -- cost per call, matched accuracy on both "
-                "rulers, the ownership rung, the per-sweep overhead and the "
-                "failure taxonomy -- each with its caption, its denominator "
+                "rulers, the fixed-point distance between arms, the ownership "
+                "rung, the per-sweep overhead and the failure taxonomy -- each "
+                "with its caption, its denominator "
                 "and the audit position it was measured at"
             ),
             guarded_by="tally_contracts",

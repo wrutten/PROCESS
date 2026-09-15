@@ -1534,6 +1534,371 @@ def _matched_accuracy(
     )
 
 
+# --------------------------------------------------------------------------
+# the distance between two arms' fixed points, re-derived
+# --------------------------------------------------------------------------
+#
+# The tally evaluates the predicate's own residual (harness/child/ystate.py)
+# between two exit states.  Here the same declaration — ``stats.
+# fixed_point_distance``'s docstring — is re-derived from the artifacts and the
+# state files alone: the coupling-state artifact for keys, categories and
+# scales; ``y_exit.json`` for the values, decoded from their hex literals; the
+# per-run artifact and the write census for the exclusion.  No line of the
+# predicate module is imported, so agreement with the tally is agreement of two
+# readings of one declaration and not of one code path with itself.
+
+FIXED_POINT_LADDER: tuple[str, ...] = ("AR", "A0", "A0p", "A1")
+
+
+def _decode_state_value(record: Mapping[str, Any]) -> Any:
+    """One ``y_exit.json`` value, decoded from its tagged exact form."""
+    kind = record.get("k")
+    if kind == "f":
+        return float.fromhex(record["hex"])
+    if kind == "af":
+        return [float.fromhex(h) for h in record["hex"]]
+    if kind == "a":
+        return list(record["v"])
+    if kind == "l":
+        return [_decode_state_value(x) for x in record["v"]]
+    if kind in ("b", "i", "s"):
+        return record["v"]
+    if kind == "none":
+        return None
+    return record.get("v")
+
+
+def _as_floats(value: Any) -> list[float] | None:
+    """The value as a flat list of floats, or None where it is not float-valued.
+
+    A bool is not a float, an int is not a float, and a list is float-valued
+    only when every element is a float: the same rule the predicate applies,
+    stated here in its own words.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        return [value]
+    if isinstance(value, list):
+        if not value:
+            return None
+        if all(isinstance(x, float) and not isinstance(x, bool) for x in value):
+            return list(value)
+        if all(isinstance(x, list) for x in value):
+            flat: list[float] = []
+            for x in value:
+                inner = _as_floats(x)
+                if inner is None:
+                    return None
+                flat.extend(inner)
+            return flat
+        return None
+    return None
+
+
+def _values_equal(a: Any, b: Any) -> bool:
+    """Exact equality, NaN equal to NaN, element by element for lists."""
+    if isinstance(a, float) and isinstance(b, float):
+        return a == b or (math.isnan(a) and math.isnan(b))
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_values_equal(x, y) for x, y in zip(a, b))
+    if isinstance(a, list) != isinstance(b, list):
+        return False
+    return a == b
+
+
+def _scaled_gap(a: Any, b: Any, scale: float, *, nonfinite: bool) -> tuple[float, bool]:
+    """``max|b − a| / scale`` for one component, and whether a NaN pattern
+    changed.  Infinite where the two are not comparable float-valued things."""
+    fa, fb = _as_floats(a), _as_floats(b)
+    if fa is None or fb is None or len(fa) != len(fb):
+        return math.inf, False
+    if nonfinite:
+        pattern_a = [math.isfinite(x) for x in fa]
+        pattern_b = [math.isfinite(x) for x in fb]
+        if pattern_a != pattern_b:
+            return math.inf, True
+        finite = [(x, y) for x, y in zip(fa, fb) if math.isfinite(y)]
+        if not finite:
+            return 0.0, False
+        return max(abs(y - x) for x, y in finite) / scale, False
+    if not all(math.isfinite(y) for y in fb):
+        return math.inf, True
+    return max(abs(y - x) for x, y in zip(fa, fb)) / scale, False
+
+
+def _state_distance(
+    components: Sequence[Mapping[str, Any]],
+    y_base: Mapping[str, Any],
+    y_arm: Mapping[str, Any],
+    *,
+    kept: Sequence[bool],
+    tau: float,
+) -> dict[str, Any]:
+    """The scaled residual between two states over the kept components."""
+    best = -1.0
+    argmax: str | None = None
+    n_above = 0
+    unclean = False
+    for component, keep in zip(components, kept):
+        if not keep:
+            continue
+        key = component["key"]
+        category = component["category"]
+        a = _decode_state_value(y_base[key])
+        b = _decode_state_value(y_arm[key])
+        if category in ("continuous", "nonfinite"):
+            gap, nan_changed = _scaled_gap(
+                a, b, float(component["scale"]), nonfinite=(category == "nonfinite")
+            )
+            unclean = unclean or nan_changed
+            if gap > best:
+                best, argmax = gap, key
+            if gap >= tau:
+                n_above += 1
+        elif category in ("discrete", "constant"):
+            if not _values_equal(a, b):
+                unclean = True
+    return {
+        "max": best if best >= 0 else 0.0,
+        "argmax": argmax,
+        "n_above": n_above,
+        "clean": not unclean,
+    }
+
+
+def _written_by_the_per_run_nodes(
+    campaign: Campaign,
+    configuration: str,
+    record: Mapping[str, Any],
+    components: Sequence[Mapping[str, Any]],
+) -> tuple[set[str], set[str], str]:
+    """Every spec component the once-per-run nodes write, and the tested ones
+    among them (the set whose digest the audit stamped); or the reason there is
+    none.  A digest that does not match the record is a refusal."""
+    import hashlib  # noqa: PLC0415
+
+    restricted = ((record.get("exit_audit") or {}).get("frozen") or {}).get("restricted")
+    if not isinstance(restricted, Mapping):
+        return set(), set(), "the record's exit audit carries no restricted block"
+    artifact = Path(campaign.data_dir) / Path(str(restricted.get("artifact"))).name
+    census_path = Path(campaign.data_dir) / "node_writesets.json"
+    if not artifact.exists() or not census_path.exists():
+        return set(), set(), "the per-run artifact or the write census is not in this tree"
+    nodes = json.loads(artifact.read_text())["post_solve_nodes"]
+    per_scenario = json.loads(census_path.read_text())["per_scenario"]
+    if configuration not in per_scenario:
+        raise AnalysisError(
+            f"no write census for {configuration!r} in {census_path}; the "
+            f"exclusion would be guessed"
+        )
+    writes = per_scenario[configuration]["writes_by_node"]
+    union: set[str] = set()
+    for node in nodes:
+        union.update(writes.get(node) or ())
+    spec_keys = {c["key"] for c in components}
+    tested_keys = {c["key"] for c in components if c["category"] in ("continuous", "nonfinite")}
+    written = union & spec_keys
+    excluded = written & tested_keys
+    digest = hashlib.sha256("\n".join(sorted(excluded)).encode()).hexdigest()
+    if digest != restricted.get("excluded_sha256"):
+        raise AnalysisError(
+            f"the exclusion re-derived for {configuration} hashes to "
+            f"{digest[:12]}…, the record stamped "
+            f"{str(restricted.get('excluded_sha256'))[:12]}…: the artifacts in "
+            f"this tree are not the ones the run read"
+        )
+    return written, excluded, ""
+
+
+def _directories_by_digest(campaign: Campaign, source: Source) -> dict[str, Path]:
+    """Where each of *source*'s records lives in this tree, by job digest."""
+    out: dict[str, Path] = {}
+    for directory in source_directories(campaign, source):
+        path = Path(directory) / "metrics.json"
+        if not path.exists():
+            continue
+        try:
+            digest = json.loads(path.read_text()).get("job_digest")
+        except Exception:  # noqa: BLE001 - an unreadable record has no digest
+            continue
+        if digest:
+            out[str(digest)] = Path(directory)
+    return out
+
+
+def _fixed_point_distance(
+    campaign: Campaign,
+    population: Population,
+    configuration: str,
+    source: str,
+    where: Mapping[str, Path],
+) -> Recomputed | None:
+    """How far apart two arms' exit states are at the same entry (beside §4.2.2)."""
+    config = campaign.configuration(configuration)
+    grouped = by_arm(population, configuration)
+    indexed = by_arm_and_seed(population, configuration)
+    headline_base = evaluation_reference_arm(config.pulsed, grouped)
+    ladder = [arm for arm in FIXED_POINT_LADDER if arm in indexed]
+    report: list[tuple[str, str, str]] = []
+    for base, arm in zip(ladder, ladder[1:]):
+        report.append(
+            (base, arm, "headline" if (arm == "A1" and base == headline_base) else "rung")
+        )
+    if "A0" in ladder and "A1" in ladder and headline_base != "A0":
+        report.append(("A0", "A1", "beside"))
+    if not report:
+        return None
+    artifact = json.loads(Path(config.coupling_state_path).read_text())
+    components = list(artifact["components"])
+    expected_digest = artifact.get("components_sha256")
+    tau = float(campaign.tau)
+    cache: dict[tuple[str, int], tuple[Mapping[str, Any] | None, str]] = {}
+
+    def state(arm: str, key: int) -> tuple[Mapping[str, Any] | None, str]:
+        if (arm, key) in cache:
+            return cache[(arm, key)]
+        record = indexed[arm][key]
+        directory = where.get(str(record.get("job_digest")))
+        name = record.get("exit_state_written_to")
+        if directory is None:
+            result: tuple[Mapping[str, Any] | None, str] = (
+                None, "the record's directory is unknown to the source"
+            )
+        elif not name:
+            result = (None, "the run wrote no exit state (exit_state_written_to is empty)")
+        elif not (directory / str(name)).exists():
+            result = (None, f"{name} is missing from the run directory")
+        else:
+            snapshot = json.loads((directory / str(name)).read_text())
+            if snapshot.get("components_sha256") != expected_digest:
+                raise AnalysisError(
+                    f"{directory / str(name)} was written against another "
+                    f"component spec than this tree's artifact"
+                )
+            result = (snapshot["state"], "")
+        cache[(arm, key)] = result
+        return result
+
+    rows: list[dict[str, Any]] = []
+    n_pairs = 0
+    paired_on = "columns" if {str(r.get("regime")) for r in population.records} == {"stencil"} else "seeds"
+    for base, arm, role in report:
+        keys = sorted(set(indexed[base]) & set(indexed[arm]))
+        n_pairs += len(keys)
+        reasons: dict[str, int] = {}
+        restricted_values: list[float] = []
+        whole_values: list[float] = []
+        per_key: list[tuple[int, float]] = []
+        argmaxes: set[str] = set()
+        n_above_pairs = 0
+        n_unclean = 0
+        n_excluded_seen: set[int] = set()
+        for key in keys:
+            left, right = indexed[base][key], indexed[arm][key]
+            if not (completed(left) and completed(right)):
+                reasons["a side did not finish"] = reasons.get("a side did not finish", 0) + 1
+                continue
+            y_base, why_a = state(base, key)
+            y_arm, why_b = state(arm, key)
+            if y_base is None or y_arm is None:
+                why = why_a or why_b
+                reasons[why] = reasons.get(why, 0) + 1
+                continue
+            written_a, excluded_a, why_x = _written_by_the_per_run_nodes(
+                campaign, configuration, left, components
+            )
+            written_b, excluded_b, why_y = _written_by_the_per_run_nodes(
+                campaign, configuration, right, components
+            )
+            if why_x or why_y:
+                why = why_x or why_y
+                reasons[why] = reasons.get(why, 0) + 1
+                continue
+            if written_a != written_b or excluded_a != excluded_b:
+                raise AnalysisError(
+                    f"{configuration} {arm}/{base} at {key}: the two audits "
+                    f"excluded different sets"
+                )
+            kept = [c["key"] not in written_a for c in components]
+            restricted = _state_distance(components, y_base, y_arm, kept=kept, tau=tau)
+            whole = _state_distance(
+                components, y_base, y_arm, kept=[True] * len(components), tau=tau
+            )
+            restricted_values.append(restricted["max"])
+            whole_values.append(whole["max"])
+            per_key.append((key, restricted["max"]))
+            if restricted["argmax"]:
+                argmaxes.add(restricted["argmax"])
+            if restricted["n_above"] > 0:
+                n_above_pairs += 1
+            if not restricted["clean"]:
+                n_unclean += 1
+            n_excluded_seen.add(len(excluded_a))
+        worst_key = None
+        if per_key and max(v for _, v in per_key) > 0:
+            worst_key = max(per_key, key=lambda kv: kv[1])[0]
+        rows.append(
+            {
+                "pair": f"{arm}/{base}",
+                "role": role,
+                "n": len(keys),
+                "n_compared": len(restricted_values),
+                "not_compared": joined(
+                    [f"{k}: {v}" for k, v in sorted(reasons.items())]
+                ),
+                "restricted_median": middle(restricted_values),
+                "restricted_p90": ninetieth(restricted_values),
+                "restricted_max": max(restricted_values) if restricted_values else None,
+                "worst_pair": worst_key,
+                "argmax": joined(sorted(argmaxes)),
+                "n_pairs_above_tau": n_above_pairs,
+                "n_pairs_unclean": n_unclean,
+                "whole_median": middle(whole_values),
+                "whole_p90": ninetieth(whole_values),
+                "n_excluded": joined([str(v) for v in sorted(n_excluded_seen)]),
+            }
+        )
+    return Recomputed(
+        name=f"fixed-point distance — {configuration} — {source}",
+        caption=(
+            f"units: dimensionless — the largest scaled difference between two "
+            f"arms' exit coupling states at the same entry, in the units "
+            f"τ = {tau:g} is stated in.  A row is one pair of arms: each rung "
+            f"of the evaluation phase's ladder and, marked headline, the "
+            f"partitioned arm against {headline_base}; A1/A0 beside on a "
+            f"pulsed configuration.  A column is the pairs the two arms share "
+            f"(by {paired_on}), how many were compared and why the rest were "
+            f"not, the restricted distance's median, p90 and worst pair, the "
+            f"components the maximum sat on, the pairs with any restricted "
+            f"component at or above τ, the pairs where a discrete component "
+            f"differs or a constant moved, and the whole-state distance "
+            f"beside.  Population: {population.what}; {n_pairs} pair(s) of "
+            f"{configuration}.  Construction (re-derived here from the "
+            f"coupling-state artifact and the exit-state files, importing no "
+            f"line of the predicate): max_i |y_arm,i − y_base,i| / s_i over the "
+            f"continuous components not written by the once-per-run deferred "
+            f"nodes, s_i the committed scale; median = nearest-rank "
+            f"upper-middle, p90 = nearest-rank ceil(0.9 n).  Reported, not "
+            f"accepted on: no acceptance rule was pre-declared for this "
+            f"quantity (added by task A76 (fixed-point-distance))."
+        ),
+        columns=(
+            "pair", "role", "n", "n_compared", "not_compared",
+            "restricted_median", "restricted_p90", "restricted_max",
+            "worst_pair", "argmax", "n_pairs_above_tau", "n_pairs_unclean",
+            "whole_median", "whole_p90", "n_excluded",
+        ),
+        key_columns=("pair",),
+        rows=tuple(rows),
+        denominator=n_pairs,
+        denominator_is=(
+            f"evaluation-phase pairs of {configuration} over the ladder's rungs"
+        ),
+        composite=("role", "not_compared", "argmax", "n_excluded"),
+    )
+
+
 def _ownership_rung(
     campaign: Campaign, population: Population, configuration: str, source: str
 ) -> Recomputed | None:
@@ -2532,6 +2897,12 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                     verdicts.extend(
                         {"source": source.name, **v} for v in pairs
                     )
+                    distance = _fixed_point_distance(
+                        campaign, population, config.name, source.name,
+                        _directories_by_digest(campaign, source),
+                    )
+                    if distance is not None:
+                        produced[distance.name] = distance
                     rung = _ownership_rung(
                         campaign, population, config.name, source.name
                     )

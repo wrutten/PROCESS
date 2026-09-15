@@ -475,6 +475,146 @@ def _tooth_reference_cell_moved(campaign: Campaign) -> Callable[[], tuple[bool, 
     return look
 
 
+def _tooth_fixed_point_distance_restriction(
+    campaign: Campaign,
+) -> Callable[[], tuple[bool, str]]:
+    """Doctor one exit state in a scratch copy: a kept component moved by
+    1e-3 of its scale must raise the restricted distance to at least that
+    and count the pair above τ; an excluded component moved past the
+    whole-state maximum must leave the restricted distance exactly where it
+    was and carry the whole-state one.  Both halves, on one real pair of the
+    published population, or the tooth is not tripped."""
+
+    def look() -> tuple[bool, str]:
+        import shutil  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        from harness.child import predicate as predicate_mod  # noqa: PLC0415
+
+        # One real pair: the first configuration and published evaluation
+        # source that carries the headline pair with both exit states.
+        for source in tally_mod.published_sources(campaign):
+            if tally_a.PHASE not in source.phases:
+                continue
+            rows, _ = tally_mod.source_rows(campaign, source)
+            where = {
+                str(r.record.get("job_digest")): Path(r.path).parent
+                for r in rows
+                if r.record.get("job_digest")
+            }
+            population = tally_mod.population_for(
+                rows, phase=tally_a.PHASE, what="tooth",
+                campaign_present=tally_mod.campaign_present(campaign),
+            )
+            for config in campaign.configurations:
+                indexed = tally_a._by_arm_and_seed(population, config.name)
+                base, _why = tally_a.reference_arm(config.pulsed, set(indexed))
+                pairs = [
+                    (b, a) for b, a, role in tally_a.ladder_pairs(list(indexed), base)
+                    if role == "headline"
+                ]
+                if not pairs:
+                    continue
+                b_arm, a_arm = pairs[0]
+                for key in sorted(set(indexed[b_arm]) & set(indexed[a_arm])):
+                    left, right = indexed[b_arm][key], indexed[a_arm][key]
+                    if not (stats_mod.finished(left) and stats_mod.finished(right)):
+                        continue
+                    d_left = where.get(str(left.get("job_digest")))
+                    d_right = where.get(str(right.get("job_digest")))
+                    if d_left is None or d_right is None:
+                        continue
+                    if not ((d_left / "y_exit.json").exists() and (d_right / "y_exit.json").exists()):
+                        continue
+                    return _doctor_and_look(
+                        campaign, config, population, source.name,
+                        left, right, d_left, d_right, key,
+                        predicate_mod, shutil, tempfile,
+                    )
+        return False, "no published evaluation pair with both exit states on disk"
+
+    return look
+
+
+def _doctor_and_look(
+    campaign, config, population, source_name, left, right, d_left, d_right,
+    key, predicate_mod, shutil, tempfile,
+) -> tuple[bool, str]:
+    spec = predicate_mod.load_spec(config.coupling_state_path)
+    spec_keys = [spec.name(i) for i in range(len(spec.keys))]
+    tested = [spec.name(i) for i in sorted(set(spec.idx_continuous) | set(spec.idx_nonfinite))]
+    written, _excluded, why = tally_a._excluded_by_the_per_run_nodes(
+        campaign, config.name, right, spec_keys, tested
+    )
+    if written is None:
+        return False, f"the pair carries no restriction to test: {why}"
+    state = json.loads((d_right / "y_exit.json").read_text())["state"]
+    scalars = {
+        spec.name(i): i for i in spec.idx_continuous
+        if state.get(spec.name(i), {}).get("k") == "f"
+    }
+    kept_name = next((n for n in scalars if n not in written), None)
+    excluded_name = next((n for n in scalars if n in written), None)
+    if kept_name is None or excluded_name is None:
+        return False, "no scalar continuous component on both sides of the restriction"
+    two = {str(left.get("job_digest")): d_left}
+
+    def distance_with(doctored_name: str | None, *, scaled_step: float = 1e-3) -> Mapping[str, Any]:
+        scratch = Path(tempfile.mkdtemp(prefix="tooth_fixed_point_"))
+        try:
+            copy_dir = scratch / "arm"
+            shutil.copytree(d_right, copy_dir)
+            if doctored_name is not None:
+                doc = json.loads((copy_dir / "y_exit.json").read_text())
+                value = float.fromhex(doc["state"][doctored_name]["hex"])
+                step = scaled_step * float(spec.scale[scalars[doctored_name]])
+                doc["state"][doctored_name]["hex"] = float(value + step).hex()
+                (copy_dir / "y_exit.json").write_text(json.dumps(doc))
+            where = {**two, str(right.get("job_digest")): copy_dir}
+            pop = stats_mod.Population.of(
+                [left, right], what="tooth: one pair",
+                campaign_present=tally_mod.campaign_present(campaign),
+            )
+            table = tally_a.fixed_point_distance(
+                campaign, pop, config.name, source_name, where
+            )
+            row = next(r for r in table.rows if r["role"] == "headline")
+            return dict(row)
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+    plain = distance_with(None)
+    kept = distance_with(kept_name)
+    # The excluded component is moved past the whole-state maximum, so that
+    # the whole-state column must follow it while the restricted one holds.
+    big = 2.0 * (float(plain["whole_median"] or 0.0) + 1.0)
+    excluded = distance_with(excluded_name, scaled_step=big)
+    kept_caught = (
+        kept["restricted_max"] is not None
+        and kept["restricted_max"] >= 1e-3 - 1e-12
+        and kept["n_pairs_above_tau"] == 1
+        and kept["argmax"] == kept_name
+    )
+    excluded_caught = (
+        excluded["restricted_max"] == plain["restricted_max"]
+        and excluded["n_pairs_above_tau"] == plain["n_pairs_above_tau"]
+        and excluded["whole_median"] is not None
+        and excluded["whole_median"] >= big - 1e-9
+    )
+    caught = bool(kept_caught and excluded_caught)
+    return caught, (
+        f"{config.name} {plain['pair']} at key {key}: undoctored restricted "
+        f"worst {plain['restricted_max']:.3e}; kept component {kept_name} "
+        f"moved by 1e-3 of its scale → restricted worst "
+        f"{kept['restricted_max']:.3e}, argmax {kept['argmax']}, pairs above "
+        f"τ {kept['n_pairs_above_tau']}; excluded component {excluded_name} "
+        f"moved by {big:.3g} of its scale → restricted worst "
+        f"{excluded['restricted_max']:.3e} (unchanged), whole-state median "
+        f"{plain['whole_median']:.3e} → {excluded['whole_median']:.3e}"
+        + ("" if caught else " — NOT CAUGHT")
+    )
+
+
 def pool_tally_jobs(campaign: Campaign) -> list[dict[str, Any]]:
     """The jobs this gate reads: the published sources' and the reproduction gate's."""
     jobs = [
@@ -488,7 +628,7 @@ def pool_tally_jobs(campaign: Campaign) -> list[dict[str, Any]]:
 
 
 def gate(campaign: Campaign) -> Gate:
-    """The tally's gate, with its ten teeth."""
+    """The tally's gate, with its eleven teeth."""
     return Gate(
         name="tally_contracts",
         binds="every table the tally emits, and the cells it reproduces",
@@ -576,6 +716,13 @@ def gate(campaign: Campaign) -> Gate:
                 "incremented",
                 must="TRIP",
                 check=_tooth_reference_cell_moved(campaign),
+            ),
+            Tooth(
+                name="the fixed-point distance's restriction",
+                what="one exit state doctored in a scratch copy: a kept "
+                "component moved by 1e-3 of its scale, then an excluded one",
+                must="MOVE ON THE KEPT COMPONENT, HOLD ON THE EXCLUDED ONE",
+                check=_tooth_fixed_point_distance_restriction(campaign),
             ),
         ),
     )

@@ -7,7 +7,8 @@ records — so it is registered as a *measurement stage* and runs under
 ``--measure``, never under ``--gate``.  Where the tally *checks* something,
 that check is a gate with teeth and lives in ``harness/gates/gate_tally.py``.
 
-Five tables, each the shape of one of the plan's §4.2 placeholders:
+Six tables, five the shape of one of the plan's §4.2 placeholders and one
+beside the second:
 
 ``cost_per_call``      §4.2.1 — model executions per evaluation, sweeps per
                        evaluation, sweeps per block, the arrangement-method
@@ -16,6 +17,11 @@ Five tables, each the shape of one of the plan's §4.2 placeholders:
 ``matched_accuracy``   §4.2.2 — the exit-audit maximum, restricted and whole
                        state, **on both rulers**, with the argmax component
                        named rather than averaged, and the similarity verdict.
+``fixed_point_distance`` beside §4.2.2 — how far apart two arms' exit states
+                       are at the same entry: the predicate's residual between
+                       the two states the runs wrote, restricted as the audit
+                       is, reported and not accepted on (added after the
+                       campaign by task A76 (fixed-point-distance)).
 ``ownership_rung``     §4.2.3 — the flat control against the flat control with
                        the burn time owned by a constant.
 ``per_sweep_overhead`` §3.5 check 5 — what each arm's convergence test cost, in
@@ -51,6 +57,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from harness.child import predicate as predicate_mod
 from harness.experiment import arms as arms_mod
 from harness.measurement import stats as stats_mod
 from harness.measurement import tally as tally_mod
@@ -529,6 +536,342 @@ def matched_accuracy(
     return table
 
 
+#: The evaluation phase's ladder, in rung order (plan §3.2): adjacent arms
+#: differ by one named thing.  A configuration that skips an arm (st skips
+#: A0p) has the rung across the gap.
+LADDER: tuple[str, ...] = ("AR", "A0", "A0p", "A1")
+
+
+def ladder_pairs(present: Sequence[str], headline_base: str) -> list[tuple[str, str, str]]:
+    """``(base, arm, role)`` for every pair the fixed-point distance reports.
+
+    One row per rung of the ladder among the arms present — ``AR → A0`` (the
+    stopping rule), ``A0 → A0p`` (ownership), ``A0p → A1`` (the partition) —
+    with the partitioned arm against the declared reference marked
+    ``headline``, and on a pulsed configuration ``A0 → A1`` beside, which is
+    the previous revision's pair and the steady-state configuration's
+    headline, so the three configurations share a readable row.
+    """
+    ladder = [arm for arm in LADDER if arm in present]
+    out: list[tuple[str, str, str]] = []
+    for base, arm in zip(ladder, ladder[1:]):
+        role = "headline" if (arm == "A1" and base == headline_base) else "rung"
+        out.append((base, arm, role))
+    if "A0" in ladder and "A1" in ladder and headline_base != "A0":
+        out.append(("A0", "A1", "beside"))
+    return out
+
+
+def _excluded_by_the_per_run_nodes(
+    campaign: Campaign,
+    configuration: str,
+    record: Mapping[str, Any],
+    spec_keys: Sequence[str],
+    tested_keys: Sequence[str],
+) -> tuple[set[str], set[str], str] | tuple[None, None, str]:
+    """The components the once-per-run nodes write, re-derived for *record*.
+
+    The same derivation as the exit audit's (node list from the per-run
+    artifact → the committed write census → the spec's keys; never a prefix
+    rule), from the artifacts in this tree's ``harness/data/``, and **checked
+    against the record**: the audit stamped the sha256 of the set it excluded
+    — the written components among the *tested* (continuous and non-finite)
+    ones, which is the second set returned — and a derivation that lands
+    elsewhere means the artifacts on disk are not the ones the run read, which
+    is a refusal and not a smaller table.  The first set returned is every
+    spec component those nodes write, of any category, which is what the
+    restricted residual leaves out.
+    """
+    audit = (record.get("exit_audit") or {}).get("frozen") or {}
+    restricted = audit.get("restricted")
+    if not isinstance(restricted, Mapping):
+        return None, None, "the record's exit audit carries no restricted block"
+    artifact = Path(campaign.data_dir) / Path(str(restricted.get("artifact"))).name
+    census_path = Path(campaign.data_dir) / "node_writesets.json"
+    if not artifact.exists() or not census_path.exists():
+        return None, None, (
+            f"the per-run artifact {artifact.name} or the write census is not "
+            f"in this tree's data directory"
+        )
+    nodes = list(json.loads(artifact.read_text())["post_solve_nodes"])
+    census = json.loads(census_path.read_text())["per_scenario"]
+    if configuration not in census:
+        raise tally_mod.TallyError(
+            f"{census_path} carries no write census for {configuration!r}; "
+            f"the excluded set would be guessed, so the distance is refused"
+        )
+    writes_by_node = census[configuration]["writes_by_node"]
+    excluded: set[str] = set()
+    for node in nodes:
+        excluded |= set(writes_by_node.get(node) or ())
+    written = excluded & set(spec_keys)
+    excluded = written & set(tested_keys)
+    import hashlib  # noqa: PLC0415 - one digest, here only
+
+    digest = hashlib.sha256("\n".join(sorted(excluded)).encode()).hexdigest()
+    if digest != restricted.get("excluded_sha256"):
+        raise tally_mod.TallyError(
+            f"the excluded set derived from {artifact.name} and "
+            f"{census_path.name} hashes to {digest[:12]}…, the record's audit "
+            f"stamped {str(restricted.get('excluded_sha256'))[:12]}…: the "
+            f"artifacts in this tree are not the ones the run read, so the "
+            f"restricted distance is refused rather than published over a set "
+            f"nobody chose"
+        )
+    return written, excluded, ""
+
+
+def _exit_state(
+    where: Mapping[str, Path], record: Mapping[str, Any], spec
+) -> tuple[list | None, str]:
+    """The exit coupling state a run wrote, restored exactly, or why not."""
+    digest = record.get("job_digest")
+    directory = where.get(str(digest)) if digest else None
+    if directory is None:
+        return None, "the record's directory is unknown to the source"
+    name = record.get("exit_state_written_to")
+    if not name:
+        return None, "the run wrote no exit state (exit_state_written_to is empty)"
+    path = Path(directory) / str(name)
+    if not path.exists():
+        return None, f"{name} is missing from the run directory"
+    try:
+        return predicate_mod.restore_snapshot(spec, json.loads(path.read_text())), ""
+    except predicate_mod.PredicateError as exc:
+        raise tally_mod.TallyError(
+            f"{path}: the exit state does not restore against this tree's "
+            f"coupling-state artifact ({exc}); a distance over a mapping nobody "
+            f"chose is refused"
+        ) from exc
+
+
+def fixed_point_distance(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    configuration: str,
+    source: str,
+    where: Mapping[str, Path],
+) -> Table | None:
+    """Beside §4.2.2 — how far apart two arms' exit states are at the same entry.
+
+    One row per arm against the declared reference arm of the evaluation
+    phase.  The statistic is ``stats.fixed_point_distance``; the residual
+    itself is the predicate's own (``harness/child/ystate.py``, decision
+    D14(c): one implementation of the coupling-state test), evaluated between
+    the two exit states the runs wrote.  ``where`` maps a record's job digest
+    to its run directory, because the record's own ``outdir`` names the tree
+    the campaign ran in and not the tree the records were seeded into.
+    """
+    config = campaign.configuration(configuration)
+    by_arm = _by_arm(population, configuration)
+    by_seed = _by_arm_and_seed(population, configuration)
+    headline_base, why_base = reference_arm(config.pulsed, set(by_arm))
+    pairs_to_report = ladder_pairs(list(by_seed), headline_base)
+    if not pairs_to_report:
+        return None
+    spec = predicate_mod.load_spec(config.coupling_state_path)
+    spec_keys = [spec.name(i) for i in range(len(spec.keys))]
+    # The audit's exclusion count is over the components its scaled vector
+    # holds: the continuous and non-finite ones, in index order (ystate's
+    # ``idx_c``).  Discrete and constant components are tested for equality,
+    # not scaled, so they are not in that count.
+    tested_keys = [
+        spec.name(i)
+        for i in sorted(set(spec.idx_continuous) | set(spec.idx_nonfinite))
+    ]
+    tau = float(campaign.tau)
+    rows: list[dict[str, Any]] = []
+    n_pairs_total = 0
+    states: dict[tuple[str, int], tuple[list | None, str]] = {}
+
+    def state_of(arm: str, key: int) -> tuple[list | None, str]:
+        if (arm, key) not in states:
+            states[(arm, key)] = _exit_state(where, by_seed[arm][key], spec)
+        return states[(arm, key)]
+
+    for base, arm, role in pairs_to_report:
+        pairs: list[dict[str, Any]] = []
+        for key in sorted(set(by_seed[base]) & set(by_seed[arm])):
+            left, right = by_seed[base][key], by_seed[arm][key]
+            pair: dict[str, Any] = {"key": key, "compared": False}
+            if not (stats_mod.finished(left) and stats_mod.finished(right)):
+                pair["why"] = "a side did not finish"
+                pairs.append(pair)
+                continue
+            y_base, why_a = state_of(base, key)
+            y_arm, why_b = state_of(arm, key)
+            if y_base is None or y_arm is None:
+                pair["why"] = why_a or why_b
+                pairs.append(pair)
+                continue
+            written_a, excluded_a, why_x = _excluded_by_the_per_run_nodes(
+                campaign, configuration, left, spec_keys, tested_keys
+            )
+            written_b, excluded_b, why_y = _excluded_by_the_per_run_nodes(
+                campaign, configuration, right, spec_keys, tested_keys
+            )
+            if excluded_a is None or excluded_b is None:
+                pair["why"] = why_x or why_y
+                pairs.append(pair)
+                continue
+            if excluded_a != excluded_b or written_a != written_b:
+                raise tally_mod.TallyError(
+                    f"{configuration} {base}/{arm} at key {key}: the two "
+                    f"records' audits excluded different sets "
+                    f"({len(excluded_a)} and {len(excluded_b)} components); "
+                    f"a restricted distance over two restrictions is refused"
+                )
+            kept = [i for i, name in enumerate(spec_keys) if name not in written_a]
+            restricted = spec.residual(y_base, y_arm, subset=kept, ruler="frozen")
+            whole = spec.residual(y_base, y_arm, ruler="frozen")
+            pair.update(
+                {
+                    "compared": True,
+                    "restricted_max": float(restricted.max),
+                    "restricted_max_hex": float(restricted.max).hex(),
+                    "restricted_argmax": (
+                        None if restricted.argmax is None else spec.name(restricted.argmax)
+                    ),
+                    "restricted_n_above_tau": restricted.n_above(tau),
+                    "whole_max": float(whole.max),
+                    "whole_argmax": (
+                        None if whole.argmax is None else spec.name(whole.argmax)
+                    ),
+                    "categorically_clean": not (
+                        restricted.mismatch_discrete
+                        or restricted.moved_constant
+                        or restricted.nan_new
+                    ),
+                    "n_excluded": len(excluded_a),
+                }
+            )
+            pairs.append(pair)
+        n_pairs_total += len(pairs)
+        summary = stats_mod.fixed_point_distance(pairs, tau=tau)
+        rows.append(
+            {
+                "pair": f"{arm}/{base}",
+                "role": role,
+                "n": summary["n"],
+                "n_compared": summary["n_compared"],
+                "not_compared": cell_list(
+                    [f"{k}: {v}" for k, v in sorted(summary["not_compared_by_reason"].items())]
+                ),
+                "restricted_median": summary["restricted_median"],
+                "restricted_p90": summary["restricted_p90"],
+                "restricted_max": summary["restricted_max"],
+                "worst_pair": summary["worst_pair_key"],
+                "argmax": cell_list(summary["argmax_components"]),
+                "n_pairs_above_tau": summary["n_pairs_above_tau"],
+                "n_pairs_unclean": summary["n_pairs_unclean"],
+                "whole_median": summary["whole_median"],
+                "whole_p90": summary["whole_p90"],
+                "n_excluded": cell_list([str(v) for v in summary["n_excluded"]]),
+            }
+        )
+    positions = sorted(
+        {
+            str(r.get("audit_position"))
+            for arm in by_seed
+            for r in by_seed[arm].values()
+            if r.get("audit_position")
+        }
+    )
+    paired_on = _paired_with(population)
+    return Table(
+        name=f"fixed-point distance — {configuration} — {source}",
+        caption=Caption(
+            units=(
+                "dimensionless: the largest scaled difference between two "
+                "arms' exit coupling states at the same entry, in the units "
+                f"τ = {tau:g} is stated in"
+            ),
+            row_is=(
+                "one pair of arms: each rung of the evaluation phase's ladder "
+                "(adjacent arms, differing by one named thing) and, marked "
+                f"headline, the partitioned arm against {headline_base} "
+                f"({why_base}); on a pulsed configuration A1/A0 is published "
+                "beside, the previous revision's pair"
+            ),
+            column_is=(
+                f"the pairs the two arms share (by {paired_on}), how many of "
+                "them were compared and why the rest were not, the restricted "
+                "distance's median, p90 and worst pair, the components the "
+                "maximum sat on, the pairs with any restricted component at "
+                "or above τ, the pairs where a discrete component differs or "
+                "a constant moved, and the whole-state distance beside"
+            ),
+            population=(
+                f"{population.what}; {n_pairs_total} pair(s) of {configuration}"
+            ),
+            construction=(
+                "stats.fixed_point_distance: the predicate's own scaled "
+                "residual (harness/child/ystate.py, frozen ruler: "
+                "max_i |y_arm,i − y_base,i| / s_i) evaluated between the two "
+                "exit states the runs wrote (y_exit.json), restricted to the "
+                "components the configuration's once-per-run deferred nodes do "
+                "not write — the exit audit's own exclusion, re-derived from "
+                "the artifacts and checked against the digest the audit "
+                "stamped; median = nearest-rank upper-middle, p90 = "
+                "nearest-rank ceil(0.9 n) over the compared pairs"
+            ),
+            clauses=(
+                "**reported, not accepted on**: no acceptance rule was "
+                "pre-declared for this quantity; it was added after the "
+                "campaign by task A76 (fixed-point-distance) from the exit "
+                "states already on disk, and no model ran to produce it",
+                "**what it adds to the matched-accuracy table beside it**: "
+                "that table says how far each arm is from *a* fixed point; "
+                "this one says how far the two arms' points are from *each "
+                "other*.  Both are on the frozen ruler; the mixed ruler is not "
+                "offered here because its denominator reads a current value "
+                "and a distance between two states has no current side",
+                "**the exit states are the ones the audit read**: taken at "
+                + (", ".join(positions) if positions else "an unrecorded position")
+                + ", before the audit's own sweep, so a state moved by the "
+                "instrument cannot enter this table",
+                "**n counts the pairs the two arms share**, and n_compared the "
+                "ones on which both exit states exist and both audits carry the "
+                "restriction; the shortfall is named by reason in the column "
+                "beside, never dropped (trap T11)",
+                "the whole-state distance is large for the partitioned arm by "
+                "design — its once-per-run nodes run at the end, so their "
+                "outputs are stale at exit — and is published to show the "
+                "exclusion's size, not judged",
+            ),
+            how_to_read=(
+                "a restricted median far below τ with 0 pairs above τ means "
+                "the two arms stopped at the same fixed point to within the "
+                "tolerance they were asked for; a pair above τ names an entry "
+                "on which they did not, and the worst-pair column says which"
+            ),
+        ),
+        columns=(
+            Column("pair", "pair"),
+            Column("role", "role"),
+            Column("n", f"n ({paired_on} shared)", fmt=_fmt_int),
+            Column("n_compared", "compared", fmt=_fmt_int),
+            Column("not_compared", "not compared (reason: count)"),
+            Column("restricted_median", "restricted median", fmt=_fmt_exp),
+            Column("restricted_p90", "restricted p90", fmt=_fmt_exp),
+            Column("restricted_max", "restricted worst", fmt=_fmt_exp),
+            Column("worst_pair", f"worst {paired_on[:-1]}", fmt=_fmt_int),
+            Column("argmax", "restricted argmax"),
+            Column("n_pairs_above_tau", "pairs with a component ≥ τ", fmt=_fmt_int),
+            Column("n_pairs_unclean", "pairs categorically unclean", fmt=_fmt_int),
+            Column("whole_median", "whole-state median", fmt=_fmt_exp),
+            Column("whole_p90", "whole-state p90", fmt=_fmt_exp),
+            Column("n_excluded", "components excluded"),
+        ),
+        rows=tuple(rows),
+        denominator=n_pairs_total,
+        denominator_is=(
+            f"evaluation-phase pairs of {configuration} over the ladder's rungs"
+        ),
+        acceptance=False,
+    )
+
+
 def ownership_rung(
     campaign: Campaign,
     population: stats_mod.Population,
@@ -946,6 +1289,14 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             continue
         rows, source_refusals = tally_mod.source_rows(campaign, source)
         refusals.extend(f"[{source.name}] {line}" for line in source_refusals)
+        # Where each record lives in THIS tree, by job digest: the record's own
+        # ``outdir`` names the tree the campaign ran in, and the exit states
+        # the fixed-point distance reads sit beside the record, not in it.
+        where = {
+            str(row.record.get("job_digest")): Path(row.path).parent
+            for row in rows
+            if row.record.get("job_digest")
+        }
         population = tally_mod.population_for(
             rows,
             phase=PHASE,
@@ -980,6 +1331,11 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 {"source": source.name, "configuration": config.name, **v}
                 for v in getattr(accuracy, "similarity_verdicts", [])
             )
+            distance = fixed_point_distance(
+                campaign, population, config.name, source.name, where
+            )
+            if distance is not None:
+                emitted.append(distance)
             rung = ownership_rung(campaign, population, config.name, source.name)
             if rung is not None:
                 emitted.append(rung)

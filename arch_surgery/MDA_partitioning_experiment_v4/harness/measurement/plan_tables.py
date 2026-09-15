@@ -104,7 +104,8 @@ SECTIONS: tuple[Section, ...] = (
         heading="The evaluation phase",
         stage="tally_evaluation",
         what=(
-            "cost per call, matched accuracy on both rulers, the ownership "
+            "cost per call, matched accuracy on both rulers, the fixed-point "
+            "distance between arms (reported, not accepted on), the ownership "
             "rung, the per-sweep overhead, the failure taxonomy and the "
             "predicate trial"
         ),
