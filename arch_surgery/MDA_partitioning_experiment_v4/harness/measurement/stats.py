@@ -83,6 +83,7 @@ __all__ = [
     "audit_position_of",
     "empty_visit_shares",
     "predicate_widths",
+    "fixed_point_distance",
 ]
 
 
@@ -1192,5 +1193,99 @@ def predicate_widths(record: Mapping[str, Any]) -> dict[str, Any]:
         "never_pooled": (
             "the two counts are published in separate columns; their sum is "
             "not a quantity of any test"
+        ),
+    }
+
+
+# --------------------------------------------------------------------------
+# the distance between two arms' fixed points
+# --------------------------------------------------------------------------
+
+
+def fixed_point_distance(
+    pairs: Sequence[Mapping[str, Any]], *, tau: float
+) -> dict[str, Any]:
+    """**The distance between two arms' exit states at the same entry**, over
+    the pairs of one arm against the reference arm.
+
+    The exit audit measures how far each arm's exit state is from *a* fixed
+    point — one further sweep, taken per run.  It does not say whether two
+    arms reached the *same* point, and the experiment assumes they do: the
+    partitioned arrangement is meant to reach the flat arrangement's fixed
+    point at lower cost, not a different one.  This statistic is that
+    comparison, taken from the exit states the runs wrote (``y_exit.json``)
+    and nothing else — no model runs.
+
+    **Per pair** (one entry, two arms): the predicate's own scaled residual
+    evaluated between the two exit states instead of between two successive
+    sweeps — ``max_i |y_arm,i − y_base,i| / s_i`` over the continuous
+    components, ``s_i`` the committed scale (the **frozen** ruler, the one τ is
+    stated on) — **restricted** to the components not written by the
+    configuration's once-per-run deferred nodes, exactly the restriction the
+    matched-accuracy table applies and for the same reason: those components
+    are stale at the partitioned arm's exit by design.  With it travel the
+    component the maximum sat on, the count of restricted components at or
+    above τ, the whole-state maximum beside, and whether the pair is
+    *categorically clean* — no discrete component differs, no constant moved,
+    no NaN appeared on one side only.  The mixed ruler is not offered: its
+    denominator reads a *current* value, and a distance between two states
+    has no current side.
+
+    **Over the pairs:** ``n`` counts the pairs the two arms have in common at
+    the pairing key; ``n_compared`` the pairs on which both exit states exist
+    and were read, and the shortfall is named by reason, never dropped;
+    the median (nearest-rank upper-middle) and p90 (nearest-rank ``ceil(0.9
+    n)``) of the restricted maximum over the compared pairs, the worst pair and
+    its key (none when every compared pair reads exactly 0: nothing is worst),
+    the count of compared pairs with any restricted component at or
+    above τ, the count that are categorically unclean, and the whole-state
+    median and p90 beside.
+
+    **Reported, not accepted on.**  No acceptance rule was pre-declared for
+    this quantity in the experiment plan; it was added after the campaign
+    (task A76 (fixed-point-distance)) from records already on disk.  The
+    reader is given τ beside every cell and the acceptance stays with the
+    checks that declared one.
+    """
+    compared = [p for p in pairs if p.get("compared")]
+    reasons: dict[str, int] = {}
+    for p in pairs:
+        if not p.get("compared"):
+            reason = str(p.get("why") or "unstated")
+            reasons[reason] = reasons.get(reason, 0) + 1
+    restricted = [float(p["restricted_max"]) for p in compared]
+    whole = [float(p["whole_max"]) for p in compared]
+    worst = (
+        max(compared, key=lambda p: float(p["restricted_max"]))
+        if compared and max(restricted) > 0
+        else None
+    )
+    return {
+        "n": len(pairs),
+        "n_compared": len(compared),
+        "not_compared_by_reason": reasons,
+        "restricted_median": median(restricted),
+        "restricted_p90": p90(restricted),
+        "restricted_max": max(restricted) if restricted else None,
+        "worst_pair_key": None if worst is None else worst.get("key"),
+        "argmax_components": sorted(
+            {str(p.get("restricted_argmax")) for p in compared if p.get("restricted_argmax")}
+        ),
+        "n_pairs_above_tau": sum(
+            1 for p in compared if int(p.get("restricted_n_above_tau") or 0) > 0
+        ),
+        "n_pairs_unclean": sum(
+            1 for p in compared if not p.get("categorically_clean", True)
+        ),
+        "whole_median": median(whole),
+        "whole_p90": p90(whole),
+        "n_excluded": sorted({int(p["n_excluded"]) for p in compared if p.get("n_excluded") is not None}),
+        "tau": tau,
+        "construction": (
+            "per pair: the predicate's scaled residual between the two exit "
+            "states on the frozen ruler, restricted to the components the "
+            "once-per-run deferred nodes do not write; over pairs: nearest-rank "
+            "upper-middle median and nearest-rank ceil(0.9 n) p90 of the "
+            "restricted maximum"
         ),
     }
