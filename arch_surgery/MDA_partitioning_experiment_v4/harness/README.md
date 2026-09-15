@@ -95,13 +95,24 @@ run executes (harness plan amendment 13, rule (vi)).
 - `measurement/analysis.py` is a **deliberate second implementation** of every published cell,
   sharing no helper with the tally. Gate `recomputation` compares the two. Agreement means the tables
   are not an artefact of one piece of code.
-- `measurement/plan_tables.py` renders the report's **Appendix D — Results tables** (summarising
-  tables only, numbered `Table D.n`, one short caption each, the constructions declared once in
-  D.0) and the companion file `RESULTS_TABLES_FULL.md` (every per-run, per-seed and per-pair table
-  and the second implementation's tables, `Table F.n`) from the stage records; its check mode diffs
-  both committed documents without writing and resolves every `Table D.n` / `Table F.n` reference
-  in the hand-written text. The report's §4 is hand-written conclusions pointing at those numbers
-  (task A79 (report-captions), 2026-09-15).
+- `measurement/plan_tables.py` renders the report's tables from the stage records. **One
+  construction, one table** (`LAYOUTS`, a declaration per construction): the tally emits a table per
+  *(configuration, source)*, and the renderer combines them into one grid — `stack` puts the
+  configurations and regimes in row groups under a bold sub-heading row that states each group's own
+  n; `merge` aligns several constructions of one configuration on a join column, so a fact stated
+  once per configuration (the seed set, the entry reference) is a column of the table it qualifies
+  rather than a table of its own; `single` passes through a construction the tally already emits
+  whole. Three **headline tables** are rendered into the report's §4 itself, between
+  `MAIN_START` / `MAIN_END` marker pairs carrying the layout's name and numbered `Table n` after
+  §3's six; everything else is **Appendix D — Results tables** (`Table D.n`, one short caption
+  each, the constructions declared once in D.0) and the companion file `RESULTS_TABLES_FULL.md`
+  (every per-run, per-seed and per-pair table, and the full version of a report table whose
+  per-seed columns it omits, `Table F.n`). The second implementation's tables are **not rendered
+  anywhere**: gate `recomputation`'s row of Table D.1 is that check. Check mode diffs every block
+  and both committed documents without writing, and resolves every `Table n` / `Table D.n` /
+  `Table F.n` reference in the hand-written text. §4 is hand-written conclusions beside those
+  tables (task A79 (report-captions); the layouts and the main-text tables task A83
+  (headline-tables-in-text), 2026-09-15).
 
 ### Layer 5 — the gates: `harness/gates/`
 
@@ -157,11 +168,12 @@ true.
 A run record is written by `child/`, stamped by `core/`, kept or re-made by the pool. The tally reads
 a declared set of records and writes a stage record naming them. The analysis recomputes the same
 cells independently. The recomputation gate compares. The gate table stage collects every verdict.
-The renderer writes Appendix D and the companion file from those stage records and refuses if any
-record it reads has been outrun. Every table declares its units, row, column, population and
-construction (printed once per kind in D.0) and carries a caption of a few lines stating its own
-denominator; every cell is traced by the construction name printed under its table, never by its
-number. That chain is what lets the report's tables be read without trusting anyone's memory.
+The renderer writes §4's three headline tables, Appendix D and the companion file from those stage
+records and refuses if any record it reads has been outrun. Every table declares its units, row,
+column, population and construction (printed once per construction in D.0) and carries a caption of
+a few lines; a **combined** table's denominator is the number of row groups, and each group's
+sub-heading row states its own n — there is no pooled one. Every cell is traced by the construction
+names printed under its grid, never by its number. That chain is what lets the report's tables be read without trusting anyone's memory.
 
 ---
 
@@ -602,12 +614,14 @@ $PY -m harness.measurement.analysis --teeth                          # the six d
 # 'smoke'; no approval needed and no campaign record made
 $PY experiment_runner.py --smoke --resume --census-entry evaluation
 
-# the report's Appendix D and the companion RESULTS_TABLES_FULL.md, rendered from
-# the measurement stages' records.  'check' compares both with what is committed,
-# resolves every Table D.n / F.n reference in the hand-written text and writes
-# nothing (exit 3 on a difference or a dangling reference); press --measure
-# gate_table after any gate re-run, or the renderer refuses rather than
-# reproducing the older verdict
+# the report's three headline tables (in §4, between the renderer's markers),
+# its Appendix D and the companion RESULTS_TABLES_FULL.md, rendered from the
+# measurement stages' records.  'check' compares all of them with what is
+# committed, resolves every Table n / D.n / F.n reference in the hand-written
+# text and writes nothing (exit 3 on a difference or a dangling reference);
+# press --measure gate_table after any gate re-run, or the renderer refuses
+# rather than reproducing the older verdict.  'show' also prints the census:
+# how many stage tables each rendered table combines, and its shape
 $PY experiment_runner.py --plan-tables show
 $PY experiment_runner.py --plan-tables check
 $PY experiment_runner.py --plan-tables write
