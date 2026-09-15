@@ -9,7 +9,9 @@
 > (report-captions): the tables moved from §4 to the appendix, every table numbered `Table D.n`
 > with one caption of a few lines, the full result matrices in the generated companion file
 > [`RESULTS_TABLES_FULL.md`](RESULTS_TABLES_FULL.md) as `Table F.n`); §5 and §6 are the
-> **discussion and conclusion**, written from the rendered tables alone. The file was
+> **discussion and conclusion**, written from the rendered tables alone; **audited sentence by
+> sentence against the tables on 2026-09-15 by task A80 (report-accuracy-audit)**, whose corrections
+> are one dated Appendix C entry and which closed issue I-26 (the check-2 evaluation column). The file was
 > `EXPERIMENT_PLAN.md` until 2026-09-15, when the user had it renamed to what it had become (*"rename
 > the PLAN file to REPORT"*); the superseded draft header is readable at `3abea2c6` and is summarised
 > in Appendix C.
@@ -28,7 +30,9 @@
 > experiment"*), after the D27 rerun of every gate on the final harness — 30 PASS, 152/152 teeth,
 > GR 256/256, G1 byte-neutral, at `03f72479`; `EXECUTION_APPROVED` flipped at the approval commit
 > `57dc0c14`. The campaign was pressed from the button (`experiment_runner.py --campaign`) at that
-> commit: **949 records** (921 ok, 28 crashed), stamped `campaign`, kept untracked at
+> commit: **949 records** (921 ok, 28 not ok — 20 crashed in PROCESS's own Newton solve and 8 whose
+> coupling-state loop hit its 20-sweep cap, both stamped `crashed` by the harness and split by Tables
+> D.61–D.63; "28 crashed" until A80's audit, 2026-09-15), stamped `campaign`, kept untracked at
 > `arch_surgery/idf_probe/runs/campaign_57dc0c14/`.
 >
 > **Scope.** Base commit `c0ae5b28` throughout; the physics is frozen — V4 contains no change under
@@ -363,7 +367,10 @@ variable at the configuration's design point, coupling state at the reference fi
 exactly the sequence `fcnvmc2` executes (`evaluators.py:136-143`); plus the lifted column on the
 pinned arms. Deterministic, no seeds, `2(nvar + 1)` single evaluations per arm per configuration.
 The transfer (§3.5) is stated on this regime, with the forward and backward sets as the published
-bracket.
+bracket. *(As built, 2026-09-15 (A80): every Phase A arm reads the committed input file — the pin is a
+constant, not an iteration variable — so no arm has a lifted column and each has `nvar` points per
+sign: 20 / 19 / 14 per arm, 396 stencil evaluations in all, not 418 (Tables D.55–D.60; the chain derives
+the column set from the input file each arm reads, `chain.stencil_column_set`).)*
 
 **Why not a smaller δ.** The improvement list proposed δ = 0.001, matched to `epsfcn`, as the
 representative regime. A44 measured it (`E2`, ten seeds, three configurations): at δ = 0.001 the
@@ -492,7 +499,7 @@ headline unreadable. The failure table carries the retried seeds with each arm's
 
 **The transfer (RQ3; I-17), restated** *(amended 2026-09-10 on A44; pending review)*. No V4
 number is derived through the transfer; Phase B's realised ratio stands as the deployment result.
-The gap is an identity, `R = (N_B3/C_B3)/(N_B0/C_B0) × C_B3/C_B0 = ρ_B × ε`, with `N` solve-phase
+The gap is an identity, `R = (N_B2/C_B2)/(N_B0/C_B0) × C_B2/C_B0 = ρ_B × ε`, with `N` solve-phase
 node calls and `C` `call_models` evaluations over the one seed set, `per_run` executions and the
 reference arms' output-time sweeps carried as separate terms. A44 established on V3's records that
 the per-evaluation term `ρ_B/ρ_A` is uniform across configurations and is the entry regime
@@ -502,7 +509,7 @@ evaluations, so the lifted arms pay `(nvar + 2)/(nvar + 1)` per problem-call; **
 whose evaluations are in `N` and whose iterations are not in check 2; **(iii)** trajectory change
 at the lift (lad, every seed) and, on st, at the partition. V4 therefore states the transfer as
 
-    B2/B0  ≈  ρ_A(stencil)  ×  (nvar_B3 + 1)/(nvar_B0 + 1)  ×  (problem-call ratio)
+    B2/B0  ≈  ρ_A(stencil)  ×  (nvar_B2 + 1)/(nvar_B0 + 1)  ×  (problem-call ratio)
 
 with `ρ_A(stencil)` the ratio of per-evaluation means at the stencil regime, the forward and
 backward sets as the published bracket, and the problem-call ratio a Phase B measurement the
@@ -537,14 +544,19 @@ set named — per configuration and arm, the decisive passes, the components, `|
 there, whether the component held the pass under `frozen`; plus a doctored-component tooth
 (a component at `100 s_i` with `Δy = 50 τ s_i` fails `frozen` and passes `mixed`; the same
 `Δy` at `y = s_i` fails both). **Measurement:** Phase A (`A0`, `A1`, `A2`; 25 seeds; three
-configurations; δ = 0.10) under both modes — counts, ratios with seed bracket, and the exit
+configurations; δ = 0.10) under both modes *(as built, 2026-09-15 (A80): the trial ran as gate G8 on
+`A0` and `A2` at seeds 1–2 on the three configurations — 12 pairs, 24 runs — not as 150 campaign runs;
+Table D.1 and companion Table F.13)* — counts, ratios with seed bracket, and the exit
 audit **on both rulers** (a mixed audit beside a frozen one alone would report an accuracy
 gain that is a change of ruler — both columns or neither). Phase B (`B0`, `B2`) under `mixed`
 only if Phase A shows a decisive pass on an in-loop component. **Adoption rule:** gates 1–3
 pass and the measurement is either neutral (adopted as the easier-to-defend equivalent) or
 non-neutral on a named set (adopted, with the moved ratios re-stated as metric-dependent).
 Only a gate failure blocks adoption. Adoption makes `mixed` V4's predicate and audit ruler,
-with `frozen` selectable for cross-study comparison; V3's numbers are not retro-edited.
+with `frozen` selectable for cross-study comparison; V3's numbers are not retro-edited. *(As
+built, 2026-09-15 (A80): gates 1–3 passed and the 12 pairs were neutral, which under this rule adopts
+`mixed`; the campaign nevertheless ran and is reported on `frozen`, and the rule was not applied —
+§5.6 records the departure for the user's ruling rather than adopting retroactively.)*
 
 **Matched accuracy is verified per run, never assumed from a shared τ.** The exit audit is the
 same full sweep on the same ruler for every arm; a pair whose audit residuals differ beyond the
@@ -569,7 +581,8 @@ is where it is applied.*
 **All ruled (2026-09-10)**, (g) last, after A43 (st-trust-gap)'s verdict opened it the same day. The V3 report receives **no errata**: A44 (transfer-gap)'s retry finding
 lives in its own report and is carried into V4's method (§3.5), not written back into V3. The
 PROCESS copy is taken at the current `architecture_surgery` tip, the commit recorded (§3.8 (i)).
-The §4 table format awaits the user's review.
+The §4 table format awaits the user's review *(reviewed and accepted 2026-09-10, D21 (c); the tables
+are Appendix D and the companion file since 2026-09-15, A79)*.
 
 ### 3.8 Implementation overview
 
@@ -630,7 +643,8 @@ reference **refusing**, never passing over an empty comparison.
 **(iii) Analysis.** An independent recomputation of every published table from the records
 (`--verify` against the tally cell by cell, `--teeth` doctoring the records to show each
 comparison can fail), producing every table in §4 in the one format with its
-caption. Nothing is published that this script does not regenerate. The DSM overlay of
+caption *(as built: the tables are Appendix D and `RESULTS_TABLES_FULL.md` since A79, 2026-09-15; §4
+states the conclusions)*. Nothing is published that this script does not regenerate. The DSM overlay of
 improvement-list item 8 is dropped with V3's joint-test arm (V3's `B2`): no V4 arm exercises the outer verification loop.
 
 ### 3.9 Gates, each with teeth, run before any campaign number is cited
@@ -650,9 +664,9 @@ criteria are counts or bit-comparisons.*
 | **G2** prime on, fixed-point map | the prime's inertness after call 1 | from each reference exit snapshot, one flat and one partitioned call, prime on vs off, exit states bit-identical on N/N components | a doctored snapshot component trips |
 | **G3 / G3c** prime on, cold chain; lad carrier census | "no cut edge carries anything" | as V3, **re-run at the campaign commit** (item 7) | prime-off chain reproduces A35's counts — 244 (`large_tokamak_nof`) / 124 (`st_regression`) for G3, 240 cold / 218 displaced (`low_aspect_ratio_DEMO`) for G3c — and every residual maximum to the bit; the "3 outer passes → 2" half has nothing to count since DR1 removed the repeated schedule (A52) |
 | **G4** audit restriction | the similarity statistic | a doctored `per_run`-owned component trips the whole-state audit and not the restricted one; a doctored in-loop component trips both; **one doctored component from each excluded namespace** (`costs`, `water_use`, `vacuum`, …) | both directions, every namespace |
-| **G5** combined-switch equivalence | `B2` | the arm composed from the matrix equals the arm composed switch by switch: `norm_objf` hex, `ifail`, iterations, outer-pass histogram, exit audit hex | `norm_objf` hex and `n_call_models` teeth |
+| **G5** combined-switch equivalence | `B2` | the arm composed from the matrix equals the arm composed switch by switch: `norm_objf` hex, `ifail`, iterations, outer-pass histogram, exit audit hex *(as built: 37 switch names and 10 run values per configuration, 141 compared, Table D.1; the outer-pass histogram has nothing to count since DR1)* | `norm_objf` hex and `n_call_models` teeth *(as built 4/4)* |
 | **G6** Phase A entry and warm equivalence | Phase A | seed-paired entries bit-identical across arms per configuration; each block arm from the reference snapshot, pinned at the reference's converged burn time, reproduces the reference fixed point below τ with the pinned component bit-identical | as V3 |
-| **G7** record completeness | the declared pairing and forensics | a forced-unconverged smoke run carries every declared field; a record with a field missing is refused by the tally | 5/5 field teeth |
+| **G7** record completeness | the declared pairing and forensics | a forced-unconverged smoke run carries every declared field; a record with a field missing is refused by the tally | 5/5 field teeth *(as built 9/9, Table D.1)* |
 | **G8** predicate trial (§3.6 gates 1–3) | the `mixed` mode | neutrality of `frozen`; the identity; the binding set | the doctored-component tooth |
 | **G9** output-path equivalence | `MDA_Output` removal | on the intervention arms, the accepted state written by the new path is bit-identical to the state at the entry to `write_output_files`; on `BR`/`B0` nothing changes | a 1-ULP perturbation before `finalise` is caught |
 
@@ -673,15 +687,16 @@ provenance. None may change after approval except by dated amendment.*
 | cluster gap | 10 × floor = 1e-5, with the resolution category declared | check 1a/1b | V3; item 5 |
 | iteration bound | median paired ratio ≤ 1.05 | check 2 | V2 App. B |
 | median | nearest-rank, upper-middle (`sorted[n // 2]`) | every Phase B check | V3 |
-| inner cap | 20 sweeps per block; a cap hit is a refusal | partitioned arms | V2 |
+| inner cap | 20 sweeps per block; a cap hit is a refusal | partitioned arms *(as built: the flat control's one block too — `B0`/`B1` on `low_aspect_ratio_DEMO` refused with `block FLAT did not converge in 20 sweeps` on 2 / 3 starts, Table D.62)* | V2 |
 | upstream cap | 10 passes (raises) → `unconverged-at-cap` | `AR`/`BR` | upstream; item 1 |
 | W | 3 | worker pool | V2 |
 
 **Run budget (context).** Phase A: `AR` 75 + `A0` 75 + `A1` 50 + `A2` 75 = 275 single
 evaluations at δ = 0.10, plus the stencil regime — `2(nvar+1)` per arm per configuration:
-42 × 4 (nof) + 40 × 4 (lad) + 30 × 3 (st) = 418 — plus 150 under the `mixed` mode, plus gates;
+42 × 4 (nof) + 40 × 4 (lad) + 30 × 3 (st) = 418 *(as built 40 × 4 + 38 × 4 + 28 × 3 = 396, §3.4)* — plus 150 under the `mixed` mode *(as built: 24 gate runs, G8; §3.6)*, plus gates;
 V3's 225 took ≈ 1.5 h at W = 3. Phase B: 4 arms × 25 × 2 pulsed + 3 arms × 25 on st = 275 optimisations (V3: 350; V3's joint-test arm
-removed; ≈ 2.5–3 h at W = 3), plus `B0`/`B2` under `mixed` (≤ 150) only if Phase A licenses it.
+removed; ≈ 2.5–3 h at W = 3), plus `B0`/`B2` under `mixed` (≤ 150) only if Phase A licenses it *(not
+licensed: 0 verdict changes, §5.6; not run)*.
 
 ### 3.11 Scope honesty, declared in advance
 
@@ -698,14 +713,18 @@ neutrality is not claimed. No timing is evidence.
 
 ## 4. Results
 
-*Written 2026-09-15 by task A79 (report-captions) from Appendix D alone. Every number below is a
+*Written 2026-09-15 by task A79 (report-captions) from Appendix D alone, and audited the same day by
+A80 (report-accuracy-audit), whose corrections are marked in Appendix C. Every number below is a
 cell of a table there or in the companion file [`RESULTS_TABLES_FULL.md`](RESULTS_TABLES_FULL.md),
 and the table is named beside it; nothing in this section is computed by hand. The population is
-the **campaign** — 949 run records made at `57dc0c14` (921 ok, 28 crashed), 25 seeds per arm per
-configuration — read through the arm-name translation of 2026-09-15 (`AR / A0 / A1 / A2`,
+the **campaign** — 949 run records made at `57dc0c14` (921 ok; 28 stamped `crashed`, of which 20 are
+PROCESS's own `RuntimeError` and 8 the coupling-state loop's 20-sweep cap, Tables D.61–D.63), 25 seeds
+per arm per configuration — read through the arm-name translation of 2026-09-15 (`AR / A0 / A1 / A2`,
 `BR / B0 / B1 / B2`; Appendix C). Configurations are written nof / lad / st for
 `large_tokamak_nof` / `low_aspect_ratio_DEMO` / `st_regression`, in that order, and are never
-pooled. Denominators: 25 runs per arm in every evaluation-phase source (Tables D.49–D.60); in the
+pooled. Denominators: in the evaluation phase 25 runs per arm in the displaced regime, one per
+design-vector column per arm at the stencil points (20 / 19 / 14) and one `A0` run per configuration
+in the entry reference (Tables D.49–D.60); in the
 optimisation phase the seed set on which every arm reached an accepted optimum — **22 / 11 / 22**
 of 25 (Tables D.64–D.66). The appendix's own conventions (D.0) hold: a ratio is read pooled
 (Σ arm / Σ reference), as the per-run median with its bracket, and as the count of runs on which
@@ -716,13 +735,17 @@ the arm cost more.*
 Every table below is read under a passed gate table: **30 gates PASS, 0 FAIL, 161 of 161 teeth
 tripped** (Table D.1). The rows that license the numbers directly: the reproduction gate GR
 reproduces the previous revision's twenty records on 256 of 256 compared values; the neutrality
-gate G1 finds 0 of 54 144 values changed across the driver commits it straddles; the recomputation
+gate G1 finds 0 of 54 144 compared values changed across the driver commits it straddles (2 825
+record values and 51 319 output-file lines, the two counts its cell now shows); the recomputation
 row states that a second implementation sharing no construction with the tally reproduced every
 published cell — **101 tables, 14 394 cells compared, 0 mismatched**; `tally_contracts` reproduces
-the 256 reference cells and finds every emitted table captioned with a counted denominator;
+the 256 reference cells and finds every emitted table captioned with a counted denominator (its 559
+compared are 303 table checks + 256 cells, two counts the cell shows since A80);
 `run_kind_separation` shows the 949 campaign records and no gate or smoke record in every published
-population. The one row reading 1 mismatched and PASS is the frozen-physics gate `g0prime`, which
-counts the single model file the user approved as differing, by name.
+population. Two PASS rows carry a nonzero *mismatched*: the frozen-physics gate `g0prime`, which
+counts the single model file the user approved as differing, by name (1 of 77), and `copy_identity`,
+which counts the seven driver files the experiment's permitted edits touched, by name and digest (7 of
+224; the record lists them). *(A80: the sentence named only the first.)*
 
 ### 4.2 The evaluation phase
 
@@ -782,7 +805,8 @@ and it stops **further from the fixed point**: `AR`'s restricted residual is 2.6
 1.539e-07 median against `A0`'s 5.042e-10 / 0 / 5.372e-09 (p90 1.542e-07 / 0 / 2.793e-07 against
 2.963e-09 / 0 / 2.023e-08). That is what the predicate-matched control is a control *for*.
 
-**Machinery.** Every scheduled evaluation finished: 25 of 25 per arm in every source and
+**Machinery.** Every scheduled evaluation finished: 25 of 25 per arm in the displaced regime, 20 / 19 /
+14 of 20 / 19 / 14 per arm at the forward and at the backward stencil points, 1 of 1 entry reference per
 configuration (Tables D.49–D.60). The predicate trial's runs are bit-identical under the two rulers
 with 0 verdict changes on every pair (gate `predicate_mode`, 8 152 compared / 0 mismatched, Table
 D.1; the per-pair table is companion Table F.13). The per-run convergence-test costs are companion
@@ -792,12 +816,20 @@ Tables F.1–F.12.
 
 **The population (Tables D.61–D.66).** On nof seeds 5, 20 and 21 crash in all four arms with
 PROCESS's own `RuntimeError: Failed to converge after 50 iterations, value is nan`, leaving a seed
-set of **22**; no arm retried on any of them. On lad 13 seeds are configuration-invalid — 2 crash in
-every arm and the rest fail to converge in at least one (`B0` 2, `B1` 3, `B2` 3 unconverged, the
-block solver's own exit on `current_drive.eta_cd_dimensionless_hcd_primary` at `inf`) — leaving
-**11**, with 12 / 10 / 10 / 10 retried seeds per arm across the 25 offered. On st every start
-finished (25 of 25 per arm), one seed is configuration-invalid, the set is **22**, and 5 / 3 / 2
-seeds retried in `BR` / `B0` / `B2`. Every ratio below is over these sets and says so.
+set of **22**; no arm retried on any of them. On lad 14 seeds are outside the set and 13 of them are
+configuration-invalid — no arm reached an accepted optimum there: on 2 every arm crashes, on 9 every arm
+exhausts VMCON's four-attempt retry ladder and finishes with `ifail = 5` (a finished run, counted *ok*
+in Table D.62 and *failed* in companion Table F.17), and on 2 `BR` exhausts the ladder while `B0`, `B1`
+and `B2` are refused by their coupling-state loop's 20-sweep cap (`ModuleSolveFailure`, block `FLAT` /
+`M1`, `current_drive.eta_cd_dimensionless_hcd_primary` at `inf`; `B0` 2, `B1` 3, `B2` 3 such exits in
+all). The fourteenth, seed 10, is the one start lost to the intervention arms alone: `BR` and `B0`
+accepted, `B1` and `B2` hit the cap. That leaves **11**, with accepted optima on 12 / 12 / 11 / 11 seeds
+per arm and 12 / 10 / 10 / 10 retried seeds per arm across the 25 offered (Tables D.62, D.65; companion
+Table F.17; `report_counts_check.py` §3). On st every start finished (25 of 25 per arm); one seed is
+configuration-invalid (every arm `ifail = 5` after four attempts) and two more are lost to one arm's
+`ifail = 5` each (`B2` on seed 5, `B0` on seed 10), so the set is **22**; 5 / 3 / 2 seeds retried in
+`BR` / `B0` / `B2`. Every ratio below is over these sets and says so. *(A80 corrected this paragraph:
+it had described the 13 as "2 crash in every arm and the rest fail to converge in at least one".)*
 
 **RQ2 — the partitioning inside the optimisation, `B0 → B2` (Tables D.73–D.75, headline Tables
 D.2–D.5).** `B2` costs **0.6395 / 0.4504 / 0.5331** of `B0`'s solve-phase model-node executions
@@ -808,9 +840,10 @@ ratio is 0.6594 pooled (0.5371 median, n = 10); nof has no retried seed and st's
 0.0010 / 0.0003 / 0.0004 of the flat arm's, the pulse node 0.3161 / 0.2182 (pooled; deferred on
 st), M3 0.7603 / 0.5438 / 0.6583, M1 0.6851 / 0.4671 / 0.6437, and M2 0.8691 / 0.5930 / 0.6680 —
 on nof the per-run median for M2 is 0.8765 with one run of 22 above 1 (bracket [0.761, 1.013]),
-and on lad the two seeds on which `B2` took more evaluations show as 2 of 11 runs above 1 in
-each of the M1, M2, M3 and pulse rows. The census total less its last row (the 63 / 63 / 21 / 24 calls per run outside
-the solve phase: the output path and the audit's sweep) is check 4's solve-phase total.
+and on lad the two seeds on which `B2` cost more in node calls (three took more evaluations, Table
+D.5) show as 2 of 11 runs above 1 in each of the M1, M2, M3 and pulse rows. The census total less its
+last row (the 63 / 63 / 21 / 24 calls per run outside the solve phase — 25 for `B2` on st, whose
+once-per-run set has four nodes: the output path and the audit's sweep) is check 4's solve-phase total.
 
 **The optimiser's path decomposes that ratio (Table D.5).** Per seed R = ρ × ε, where ε is the
 count of evaluations of the model set (`sweeps_per_eval.n_evaluations`) and ρ the node calls per
@@ -820,10 +853,15 @@ evaluation. The per-evaluation term is the stable one: ρ for `B2/B0` reads **0.
 evaluations in the median (mean 1.0437, 19 of 22 seeds above 1; 640 against 614.7 per run) while
 its iterations are the same (median 1.0000) — the lifted formulation's extra design variable adds
 a stencil column, and `B1` shows the same 640; on lad the median is 0.8468 (3 of 11 seeds above 1,
-up to 6.450, which is the mean of 1.4816); on st 1.0000 (5 of 22 above 1). The R rows reproduce
-check 4 (medians 0.6452 / 0.5237 / 0.5911). The ε = 1 expectation of §3.5 therefore holds in
-iterations and does not hold in evaluations on nof; it is the ownership rung's formulation, not the
-partition, that adds the column.
+the largest 6.450, which is why the mean reads 1.4816); on st 1.0000 (5 of 22 above 1). The R rows
+reproduce check 4 (medians 0.6452 / 0.5237 / 0.5911). **The ε = 1 expectation of §3.5 was pre-declared
+on `B1 → B2`, and there it holds exactly**: `B1` and `B2` take the same number of evaluations on 22 of 22
+and 11 of 11 seeds (Tables D.70–D.71, the `B1 → B2` row's *ε = 1 on* column, added by A80). The 1.0476
+above is `B0 → B2`, and it is the ownership rung's formulation — one design variable more, one stencil
+column more, (nvar + 2)/(nvar + 1) = 22/21 = 1.0476 on nof exactly — not the partition, that adds it; on
+lad the same rung reads 0.8468 because the lift shortens the optimiser's path (0.8125 iterations) by more
+than the column adds. *(A80: this paragraph had read the expectation against `B0 → B2` and called it
+refuted in evaluations.)*
 
 **The same optimum — check 1 (Tables D.67–D.69).** The paired relative objective difference
 `B0 → B2` is **2.823e-11 / 4.101e-07 / 3.467e-13** median and **4.570e-11 / 2.148e-06 /
@@ -838,9 +876,12 @@ the partition. On st the yardstick pair itself hops on 2 of 22 seeds and `B0 →
 is **1.0000 / 0.8125 / 1.0000**, PASS against ≤ 1.05 on every configuration; the ratio of sums
 0.9942 / 0.7012 / 0.9530. `B0 → B1` reads identically on the pulsed configurations (1.0000 /
 0.8125), so the partition adds no iteration; the final-attempt construction agrees on nof (0
-disagreeing seeds) and differs on lad and st where seeds retried (1 / 1 pairs). The tables'
-*evaluations median* column reads `n_model_calls` and is not ε (issue I-26); Table D.5 carries ε
-from the declared field.
+disagreeing seeds) and differs on lad and st where seeds retried (1 / 1 pairs). The tables' ε column
+reads `sweeps_per_eval.n_evaluations` since A80 closed issue I-26 — until then it read `n_model_calls`,
+the driver's count of dispatch-body sweeps, under a heading that said evaluations — and gives
+**1.0476 / 0.8468 / 1.0000** for `B0 → B2`, the same numbers as Table D.5's ε row, with ε exactly 1 on
+0 / 0 / 14 seeds; the sweep ratio it used to show is now its own column, **2.6524 / 2.1169 / 2.7767**,
+a mechanism (block sweeps over a third of the map) and not a cost.
 
 **The other rungs.** `BR → B0`, the stopping rule inside the optimisation, reads **0.9756 / 1.0300
 / 1.1968** pooled (Tables D.73–D.75); `B0 → B1`, ownership plus the removal of the output-time
@@ -857,10 +898,14 @@ maximum on the frozen ruler — every value far below τ = 1e-6 — against `B0`
 (the per-run components-above-τ column, companion Table F.48, reads 1 on two of its 23 runs;
 §5.7). The per-run components-above-τ columns are companion Tables F.47–F.49.
 
-**Cost beside the node calls.** The arrangement-method calls `B2` adds are 117 281 / 157 504 /
-280 776 summed over its 22 / 11 / 22 runs in the seed set (Tables D.73–D.75, a column of its own,
-never pooled into the node calls); per evaluation they are the 13.2 / 12.9 / 14.8 of Tables
-D.13–D.15. The output-time loop costs exactly two sweeps per run in `BR` and `B0` and none in `B1`
+**Cost beside the node calls.** The arrangement-method (prime) calls `B2` adds are one per sweep of
+the dispatch body — **5 331.0 / 14 318.5 / 12 762.5 per run** on average, 117 281 / 157 504 / 280 776
+summed over its 22 / 11 / 22 runs in the seed set (Tables D.73–D.75, two columns of their own, never
+pooled into the node calls; `report_counts_check.py` §6 finds the per-run count equal to the run's
+dispatch sweeps on every one of the 55 runs). Per evaluation that is about 8.3 / 8.4 / 9.1 (the per-run
+mean over Table D.5's ε), the optimisation's sweeps per evaluation — **not** the 13.2 / 12.9 / 14.8 of
+the displaced single evaluations (Tables D.13–D.15), whose entries sit 100× further from the fixed
+point. *(A80: the sentence had carried the evaluation phase's figure over.)* The output-time loop costs exactly two sweeps per run in `BR` and `B0` and none in `B1`
 and `B2`; the attempt-summation identity holds with residual 0 on every run that finished with
 status ok, while a crashed or unconverged start carries no solve-phase total and reads NO with no
 residual — both are per-run tables and are companion Tables F.15–F.22.
@@ -877,10 +922,12 @@ row of Table D.1); the recomputed tables themselves are companion Tables F.50–
 *Written 2026-09-14 by the orchestrating session from the rendered results only — the campaign
 population, 949 records at `57dc0c14`, rendered by `--plan-tables` from the stage records at
 `004eb06b` after A75 (campaign-tally-source); the table references were re-pointed at Appendix D's
-numbered tables by A79 (report-captions) on 2026-09-15, the numbers unchanged. Every number below
+numbered tables by A79 (report-captions) on 2026-09-15, the numbers unchanged; audited against the
+tables by A80 (report-accuracy-audit) the same day — every sentence it changed says so in place. Every number below
 is a cell of Appendix D or of the companion file; the table it comes from is named. Denominators:
-25 seeds offered per arm per configuration; Phase A tables are over 25 runs per arm (every
-evaluation finished), Phase B tables over the seed set on which every arm converged — 22 on
+25 seeds offered per arm per configuration; Phase A tables are over 25 runs per arm in the displaced
+regime and 20 / 19 / 14 per arm at the stencil points (every evaluation finished), Phase B tables over
+the seed set on which every arm converged — 22 on
 `large_tokamak_nof`, **11** on `low_aspect_ratio_DEMO`, 22 on `st_regression` (Tables D.64–D.66).
 The pre-declared expectations are §3.4 and §3.5's; where a measurement refutes one it is named so.*
 
@@ -893,7 +940,7 @@ low-aspect-ratio machine and the spherical tokamak, worse on 0 of 25 seeds each.
 figures were 0.522 / 0.568 / 0.502: reproduced to within a few hundredths, on a different entry
 construction. In the stencil regime the saving is smaller — **0.62 / 0.64 / 0.58** forward,
 0.64 / 0.66 / 0.56 backward — because a one-variable displacement from a fixed point leaves the flat
-arm little to iterate; the plan's transfer statement (§3.4) uses both regimes and both are on the
+arm little to iterate; the plan's transfer statement (§3.4–§3.5) uses both regimes and both are on the
 page. Matched accuracy holds and is not a near thing: at the audit position the restricted maximum
 scaled residual is **identical** for `A1` and `A2` on both pulsed configurations (median 3.8e-10,
 p90 1.7e-8 on the large tokamak; exactly 0 on every run of the low-aspect-ratio machine) and for
@@ -932,10 +979,13 @@ leaves the declared inconsistency: a burn-time residual at exit of 155 s / 526 s
 
 **`AR → A0` — the stopping rule (RQ4; Tables D.13–D.15 and D.25–D.27).** Upstream's
 objective/constraint test at its two-pass floor is cheaper per call than the coupling-state test at
-τ on two configurations (0.97 and 0.84 pooled against `A0`; equal on the low-aspect-ratio machine,
-where both stop after exactly five sweeps on every seed) — and it stops **further from the fixed
-point**: `AR`'s restricted residual is 2.6e-8 / 1.5e-7 median against `A0`'s 5.0e-10 / 5.4e-9 on the
-large and spherical tokamaks, a factor of 30–50, and 0 against 0 on the low-aspect-ratio machine.
+τ on two configurations (0.90 and 0.84 pooled against `A0` — on the large tokamak Table D.13's
+ratios are against `A1`, 0.9688 for `AR` and 1.0781 for `A0`, whose quotient is the 0.8986; 0.8425
+directly on the spherical tokamak; equal on the low-aspect-ratio machine, where both stop after
+exactly five sweeps on every seed) — and it stops **further from the fixed point**: `AR`'s
+restricted residual is 2.6e-8 / 1.5e-7 median against `A0`'s 5.0e-10 / 5.4e-9 on the large and
+spherical tokamaks, a factor of 52 and 29, and 0 against 0 on the low-aspect-ratio machine. *(A80:
+the sentence had read "0.97 and 0.84 against `A0`" — the 0.97 is against `A1` — and "30–50".)*
 That is what the predicate-matched control is a control *for*: `B0` is `BR` with a stopping rule
 that reaches a stated accuracy, so that every rung above it compares arms at matched accuracy.
 
@@ -957,39 +1007,49 @@ headline: `B2` costs **0.640 / 0.450 / 0.533** of `B0`'s solve-phase model-node 
 construction and 25 seeds. Without the retried seeds the low-aspect-ratio ratio is 0.66 pooled
 (0.54 median), the reading §3.5 asked for beside the pooled one. `BR → B0` reads 0.976 / 1.030 /
 1.197 pooled against the expected 0.98 / 1.03 / 1.16. The `ε = 1` expectation holds where it was
-pre-declared: the summed-over-attempts iteration median is identical for `B1` and `B2` on both pulsed
-configurations (1.000 and 0.8125), so the partition changes what an evaluation costs and not how many
-the optimiser takes. The dispatch runs 2.7 / 2.1 / 2.8 times as many sweeps per run in `B2` (block
-sweeps, each over a third of the map), which is the mechanism, not a cost.
+pre-declared and in the quantity it was declared in: `B1` and `B2` take exactly the same number of
+evaluations on every seed of the set — 22 of 22 and 11 of 11 (Tables D.70–D.71, the `B1 → B2` row) —
+and the same summed iterations (1.000 and 0.8125 against `B0` for both), so the partition changes what
+an evaluation costs and not how many the optimiser takes. The dispatch runs 2.7 / 2.1 / 2.8 times as
+many sweeps per run in `B2` (the *sweeps median* column of Tables D.70–D.72, 2.6524 / 2.1169 / 2.7767:
+block sweeps, each over a third of the map), which is the mechanism, not a cost.
 
 **Refuted or qualified expectations, named.** (a) **Same optimum (check 1) FAILs on the
 low-aspect-ratio machine**: `B0 → B1` and `B0 → B2` both read a paired relative objective difference
 of 4.1e-7 median (passes) and **2.15e-6 p90 (fails the 1e-6 floor)**, with 1 hop of 11 and 2 pairs
 below cluster resolution; `BR → B0`'s yardstick is 2.0e-13. Since `B1` and `B2` read the same `r`
 to every digit, the difference sits on the ownership rung `B0 → B1` — the lifted formulation lands
-on a slightly different optimum on 2 of 11 seeds — and not on the partition. On the large tokamak
+on a different optimum on 3 of 11 seeds: the 2 pairs below cluster resolution (1.26e-6 and 2.15e-6
+relative) and the 1 hop between objective clusters, 3.1e-4 relative, on the one seed of the set on
+which `B0` retried (`report_counts_check.py` §11; Table D.68's *hops*, *below resolution* and *retried*
+columns) — and not on the partition. On the large tokamak
 (2.8e-11 / 4.6e-11) and the spherical tokamak (3.5e-13 / 3.5e-9) check 1 PASSes with margin.
-(b) **The low-aspect-ratio seed set is 11 of 25.** Thirteen seeds are configuration-invalid: 2
-crashed in every arm (§5.7), and the rest failed to converge in at least one arm, with 10–12 retried
-seeds per arm. Every low-aspect-ratio ratio above is over n = 11 and says so.
+(b) **The low-aspect-ratio seed set is 11 of 25.** Fourteen seeds are outside the set, 13 of them
+configuration-invalid — no arm reached an accepted optimum there: 2 crashed in every arm (§5.7), 9
+exhausted VMCON's four-attempt retry ladder with `ifail = 5` in every arm, and on 2 the incumbent
+exhausted the ladder while the three coupling-state arms hit their loop's 20-sweep cap. The fourteenth
+(seed 10) is the one start lost to the intervention arms alone (§4.3). The 10–12 retried seeds per arm
+are mostly those ladder exhaustions. Every low-aspect-ratio ratio above is over n = 11 and says so.
 
 ### 5.2 The transfer (RQ3)
 
 Phase A's per-call ratio against the realised Phase B ratio, pooled: 0.56 → 0.64 (large tokamak),
 0.58 → 0.45 (low aspect ratio), 0.50 → 0.53 (spherical). The transfer factor is 1.14, 0.78 and 1.06:
-Phase A under-predicts the saving on one configuration and over-predicts on two, by up to a fifth.
-The factor decomposition that §3.4 declares — per-evaluation cost × evaluation count × the entry
+Phase A under-predicts the saving on one configuration and over-predicts on two, by up to 22 %.
+The factor decomposition that §3.5 declares — per-evaluation cost × evaluation count × the entry
 regime × ownership — is on the page (the stencil-regime per-call ratios 0.62–0.66 sit closer to the
 realised 0.64 on the large tokamak than the displaced-regime 0.56 does; the iteration multiplier is 1
 on two configurations and 0.81 on the third), but attributing the residual to one factor is issue
 **I-17**, which the user has reserved. What the campaign settles is that the transfer is not
 systematic in sign, exactly as V3's assessment (§2.2) said, and that Phase A's displaced-regime ratio
-is a predictor good to ±20 % here.
+is a predictor good to within 22 % here (the transfer factors are quotients of the pooled cells of
+Table D.7's TOTAL rows and Tables D.73–D.75, not cells themselves).
 
 ### 5.3 The stopping rule (RQ4)
 
-Covered in §5.1 (`AR → A0`): upstream's test stops 30–50× further from the coupling-state fixed
-point on two configurations and at the same place on the third, for a per-call saving of 3–16 %.
+Covered in §5.1 (`AR → A0`): upstream's test stops 52× and 29× further from the coupling-state fixed
+point on two configurations and at the same place on the third, for a per-call saving of 10 % and
+16 % (0 on the third; `report_counts_check.py` §8, from Tables D.13–D.15 and D.25–D.27).
 `BR → B0` in the optimisation reads 0.98 / 1.03 / 1.20 — the coupling-state test costs up to a fifth
 more on the spherical tokamak, where `BR` also retries more seeds (5 against 3). The control is
 therefore a control for *accuracy*, bought at that price, and the headline ratios are stated against
@@ -1002,7 +1062,7 @@ schedule pass reaches the flat fixed point bit for bit once the blocks are solve
 campaign's `B2` (the partitioned arm) exit audit is consistent with that: 0 components above τ at the accepted point on
 every converged run on every configuration (Tables D.76–D.78; the per-run column is companion
 Tables F.47–F.49), with the spherical tokamak's
-`B2` restricted median 7.5e-12 against `B0`'s 4.9e-14 — three orders larger, both far under
+`B2` restricted median 7.5e-12 against `B0`'s 4.9e-14 — a factor 150, two orders, both far under
 τ = 1e-6.
 
 ### 5.5 The per-sweep overhead
@@ -1019,26 +1079,39 @@ evaluation.
 
 `frozen` against `mixed` (companion Table F.13; the gate row is in Table D.1): on every pair tried
 the two rulers' runs are
-bit-identical and no decisive pass changed its verdict (0 verdicts changed over 9–15 predicate
-evaluations per run). The `mixed` ruler reads the same run's residual smaller (by up to 8× on the
-large tokamak's `A2`), so a threshold stated on it would be a looser threshold; the experiment's
-τ is stated on `frozen` and nothing in §4 depends on the choice. The trial changes nothing here and
-records that a future revision adopting `mixed` must restate τ.
+bit-identical and no decisive pass changed its verdict (0 verdicts changed over 8–16 predicate
+evaluations per run). The `mixed` ruler reads the same run's exit residual smaller (by up to 5.4× on the
+large tokamak's `A2`, seed 1: `0x1.f5b2a3ea40bd7p-1` against `0x1.774db44e2d2b1p-3`;
+`report_counts_check.py` §9 over the 9 pairs whose residual is not 0), so a threshold stated on it would
+be a looser threshold; the experiment's τ is stated on `frozen` and nothing in §4 depends on the choice.
+**The pre-declared adoption rule of §3.6 was not applied.** It reads: gates 1–3 pass and the
+measurement is neutral → `mixed` is adopted as V4's predicate and audit ruler. Gate G8 passed with its
+teeth and the 12 pairs it measured were neutral, so the rule as written adopts `mixed`; the campaign
+was pressed and is reported on `frozen`, and the trial's measurement was also smaller than §3.6
+declared (`A0`/`A2` at 2 seeds as a gate, not `A0`/`A1`/`A2` at 25 seeds in the campaign). The
+departure is recorded here (A80, 2026-09-15) for the user's ruling — a dated amendment either way —
+rather than adopted retroactively: nothing in the tables moves with the ruler except the exit-audit
+columns, which are printed on both. A future revision adopting `mixed` must restate τ.
 
 ### 5.7 Robustness events, reported without a robustness claim
 
-Twenty-eight of 275 optimisations crashed (Tables D.61–D.63; the failure tables are companion
-Tables F.14, F.17 and F.20), all with PROCESS's own
+Twenty-eight of 275 optimisations did not finish (Tables D.61–D.63; the failure tables are companion
+Tables F.14, F.17 and F.20): 20 crashed with PROCESS's own
 `RuntimeError: Failed to converge after 50 iterations, value is nan` from a model-internal Newton
-solve at a displaced start. On the large tokamak seeds 5, 20 and 21 crash in **all four arms** —
+solve at a displaced start, and 8 — on the low-aspect-ratio machine only — were refused by their
+coupling-state loop's 20-sweep cap (the harness stamps both `crashed`; the taxonomy tables split them;
+*A80: the sentence had read "crashed … all with PROCESS's own RuntimeError"*). On the large tokamak seeds 5, 20 and 21 crash in **all four arms** —
 configuration hardness, dropped paired. On the low-aspect-ratio machine `BR` crashes on 2 seeds,
 `B0` on 2 plus 2 unconverged, `B1` and `B2` on 2 plus 3 unconverged; the unconverged ones are the
 block solver's own exit (`ModuleSolveFailure: block FLAT / M1 did not converge in 20 sweeps`,
 `current_drive.eta_cd_dimensionless_hcd_primary` at `inf`), and on the same variable `BR` reaches
 the audit with an infinite residual on 2 runs. The spherical tokamak loses no seed to a crash. The
-intervention arms therefore fail on 1–3 more low-aspect-ratio starts than the incumbent, on a
-variable the incumbent also cannot hold finite; the plan makes no robustness claim and this report
-makes none.
+intervention arms therefore do not finish on 5 low-aspect-ratio starts against `B0`'s 4 and `BR`'s 2,
+on a variable the incumbent also cannot hold finite; counted in accepted optima the difference is one
+start — 11 for `B1` and `B2` against 12 for `BR` and `B0` (seed 10, §4.3) — because on the other lost
+seeds no arm reached one: 9 of them are VMCON exhausting its retry ladder (`ifail = 5` after four
+attempts) in every arm, a failure the taxonomy tables count as finished (`report_counts_check.py` §3).
+The plan makes no robustness claim and this report makes none.
 
 ### 5.8 Threats to validity that survived the design
 
@@ -1049,9 +1122,12 @@ makes none.
 - **Location non-identification:** correctness is gated on `norm_objf` and the feasibility audit
   (D6), never on iteration variables; two optima closer than 1e-5 relative are "below resolution",
   and 2 such pairs are counted on the low-aspect-ratio machine.
-- **The prime's excluded cost:** `n_arrangement_method_calls` is 13 per evaluation in `A2` and
-  117 281 / 157 504 / 280 776 per optimisation in `B2` (Tables D.73–D.75, column "arrangement·method
-  calls"), stamped beside every node-call table and never pooled into it (D19). A reader who
+- **The prime's excluded cost:** `n_arrangement_method_calls` is 13.2 / 12.9 / 14.8 per evaluation in
+  `A2` (Tables D.13–D.15) and 5 331 / 14 319 / 12 763 per optimisation on average in `B2` — one per
+  dispatch sweep; 117 281 / 157 504 / 280 776 summed over the 22 / 11 / 22 runs of the seed set (Tables
+  D.73–D.75, columns *arrangement·method calls / run* and *Σ over the set*; *A80: the sentence had
+  called the sum "per optimisation"*), stamped beside every node-call table and never pooled into it
+  (D19). A reader who
   weights the prime as a model node must add it; it is not a model node.
 - **The written file** carries a post-write value of `tfcoil.insstrain` 0.7 % off the accepted
   state in every Phase B arm (A67, I-21); no acceptance quantity reads it.
@@ -1072,15 +1148,16 @@ costs **0.640 / 0.450 / 0.533** of the control's solve-phase model-node evaluati
 0.81 / 1.00 — **accepted** against ≤ 1.05) and the lifted constraint closed. **Same optimum:
 accepted** on the large and spherical tokamaks (paired relative objective difference ≤ 4.6e-11 /
 3.5e-9 at p90), **not accepted** on the low-aspect-ratio machine (2.15e-6 at p90 against the 1e-6
-floor, 1 hop of 11), where the difference sits on the ownership rung and not on the partition.
+floor; 3 of 11 pairs above the floor, 1 of them a hop between objective clusters at 3.1e-4), where the
+difference sits on the ownership rung and not on the partition.
 
 **RQ3 — transfer.** Phase A's displaced-regime per-call ratio predicts the realised optimisation
 ratio to within 1.14 / 0.78 / 1.06; the transfer is not systematic in sign. The attribution to one
 factor is I-17, reserved by the user; the terms it needs are on the page.
 
-**RQ4 — the stopping rule.** Upstream's objective/constraint test saves 3–16 % of model-node
-evaluations per call against the coupling-state test at τ = 1e-6 and stops 30–50× further from the
-fixed point on two configurations (identical on the third); in the optimisation the coupling-state
+**RQ4 — the stopping rule.** Upstream's objective/constraint test saves 10 % and 16 % of model-node
+evaluations per call against the coupling-state test at τ = 1e-6 and stops 52× and 29× further from the
+fixed point on those two configurations (0 % and identical on the third); in the optimisation the coupling-state
 control costs 0.98 / 1.03 / 1.20 of the incumbent. The control buys stated accuracy at that price.
 
 **RQ5 — the trust step.** Not measured by a V4 arm; A43's answer on V3's records stands and the
@@ -1089,9 +1166,10 @@ campaign's `B2` exit audits (0 components above τ on every converged run) are c
 **The sentence the experiment licenses about §1.2:** *with every physics and engineering model
 byte-identical to upstream, rearranging the driver alone — solving the models in three blocks with
 the burn time owned by the optimiser — reaches the same accepted optimum on two of three
-configurations at 0.53–0.64 of the model evaluations, and a different optimum within 2.2e-6 relative
-on the third at 0.45; the per-call saving of roughly half measured without the optimiser transfers
-to the optimisation to within a fifth.*
+configurations at 0.53–0.64 of the model evaluations, and on the third, at 0.45, the same optimum on
+8 of 11 seeds and a different one on 3 (2.15e-6 relative at the p90; 3.1e-4 on the one seed that
+changes objective cluster); the per-call saving of roughly half measured without the optimiser
+transfers to the optimisation to within 22 %.*
 
 **The sentence it does not license:** that the partitioned architecture is more robust, or that it
 would save wall-clock time — no conclusion here rests on a timing, and on the hostile configuration
@@ -1119,10 +1197,11 @@ package's internals are the implementation plan's.*
 | `experiment_runner.py` | one-button entry point: `--selfcheck`, `--gate`, `--measure`, `--plan-tables write\|check`, `--smoke`, `--campaign`, `--jobs`; refused the campaign until approved |
 | `RESULTS_TABLES_FULL.md` | the companion file of Appendix D: every full result matrix (per-run, per-seed and per-pair tables, the full versions of tables whose per-seed columns the report omits, the second implementation's tables), numbered `Table F.n`, generated whole by `--plan-tables write` and guarded by `--plan-tables check`; never hand-edited (A79 (report-captions), 2026-09-15) |
 | `harness_survey.py`, `run_stamp_survey.py`, `merged_names_check.py` | surveys of the harness's own documents and run stamps; the merged-names check |
+| `report_counts_check.py` | every count the report states — the 949 / 921 / 28, the 25 per arm, the seed sets 22 / 11 / 22 with every seed outside them by arm and disposition, the crash taxonomy by seed, the retried seeds, the prime-calls-per-sweep identity, ε on `B1 → B2` per seed, `AR/A0`, the predicate trial's ruler ratio, the 30 gates / 161 teeth — re-derived from the records through the harness and printed beside the report's figure (A80 (report-accuracy-audit), 2026-09-15) |
 | `results_cells_unchanged.py`, `caption_census.py`, `renamed_section_diff.py` | proofs over the report itself: that every cell of the old §4 is a cell of Appendix D or the companion file, unchanged (A79); the table and caption census before/after (A79); the names-only diff of A78's re-rendering (reads the pre-A79 markers) |
 | `PROCESS/` | V4's own copy of the PROCESS package (D20); every V4 driver change lives here; `models/` frozen at `c0ae5b28`, gated. `PROCESS/PROVENANCE.json` names the source commit (`f2dc9243`) and every file's sha256; `PROCESS/copy_gates.py` is the copy-identity gate, G0′ and the smoke import, nine teeth (A46 (process-copy), merged 2026-09-10) |
 | `PROCESS_diff.py` | shows every change the experiment made to PROCESS: a `git diff` of `PROCESS/process/` against the copy's source commit, grouped by file with a plain-language overview (user, 2026-09-10) |
-| `harness/` | the self-contained package (per the implementation plan): `core/`, `experiment/`, `child/`, `gates/`, `measurement/`, `chain.py`; every verification gate and every measurement stage is implemented here (its own `README.md` is the map) |
+| `harness/` | the self-contained package (per the implementation plan): `core/`, `experiment/`, `child/`, `gates/`, `measurement/`, `data/` (the committed per-configuration artifacts and input files), `reference/` (the committed reproduction reference), `chain.py`; every verification gate and every measurement stage is implemented here (its own `README.md` is the map) |
 | `runs/` | untracked bulk artifacts |
 | `.gitignore` | `runs/` untracked; the copy's `.dat` files re-included against the repository-root `*.dat` pattern (added at A46's merge) |
 
@@ -1135,20 +1214,27 @@ it, or why not.*
 |---|---|---|
 | 0 prime inside the intervention; `A1u` retired | §3.2, §3.3 | decided (user) |
 | 1 `AR`/`BR`; `unconverged-at-cap`; G0 refusal | §3.3, §3.4 check 4, §3.9 | decided (user) |
-| 1a second amplitude | §3.4, §3.10 | recommendation (a) |
+| 1a second amplitude | §3.4, §3.10 | ruled (a): the stencil regime, not δ = 0.001 (D21, 2026-09-10); as built 2·nvar points per arm and sign (§3.4) |
 | 1b `MDA_Output` out of the intervention arms | §3.3, §3.9 G9 | decided (user); driver change (d) |
 | 1c the pinned flat arm, `A1` (the list names it as of 2026-09-10; Appendix C, 2026-09-15) | §3.2, §3.3, §3.4 | decided (user) |
 | 1d naming | §3.2 | decided (user; `per_call`) |
-| 2 empty blocks / nodes | §3.3 | driver change (d) |
-| 3 per-sweep counters | §3.5 check 5 | driver change (d) |
-| 4 objective/structure confound | §3.7 (b) | open |
+| 2 empty blocks / nodes | §3.3 | **rejected** under (d): left as is and disclaimed (D21, 2026-09-10); the sweep share is 0 / 0 / 10.84–11.30 % |
+| 3 per-sweep counters | §3.5 check 5 | accepted under (d); built (A58 (driver-predicate-counters), 2026-09-10); the hypothesis it tested is **closed in the negative** on counts — the list's heading says so |
+| 4 objective/structure confound | §3.7 (b) | ruled: no fourth configuration in V4, disclosed in every cross-configuration caption (D21 (b), 2026-09-10); it bites on lad at p90 (§5.1 (a)) |
 | 5 clusters vs floor | §3.5 check 1b | declared resolution category |
-| 5a predicate trial | §3.6, §3.9 G8 | pre-declared; driver change (d) |
-| 5b one seed set, one format | §3.5, §3.7 (c) | recommendation (c) |
+| 5a predicate trial | §3.6, §3.9 G8 | built (A59 (driver-predicate-mode), 2026-09-11); ran as gate G8 on 12 pairs: neutral, 0 verdict changes; **the adoption rule was not applied** — §5.6, awaiting the user's ruling |
+| 5b one seed set, one format | §3.5, §3.7 (c) | accepted (D21 (c), 2026-09-10); as built in every optimisation-phase table |
 | 6 within-cluster in both implementations | §3.5 check 1a | absorbed |
 | 6a class-level classification; read census; Phase A provenance; G4 per namespace | §3.8 (ii), §3.9 G4 | absorbed |
 | 7 G1–G3c at the campaign commit | §3.9 | absorbed |
 | 8 V3's joint-test arm (V3's `B2`, not today's) in the DSM overlay | — | **dropped** with that arm (user, 2026-09-10) |
+| 9, 10 (A43's candidates: sub-tolerance injection; permutation control) | — | not in V4's method; open on the list |
+| 6b the trace instrument's argmax on a zero residual (A43) | — | not in V4's method; open on the list |
+| 11 `tfcoil.insstrain` above τ at the accepted point | §3.3 | diagnosed as an instrument artefact (A61, `fd480aff`) and, in the written file, as PROCESS's own 0.7 % gap (A67, I-21); no acceptance quantity reads it |
+| 12 G4's doctored runs bypass `--resume` | — | discharged (A71, `24e5fe2f`) |
+| 13 G1's `--resume` press rewrites the manifest's commit | — | discharged (A73, `4ca8cff5`) |
+| 14 δ at seed 0 composed two ways; 15 a never-bound name found only by a press | — | filed 2026-09-14 (A72, A73); open on the list |
+*(Rows 9–15 and the statuses of 1a, 2, 3, 4, 5a and 5b brought to the list's current state by A80 (report-accuracy-audit), 2026-09-15; the list is the authority on each item's state.)*
 
 ## Appendix C — Change log
 
@@ -1275,6 +1361,7 @@ joint-test arm, not today's partitioned optimisation arm (the renaming entry of 
 | 2026-09-15 | **A76 (fixed-point-distance): the between-arm distance of the evaluation phase's fixed points, added to the analysis from the campaign's exit states** (the user, 2026-09-15: *"add the between-arm distance of phase A as an additional analysis to the analysis scripts, and add the results to the report"*). §4.2 gains a *fixed-point distance* table beside each matched-accuracy table — the predicate's own residual evaluated between two arms' `y_exit.json` at the same entry, restricted to the components the once-per-run nodes do not write (the audit's own exclusion, re-derived and checked against the digest the audit stamped), one row per rung of the ladder with the headline pair marked; `stats.fixed_point_distance` is the declaration, `tally_evaluation.fixed_point_distance` computes it through `harness/child/predicate.py`, `analysis._fixed_point_distance` re-derives it from the artifacts and the hex literals importing no line of the predicate. **Reported, not accepted on**: no acceptance rule was pre-declared. Zero PROCESS runs; 0 of 1 096 run records re-made. Gates re-pressed with `--resume`: `recomputation` 13 174 compared / 0 mismatched over 93 tables (from 12 715 / 84 — the 459 new cells are the nine distance tables), `tally_contracts` 279 / 0 with an eleventh tooth (one exit state doctored in a scratch copy: a kept component moved by 1e-3 of its scale raises the restricted distance to 1.000e-3 and counts the pair above τ; an excluded one moved past the whole-state maximum leaves the restricted distance at 1.523e-10 and carries the whole-state column), `run_kind_separation` 2 994 / 0, `self_containment` 52 / 0; §4.1 reads 30 PASS, 156 of 156 teeth; self-check PASS. §5.1 gains one paragraph under the `A0p → A1` rung, from §4 cells only. Not renamed here: the arms keep their current names (A78 (arm-renames) follows). |
 | 2026-09-15 | **A78 (arm-renames): the arms renamed so the rungs read rung for rung — `A0p → A1`, `A1 → A2`, `B3 → B2`; `AR/A0/A1/A2` against `BR/B0/B1/B2`** (the user, 2026-09-15: *"In the v4 report, rename A0p and A1 to A1 and A2, and B3 to B2. That makes the naming of the rungs reflect the parallelism in the switch matrix … it should be applied consistently throughout the v4 folder"*). A rename, not a method change: no number changed. Applied in place in §1–§3, §5–§6 and Appendices A–B; §4 re-rendered by `--plan-tables write` after the tally stages were re-run over the same 949 campaign records (`check` IDENTICAL); every mention of V3's removed joint-test arm now reads "V3's `B2`" so today's `B2` cannot be read as it; §2.1 quotes V3's results under V3's names and says so; this appendix's earlier entries keep their day's names (the line at its head). Harness: the matrix, the registry's V3 name map (`switches.PREVIOUS_ARM_NAMES = {R: BR, A1: A2, B3: B2}`), every gate, both tallies, the analysis, the README, `PROCESS/CHANGES.md` (no `.py` under `PROCESS/` changed: `copy_identity` and `g0prime` PASS). **The records were not re-made.** The 949 campaign records and the 139 seeded gate records stamp the old names; one declared table, `records.RECORDED_ARM_NAMES`, is applied in `records.read` — the one reader — so every consumer sees today's names; a record made after the renaming stamps `arm_naming` (by the pool) and is read as written; a translated record's `job_digest` is re-derived over the translated identity, the stamped one kept in the in-memory trace `arm_name_translation`; the pool resolves a job's directory by that digest (`pool.directory_for`) where a record exists and refuses to remove another job's record; a record naming an arm nobody declared is refused by name. Gate `resume_identity` surveys every record by how its name was read — 1099 records: 458 translated (`A0p → A1` 132, `A1 → A2` 233, `B3 → B2` 93), 641 unchanged or stamped, 0 refused — and has four new teeth (160 teeth in all). `--jobs all`: 1075 distinct jobs, `--resume` would keep 1044 before and after the renaming (the 31 not kept are the 28 crashed campaign optimisations and G5's three hand-composed jobs, both as at the base). The reproduction reference's `arm` fields regenerated names-only (`reference.py --rename-arms`; 9 fields, 3 provenance keys) and GR pressed once: 256 / 0. **The press in this worktree (`--gate all --resume`, then the gates the stopped chain did not reach, one press each): 30 PASS, 0 FAIL, 161 of 161 teeth** — after one fix on the branch: at the first press `switch_composition` (G5) FAILed 3 of 141, its kept from-the-matrix records (`0677a9b3`, made in the A73 worktree) against its hand-composed records re-made here differing only in `resolved_switches`' absolute artifact paths under the two worktrees, every physics value equal; the gate now compares those paths relative to the experiment directory of the record that carries them (its own `tree` stamp), with a tooth (a resolved value flipped disagrees; the paths re-rooted under another worktree agree), and the pool renders path-valued `override_env` identity entries tree-relative so the hand-composed job's identity — the reason `--jobs all` at the base listed those three jobs "no record on disk" in every worktree but A73's — is portable (digest changed for those 3 jobs only; `--jobs all` keeps 1044 of 1075 before and after, 1047 once their records exist). G5 pressed once after: 141 / 0. Runs made: 7 (G7's tooth evaluation, re-made by design every press; G5's three hand-composed `B2` optimisations twice — once under the old identity, once under the portable one, ~29–52 s each); every other record kept, 1096 → 1102. §4 against the base with the names reversed (`renamed_section_diff.py`): 1439 tokens reversed, 13 of 4966 line positions differ, all of them the §4.1 gate table and marker re-made by this press (the new records and their commits, `resume_identity`'s new population, the census entry pressed as `optimisation`, G8's excluded-value count 240 → 294 from the translation trace) — 0 in a measurement cell. |
 | 2026-09-15 | **A79 (report-captions): the report's presentation brought to an academic paper's** (the user, 2026-09-15: *"Captions in the report should be much more concise a few lines at most. the rest should be clear from the main text"*; *"the report should mimic academic paper style in terms of how the captions are handled"*; *"move the big tables to an appendix (with some explanation/context there), report only the conclusions in the main text"*; *"there should simply not be any tables listing results per seed. I don't want full result matrices, but summarizing tables"*; the three headline shapes of `docs/plans/REPORT_HEADLINE_TABLES.md`). **§4 is now hand-written conclusions** — per research question and rung, the numbers that carry a verdict, each pointing at its table by number — and **the rendered tables are Appendix D — Results tables**: 80 summarising tables numbered `Table D.1`–`D.80` (the gate table; the three headline shapes as Tables D.2–D.9 — node calls per module per configuration with per-run brackets, pooled `B2/B0`, per-run median and the runs `B2 > B0`; the optimiser's path over the configurations as iterations, ε from `sweeps_per_eval.n_evaluations` (issue I-26's field), ρ and R = ρ × ε; node calls per block, configurations stacked, per evaluation-phase source; then cost per call, matched accuracy, fixed-point distance, the ownership rung, the failure taxonomies, the seed sets, checks 1–4 and the accepted-optimum accuracy), each under **one caption of a few lines** (median 368 characters, at most 485 — `caption_census.py`), with every construction's declaration printed once in D.0 from the stages' own records and a hand-written context paragraph per group. **No table with a row per run, seed, pair of runs or predicate evaluation is in the report**: the per-sweep overhead (both phases), the attempt-summation identity, the failure table and the predicate trial, the full versions of the five table kinds whose per-seed columns the report omits, and the second implementation's 101 tables are rendered, unchanged in content, into the generated companion file [`RESULTS_TABLES_FULL.md`](RESULTS_TABLES_FULL.md) as `Table F.1`–`F.150`, guarded by the same `--plan-tables check`, which now compares both documents and resolves every `Table D.n` / `Table F.n` reference in the hand-written text. The doubled-caption defect (373 `*Caption:` lines for 187 tables at `4dac585e`: the record's `markdown` carried the caption and the renderer printed it again) is fixed at its cause — the record carries the grid alone. The pooled `n = 100` line under per-row tables is gone. §3's tables are `Table 1`–`Table 6`, Appendix A's and B's `Table A.1` / `B.1`, with captions of a few lines. §5's and §6's table references re-pointed at the numbered tables; no number in them changed. **No number changed:** `results_cells_unchanged.py --base 4dac585e` — every one of the 33 467 cells of the old §4 is a cell of Appendix D or the companion file with the same value (0 absent, 0 differing); the 16 new tables (8 tally + 8 recomputed) are the headline shapes; the gate table's `recomputation` row moved from 93 tables / 13 174 cells to 101 / 14 394 because the table set grew, and `tally_contracts` correspondingly. Records translate arm names at read; the tally stages were re-run over the same 949 records at `57dc0c14`, **0 PROCESS runs**. |
+| 2026-09-15 | **A80 (report-accuracy-audit): the report audited sentence by sentence against Appendix D and the companion file** (the user: *"critically reassess the accuracy of the experiment_report v4"*); the findings table is `docs/reports/A80_report_accuracy_audit.md`. **Corrected in place** (each corrected sentence says so): the population — 28 records stamped `crashed` are 20 PROCESS `RuntimeError` crashes and 8 refusals by the coupling-state loop's 20-sweep cap, not "28 crashed … all with PROCESS's own RuntimeError" (header, §4, §5.7); the low-aspect-ratio seed set — 14 seeds outside, 13 configuration-invalid, of which 9 are VMCON exhausting its retry ladder with `ifail = 5` in every arm and 2 the incumbent's ladder exhaustion beside the coupling-state arms' cap, and one seed (10) lost to the intervention arms alone; accepted optima 12 / 12 / 11 / 11 per arm (§4.3, §5.1 (b), §5.7); **the pre-declared `ε = 1` expectation is on `B1 → B2` and holds exactly on 22 of 22 and 11 of 11 seeds** — §4.3 had read it against `B0 → B2` and called it refuted in evaluations, §5.1 had substituted iterations for evaluations (the `B1 → B2` row the plan's §3.5 declared "reported beside" is now in Tables D.70–D.72, with an *ε = 1 on* column); `AR → A0`'s per-call saving is 10 % / 0 / 16 % and its residual factor 52× / — / 29×, not "3–16 %" and "30–50×" (§5.1, §5.3, §6 RQ4; §5.1's "0.97 against `A0`" was against `A1`); check 1 on lad differs on 3 of 11 seeds with the worst pair 3.1e-4 on the one retried seed, not "2 of 11" and not "within 2.2e-6" (§5.1 (a), §6); the transfer factor 0.78 is 22 % off, not "a fifth" / "±20 %" (§5.2, §6); `B2`'s st exit residual is two orders above `B0`'s, not three (§5.4); the predicate trial ran 8–16 evaluations per run and the rulers differ by up to 5.4×, not 9–15 and 8× (§5.6); the prime calls of Tables D.73–D.75 are a sum over the seed set, 5 331 / 14 319 / 12 763 per optimisation on average and 8.3 / 8.4 / 9.1 per evaluation, not "per optimisation" and not the evaluation phase's 13.2 / 12.9 / 14.8 (§4.3, §5.8); `copy_identity` is the second PASS row with a nonzero mismatched count (7 permitted-edit files; §4.1); G1's 54 144 are 2 825 record values + 51 319 output-file lines and `tally_contracts`' 559 are 303 + 256, now shown in the cell (§4.1, D.1); the evaluation-phase denominators are 25 per arm in the displaced regime only — 20 / 19 / 14 at the stencil points, 1 in the entry reference (§4 intro, §4.2, §5 intro); "63 / 63 / 21 / 24" outside the solve phase is 25 for `B2` on st; the 2 lad seeds above 1 in Tables D.2–D.4 are node calls, 3 took more evaluations (§4.3). **As-built brackets in the plan (§3, text unchanged):** the stencil regime is 2·nvar points per arm — no lifted column exists in Phase A — 396 evaluations, not 418 (§3.4, §3.10); the predicate trial ran as gate G8 on 12 pairs, not 150 campaign runs, and **its pre-declared adoption rule was not applied** — neutral on a passed gate adopts `mixed`, the campaign ran on `frozen`; recorded in §5.6 for the user's ruling (§3.6, §3.10, App. B item 5a); G7's teeth 9/9 not 5/5 and G5's compared set as built (Table 5); the 20-sweep cap binds the flat control's one block too (Table 6); §3.5's transfer identity still spelled `B3` — renamed `B2`; the format-review and "every table in §4" sentences bracketed (§3.7, §3.8 (iii)). **Appendix D and the companion, through the renderer only:** issue **I-26 closed** — check 2's evaluation column reads `sweeps_per_eval.n_evaluations` (ε) in `tally_optimisation.py` and `analysis.py`, the old `n_model_calls` ratio kept beside as *sweeps median*, the plan's `B1 → B2` row added, the `n_model_calls` schema sentence in `records.py` corrected (the driver's sweep count, not evaluations); check 4 gains *arrangement·method calls / run* beside the sum; Table D.5's caption states n per configuration, never summed (D21 (b)); the gate table shows a summed *compared* count's parts and names both nonzero-mismatched PASS rows; the predicate-trial declaration's dangling "§4.2.5" re-pointed. Gates re-pressed with `--resume` at `86430cb6` and `1f378e58`: `recomputation` 14 445 compared / 0 mismatched over 101 tables (from 14 394; the 51 new cells are the new columns and rows), `tally_contracts` 559 / 0 (303 + 256), `run_kind_separation` 3 000 / 0, `self_containment` 52 / 0; `--measure gate_table --resume` 30 PASS, 0 FAIL, 161 of 161 teeth; `--plan-tables write`, `check` IDENTICAL, 80 tables in Appendix D before and after (no number shifted, T17), 150 in the companion; stamp survey before and after: 1 102 records, 0 whose commit changed, 0 new — **0 PROCESS runs**. Every count the report states re-derived from the records by `report_counts_check.py` (committed) and printed beside the report's figure; the two `y_exit.json` files under the campaign tree that are not campaign records are the lifted-input derivation's baseline evaluations (`input_files/<configuration>/baseline_evaluation/`), so 921 under `campaign/` = 674 + 247 exactly. Appendix A gains `report_counts_check.py` and the `harness/data/`, `harness/reference/` folders; Appendix B's item statuses brought to the improvement list's current state, rows 9–15 added. Not changed: the merged reports and this appendix's earlier entries (their "28 crashed" stands as the record of its day, D17). |
 
 ## Appendix D — Results tables *(rendered by `harness/measurement/plan_tables.py` from the stage records; the **campaign** population — 949 run records at `57dc0c14`)*
 
