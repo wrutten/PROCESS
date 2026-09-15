@@ -61,6 +61,10 @@ __all__ = [
     "finished",
     "every_arm_converged",
     "configuration_invalid_seeds",
+    "ACCEPTED_CLASS",
+    "COUPLING_LOOP_CAP_CLASS",
+    "outcome_class",
+    "per_arm_success",
     "retried",
     "retried_seeds",
     "n_attempts",
@@ -448,6 +452,176 @@ def configuration_invalid_seeds(
             for arm in by_arm
         )
     ]
+
+
+#: The outcome class of a start that reached an accepted optimum.
+ACCEPTED_CLASS = "accepted"
+
+#: The outcome class of a start the coupling-state loop refused at its sweep
+#: cap (``ModuleSolveFailure``; the harness's failure class ``unconverged``).
+#: The harness stamps such a run ``crashed`` like a run PROCESS's own code
+#: raised in, and the taxonomy tables split them; this construction splits
+#: them the same way and names the split.
+COUPLING_LOOP_CAP_CLASS = "coupling-loop cap (ModuleSolveFailure)"
+
+
+def _exception_name(record: Mapping[str, Any]) -> str:
+    """The exception a crashed run raised, by its class name, from the
+    traceback's last line (``pkg.mod.Name: message`` → ``Name``)."""
+    line = traceback_last_line(record)
+    if not line:
+        return "no traceback"
+    head = line.split(":", 1)[0].strip()
+    return head.rsplit(".", 1)[-1] or "no traceback"
+
+
+def outcome_class(record: Mapping[str, Any]) -> str:
+    """**The outcome class of one start** — one label per record, from the
+    same two sources :func:`accepted_optimum` reads plus the harness's failure
+    class:
+
+    * ``accepted`` — :func:`accepted_optimum` (``status == "ok"`` and MFILE
+      ``ifail == 1``);
+    * ``finished, ifail = k`` — the run finished (``status == "ok"``) and the
+      optimiser's exit code was ``k != 1`` (``ifail = 5``: VMCON's retry ladder
+      exhausted); a finished start that is not an accepted optimum;
+    * ``crashed (<Exception>)`` — the harness's failure class ``crashed``:
+      PROCESS's own code raised, the exception named from the traceback's last
+      line (``RuntimeError`` for the model-internal Newton solve's
+      ``Failed to converge after 50 iterations, value is nan``);
+    * :data:`COUPLING_LOOP_CAP_CLASS` — the harness's failure class
+      ``unconverged``: the coupling-state loop refused at its sweep cap
+      (``ModuleSolveFailure``), which the harness also stamps ``crashed``;
+    * any other failure class by its own name (``timeout``, ``machinery``,
+      ``refused``, ``unconverged-at-cap``), none of which occurred in the
+      campaign.
+
+    The classes partition the starts: every record has exactly one.
+    """
+    if accepted_optimum(record):
+        return ACCEPTED_CLASS
+    if finished(record):
+        ifail = (record.get("mfile") or {}).get("ifail")
+        shown = int(ifail) if isinstance(ifail, float) and ifail == int(ifail) else ifail
+        return f"finished, ifail = {shown}"
+    failure_class = str(record.get("failure_class") or "unknown")
+    if failure_class == "crashed":
+        return f"crashed ({_exception_name(record)})"
+    if failure_class == "unconverged":
+        return COUPLING_LOOP_CAP_CLASS
+    return failure_class
+
+
+def _class_rank(label: str) -> tuple[int, str]:
+    """The order the outcome classes print in: accepted, finished by exit
+    code, crashed by exception, the coupling-loop cap, anything else."""
+    if label == ACCEPTED_CLASS:
+        return (0, label)
+    if label.startswith("finished, ifail = "):
+        return (1, label)
+    if label.startswith("crashed ("):
+        return (2, label)
+    if label == COUPLING_LOOP_CAP_CLASS:
+        return (3, label)
+    return (4, label)
+
+
+def per_arm_success(
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    seeds: Sequence[int],
+) -> dict[str, Any]:
+    """**Per-arm success** — reliability stated per arm over the starts
+    offered, beside the seed-set filter every cost table applies.
+
+    Per arm: the starts **offered** (the seeds at which the arm has a record),
+    the **accepted optima** (:func:`accepted_optimum`: ``status == "ok"`` and
+    MFILE ``ifail == 1``), every other start by its :func:`outcome_class`
+    with its count and its seeds named, and the starts **lost that another
+    arm accepted** — the seeds on which this arm did not reach an accepted
+    optimum while at least one other arm of the group did (the asymmetric
+    failures; a seed no arm accepted is configuration hardness, counted in
+    :func:`configuration_invalid_seeds`, and is not one).  Beside them the
+    **seed set** (:func:`every_arm_converged`).  Per seed: each arm's class,
+    how many arms accepted, whether the seed is in the set and which arms
+    lost it.
+
+    The rate is ``accepted / offered`` with the denominator printed, never a
+    percentage alone (trap T11).  **Reported, not accepted on**: no
+    pre-declared rule of the plan reads it; the experiment's cost cells stay
+    over the seed set and this construction says what that filter leaves out
+    (decision D29, 2026-09-15, on A81 (benchmarking-practices)'s finding F1).
+    Written by task **A82 (per-arm-success)**.
+    """
+    order = list(by_arm)
+    labels_by_seed: dict[int, dict[str, str]] = {
+        seed: {
+            arm: outcome_class(by_arm[arm][seed])
+            for arm in order
+            if seed in by_arm[arm]
+        }
+        for seed in seeds
+    }
+    accepted_arms: dict[int, list[str]] = {
+        seed: [arm for arm, label in labels.items() if label == ACCEPTED_CLASS]
+        for seed, labels in labels_by_seed.items()
+    }
+    seed_set = every_arm_converged(by_arm, seeds)
+    classes = sorted(
+        {
+            label
+            for labels in labels_by_seed.values()
+            for label in labels.values()
+            if label != ACCEPTED_CLASS
+        },
+        key=_class_rank,
+    )
+    arms: dict[str, dict[str, Any]] = {}
+    for arm in order:
+        offered = sorted(s for s in seeds if s in by_arm[arm])
+        seeds_by_class: dict[str, list[int]] = {label: [] for label in classes}
+        accepted: list[int] = []
+        for seed in offered:
+            label = labels_by_seed[seed][arm]
+            if label == ACCEPTED_CLASS:
+                accepted.append(seed)
+            else:
+                seeds_by_class[label].append(seed)
+        lost = [
+            seed
+            for seed in offered
+            if labels_by_seed[seed][arm] != ACCEPTED_CLASS
+            and accepted_arms[seed]
+        ]
+        arms[arm] = {
+            "offered": len(offered),
+            "accepted": len(accepted),
+            "accepted_seeds": accepted,
+            "by_class": {label: len(seeds_by_class[label]) for label in classes},
+            "seeds_by_class": seeds_by_class,
+            "lost_another_arm_accepted": lost,
+        }
+    per_seed = [
+        {
+            "seed": seed,
+            "classes": labels_by_seed[seed],
+            "n_accepted": len(accepted_arms[seed]),
+            "in_seed_set": seed in set(seed_set),
+            "lost_by": [
+                arm
+                for arm in order
+                if arm in labels_by_seed[seed]
+                and labels_by_seed[seed][arm] != ACCEPTED_CLASS
+                and accepted_arms[seed]
+            ],
+        }
+        for seed in seeds
+    ]
+    return {
+        "classes": classes,
+        "arms": arms,
+        "seed_set": seed_set,
+        "per_seed": per_seed,
+    }
 
 
 # --------------------------------------------------------------------------

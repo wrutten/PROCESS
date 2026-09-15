@@ -305,13 +305,19 @@ GROUPS: tuple[Group, ...] = (
             "excluded alike in every arm), published with and without the "
             "seeds on which either side retried; the attempt-summation "
             "identity that licenses this is printed per run in the companion "
-            "file. Configurations run in the fixed order nof / lad / st; "
+            "file. Beside each seed-set table, the **per-arm success** table "
+            "states reliability the other way round — per arm over the 25 "
+            "starts offered: accepted optima, the other starts by outcome "
+            "class, the starts lost that another arm accepted; reported, not "
+            "accepted on (D29, 2026-09-15). Configurations run in the fixed "
+            "order nof / lad / st; "
             "`B1` is inactive on `st_regression`, so its tables carry three "
             "arms."
         ),
         kinds=(
             ("tally_optimisation", "failure_taxonomy"),
             ("tally_optimisation", "seed_set"),
+            ("tally_optimisation", "per_arm_success"),
             ("tally_optimisation", "same_optimum"),
             ("tally_optimisation", "iteration_multiplier"),
             ("tally_optimisation", "cost"),
@@ -343,7 +349,9 @@ COMPANION_GROUPS: tuple[dict[str, Any], ...] = (
         "number": "F.2",
         "title": "The optimisation phase — one row per seed or per run",
         "context": (
-            "The per-seed and per-run tables of the optimisation phase: the "
+            "The per-seed and per-run tables of the optimisation phase: "
+            "per-arm success by seed (every start offered, each arm's outcome "
+            "class there), the "
             "failure table (every seed outside the seed set, with what failed "
             "there and what the other arms cost at the same start), the "
             "attempt-summation identity (every run's per-attempt costs against "
@@ -804,6 +812,8 @@ KIND_TITLES: dict[str, str] = {
     "per_sweep_overhead": "per-sweep overhead",
     "predicate_trial": "the predicate trial",
     "seed_set": "the seed set",
+    "per_arm_success": "per-arm success",
+    "per_arm_success_by_seed": "per-arm success by seed",
     "failure_table": "the failure table",
     "same_optimum": "same optimum (check 1)",
     "iteration_multiplier": "iteration multiplier (check 2)",
