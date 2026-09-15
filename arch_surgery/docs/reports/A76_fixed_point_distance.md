@@ -290,3 +290,23 @@ tally_contracts --resume`, `--gate recomputation --resume`, `--gate run_kind_sep
 | date | entry |
 |---|---|
 | 2026-09-15 | Report written at `d9e7c2a5`; task open, awaiting the orchestrator's assessment. |
+
+## 11. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `abff00a2` by the orchestrating session, by checks that differ from the agent's; gates the merge.*
+
+**Checks made, none a repeat of the agent's press.**
+
+1. **The headline row recomputed from the raw files with none of the branch's code.** A twenty-line script in the assessment session read the 25 `y_exit.json` pairs of `large_tokamak_nof` `A1`/`A0p` (displaced regime) as hex literals, took the scales from `harness/data/coupling_state_large_tokamak_nof.json`, derived the exclusion from the record's `per_run_nodes` (`vacuum`, `water_use`, `costs`) and `node_writesets.json`, and computed `max_i |Δy_i| / s_i` over the kept tested components. Result: median **5.093949426530372e-12**, p90 **1.8380370166410915e-10**, worst **2.709328238976662e-10**, 0 of 25 at or above τ, seed 1 **1.523322553612911e-10** on `heat_transport.tlvpmw`, whole-state median 2.435 on `costs.coecap` — every published digit of the row and of the tooth's baseline. The exclusion's digest was reproduced too: `sha256("\n".join(sorted excluded tested keys))` = `1ec977f7…`, the record's, and the "every spec key" variant the agent's first derivation made = `defab3ec…`, the refusal it described in §2.3. Both refusal and digest are as stated.
+2. **The lad bit-identity claim checked on hex strings, not floats.** Over the 25 `low_aspect_ratio_DEMO` pairs `A1`/`A0p`, 0 pairs have any kept component whose hex literal differs — "bit-identical over every restricted component" is literally true.
+3. **Gate records.** `runs/gates/{tally_contracts,recomputation,run_kind_separation,self_containment}/gate.json` in the worktree all read PASS, `tree_git_head` `d9e7c2a5`, 279/0, 13 174/0, 2 994/0, 52/0. The three stamp-survey files exist (`before_A76`, `after_A76`, `after_A76_commit`).
+4. **What moved in the report.** `git diff 14342a72 d9e7c2a5` on `EXPERIMENT_REPORT.md`: 276 insertions, 4 deletions; the four removed lines are the two gate-table rows whose populations grew, the teeth total (155 → 156) and the §4.2 *Emitted by* line — decision (h) holds. The added prose is the eighteen table headers, their captions and one §5.1 paragraph; every number in that paragraph is in the table beside it.
+5. **Scope.** No file under `harness/child/` or `PROCESS/` changed; `EXECUTION_APPROVED` untouched; no run-kind other than the existing records; the tally imports `harness.child.predicate` (decision (f)) — an import, not an edit, and D14(c)'s one implementation is the right call.
+
+**Findings for the record, none blocking.**
+
+- **The denominator line under each table reads `n = 100 (…pairs … over the ladder's rungs)`** while every row is over n = 25 (n = 50 / 80 / 76 / 28 likewise pooled over rows). The pooled figure is not wrong but it is not the number a reader needs, and the row already carries its own. Goes to the caption task the user has asked for (captions concise, the rest in the main text), with the pre-existing rendering defect this assessment noticed in passing: **every §4 caption is rendered twice** (380 `*Caption:` lines for 193 tables) and the *How to read* line twice for many — not this task's doing, present at `14342a72`.
+- **Interpretation, agreed with a caveat.** The headline distance (5e-12) is two orders below the arms' own audit residual (3.8e-10 median): the two arms' exit iterates are closer to each other than either is to the point one further sweep reaches. That is consistent with both arms taking the same arithmetic on the kept components and stopping on the same predicate, and it licenses "the same fixed point to well within τ"; the agent's Limits §8 says correctly that it is not a statement at machine precision. The `A0p/A0` reading (0.097 / 0.070, 25/25 above τ) is the ownership rung's declared inconsistency measured on the state; the sentence that V3's Phase A pair compared two different fixed points is supported by the `A1/A0` beside row and by §3.4's declaration of `A1/A0p` as the pair.
+- **Post hoc, as declared.** Rows chosen after a first draft (§7 (a)); reported, not accepted on; every caption says so. Acceptable for an added descriptive table; a V5 rule is A77's list's business.
+
+**Verdict: merge.** Numbers verified by an independent route to every digit on the headline row and on the tooth's baseline; the gates that had to run ran and PASS at the commit the report names; zero PROCESS runs; scope as briefed. Records will be at the path the retire script prints.
