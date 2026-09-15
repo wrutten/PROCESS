@@ -1,45 +1,70 @@
 #!/usr/bin/env python
-"""The experiment plan's results section, rendered from the stage records.
+"""The report's results tables, rendered from the stage records.
 
-``EXPERIMENT_REPORT.md`` §4 carried a template: every cell a *format*, ``0.xxx``
-where a ratio belongs and ``n`` where a count belongs, so that the shape could
-be reviewed before anything was measured.  This module replaces that template
-with the tables the measurement stages actually emitted, **by reading their
-records** — ``runs/gates/<stage>/measurements.json`` — and writing the section
-out.  No cell passes through a person's hands (protocol §15), and nothing here
-computes a number: every table, caption and denominator is the stage's own.
+``EXPERIMENT_REPORT.md`` §4 carried a template — every cell a *format*,
+``0.xxx`` where a ratio belongs and ``n`` where a count belongs — so that the
+shape could be reviewed before anything was measured.  This module renders the
+tables the measurement stages actually emitted, **by reading their records**
+(``runs/gates/<stage>/measurements.json``) and writing them out.  No cell
+passes through a person's hands (protocol §15), and nothing here computes a
+number: every table, caption and denominator is the stage's own.
+
+**Where the tables go (task A79 (report-captions), the user's rulings of
+2026-09-15).**  The report's main text §4 states conclusions in prose, each
+pointing at a numbered table; the tables themselves are **Appendix D —
+Results tables**, which this module renders between :data:`SECTION_START`
+(the appendix heading) and :data:`SECTION_END` (an explicit end marker), so
+``--plan-tables write | check`` guards exactly the rendered block.  Appendix D
+holds **summarising tables only** — per arm or arm pair and configuration —
+each numbered ``Table D.n`` in emission order and carrying **one caption of a
+few lines**: what the table shows, its population and denominator, the one
+thing a reader must not infer.  Every construction's full declaration (units,
+row, column, construction, clauses, how to read) is printed **once per table
+kind** in D.0.  A table whose rows are runs, seeds, pairs of runs or predicate
+evaluations — a full result matrix — is rendered, unchanged in content, into
+the **companion file** :data:`COMPANION_NAME` beside the report, numbered
+``Table F.n``, together with the full versions of tables whose per-seed
+columns the report omits and every table of the second implementation
+(``recomputed_tables``); the companion is generated whole and is guarded by
+the same ``check``.
 
 What is rendered, and from which stage's record:
 
 =========================  ==================================================
-``gate_table``             §4.1, one row per registered gate
-``tally_evaluation``       §4.2, the evaluation phase's tables
-``tally_optimisation``     §4.3, the optimisation phase's tables
-``recomputed_tables``      §4.4, the same cells from the second implementation
+``gate_table``             D.1, one row per registered gate
+``tally_evaluation``       D.2 (headline shape 3) and D.3; per-run tables → F
+``tally_optimisation``     D.2 (headline shapes 1 and 2) and D.4; per-run → F
+``recomputed_tables``      F only: the same cells from the second implementation
 =========================  ==================================================
 
-**What the cells are over, said once and in every caption.** §4.2–§4.4 are
-over **one population**, the one the tally publishes (``tally.published_sources``):
-the **campaign population** — the campaign plan's own records under
+**What the cells are over, said once.** The tally stages are over **one
+population**, the one the tally publishes (``tally.published_sources``): the
+**campaign population** — the campaign plan's own records under
 ``runs/campaign/``, twenty-five seeds per arm — once a campaign record exists,
 and the **gate population** — the runs the verification gates made, one or two
 seeds per arm — while none does.  A median over one run and a median over
-twenty-five are different quantities with the same name, which is trap T11's
-shape, so the section's heading marker names the population and the commit
-its records were made at, each rendered caption is prefixed with it, and the
-other population is named as excluded (the gate population as the section's
-earlier fill, before execution approval).  §4.1 is the gates' own table and
-stays over each gate's own population: gates are gates.
+twenty-five are different quantities with the same name (trap T11), so the
+appendix's opening names the population and the commit its records were made
+at, and every caption states its own denominator.  D.1 is the gates' own table
+and stays over each gate's own population: gates are gates.
 
-**§4.1 is rendered from the ``gate_table`` stage record, not from the verdicts
+**D.1 is rendered from the ``gate_table`` stage record, not from the verdicts
 themselves**, so a gate re-run after that stage would be reproduced here as it
 was, not as it is.  The renderer therefore refuses a stage record whose own
 account of the verdicts it read disagrees with the verdicts on disk, naming the
 gate, both commits and both times (issue I-22 (a); the mechanism is the
 framework's ``assert_records_read_are_current``).
 
+**Table numbers are positional.** ``Table D.n`` and ``Table F.n`` are assigned
+in emission order and change when a table is added or removed; the hand-written
+text cites them, so ``check`` also resolves every ``Table D.n`` / ``Table F.n``
+reference in the report against the numbers this rendering assigns and reports
+any that point past the end.  Cells are keyed by the table's *construction
+name* (``table``) everywhere a number must be traced, never by its number.
+
 Written by task **A55 (harness-smoke)**; the freshness refusal and the
-comparison mode by task **A63 (stage-provenance)**.
+comparison mode by task **A63 (stage-provenance)**; the appendix, the companion
+file, the numbering and the caption rule by task **A79 (report-captions)**.
 """
 
 from __future__ import annotations
@@ -47,6 +72,7 @@ from __future__ import annotations
 import datetime as _dt
 import difflib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -54,23 +80,42 @@ from typing import Any, Mapping, Sequence
 from ..core import framework
 from ..core.config import EXECUTION_APPROVED, Campaign
 
-__all__ = ["PlanTablesError", "render", "check", "write", "SECTIONS"]
+__all__ = [
+    "PlanTablesError",
+    "render",
+    "check",
+    "write",
+    "SECTIONS",
+    "GROUPS",
+    "SECTION_START",
+    "SECTION_END",
+    "COMPANION_NAME",
+]
 
 
 class PlanTablesError(RuntimeError):
     """A refusal to render.  Never a section with a hole in it."""
 
 
-#: Where §4 starts and stops in the plan.  Both are matched on the whole line,
-#: so a heading that has been reworded is a refusal rather than a silent
-#: rewrite of the wrong part of the document.
-SECTION_START = "## 4. Results"
-SECTION_END = "## 5. Discussion"
+#: Where the rendered block starts and stops in the report.  Both are matched
+#: on the whole line, so a heading that has been reworded is a refusal rather
+#: than a silent rewrite of the wrong part of the document.  The end marker is
+#: explicit because Appendix D is the document's last section.
+SECTION_START = "## Appendix D — Results tables"
+SECTION_END = "<!-- plan_tables: end of the rendered results tables -->"
+
+#: The companion file beside the report: every full result matrix, generated
+#: whole by :func:`write` and compared whole by :func:`check`.
+COMPANION_NAME = "RESULTS_TABLES_FULL.md"
+
+#: The two documents' table-number prefixes.
+REPORT_PREFIX = "D"
+COMPANION_PREFIX = "F"
 
 
 @dataclass(frozen=True)
 class Section:
-    """One subsection of §4: which stage record fills it, and its heading."""
+    """One stage record the appendix is rendered from, and its heading."""
 
     number: str
     heading: str
@@ -78,7 +123,7 @@ class Section:
     what: str
     #: Whether this stage's record must say **which records it read**, and be
     #: refused when they have moved since.  True where the stage summarises
-    #: other records rather than runs: §4.1 is one row per gate *verdict*, and
+    #: other records rather than runs: D.1 is one row per gate *verdict*, and
     #: a gate re-run after the stage leaves this section reproducing the older
     #: verdict byte for byte with nothing to mark it — which is what happened
     #: (issue I-22 (a)).  A stage over **run** records is not checked here: its
@@ -89,7 +134,7 @@ class Section:
 
 SECTIONS: tuple[Section, ...] = (
     Section(
-        number="4.1",
+        number="D.1",
         heading="Gates",
         stage="gate_table",
         records_read_required=True,
@@ -100,37 +145,260 @@ SECTIONS: tuple[Section, ...] = (
         ),
     ),
     Section(
-        number="4.2",
+        number="D.3",
         heading="The evaluation phase",
         stage="tally_evaluation",
         what=(
             "cost per call, matched accuracy on both rulers, the fixed-point "
             "distance between arms (reported, not accepted on), the ownership "
-            "rung, the per-sweep overhead, the failure taxonomy and the "
-            "predicate trial"
+            "rung, the failure taxonomy and the per-block headline table; the "
+            "per-run tables and the predicate trial go to the companion file"
         ),
     ),
     Section(
-        number="4.3",
+        number="D.4",
         heading="The optimisation phase",
         stage="tally_optimisation",
         what=(
-            "the seed set and the failure table, the same-optimum check, both "
-            "iteration constructions, the attempt-summation identity, the cost "
-            "with and without the retried seeds, and the lift's residual"
+            "the seed set, the same-optimum check, both iteration "
+            "constructions, the cost with and without the retried seeds, the "
+            "achieved accuracy, the lift's residual, the failure taxonomy and "
+            "the two headline tables; the failure table, the attempt-summation "
+            "identity and the per-run overhead go to the companion file"
         ),
     ),
     Section(
-        number="4.4",
+        number="F",
         heading="The same cells, computed a second time",
         stage="recomputed_tables",
         what=(
-            "every cell of §4.2 and §4.3 recomputed by an implementation that "
-            "shares no construction with the tally; the verdict on whether the "
-            "two agree is gate `recomputation`'s, in §4.1"
+            "every cell of the tally's tables recomputed by an implementation "
+            "that shares no construction with the tally; the verdict on "
+            "whether the two agree is gate `recomputation`'s, in D.1"
         ),
     ),
 )
+
+#: The tally stages whose tables carry a ``kind`` and are grouped by it.
+TALLY_STAGES: tuple[str, ...] = ("tally_evaluation", "tally_optimisation")
+
+
+@dataclass(frozen=True)
+class Group:
+    """One group of Appendix D: a heading, a hand-written context paragraph
+    said once, and the table kinds it holds, as ``(stage, kind)`` in the order
+    they print.  A kind absent from every group is a refusal, not a guess."""
+
+    number: str
+    title: str
+    context: str
+    kinds: tuple[tuple[str, str], ...]
+
+
+GROUPS: tuple[Group, ...] = (
+    Group(
+        number="D.1",
+        title="Gates",
+        context=(
+            "The gate table is the appendix's licence: every table below is "
+            "read only if every row here is PASS with its teeth tripped. A "
+            "**tooth** is a deliberate break the gate must catch, so a gate "
+            "whose tooth did not trip is not accepted whatever its verdict. "
+            "The row `recomputation` is the second implementation's summary "
+            "— every cell of the tally's tables recomputed from the run "
+            "records by code sharing no construction with the tally, "
+            "compared without tolerance; its *compared* / *mismatched* pair "
+            "is the whole of that check, and the recomputed tables themselves "
+            "are in the companion file. The row `tally_contracts` covers the "
+            "captions, denominators and record contract of every table "
+            "emitted."
+        ),
+        kinds=(("gate_table", "gate_table"),),
+    ),
+    Group(
+        number="D.2",
+        title="Headline tables",
+        context=(
+            "The three tables §4 is written from, in the shapes the user "
+            "asked for (`docs/plans/REPORT_HEADLINE_TABLES.md`). **Node calls "
+            "per module** (one table per configuration) splits the "
+            "optimisation phase's model-node executions by the partition's "
+            "node groups — the three modules, the pulse node and the "
+            "once-per-run deferred nodes, as the committed node map and the "
+            "configuration's per-run artifact place them — with per-run "
+            "brackets, the pooled `B2/B0`, the per-run median and the count "
+            "of runs on which `B2` cost more; its counts are the whole run's "
+            "census, and its last row is the part outside the solve phase, "
+            "so the row above it less that row is check 4's solve-phase "
+            "total. **The optimiser's path** (one table over the "
+            "configurations) decomposes the cost ratio R of check 4 into the "
+            "evaluation count ε — read from `sweeps_per_eval.n_evaluations`, "
+            "the field issue I-26 names — and the cost per evaluation ρ, "
+            "with the iterations beside, so R = ρ × ε reads down each "
+            "configuration's four rows. **Node calls per block** (one table "
+            "per evaluation-phase source, configurations stacked) is the "
+            "evaluation phase's counterpart: mean node calls per evaluation "
+            "in each block and the pooled ratio of `A2` to its declared "
+            "reference — `A1` on the pulsed configurations, `A0` on "
+            "`st_regression`. Populations: the optimisation tables are over "
+            "each configuration's seed set (every arm converged; D.4 states "
+            "it); the evaluation tables over every finished run of the "
+            "source. Prime (arrangement-method) calls are not model nodes and "
+            "are in none of these rows."
+        ),
+        kinds=(
+            ("tally_optimisation", "node_calls_per_module"),
+            ("tally_optimisation", "optimiser_path"),
+            ("tally_evaluation", "node_calls_per_block"),
+        ),
+    ),
+    Group(
+        number="D.3",
+        title="The evaluation phase",
+        context=(
+            "One `call_models` evaluation per run, no optimiser. Four "
+            "sources, never pooled: the **entry reference** (one flat `A0` "
+            "evaluation per configuration from the input file's own point), "
+            "the **displaced entries** (δ = 0.10, seeds 1–25 — the acceptance "
+            "regime), and the **forward** and **backward stencil points** "
+            "(one per design-vector column, paired across arms by column). "
+            "Within a source the tables run configuration by configuration in "
+            "the fixed order nof / lad / st. Absolute cost cells are per-run "
+            "means with the seed bracket; a ratio against the reference is "
+            "read three ways — pooled (Σ arm / Σ reference), per-run median, "
+            "and the count of runs on which the arm cost more. The reference "
+            "is `A1` on a pulsed configuration and `A0` on a steady-state one; "
+            "where a population carries no `A1` run the caption says the "
+            "ratio is a fallback against `A0`. The accuracy tables are on both "
+            "rulers and carry the audit position as a column; their "
+            "whole-state column is large for `A2` by design and is not "
+            "judged. Denominators are runs of the configuration in the "
+            "source (25 per arm in the displaced regime; one per design-vector "
+            "column per arm in a stencil source); every caption states its "
+            "own. The per-run overhead tables and the predicate trial are in "
+            "the companion file."
+        ),
+        kinds=(
+            ("tally_evaluation", "cost_per_call"),
+            ("tally_evaluation", "matched_accuracy"),
+            ("tally_evaluation", "fixed_point_distance"),
+            ("tally_evaluation", "ownership_rung"),
+            ("tally_evaluation", "failure_taxonomy"),
+        ),
+    ),
+    Group(
+        number="D.4",
+        title="The optimisation phase",
+        context=(
+            "One full optimisation per start, 25 starts per arm per "
+            "configuration (seed 0 unperturbed, seeds 1–24 displaced at "
+            "δ = 0.10). Every check is over **the seed set** — the seeds on "
+            "which every arm reached an accepted optimum (status ok and the "
+            "output file's `ifail == 1`) — whose size the seed-set table "
+            "states per configuration and every other table repeats as its "
+            "n; the seeds outside it are the failure table's, in the "
+            "companion file, so the filter cannot flatter an arm that fails on "
+            "expensive seeds. Every ratio is against the flat control `B0`; "
+            "`BR → B0` is published beside as the yardstick, never accepted "
+            "on. Cost is solve-phase model-node executions summed over the "
+            "optimiser's attempts (the output path and the exit audit "
+            "excluded alike in every arm), published with and without the "
+            "seeds on which either side retried; the attempt-summation "
+            "identity that licenses this is printed per run in the companion "
+            "file. Configurations run in the fixed order nof / lad / st; "
+            "`B1` is inactive on `st_regression`, so its tables carry three "
+            "arms."
+        ),
+        kinds=(
+            ("tally_optimisation", "failure_taxonomy"),
+            ("tally_optimisation", "seed_set"),
+            ("tally_optimisation", "same_optimum"),
+            ("tally_optimisation", "iteration_multiplier"),
+            ("tally_optimisation", "cost"),
+            ("tally_optimisation", "achieved_accuracy"),
+            ("tally_optimisation", "lift_closed"),
+        ),
+    ),
+)
+
+#: The companion file's groups: ``(number, title, context, selector)`` where
+#: the selector names the stage and whether the group takes that stage's
+#: detail tables, the full versions of report tables with omitted columns, or
+#: every table of the stage.
+COMPANION_GROUPS: tuple[dict[str, Any], ...] = (
+    {
+        "number": "F.1",
+        "title": "The evaluation phase — one row per run",
+        "context": (
+            "The per-run tables of the evaluation phase: what each finished "
+            "run's convergence test cost (one row per run; the two predicates "
+            "in columns of their own, never summed) and the predicate trial "
+            "(one row per pair of runs under the two rulers). Populations and "
+            "constructions are as declared in Appendix D.0 of the report."
+        ),
+        "stage": "tally_evaluation",
+        "take": "detail",
+    },
+    {
+        "number": "F.2",
+        "title": "The optimisation phase — one row per seed or per run",
+        "context": (
+            "The per-seed and per-run tables of the optimisation phase: the "
+            "failure table (every seed outside the seed set, with what failed "
+            "there and what the other arms cost at the same start), the "
+            "attempt-summation identity (every run's per-attempt costs against "
+            "its solve-phase total) and the per-run overhead."
+        ),
+        "stage": "tally_optimisation",
+        "take": "detail",
+    },
+    {
+        "number": "F.3",
+        "title": "Appendix D's tables with their per-seed columns",
+        "context": (
+            "The full versions of the report's tables whose columns listing a "
+            "value per seed inside one cell (the paired seeds, the seeds of "
+            "the set, the attempts per seed, the components above τ per run) "
+            "the report omits. Every other cell is identical to the report's."
+        ),
+        "stage": None,
+        "take": "omitted",
+    },
+    {
+        "number": "F.4",
+        "title": "The same cells, computed a second time",
+        "context": (
+            "Every table of the tally recomputed by `harness/measurement/"
+            "analysis.py`, a second implementation that imports none of the "
+            "tally's constructions. Column headings are the record keys, not "
+            "the report's headings; the verdict on whether the two agree — "
+            "table by table, row by row, cell by cell, without tolerance — is "
+            "gate `recomputation`'s, one row of the report's gate table."
+        ),
+        "stage": "recomputed_tables",
+        "take": "all",
+    },
+)
+
+#: The report's conventions paragraph, printed once at the appendix's opening
+#: (formerly the §4 preamble's).
+CONVENTIONS = (
+    "**Conventions that hold in every table (D21 (c)).** Absolute cost cells "
+    "are per-run means with the seed bracket. A ratio against the reference is "
+    "given three ways: pooled (sum over the set / sum over the set), per-run "
+    "median with `[min, max]`, and the count of seeds on which the arm cost "
+    "more. Configurations appear in the fixed order nof / lad / st and are "
+    "never pooled (D21 (b)). Prime calls appear beside node calls, never inside "
+    "them (D19). Node-call ratios are the acceptance quantities; timings are "
+    "context and no conclusion rests on one (I-10). Arm names are `AR / A0 / "
+    "A1 / A2` and `BR / B0 / B1 / B2` (2026-09-15); the records carry the "
+    "names of their day and are translated at read (trap T16)."
+)
+
+
+# --------------------------------------------------------------------------
+# the stage records
+# --------------------------------------------------------------------------
 
 
 def stage_record(records_dir: Path, stage: str) -> dict[str, Any]:
@@ -138,7 +406,7 @@ def stage_record(records_dir: Path, stage: str) -> dict[str, Any]:
     path = Path(records_dir) / stage / "measurements.json"
     if not path.exists():
         raise PlanTablesError(
-            f"stage {stage!r} has written no record at {path}.  §4's "
+            f"stage {stage!r} has written no record at {path}.  The appendix's "
             f"{stage} tables are that stage's own output and are never typed "
             f"by hand: run `experiment_runner.py --measure {stage}` (or "
             f"`--measure all`) first."
@@ -154,7 +422,7 @@ def assert_stage_read_what_is_there(
 ) -> str:
     """Refuse to render a section from a stage record its sources have outrun.
 
-    §4.1 is not rendered from the verdict records: it is rendered from the
+    D.1 is not rendered from the verdict records: it is rendered from the
     ``gate_table`` **stage** record, which was made from the verdicts at the
     moment that stage ran.  Re-run a gate afterwards and this renderer would
     reproduce the older verdict — the same table, the same numbers, the same
@@ -173,7 +441,7 @@ def assert_stage_read_what_is_there(
             stage=section.stage,
             remedy=(
                 f"Re-run `experiment_runner.py --measure {section.stage}` and "
-                f"render again: §{section.number} is that stage's output, and "
+                f"render again: {section.number} is that stage's output, and "
                 f"a section rendered from a record older than the verdicts it "
                 f"summarises publishes the older verdict without saying so."
             ),
@@ -220,7 +488,7 @@ def _survey(paths: Sequence[Path]) -> dict[str, Any]:
 
 
 def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
-    """What every cell in §4.2–§4.4 is over, measured from the records themselves.
+    """What every tally cell is over, measured from the records themselves.
 
     The commit, the record count, the audit position, the convergence ruler and
     the exit-audit instrument version, all read from the run records rather
@@ -232,8 +500,8 @@ def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     — the campaign family once a campaign record exists, the gate family
     otherwise), so the marker describes the population the tables were
     computed over and no other.  The gate runs under *records_dir* are
-    surveyed too, as the population §4.1 is over and — with the campaign
-    present — as the section's earlier fill, named as excluded.
+    surveyed too, as the population D.1 is over and — with the campaign
+    present — as the tables' earlier fill, named as excluded.
     """
     from harness.measurement import tally as tally_mod  # noqa: PLC0415
 
@@ -270,43 +538,8 @@ def _commits(block: Mapping[str, Any]) -> str:
     return ", ".join(f"`{h[:8]}`" for h in block["records_by_commit"]) or "—"
 
 
-def _caption_marker(marker: Mapping[str, Any]) -> str:
-    """The clause every §4.2–§4.4 caption carries: what population this cell is over.
-
-    Short on purpose.  The full statement is made once, under the section
-    heading; what a caption needs is the one thing a reader must not infer —
-    which population this cell is a figure of, and the commit its records
-    were made at, so no cell can be quoted without them.
-    """
-    if marker["campaign_present"]:
-        return (
-            f"Population: the campaign runs at {_commits(marker)} — the source "
-            f"named in the caption, twenty-five seeds per arm — **not** the gate "
-            f"runs, which filled this section before execution approval and are "
-            f"excluded by kind; see the §4 heading for the audit position, the "
-            f"ruler and the instrument."
-        )
-    return (
-        f"Population: the gate runs at {_commits(marker)}, "
-        f"one or two seeds per arm — **not** the campaign, which has not run "
-        f"(`EXECUTION_APPROVED` is {marker['execution_approved']}); see the "
-        f"§4 heading for the audit position, the ruler and the instrument."
-    )
-
-
-def _gate_caption_marker(marker: Mapping[str, Any]) -> str:
-    """§4.1's clause: the gates' own populations, whatever §4.2–§4.4 are over."""
-    gates = marker["gate_runs"]
-    return (
-        f"Population: each gate's own, stated in its row — the gate population "
-        f"({gates['n_run_records']} run record(s) at {_commits(gates)}), never "
-        f"the campaign's; gates are gates.  §4.2–§4.4 are over the "
-        f"{marker['population_family']} population."
-    )
-
-
 def _marker_sentence(marker: Mapping[str, Any]) -> str:
-    """The full statement, made once under the section heading."""
+    """The full population statement, made once at the appendix's opening."""
     audit = (
         f"The exit audit was taken at position(s) "
         f"{', '.join(f'`{p}`' for p in marker['audit_positions'])} with the "
@@ -323,20 +556,20 @@ def _marker_sentence(marker: Mapping[str, Any]) -> str:
         return (
             f"**Population: the campaign, not the gate runs.** "
             f"`EXECUTION_APPROVED` is {marker['execution_approved']} and the "
-            f"campaign has run: every cell in §4.2–§4.4 is over the "
-            f"{marker['n_run_records']} campaign run record(s) made at "
-            f"commit(s) {_commits(marker)}, by run kind "
+            f"campaign has run: every cell of D.2–D.4 and of the companion "
+            f"file is over the {marker['n_run_records']} campaign run "
+            f"record(s) made at commit(s) {_commits(marker)}, by run kind "
             f"{marker['records_by_run_kind']}, by source {sources}. The "
             f"{gates['n_run_records']} gate run record(s) at {_commits(gates)} "
-            f"(by run kind {gates['records_by_run_kind']}) were this section's "
+            f"(by run kind {gates['records_by_run_kind']}) were these tables' "
             f"earlier fill, before execution approval; they are excluded from "
             f"every published cell **by kind** (gate `run_kind_separation`) and "
-            f"appear only in §4.1, which is the gates' own table. {audit}"
+            f"appear only in D.1, which is the gates' own table. {audit}"
         )
     return (
         f"**Population: the gate runs, not the campaign.** "
         f"`EXECUTION_APPROVED` is {marker['execution_approved']}, so no "
-        f"campaign record exists: every cell below is over the "
+        f"campaign record exists: every cell of D.2–D.4 is over the "
         f"{marker['n_run_records']} run record(s) the verification gates made "
         f"— one or two seeds per arm — at commit(s) {_commits(marker)}, by "
         f"run kind {marker['records_by_run_kind']}. {audit} The "
@@ -345,39 +578,104 @@ def _marker_sentence(marker: Mapping[str, Any]) -> str:
     )
 
 
-def _table_block(table: Mapping[str, Any], marker_sentence: str) -> list[str]:
-    """One emitted table as the plan prints it: caption, grid, denominator."""
-    lines = [f"**`{table['table']}`**", ""]
-    caption = str(table.get("caption") or "").strip()
-    audit = table.get("audit_positions") or []
-    audit_clause = (
-        f" Audit position: {', '.join(f'`{p}`' for p in audit)}." if audit else ""
-    )
-    lines.append(
-        f"*Caption: {caption}{audit_clause} "
-        f"n = {table['denominator']} ({table['denominator_is']}). "
-        f"{marker_sentence}*"
-    )
+# --------------------------------------------------------------------------
+# one table on the page
+# --------------------------------------------------------------------------
+
+
+def _column_key(column: Any) -> str:
+    return str(column["key"]) if isinstance(column, Mapping) else str(column)
+
+
+def _column_heading(column: Any) -> str:
+    if isinstance(column, Mapping):
+        return str(column.get("heading") or column.get("key"))
+    return str(column)
+
+
+def _grid_lines(table: Mapping[str, Any], *, omit: Sequence[str] = ()) -> list[str]:
+    """The table's grid, from the record's rendered cells where it has them.
+
+    A record made since task A79 carries ``cells`` (the columns' own
+    rendering, row by row) and the grid is built from them so that a column
+    can be left out; an older record, a recomputed table or a self-check
+    fixture carries only ``markdown``, and the grid is its ``|`` lines —
+    which is also what strips the caption an older record's ``markdown``
+    still carries, the cause of the doubled captions before A79.
+    """
+    columns = table.get("columns") or []
+    cells = table.get("cells")
+    if cells is not None and columns:
+        keep = [i for i, c in enumerate(columns) if _column_key(c) not in set(omit)]
+        headings = [_column_heading(columns[i]) for i in keep]
+        lines = ["| " + " | ".join(headings) + " |", "|" + "|".join("---" for _ in keep) + "|"]
+        for row in cells:
+            lines.append("| " + " | ".join(str(row[i]) for i in keep) + " |")
+        return lines
+    if omit:
+        raise PlanTablesError(
+            f"table {table.get('table')!r} asks the report to omit columns "
+            f"{list(omit)} but its record carries no rendered cells; re-run "
+            f"the stage that emits it"
+        )
+    return [
+        line
+        for line in str(table.get("markdown") or "").splitlines()
+        if line.startswith("|")
+    ]
+
+
+def _caption_text(table: Mapping[str, Any]) -> str:
+    """The few lines the report prints: the summary, or the full caption
+    where a stage has not written one (an older record, a recomputed table)."""
+    summary = str(table.get("caption_summary") or "").strip()
+    if summary:
+        return summary
+    return str(table.get("caption") or "").strip()
+
+
+def _table_block(
+    table: Mapping[str, Any],
+    number: str,
+    *,
+    omit: Sequence[str] = (),
+    full_version: str | None = None,
+) -> list[str]:
+    """One table as the documents print it: a numbered caption, the grid, the
+    construction name.  ``full_version`` names the companion table that holds
+    the omitted columns, when any are."""
+    caption = _caption_text(table)
+    denominator = f"n = {table['denominator']} ({table['denominator_is']})."
+    omitted = ""
+    if omit:
+        headings = [
+            _column_heading(c)
+            for c in table.get("columns") or []
+            if _column_key(c) in set(omit)
+        ]
+        omitted = (
+            f" Per-seed column(s) {', '.join(f'*{h}*' for h in headings)}: "
+            f"{full_version}."
+        )
+    lines = [f"**Table {number}.** *{caption} {denominator}{omitted}*", ""]
+    lines.extend(_grid_lines(table, omit=omit))
     lines.append("")
-    lines.extend(
-        line for line in str(table.get("markdown") or "").splitlines() if line.strip()
-    )
+    lines.append(f"<sub>`{table['table']}`</sub>")
     lines.append("")
-    if table.get("how_to_read"):
-        lines.append(f"*How to read: {table['how_to_read']}*")
-        lines.append("")
     return lines
 
 
-def _gate_table_block(block: Mapping[str, Any], marker_sentence: str) -> list[str]:
-    """§4.1: the gate table, which is a measurement stage and not a Table."""
+def _gate_table_block(block: Mapping[str, Any], number: str) -> list[str]:
+    """D.1: the gate table, which is a measurement stage and not a Table."""
     lines = [
-        f"*Caption: {block['caption']} "
-        f"Population: {block['population']}. {marker_sentence}*",
+        f"**Table {number}.** *{block['caption']} Population: "
+        f"{block['population']}.*",
         "",
     ]
     lines.extend(
-        line for line in str(block.get("markdown") or "").splitlines() if line.strip()
+        line
+        for line in str(block.get("markdown") or "").splitlines()
+        if line.startswith("|")
     )
     lines.append("")
     lines.append(
@@ -386,128 +684,455 @@ def _gate_table_block(block: Mapping[str, Any], marker_sentence: str) -> list[st
         f"{block['n_teeth']} teeth tripped.**"
     )
     lines.append("")
-    lines.append(
-        "*How to read: no number in §4.2–§4.4 is cited unless every row here "
-        "is PASS with its tooth tripped; a FAIL is a result and the dependent "
-        "tables are marked \"not produced — gate X failed\".*"
-    )
+    lines.append("<sub>`gate table`</sub>")
     lines.append("")
     return lines
 
 
+# --------------------------------------------------------------------------
+# sorting the tables into the two documents
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class Placed:
+    """One emitted table with where it goes and what number it got."""
+
+    stage: str
+    kind: str
+    table: Mapping[str, Any]
+    emitted_index: int
+    #: The report number (``D.n``) or ``None`` when the table is companion-only.
+    report_number: str | None = None
+    #: The companion number (``F.n``) or ``None`` when the table is report-only.
+    companion_number: str | None = None
+
+
+def _kind_order() -> dict[tuple[str, str], tuple[int, int]]:
+    order: dict[tuple[str, str], tuple[int, int]] = {}
+    for g, group in enumerate(GROUPS):
+        for k, key in enumerate(group.kinds):
+            order[key] = (g, k)
+    return order
+
+
+def _place(records: Mapping[str, Mapping[str, Any]]) -> list[Placed]:
+    """Every table of every stage, classified.  Refuses a tally table whose
+    kind no group declares: the appendix's grouping is a declaration, not a
+    guess, and a new kind must be placed by whoever adds it."""
+    order = _kind_order()
+    placed: list[Placed] = []
+    for stage in TALLY_STAGES:
+        for index, table in enumerate(records[stage].get("tables") or []):
+            kind = str(table.get("kind") or "")
+            if not kind:
+                raise PlanTablesError(
+                    f"stage {stage!r} emitted table {table.get('table')!r} "
+                    f"without a kind; the appendix groups tables by kind and "
+                    f"does not guess one"
+                )
+            if not table.get("detail") and (stage, kind) not in order:
+                raise PlanTablesError(
+                    f"stage {stage!r} emitted a table of kind {kind!r} that no "
+                    f"group of plan_tables.GROUPS declares; place it before "
+                    f"rendering"
+                )
+            placed.append(Placed(stage=stage, kind=kind, table=table, emitted_index=index))
+    for index, table in enumerate(records["recomputed_tables"].get("tables") or []):
+        placed.append(
+            Placed(
+                stage="recomputed_tables",
+                kind=str(table.get("kind") or "recomputed"),
+                table=table,
+                emitted_index=index,
+            )
+        )
+    return placed
+
+
+def _report_order(placed: Sequence[Placed]) -> list[Placed]:
+    order = _kind_order()
+    summarising = [p for p in placed if p.stage in TALLY_STAGES and not p.table.get("detail")]
+    return sorted(summarising, key=lambda p: (order[(p.stage, p.kind)], p.emitted_index))
+
+
+def _number_of(text: str | None) -> int:
+    return int(text.split(".")[1]) if text else 0
+
+
+def _companion_order(placed: Sequence[Placed]) -> list[tuple[Mapping[str, Any], list[Placed]]]:
+    """The companion's groups, each with its tables in emission order."""
+    out: list[tuple[Mapping[str, Any], list[Placed]]] = []
+    for group in COMPANION_GROUPS:
+        take = group["take"]
+        if take == "detail":
+            chosen = [
+                p for p in placed
+                if p.stage == group["stage"] and p.table.get("detail")
+            ]
+        elif take == "omitted":
+            chosen = sorted(
+                (
+                    p for p in placed
+                    if p.stage in TALLY_STAGES
+                    and not p.table.get("detail")
+                    and p.table.get("report_omits")
+                ),
+                key=lambda p: _number_of(p.report_number),
+            )
+        else:
+            chosen = [p for p in placed if p.stage == group["stage"]]
+        out.append((group, chosen))
+    return out
+
+
+# --------------------------------------------------------------------------
+# D.0 — constructions and populations, once
+# --------------------------------------------------------------------------
+
+
+KIND_TITLES: dict[str, str] = {
+    "gate_table": "the gate table",
+    "node_calls_per_module": "node calls per module (headline shape 1)",
+    "optimiser_path": "the optimiser's path (headline shape 2)",
+    "node_calls_per_block": "node calls per block (headline shape 3)",
+    "cost_per_call": "cost per call",
+    "matched_accuracy": "matched accuracy",
+    "fixed_point_distance": "fixed-point distance",
+    "ownership_rung": "the ownership rung",
+    "failure_taxonomy": "failure taxonomy",
+    "per_sweep_overhead": "per-sweep overhead",
+    "predicate_trial": "the predicate trial",
+    "seed_set": "the seed set",
+    "failure_table": "the failure table",
+    "same_optimum": "same optimum (check 1)",
+    "iteration_multiplier": "iteration multiplier (check 2)",
+    "cost": "cost (check 4)",
+    "attempt_summation": "the attempt-summation identity",
+    "achieved_accuracy": "achieved accuracy at the accepted optimum",
+    "lift_closed": "the lift closed (check 3)",
+}
+
+
+def _declaration_lines(kind_title: str, placed: Sequence[Placed]) -> list[str]:
+    """One kind's declaration, printed once; where tables of the kind declare
+    differently, each variant with the tables it applies to."""
+    variants: dict[str, list[Placed]] = {}
+    for p in placed:
+        declaration = p.table.get("declaration")
+        key = json.dumps(declaration, sort_keys=True) if declaration else json.dumps(
+            {"caption": p.table.get("caption")}
+        )
+        variants.setdefault(key, []).append(p)
+    report_numbers = sorted(
+        (p.report_number for p in placed if p.report_number), key=_number_of
+    )
+    companion_numbers = sorted(
+        (p.companion_number for p in placed if p.companion_number), key=_number_of
+    )
+    where: list[str] = []
+    if report_numbers:
+        where.append(
+            f"Table {report_numbers[0]}"
+            if len(report_numbers) == 1
+            else f"Tables {report_numbers[0]}–{report_numbers[-1]}"
+        )
+    if companion_numbers:
+        where.append(
+            f"companion Table {companion_numbers[0]}"
+            if len(companion_numbers) == 1
+            else f"companion Tables {companion_numbers[0]}–{companion_numbers[-1]}"
+        )
+    lines = [
+        f"**{kind_title}** (`{placed[0].kind}`, stage `{placed[0].stage}`; "
+        f"{'; '.join(where)}; {len(placed)} table(s)).",
+        "",
+    ]
+    for key, group in variants.items():
+        declaration = json.loads(key)
+        if len(variants) > 1:
+            applies = ", ".join(
+                p.report_number or f"companion {p.companion_number}" for p in group
+            )
+            lines.append(f"*Applies to {applies}.*")
+            lines.append("")
+        if "caption" in declaration and "units" not in declaration:
+            lines.append(str(declaration["caption"]))
+            lines.append("")
+            continue
+        lines.append(f"- *Units:* {declaration['units']}.")
+        lines.append(f"- *A row is* {declaration['row_is']}.")
+        lines.append(f"- *A column is* {declaration['column_is']}.")
+        lines.append(f"- *Construction:* {declaration['construction']}.")
+        for clause in declaration.get("clauses") or []:
+            lines.append(f"- {clause}.")
+        if declaration.get("how_to_read"):
+            lines.append(f"- *How to read:* {declaration['how_to_read']}.")
+        lines.append("")
+    return lines
+
+
+def _populations_sentence(records: Mapping[str, Mapping[str, Any]]) -> str:
+    parts: list[str] = []
+    seen: set[str] = set()
+    for stage in TALLY_STAGES:
+        for source in records[stage].get("sources") or []:
+            name = str(source.get("source"))
+            if name in seen:
+                continue
+            seen.add(name)
+            parts.append(
+                f"`{name}` — {source.get('n_records')} record(s): {source.get('what')}"
+            )
+    if not parts:
+        return "no tally source published a record."
+    return "One population family, the sources named in every caption: " + "; ".join(parts) + "."
+
+
+def _constructions(
+    placed: Sequence[Placed], records: Mapping[str, Mapping[str, Any]], gate_block: Mapping[str, Any]
+) -> list[str]:
+    lines = [
+        "### D.0 Constructions and populations",
+        "",
+        "Every table of this appendix and of the companion file is an "
+        "instance of one **construction**, declared once here — its units, "
+        "what a row and a column are, how the cells are built (the function in "
+        "`harness/measurement/stats.py` whose docstring is the declaration), "
+        "the clauses that bind its reading — and printed under no table. A "
+        "table's own caption carries only what varies by table: what it shows, "
+        "its population and denominator, the one thing not to infer. The "
+        "declarations are rendered from the stages' records, so a construction "
+        "that changes here changed in the code.",
+        "",
+        "**Populations.** " + _populations_sentence(records),
+        "",
+        f"**{KIND_TITLES['gate_table']}** (`gate_table`; Table {REPORT_PREFIX}.1; 1 table).",
+        "",
+        str(gate_block.get("declaration") or gate_block.get("caption") or ""),
+        "",
+    ]
+    by_kind: dict[tuple[str, str], list[Placed]] = {}
+    order = _kind_order()
+    for p in placed:
+        if p.stage == "recomputed_tables":
+            continue
+        by_kind.setdefault((p.stage, p.kind), []).append(p)
+    # Declared groups first, in their order; then the detail-only kinds.
+    keys = sorted(
+        by_kind,
+        key=lambda k: (order.get(k, (len(GROUPS), 0)), k[0], k[1]),
+    )
+    for key in keys:
+        title = KIND_TITLES.get(key[1], key[1])
+        lines.extend(_declaration_lines(title, by_kind[key]))
+    return lines
+
+
+# --------------------------------------------------------------------------
+# the two documents
+# --------------------------------------------------------------------------
+
+
+def _captions_status(placed: Sequence[Placed]) -> dict[str, Any]:
+    """How long the report's captions are, for the renderer's own report."""
+    lengths = [len(_caption_text(p.table)) for p in placed if p.report_number]
+    return {
+        "n_report_tables": len(lengths),
+        "caption_chars_max": max(lengths) if lengths else 0,
+        "caption_chars_median": sorted(lengths)[len(lengths) // 2] if lengths else 0,
+    }
+
+
 def render(campaign: Campaign, records_dir: Path | None = None) -> dict[str, Any]:
-    """§4 of the plan, as markdown, with the record that says where it came from."""
+    """Appendix D and the companion file, as markdown, with the record of where
+    every table came from and which number it got."""
     records_dir = Path(
         records_dir or (Path(campaign.runs_dir) / framework.GATES_SUBPATH)
     )
     marker = population_marker(campaign, records_dir)
-    marker_sentence = _marker_sentence(marker)
-    caption_marker = _caption_marker(marker)
-    gate_caption_marker = _gate_caption_marker(marker)
-    if marker["campaign_present"]:
-        heading_note = (
-            f"*(the **campaign** population — {marker['n_run_records']} records "
-            f"at {_commits(marker)} — rendered from the campaign's records; the "
-            f"gate population at {_commits(marker['gate_runs'])} was the "
-            f"section's earlier fill, before execution approval, and is "
-            f"excluded by kind)*"
-        )
-    else:
-        heading_note = (
-            f"*(the **gate** population — not the campaign — rendered from the "
-            f"records at {_commits(marker)}; the campaign fills the section "
-            f"again after execution approval)*"
-        )
-    lines: list[str] = [
-        f"{SECTION_START} {heading_note}",
-        "",
-        "**Where these cells come from.** Every table below is emitted by a "
-        "measurement stage of `experiment_runner.py` and rendered into this "
-        "document by `harness/measurement/plan_tables.py`, which reads the stages' own "
-        "records under `runs/gates/<stage>/measurements.json`. No cell is "
-        "typed by hand (protocol §15), and nothing in this section is "
-        "computed here: each caption, denominator and grid is the stage's.",
-        "",
-        marker_sentence,
-        "",
-        "**Conventions that hold in every table (D21 (c)).** Absolute cost "
-        "cells are per-run means with the seed bracket. A ratio against the "
-        "reference is given three ways: pooled (sum over the set / sum over "
-        "the set), per-run median with `[min, max]`, and the count of seeds on "
-        "which the arm cost more. Configurations appear in the fixed order "
-        "nof / lad / st and are never pooled (D21 (b)). Prime calls appear "
-        "beside node calls, never inside them (D19). Node-call ratios are the "
-        "acceptance quantities; timings are context and no conclusion rests on "
-        "one (I-10).",
-        "",
-    ]
-    blocks: list[dict[str, Any]] = []
-    n_tables = 0
-    n_cells = 0
+    records: dict[str, dict[str, Any]] = {}
     freshness: list[str] = []
     for section in SECTIONS:
-        record = stage_record(records_dir, section.stage)
+        records[section.stage] = stage_record(records_dir, section.stage)
         if section.records_read_required:
-            freshness.append(assert_stage_read_what_is_there(record, records_dir, section))
-        lines.append(f"### {section.number} {section.heading}")
-        lines.append("")
-        lines.append(
-            f"*Emitted by `experiment_runner.py --measure {section.stage}`; "
-            f"{section.what}.*"
-        )
-        lines.append("")
-        if section.stage == "gate_table":
-            lines.extend(_gate_table_block(record, gate_caption_marker))
-            n_tables += 1
-            n_cells += len(record.get("rows") or [])
-            blocks.append(
-                {
-                    "section": section.number,
-                    "stage": section.stage,
-                    "n_tables": 1,
-                    "n_rows": len(record.get("rows") or []),
-                }
+            freshness.append(
+                assert_stage_read_what_is_there(records[section.stage], records_dir, section)
             )
-            continue
-        tables = record.get("tables") or []
-        if not tables:
+    for stage in TALLY_STAGES:
+        if not records[stage].get("tables"):
             raise PlanTablesError(
-                f"stage {section.stage!r} emitted no table, so §{section.number} "
+                f"stage {stage!r} emitted no table, so its part of the appendix "
                 f"would be an empty section presented as a result.  A section "
                 f"with no population is not a section (trap T11)."
             )
-        not_produced = record.get("tables_not_produced") or []
-        for table in tables:
-            lines.extend(_table_block(table, caption_marker))
-            n_tables += 1
-            n_cells += len(table.get("rows") or []) * len(
-                table.get("columns") or []
+    placed = _place(records)
+
+    # --- numbering: the report first (D.1 is the gate table), then F.
+    report_tables = _report_order(placed)
+    n = 1  # D.1 is the gate table
+    for p in report_tables:
+        n += 1
+        p.report_number = f"{REPORT_PREFIX}.{n}"
+    companion = _companion_order(placed)
+    m = 0
+    for _group, chosen in companion:
+        for p in chosen:
+            m += 1
+            p.companion_number = f"{COMPANION_PREFIX}.{m}"
+
+    # --- Appendix D
+    heading_note = (
+        f"*(rendered by `harness/measurement/plan_tables.py` from the stage "
+        f"records; the **{marker['population_family']}** population — "
+        f"{marker['n_run_records']} run records at {_commits(marker)})*"
+    )
+    lines: list[str] = [
+        f"{SECTION_START} {heading_note}",
+        "",
+        "**What this appendix is.** Every table of the experiment's results, "
+        "numbered `Table D.n` in the order printed, each an output of a "
+        "measurement stage of `experiment_runner.py` read from its record "
+        "under `runs/gates/<stage>/measurements.json`; no cell is typed by "
+        "hand (protocol §15) and nothing here computes a number. §4 of the "
+        "main text states the conclusions and points at these tables by "
+        "number. **Only summarising tables are here** — per arm or arm pair "
+        "and configuration. Every table with a row per run, seed, pair of "
+        "runs or predicate evaluation, the full versions of the tables whose "
+        "per-seed columns are omitted here, and every table of the second "
+        f"implementation are in the companion file [`{COMPANION_NAME}`]"
+        f"({COMPANION_NAME}) (numbered `Table F.n`, generated by the same "
+        "renderer and guarded by the same check), which this appendix points "
+        "at once, here. Table numbers are positional and change when a table "
+        "is added; a cell is traced by the construction name printed under "
+        "each table, never by its number.",
+        "",
+        _marker_sentence(marker),
+        "",
+        CONVENTIONS,
+        "",
+    ]
+    gate_block = records["gate_table"]
+    lines.extend(_constructions(placed, records, gate_block))
+    for group in GROUPS:
+        lines.append(f"### {group.number} {group.title}")
+        lines.append("")
+        lines.append(group.context)
+        lines.append("")
+        if group.kinds == (("gate_table", "gate_table"),):
+            lines.extend(_gate_table_block(gate_block, f"{REPORT_PREFIX}.1"))
+            continue
+        for p in report_tables:
+            if (p.stage, p.kind) not in group.kinds:
+                continue
+            omit = tuple(p.table.get("report_omits") or ())
+            lines.extend(
+                _table_block(
+                    p.table,
+                    p.report_number or "?",
+                    omit=omit,
+                    full_version=(
+                        f"companion Table {p.companion_number}"
+                        if omit and p.companion_number
+                        else None
+                    ),
+                )
             )
-        if not_produced:
-            lines.append(
-                f"*Not produced by this stage, each with its reason: "
-                f"{_not_produced_text(not_produced)}*"
-            )
-            lines.append("")
-        blocks.append(
-            {
-                "section": section.number,
-                "stage": section.stage,
-                "n_tables": len(tables),
-                "n_not_produced": len(not_produced),
-                "population": record.get("population"),
-                "runs_provenance": record.get("runs_provenance"),
-            }
-        )
+        if group.number == "D.4":
+            not_produced = records["tally_optimisation"].get("tables_not_produced") or []
+            if not_produced:
+                lines.append(
+                    f"*Not produced by the stage, each with its reason: "
+                    f"{_not_produced_text(not_produced)}*"
+                )
+                lines.append("")
+    lines.append(SECTION_END)
     markdown = "\n".join(lines).rstrip() + "\n"
+
+    # --- the companion file
+    companion_lines: list[str] = [
+        "# Results tables — the full result matrices",
+        "",
+        "> **Document status** — **GENERATED, never hand-edited.** Written whole "
+        "by `harness/measurement/plan_tables.py` (`experiment_runner.py "
+        "--plan-tables write`) from the same stage records as the report's "
+        "Appendix D, and compared whole by `--plan-tables check`. It holds "
+        "every table with a row per run, seed, pair of runs or predicate "
+        "evaluation, the full versions of the report's tables whose per-seed "
+        "columns the report omits, and every table of the second "
+        "implementation. Tables are numbered `Table F.n` in the order printed; "
+        "the report cites them by that number and traces a cell by the "
+        "construction name printed under each table. Populations, "
+        "constructions and conventions are the report's Appendix D.0's, not "
+        "repeated here. Arm names are today's (`AR/A0/A1/A2`, `BR/B0/B1/B2`); "
+        "the records carry the names of their day (trap T16).",
+        "",
+        f"*Rendered from the **{marker['population_family']}** population — "
+        f"{marker['n_run_records']} run records at {_commits(marker)}.*",
+        "",
+    ]
+    for group, chosen in companion:
+        companion_lines.append(f"## {group['number']} {group['title']}")
+        companion_lines.append("")
+        companion_lines.append(group["context"])
+        companion_lines.append("")
+        if not chosen:
+            companion_lines.append("*No table of this group was emitted.*")
+            companion_lines.append("")
+        for p in chosen:
+            companion_lines.extend(_table_block(p.table, p.companion_number or "?"))
+        if group["stage"] == "recomputed_tables":
+            not_produced = records["recomputed_tables"].get("tables_not_produced") or []
+            if not_produced:
+                companion_lines.append(
+                    f"*Not produced by the stage, each with its reason: "
+                    f"{_not_produced_text(not_produced)}*"
+                )
+                companion_lines.append("")
+    companion_markdown = "\n".join(companion_lines).rstrip() + "\n"
+
+    numbers = {
+        f"{p.stage}::{p.table['table']}": {
+            "stage": p.stage,
+            "kind": p.kind,
+            "report": p.report_number,
+            "companion": p.companion_number,
+        }
+        for p in placed
+    }
     return {
         "markdown": markdown,
+        "companion_markdown": companion_markdown,
         "marker": marker,
-        "sections": blocks,
-        "n_tables": n_tables,
-        "n_cells": n_cells,
         "records_dir": str(records_dir),
         "stage_records_are_current": freshness,
+        "n_tables": 1 + len(report_tables),
+        "n_report_tables": 1 + len(report_tables),
+        "n_companion_tables": m,
+        "n_cells": sum(
+            len(p.table.get("rows") or []) * len(p.table.get("columns") or [])
+            for p in placed
+        ) + len(gate_block.get("rows") or []),
+        "numbers": numbers,
+        "captions": _captions_status(placed),
+        "sections": [
+            {
+                "stage": stage,
+                "n_tables": (
+                    len(records[stage].get("tables") or []) if stage != "gate_table" else 1
+                ),
+                "n_in_report": (
+                    1 if stage == "gate_table"
+                    else sum(1 for p in placed if p.stage == stage and p.report_number)
+                ),
+                "n_in_companion": sum(
+                    1 for p in placed if p.stage == stage and p.companion_number
+                ),
+                "population": records[stage].get("population"),
+                "runs_provenance": records[stage].get("runs_provenance"),
+            }
+            for stage in ("gate_table", *TALLY_STAGES, "recomputed_tables")
+        ],
     }
 
 
@@ -523,55 +1148,80 @@ def _not_produced_text(rows: Sequence[Any]) -> str:
     return "; ".join(parts)
 
 
+# --------------------------------------------------------------------------
+# the documents on disk
+# --------------------------------------------------------------------------
+
+
 def plan_path(campaign: Campaign) -> Path:
-    """The experiment plan this section belongs to."""
+    """The experiment report the appendix belongs to."""
     return Path(campaign.runs_dir).parent / "EXPERIMENT_REPORT.md"
 
 
-def section_span(document: Path, lines: Sequence[str]) -> tuple[int, int]:
-    """Where §4 starts and stops in *lines*, or a refusal.
+def companion_path(campaign: Campaign) -> Path:
+    """The companion file beside the report."""
+    return Path(campaign.runs_dir).parent / COMPANION_NAME
 
-    Both headings are matched on the whole line and both must occur exactly
+
+def section_span(document: Path, lines: Sequence[str]) -> tuple[int, int]:
+    """Where the rendered block starts and stops in *lines*, or a refusal.
+
+    Both markers are matched on the whole line and both must occur exactly
     once: a renderer that writes into — or compares against — the wrong part
-    of a shared document is worse than one that does nothing.
+    of a shared document is worse than one that does nothing.  The span
+    **includes** the end marker, which the renderer writes.
     """
     starts = [i for i, line in enumerate(lines) if line.startswith(SECTION_START)]
-    ends = [i for i, line in enumerate(lines) if line.startswith(SECTION_END)]
+    ends = [i for i, line in enumerate(lines) if line.strip() == SECTION_END]
     if len(starts) != 1 or len(ends) != 1 or ends[0] <= starts[0]:
         raise PlanTablesError(
             f"{document} does not hold exactly one section starting "
-            f"{SECTION_START!r} followed by one starting {SECTION_END!r} "
+            f"{SECTION_START!r} followed by one line {SECTION_END!r} "
             f"(found {len(starts)} and {len(ends)}).  The renderer replaces "
             f"that span and nothing else, and refuses rather than guessing "
             f"which part of a shared document it was asked to rewrite."
         )
-    return starts[0], ends[0]
+    return starts[0], ends[0] + 1
 
 
-def check(
-    campaign: Campaign, records_dir: Path | None = None, *, path: Path | None = None
-) -> dict[str, Any]:
-    """Render §4 and compare it with the section the document already carries.
+#: A reference in the hand-written text: ``Table D.12``, ``Tables D.3–D.5``,
+#: ``Tables F.1 and F.2``.
+_REFERENCE = re.compile(
+    r"\bTables?\s+([DF])\.(\d+)(?:\s*(?:–|-|—|and|,)\s*(?:[DF]\.)?(\d+))?"
+)
 
-    The same rendering as :func:`write`, and **no write**: what comes back is
-    whether the committed section is the one these records produce, and the
-    lines where it is not.  It exists so that a task whose job is the records
-    can report the state of a shared document without editing it, and so that
-    "the plan is up to date" is a comparison rather than a claim.
-    """
-    document = Path(path) if path is not None else plan_path(campaign)
-    lines = document.read_text().splitlines()
-    start, end = section_span(document, lines)
-    committed = lines[start:end]
-    rendered = render(campaign, records_dir)
-    fresh = rendered["markdown"].splitlines()
+
+def _references(lines: Sequence[str], counts: Mapping[str, int]) -> dict[str, Any]:
+    """Every ``Table D.n`` / ``Table F.n`` reference in *lines*, resolved
+    against the numbers this rendering assigns."""
+    found: dict[str, int] = {"D": 0, "F": 0}
+    dangling: list[str] = []
+    for i, line in enumerate(lines):
+        for match in _REFERENCE.finditer(line):
+            prefix = match.group(1)
+            numbers = [int(match.group(2))]
+            if match.group(3):
+                numbers.append(int(match.group(3)))
+            for number in numbers:
+                found[prefix] += 1
+                if number < 1 or number > counts.get(prefix, 0):
+                    dangling.append(f"line {i + 1}: Table {prefix}.{number}")
+    return {
+        "n_references_to_the_appendix": found["D"],
+        "n_references_to_the_companion": found["F"],
+        "n_dangling": len(dangling),
+        "dangling": dangling[:20],
+    }
+
+
+def _diff(committed: list[str], fresh: list[str]) -> dict[str, Any]:
     while committed and not committed[-1].strip():
         committed.pop()
     while fresh and not fresh[-1].strip():
         fresh.pop()
     # A **diff**, not a line-for-line comparison against position: one row
-    # added to §4.1 shifts everything below it, and a positional comparator
-    # would report seventeen hundred differences where there is one insertion —
+    # added shifts everything below it, and a positional comparator would
+    # report seventeen hundred differences where there is one insertion —
     # a count over a population nobody would recognise (trap T11).
     matcher = difflib.SequenceMatcher(a=committed, b=fresh, autojunk=False)
     common = added = removed = 0
@@ -592,24 +1242,83 @@ def check(
                 "from_the_records": [line[:160] for line in fresh[j1:j2][:3]],
             }
         )
+    return {
+        "n_lines_in_document": len(committed),
+        "n_lines_from_the_records": len(fresh),
+        "n_lines_identical": common,
+        "n_lines_only_in_the_document": removed,
+        "n_lines_only_from_the_records": added,
+        "n_hunks": len(hunks),
+        "identical": not hunks,
+        "hunks": hunks[:10],
+        "n_hunks_not_listed": max(0, len(hunks) - 10),
+    }
+
+
+def check(
+    campaign: Campaign, records_dir: Path | None = None, *, path: Path | None = None
+) -> dict[str, Any]:
+    """Render both documents and compare them with what is committed, writing nothing.
+
+    The same rendering as :func:`write`, and **no write**: what comes back is
+    whether the committed Appendix D and the committed companion file are the
+    ones these records produce, the lines where they are not, and whether
+    every table reference in the report's hand-written text resolves.  It
+    exists so that a task whose job is the records can report the state of a
+    shared document without editing it, and so that "the report is up to
+    date" is a comparison rather than a claim.
+    """
+    document = Path(path) if path is not None else plan_path(campaign)
+    companion = (
+        document.parent / COMPANION_NAME if path is not None else companion_path(campaign)
+    )
+    lines = document.read_text().splitlines()
+    start, end = section_span(document, lines)
+    rendered = render(campaign, records_dir)
+    compared = _diff(lines[start:end], rendered["markdown"].splitlines())
+    compared["what_this_is"] = (
+        "the document's Appendix D against the appendix these stage records "
+        "produce now, as a diff, with nothing written"
+    )
+    if companion.exists():
+        compared_companion = _diff(
+            companion.read_text().splitlines(),
+            rendered["companion_markdown"].splitlines(),
+        )
+    else:
+        fresh = rendered["companion_markdown"].splitlines()
+        compared_companion = {
+            "identical": False,
+            "missing": True,
+            "n_hunks": 1,
+            "hunks": [],
+            "n_hunks_not_listed": 0,
+            "n_lines_in_document": 0,
+            "n_lines_from_the_records": len(fresh),
+            "n_lines_identical": 0,
+            "n_lines_only_in_the_document": 0,
+            "n_lines_only_from_the_records": len(fresh),
+        }
+    compared_companion["what_this_is"] = (
+        f"the committed {COMPANION_NAME} against the one these stage records "
+        f"produce now, whole, as a diff"
+    )
+    references = _references(
+        lines[:start] + lines[end:],
+        {"D": rendered["n_report_tables"], "F": rendered["n_companion_tables"]},
+    )
     rendered.update(
         {
             "document": str(document),
-            "compared": {
-                "what_this_is": (
-                    "the document's §4 against the §4 these stage records "
-                    "produce now, as a diff, with nothing written"
-                ),
-                "n_lines_in_document": len(committed),
-                "n_lines_from_the_records": len(fresh),
-                "n_lines_identical": common,
-                "n_lines_only_in_the_document": removed,
-                "n_lines_only_from_the_records": added,
-                "n_hunks": len(hunks),
-                "identical": not hunks,
-                "hunks": hunks[:10],
-                "n_hunks_not_listed": max(0, len(hunks) - 10),
-            },
+            "companion": str(companion),
+            "compared": compared,
+            "compared_companion": compared_companion,
+            "references": references,
+            "identical": bool(
+                compared["identical"]
+                and compared_companion["identical"]
+                and references["n_dangling"] == 0
+            ),
         }
     )
     return rendered
@@ -618,24 +1327,36 @@ def check(
 def write(
     campaign: Campaign, records_dir: Path | None = None, *, path: Path | None = None
 ) -> dict[str, Any]:
-    """Replace §4 of the plan with the rendered section, in place.
+    """Replace Appendix D in the report and the companion file whole, in place.
 
-    Only §4 is touched: the section is found by its own heading and the next
-    one, and a document where either heading has moved or been reworded is a
-    **refusal**, never a best-effort edit — a renderer that writes into the
-    wrong part of a shared document is worse than one that does nothing.
+    Only the rendered block is touched in the report: it is found by its own
+    heading and the end marker, and a document where either has moved or been
+    reworded is a **refusal**, never a best-effort edit — a renderer that
+    writes into the wrong part of a shared document is worse than one that
+    does nothing.  The companion file is the renderer's alone and is written
+    whole.
     """
     document = Path(path) if path is not None else plan_path(campaign)
+    companion = (
+        document.parent / COMPANION_NAME if path is not None else companion_path(campaign)
+    )
     text = document.read_text()
     lines = text.splitlines()
     start, end = section_span(document, lines)
     rendered = render(campaign, records_dir)
     body = rendered["markdown"].splitlines()
-    replaced = lines[:start] + body + [""] + lines[end:]
+    replaced = lines[:start] + body + lines[end:]
     document.write_text("\n".join(replaced).rstrip() + "\n")
+    companion.write_text(rendered["companion_markdown"])
     rendered["document"] = str(document)
+    rendered["companion"] = str(companion)
     rendered["n_lines_replaced"] = end - start
     rendered["n_lines_written"] = len(body)
+    rendered["n_companion_lines_written"] = len(rendered["companion_markdown"].splitlines())
+    rendered["references"] = _references(
+        lines[:start] + lines[end:],
+        {"D": rendered["n_report_tables"], "F": rendered["n_companion_tables"]},
+    )
     return rendered
 
 
@@ -655,13 +1376,9 @@ def report(result: Mapping[str, Any]) -> None:
     print(f"  instrument: {marker['exit_audit_instrument']}")
     for block in result["sections"]:
         print(
-            f"  §{block['section']:<5} {block['stage']:<20} "
-            f"{block['n_tables']:>3} table(s)"
-            + (
-                f", {block['n_not_produced']} not produced"
-                if block.get("n_not_produced")
-                else ""
-            )
+            f"  {block['stage']:<20} {block['n_tables']:>3} table(s): "
+            f"{block['n_in_report']} in the report, {block['n_in_companion']} "
+            f"in the companion file"
         )
         provenance = block.get("runs_provenance") or {}
         if provenance:
@@ -669,11 +1386,25 @@ def report(result: Mapping[str, Any]) -> None:
                 f"            runs read: {provenance.get('n_records')} "
                 f"record(s) at {provenance.get('heads')}"
             )
-    print(f"  {result['n_tables']} table(s), {result['n_cells']} cell(s)")
-    compared = result.get("compared")
-    if compared:
+    captions = result.get("captions") or {}
+    print(
+        f"  {result['n_report_tables']} table(s) in Appendix D, "
+        f"{result['n_companion_tables']} in {COMPANION_NAME}, "
+        f"{result['n_cells']} cell(s); report captions up to "
+        f"{captions.get('caption_chars_max')} characters (median "
+        f"{captions.get('caption_chars_median')})"
+    )
+    for name, compared in (
+        ("Appendix D", result.get("compared")),
+        (COMPANION_NAME, result.get("compared_companion")),
+    ):
+        if not compared:
+            continue
+        if compared.get("missing"):
+            print(f"  compared  : {name} — the committed file does not exist; NOT IDENTICAL")
+            continue
         print(
-            f"  compared  : {result['document']} — "
+            f"  compared  : {name} — "
             f"{compared['n_lines_in_document']} line(s) in the document "
             f"against {compared['n_lines_from_the_records']} from the "
             f"records: {compared['n_lines_identical']} identical, "
@@ -697,9 +1428,21 @@ def report(result: Mapping[str, Any]) -> None:
                 f"    and {compared['n_hunks_not_listed']} further hunk(s) "
                 f"not listed"
             )
+    references = result.get("references")
+    if references:
+        print(
+            f"  references: {references['n_references_to_the_appendix']} to "
+            f"Appendix D and {references['n_references_to_the_companion']} to "
+            f"the companion file in the hand-written text; "
+            f"{references['n_dangling']} dangling"
+        )
+        for line in references["dangling"]:
+            print(f"    DANGLING {line}")
+    if result.get("compared"):
         print("  nothing was written: this is the comparison mode")
     elif result.get("document"):
         print(
             f"  written   : {result['document']} — {result['n_lines_written']} "
-            f"line(s) replacing {result['n_lines_replaced']}"
+            f"line(s) replacing {result['n_lines_replaced']}; "
+            f"{result['companion']} — {result['n_companion_lines_written']} line(s), whole"
         )

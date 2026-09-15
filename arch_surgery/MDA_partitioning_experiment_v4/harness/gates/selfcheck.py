@@ -1216,13 +1216,23 @@ def _scratch_records(destination: Path) -> tuple[int, int]:
             + "\n".join(f"| `{row['gate']}` | **PASS** |" for row in rows),
         }
     }
+    # Each tally stage's scratch table carries a kind the renderer's groups
+    # declare (a tally table without one is refused, by design); the
+    # recomputed stage's carries none, as the analysis's tables do not.
+    scratch_kind = {
+        "tally_evaluation": "cost_per_call",
+        "tally_optimisation": "cost",
+        "recomputed_tables": "",
+    }
     for stage in ("tally_evaluation", "tally_optimisation", "recomputed_tables"):
         stage_records[stage] = {
             "population": "a scratch population of 1",
             "runs_provenance": {"n_records": 0, "heads": []},
+            "sources": [],
             "tables": [
                 {
                     "table": f"a_scratch_table_of_{stage}",
+                    "kind": scratch_kind[stage],
                     "caption": "a scratch table, owned by the self-check.",
                     "denominator": 1,
                     "denominator_is": "one scratch row",

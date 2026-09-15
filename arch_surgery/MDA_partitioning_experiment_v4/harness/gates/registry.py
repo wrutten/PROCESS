@@ -467,24 +467,33 @@ def gate_table(campaign: Campaign, records_dir: Path | None = None) -> dict[str,
             "the experiment plan §4.1's gate table, filled in from the verdict "
             "records rather than by hand"
         ),
+        # The full reading of the columns is the declaration, printed once in
+        # the results appendix's constructions subsection; the caption is the
+        # few lines the report prints under the table (task A79
+        # (report-captions), the user's ruling of 2026-09-15).
+        "declaration": (
+            "'plan' is the label the experiment plan's §3.9 table uses, empty "
+            "where the gate is one of the harness's own checks rather than one "
+            "of the plan's. 'verdict' is PASS/FAIL on the gate's criterion "
+            "**and** on every tooth tripping. 'population' is what the gate "
+            "compared, in its own words; 'compared' is the denominator and "
+            "'mismatched' the count of things that differed — both are the "
+            "gate's own headline pair, and a gate whose criterion is not a "
+            "count of compared values leaves them empty and states its "
+            "population in words instead. Where a gate compares more than one "
+            "kind of thing — coupling-state components, record values, "
+            "output-file lines — the denominator is their sum and the row's "
+            "'denominators summed' names each. 'teeth' is tripped / declared. "
+            "A gate whose tooth did not trip is not accepted whatever its "
+            "verdict."
+        ),
         "caption": (
-            "One row per registered gate. 'plan' is the label the experiment "
-            "plan's §3.9 table uses, empty where the gate is one of the "
-            "harness's own checks rather than one of the plan's. 'verdict' is "
-            "PASS/FAIL on the gate's criterion **and** on every tooth "
-            "tripping. 'population' is what the gate compared, in its own "
-            "words; 'compared' is the denominator and 'mismatched' the count "
-            "of things that differed — both are the gate's own headline pair, "
-            "and a gate whose criterion is not a count of compared values "
-            "leaves them empty and states its population in words instead. "
-            "Where a gate compares more than one kind of thing — coupling-state "
-            "components, record values, output-file lines — the denominator is "
-            "their sum and the row's 'denominators summed' names each. "
-            "'teeth' is tripped / declared. A gate whose tooth did not trip is "
-            "not accepted whatever its verdict. One row reads 1 mismatched and "
-            "PASS: the frozen-physics gate counts the single model file the "
-            "user approved as differing, by name, and passes because it is the "
-            "approved one."
+            "Every registered gate from its verdict record: the verdict on "
+            "the criterion and every tooth, what it compared (the denominator) "
+            "and how many differed, teeth tripped / declared. No number in "
+            "this appendix is cited unless every row is PASS with its teeth "
+            "tripped; the one 1-mismatched PASS is the frozen-physics gate "
+            "counting the one approved model file by name."
         ),
         "population": (
             f"{len(rows)} registered gate(s): {len(plan_rows)} of the "

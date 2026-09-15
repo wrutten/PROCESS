@@ -655,15 +655,16 @@ def stage_measure(args: argparse.Namespace, campaign: Campaign) -> int:
 
 
 def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
-    """The plan's §4, rendered from the measurement stages' own records.
+    """The report's results tables, rendered from the measurement stages' own records.
 
-    ``show`` prints it, ``write`` puts it into ``EXPERIMENT_REPORT.md`` in place
-    of the section it replaces.  Neither computes a number: every table,
-    caption and denominator here is a stage's, read from
-    ``runs/gates/<stage>/measurements.json``, so the document and the records
-    on disk cannot drift apart (protocol §15).
+    ``show`` prints Appendix D, ``write`` puts it into ``EXPERIMENT_REPORT.md``
+    in place of the block it replaces and writes the companion file
+    ``RESULTS_TABLES_FULL.md`` whole, ``check`` compares both without
+    writing.  None computes a number: every table, caption and denominator
+    here is a stage's, read from ``runs/gates/<stage>/measurements.json``, so
+    the documents and the records on disk cannot drift apart (protocol §15).
     """
-    _rule("the plan's results section")
+    _rule("the report's results tables")
     try:
         if args.plan_tables == "write":
             result = plan_tables_mod.write(
@@ -684,10 +685,11 @@ def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
     if args.plan_tables == "show":
         print()
         print(result["markdown"])
-    if args.plan_tables == "check" and not result["compared"]["identical"]:
-        # A difference is reported, not repaired: the plan is a shared
-        # document and this mode exists so that a task can say what the
-        # records now produce without editing it.
+    if args.plan_tables == "check" and not result["identical"]:
+        # A difference — in either document, or a table reference in the
+        # hand-written text that points past the end — is reported, not
+        # repaired: the report is a shared document and this mode exists so
+        # that a task can say what the records now produce without editing it.
         return 3
     return 0
 
