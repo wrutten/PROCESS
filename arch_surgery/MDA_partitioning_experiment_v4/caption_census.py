@@ -85,7 +85,21 @@ def census_old(text: str, width: int) -> dict[str, object]:
     how_to_read = [l for l in section if l.startswith("*How to read:")]
     per_table_caption_lines = len(caption_lines) / n_tables if n_tables else 0
     chars = [len(_OLD_CAPTION.match(l).group(1)) if _OLD_CAPTION.match(l) else len(l) for l in caption_lines]
-    hand = [l for i, l in enumerate(lines) if l.startswith("*Caption:") and not (start <= i < end)]
+    hand: list[str] = []
+    paragraph: list[str] = []
+    for i, l in enumerate(lines + [""]):
+        if start <= i < end:
+            continue
+        if paragraph:
+            paragraph.append(l.strip())
+            if l.strip().endswith("*") or not l.strip():
+                hand.append(" ".join(paragraph)[len("*Caption: "):].rstrip("*"))
+                paragraph = []
+        elif l.startswith("*Caption:"):
+            paragraph = [l.strip()]
+            if l.strip().endswith("*") and len(l.strip()) > 12:
+                hand.append(l.strip()[len("*Caption: "):].rstrip("*"))
+                paragraph = []
     return {
         "document": "EXPERIMENT_REPORT.md §4 (before)",
         "n_tables": n_tables,
@@ -120,7 +134,24 @@ def census_new(text: str, name: str, width: int, *, block_only: bool) -> dict[st
         else:
             in_grid = False
     chars = [len(m.group(2)) for m in titles]
-    hand = [m for l in outside if (m := _HAND_TITLE.match(l.strip()))]
+    # The hand-written captions wrap over several lines: join a paragraph
+    # that opens with a hand title until its closing ``*``.
+    hand: list[str] = []
+    paragraph: list[str] = []
+    for l in outside + [""]:
+        if paragraph:
+            paragraph.append(l.strip())
+            if l.strip().endswith("*") or not l.strip():
+                joined = " ".join(paragraph).strip()
+                m = _HAND_TITLE.match(joined)
+                if m:
+                    hand.append(m.group(2))
+                paragraph = []
+        elif re.match(r"^\*\*Table (\d+|[A-C]\.\d+)\.\*\* \*", l.strip()):
+            paragraph = [l.strip()]
+            if l.strip().endswith("*") and _HAND_TITLE.match(l.strip()):
+                hand.append(_HAND_TITLE.match(l.strip()).group(2))
+                paragraph = []
     return {
         "document": name,
         "n_tables": len(titles),
@@ -131,7 +162,7 @@ def census_new(text: str, name: str, width: int, *, block_only: bool) -> dict[st
         "caption_chars": _stats(chars),
         "caption_lines_at_width": _stats([_lines_at(c, width) for c in chars]),
         "n_hand_written_captions_outside": len(hand),
-        "hand_written_caption_chars": _stats([len(m.group(2)) for m in hand]),
+        "hand_written_caption_chars": _stats([len(h) for h in hand]),
     }
 
 
