@@ -81,3 +81,13 @@ sweeps is `PROCESS/process/core/caller.py`'s `NODE_CALLS` docstring.
 | date | entry |
 |---|---|
 | 2026-09-15 | List opened with item 1; report written; task open, awaiting the orchestrator's assessment. |
+
+## 6. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `d56aa19f` by the orchestrating session; gates the merge.*
+
+**Checks.** (1) Every V4 cell the item cites exists in `EXPERIMENT_REPORT.md` at `14342a72` as cited: §4.3's iteration-multiplier table rows `B0 → B1` and `B0 → B3` on `low_aspect_ratio_DEMO` read 11 / 0.8125 / 0.7012 / PASS, and the same table's *evaluations median* column reads 0.8046 for `B0 → B1` and **2.1169** for `B0 → B3` — a number that cannot be an evaluation-count ratio on a pair whose optimiser took the same path, which is the defect in one cell. (2) The defect's evidence re-read from the campaign records in the main checkout (`campaign_57dc0c14/campaign/optimisation/large_tokamak_nof/{B0,B1,B3}/seed001/metrics.json`): `n_model_calls` 2 074 / **2 101** / 5 498 (the item says 2 100; one off, immaterial), `sweeps_per_eval.n_evaluations` 630 / 660 / 660, `n_solver_iterations` 8 / 8 / 8; `records.py:472` describes `n_model_calls` as "evaluations of the model set the optimiser asked for" and `tally_optimisation.py:679–680` builds the column from it. Confirmed; minted as **I-26** at the merge. (3) The V5 list's header says what the list is and is not, names the arm-naming state and A78, and marks the D22 paragraph as the agent's proposal. (4) Doc-only: two files added, nothing else in the diff.
+
+**Two remarks.** The item's mechanism statement — a shorter trajectory passes a one-sided bound and its saving is read as per-evaluation saving — is correct for the *attribution* and the item says so; it does not claim a V4 verdict changed, and none did. The proposed two-sided label at `|log ε| ≤ log 1.05` reuses V4's 1.05 without a reason; a V5 plan should derive its threshold or drop the label. The D22 paragraph stays marked as proposed until the user rules on it.
+
+**Verdict: merge.** The item records the user's ruling in the user's words with the cells that support it; the defect it found is real and becomes an issue.
