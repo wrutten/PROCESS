@@ -8,6 +8,7 @@
 > name instrumentation V3 lacked; the rest are design or analysis changes on data that already
 > exists. Nothing here may be applied to the V3 harness — V3's campaign is measured and
 > published, and changing its schedule or arm names retrospectively would break comparability.
+> **Arm names (2026-09-15, A78 (arm-renames)):** the V4 arms are now `AR A0 A1 A2` / `BR B0 B1 B2`; the items below are dated entries and keep the names of their day — `A0p` is today's `A1`, `A1` today's `A2`, `B3` today's `B2`, and `B2` below is V3's joint-test arm (removed by D22), not today's partitioned optimisation arm.
 
 ## Arm lattice
 

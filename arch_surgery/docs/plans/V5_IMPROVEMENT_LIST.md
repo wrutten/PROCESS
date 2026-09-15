@@ -8,8 +8,9 @@
 > not a plan.** Nothing here is decided, and a V5 experiment plan would restate its selections with
 > pre-declared acceptance rules. Nothing here may be applied to the V4 harness or its report — V4's
 > campaign is measured and published, and a rule changed after the numbers is not a check. Arm
-> names are the V4 report's at `14342a72` (`BR / B0 / B1 / B3`); A78 (arm-renames) renames `B3`
-> to `B2` throughout the V4 folder and a V5 plan should use whatever names stand when it is written.
+> names in item 1 are the V4 report's at `14342a72` (`BR / B0 / B1 / B3`), the names of its day;
+> **A78 (arm-renames) renamed `B3` to `B2` (and `A0p`, `A1` to `A1`, `A2`) throughout the V4 folder on
+> 2026-09-15** — the `B3` below is today's `B2` — and a V5 plan uses the names that stand when it is written.
 
 ## Design of the comparison
 

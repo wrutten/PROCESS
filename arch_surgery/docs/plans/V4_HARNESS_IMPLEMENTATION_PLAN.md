@@ -20,6 +20,7 @@
 > [`V4_IMPROVEMENT_LIST.md`](V4_IMPROVEMENT_LIST.md) (the item list behind it). This plan says
 > how a harness implements them, and where the harness *forces* a methodological choice it says
 > so and asks rather than deciding.
+> **Arm names since 2026-09-15 (A78 (arm-renames), amendment 27):** `AR A0 A1 A2` / `BR B0 B1 B2`. The text below is the plan as approved and its dated amendments, in the names of their day: `A0p` there is today's `A1`, `A1` today's `A2`, `B3` today's `B2`; a `B2` in an entry dated before 2026-09-15 is V3's removed joint-test arm, not today's partitioned optimisation arm. Only §0's vocabulary row, §2.3's artifact row, §4.5's map and §7.5's coverage row are written in today's names.
 
 ---
 
@@ -41,7 +42,7 @@ frozen physics or engineering calculation.*
 | term | meaning |
 |---|---|
 | **model** | a physics or engineering calculation under `process/models/`. **Frozen** at base commit `c0ae5b28` — the whole point (decision **D5**) |
-| **arm** | one assignment of the driver's environment switches. Phase A arms `AR A0 A0p A1`; Phase B arms `BR B0 B1 B3` *(**D22**, 2026-09-10: `B2` removed from the arm set)* |
+| **arm** | one assignment of the driver's environment switches. Phase A arms `AR A0 A1 A2`; Phase B arms `BR B0 B1 B2` *(names of 2026-09-15, A78 (arm-renames); **D22**, 2026-09-10: V3's joint-test arm — V3's `B2`, not today's — removed from the arm set)* |
 | **prime** | executing the first-wall geometry method at the head of every sweep so `build` reads this pass's first-wall thickness instead of the previous pass's. A driver choice about *when a method runs* (decision **D19**); the README calls it **arrangement · method** |
 | **`norm_objf`** | the normalised objective at exit. The correctness quantity (decision **D6**: never iteration variables) |
 | **D`<n>` / I-`<n>` / A`<n>`** | a recorded user decision / a filed issue / a queue task, in [`MASTER_TODO.md`](MASTER_TODO.md) |
@@ -195,7 +196,7 @@ it" matters because an artifact the **driver** also reads cannot be moved by the
 | `docs/data/ystate_a26_<config>.json` (3) | `v3_config.ystate_for`, passed as `PROCESS_ARCH_YSTATE` and as both Phase A specs | **the driver**, `module_solve.load_spec` | yes — the definition of `y` |
 | `docs/data/writeset_a26_<config>.json` (3) | `v3_config.writeset_for`, passed as `PROCESS_ARCH_WRITESET` | **the driver**, `module_solve` | yes — the per-block subsets |
 | `docs/data/postsolve_<config>.json` (3) | `PROCESS_ARCH_POST_SOLVE`; `phase_a.excluded_keys`; `v3_report_analysis.excluded_keys` | **the driver**, `caller._post_solve_nodes` | yes — becomes the `per_run` set |
-| `docs/data/postsolve_nolift_<config>.json` (2) | Phase A block arms on pulsed configurations (they run the frozen deck, so the artifact must be stamped for the base constraint set) | the driver | yes — `A0p`/`A1` need it |
+| `docs/data/postsolve_nolift_<config>.json` (2) | Phase A block arms on pulsed configurations (they run the frozen deck, so the artifact must be stamped for the base constraint set) | the driver | yes — `A1`/`A2` (today's names) need it |
 | `docs/data/node_writesets.json` | `phase_a.py:115,342`; `v3_report_analysis.py:114` | **the driver**, `caller.py:350,583` — **hard-coded path, no override** | yes |
 | `docs/data/dsm_node_map.json` | `v3_report_analysis.py:1084,1314` | **the driver**, `caller.py:382,570,703` — **hard-coded path, no override** | yes |
 | `docs/data/a21_published.json`, `a28_published.json` | **nobody in V3** | — | no |
@@ -685,7 +686,9 @@ inventory finding that requires it. Fields not listed are carried unchanged.*
 
 ### 4.5 Naming, and the map back to V3
 
-`AR A0 A0p A1` / `BR B0 B1 B3` (V4 plan §3.2). V3's `R` becomes `BR`; V3's `A1u` is retired
+`AR A0 A1 A2` / `BR B0 B1 B2` (V4 plan §3.2; the names of 2026-09-15 — A78 (arm-renames),
+amendment 27; before that date `A0p A1` and `B3`). V3's `R` becomes `BR`, V3's `A1` is today's `A2`,
+V3's `B3` is today's `B2` (`switches.PREVIOUS_ARM_NAMES`); V3's `A1u` is retired
 (improvement item 0). The **V3 → V4 map** lives in `switches.py` as one dict covering arm names,
 environment-variable names and record field names, and is used in exactly two places: gate G0's
 reference lookup, and any V4 table that carries a V3 baseline. **A lookup that misses must raise**
@@ -699,7 +702,9 @@ experiment plan's §3.2 matrix, which no longer has a `B2` column, so the arm si
 in the table; **no rung, check, tally column or table may name `B0 → B2` or `B2 → B3`.** GR's
 reference set (§7.1) is unaffected — it never held `B2`. The `verify` outer-loop mode remains a
 **driver** capability (`PROCESS_ARCH_OUTER=verify`, the driver default) and is still what GR's
-composition tooth perturbs; what is removed is the *arm*, not the switch.
+composition tooth perturbs; what is removed is the *arm*, not the switch. *(2026-09-15, amendment 27:
+this paragraph's `B2` is V3's joint-test arm and its `B3` is today's `B2`; the prohibition is on the
+removed arm, not on the spelling — today's rung `B1 → B2` is the partition.)*
 
 ### 4.6 What "minimal" costs, priced
 
@@ -989,7 +994,7 @@ itself produces.*
 
 | arm | why GR cannot cover it | covered instead by |
 |---|---|---|
-| **`A0p`** (flat + lift + pin; improvement item 1c) | V3 never ran flat-with-pin: its Phase A pin appears only on the block arms, so there is no V3 record to reproduce | **G6, the warm-equivalence gate.** Pinned at the reference's *converged* burn time, `A0p` must reproduce the reference fixed point with cross-state maximum scaled residual `< τ` **and** the pinned component bit-identical. That is the same construction V3's G6 already passes on both pulsed configurations for the block arms, applied to the new arm |
+| **`A1`** (today's name; `A0p` when this row was written — flat + lift + pin; improvement item 1c) | V3 never ran flat-with-pin: its Phase A pin appears only on the block arms, so there is no V3 record to reproduce | **G6, the warm-equivalence gate.** Pinned at the reference's *converged* burn time, `A0p` must reproduce the reference fixed point with cross-state maximum scaled residual `< τ` **and** the pinned component bit-identical. That is the same construction V3's G6 already passes on both pulsed configurations for the block arms, applied to the new arm |
 | **`AR`** (Phase A reference: every switch unset; improvement item 1) | V3 had no Phase A reference arm at all | **a G1-shape check**: `evaluate.py` with every architecture switch cleared must reproduce the **first `call_models`** of `BR start000` on the counts that call records — node calls for the call, sweeps for the call, and the objective hex at its exit. Both sides are then upstream's own loop entered from the same state, so any difference is the harness's, which is exactly what the check is for |
 
 Two consequences the plan holds to. **The GR record names both rows explicitly**, so a reader
@@ -1501,6 +1506,8 @@ proposal (C2, C3 of the survey; the user's).*
 - **Amendment 25 (2026-09-14, at A73 (run-path-edits-and-the-press)'s merge, `03f72479`) — D27 discharged.** The simplification survey's tiers A and B (20 items) and the `ystate.py` move landed in four sequential tasks: A70 (A1, A2, A9), A71 (A3–A8 in part, A10–A12, B2, B5–B8), A72 (I-23, B4, B1), A73 (B3, A66, the child-side remainders, item 13). Harness 47 728 → 45 390 lines; registry 26 gates + 9 stages → 30 gates + 5 stages; teeth 153 → 152; one schema change (100 → 101 fields). **The one press** (D27: "rerun the gates once after the full changes"), from scratch at `0677a9b3`/`4ca8cff5`: 30 PASS, 152/152 teeth; GR 256/256; G1 straddle `fd480aff → 0677a9b3` 0/2 825 values, 0/51 319 lines; 136 PROCESS runs; the shared pool measured at 20 fewer runs per press (132 vs 152). Two gates A72 changed without pressing failed at the press and were fixed on kept records (G4 a renamed name, G8 two unexcluded identity stamps) — rule (xiii)'s prediction, and its cost. **Rule (xiv) clarified:** records of the *same* job must agree on every identity field and the digest; a gate that pairs *different* jobs by construction (G8's two modes) excludes the varied field's stamps by name, classified in `exclusion_review`. Tier C is deferred by the user. The campaign still waits on `EXECUTION_APPROVED`.
 
 - **Amendment 26 (2026-09-14, at A75 (campaign-tally-source)'s merge, `004eb06b`) — the campaign source family; I-24.** The first campaign press (`57dc0c14`, 949 records) reached the tally and read 0 records: `tally.SOURCES` named two gate job sets and no campaign one, and the smoke could not show it (T15). Now the tally and the analysis each derive, independently, the campaign plan's job sets from `chain.campaign_jobs` — entry references, displaced, stencil forward, stencil backward, optimisation — present only under `EXECUTION_APPROVED`; **one population family per table**, named in the caption; the gate family is not emitted while the campaign is present. **Rule (xi) extended to chain plans:** a chain plan's job set is a tally population. `run_kind_separation` proves every published cell is over campaign records only, both directions toothed. The attempt-summation identity is not asked of a record whose status is not `ok` (a crash has no solve-phase total by construction); the all-or-none rule stands. §4 is the campaign population.
+
+- **Amendment 27 (2026-09-15, A78 (arm-renames)) — the arms renamed, the records not re-made.** At the user's ruling (*"rename A0p and A1 to A1 and A2, and B3 to B2 … so the naming of the rungs reflects the parallelism in the switch matrix"*) the arms are `AR A0 A1 A2` / `BR B0 B1 B2`, one letter apart per rung in the two phases. Applied throughout the V4 folder — matrix, registry map, gates, tallies, analysis, README, `CHANGES.md`, the report (§4 by re-rendering) — and in this document's current-state rows only (§0, §2.3, §4.5, §7.5); every dated amendment keeps its day's names. **The 949 campaign records and every earlier gate record stamp the old names and were not re-made:** one declared table, `records.RECORDED_ARM_NAMES`, is applied in `records.read` — the one reader — so every consumer sees today's names; a record made after the renaming stamps `arm_naming` and is read as written (today's `A1` and yesterday's `A1` spell the same and mean different arms; the stamp is what separates them); a translated record's `job_digest` is re-derived over the translated identity with the stamped one kept as `job_digest_as_stamped`, so rule (xiv)'s comparison keeps it; the pool resolves a job's directory by that digest (`pool.directory_for`) where a record exists and refuses to remove another job's record from a canonical directory; a record naming an arm nobody declared is refused by name. Directory names on disk keep their day's names. **Corollary to rule (xiv), proposed for the rule table at the merge: a name in a record is the name at the time of the run; a reader translates at read through one declared table and never rewrites the record.** The reproduction reference's `arm` fields were regenerated names-only (`reference.py --rename-arms`) and the gate pressed once (rule xiii). Gate `resume_identity` surveys every record by how its name was read and has four teeth on it.
 
 ---
 
