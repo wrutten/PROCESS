@@ -1216,23 +1216,34 @@ def _scratch_records(destination: Path) -> tuple[int, int]:
             + "\n".join(f"| `{row['gate']}` | **PASS** |" for row in rows),
         }
     }
-    # Each tally stage's scratch table carries a kind the renderer's groups
-    # declare (a tally table without one is refused, by design); the
-    # recomputed stage's carries none, as the analysis's tables do not.
-    scratch_kind = {
-        "tally_evaluation": "cost_per_call",
-        "tally_optimisation": "cost",
-        "recomputed_tables": "",
+    # Each tally stage's scratch table carries a kind **and a name** the
+    # renderer's layouts declare: a tally table whose kind no layout places is
+    # refused, by design, and the name is where the renderer reads the
+    # configuration and the source from (a table per construction, per
+    # configuration, per source, combined into one).  The recomputed stage's
+    # carries no kind, as the analysis's tables do not, and is rendered
+    # nowhere.
+    scratch_table = {
+        "tally_evaluation": (
+            "cost_per_call",
+            "cost per call — a_scratch_configuration — campaign_displaced",
+        ),
+        "tally_optimisation": (
+            "cost",
+            "cost (check 4) — a_scratch_configuration — campaign_optimisation",
+        ),
+        "recomputed_tables": ("", "a_scratch_table_of_recomputed_tables"),
     }
     for stage in ("tally_evaluation", "tally_optimisation", "recomputed_tables"):
+        kind, name = scratch_table[stage]
         stage_records[stage] = {
             "population": "a scratch population of 1",
             "runs_provenance": {"n_records": 0, "heads": []},
             "sources": [],
             "tables": [
                 {
-                    "table": f"a_scratch_table_of_{stage}",
-                    "kind": scratch_kind[stage],
+                    "table": name,
+                    "kind": kind,
                     "caption": "a scratch table, owned by the self-check.",
                     "denominator": 1,
                     "denominator_is": "one scratch row",
