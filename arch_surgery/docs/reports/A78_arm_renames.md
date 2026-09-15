@@ -6,7 +6,7 @@
 > rename A0p and A1 to A1 and A2, and B3 to B2. That makes the naming of the rungs reflect the
 > parallelism in the switch matrix … I don't value consistency of naming with v3 report, but it
 > should be applied consistently throughout the v4 folder. Check this thoroughly."* Records made:
-> 4 runs through the pool — 3 gate-kind, 1 smoke-kind tooth run (§6(b)); every campaign record kept. Folder position records lifecycle, not validity
+> 7 runs through the pool — 6 gate-kind, 1 smoke-kind tooth run (§6(b)); every campaign record kept. Folder position records lifecycle, not validity
 > (trap T3).
 
 ## 1. Verdict in one page
@@ -24,18 +24,20 @@
   reader — so every consumer sees today's names (§2). `--jobs all` lists **1075** distinct jobs and
   `--resume` would keep **1044** of them before the renaming and **1044** after it, the same 31 not
   kept (28 crashed campaign optimisations, 3 hand-composed G5 jobs) (§6(b)).
-- **The press in this worktree: 29 PASS, 1 FAIL, 160 of 160 teeth tripped.** The FAIL is
-  `switch_composition` (G5), **3 of 141** mismatched: its kept from-the-matrix records were made in
-  the A73 worktree and its hand-composed records had to be re-made here (their identity carries the
-  pressing worktree's absolute artifact paths, so `--jobs all` at the base already listed them "no
-  record on disk"); the three mismatches are `resolved_switches`, whose artifact paths name the two
-  worktrees, and **every physics value of the ten compared is equal**. Pre-existing, independent of
-  the renaming, not tuned; reported with the numbers in §6(b) and proposed as an issue in §9.
-- **Runs made: 4**, all through the pool (3 gate-kind, 1 smoke-kind): G7's stale-record tooth re-makes one `AR`
-  smoke evaluation every press by design (4.4 s here), and G5's three hand-composed `B2`
-  optimisations (34–52 s each). The stamp surveys before and after are in §6(b): 1096 → 1099 records,
-  0 disappeared, 4 with a changed commit (the one re-made plus the three new), 949 campaign records at
-  `57dc0c14` untouched.
+- **The press in this worktree: 30 PASS, 0 FAIL, 161 of 161 teeth tripped** — after one fix on the
+  branch at the orchestrator's instruction (§6(b), §7 d11). At the first press `switch_composition`
+  (G5) FAILed **3 of 141**: its kept from-the-matrix records were made in the A73 worktree and its
+  hand-composed records had to be re-made here (their identity carried the pressing worktree's
+  absolute artifact paths, so `--jobs all` at the base already listed them "no record on disk"); the
+  three mismatches were `resolved_switches`' artifact paths naming the two worktrees, **every physics
+  value of the ten compared equal**. The gate now compares those paths relative to the record's own
+  experiment directory (a tooth added), and the pool renders path-valued identity entries
+  tree-relative so the job resumes across worktrees. G5 pressed once after: **141 / 0**, 4/4 teeth.
+- **Runs made: 7**, all through the pool (6 gate-kind, 1 smoke-kind): G7's stale-record tooth re-makes
+  one `AR` smoke evaluation every press by design (4.4 s here), and G5's three hand-composed `B2`
+  optimisations twice — once under the old identity, once under the portable one (29–52 s each). The
+  stamp surveys before and after are in §6(b): 1096 → 1102 records, 0 disappeared, 7 with a changed
+  commit (the one re-made plus the six new), 949 campaign records at `57dc0c14` untouched.
 - **Two defects of my own found by the press and fixed on kept records, each pressed once after:**
   (i) the translation's in-memory trace fields were read by G8's value-for-value comparison as 18
   differing values (FAIL, first press) — folded into one field, `arm_name_translation`, declared in
@@ -233,7 +235,8 @@ once more and the stages re-run; §4 re-rendered identically.
 |---|---|---|---|---|
 | g0prime, copy_identity, edit_behaviour, self_containment, composition, rungs, provenance, data, run_path, capability, artifacts_check, artifacts_derive_inputs, artifacts_census, artifacts_per_run, record_completeness, prime_map, cold_chain, audit_restriction, entry_and_warm | PASS ×19 | — | all tripped | kept, `0677a9b3` / `4ca8cff5` |
 | resume_identity | PASS | 1137 / 0 (22 Job fields; 13 by-design pairs; 3 table rows; 1099 records by name) | 9/9 | — |
-| **switch_composition (G5)** | **FAIL** | **141 / 3** | 3/3 | 6 records — 3 at `0677a9b3`, 3 at `50a35de1` |
+| switch_composition (G5), first press | FAIL | 141 / 3 | 3/3 | 6 records — 3 at `0677a9b3`, 3 at `50a35de1` |
+| **switch_composition (G5), after the fix (`6f5ba612`)** | **PASS** | **141 / 0** | **4/4** | 6 records — 3 at `0677a9b3`, 3 at `6f5ba612` |
 | switch_neutrality (G1) | PASS | 2825 values + 51 319 lines / 0 | 9/9 | 6 at `0677a9b3` |
 | reproduction (GR) | PASS | 256 / 0 | 8/8 | 29 — 26 at `0677a9b3`, 3 at `4ca8cff5` |
 | output_path (G9) | PASS | — | 4/4 | 17 at `0677a9b3` |
@@ -244,7 +247,7 @@ once more and the stages re-run; §4 re-rendered identically.
 | run_kind_separation | PASS | 2997 / 0 | 9/9 | 949 at `57dc0c14` |
 | stage_provenance | PASS | 17 / 0 | 5/5 | — |
 
-**29 PASS, 1 FAIL, 160 of 160 teeth** (the gate table's own summary in §4.1). `reproduction` was
+**30 PASS, 0 FAIL, 161 of 161 teeth** (the gate table's own summary in §4.1, after `--measure gate_table --resume` at `6f5ba612`; `resume_identity` re-pressed after the pool change: 1140 / 0, 9/9). `reproduction` was
 pressed twice more after code changes that touched what it reads (the JSON's provenance keys, its
 tooth's scratch copy): 256 / 0 each time.
 
@@ -260,22 +263,41 @@ were made (34–52 s each). The three mismatches are `resolved_switches`: `COUPL
 on the other; the other nine compared values — `norm_objf` hex, `ifail`, iterations, the outer-pass
 histogram, the exit-audit hex, the model-call count and the rest — are equal on all three
 configurations. Not the renaming's: the same press at the base in any worktree but A73's fails the
-same way. Not tuned. Proposed as an issue (§9).
+same way. **Fixed on the branch at the orchestrator's instruction** (protocol §6: a failed gate blocks
+the merge): (1) G5 compares `resolved_switches` through `portable_resolved_switches` — a string value
+that is an absolute path under the experiment directory of the record that carries it (the parent of
+the record's own `tree` stamp) becomes `experiment:<relative posix path>`; every other value exactly
+as resolved; declared in the gate's docstring and the `COMPARED` comment. The existing teeth did not
+cover a resolved-switch value; one was added: the resolved `MDA_MODE` flipped on one side must
+disagree, and the same resolved switches re-rooted under another worktree (3 artifact paths) must
+agree — tripped. (2) `pool.Job.identity` renders a mapping value that is an absolute path under
+`runs/` relative to it and one under the experiment directory as `experiment:…`
+(`pool._render_string`), so G5's hand-composed identity is portable. Proof it changed nothing else:
+`--jobs all` 1075 / **1044** before the change and 1075 / **1044** after it (the 3 hand-composed
+jobs' digests changed and their records of the first press could not be kept — their stamped
+identity holds the absolute paths, the same reason they never resumed — so they were made once more
+under the portable identity: 29–48 s each), then 1075 / **1047**. The 3 first-press records
+(`B_B2_*_seed000_gate_{5b82bc37…,b8ba719b…,6069c6c9…}`, at `50a35de1`) remain under `runs/gates/_runs/`
+as records of an identity nothing composes now; untracked, harmless, listed here.
 
-*Runs made.* 4, all through the pool at gate/smoke kind: G7's stale-record tooth re-makes one `AR`
+*Runs made.* 7, all through the pool at gate/smoke kind: G7's stale-record tooth re-makes one `AR`
 `st_regression` seed-0 smoke evaluation every press by construction (it stamps the record stale and
-asks for it again without resume; 4.4 s), and G5's three `B2` optimisations above.
+asks for it again without resume; 4.4 s), and G5's three `B2` optimisations twice (above).
 
 *Stamp survey after* (`run_stamp_survey.py --json … --against before`): 1099 records — 949 at
 `57dc0c14`, 95 at `0677a9b3`, 39 at `4ca8cff5`, 6 at `fd480aff`, 3 at `47be2b0d`, 3 at `61473c1d`,
-3 at `50a35de1`, 1 at `8996b843`. **Records whose commit changed: 4** (`A_AR_st_regression_seed000_smoke`
-`0677a9b3 → 8996b843`; the three `B_B2_*_seed000_gate` from none); **disappeared: 0; new: 3.**
-Every campaign record at its commit.
+3 at `50a35de1`, 3 at `6f5ba612`, 1 at `8996b843`: **1102 records; records whose commit changed: 7**
+(`A_AR_st_regression_seed000_smoke` `0677a9b3 → 8996b843`; three `B_B2_*_seed000_gate` at `50a35de1`
+and three at `6f5ba612`, all from none); **disappeared: 0; new: 6.** Every campaign record at its
+commit. (`run_kind_separation`'s §4.1 row still counts 1099 records: it was pressed before the
+last three; not re-pressed, per the instruction's scope.)
 
 *Dry run of the resume decision* (`--jobs all`): at the base `abcd15e0` — **1075 distinct jobs over
 30 gates, 3034 declarations, 986 shared, `--resume` would keep 1044**; after the renaming and before
 the press — **1075 / 1044**, the same 31 not kept (28 campaign optimisations with `status = crashed`,
-G5's 3 hand-composed jobs "no record on disk"); after the press — **1075 / 1047**.
+G5's 3 hand-composed jobs "no record on disk"); after the identity change, before its press —
+**1075 / 1044** (the 3 with new digests, again "no record on disk", every other job unchanged);
+after G5's press — **1075 / 1047**.
 
 *The first press, for the record.* The same sequence at `50a35de1` (the code before commits
 `02f641ba`, `8996b843`): G5 FAIL 141 / 3 for the reason above, and **G8 FAIL: 8140 values compared,
@@ -296,13 +318,13 @@ unified-diff lines), by subsection: marker 2, §4.1 7, §4.2 2, §4.4 2. Each, a
 
 | where | difference | cause |
 |---|---|---|
-| §4 marker (2 lines) | gate commits gain `50a35de1`, `8996b843`; gate records 139 → 142, gate-kind 137 → 140 | the 4 runs of this press |
+| §4 marker (2 lines) | gate commits gain `50a35de1`, `6f5ba612`, `8996b843`; gate records 139 → 145, gate-kind 137 → 143 | the 7 runs of this press |
 | §4.1 `resume_identity` | population "…; 3 recorded-name row(s); 1099 record(s) under runs/ read by arm name", compared 35 → 1137, teeth 5/5 → 9/9 | this task's survey and teeth |
 | §4.1 `artifacts_census` | "one evaluation census each" → "one optimisation census each" | the button's `--census-entry` default is `optimisation`; the seeded verdict was pressed with `evaluation`; both censuses are on disk and were resumed |
-| §4.1 `switch_composition` | PASS → **FAIL**, mismatched 0 → 3 | §6(b) |
+| §4.1 `switch_composition` | teeth 3/3 → 4/4 | the added tooth |
 | §4.1 `run_kind_separation` | 1096 → 1099 records, 2994 → 2997 compared | the 3 new gate records |
 | §4.1 `stage_provenance` | 16 → 17 compared | "whatever live records this tree holds, surveyed and named" — one more |
-| §4.1 summary | 30 PASS / 0 FAIL / 156 teeth → 29 / 1 / 160 | above |
+| §4.1 summary | 156 teeth → 161 | above |
 | §4.2, §4.4 predicate-trial captions (2 + 2 lines) | "240 record values excluded" → "294" | G8's verdict, from which the trial table is shaped: the 54 trace leaves excluded by name |
 
 **0 of the residual differences is a cell of a measurement table.** The report's §4.2–§4.4 cells
@@ -358,6 +380,12 @@ written "V3's `B2`" (§5); the rest today's arm.
 10. **The census entry was pressed at the button's default** (`optimisation`), not at the seeded
     verdict's `evaluation`; both census records were resumed. Reversal: `--census-entry evaluation`
     on the next press.
+11. **G5's path comparison relative to the record's own experiment directory** (from its `tree`
+    stamp), not `(basename, sha256)`: which committed artifact a switch named is what must agree,
+    and the relative path says it while the bytes are `artifacts_check`'s business. Reversal: the
+    `(basename, sha256)` form, one function. **Identity rendering of path strings** under
+    `experiment:`: reversal is `_render_string` returning its argument, which orphans the 3 records
+    again.
 
 ## 8. Limits
 
@@ -372,8 +400,8 @@ written "V3's `B2`" (§5); the rest today's arm.
   every verdict, and the tally's predicate-trial table (shaped from G8's verdict, not from run
   records) followed; the first `--plan-tables` render of this task, made before the press, showed
   38 such lines and is why the order gates → stages → render matters (§9's trap).
-- **The press could not be made 0-run** (G7's tooth by construction) **nor all-PASS** (G5's
-  worktree-path identity, pre-existing). Neither is the renaming's; both are reported as results.
+- **The press could not be made 0-run** (G7's tooth by construction); it is all-PASS only after
+  the G5 fix of §6(b), made at the orchestrator's instruction under protocol §6.
 - The `resume_identity` survey counts 636 "unchanged" records among the 1099; that class includes
   the 6 census records and the 6 pre-A72 `switch_neutrality/before` captures, which carry
   `campaign_arm` (`AR`/`BR`) and no identity; they are read, not translated, and not refused.
@@ -386,14 +414,8 @@ written "V3's `B2`" (§5); the rest today's arm.
 - **Queue, D22** (*"`B2` removed from V4 (Phase B is `BR / B0 / B1 / B3`)"*): a ruling in its day's
   names. The user's call whether a bracketed dated note is added to the row or a D29 records the
   renaming as a ruling; I edited no D-row.
-- **An issue for G5's worktree-dependent identity and comparison** (I-27 candidate): the
-  hand-composed job's `override_env` carries absolute artifact paths, so its identity — and its
-  record — is per worktree, and its `resolved_switches` comparison then fails across worktrees on
-  paths alone. A72's decision 1 chose `override_env` over the composed environment for identity;
-  the fix is to render the paths relative to the tree (as `_render_path` does for `Path` fields) or
-  to compare `resolved_switches` with its path values normalised — either changes what the gate
-  reads and is a task, not a fix in passing. Until then every cross-worktree `--gate all --resume`
-  re-makes three `B2` optimisations and FAILs G5 on three paths.
+- **G5's worktree-dependent identity and comparison** — fixed on the branch (§6(b)); no issue
+  needed. Harness plan amendment 27 could gain one sentence on it at the merge.
 - **TRAPS.md, a T16 candidate:** *a name in a record is the name at the time of the run.* Records,
   verdicts, directory names and stage records all carry the vocabulary of their day; a rename
   applied to the code and the documents leaves them spelling another arm — and where the new name
@@ -403,8 +425,7 @@ written "V3's `B2`" (§5); the rest today's arm.
 - **Harness plan, rule table (A.1):** the corollary to rule (xiv) proposed in amendment 27, if the
   user wants it as a rule.
 - **A79 (report-captions) and A80 (report-accuracy-audit)** inherit today's names; A80's row already
-  says "arm names after A78". The report's §4.1 now reads 29 PASS / 1 FAIL until G5 is addressed;
-  A80 should not read that as the campaign's state.
+  says "arm names after A78".
 - **`--gate all` with `--census-entry evaluation`** if the orchestrator wants the seeded verdict's
   census entry back.
 
@@ -419,7 +440,8 @@ I-20 and I-26 — the only queue edits; harness plan amendment 27; the two impro
 notes), `02f641ba` (the trace folded into one excluded field, after G8's first-press FAIL),
 `8996b843` (no in-memory stamp), `336b1b05` (the reference's per-arm provenance keys; the diff
 script's classification), `a536cc60` (§4 re-rendered), `350a58c4` (`stamped_as_today`; Appendix C
-entry), and this report. No `.py` under `PROCESS/` changed; `harness/child/` changed in two usage
+entry), `2113e8d9` (this report), `6f5ba612` (G5's portable comparison and tooth; portable identity
+rendering), and the final commit (§4.1 re-rendered at 30 PASS; report and Appendix C updated). No `.py` under `PROCESS/` changed; `harness/child/` changed in two usage
 docstrings only, with nothing running. Presses: `--selfcheck`; `--gate all --resume` twice (first at
 `50a35de1`, final at `8996b843`), the nine gates the stopped chain did not reach once each after the
 final press, `reproduction` twice more after its inputs changed, `resume_identity` and
@@ -436,3 +458,8 @@ and stage records are there.
 - 2026-09-15 — first press: G5 FAIL (worktree paths), G8 FAIL (the trace fields); the latter fixed
   on kept records; G1's pair caught the first directory-resolution rule.
 - 2026-09-15 — final press, stages, §4 re-rendered, this report.
+- 2026-09-15 — orchestrator's assessment: G5's FAIL blocks the merge (§6), fix it on the branch.
+  Done at `6f5ba612`: portable `resolved_switches` comparison with a tooth; portable identity
+  rendering of path strings; G5 141 / 0 (4/4), `resume_identity` 1140 / 0; `--measure gate_table`,
+  `--plan-tables write`/`check` IDENTICAL: **30 PASS, 0 FAIL, 161 of 161 teeth**; `--jobs all`
+  1075 / 1044 before and after the identity change, 1047 after the press; 1102 records, 0 gone.
