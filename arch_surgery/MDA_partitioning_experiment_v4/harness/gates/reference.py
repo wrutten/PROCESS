@@ -602,7 +602,8 @@ def rename_arms(path: Path | None = None) -> dict[str, Any]:
     (``records.RECORDED_ARM_NAMES``): each entry's ``arm`` — V4's name — goes
     through the table; ``previous_arm``, ``source_path``, ``source_sha256``,
     ``tree_git_head`` and every compared value are V3's and are not touched.
-    The provenance block gains the naming stamp :func:`load` requires and a
+    Provenance blocks keyed by V4 arm name (per-arm prose) are re-keyed; the
+    provenance block gains the naming stamp :func:`load` requires and a
     dated note.  Refuses a file already in today's scheme, so it cannot be
     applied twice and translate ``A1`` a second time.  Returns what changed.
     """
@@ -632,6 +633,25 @@ def rename_arms(path: Path | None = None) -> dict[str, Any]:
             arm, rest = key.split("/", 1)
             renamed_absent[f"{records_mod.RECORDED_ARM_NAMES.get(arm, arm)}/{rest}"] = why
         provenance["absent_from_the_set"] = renamed_absent
+    # Provenance blocks keyed by V4 arm name -- prose per arm, such as
+    # ``block_solver_field_applicability`` and ``not_covered_by_this_reference``.
+    # A block whose every key is an arm name (today's or a recorded one) is
+    # re-keyed; the prose is not touched.
+    arm_names = set(records_mod.RECORDED_ARM_NAMES) | set(arms_mod.ARMS)
+    for name, block in list(provenance.items()):
+        if (
+            isinstance(block, Mapping)
+            and block
+            and all(isinstance(k, str) and k in arm_names for k in block)
+        ):
+            rekeyed = {
+                records_mod.RECORDED_ARM_NAMES.get(k, k): v for k, v in block.items()
+            }
+            if list(rekeyed) != list(block):
+                provenance[name] = rekeyed
+                changed[f"provenance.{name} keys"] = sum(
+                    1 for k in block if records_mod.RECORDED_ARM_NAMES.get(k, k) != k
+                )
     provenance[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
     provenance["arm_names_note"] = (
         "the 'arm' fields were rewritten into the matrix's names of 2026-09-15 "

@@ -118,14 +118,14 @@
     "block_solver_field_applicability": {
       "BR": "the block solver is never entered on this arm (upstream's own loop runs instead), so module_solve_totals is present and empty: n_call_models = 0, no per-block histogram.  Compared as the value it has, not omitted",
       "B0": "one block over every in-loop node, so the per-block histogram has the single entry 'FLAT'.  This is the flat arm's shape, not a missing partition",
-      "B3": "the partitioned arm: one entry per block in the schedule (M1, M2, PULSE, M3, FF)",
+      "B2": "the partitioned arm: one entry per block in the schedule (M1, M2, PULSE, M3, FF)",
       "A0": "one block over every in-loop node, so the per-block histogram has the single entry 'FLAT'.  This is the flat arm's shape, not a missing partition",
-      "A1": "the partitioned arm: one entry per block in the schedule (M1, M2, PULSE, M3, FF)",
+      "A2": "the partitioned arm: one entry per block in the schedule (M1, M2, PULSE, M3, FF)",
       "B1": "one block over every in-loop node, so the per-block histogram has the single entry 'FLAT'.  This is the flat arm's shape, not a missing partition"
     },
     "not_covered_by_this_reference": {
       "AR": "the previous revision had no evaluation-phase reference arm.  Covered instead by a G1-shape check: one evaluation with every architecture switch cleared must reproduce the first call_models of BR at seed 0 on that call's node calls, sweeps and objective hex",
-      "A0p": "the previous revision never ran the flat arm with the burn time owned by a constant.  Covered instead by the warm-equivalence gate G6: pinned at the reference's converged burn time it must reproduce the reference fixed point, cross-state residual below the tolerance and the pinned component bit-identical"
+      "A1": "the previous revision never ran the flat arm with the burn time owned by a constant.  Covered instead by the warm-equivalence gate G6: pinned at the reference's converged burn time it must reproduce the reference fixed point, cross-state residual below the tolerance and the pinned component bit-identical"
     },
     "how_to_re_derive": "python harness/reference.py --extract --previous-runs <repo>/arch_surgery/MDA_partitioning_experiment_v3/runs; python harness/reference.py --verify re-derives it and requires byte-for-byte equality",
     "arm_naming": "rungs-2026-09-15",

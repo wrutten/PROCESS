@@ -116,6 +116,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f"reverse translation applied: {' , '.join(f'{t} -> {r}' for t, r in pairs)}; {n_tokens_translated} token(s) reversed")
     print(f"lines differing before the reverse translation: {raw_differing} of {max(len(old), len(new))}")
     print(f"lines differing after the reverse translation: {len(differing)} of {max(len(old), len(new))}")
+    if len(old) == len(new):
+        # Which subsection each residual difference falls in, so that a reader
+        # can see whether the measurement tables (§4.2-§4.4) moved or only the
+        # gate table (§4.1), whose rows are re-made by every press.
+        by_subsection: dict[str, int] = {}
+        current = "(before the first subsection)"
+        for a, b in zip(old, reversed_new):
+            if a.startswith("### "):
+                current = a.split(" ")[1]
+            if a != b:
+                by_subsection[current] = by_subsection.get(current, 0) + 1
+        print("residual differing lines by subsection: " + ", ".join(f"{k}: {v}" for k, v in by_subsection.items()) if by_subsection else "residual differing lines by subsection: none")
     if differing:
         for line in differing[: args.show]:
             print("  " + line[:200])
