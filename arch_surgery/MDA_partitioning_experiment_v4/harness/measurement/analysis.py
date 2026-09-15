@@ -4476,7 +4476,6 @@ def _module_scope(campaign: Campaign, population: Population) -> Recomputed | No
             "iterated",
             *[f"{config.name}_nodes" for config in configurations],
         ),
-        from_records=False,
     )
 
 

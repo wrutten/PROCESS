@@ -109,12 +109,20 @@ run executes (harness plan amendment 13, rule (vi)).
   declared, disjoint set of a stage table's rows, so a construction the previous revision published
   as several tables of one quantity each — the optimiser's path — renders as several tables and
   not as one stacked grid; `blocks` prints one grid per configuration under a bold heading line
-  (``**`nof`** (n = 22 — …)``), which is the per-module form; `bold` marks the result column and
-  the verdict; `blank_repeats` blanks a repeated key on continuation rows. Every one of them is a
+  (``**`nof`** (n = 22)``), which is the per-module form, its heading line reduced to the previous
+  revision's own (a `Table.block_denominator` declares the per-arm count where the table's own
+  denominator is over every arm, and the arm set is named only where the block does not carry the
+  phase's whole ladder); `bold` marks the result column and the verdict; `blank_repeats` blanks a
+  repeated key on continuation rows; `omit` drops a column whose cell is the same label on every
+  row the grid keeps and states it in the caption instead, as the previous revision's grids did
+  (task A86 (v3-tables-remainder)); and a `fraction` merge puts a count and its denominator in one
+  cell (`0/22`). Every one of them is a
   rendering of cells a stage record already carries, and
-  `report_cells_preserved.py` puts each old row through the same declarations before looking for
-  it, so a merge that dropped or swapped a part would not reproduce the cell. Seven **headline
-  tables** are rendered into the report's §4 itself, between
+  `report_cells_preserved.py` puts each old row through the same declarations — the omission
+  included, counted and named in its output — before looking for it, so a merge that dropped or
+  swapped a part would not reproduce the cell; the one heading this rendering has reused for a
+  different statistic is declared in that script's `RENAMED_HEADINGS` and printed with every run.
+  Twelve **headline tables** are rendered into the report's §4 itself, between
   `MAIN_START` / `MAIN_END` marker pairs carrying the layout's name and numbered `Table n` after
   §3's six; everything else is **Appendix D — Results tables** (`Table D.n`, one short caption
   each, the constructions declared once in D.0) and the companion file `RESULTS_TABLES_FULL.md`
@@ -1643,7 +1651,7 @@ by number. `harness/measurement/plan_tables.py` reads the stages' records under
 | document | holds | rendered from |
 |---|---|---|
 | `EXPERIMENT_REPORT.md`, the block between `## Appendix D — Results tables` and the end marker `<!-- plan_tables: end of the rendered results tables -->` | D.0 the constructions and populations, declared once per table kind from the stages' own records; D.1 the gate table; D.2 the evaluation phase's and D.4 the optimisation phase's **summarising** tables (per arm or arm pair and configuration), `Table D.1`–`D.n` in emission order, one caption of a few lines each, the construction name printed under each grid | `--measure gate_table`, `tally_evaluation`, `tally_optimisation` |
-| `RESULTS_TABLES_FULL.md`, whole | F.1–F.2 every table with a row per run, seed or pair of runs; F.3 the full versions of the report's tables whose per-seed columns it omits; F.4 every table of the second implementation; `Table F.1`–`F.m`; generated, never hand-edited | the same three stages and `--measure recomputed_tables` |
+| `RESULTS_TABLES_FULL.md`, whole | F.1–F.2 every table with a row per run, seed or pair of runs and the evaluation phase's headline grids at the stencil entry points; F.3 the full versions of **every** table whose per-seed columns are omitted, the main text's as well as the appendix's; `Table F.1`–`F.m`; generated, never hand-edited | the same three stages |
 
 *Caption: one row per document the renderer writes; the middle column is what it holds and how it
 is numbered; the right column the stages whose records fill it. No cell is typed by hand and nothing
