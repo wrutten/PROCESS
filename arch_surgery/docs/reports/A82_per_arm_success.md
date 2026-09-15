@@ -261,3 +261,13 @@ entry says so.
 
 - 2026-09-15 — task opened at `4878688e`; the work above; D30 added to the task mid-flight by the
   orchestrating session on the user's ruling; report written at `1b6a7522`.
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `829e3058` by the orchestrating session; gates the merge.*
+
+**Checks.** (1) Table D.68's cells against the `ifail` pattern I derived from the records at A80's merge (11 seeds all-accepted, 9 all-`ifail = 5`, 2 all-crash, 2 `BR` at 5 with the coupling-state arms at the cap, seed 10 lost to `B1`/`B2` alone): accepted 12 / 12 / 11 / 11; `ifail = 5` 11 / 9 / 9 / 9 (`BR` = 9 + 2); crashed 2 each; cap 0 / 2 / 3 / 3 (`B1`/`B2` = 2 + seed 10); lost-to-this-arm 0 / 0 / 1 / 1 — every cell agrees with a derivation that shares nothing with the tally or the analysis. (2) The st asymmetry's costs (479 630 vs 175 413; 667 989 vs 129 012) are the cells §5.7 now cites from the companion. (3) Gates at the tally commit: `recomputation` 15 122 / 0, `tally_contracts` 321 + 256 / 0; `check` IDENTICAL both documents; 0 re-made runs. (4) The D30 wording in §5.6 and §3.6 and the D29 brackets are as ruled. Scope by diff: nothing under `PROCESS/`, `harness/child/`, root `process/`. (5) The report's last two verification lines cite `merged_names_check.py` and `harness_survey.py`, removed from the trunk at `79d044b1` while this task ran — the last citations; the merge carries the deletion.
+
+**Finding for the record, not this task's fault: the presentation of Appendix D.** Reading D.67–D.69 beside D.61–D.66 confirms what the user has just said of the report as a whole — the same construction is emitted once per configuration (and once per source in the evaluation phase), so a reader meets nine or twelve small tables where one table with a configuration column, or one stacked table as the block table already is, would do. That is the renderer's grouping, inherited from the tally's one-table-per-(construction, configuration, source) emission, and it is the subject of the orchestrator's formatting reassessment now and of A83.
+
+**Verdict: merge.** D29 (1) and (3) and D30 executed as ruled; the added cells agree with an independent derivation; zero PROCESS runs.
