@@ -68,6 +68,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -3045,6 +3046,9 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
     seed_sets: dict[str, list[int]] = {}
     not_produced: list[str] = []
     present = campaign_present(campaign)
+    # Module scope is static and is produced once, from the first source that
+    # carries the partitioned arm.
+    scope: Recomputed | None = None
     for source in published_sources(campaign):
         records = source_records(campaign, source)
         for phase in ("A", "B"):
@@ -3112,6 +3116,21 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                 stacked = _node_calls_per_block(campaign, population, source.name)
                 if stacked is not None:
                     produced[stacked.name] = stacked
+                for built in (
+                    _matched_accuracy_headline(campaign, population, source.name),
+                    _cost_per_call_headline(campaign, population, source.name),
+                    _full_distributions(campaign, population, source.name),
+                    _excluded_namespaces(
+                        campaign, population, source.name,
+                        _directories_by_digest(campaign, source),
+                    ),
+                ):
+                    if built is not None:
+                        produced[built.name] = built
+                if scope is None:
+                    scope = _module_scope(campaign, population)
+                    if scope is not None:
+                        produced[scope.name] = scope
             else:
                 path_groups: list[Any] = []
                 for config in campaign.configurations:
@@ -3189,6 +3208,18 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                 path = _optimiser_path(campaign, population, source.name, path_groups)
                 if path is not None:
                     produced[path.name] = path
+                for built in (
+                    _location_diagnostic(population, source.name, path_groups),
+                    _identity(population, source.name, path_groups),
+                    _cost_sums(population, source.name, path_groups),
+                    _cost_anchors(population, source.name, path_groups),
+                    _sweeps_and_prime_calls(population, source.name, path_groups),
+                    _problem_definition(
+                        campaign, population, source.name, path_groups
+                    ),
+                ):
+                    if built is not None:
+                        produced[built.name] = built
     trial = _predicate_trial(records_dir)
     if trial is not None:
         produced[trial.name] = trial
@@ -3936,6 +3967,11 @@ def _optimiser_path(
             summary = _ratio_summary(pairs)
             row.update(
                 {
+                    # The ratio of the two means over the same seeds — equal
+                    # to the ratio of the sums, the campaign-cost statistic —
+                    # beside the mean of the per-seed ratios, which is the
+                    # typical seed's (task A86 (v3-tables-remainder)).
+                    "ratio_pooled": summary["pooled"],
                     "ratio_mean": summary["mean"],
                     "ratio_median": summary["median"],
                     "ratio_bracket": "—" if summary["min"] is None else f"[{summary['min']:.3f}, {summary['max']:.3f}]",
@@ -3951,10 +3987,10 @@ def _optimiser_path(
             "recomputed: iterations summed over attempts, evaluations summed "
             "over attempts[].sweeps_per_eval.n_evaluations, solve-phase node "
             "calls summed over attempts and their quotient, per arm over the "
-            "seed set, with the B2/B0 per-seed ratio's mean, median, [min, max] "
-            "and count above 1"
+            "seed set, with B2/B0 as the ratio of the two means and as the "
+            "per-seed ratio's mean, median, [min, max] and count above 1"
         ),
-        columns=("quantity", "configuration", "arms", "n", *OPTIMISATION_LADDER, "ratio_mean", "ratio_median", "ratio_bracket", "n_above_one"),
+        columns=("quantity", "configuration", "arms", "n", *OPTIMISATION_LADDER, "ratio_pooled", "ratio_mean", "ratio_median", "ratio_bracket", "n_above_one"),
         key_columns=("quantity", "configuration", "arms"),
         rows=tuple(rows),
         # never the seeds summed over the configurations (D21 (b)): one
@@ -3966,6 +4002,1038 @@ def _optimiser_path(
             + " seeds on which every arm converged; never pooled"
         ),
         composite=("arms", "ratio_bracket"),
+    )
+
+
+# --------------------------------------------------------------------------
+# the previous revision's remaining shapes, re-derived (task A86
+# (v3-tables-remainder), 2026-09-15)
+# --------------------------------------------------------------------------
+
+
+def _design_vector(record: Mapping[str, Any]) -> dict[str, float]:
+    """The accepted design vector keyed by name, re-derived.
+
+    The output file's ``itvars`` and ``itvar_names`` are both keyed by the
+    solver's slot, so the join is on the slot and never on position.  A slot
+    carrying a value the name map does not name is refused: the lift adds a
+    variable, and a positional join would silently compare two different ones.
+    """
+    mfile = record.get("mfile") or {}
+    values = mfile.get("itvars") or {}
+    names = mfile.get("itvar_names") or {}
+    if not values or not names:
+        raise AnalysisError(
+            f"{label_of(record)}: no keyed iteration variables in the output "
+            f"file ({len(values)} value(s), {len(names)} name(s))"
+        )
+    orphan = [slot for slot in values if slot not in names]
+    if orphan:
+        raise AnalysisError(
+            f"{label_of(record)}: slot(s) {sorted(orphan)} carry a value with "
+            f"no name; a design vector joined by position would compare two "
+            f"different variables once the lift has added one"
+        )
+    return {
+        str(names[slot]): float(value)
+        for slot, value in values.items()
+        if value is not None
+    }
+
+
+def _point_gap(a: Mapping[str, float], b: Mapping[str, float]) -> dict[str, Any]:
+    """The largest relative difference over the variables two vectors share,
+    the variable it sat on, how many are shared and which are not."""
+    common = sorted(set(a) & set(b))
+    worst: float | None = None
+    where: str | None = None
+    for name in common:
+        scale = max(abs(a[name]), abs(b[name]))
+        gap = 0.0 if scale == 0 else abs(a[name] - b[name]) / scale
+        if worst is None or gap > worst:
+            worst, where = gap, name
+    return {
+        "max": worst,
+        "argmax": where,
+        "n_shared": len(common),
+        "extra": sorted(set(a) ^ set(b)),
+    }
+
+
+def _namespace_maxima(audit: Mapping[str, Any], ruler: str) -> dict[str, float]:
+    """Per excluded namespace, the largest scaled residual in one run."""
+    excluded = audit.get("excluded_keys")
+    if excluded is None:
+        raise AnalysisError(
+            "the audit residual file names no excluded_keys; the per-namespace "
+            "maxima would be over a list nobody declared"
+        )
+    block = (audit.get("rulers") or {}).get(ruler)
+    if not isinstance(block, Mapping):
+        raise AnalysisError(
+            f"the audit residual file carries no {ruler!r} ruler; a maximum on "
+            f"another ruler is a different quantity"
+        )
+    scaled = block.get("scaled_hex") or {}
+    out: dict[str, float] = {}
+    for key in excluded:
+        raw = scaled.get(str(key))
+        if raw is None:
+            continue
+        value = float.fromhex(str(raw)) if isinstance(raw, str) else float(raw)
+        head = str(key).split(".", 1)[0]
+        if head not in out or value > out[head]:
+            out[head] = value
+    return out
+
+
+def _objective_name(numerics: str, i_figure_merit: Any) -> dict[str, Any]:
+    """The objective's description and sense, from the frozen tree's enum."""
+    if i_figure_merit is None:
+        raise AnalysisError("a record carries no i_figure_merit")
+    number = int(i_figure_merit)
+    table: dict[int, str] = {}
+    for line in re.findall(
+        r"=\s*\(\s*(\d+)\s*,\s*\n?\s*\"([^\"]+)\"", numerics
+    ):
+        table[int(line[0])] = line[1]
+    if abs(number) not in table:
+        raise AnalysisError(
+            f"i_figure_merit {number} is not a member of the frozen tree's "
+            f"FiguresOfMerit ({sorted(table)})"
+        )
+    return {
+        "objective": table[abs(number)],
+        "sense": "maximise" if number < 0 else "minimise",
+    }
+
+
+def _configurations_with_a2(campaign: Campaign, population: Population) -> list[Any]:
+    return [
+        config
+        for config in campaign.configurations
+        if "A2" in by_arm(population, config.name)
+    ]
+
+
+def _span_cell(values: Sequence[Any]) -> str:
+    span = extremes([v for v in values if v is not None])
+    if span is None:
+        return "—"
+    low, high = span
+    return f"{low:g}" if low == high else f"{low:g}–{high:g}"
+
+
+def _verdict_at(a: Sequence[float], b: Sequence[float], factor: float) -> dict[str, Any]:
+    """The similarity ratio and verdict at both quantiles, re-derived."""
+    out: dict[str, Any] = {}
+    for label, statistic in (("median", middle), ("p90", ninetieth)):
+        left, right = statistic(a), statistic(b)
+        if left is None or right is None:
+            out[label] = {"ratio": None, "similar": None}
+        elif left == 0 and right == 0:
+            out[label] = {"ratio": None, "similar": True}
+        elif left == 0 or right == 0:
+            out[label] = {"ratio": None, "similar": False}
+        else:
+            ratio = max(left, right) / min(left, right)
+            out[label] = {"ratio": ratio, "similar": bool(ratio <= factor)}
+    return out
+
+
+def _matched_accuracy_headline(
+    campaign: Campaign, population: Population, source: str
+) -> Recomputed | None:
+    """Check 1 re-derived, one row per configuration."""
+    configurations = _configurations_with_a2(campaign, population)
+    if not configurations:
+        return None
+    ruler = campaign.predicate_mode_default
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for config in configurations:
+        grouped = by_arm(population, config.name)
+        base = evaluation_reference_arm(config.pulsed, grouped)
+        done = {
+            arm: [r for r in records if completed(r)]
+            for arm, records in grouped.items()
+        }
+        n = sum(len(v) for v in done.values())
+        total += n
+        values = {
+            arm: accuracy_population(records, ruler=ruler)["values"]
+            for arm, records in done.items()
+        }
+        row: dict[str, Any] = {
+            "configuration": config.name,
+            "reference": base,
+            "n": n,
+        }
+        for arm in EVALUATION_LADDER:
+            row[f"{arm}_median"] = middle(values.get(arm) or [])
+            row[f"{arm}_p90"] = ninetieth(values.get(arm) or [])
+        note = f"declared pair A2/{base}"
+        for against in ("A1", "A0"):
+            key = f"A2_over_{against}"
+            left, right = values.get(against) or [], values.get("A2") or []
+            if not left or not right:
+                row[f"{key}_median"] = None
+                row[f"{key}_p90"] = None
+                row[f"{key}_verdict"] = "—"
+                continue
+            judged = _verdict_at(left, right, campaign.similarity_factor)
+            row[f"{key}_median"] = judged["median"]["ratio"]
+            row[f"{key}_p90"] = judged["p90"]["ratio"]
+            if judged["median"]["similar"] is None or judged["p90"]["similar"] is None:
+                row[f"{key}_verdict"] = "—"
+            else:
+                row[f"{key}_verdict"] = (
+                    "PASS"
+                    if judged["median"]["similar"] and judged["p90"]["similar"]
+                    else "FAIL"
+                )
+            if against == base:
+                note = _verdict_note_again(base, judged)
+        row["note"] = note
+        rows.append(row)
+    return Recomputed(
+        name=f"matched accuracy by configuration — {source}",
+        caption=(
+            "recomputed: the restricted audit maximum's median and p90 per "
+            "arm on the frozen ruler, one row per configuration, with the "
+            "partitioned arm judged against its reference and against the "
+            "flat control at both quantiles"
+        ),
+        columns=(
+            "configuration",
+            "n",
+            *[f"{arm}_{q}" for arm in EVALUATION_LADDER for q in ("median", "p90")],
+            "reference",
+            "A2_over_A1_median",
+            "A2_over_A1_p90",
+            "A2_over_A1_verdict",
+            "A2_over_A0_median",
+            "A2_over_A0_p90",
+            "A2_over_A0_verdict",
+            "note",
+        ),
+        key_columns=("configuration",),
+        rows=tuple(rows),
+        denominator=total,
+        denominator_is=(
+            f"finished evaluation-phase runs over every "
+            f"configuration in this source"
+        ),
+        composite=("reference", "A2_over_A1_verdict", "A2_over_A0_verdict", "note"),
+    )
+
+
+def _verdict_note_again(base: str, judged: Mapping[str, Any]) -> str:
+    """The check-1 table's *verdict note*, re-derived: the category of each
+    quantile that has no ratio, or the declared pair's name."""
+    labels = {
+        True: "both quantiles exactly 0 — the trivially-similar clause",
+        False: "one side exactly 0 and the other not: unbounded",
+        None: "a distribution is empty: not judged",
+    }
+    parts = [
+        labels[judged[q]["similar"]]
+        for q in ("median", "p90")
+        if judged[q]["ratio"] is None
+    ]
+    if not parts:
+        return f"declared pair A2/{base}"
+    return f"A2/{base}: " + "; ".join(dict.fromkeys(parts))
+
+
+def _cost_per_call_headline(
+    campaign: Campaign, population: Population, source: str
+) -> Recomputed | None:
+    """The per-call cost re-derived, one row per configuration."""
+    configurations = _configurations_with_a2(campaign, population)
+    if not configurations:
+        return None
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for config in configurations:
+        grouped = by_arm(population, config.name)
+        indexed = by_arm_and_seed(population, config.name)
+        base = evaluation_reference_arm(config.pulsed, grouped)
+        done = {
+            arm: [r for r in records if completed(r)]
+            for arm, records in grouped.items()
+        }
+        n = sum(len(v) for v in done.values())
+        total += n
+        row: dict[str, Any] = {
+            "configuration": config.name,
+            "reference": base,
+            "n": n,
+        }
+        for arm in EVALUATION_LADDER:
+            calls = [r.get("node_calls_single_eval") for r in done.get(arm, [])]
+            row[f"{arm}_mean"] = arithmetic_mean(calls) if calls else None
+            row[f"{arm}_bracket"] = _bracket_text(calls) if calls else "—"
+        rungs = (
+            [("AR", "A0"), ("A0", "A1"), ("A1", "A2")]
+            if "A1" in grouped
+            else [("AR", "A0"), ("A0", "A2")]
+        )
+        pairs = 0
+        for left, right in (("AR", "A0"), ("A0", "A1"), ("A1", "A2"), ("A0", "A2")):
+            key = f"{left}_to_{right}"
+            if (left, right) not in rungs:
+                row[key] = None
+                continue
+            a, b, keys = _pair_on(indexed, left, right, "node_calls_single_eval")
+            bottom = sum(a)
+            row[key] = (sum(b) / bottom) if bottom else None
+            pairs = max(pairs, len(keys))
+        primes = [
+            r.get("n_arrangement_method_calls") for r in done.get("A2", [])
+        ]
+        row["prime_calls"] = arithmetic_mean(primes) if primes else None
+        row["n_pairs"] = pairs
+        rows.append(row)
+    return Recomputed(
+        name=f"per-call cost by configuration — {source}",
+        caption=(
+            "recomputed: mean node calls per evaluation with the observed "
+            "bracket per arm, one row per configuration, and the ladder's "
+            "rungs as pooled ratios with the partitioned arm's prime calls "
+            "beside them"
+        ),
+        columns=(
+            "configuration",
+            "n",
+            *[f"{arm}_{p}" for arm in EVALUATION_LADDER for p in ("mean", "bracket")],
+            "AR_to_A0",
+            "A0_to_A1",
+            "A1_to_A2",
+            "A0_to_A2",
+            "reference",
+            "prime_calls",
+            "n_pairs",
+        ),
+        key_columns=("configuration",),
+        rows=tuple(rows),
+        denominator=total,
+        denominator_is=(
+            f"finished evaluation-phase runs over every "
+            f"configuration in this source"
+        ),
+        composite=(
+            "reference",
+            *[f"{arm}_bracket" for arm in EVALUATION_LADDER],
+        ),
+    )
+
+
+def _full_distributions(
+    campaign: Campaign, population: Population, source: str
+) -> Recomputed | None:
+    """The full restricted-audit distributions re-derived, per arm."""
+    configurations = _configurations_with_a2(campaign, population)
+    if not configurations:
+        return None
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for config in configurations:
+        grouped = by_arm(population, config.name)
+        for arm in arm_order(grouped):
+            records = [r for r in grouped[arm] if completed(r)]
+            total += len(records)
+            block = accuracy_population(
+                records, ruler=campaign.predicate_mode_default
+            )
+            values = block["values"]
+            above = [
+                s.get("n_above_tau")
+                for s in block["statistics"]
+                if s.get("present") and s.get("n_above_tau") is not None
+            ]
+            mixed = accuracy_population(records, ruler="mixed")["values"]
+            span = extremes(values)
+            rows.append(
+                {
+                    "configuration": config.name,
+                    "arm": arm,
+                    "n": block["n"],
+                    "min": None if span is None else span[0],
+                    "median": middle(values),
+                    "max": None if span is None else span[1],
+                    "n_above_tau": sum(above) if above else None,
+                    "worst_run": max(above) if above else None,
+                    "mixed_median": middle(mixed),
+                    "mixed_p90": ninetieth(mixed),
+                    "sweeps": _span_cell(
+                        [r.get("n_model_calls_sweeps") for r in records]
+                    ),
+                    "node_calls": _span_cell(
+                        [r.get("node_calls_single_eval") for r in records]
+                    ),
+                }
+            )
+    return Recomputed(
+        name=f"full distributions — {source}",
+        caption=(
+            "recomputed: minimum, median and maximum of the restricted audit "
+            "maximum per configuration and arm on the frozen ruler, the "
+            "components left above τ summed over the runs and in the worst "
+            "one, the mixed ruler beside, and the per-evaluation sweeps and "
+            "node calls as ranges"
+        ),
+        columns=(
+            "configuration", "arm", "n", "min", "median", "max",
+            "n_above_tau", "worst_run", "mixed_median", "mixed_p90",
+            "sweeps", "node_calls",
+        ),
+        key_columns=("configuration", "arm"),
+        rows=tuple(rows),
+        denominator=total,
+        denominator_is=(
+            f"finished evaluation-phase runs over every "
+            f"configuration in this source"
+        ),
+        composite=("sweeps", "node_calls"),
+    )
+
+
+def _module_scope(campaign: Campaign, population: Population) -> Recomputed | None:
+    """The static module scope re-derived from the committed map."""
+    configurations = _configurations_with_a2(campaign, population)
+    if not configurations:
+        return None
+    node_map = _node_map(campaign)
+    rows_by_module = (node_map.get("units") or {}).get("dsm_rows") or {}
+    modules = node_map.get("modules") or {}
+    grouping: dict[str, list[tuple[str, list[str]]]] = {}
+    total = 0
+    for config in configurations:
+        records = [
+            r
+            for records in by_arm(population, config.name).values()
+            for r in records
+            if completed(r)
+        ]
+        total += len(records)
+        grouping[config.name] = _groups(
+            campaign, config.name, records, optimisation=False
+        )
+    order: list[str] = []
+    for groups in grouping.values():
+        for group, _nodes in groups:
+            if group not in order:
+                order.append(group)
+    rows: list[dict[str, Any]] = []
+    for name in order:
+        row: dict[str, Any] = {
+            "module": name,
+            "label": str((modules.get(name) or {}).get("label") or name),
+            "dsm_rows": (
+                int(rows_by_module[name]) if name in rows_by_module else None
+            ),
+            "iterated": (
+                "—"
+                if name not in modules
+                else ("yes" if (modules.get(name) or {}).get("in_loop") else "no")
+            ),
+        }
+        for config in configurations:
+            nodes = next(
+                (
+                    list(members)
+                    for group, members in grouping[config.name]
+                    if group == name
+                ),
+                [],
+            )
+            row[f"{config.name}_n"] = len(nodes)
+            row[f"{config.name}_nodes"] = joined(nodes, empty="—") if nodes else "—"
+        rows.append(row)
+    return Recomputed(
+        name="module scope",
+        caption=(
+            "recomputed: each node group's collapsed-DSM row count and loop "
+            "membership from the committed node map, and the nodes that "
+            "execute in it on each configuration from that map and the "
+            "configuration's per-run artifact"
+        ),
+        columns=(
+            "module", "label", "dsm_rows", "iterated",
+            *[
+                f"{config.name}_{part}"
+                for config in configurations
+                for part in ("n", "nodes")
+            ],
+        ),
+        key_columns=("module",),
+        rows=tuple(rows),
+        denominator=len(configurations),
+        denominator_is="configurations whose grouping this table states",
+        composite=(
+            "label",
+            "iterated",
+            *[f"{config.name}_nodes" for config in configurations],
+        ),
+        from_records=False,
+    )
+
+
+def _excluded_namespaces(
+    campaign: Campaign,
+    population: Population,
+    source: str,
+    where: Mapping[str, Path],
+) -> Recomputed | None:
+    """The excluded namespaces' p90s re-derived from each run's own vector."""
+    configurations = _configurations_with_a2(campaign, population)
+    if not configurations:
+        return None
+    ruler = campaign.predicate_mode_default
+    arms = ("A0", "A2")
+    collected: list[tuple[str, str, int, dict[str, list[float]], list[float]]] = []
+    namespaces: set[str] = set()
+    total = 0
+    for config in configurations:
+        grouped = by_arm(population, config.name)
+        for arm in arms:
+            records = [r for r in grouped.get(arm, []) if completed(r)]
+            if not records:
+                continue
+            per_namespace: dict[str, list[float]] = {}
+            restricted: list[float] = []
+            for record in records:
+                statistic = restricted_audit(record, ruler=ruler)
+                if statistic.get("present") and statistic.get("max") is not None:
+                    restricted.append(statistic["max"])
+                directory = where.get(str(record.get("job_digest")))
+                if directory is None:
+                    raise AnalysisError(
+                        f"{label_of(record)}: no directory for this record's "
+                        f"job digest, so its residual vector cannot be read"
+                    )
+                path = Path(directory) / "audit_residual.json"
+                if not path.exists():
+                    raise AnalysisError(f"{label_of(record)}: {path} is absent")
+                for namespace, value in _namespace_maxima(
+                    json.loads(path.read_text()), ruler
+                ).items():
+                    per_namespace.setdefault(namespace, []).append(value)
+                    namespaces.add(namespace)
+            total += len(records)
+            collected.append(
+                (config.name, arm, len(records), per_namespace, restricted)
+            )
+    if not collected:
+        return None
+    ordered = sorted(namespaces)
+    rows = [
+        {
+            "configuration": configuration,
+            "arm": arm,
+            "n": n,
+            "restricted": ninetieth(restricted),
+            **{
+                f"ns_{namespace}": ninetieth(per_namespace.get(namespace) or [])
+                for namespace in ordered
+            },
+        }
+        for configuration, arm, n, per_namespace, restricted in collected
+    ]
+    return Recomputed(
+        name=f"excluded namespaces — {source}",
+        caption=(
+            "recomputed: the p90 across runs of the per-run maximum scaled "
+            "residual, over the restricted set and over each namespace the "
+            "restriction removes, read from every run's own residual vector"
+        ),
+        columns=(
+            "configuration", "arm", "n", "restricted",
+            *[f"ns_{namespace}" for namespace in ordered],
+        ),
+        key_columns=("configuration", "arm"),
+        rows=tuple(rows),
+        denominator=total,
+        denominator_is=(
+            f"finished evaluation-phase runs over every "
+            f"configuration in this source, arms {', '.join(arms)}"
+        ),
+    )
+
+#: The pairs the location diagnostic reports, in print order, and the pair
+#: the identity table is about.  Re-typed here, not imported.
+DIAGNOSTIC_PAIRS_AGAIN: tuple[tuple[str, str], ...] = (
+    ("BR", "B0"),
+    ("B0", "B1"),
+    ("B0", "B2"),
+    ("B1", "B2"),
+)
+IDENTITY_PAIR_AGAIN: tuple[str, str] = ("B1", "B2")
+UNLIFTED_AGAIN: tuple[str, ...] = ("BR", "B0")
+LIFTED_AGAIN: tuple[str, ...] = ("B1", "B2")
+COST_SETS_AGAIN: tuple[tuple[str, bool], ...] = (
+    ("every arm accepted", False),
+    ("without retried seeds", True),
+)
+
+
+def _objective_gaps(
+    index: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    a: str,
+    b: str,
+    converged: Sequence[int],
+) -> tuple[list[float], list[int]]:
+    values: list[float] = []
+    seeds: list[int] = []
+    for seed in converged:
+        left, right = index.get(a, {}).get(seed), index.get(b, {}).get(seed)
+        if not (left and right):
+            continue
+        fa = _hex_float((left.get("exact") or {}).get("norm_objf"))
+        fb = _hex_float((right.get("exact") or {}).get("norm_objf"))
+        if fa is None or fb is None:
+            continue
+        values.append(relative_objective_gap(fa, fb))
+        seeds.append(seed)
+    return values, seeds
+
+
+def _location_diagnostic(
+    population: Population,
+    source: str,
+    groups: Sequence[Any],
+) -> Recomputed | None:
+    """Where the arms landed, re-derived — a diagnostic, never an acceptance."""
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for configuration, arms, index, converged in groups:
+        for a, b in DIAGNOSTIC_PAIRS_AGAIN:
+            if a not in index or b not in index:
+                continue
+            objective, seeds = _objective_gaps(index, a, b, converged)
+            distances: list[float] = []
+            census: dict[str, int] = {}
+            extra: list[str] = []
+            shared: set[int] = set()
+            for seed in seeds:
+                gap = _point_gap(
+                    _design_vector(index[a][seed]), _design_vector(index[b][seed])
+                )
+                if gap["max"] is None:
+                    continue
+                distances.append(gap["max"])
+                shared.add(gap["n_shared"])
+                if gap["argmax"]:
+                    census[gap["argmax"]] = census.get(gap["argmax"], 0) + 1
+                for name in gap["extra"]:
+                    if name not in extra:
+                        extra.append(name)
+            span = extremes(distances)
+            ranked = sorted(census.items(), key=lambda kv: (-kv[1], kv[0]))
+            total += len(seeds)
+            rows.append(
+                {
+                    "configuration": configuration,
+                    "pair": f"{a} → {b}"
+                    + (" (yardstick)" if (a, b) == ("BR", "B0") else ""),
+                    "n": len(seeds),
+                    "objf_median": middle(objective),
+                    "objf_p90": ninetieth(objective),
+                    "point_median": middle(distances),
+                    "point_p90": ninetieth(distances),
+                    "point_max": None if span is None else span[1],
+                    "shared": (
+                        "; ".join(str(v) for v in sorted(shared)) if shared else "—"
+                    ),
+                    "extra": joined(extra),
+                    "argmax": joined(
+                        [f"{name} ({n}/{len(distances)})" for name, n in ranked[:3]]
+                    ),
+                }
+            )
+    if not rows:
+        return None
+    return Recomputed(
+        name=f"location diagnostic — {source}",
+        caption=(
+            "recomputed: check 1's objective difference beside the maximum "
+            "relative difference over the iteration variables the two arms "
+            "share by name, as median, p90 and maximum, with the argmax "
+            "census and the unshared variables.  A diagnostic, never an "
+            "acceptance (D6)"
+        ),
+        columns=(
+            "configuration", "pair", "n", "objf_median", "objf_p90",
+            "point_median", "point_p90", "point_max", "shared", "extra",
+            "argmax",
+        ),
+        key_columns=("configuration", "pair"),
+        rows=tuple(rows),
+        denominator=total,
+        denominator_is=(
+            "arm-pair comparisons over the configurations' seed sets"
+        ),
+        composite=("pair", "shared", "extra", "argmax"),
+    )
+
+
+def _identity(
+    population: Population, source: str, groups: Sequence[Any]
+) -> Recomputed | None:
+    """The partition at an unchanged trajectory, re-derived."""
+    a, b = IDENTITY_PAIR_AGAIN
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for configuration, arms, index, converged in groups:
+        if a not in index or b not in index:
+            continue
+        pairs = [
+            seed
+            for seed in converged
+            if seed in index[a]
+            and seed in index[b]
+            and at_an_accepted_optimum(index[a][seed])
+            and at_an_accepted_optimum(index[b][seed])
+        ]
+        total += len(pairs)
+
+        def _agree(read) -> int:
+            n = 0
+            for seed in pairs:
+                left, right = read(index[a][seed]), read(index[b][seed])
+                if left is not None and right is not None and left == right:
+                    n += 1
+            return n
+
+        rows.append(
+            {
+                "configuration": configuration,
+                "pair": f"{a} → {b}",
+                "pairs": len(pairs),
+                "evaluations_identical": _agree(_evaluations),
+                "iterations_identical": _agree(iterations_summed),
+                "objf_identical": _agree(
+                    lambda record: (record.get("exact") or {}).get("norm_objf")
+                ),
+            }
+        )
+    if not rows:
+        return None
+    return Recomputed(
+        name=f"the identity B1 → B2 — {source}",
+        caption=(
+            "recomputed: over the pairs on which both arms reached an "
+            "accepted optimum, how many agree exactly on evaluations of the "
+            "model set, on optimiser iterations summed over attempts, and on "
+            "the stamped hex float of norm_objf"
+        ),
+        columns=(
+            "configuration", "pair", "pairs", "evaluations_identical",
+            "iterations_identical", "objf_identical",
+        ),
+        key_columns=("configuration",),
+        rows=tuple(rows),
+        denominator=total,
+        denominator_is=(
+            f"pairs on which both arms of {a} → {b} reached an accepted optimum"
+        ),
+        composite=("pair",),
+    )
+
+
+def _cost_set_seeds(
+    index: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    *, without_retried: bool,
+) -> list[int]:
+    if not without_retried:
+        return list(converged)
+    return [
+        seed
+        for seed in converged
+        if not any(
+            was_retried(rows[seed]) for rows in index.values() if seed in rows
+        )
+    ]
+
+
+def _solve_sum(
+    index: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    arm: str,
+    seeds: Sequence[int],
+) -> float | None:
+    values = [
+        summed_node_calls(index[arm][seed])
+        for seed in seeds
+        if seed in index.get(arm, {})
+    ]
+    values = [v for v in values if v is not None]
+    return sum(values) if values else None
+
+
+def _cost_sums(
+    population: Population, source: str, groups: Sequence[Any]
+) -> Recomputed | None:
+    """Check 4's cost as sums over a seed set, re-derived."""
+    rows: list[dict[str, Any]] = []
+    for configuration, arms, index, converged in groups:
+        if BASE_ARM not in index:
+            continue
+        for label, without in COST_SETS_AGAIN:
+            seeds = _cost_set_seeds(index, converged, without_retried=without)
+            row: dict[str, Any] = {
+                "configuration": configuration,
+                "set": label,
+                "n": len(seeds),
+            }
+            for arm in OPTIMISATION_LADDER:
+                row[arm] = (
+                    _solve_sum(index, arm, seeds) if arm in index else None
+                )
+            bottom = row.get(BASE_ARM)
+            row["ratio"] = (
+                (row["B2"] / bottom)
+                if bottom and row.get("B2") is not None
+                else None
+            )
+            rows.append(row)
+    if not rows:
+        return None
+    return Recomputed(
+        name=f"cost sums (check 4) — {source}",
+        caption=(
+            "recomputed: solve-phase node calls summed over attempts and then "
+            "over each published seed set, one column per arm, with the "
+            "partitioned arm's ratio to the flat control"
+        ),
+        columns=(
+            "configuration", "set", "n", *OPTIMISATION_LADDER, "ratio",
+        ),
+        key_columns=("configuration", "set"),
+        rows=tuple(rows),
+        denominator=len(rows),
+        denominator_is=(
+            "configuration × set rows, each over its own seeds — the n column"
+        ),
+        composite=("set",),
+    )
+
+
+def _cost_anchors(
+    population: Population, source: str, groups: Sequence[Any]
+) -> Recomputed | None:
+    """The same sums against both anchors, re-derived."""
+    rows: list[dict[str, Any]] = []
+    for configuration, arms, index, converged in groups:
+        if BASE_ARM not in index:
+            continue
+        for label, without in COST_SETS_AGAIN:
+            seeds = _cost_set_seeds(index, converged, without_retried=without)
+            sums = {
+                arm: (_solve_sum(index, arm, seeds) if arm in index else None)
+                for arm in OPTIMISATION_LADDER
+            }
+
+            def _over(top: str, bottom: str) -> float | None:
+                a, b = sums.get(top), sums.get(bottom)
+                return (a / b) if (a is not None and b) else None
+
+            rows.append(
+                {
+                    "configuration": configuration,
+                    "set": label,
+                    "n": len(seeds),
+                    "reference_to_base": _over(BASE_ARM, "BR"),
+                    "partition_to_base": _over("B2", BASE_ARM),
+                    "partition_to_reference": _over("B2", "BR"),
+                }
+            )
+    if not rows:
+        return None
+    return Recomputed(
+        name=f"cost against both anchors — {source}",
+        caption=(
+            "recomputed: the stopping-rule change BR → B0, the architecture "
+            "at a matched stopping rule B2/B0 and the end-to-end B2/BR, from "
+            "the same summed solve-phase node calls"
+        ),
+        columns=(
+            "configuration", "set", "n", "reference_to_base",
+            "partition_to_base", "partition_to_reference",
+        ),
+        key_columns=("configuration", "set"),
+        rows=tuple(rows),
+        denominator=len(rows),
+        denominator_is=(
+            "configuration × set rows, each over its own seeds — the n column"
+        ),
+        composite=("set",),
+    )
+
+
+def _sweeps_and_prime_calls(
+    population: Population, source: str, groups: Sequence[Any]
+) -> Recomputed | None:
+    """Sweeps and prime calls per arm, re-derived."""
+    rows: list[dict[str, Any]] = []
+    for configuration, arms, index, converged in groups:
+        for arm in arm_order(index):
+            records = [
+                index[arm][seed]
+                for seed in converged
+                if seed in index[arm] and completed(index[arm][seed])
+            ]
+            if not records:
+                continue
+
+            def _total(field: str) -> float | None:
+                values = [r.get(field) for r in records if r.get(field) is not None]
+                return sum(values) if values else None
+
+            calls = _solve_sum(index, arm, converged)
+            sweeps = _total("n_model_calls")
+            primes = _total("n_arrangement_method_calls")
+            rows.append(
+                {
+                    "configuration": configuration,
+                    "arm": arm,
+                    "n": len(records),
+                    "node_calls": calls,
+                    "sweeps": sweeps,
+                    "prime_calls": primes,
+                    "prime_per_sweep": (
+                        (primes / sweeps) if (primes and sweeps) else None
+                    ),
+                    "prime_per_node": (
+                        (primes / calls) if (primes and calls) else None
+                    ),
+                }
+            )
+    if not rows:
+        return None
+    return Recomputed(
+        name=f"sweeps and prime calls — {source}",
+        caption=(
+            "recomputed: summed solve-phase node calls, summed dispatch "
+            "sweeps (n_model_calls) and summed arrangement-method calls per "
+            "arm over the seed set, with the two rates they form"
+        ),
+        columns=(
+            "configuration", "arm", "n", "node_calls", "sweeps", "prime_calls",
+            "prime_per_sweep", "prime_per_node",
+        ),
+        key_columns=("configuration", "arm"),
+        rows=tuple(rows),
+        denominator=len(rows),
+        denominator_is=(
+            "arm rows over the configurations' seed sets — the n column"
+        ),
+    )
+
+
+def _problem_definition(
+    campaign: Campaign, population: Population, source: str, groups: Sequence[Any]
+) -> Recomputed | None:
+    """What each configuration optimises, re-derived from the runs' stamps."""
+    numerics = Path(campaign.tree) / "process" / "data_structure" / "numerics.py"
+    if not numerics.exists():
+        raise AnalysisError(
+            f"the frozen tree carries no {numerics}; the objective's name "
+            f"cannot be read"
+        )
+    text = numerics.read_text()
+    fields = (
+        "i_figure_merit",
+        "nvar",
+        "n_equality_constraints",
+        "n_inequality_constraints",
+        "n_constraints",
+    )
+    rows: list[dict[str, Any]] = []
+    done: set[str] = set()
+    for configuration, arms, index, converged in groups:
+        if configuration in done:
+            continue
+
+        def _runs(wanted: Sequence[str]) -> list[Mapping[str, Any]]:
+            return [
+                index[arm][seed]
+                for arm in wanted
+                if arm in index
+                for seed in converged
+                if seed in index[arm] and completed(index[arm][seed])
+            ]
+
+        def _agreed(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+            out: dict[str, Any] = {}
+            for field in fields:
+                seen = sorted({r.get(field) for r in records})
+                if len(seen) != 1:
+                    raise AnalysisError(
+                        f"{configuration}: these runs stamp {field} as {seen}"
+                    )
+                out[field] = seen[0]
+            return out
+
+        flat = _runs(UNLIFTED_AGAIN)
+        lifted = _runs(LIFTED_AGAIN)
+        if not flat:
+            continue
+        done.add(configuration)
+        stamped = _agreed(flat)
+        after = _agreed(lifted) if lifted else None
+        merit = _objective_name(text, stamped["i_figure_merit"])
+
+        def _text(block: Mapping[str, Any] | None) -> str:
+            if block is None:
+                return "—"
+            return (
+                f"{block['n_constraints']} "
+                f"({block['n_equality_constraints']} / "
+                f"{block['n_inequality_constraints']})"
+            )
+
+        rows.append(
+            {
+                "configuration": configuration,
+                "n": len(flat),
+                "i_figure_merit": stamped["i_figure_merit"],
+                "objective": merit["objective"],
+                "sense": merit["sense"],
+                "nvar": stamped["nvar"],
+                "constraints": _text(stamped),
+                "nvar_lifted": None if after is None else after["nvar"],
+                "constraints_lifted": _text(after),
+                "pulsed": (
+                    "yes"
+                    if campaign.configuration(configuration).pulsed
+                    else "no (k = 0)"
+                ),
+            }
+        )
+    if not rows:
+        return None
+    return Recomputed(
+        name=f"problem definition — {source}",
+        caption=(
+            "recomputed: the figure of merit, iteration variables and "
+            "constraint counts the unlifted arms' runs stamp, the same after "
+            "the lift, and the objective's name and sense read from the "
+            "frozen tree's FiguresOfMerit"
+        ),
+        columns=(
+            "configuration", "n", "i_figure_merit", "objective", "sense",
+            "nvar", "constraints", "nvar_lifted", "constraints_lifted",
+            "pulsed",
+        ),
+        key_columns=("configuration",),
+        rows=tuple(rows),
+        denominator=len(rows),
+        denominator_is="configurations whose problem this table states",
+        composite=(
+            "objective", "sense", "constraints", "constraints_lifted", "pulsed",
+        ),
     )
 
 

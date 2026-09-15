@@ -2193,6 +2193,874 @@ def node_calls_per_module(
 #: The optimiser's path, quantity by quantity: the label the table prints,
 #: and the construction that reads one run.  ``R = ρ × ε`` holds per run by
 #: construction (ρ is R / ε), which is why the four rows are one table.
+# --------------------------------------------------------------------------
+# the previous revision's §5 cross-configuration shapes (task A86
+# (v3-tables-remainder), 2026-09-15)
+# --------------------------------------------------------------------------
+
+#: The pairs the location diagnostic and the identity table read, in the
+#: order they print: check 1's own pairs, then the partition at an unchanged
+#: trajectory.  ``None`` in the second slot means "every other arm".
+DIAGNOSTIC_PAIRS: tuple[tuple[str, str], ...] = (
+    YARDSTICK_PAIR,
+    (BASE_ARM, "B1"),
+    (BASE_ARM, "B2"),
+    ("B1", "B2"),
+)
+
+#: The arms that solve the configuration's own problem, and the arms that
+#: solve the problem after the burn-time lift.  Derived from the ladder's
+#: rungs (plan §3.3): the ownership rung ``B0 → B1`` is where the lift enters,
+#: so everything from ``B1`` on carries it.
+UNLIFTED_ARMS: tuple[str, ...] = LADDER[: LADDER.index("B1")]
+LIFTED_ARMS: tuple[str, ...] = LADDER[LADDER.index("B1") :]
+
+#: The pair the identity table is about: the partition at an unchanged
+#: optimiser trajectory.  The previous revision proved the same thing one
+#: rung over, for its trust step.
+IDENTITY_PAIR: tuple[str, str] = ("B1", "B2")
+
+
+def _objective_pairs(
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    a: str,
+    b: str,
+    converged: Sequence[int],
+) -> tuple[list[float], list[int]]:
+    """Check 1's relative objective difference per seed, and the seeds."""
+    values: list[float] = []
+    seeds: list[int] = []
+    for seed in converged:
+        ra, rb = by_arm.get(a, {}).get(seed), by_arm.get(b, {}).get(seed)
+        if not (ra and rb):
+            continue
+        fa = _hexf((ra.get("exact") or {}).get("norm_objf"))
+        fb = _hexf((rb.get("exact") or {}).get("norm_objf"))
+        if fa is None or fb is None:
+            continue
+        values.append(stats_mod.relative_objective_difference(fa, fb))
+        seeds.append(seed)
+    return values, seeds
+
+
+def location_diagnostic(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    source: str,
+    groups: Sequence[Any],
+) -> Table | None:
+    """**Where the arms actually landed** — the previous revision's §5.2.2.
+
+    One row per configuration and arm pair: check 1's objective agreement
+    repeated for direct comparison, then the **maximum over iteration
+    variables of the per-variable relative difference** on the unscaled
+    accepted design vector, as the median, p90 and maximum over the pair's
+    seeds, with the argmax variable named and the count of shared variables
+    beside the name of any variable one side carries and the other does not.
+
+    Variables are matched **by name** (:func:`stats.iteration_variables`),
+    never by index: the lift adds ``t_plant_pulse_burn``, so the lifted arms
+    carry one more iteration variable than the flat ones on a pulsed
+    configuration, and the unshared variable is named and never compared.
+
+    **This is a diagnostic. D6 forbids gating on it, and nothing in this
+    report's verdicts rests on it.**
+    """
+    rows: list[dict[str, Any]] = []
+    n_pairs_total = 0
+    for configuration, arms, by_arm, converged in groups:
+        for a, b in DIAGNOSTIC_PAIRS:
+            if a not in by_arm or b not in by_arm:
+                continue
+            objective, seeds = _objective_pairs(by_arm, a, b, converged)
+            distances: list[float] = []
+            argmaxes: dict[str, int] = {}
+            extra: list[str] = []
+            shared: set[int] = set()
+            for seed in seeds:
+                left = stats_mod.iteration_variables(by_arm[a][seed])
+                right = stats_mod.iteration_variables(by_arm[b][seed])
+                difference = stats_mod.point_difference(left, right)
+                if difference["max"] is None:
+                    continue
+                distances.append(difference["max"])
+                shared.add(difference["n_shared"])
+                if difference["argmax"]:
+                    argmaxes[difference["argmax"]] = (
+                        argmaxes.get(difference["argmax"], 0) + 1
+                    )
+                for name in difference["extra"]:
+                    if name not in extra:
+                        extra.append(name)
+            bracket = stats_mod.seed_bracket(distances)
+            census = sorted(argmaxes.items(), key=lambda kv: (-kv[1], kv[0]))
+            n_pairs_total += len(seeds)
+            rows.append(
+                {
+                    "configuration": configuration,
+                    "pair": f"{a} → {b}"
+                    + (" (yardstick)" if (a, b) == YARDSTICK_PAIR else ""),
+                    "n": len(seeds),
+                    "objf_median": stats_mod.median(objective),
+                    "objf_p90": stats_mod.p90(objective),
+                    "point_median": stats_mod.median(distances),
+                    "point_p90": stats_mod.p90(distances),
+                    "point_max": None if bracket is None else bracket[1],
+                    "shared": (
+                        "; ".join(str(v) for v in sorted(shared))
+                        if shared
+                        else "—"
+                    ),
+                    "extra": cell_list(extra),
+                    "argmax": cell_list(
+                        [f"{name} ({n}/{len(distances)})" for name, n in census[:3]]
+                    ),
+                }
+            )
+    if not rows:
+        return None
+    return Table(
+        name=f"location diagnostic — {source}",
+        caption=Caption(
+            units="dimensionless: relative differences of the normalised "
+            "objective and of an iteration variable",
+            row_is="one arm pair of one configuration over its seed set",
+            column_is="an order statistic of the pair's objective difference "
+            "or of its design-point difference, the variable the point "
+            "difference sat on most often, or the variables the two sides do "
+            "not share",
+            population=(
+                f"{population.what}; {n_pairs_total} pair(s) over the "
+                f"configurations' seed sets"
+            ),
+            construction=(
+                "stats.iteration_variables joins the output file's itvars to "
+                "its itvar_names **on the solver's slot** and refuses a "
+                "record with a value in a slot the name map does not carry; "
+                "stats.point_difference is the maximum over the shared names "
+                "of |Δx| / max(|x_a|, |x_b|) on the unscaled vector, with the "
+                "argmax named; median = nearest-rank upper-middle, p90 = "
+                "nearest-rank ceil(0.9 n); the objective columns are "
+                "stats.relative_objective_difference, check 1's own"
+            ),
+            clauses=(
+                "**This is a diagnostic. D6 forbids gating on it, and "
+                "nothing in this report's verdicts rests on it** — some "
+                "iteration variables are not identified by the problem and "
+                "differ at an unchanged optimum",
+                "variables are matched **by name**, never by index: the lift "
+                "adds `t_plant_pulse_burn`, so a lifted arm carries one more "
+                "iteration variable than a flat one on a pulsed "
+                "configuration; the unshared variable is named in its own "
+                "column and never compared",
+                "the yardstick pair is a change of **stopping rule** and "
+                "nothing else; where it moves the point as far as an "
+                "architectural rung does, non-identification is a property "
+                "of the configuration and not of the partition",
+                "the objective columns are check 1's, repeated here so the "
+                "two questions — how good, and where — are read side by side",
+            ),
+            how_to_read=(
+                "read the objective columns against the point columns on one "
+                "row: agreement to thirteen digits on the first with a "
+                "per-cent difference on the second is a weakly identified "
+                "direction, not a disagreement about the optimum"
+            ),
+            summary=(
+                "Where each pair of arms landed, by configuration: check 1's "
+                "objective difference beside the maximum relative difference "
+                "over the **iteration variables**, matched by name, as median, "
+                "p90 and maximum, with the argmax variable named and any "
+                "variable one side alone carries. **A diagnostic, never an "
+                "acceptance** (D6): some iteration variables are not "
+                "identified by the problem and differ at an unchanged optimum."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("pair", "pair"),
+            Column("n", "n", fmt=_fmt_int),
+            Column("objf_median", "objf med", fmt=_fmt_exp),
+            Column("objf_p90", "objf p90", fmt=_fmt_exp),
+            Column("point_median", "point med", fmt=_fmt_exp),
+            Column("point_p90", "point p90", fmt=_fmt_exp),
+            Column("point_max", "point max", fmt=_fmt_exp),
+            Column("shared", "shared vars"),
+            Column("extra", "extra vars"),
+            Column("argmax", "argmax census"),
+        ),
+        rows=tuple(rows),
+        denominator=n_pairs_total,
+        denominator_is=(
+            "arm-pair comparisons over the configurations' seed sets"
+        ),
+        kind="location_diagnostic",
+    )
+
+
+def identity(
+    population: stats_mod.Population,
+    source: str,
+    groups: Sequence[Any],
+) -> Table | None:
+    """**The partition at an unchanged trajectory** — the §5.3 identity table.
+
+    One row per configuration: over the pairs on which **both** arms reached
+    an accepted optimum, how many ran the identical number of evaluations of
+    the model set, the identical number of optimiser iterations, and reached
+    a **bit-identical** ``norm_objf`` — compared as the hex float the record
+    stamps, so "identical" is exact and not "within noise".
+
+    The previous revision's table proved its trust step left the optimiser's
+    path unchanged; this proves the **partition** does, one rung over.
+    """
+    a, b = IDENTITY_PAIR
+    rows: list[dict[str, Any]] = []
+    total = 0
+    for configuration, arms, by_arm, converged in groups:
+        if a not in by_arm or b not in by_arm:
+            continue
+        pairs = [
+            seed
+            for seed in converged
+            if seed in by_arm[a]
+            and seed in by_arm[b]
+            and stats_mod.accepted_optimum(by_arm[a][seed])
+            and stats_mod.accepted_optimum(by_arm[b][seed])
+        ]
+        total += len(pairs)
+
+        def _same(seed: int, read) -> bool | None:
+            left, right = read(by_arm[a][seed]), read(by_arm[b][seed])
+            return None if left is None or right is None else left == right
+
+        def _count(read) -> int:
+            return sum(1 for seed in pairs if _same(seed, read) is True)
+
+        rows.append(
+            {
+                "configuration": configuration,
+                "pair": f"{a} → {b}",
+                "pairs": len(pairs),
+                "evaluations_identical": _count(stats_mod.n_evaluations),
+                "iterations_identical": _count(
+                    stats_mod.iterations_summed_over_attempts
+                ),
+                "objf_identical": _count(
+                    lambda record: (record.get("exact") or {}).get("norm_objf")
+                ),
+            }
+        )
+    if not rows:
+        return None
+    return Table(
+        name=f"the identity B1 → B2 — {source}",
+        caption=Caption(
+            units="counts of seeds",
+            row_is="one configuration",
+            column_is="how many of the configuration's both-accepted pairs "
+            "agree exactly on one quantity",
+            population=(
+                f"{population.what}; {total} pair(s) on which both arms of "
+                f"{a} → {b} reached an accepted optimum"
+            ),
+            construction=(
+                "stats.n_evaluations (sweeps_per_eval.n_evaluations) and "
+                "stats.iterations_summed_over_attempts compared as integers; "
+                "the objective compared as the **hex float** the record "
+                "stamps (`exact.norm_objf`), so identity is bit identity and "
+                "not agreement to a printed precision"
+            ),
+            clauses=(
+                "a pair counts only where both sides reached an accepted "
+                "optimum; the seeds outside that set are the failure table's",
+                "integers are compared exactly, so *identical* here is exact "
+                "and never 'within noise'",
+                "this is the **partition** at an unchanged trajectory: the "
+                "two arms differ by the partition alone, both carrying the "
+                "lift and the prime",
+            ),
+            how_to_read=(
+                "a count equal to the pair count says the partition changed "
+                "nothing about the path the optimiser took, only what each "
+                "step cost"
+            ),
+            summary=(
+                f"The partition at an unchanged trajectory, by configuration: "
+                f"over the pairs on which both {a} and {b} reached an accepted "
+                f"optimum, how many agree exactly on evaluations of the model "
+                f"set, on optimiser iterations, and on a bit-identical "
+                f"`norm_objf` (compared as the stamped hex float). `B1` is "
+                f"inactive on `st_regression`, which therefore has no row."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("pair", "pair"),
+            Column("pairs", "pairs", fmt=_fmt_int),
+            Column("evaluations_identical", "evaluations identical", fmt=_fmt_int),
+            Column("iterations_identical", "iterations identical", fmt=_fmt_int),
+            Column("objf_identical", "objf bit-identical", fmt=_fmt_int),
+        ),
+        rows=tuple(rows),
+        denominator=total,
+        denominator_is=(
+            f"pairs on which both arms of {a} → {b} reached an accepted optimum"
+        ),
+        kind="identity",
+    )
+
+
+def _set_members(
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    *, without_retried: bool,
+) -> list[int]:
+    """One of check 4's two published seed sets."""
+    if not without_retried:
+        return list(converged)
+    return [
+        seed
+        for seed in converged
+        if not any(
+            stats_mod.retried(rows[seed])
+            for rows in by_arm.values()
+            if seed in rows
+        )
+    ]
+
+
+COST_SETS: tuple[tuple[str, bool], ...] = (
+    ("every arm accepted", False),
+    ("without retried seeds", True),
+)
+
+
+def _summed_over(
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    arm: str,
+    seeds: Sequence[int],
+) -> float | None:
+    values = [
+        _summed_solve_calls(by_arm[arm][seed])
+        for seed in seeds
+        if seed in by_arm.get(arm, {})
+    ]
+    values = [v for v in values if v is not None]
+    return sum(values) if values else None
+
+
+def cost_sums(
+    population: stats_mod.Population,
+    source: str,
+    groups: Sequence[Any],
+) -> Table | None:
+    """**Check 4's cost as sums over a seed set** — the previous revision's §5.5.
+
+    One row per configuration and published set, one column per arm holding
+    the **summed solve-phase node calls** over that set, and the ratio of the
+    partitioned arm to the flat control.  The same quantity the per-arm cost
+    table states as a per-run mean, summed: the claim is about total work
+    over the campaign, which is what a deployment question asks.
+
+    V4's two sets are not the previous revision's.  It published
+    identical-**ok** and identical-**converged**; V4 has one acceptance set —
+    the seeds on which every arm reached an accepted optimum — and publishes
+    the retried-seed exclusion beside it, because a retry is a robustness
+    event and a cost at once (the cost table's two ratio pairs).
+    """
+    rows: list[dict[str, Any]] = []
+    n_rows = 0
+    for configuration, arms, by_arm, converged in groups:
+        if BASE_ARM not in by_arm:
+            continue
+        for label, without in COST_SETS:
+            seeds = _set_members(by_arm, converged, without_retried=without)
+            row: dict[str, Any] = {
+                "configuration": configuration,
+                "set": label,
+                "n": len(seeds),
+            }
+            for arm in LADDER:
+                row[arm] = _summed_over(by_arm, arm, seeds) if arm in by_arm else None
+            base = row.get(BASE_ARM)
+            row["ratio"] = (
+                (row["B2"] / base)
+                if base and row.get("B2") is not None
+                else None
+            )
+            rows.append(row)
+            n_rows += 1
+    if not rows:
+        return None
+    return Table(
+        name=f"cost sums (check 4) — {source}",
+        caption=Caption(
+            units="model-node executions during the solve, summed over the "
+            "set; the ratio is dimensionless",
+            row_is="one configuration under one published seed set",
+            column_is="one arm's summed solve-phase node calls over that set, "
+            "or the partitioned arm's ratio to the flat control",
+            population=(
+                f"{population.what}; {n_rows} row(s) over the "
+                f"configurations' seed sets"
+            ),
+            construction=(
+                "solve-phase node calls **summed over attempts[]** per run "
+                "(the attempt-summation identity is printed per run in the "
+                "companion file), then summed over the set's seeds; the ratio "
+                "is Σ B2 / Σ B0 over the same seeds"
+            ),
+            clauses=(
+                "**these are sums, so the claim is about total work over the "
+                "set** and not about every run: the per-run distribution is "
+                "the per-module table's last columns, which show where the "
+                "sign reverses",
+                "the two sets are V4's own — the seeds on which every arm "
+                "reached an accepted optimum, and the same set less the seeds "
+                "on which any arm retried — not the previous revision's ok / "
+                "converged pair, because V4 has one acceptance set and "
+                "publishes the retry exclusion beside it",
+                "the output path and the exit audit are excluded from this "
+                "unit symmetrically in every arm",
+                "prime calls are not model nodes and are in no column here "
+                "(D19); they are the sweeps-and-prime-calls table's",
+            ),
+            how_to_read=(
+                "read the ratio column down the two sets of one "
+                "configuration: where they agree, nothing in the result "
+                "depended on a retry"
+            ),
+            summary=(
+                "Check 4 as sums: solve-phase model-node executions summed "
+                "over each configuration's seed set and over that set less "
+                "the retried seeds, one column per arm, with the partitioned "
+                "arm's ratio to the flat control. Sums, so the claim is about "
+                "total work over the set; the per-run reading is the "
+                "per-module table's."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("set", "set"),
+            Column("n", "n", fmt=_fmt_int),
+            *[Column(arm, arm, fmt=_fmt_int) for arm in LADDER],
+            Column("ratio", "B2/B0", fmt=_fmt_ratio),
+        ),
+        rows=tuple(rows),
+        denominator=n_rows,
+        denominator_is=(
+            "configuration × set rows, each over its own seeds — the n column"
+        ),
+        acceptance=True,
+        kind="cost_sums",
+    )
+
+
+def cost_anchors(
+    population: stats_mod.Population,
+    source: str,
+    groups: Sequence[Any],
+) -> Table | None:
+    """**Both anchors** — the previous revision's second §5.5 table.
+
+    The same rows as the cost sums, and three ratios: the stopping-rule
+    change `BR → B0`, the architecture at a matched stopping rule `B2/B0`,
+    and the end-to-end change a user switching from PROCESS as shipped would
+    see, `B2/BR`.  Neither ratio is more correct: they answer different
+    questions, and the report's headline uses `B0` because that is the anchor
+    the ladder decomposes against.
+    """
+    rows: list[dict[str, Any]] = []
+    n_rows = 0
+    for configuration, arms, by_arm, converged in groups:
+        if BASE_ARM not in by_arm:
+            continue
+        for label, without in COST_SETS:
+            seeds = _set_members(by_arm, converged, without_retried=without)
+            sums = {
+                arm: (_summed_over(by_arm, arm, seeds) if arm in by_arm else None)
+                for arm in LADDER
+            }
+
+            def _ratio(top: str, bottom: str) -> float | None:
+                a, b = sums.get(top), sums.get(bottom)
+                return (a / b) if (a is not None and b) else None
+
+            rows.append(
+                {
+                    "configuration": configuration,
+                    "set": label,
+                    "n": len(seeds),
+                    "reference_to_base": _ratio(BASE_ARM, "BR"),
+                    "partition_to_base": _ratio("B2", BASE_ARM),
+                    "partition_to_reference": _ratio("B2", "BR"),
+                }
+            )
+            n_rows += 1
+    if not rows:
+        return None
+    return Table(
+        name=f"cost against both anchors — {source}",
+        caption=Caption(
+            units="dimensionless ratios of summed solve-phase node calls",
+            row_is="one configuration under one published seed set",
+            column_is="one of the three anchored ratios",
+            population=(
+                f"{population.what}; {n_rows} row(s) over the "
+                f"configurations' seed sets"
+            ),
+            construction=(
+                "the same sums as the cost-sums table, ratioed: BR → B0 is "
+                "Σ B0 / Σ BR, B2/B0 is Σ B2 / Σ B0 and B2/BR is Σ B2 / Σ BR, "
+                "each over the set's own seeds"
+            ),
+            clauses=(
+                "**B2/B0 isolates the architecture at a matched stopping "
+                "rule** and is the ladder's number; **B2/BR is the "
+                "end-to-end change** a user switching from PROCESS as shipped "
+                "would see, and conflates the architecture with the "
+                "stopping-rule change",
+                "BR → B0 is that stopping-rule change alone, and it is not "
+                "free: where it exceeds 1 the matched baseline is already "
+                "cheaper than the code as shipped, so measuring against B0 "
+                "understates what a user would gain",
+                "neither ratio is more correct; the report's headline uses "
+                "B0 because that is the anchor the ladder decomposes against",
+            ),
+            how_to_read=(
+                "the gap between the last two columns is exactly what the "
+                "stopping rule is worth on that configuration"
+            ),
+            summary=(
+                "The partitioned arm's cost ratio against **both** anchors, "
+                "by configuration and set: the stopping-rule change BR → B0, "
+                "the architecture at a matched stopping rule B2/B0, and the "
+                "end-to-end B2/BR. Same sums as the cost-sums table."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("set", "set"),
+            Column("n", "n", fmt=_fmt_int),
+            Column("reference_to_base", "BR→B0", fmt=_fmt_ratio),
+            Column("partition_to_base", "B2/B0", fmt=_fmt_ratio),
+            Column("partition_to_reference", "B2/BR", fmt=_fmt_ratio),
+        ),
+        rows=tuple(rows),
+        denominator=n_rows,
+        denominator_is=(
+            "configuration × set rows, each over its own seeds — the n column"
+        ),
+        acceptance=True,
+        kind="cost_anchors",
+    )
+
+
+def sweeps_and_prime_calls(
+    population: stats_mod.Population,
+    source: str,
+    groups: Sequence[Any],
+) -> Table | None:
+    """**Sweeps and prime calls** — the previous revision's third §5.5 table.
+
+    The accounting that explains how node calls fall while dispatch sweeps
+    rise: per configuration and arm over the seed set, the summed solve-phase
+    node calls, the summed **dispatch sweeps** (``n_model_calls``, the field
+    issue **I-26** names as the sweep count), the summed prime
+    (arrangement-method) calls, and the two rates ``prime/sweep`` — which
+    verifies the prime's contract of one ``set_fw_geometry()`` per sweep —
+    and ``prime/node``, the cost decision **D19** excludes from every ratio
+    in this report, named here per trap T11.  Both are **counts**, never
+    costs.
+    """
+    rows: list[dict[str, Any]] = []
+    n_rows = 0
+    for configuration, arms, by_arm, converged in groups:
+        for arm in _arm_order(by_arm):
+            records = [
+                by_arm[arm][seed]
+                for seed in converged
+                if seed in by_arm[arm] and stats_mod.finished(by_arm[arm][seed])
+            ]
+            if not records:
+                continue
+
+            def _sum(field: str) -> float | None:
+                values = [r.get(field) for r in records]
+                values = [v for v in values if v is not None]
+                return sum(values) if values else None
+
+            calls = _summed_over(by_arm, arm, converged)
+            sweeps = _sum("n_model_calls")
+            primes = _sum("n_arrangement_method_calls")
+            rows.append(
+                {
+                    "configuration": configuration,
+                    "arm": arm,
+                    "n": len(records),
+                    "node_calls": calls,
+                    "sweeps": sweeps,
+                    "prime_calls": primes,
+                    "prime_per_sweep": (
+                        (primes / sweeps) if (primes and sweeps) else None
+                    ),
+                    "prime_per_node": (
+                        (primes / calls) if (primes and calls) else None
+                    ),
+                }
+            )
+            n_rows += 1
+    if not rows:
+        return None
+    return Table(
+        name=f"sweeps and prime calls — {source}",
+        caption=Caption(
+            units="counts: model-node executions, dispatch sweeps and "
+            "arrangement-method calls, summed over the seed set; the two "
+            "rates are dimensionless",
+            row_is="one arm of one configuration over its seed set",
+            column_is="one summed count, or one of the two rates",
+            population=(
+                f"{population.what}; {n_rows} arm row(s) over the "
+                f"configurations' seed sets"
+            ),
+            construction=(
+                "solve-phase node calls summed over attempts[] and then over "
+                "the set; `n_model_calls` is the **dispatch sweep** count "
+                "(issue I-26: it counts walks of the dispatch body, not "
+                "evaluations of the model set) and `n_arrangement_method_calls` "
+                "the prime calls, each summed over the same runs; the rates "
+                "are those sums divided"
+            ),
+            clauses=(
+                "**both rates are counts, never costs**: whether a prime call "
+                "is cheap against an average model node is a timing, and no "
+                "conclusion in this report rests on one (I-10)",
+                "`prime/sweep` is the prime's contract — one "
+                "`set_fw_geometry()` per sweep of the dispatch body — and is "
+                "read as a check, not as a result",
+                "`prime/node` is the quantity decision D19 excludes from "
+                "every cost ratio in this report, named here so the exclusion "
+                "has a size (trap T11)",
+                "a flat arm runs no prime and its rate columns read —",
+            ),
+            how_to_read=(
+                "node calls fall while sweeps rise: the partitioned arm walks "
+                "the dispatch body far more often and executes far fewer "
+                "nodes each time"
+            ),
+            summary=(
+                "The accounting behind the cost result, by configuration and "
+                "arm over the seed set: summed solve-phase node calls, summed "
+                "dispatch sweeps (`n_model_calls`, I-26), summed prime calls, "
+                "and the rates prime/sweep — the prime's one-per-sweep "
+                "contract — and prime/node, the quantity D19 excludes from "
+                "every cost ratio. Counts, never costs."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("arm", "arm"),
+            Column("n", "n", fmt=_fmt_int),
+            Column("node_calls", "node calls", fmt=_fmt_int),
+            Column("sweeps", "dispatch sweeps", fmt=_fmt_int),
+            Column("prime_calls", "prime calls", fmt=_fmt_int),
+            Column("prime_per_sweep", "prime/sweep", fmt=_fmt_ratio),
+            Column("prime_per_node", "prime/node", fmt=_fmt_ratio),
+        ),
+        rows=tuple(rows),
+        denominator=n_rows,
+        denominator_is=(
+            "arm rows over the configurations' seed sets — the n column"
+        ),
+        kind="sweeps_and_prime_calls",
+    )
+
+
+def problem_definition(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    source: str,
+    groups: Sequence[Any],
+) -> Table | None:
+    """**They do not optimise the same thing** — the §5.6 table.
+
+    One row per configuration, from the records' own stamps: the figure of
+    merit, its name and sense read from the frozen tree's own
+    ``FiguresOfMerit`` enum, the number of iteration variables, the equality
+    and inequality constraint counts, and whether the configuration is
+    pulsed.
+
+    Every configuration's runs must agree on each stamp; a configuration
+    whose records disagree is **refused** rather than reduced to whichever
+    record sorted first, because that would be a table stating one problem
+    where two were solved.
+    """
+    numerics = Path(campaign.tree) / "process" / "data_structure" / "numerics.py"
+    if not numerics.exists():
+        raise tally_mod.TallyError(
+            f"the frozen tree carries no {numerics}, so the objective's name "
+            f"cannot be read and the problem-definition table is refused "
+            f"rather than printed with an integer where the name belongs"
+        )
+    source_text = numerics.read_text()
+    fields = (
+        "i_figure_merit",
+        "nvar",
+        "n_equality_constraints",
+        "n_inequality_constraints",
+        "n_constraints",
+    )
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for configuration, arms, by_arm, converged in groups:
+        if configuration in seen:
+            continue
+        def _records(arms_wanted: Sequence[str]) -> list[Mapping[str, Any]]:
+            return [
+                by_arm[arm][seed]
+                for arm in arms_wanted
+                if arm in by_arm
+                for seed in converged
+                if seed in by_arm[arm] and stats_mod.finished(by_arm[arm][seed])
+            ]
+
+        def _stamps(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+            """The stamps these runs agree on, refusing where they do not."""
+            out: dict[str, Any] = {}
+            for field in fields:
+                values = sorted({r.get(field) for r in records})
+                if len(values) != 1:
+                    raise tally_mod.TallyError(
+                        f"{configuration}: these runs stamp {field} as "
+                        f"{values}; a problem-definition row cannot state one "
+                        f"problem where the records say two were solved"
+                    )
+                out[field] = values[0]
+            return out
+
+        # The **configuration's own** problem is the one the unlifted arms
+        # solve; the lift adds an iteration variable and a constraint, which
+        # is a change of problem and is stated in its own columns rather than
+        # averaged into the row (I-20 (b)).
+        flat = _records(UNLIFTED_ARMS)
+        lifted = _records(LIFTED_ARMS)
+        if not flat:
+            continue
+        seen.add(configuration)
+        stamped = _stamps(flat)
+        after = _stamps(lifted) if lifted else None
+        merit = stats_mod.figure_of_merit(
+            source_text, stamped["i_figure_merit"]
+        )
+
+        def _constraints(block: Mapping[str, Any] | None) -> str:
+            if block is None:
+                return "—"
+            return (
+                f"{block['n_constraints']} "
+                f"({block['n_equality_constraints']} / "
+                f"{block['n_inequality_constraints']})"
+            )
+
+        rows.append(
+            {
+                "configuration": configuration,
+                "n": len(flat),
+                "i_figure_merit": stamped["i_figure_merit"],
+                "objective": merit["objective"],
+                "sense": merit["sense"],
+                "nvar": stamped["nvar"],
+                "constraints": _constraints(stamped),
+                "nvar_lifted": None if after is None else after["nvar"],
+                "constraints_lifted": _constraints(after),
+                "pulsed": (
+                    "yes"
+                    if campaign.configuration(configuration).pulsed
+                    else "no (k = 0)"
+                ),
+            }
+        )
+    if not rows:
+        return None
+    return Table(
+        name=f"problem definition — {source}",
+        caption=Caption(
+            units="counts of iteration variables and constraints; the "
+            "objective is a name",
+            row_is="one configuration",
+            column_is="one part of the optimisation problem that "
+            "configuration poses",
+            population=(
+                f"{population.what}; the stamps of every finished run of the "
+                f"unlifted arms of each of {len(rows)} configuration(s), and "
+                f"of the lifted arms beside, each checked for agreement"
+            ),
+            construction=(
+                "the stamps `i_figure_merit`, `nvar`, `n_constraints`, "
+                "`n_equality_constraints` and `n_inequality_constraints` of "
+                f"every finished run of {' and '.join(UNLIFTED_ARMS)} (the "
+                f"configuration's own problem) and of "
+                f"{' and '.join(LIFTED_ARMS)} beside (the problem after the "
+                "lift), each refused where its runs disagree; the objective's name and sense are "
+                "stats.figure_of_merit — the description of the matching "
+                "member of `FiguresOfMerit` in the **frozen tree's** "
+                "`process/data_structure/numerics.py`, parsed from the file "
+                "and never imported, a negative figure of merit meaning "
+                "*maximise*"
+            ),
+            clauses=(
+                "**the three configurations do not optimise the same thing**, "
+                "so every cross-configuration comparison in this report is "
+                "three answers to three questions and never one sample of "
+                "three",
+                "on a configuration whose objective **is** the lifted "
+                "quantity, the ownership rung promotes that objective into "
+                "the design vector: the arms either side of it are not "
+                "solving the same optimisation problem (I-20 (b))",
+                "the counts are the run's own stamps, not the input file "
+                "read again",
+                "**the lift changes the problem**, so its `nvar` and "
+                "constraint counts are columns of their own rather than "
+                "folded into the configuration's: the unlifted arms state "
+                "what the configuration poses and the lifted arms what the "
+                "intervention poses",
+            ),
+            how_to_read=(
+                "read the objective column against the report's ladder: a "
+                "rung that touches the objective is a change of problem, not "
+                "only a change of architecture"
+            ),
+            summary=(
+                "What each configuration actually optimises, from the runs' "
+                "own stamps: the figure of merit and its name and sense (read "
+                "from the frozen tree's `FiguresOfMerit`; negative means "
+                "maximise), the iteration variables and constraints as total "
+                "(equality / inequality) before and after the lift, and "
+                "whether it is pulsed. The three are three different "
+                "optimisation problems, and the lift makes a fourth and fifth."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("n", "n (runs)", fmt=_fmt_int),
+            Column("i_figure_merit", "`i_figure_merit`", fmt=_fmt_int),
+            Column("objective", "objective"),
+            Column("sense", "sense"),
+            Column("nvar", "vars", fmt=_fmt_int),
+            Column("constraints", "constraints (eq / ineq)"),
+            Column("nvar_lifted", "vars after the lift", fmt=_fmt_int),
+            Column("constraints_lifted", "constraints after the lift"),
+            Column("pulsed", "pulsed"),
+        ),
+        rows=tuple(rows),
+        denominator=len(rows),
+        denominator_is="configurations whose problem this table states",
+        kind="problem_definition",
+    )
+
+
 PATH_QUANTITIES: tuple[tuple[str, str], ...] = (
     ("iterations (summed over attempts)", "iterations"),
     ("evaluations of the model set, ε", "evaluations"),
@@ -2272,6 +3140,14 @@ def optimiser_path(
             )
             row.update(
                 {
+                    # The previous revision's column of this name was the
+                    # **ratio of the means** — equal to the ratio of the sums
+                    # over the same seeds, the campaign-cost statistic (its
+                    # §5.3 caption).  The mean of the per-seed ratios is a
+                    # different statistic and answers the typical seed's
+                    # question; both are published, each under its own
+                    # heading (task A86 (v3-tables-remainder)).
+                    "ratio_pooled": summary["pooled"],
                     "ratio_mean": summary["mean"],
                     "ratio_median": summary["median"],
                     "ratio_bracket": (
@@ -2295,8 +3171,9 @@ def optimiser_path(
             "evaluation count ε, the node calls per evaluation ρ, the node "
             "calls per run R",
             column_is="per arm, the mean over the seed set; for B2 against B0, "
-            "the mean of the per-seed ratios, their median with [min, max], "
-            "and the count of seeds on which the ratio exceeds 1",
+            "the ratio of those means, the mean of the per-seed ratios, their "
+            "median with [min, max], and the count of seeds on which the "
+            "ratio exceeds 1",
             population=(
                 f"{population.what}; the seed set of each configuration "
                 f"(every arm converged), stated per row and never summed: "
@@ -2311,12 +3188,24 @@ def optimiser_path(
                 "Means are arithmetic over the arm's runs in the seed set; the "
                 "B2/B0 columns are stats.per_seed_ratio_summary (mean and "
                 "nearest-rank upper-middle median of the per-seed ratios, their "
-                "[min, max], the count above 1)"
+                "[min, max], the count above 1) — whose **pooled** reading is "
+                "Σ B2 / Σ B0 over the same seeds, the ratio of the two mean "
+                "columns beside it and the campaign-cost statistic, and whose "
+                "**mean** reading is the mean of the per-seed ratios, the "
+                "typical seed's"
             ),
             clauses=(
                 "R = ρ × ε holds per seed by construction, so a configuration's "
                 "four rows decompose check 4's cost ratio into how many "
                 "evaluations the optimiser took and what each cost",
+                "**two statistics, two headings**: `B2/B0 mean` is the "
+                "ratio of the two arms' means — equal to the ratio of the "
+                "sums over the same seeds, which is what the campaign cost; "
+                "`B2/B0 mean of per-seed ratios` is the mean of the ratios a "
+                "seed at a time, which is what a typical start saw.  They "
+                "differ by a lot where a few long runs dominate the sums, and "
+                "publishing one under the other's name would state the wrong "
+                "quantity (task A86 (v3-tables-remainder))",
                 "the iteration row is the same construction as check 2's "
                 "acceptance column, and the ε row the same field as check 2's "
                 "ε column (issue I-26, closed by task A80 (report-accuracy-"
@@ -2335,8 +3224,10 @@ def optimiser_path(
                 f"{tally_mod.source_phrase(source)}: per arm the mean "
                 f"iterations (summed over attempts), evaluations ε "
                 f"(sweeps_per_eval.n_evaluations), node calls per "
-                f"evaluation ρ and per run R; B2/B0 as the per-seed ratio's "
-                f"mean, median [min, max] and count above 1. R = ρ × ε per seed; "
+                f"evaluation ρ and per run R; B2/B0 as the ratio of those "
+                f"means (the campaign-cost statistic), as the mean of the "
+                f"per-seed ratios, as their median [min, max] and as the count "
+                f"above 1. R = ρ × ε per seed; "
                 f"n is per configuration, never summed."
             ),
         ),
@@ -2346,7 +3237,8 @@ def optimiser_path(
             Column("arms", "arms"),
             Column("n", "n", fmt=_fmt_int),
             *[Column(a, a, fmt=_fmt_path) for a in LADDER],
-            Column("ratio_mean", "B2/B0 mean", fmt=_fmt_ratio),
+            Column("ratio_pooled", "B2/B0 mean", fmt=_fmt_ratio),
+            Column("ratio_mean", "B2/B0 mean of per-seed ratios", fmt=_fmt_ratio),
             Column("ratio_median", "B2/B0 median", fmt=_fmt_ratio),
             Column("ratio_bracket", "[min, max]"),
             Column("n_above_one", "seeds B2/B0 > 1", fmt=_fmt_int),
@@ -2495,6 +3387,19 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         path = optimiser_path(campaign, population, source.name, path_groups)
         if path is not None:
             emitted.append(path)
+        # The previous revision's cross-configuration §5 shapes (task A86
+        # (v3-tables-remainder)): one row per configuration, or per
+        # configuration and pair, arm or published set.
+        for built in (
+            location_diagnostic(campaign, population, source.name, path_groups),
+            identity(population, source.name, path_groups),
+            cost_sums(population, source.name, path_groups),
+            cost_anchors(population, source.name, path_groups),
+            sweeps_and_prime_calls(population, source.name, path_groups),
+            problem_definition(campaign, population, source.name, path_groups),
+        ):
+            if built is not None:
+                emitted.append(built)
     from harness.measurement.tally_evaluation import _not_published  # noqa: PLC0415
 
     return {
