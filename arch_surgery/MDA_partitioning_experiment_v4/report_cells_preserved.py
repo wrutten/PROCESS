@@ -225,8 +225,26 @@ def compare(base: str) -> dict[str, Any]:
     layouts = layouts_by_title()
     by_heading, kinds = keys_by_heading()
 
-    old = grids(at(base, REPORT)) + grids(at(base, COMPANION))
-    new = grids((HERE / REPORT).read_text()) + grids((HERE / COMPANION).read_text())
+    old_report = grids(at(base, REPORT))
+    old_companion = grids(at(base, COMPANION))
+    new_report = grids((HERE / REPORT).read_text())
+    new_companion = grids((HERE / COMPANION).read_text())
+    old = old_report + old_companion
+    new = new_report + new_companion
+
+    def _one_row(these: list[Grid]) -> int:
+        return sum(
+            1
+            for grid in these
+            if len([row for row in grid.rows if not _group_row(row)]) == 1
+        )
+
+    census = {
+        "report_grids": [len(old_report), len(new_report)],
+        "companion_grids": [len(old_companion), len(new_companion)],
+        "one_row_grids": [_one_row(old), _one_row(new)],
+        "one_row_grids_in_the_report": [_one_row(old_report), _one_row(new_report)],
+    }
 
     where: dict[str, list[Grid]] = collections.defaultdict(list)
     for grid in new:
@@ -307,6 +325,7 @@ def compare(base: str) -> dict[str, Any]:
                 )
     return {
         "base": base,
+        "census": census,
         "n_old_grids": len(old),
         "n_old_grids_recomputed": n_recomputed_grids,
         "n_new_grids": len(new),
@@ -340,6 +359,17 @@ def main(argv: Iterable[str] | None = None) -> int:
         f"  grids     : {result['n_old_grids']} before "
         f"(of which {result['n_old_grids_recomputed']} the second "
         f"implementation's), {result['n_new_grids']} now"
+    )
+    census = result["census"]
+    print(
+        f"  census    : the report's grids "
+        f"{census['report_grids'][0]} → {census['report_grids'][1]} "
+        f"(§4's headline tables included in the second), the companion's "
+        f"{census['companion_grids'][0]} → {census['companion_grids'][1]}; "
+        f"grids with a single row {census['one_row_grids'][0]} → "
+        f"{census['one_row_grids'][1]} "
+        f"({census['one_row_grids_in_the_report'][0]} → "
+        f"{census['one_row_grids_in_the_report'][1]} of them in the report)"
     )
     print(
         f"  compared  : {result['n_old_rows_compared']} row(s), "
