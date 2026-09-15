@@ -1177,7 +1177,11 @@ def translate_recorded_arm_names(
                         "job_identity, so the record keeps its mismatch"
                     )
             out["job_identity"] = identity
-    out[ARM_NAMING_FIELD] = ARM_NAMING
+    # The record in memory differs from the bytes on disk in the translated
+    # names and, where a name changed, in this one trace field -- nothing
+    # else.  The naming stamp itself is not added in memory: a gate comparing
+    # two records value for value would otherwise see a field neither run
+    # wrote, and what the reader adds is kept to one name.
     if today != recorded or translation.get("job_identity_arm") != translation.get(
         "recorded_job_identity_arm"
     ):
