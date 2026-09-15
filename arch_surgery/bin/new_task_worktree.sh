@@ -11,13 +11,18 @@
 # correct, instead of asking the agent to detect and repair its own base.
 #
 # Usage:  arch_surgery/bin/new_task_worktree.sh A24 pulse-residual [start-point]
+#         (the worktree lands at <repo>/.claude/worktrees/A24-pulse-residual)
 #
 # Prints the worktree path on the last line; everything else is assertions.
 set -euo pipefail
 
 BASE_COMMIT=c0ae5b28                 # the frozen experiment base (D2)
 TRUNK=architecture_surgery
-WORKTREE_ROOT=/home/wrutten/projects/PROCESS_surgery_worktrees
+# Task worktrees live inside the repository's ignored .claude/ directory (the user,
+# 2026-09-15: ".claude/worktrees"), where Claude Code's own worktree feature puts
+# them; `.claude/` is gitignored, so they never show in `git status`.  They were at
+# /home/wrutten/projects/PROCESS_surgery_worktrees/ until A83 (headline-tables-in-text).
+WORKTREE_ROOT="$(git rev-parse --show-toplevel)/.claude/worktrees"
 
 [ $# -ge 2 ] || { echo "usage: $0 <task-label> <keyword> [start-point]" >&2; exit 2; }
 TASK=$1; KEYWORD=$2; START=${3:-$TRUNK}

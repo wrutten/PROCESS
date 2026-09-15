@@ -15,7 +15,11 @@ set -euo pipefail
 
 BRANCH=${1:?usage: $0 <branch-name>}
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
-SRC="/home/wrutten/projects/PROCESS_surgery_worktrees/${BRANCH}"
+# The worktree is found by its branch, wherever it was created: under
+# <repo>/.claude/worktrees/ since 2026-09-15, under
+# /home/wrutten/projects/PROCESS_surgery_worktrees/ before.
+SRC=$(git worktree list --porcelain | awk -v b="refs/heads/${BRANCH}" '/^worktree /{w=$2} /^branch /{if($2==b)print w}')
+[ -n "$SRC" ] || { echo "no worktree on branch ${BRANCH} (git worktree list)" >&2; exit 1; }
 DEST_RUNS="${REPO}/arch_surgery/idf_probe/runs"
 
 [ -d "$SRC" ] || { echo "no worktree at ${SRC}" >&2; exit 1; }

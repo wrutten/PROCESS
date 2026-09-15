@@ -32,8 +32,8 @@ in `arch_surgery/`.
 - **Never modify a sibling clone.** `/home/wrutten/dev_libraries/PROCESS`,
   `/home/wrutten/projects/functional_PROCESS` and `/home/wrutten/projects/PROCESS_code_analysis`
   are other working trees. Read them; never write to them.
-  **`/home/wrutten/projects/PROCESS_surgery_worktrees/` is not one of them** — it holds this
-  repository's own task worktrees, created by
+  **This repository's own task worktrees are not siblings** — they live in `.claude/worktrees/`
+  inside the repository (gitignored; before 2026-09-15 at `/home/wrutten/projects/PROCESS_surgery_worktrees/`), created by
   [`arch_surgery/bin/new_task_worktree.sh`](arch_surgery/bin/new_task_worktree.sh), and writing
   there is normal task work.
 - **Never commit to `main`.** `main` tracks upstream PROCESS. All work is on
