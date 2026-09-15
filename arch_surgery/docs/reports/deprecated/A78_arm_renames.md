@@ -1,6 +1,6 @@
 # A78 (arm-renames) — the arms renamed so the rungs read rung for rung; the records not re-made
 
-> **Document status** — **OPEN.** Task **A78 (arm-renames)**, branch `A78-arm-renames`, worktree
+> **Document status** — **MERGED 2026-09-15** at `0b89e986` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A78_runs/` (the seeded tree plus this task's presses; the latest resume-compatible records). Orchestrator's assessment §12. Task **A78 (arm-renames)**, branch `A78-arm-renames`, worktree
 > `/home/wrutten/projects/PROCESS_surgery_worktrees/A78-arm-renames`, base `abcd15e0`
 > (`architecture_surgery`, 2026-09-15). Ruling implemented: the user, 2026-09-15 — *"In the v4 report,
 > rename A0p and A1 to A1 and A2, and B3 to B2. That makes the naming of the rungs reflect the
