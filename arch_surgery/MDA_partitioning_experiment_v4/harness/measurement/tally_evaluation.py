@@ -1779,7 +1779,7 @@ def module_sweeps(
         # sentence that says what it counts (trap T11).
         block_denominator=(
             max((len(v) for v in finished.values()), default=0),
-            "runs per arm",
+            "per arm",
         ),
         kind="module_sweeps",
     )

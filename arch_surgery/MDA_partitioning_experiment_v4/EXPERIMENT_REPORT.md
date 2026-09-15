@@ -877,7 +877,7 @@ stamped beside the node calls and never in them (Table D.5).
 
 **Table 10.** ***Module sweeps per run**: how often each node group was swept in one `call_models` evaluation, one block per configuration over its own 25 displaced-entry runs, as the mean with its [min, max] seed bracket — a bare integer where every run agreed exactly. `models` is the group's collapsed-DSM row count, so total calls = Σ sweeps × models. **The ratio column is the result**, and it is unit-free: within a group every model node runs once per sweep (the construction refuses the run if they did not), so a ratio of sweeps does not depend on whether one counts model calls or DSM rows. The total does, and its ratio cell is the `[v = 1, v = 0]` interval over the two defensible attributions of the once-per-run nodes' rows (trap T9); the per-arm total cells are the v = 1 case. Reported, not accepted on. n = 3 (block(s) of this table, each over its own population with its own n in its heading line; never pooled).*
 
-**`nof`** (n = 100)
+**`nof`** (n = 25 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -888,7 +888,7 @@ stamped beside the node calls and never in them (Table D.5).
 | once per run | 3 | 4.96 [4, 5] | 5.52 [5, 6] | 5.12 [4, 6] | 0 | A1 | **0.0000** | 25 |
 | total calls | 49 | 243 | 270.5 | 250.9 | 181.6 | A1 | **[0.724, 0.767]** | 25 |
 
-**`lad`** (n = 100)
+**`lad`** (n = 25 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -899,7 +899,7 @@ stamped beside the node calls and never in them (Table D.5).
 | once per run | 3 | 5 | 5 | 4.92 [4, 5] | 0 | A1 | **0.0000** | 25 |
 | total calls | 49 | 245 | 245 | 241.1 | 178.8 | A1 | **[0.742, 0.786]** | 25 |
 
-**`st`** (n = 75)
+**`st`** (n = 25 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -2296,12 +2296,12 @@ The gate table is the appendix's licence: every table below is read only if ever
 | `output_path` | G9 | the removal of the output-time loop from the arms whose matrix cell turns it off, on every | **PASS** | 11 run(s) at seed 0 = every optimisation-phase arm on every configuration where it is active, each composed from the experiment's matrix; 3825 coup… | 3879 (3825 + 54) | 0 | 4/4 | `runs/gates/output_path/gate.json` |
 | `written_file_gap` | — | the written-file gap on the one-call output path: BR, B1 and B2 at seed 0 on the pulsed co | **PASS** | 6 run(s) at seed 0, unperturbed = 3 arm(s) (BR, B1, B2) x 2 pulsed configuration(s), each composed from the experiment's matrix with no override bu… | 42 | 0 | 4/4 | `runs/gates/written_file_gap/gate.json` |
 | `predicate_mode` | G8 | the convergence predicate's second ruler, on the evaluation-phase arms of every configurat | **PASS** | 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A2) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.… | 8152 (8068 + 84) | 0 | 4/4 | `runs/gates/predicate_mode/gate.json` |
-| `tally_contracts` | — | every table the tally emits, and the cells it reproduces | **PASS** | 20 reference run(s) (14 optimisations + 6 evaluations) over 3 configurations; 256 published cells, no tolerance on any of them; and 122 table(s) em… | 622 (366 + 256) | 0 | 13/13 | `runs/gates/tally_contracts/gate.json` |
-| `recomputation` | — | every cell the tally publishes, recomputed from the run records by a second implementation | **PASS** | 122 table(s) emitted by the two tally stages, recomputed cell by cell from 949 run record(s) under the 5 published source(s) of the campaign popula… | 16276 | 0 | 9/9 | `runs/gates/recomputation/gate.json` |
+| `tally_contracts` | — | every table the tally emits, and the cells it reproduces | **PASS** | 20 reference run(s) (14 optimisations + 6 evaluations) over 3 configurations; 256 published cells, no tolerance on any of them; and 141 table(s) em… | 679 (423 + 256) | 0 | 17/17 | `runs/gates/tally_contracts/gate.json` |
+| `recomputation` | — | every cell the tally publishes, recomputed from the run records by a second implementation | **PASS** | 141 table(s) emitted by the two tally stages, recomputed cell by cell from 949 run record(s) under the 5 published source(s) of the campaign popula… | 17554 | 0 | 9/9 | `runs/gates/recomputation/gate.json` |
 | `run_kind_separation` | — | every record this package makes, and every population the tally and the analysis build | **PASS** | 1102 run record(s) under runs/, of which 949 are covered by the tally's 5 published source(s) (the campaign family) and 31 by its 2 unpublished; ru… | 3000 | 0 | 9/9 | `runs/gates/run_kind_separation/gate.json` |
 | `stage_provenance` | — | the harness itself, before any PROCESS run | **PASS** | a scratch records directory this check writes itself — 3 verdict record(s) and 4 stage record(s) — broken 4 ways; a scratch census record, stamped … | 17 | 0 | 5/5 | `runs/gates/stage_provenance/gate.json` |
 
-**30 PASS, 0 FAIL, 0 not run; 163 of 163 teeth tripped.**
+**30 PASS, 0 FAIL, 0 not run; 167 of 167 teeth tripped.**
 
 <sub>`gate table`</sub>
 

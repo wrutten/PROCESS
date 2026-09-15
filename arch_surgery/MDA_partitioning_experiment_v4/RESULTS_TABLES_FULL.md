@@ -44,7 +44,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 
 **Table F.3.** ***Module sweeps per run** in the three regimes the report's table does not show — the entry reference and the forward and backward stencil points — one block per configuration and regime, in the same form: the mean with its [min, max] bracket, a bare integer where every run agreed, `models` the group's collapsed-DSM row count, the total Σ sweeps × models with its `[v = 1, v = 0]` interval. The entry reference carries one `A0` run per configuration and so no pair and no ratio. n = 9 (block(s) of this table, each over its own population with its own n in its heading line; never pooled).*
 
-**`nof`** (n = 1)
+**`nof`** (n = 1 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -55,7 +55,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 3 | — | 6 | — | — | A0 | — | 0 |
 | total calls | 49 | — | 294 | — | — | A0 | — | 0 |
 
-**`lad`** (n = 1)
+**`lad`** (n = 1 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -66,7 +66,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 3 | — | 5 | — | — | A0 | — | 0 |
 | total calls | 49 | — | 245 | — | — | A0 | — | 0 |
 
-**`st`** (n = 1)
+**`st`** (n = 1 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -76,7 +76,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 4 | — | 7 | — | — | A0 | — | 0 |
 | total calls | 49 | — | 343 | — | — | A0 | — | 0 |
 
-**`nof`** (n = 80)
+**`nof`** (n = 20 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -87,7 +87,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 3 | 2.95 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 0 | A1 | **0.0000** | 20 |
 | total calls | 49 | 144.6 | 154.3 | 147 | 95.85 | A1 | **[0.652, 0.696]** | 20 |
 
-**`lad`** (n = 76)
+**`lad`** (n = 19 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -98,7 +98,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 3 | 3.211 [2, 5] | 3.158 [2, 5] | 3 [2, 4] | 0 | A1 | **0.0000** | 19 |
 | total calls | 49 | 157.3 | 154.7 | 147 | 96.21 | A1 | **[0.654, 0.699]** | 19 |
 
-**`st`** (n = 42)
+**`st`** (n = 14 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -108,7 +108,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 4 | 3 [2, 4] | 3.214 [2, 4] | — | 0 | A0 | **0.0000** | 14 |
 | total calls | 49 | 147 | 157.5 | — | 99.79 | A0 | **[0.634, 0.691]** | 14 |
 
-**`nof`** (n = 80)
+**`nof`** (n = 20 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -119,7 +119,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 3 | 2.9 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 0 | A1 | **0.0000** | 20 |
 | total calls | 49 | 142.1 | 154.3 | 147 | 96.95 | A1 | **[0.660, 0.704]** | 20 |
 
-**`lad`** (n = 76)
+**`lad`** (n = 19 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -130,7 +130,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | once per run | 3 | 3.211 [2, 5] | 3.263 [2, 5] | 3.053 [2, 4] | 0 | A1 | **0.0000** | 19 |
 | total calls | 49 | 157.3 | 159.9 | 149.6 | 98.47 | A1 | **[0.658, 0.704]** | 19 |
 
-**`st`** (n = 42)
+**`st`** (n = 14 per arm)
 
 | module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
 |---|---|---|---|---|---|---|---|---|
@@ -1702,4 +1702,4 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>combining 3 stage table(s): `achieved accuracy at the accepted optimum — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `achieved accuracy at the accepted optimum — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `achieved accuracy at the accepted optimum — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-*The second implementation emitted 122 table(s); none is rendered here. Whether they agree with the tally's, table by table, row by row and cell by cell without tolerance, is gate `recomputation`'s verdict — one row of the report's Table D.1 — and the gate's own record holds every compared cell.*
+*The second implementation emitted 141 table(s); none is rendered here. Whether they agree with the tally's, table by table, row by row and cell by cell without tolerance, is gate `recomputation`'s verdict — one row of the report's Table D.1 — and the gate's own record holds every compared cell.*
