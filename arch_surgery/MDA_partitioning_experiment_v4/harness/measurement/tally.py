@@ -268,6 +268,13 @@ class Source:
     #: on the composed jobs (:func:`source_jobs`) and on the records
     #: (``Population.of``); a source whose jobs say otherwise is a refusal.
     run_kind: str = "gate"
+    #: The membership rule in **a few words**, for the report's short captions
+    #: (task A79 (report-captions)); ``what`` stays the full sentence the
+    #: appendix's populations paragraph prints once.
+    short: str = ""
+
+    def phrase(self) -> str:
+        return self.short or self.name
 
 
 def _reference_runs(campaign: Campaign) -> list[Any]:
@@ -317,6 +324,7 @@ GATE_SOURCES: tuple[Source, ...] = (
         ),
         family="gate",
         run_kind="gate",
+        short="the reproduction gate's own runs (one or two seeds per arm)",
     ),
     Source(
         name="paired_entries",
@@ -331,6 +339,7 @@ GATE_SOURCES: tuple[Source, ...] = (
         ),
         family="gate",
         run_kind="gate",
+        short="the entry gate's paired evaluations (one seed per arm)",
     ),
 )
 
@@ -357,6 +366,7 @@ CAMPAIGN_SOURCES: tuple[Source, ...] = (
         ),
         family="campaign",
         run_kind="campaign",
+        short="the entry reference",
     ),
     Source(
         name="campaign_displaced",
@@ -372,6 +382,7 @@ CAMPAIGN_SOURCES: tuple[Source, ...] = (
         ),
         family="campaign",
         run_kind="campaign",
+        short="the displaced entries (δ = 0.10)",
     ),
     Source(
         name="campaign_stencil_forward",
@@ -386,6 +397,7 @@ CAMPAIGN_SOURCES: tuple[Source, ...] = (
         ),
         family="campaign",
         run_kind="campaign",
+        short="the forward stencil points",
     ),
     Source(
         name="campaign_stencil_backward",
@@ -401,6 +413,7 @@ CAMPAIGN_SOURCES: tuple[Source, ...] = (
         ),
         family="campaign",
         run_kind="campaign",
+        short="the backward stencil points",
     ),
     Source(
         name="campaign_optimisation",
@@ -416,6 +429,7 @@ CAMPAIGN_SOURCES: tuple[Source, ...] = (
         ),
         family="campaign",
         run_kind="campaign",
+        short="the optimisations (25 starts per arm)",
     ),
 )
 
@@ -430,6 +444,14 @@ SOURCES: tuple[Source, ...] = GATE_SOURCES + (
 #: ``GateError`` subclass) — every one of them "a prerequisite record is not
 #: on disk".  Anything else is a bug and is raised.
 COMPOSITION_REFUSALS: tuple[str, ...] = ("GateError", "ReproductionError", "ChainError")
+
+
+def source_phrase(name: str) -> str:
+    """The short membership phrase of the source called *name*, for a caption."""
+    for source in SOURCES:
+        if source.name == name:
+            return source.phrase()
+    return name
 
 
 def source_jobs(campaign: Campaign, source: Source) -> list[Any]:

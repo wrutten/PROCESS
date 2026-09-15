@@ -162,6 +162,17 @@ class Caption:
     clauses: tuple[str, ...] = ()
     #: One short note telling a reader how to read the table.
     how_to_read: str = ""
+    #: **The caption the report prints** (task A79 (report-captions), the
+    #: user's ruling of 2026-09-15: *"Captions in the report should be much more
+    #: concise, a few lines at most; the rest should be clear from the main
+    #: text"*).  Two or three sentences: what the table shows, over which
+    #: population, and the one thing a reader must not infer from it.  The
+    #: five declaration parts above and the clauses are still required — they
+    #: are the construction's declaration, stated once in the results
+    #: appendix's *Constructions* subsection — but they are no longer printed
+    #: under every table.  Empty means the renderer falls back to the full
+    #: text, which is what the record and the terminal always carry.
+    summary: str = ""
 
     def __post_init__(self) -> None:
         missing = [
@@ -184,6 +195,22 @@ class Caption:
             f"construction: {self.construction}",
         ]
         return ".  ".join(parts + list(self.clauses)) + "."
+
+    def declaration(self) -> dict[str, Any]:
+        """The construction's declaration, as data, for the appendix.
+
+        Everything except the population sentence, which is the table's own
+        and stays in its caption: the results appendix prints these parts
+        **once per table kind** rather than under every table of the kind.
+        """
+        return {
+            "units": self.units,
+            "row_is": self.row_is,
+            "column_is": self.column_is,
+            "construction": self.construction,
+            "clauses": list(self.clauses),
+            "how_to_read": self.how_to_read,
+        }
 
 
 # --------------------------------------------------------------------------
@@ -252,6 +279,25 @@ class Table:
     audit_position_labelled: bool = False
     #: Set by :meth:`__post_init__`: the audit positions the rows name.
     audit_positions: tuple[str, ...] = ()
+    #: **The construction the table is an instance of** — one key per table
+    #: builder (``"cost_per_call"``, ``"same_optimum"``, …), shared by every
+    #: table that builder emits over every configuration and source.  The
+    #: results appendix groups by it and prints the declaration once per key;
+    #: the numbers-unchanged proof keys cells by it and never by a table
+    #: number.  A table without one is refused by the renderer, not guessed at.
+    kind: str = ""
+    #: ``True`` for a table whose rows are individual runs, seeds, pairs of
+    #: runs or predicate evaluations — a full result matrix.  Such a table is
+    #: still emitted, recorded and gated, but the report carries only
+    #: summarising tables (the user, 2026-09-15: *"there should simply not be
+    #: any tables listing results per seed"*); the renderer writes it to the
+    #: companion file ``RESULTS_TABLES_FULL.md`` instead.
+    detail: bool = False
+    #: Column keys the **report's** rendering leaves out — columns that list a
+    #: value per seed inside one cell (the paired seeds, the attempts per seed).
+    #: The record and the companion file carry every column; the report's
+    #: caption names the companion table that does.
+    report_omits: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.caption, Caption):
@@ -359,15 +405,25 @@ class Table:
             for row in self.rows
         ]
 
-    def markdown(self) -> str:
-        """The table as markdown, caption first, how-to-read last."""
-        lines = [f"*Caption: {self.caption.text()}*", ""]
+    def grid(self) -> str:
+        """The table's grid alone, as markdown: the header row and the body.
+
+        No caption, no denominator line, no reading note: those are the
+        renderer's to place, once.  Before task A79 (report-captions) the
+        record's ``markdown`` carried the caption *and* the renderer printed
+        it again above the grid, so every caption in the report appeared
+        twice; the grid is now the only thing the two share.
+        """
         headings = self.header()
-        lines.append("| " + " | ".join(headings) + " |")
+        lines = ["| " + " | ".join(headings) + " |"]
         lines.append("|" + "|".join("---" for _ in headings) + "|")
         for row in self.body():
             lines.append("| " + " | ".join(row) + " |")
-        lines.append("")
+        return "\n".join(lines)
+
+    def markdown(self) -> str:
+        """The table as markdown for the terminal: caption first, how-to-read last."""
+        lines = [f"*Caption: {self.caption.text()}*", "", self.grid(), ""]
         lines.append(
             f"*n = {self.denominator} ({self.denominator_is}).*"
         )
@@ -396,7 +452,12 @@ class Table:
         """The table as data, for the stage's own JSON record."""
         return {
             "table": self.name,
+            "kind": self.kind,
+            "detail": self.detail,
+            "report_omits": list(self.report_omits),
             "caption": self.caption.text(),
+            "caption_summary": self.caption.summary,
+            "declaration": self.caption.declaration(),
             "how_to_read": self.caption.how_to_read,
             "denominator": self.denominator,
             "denominator_is": self.denominator_is,
@@ -407,5 +468,9 @@ class Table:
                 for c in self.columns
             ],
             "rows": [dict(row) for row in self.rows],
-            "markdown": self.markdown(),
+            #: The cells as the columns render them, row by row, so a consumer
+            #: can print a subset of columns without re-deriving a format.
+            "cells": self.body(),
+            #: The grid alone (header and body); the caption is not in it.
+            "markdown": self.grid(),
         }
