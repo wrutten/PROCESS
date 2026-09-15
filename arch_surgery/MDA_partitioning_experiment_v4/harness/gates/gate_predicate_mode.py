@@ -111,7 +111,7 @@ _git_head = framework.git_head
 #: licenses the optimisation phase under `mixed` **only if** the evaluation
 #: phase shows a decisive pass on an in-loop component, so running it here
 #: would be spending the licence before it is granted.
-PREDICATE_MODE_ARMS: tuple[str, ...] = ("A0", "A1")
+PREDICATE_MODE_ARMS: tuple[str, ...] = ("A0", "A2")
 PREDICATE_MODE_SEEDS: tuple[int, ...] = (1, 2)
 
 #: Record leaves that differ between the two runs of a pair **by construction**,
@@ -173,6 +173,16 @@ PREDICATE_PAIR_EXCLUSIONS: dict[str, str] = {
     ),
     "exit_audit.rulers_note": (
         "prose, identical on both sides, excluded beside the stamps it explains"
+    ),
+    "arm_name_translation": (
+        "the in-memory trace records.read leaves on a record made before the "
+        "arm renaming of 2026-09-15 (records.RECORDED_ARM_NAMES): the recorded "
+        "and translated names, the digest as stamped and as re-derived.  The "
+        "two digests are of the identity and differ between the pair's two "
+        "jobs for the same reason job_digest does; the names are the same on "
+        "both sides and are compared where they matter -- campaign_arm and "
+        "job_identity.arm are not excluded.  Absent on a record made after the "
+        "renaming (task A78 (arm-renames))"
     ),
 }
 

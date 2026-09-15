@@ -24,7 +24,7 @@ skip.
 What it cannot cover, and what does.  Two arms are new and the previous revision
 never ran them, so no record exists to reproduce.  Each is covered by a
 *substitute*: an internal consistency check against a reference the gate's own
-runs produce.  ``A0p`` — the flat arm with a constant owning the burn time —
+runs produce.  ``A1`` — the flat arm with a constant owning the burn time —
 must land on the reference fixed point when pinned at the reference's own
 converged value.  ``AR`` — one evaluation with every architecture switch cleared
 — must reproduce the **first evaluation** of the optimisation-phase reference
@@ -358,10 +358,10 @@ def attach_phase_a_entries(
 def substitute_a0p_jobs(
     campaign: Campaign, references: Mapping[str, Any]
 ) -> list[tuple[Config, pool_mod.Job]]:
-    """The §7.5 substitute for ``A0p``: one warm pinned evaluation per pulsed configuration."""
+    """The §7.5 substitute for ``A1``: one warm pinned evaluation per pulsed configuration."""
     jobs: list[tuple[Config, pool_mod.Job]] = []
     for config in campaign.configurations:
-        if "A0p" in config.skips:
+        if "A1" in config.skips:
             continue
         entry = references[config.name]
         jobs.append(
@@ -369,7 +369,7 @@ def substitute_a0p_jobs(
                 config,
                 pool_mod.Job(
                     phase="A",
-                    arm="A0p",
+                    arm="A1",
                     config=config,
                     seed=0,
                     regime="unperturbed",
@@ -405,16 +405,16 @@ COMPOSITION_TOOTH_WRONG_VALUE = "flat"
 def composition_tooth_job(
     planned: Sequence[PlannedRun], campaign: Campaign
 ) -> tuple[PlannedRun | None, pool_mod.Job | None]:
-    """The positive control's job: ``B3`` with its analysis-loop switch wrong.
+    """The positive control's job: ``B2`` with its analysis-loop switch wrong.
 
-    Its ``override_env`` puts it in the identity apart from the planned ``B3``
+    Its ``override_env`` puts it in the identity apart from the planned ``B2``
     run it is compared against, so the shared pool never hands the tooth the
     very record it exists to differ from.
     """
     candidates = [
         item
         for item in planned
-        if item.run.arm == "B3" and item.run.seed == 0
+        if item.run.arm == "B2" and item.run.seed == 0
     ]
     # The cheapest configuration, by the previous revision's own cost figures:
     # the steady-state one, which has the shortest design vector.
@@ -429,13 +429,13 @@ def composition_tooth_job(
     switch = switches_mod.REGISTRY["mda"].driver_name
     return chosen, pool_mod.Job(
         phase="B",
-        arm="B3",
+        arm="B2",
         config=config,
         seed=0,
         regime="unperturbed",
         delta=campaign.delta,
         run_kind="gate",
-        reproduction_overrides=reproduction_overrides("B3"),
+        reproduction_overrides=reproduction_overrides("B2"),
         audit_position=REPRODUCTION_AUDIT_POSITION,
         audit_position_caller=GATE_NAME,
         override_env={switch: COMPOSITION_TOOTH_WRONG_VALUE},
@@ -643,7 +643,7 @@ def compare_all(
 def substitute_pinned_flat_arm(
     campaign: Campaign, root: Path, references: Mapping[str, Any], *, resume: bool
 ) -> dict[str, Any]:
-    """``A0p``: pinned at the reference's own converged value, land on it again.
+    """``A1``: pinned at the reference's own converged value, land on it again.
 
     The flat arm with a **constant** owning the burn time has no record in the
     previous revision — that revision only ever pinned its partitioned arms — so
@@ -660,8 +660,8 @@ def substitute_pinned_flat_arm(
     skipped.
     """
     record: dict[str, Any] = {
-        "substitute_for": "A0p",
-        "why": reference_mod.ARMS_WITHOUT_PREVIOUS_RECORDS["A0p"],
+        "substitute_for": "A1",
+        "why": reference_mod.ARMS_WITHOUT_PREVIOUS_RECORDS["A1"],
         "criterion": (
             "entered from the reference's exit state and pinned at the "
             "reference's own converged burn time, the arm must reproduce the "
@@ -673,11 +673,11 @@ def substitute_pinned_flat_arm(
         "passed": True,
     }
     for config in campaign.configurations:
-        if "A0p" in config.skips:
+        if "A1" in config.skips:
             record["configurations"].append(
                 {
                     "configuration": config.name,
-                    "skipped": config.skips["A0p"],
+                    "skipped": config.skips["A1"],
                 }
             )
     jobs = substitute_a0p_jobs(campaign, references)
@@ -974,7 +974,7 @@ def teeth(
     # 4 — missing key: delete a compared field from a copy of a run record.
     stripped = Path(root) / "_teeth" / "missing_key"
     stripped.mkdir(parents=True, exist_ok=True)
-    record = records_mod.read(sample.job.outdir)
+    record = records_mod.stamped_as_today(records_mod.read(sample.job.outdir))
     dropped = reference_mod.REFERENCE_FIELDS[sample.run.phase][0]
     record.pop(dropped.split(".")[0], None)
     (stripped / "metrics.json").write_text(json.dumps(record))
@@ -1042,7 +1042,7 @@ def _composition_tooth(
     """Run the partitioned arm with its analysis-loop switch set to ``flat``.
 
     Every other switch of the arm stays as the arm declares it, so the run is
-    ``B3`` in name and in composition except for the one thing the arm is
+    ``B2`` in name and in composition except for the one thing the arm is
     *about*: the shape of the analysis loop.  It is a different arm, and the
     gate must say so.  This is the positive control: it proves the comparison
     is sensitive to *which arm ran*, not merely to whether a run finished.
@@ -1064,7 +1064,7 @@ def _composition_tooth(
         return {
             "tooth": "composition",
             "caught": False,
-            "what": "no B3 run at seed 0 is planned, so the tooth cannot run",
+            "what": "no B2 run at seed 0 is planned, so the tooth cannot run",
         }
     config = campaign.configuration(chosen.run.configuration)
     switch = switches_mod.REGISTRY["mda"].driver_name
@@ -1076,10 +1076,10 @@ def _composition_tooth(
         "tooth": "composition",
         "caught": not result["passed"],
         "what": (
-            f"B3 on {config.name} run with {switch}={wrong_value} — so the "
+            f"B2 on {config.name} run with {switch}={wrong_value} — so the "
             f"flat loop ran under the partitioned arm's name, every other "
             f"switch of the arm unchanged — must not reproduce the previous "
-            f"revision's B3.  {result['n_mismatched']} of "
+            f"revision's partitioned optimisation arm (V3's B3).  {result['n_mismatched']} of "
             f"{result['n_fields']} compared values differ"
         ),
         "outdir": str(job.outdir),
@@ -1202,7 +1202,7 @@ def stage(
     verdict["record_contract"] = _record_contract(planned)
     if not skip_runs:
         verdict["substitutes"] = {
-            "A0p": substitute_pinned_flat_arm(
+            "A1": substitute_pinned_flat_arm(
                 campaign, root, references, resume=resume
             ),
             "AR": substitute_reference_evaluation(
@@ -1418,11 +1418,11 @@ def tables(verdict: Mapping[str, Any]) -> str:
         )
 
     substitutes = verdict.get("substitutes") or {}
-    if "A0p" in substitutes:
-        block = substitutes["A0p"]
+    if "A1" in substitutes:
+        block = substitutes["A1"]
         out.append("")
         out.append(
-            "*Caption: the substitute for `A0p`, the arm no earlier record "
+            "*Caption: the substitute for `A1`, the arm no earlier record "
             "covers.  Each row is one configuration; the criterion is the one "
             "quoted in the row above the table.  \"Cross-state max\" is the "
             "largest scaled residual between the arm's exit state and the "

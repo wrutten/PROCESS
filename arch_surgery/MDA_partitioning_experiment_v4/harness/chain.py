@@ -414,10 +414,7 @@ def _measured_arm_costs(campaign: Campaign) -> dict[tuple[str, str, str], dict[s
     if not root.exists():
         return {}
     for path in sorted(root.rglob("metrics.json")):
-        try:
-            record = json.loads(path.read_text())
-        except Exception:  # noqa: BLE001 - a half-written record is not a row
-            continue
+        record = records_mod.read(path.parent)  # arm names as the matrix spells them today
         if record.get("status") != "ok":
             continue
         key = (
@@ -643,22 +640,32 @@ def evaluation_stencil_chains(
                 forward = root / config.name / arm / f"column{column:03d}_forward"
                 backward = root / config.name / arm / f"column{column:03d}_backward"
                 pin = reproduction_mod.entry_pin(config, arm, reference)
+                forward_job = pool_mod.Job(
+                    phase="A",
+                    arm=arm,
+                    config=config,
+                    seed=0,
+                    outdir=forward,
+                    regime="stencil",
+                    delta=None,
+                    pin_hex=pin,
+                    entry_state=Path(reference["snapshot"]),
+                    stencil_column=column,
+                    stencil_sign=1,
+                    run_kind=plan.run_kind,
+                )
+                # The backward point is entered from the forward point's exit,
+                # so its entry state -- part of its identity -- names the
+                # directory the forward point's record *is* in, resolved by
+                # digest, not the directory the layout would give it today.
+                # The two differ for an arm renamed since the record was made
+                # (records.RECORDED_ARM_NAMES): the forward record of today's
+                # A1 sits under the arm's old name, and a backward job that
+                # named .../A1/... would be a job no record was ever made of.
+                forward_resolved = pool_mod.directory_for(forward_job, campaign)
                 chains.append(
                     [
-                        pool_mod.Job(
-                            phase="A",
-                            arm=arm,
-                            config=config,
-                            seed=0,
-                            outdir=forward,
-                            regime="stencil",
-                            delta=None,
-                            pin_hex=pin,
-                            entry_state=Path(reference["snapshot"]),
-                            stencil_column=column,
-                            stencil_sign=1,
-                            run_kind=plan.run_kind,
-                        ),
+                        forward_job,
                         pool_mod.Job(
                             phase="A",
                             arm=arm,
@@ -668,7 +675,7 @@ def evaluation_stencil_chains(
                             regime="stencil",
                             delta=None,
                             pin_hex=pin,
-                            entry_state=forward / "y_exit.json",
+                            entry_state=forward_resolved / "y_exit.json",
                             stencil_column=column,
                             stencil_sign=-1,
                             run_kind=plan.run_kind,

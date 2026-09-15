@@ -184,11 +184,22 @@ class Arm:
         return terms
 
 
-#: The eight arms of EXPERIMENT_REPORT.md §3.2.  There is no ``B2``: the arm
-#: that repeated the block schedule was removed (D22, the user's ruling of
-#: 2026-09-10) after its verification pass was measured triggering a third
-#: pass zero times in 91 888 calls.  Nothing here may name a rung, a check or
-#: a table column between ``B0`` and ``B2`` or between ``B2`` and ``B3``.
+#: The eight arms of EXPERIMENT_REPORT.md §3.2, named so that the two phases
+#: read rung for rung: ``AR/A0/A1/A2`` against ``BR/B0/B1/B2`` — the reference,
+#: the flat control, the ownership rung, the partition.  **Renamed 2026-09-15**
+#: at the user's ruling (*"rename … so the naming of the rungs reflects the
+#: parallelism in the switch matrix"*); the two Phase A arms after the control
+#: and the partitioned optimisation arm changed name, and the one table that
+#: says from what — ``records.RECORDED_ARM_NAMES`` — is the one place the old
+#: names are spelled.  Records made before that date carry the old names and
+#: are read through it.
+#:
+#: V3's joint-test arm — V3's ``B2``, which repeated the block schedule — is
+#: **not** in V4 (D22, the user's ruling of 2026-09-10): its verification pass
+#: was measured triggering a third pass zero times in 91 888 calls.  Today's
+#: ``B2`` is a different arm, the partitioned optimisation arm; the shared
+#: spelling is V3's alone to carry, and every mention of the removed arm says
+#: "V3's ``B2``".
 ARMS: dict[str, Arm] = {
     "AR": Arm(
         name="AR",
@@ -220,8 +231,8 @@ ARMS: dict[str, Arm] = {
             "the coupling state at the shared tolerance"
         ),
     ),
-    "A0p": Arm(
-        name="A0p",
+    "A1": Arm(
+        name="A1",
         phase="A",
         mda="flat",
         arrangement_node=False,
@@ -235,8 +246,8 @@ ARMS: dict[str, Arm] = {
             "ownership rung, with nothing else changed"
         ),
     ),
-    "A1": Arm(
-        name="A1",
+    "A2": Arm(
+        name="A2",
         phase="A",
         mda="partitioned",
         arrangement_node=True,
@@ -286,8 +297,8 @@ ARMS: dict[str, Arm] = {
             "ownership rung in the phase that has an optimiser"
         ),
     ),
-    "B3": Arm(
-        name="B3",
+    "B2": Arm(
+        name="B2",
         phase="B",
         mda="partitioned",
         arrangement_node=True,
@@ -312,7 +323,7 @@ PHASE_B_ARMS: tuple[str, ...] = tuple(n for n, a in ARMS.items() if a.phase == "
 #: :func:`matrix_cell` regenerates each cell from :data:`ARMS`; the two are
 #: compared by the self-check, so a transcription slip is caught rather than
 #: carried into every run of the campaign.
-MATRIX_ORDER = ("AR", "A0", "A0p", "A1", "BR", "B0", "B1", "B3")
+MATRIX_ORDER = ("AR", "A0", "A1", "A2", "BR", "B0", "B1", "B2")
 
 PLAN_MATRIX: dict[str, tuple[str, ...]] = {
     "MDA solve": ("upstream", "flat", "flat", "partitioned",
@@ -419,7 +430,7 @@ RUNGS: tuple[Rung, ...] = (
         ),
     ),
     Rung(
-        phase_a=("A0", "A0p"),
+        phase_a=("A0", "A1"),
         phase_b=("B0", "B1"),
         isolates=(
             "burn-time ownership — the loop vs a constant (Phase A) or the "
@@ -427,8 +438,8 @@ RUNGS: tuple[Rung, ...] = (
             "kind — and, in Phase B only, the output-time loop "
             "(upstream → none), placed on this rung deliberately: it is the "
             "rung already declared to differ in kind between the phases, so "
-            "the headline rung B1 → B3 keeps a switch set identical to "
-            "A0p → A1"
+            "the headline rung B1 → B2 keeps a switch set identical to "
+            "A1 → A2"
         ),
         changes_a=("burn_time_owner",),
         changes_b=("burn_time_owner", "output_loop"),
@@ -438,16 +449,16 @@ RUNGS: tuple[Rung, ...] = (
             "The output-time loop's change sits on this rung and in Phase B "
             "only.  It is the rung already declared to differ in kind between "
             "the phases, so putting it here leaves the headline rung "
-            "B1 → B3 with a switch set identical to its Phase A twin "
-            "A0p → A1, which is what lets a Phase A ratio be read against "
+            "B1 → B2 with a switch set identical to its Phase A twin "
+            "A1 → A2, which is what lets a Phase A ratio be read against "
             "its Phase B twin.  The output-time loop's sweeps are counted per "
             "run and published as their own column, so neither rung's "
             "attribution carries them silently."
         ),
     ),
     Rung(
-        phase_a=("A0p", "A1"),
-        phase_b=("B1", "B3"),
+        phase_a=("A1", "A2"),
+        phase_b=("B1", "B2"),
         isolates=(
             "the partitioning intervention — block solves, arrangement at "
             "node and method granularity, and both deferrals"
@@ -468,8 +479,8 @@ RUNGS: tuple[Rung, ...] = (
         ),
         same_in_both_phases=True,
         role=(
-            "Phase A headline; Phase B headline via B0 → B3, published beside "
-            "BR → B3"
+            "Phase A headline; Phase B headline via B0 → B2, published beside "
+            "BR → B2"
         ),
     ),
 )

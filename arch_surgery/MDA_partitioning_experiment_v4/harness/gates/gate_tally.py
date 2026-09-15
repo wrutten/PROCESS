@@ -73,7 +73,7 @@ def _sound_table(**overrides: Any) -> Table:
         "name": "a sound table",
         "caption": _sound_caption(),
         "columns": (Column("arm", "arm"), Column("calls", "node calls")),
-        "rows": ({"arm": "B0", "calls": 10}, {"arm": "B3", "calls": 5}),
+        "rows": ({"arm": "B0", "calls": 10}, {"arm": "B2", "calls": 5}),
         "denominator": 2,
         "denominator_is": "runs",
     }
@@ -298,7 +298,7 @@ def _tooth_pooled_predicates() -> tuple[bool, str]:
                     predicate="pooled",
                 ),
             ),
-            rows=({"arm": "B3", "tests": 900},),
+            rows=({"arm": "B2", "tests": 900},),
             denominator=1,
         ),
         what="a table carrying one column that adds the two predicates' counts",

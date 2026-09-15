@@ -38,8 +38,10 @@ The committed file is ``{"format", "provenance", "entries"}``.  Each entry
 is::
 
     {
-      "arm":            V4's name for the arm            ("BR")
-      "previous_arm":   the previous revision's name      ("R")
+      "arm":            V4's name for the arm            ("BR"; since the
+                        renaming of 2026-09-15 the partitioned arms are
+                        "A2" and "B2" — records.RECORDED_ARM_NAMES)
+      "previous_arm":   the previous revision's name      ("R", "A1", "B3")
       "configuration":  the configuration's name          ("st_regression")
       "phase":          "A" (one evaluation) or "B" (one optimisation)
       "seed":           0 for the unperturbed start, 1 for the first
@@ -80,6 +82,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
 
 from harness.experiment import arms as arms_mod  # noqa: E402
 from harness.experiment import switches as sw  # noqa: E402
+from harness.core import records as records_mod  # noqa: E402
 from harness.core.config import Campaign, default_campaign  # noqa: E402
 
 #: This file's directory.
@@ -394,10 +397,10 @@ class ReferenceRun:
 _REFERENCE_TABLE: tuple[tuple[str, str, int, bool, str], ...] = (
     ("B", "BR", 0, False, "optimisation, unperturbed seed, reference arm"),
     ("B", "B0", 0, False, "optimisation, unperturbed seed, flat control"),
-    ("B", "B3", 0, False, "optimisation, unperturbed seed, partitioned arm"),
+    ("B", "B2", 0, False, "optimisation, unperturbed seed, partitioned arm"),
     ("A", "A0", 1, False, "evaluation, first perturbed seed, flat control"),
-    ("A", "A1", 1, False, "evaluation, first perturbed seed, partitioned arm"),
-    ("B", "B3", 1, False, "optimisation, first perturbed seed, partitioned arm"),
+    ("A", "A2", 1, False, "evaluation, first perturbed seed, partitioned arm"),
+    ("B", "B2", 1, False, "optimisation, first perturbed seed, partitioned arm"),
     (
         "B",
         "B1",
@@ -455,7 +458,9 @@ def absent_from_the_reference_set(campaign: Campaign | None = None) -> dict[str,
 # --------------------------------------------------------------------------
 
 #: V4 arm -> the previous revision's name for it.  The registry holds the map
-#: the other way round; it is inverted here rather than written twice.
+#: the other way round; it is inverted here rather than written twice.  Since
+#: the renaming of 2026-09-15 it reads ``{"BR": "R", "A2": "A1", "B2": "B3"}``:
+#: the right-hand sides are V3's spellings.
 PREVIOUS_NAME_BY_ARM: dict[str, str] = {
     v4: previous for previous, v4 in sw.PREVIOUS_ARM_NAMES.items()
 }
@@ -471,7 +476,7 @@ ARMS_WITHOUT_PREVIOUS_RECORDS: dict[str, str] = {
         "architecture switch cleared must reproduce the first call_models of "
         "BR at seed 0 on that call's node calls, sweeps and objective hex"
     ),
-    "A0p": (
+    "A1": (
         "the previous revision never ran the flat arm with the burn time "
         "owned by a constant.  Covered instead by the warm-equivalence gate "
         "G6: pinned at the reference's converged burn time it must reproduce "
@@ -529,6 +534,11 @@ def previous_arm_name(arm: str) -> str:
 def assert_previous_arm_name(name: str) -> str:
     """Refuse *name* unless the previous revision's records can carry it.
 
+    *name* is read in the **previous revision's** namespace: ``"B2"`` here is
+    V3's retired joint-test arm, not V4's partitioned optimisation arm, which
+    V3 spelled ``"B3"``.  Go through :func:`previous_arm_name` to translate a
+    V4 name first.
+
     This is the guard the reference extraction goes through, and it is what
     makes the renamed reference arm's V4 name illegal here: the previous
     revision's directories are named ``R``, and reaching for ``BR`` without
@@ -572,7 +582,85 @@ def load(path: Path | None = None) -> dict[str, Any]:
         raise ReferenceError(
             f"{path} is in format {document.get('format')!r}, not {FORMAT!r}"
         )
+    naming = (document.get("provenance") or {}).get(records_mod.ARM_NAMING_FIELD)
+    if naming != records_mod.ARM_NAMING:
+        raise ReferenceError(
+            f"{path} writes its V4 arm names in naming scheme {naming!r}, not "
+            f"{records_mod.ARM_NAMING!r}: its 'arm' fields would not match the "
+            f"arms the gate composes today (records.RECORDED_ARM_NAMES).  "
+            f"Bring the committed file to today's names with "
+            f"`reference.py --rename-arms` and press the gate once; the file is "
+            f"not read under a guess."
+        )
     return document
+
+
+def rename_arms(path: Path | None = None) -> dict[str, Any]:
+    """Rewrite the committed file's ``arm`` fields into today's names.
+
+    The **names-only** regeneration for the arm renaming of 2026-09-15
+    (``records.RECORDED_ARM_NAMES``): each entry's ``arm`` — V4's name — goes
+    through the table; ``previous_arm``, ``source_path``, ``source_sha256``,
+    ``tree_git_head`` and every compared value are V3's and are not touched.
+    Provenance blocks keyed by V4 arm name (per-arm prose) are re-keyed; the
+    provenance block gains the naming stamp :func:`load` requires and a
+    dated note.  Refuses a file already in today's scheme, so it cannot be
+    applied twice and translate ``A1`` a second time.  Returns what changed.
+    """
+    path = Path(path or REFERENCE_PATH)
+    document = json.loads(path.read_text())
+    if document.get("format") != FORMAT:
+        raise ReferenceError(
+            f"{path} is in format {document.get('format')!r}, not {FORMAT!r}"
+        )
+    provenance = document.setdefault("provenance", {})
+    if provenance.get(records_mod.ARM_NAMING_FIELD) == records_mod.ARM_NAMING:
+        raise ReferenceError(
+            f"{path} already writes its arm names in {records_mod.ARM_NAMING!r}; "
+            f"applying the table again would rename today's arms a second time"
+        )
+    changed: dict[str, int] = {}
+    for entry in document["entries"]:
+        old = entry["arm"]
+        new = records_mod.RECORDED_ARM_NAMES.get(old, old)
+        if new != old:
+            entry["arm"] = new
+            changed[f"{old} -> {new}"] = changed.get(f"{old} -> {new}", 0) + 1
+    absent = provenance.get("absent_from_the_set")
+    if isinstance(absent, Mapping):
+        renamed_absent: dict[str, Any] = {}
+        for key, why in absent.items():
+            arm, rest = key.split("/", 1)
+            renamed_absent[f"{records_mod.RECORDED_ARM_NAMES.get(arm, arm)}/{rest}"] = why
+        provenance["absent_from_the_set"] = renamed_absent
+    # Provenance blocks keyed by V4 arm name -- prose per arm, such as
+    # ``block_solver_field_applicability`` and ``not_covered_by_this_reference``.
+    # A block whose every key is an arm name (today's or a recorded one) is
+    # re-keyed; the prose is not touched.
+    arm_names = set(records_mod.RECORDED_ARM_NAMES) | set(arms_mod.ARMS)
+    for name, block in list(provenance.items()):
+        if (
+            isinstance(block, Mapping)
+            and block
+            and all(isinstance(k, str) and k in arm_names for k in block)
+        ):
+            rekeyed = {
+                records_mod.RECORDED_ARM_NAMES.get(k, k): v for k, v in block.items()
+            }
+            if list(rekeyed) != list(block):
+                provenance[name] = rekeyed
+                changed[f"provenance.{name} keys"] = sum(
+                    1 for k in block if records_mod.RECORDED_ARM_NAMES.get(k, k) != k
+                )
+    provenance[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
+    provenance["arm_names_note"] = (
+        "the 'arm' fields were rewritten into the matrix's names of 2026-09-15 "
+        "by reference.py --rename-arms (task A78 (arm-renames)) through "
+        "records.RECORDED_ARM_NAMES; 'previous_arm', 'source_path' and every "
+        "compared value are the previous revision's and were not touched"
+    )
+    path.write_text(json.dumps(document, indent=2) + "\n")
+    return {"path": str(path), "entries": len(document["entries"]), "changed": changed}
 
 
 def lookup(
@@ -724,12 +812,32 @@ def main(argv: list[str] | None = None) -> int:
         help="emit the report's two tables, with their captions, from the "
         "committed reference",
     )
+    stage.add_argument(
+        "--rename-arms",
+        action="store_true",
+        help="rewrite the committed file's V4 'arm' fields into today's names "
+        "through records.RECORDED_ARM_NAMES and stamp the naming scheme; "
+        "names only, refused if already done.  The gate that reads the file "
+        "is then pressed once",
+    )
     parser.add_argument(
         "--path",
         type=Path,
         help=f"read this file instead of the committed one ({REFERENCE_PATH})",
     )
     args = parser.parse_args(argv)
+    if args.rename_arms:
+        try:
+            outcome = rename_arms(args.path)
+        except ReferenceError as exc:
+            print(f"[FAIL] {exc}")
+            return 3
+        print(
+            f"{outcome['path']}: {outcome['entries']} entries; arm fields "
+            f"renamed {outcome['changed'] or 'none'}; stamped "
+            f"{records_mod.ARM_NAMING_FIELD}={records_mod.ARM_NAMING!r}"
+        )
+        return 0
     try:
         document = load(args.path)
     except ReferenceError as exc:

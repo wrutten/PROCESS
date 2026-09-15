@@ -67,20 +67,24 @@ under the right name, which is a wrong answer with no symptom.
 plan's §3.2 matrix that set it (`AR`/`BR` are PROCESS as shipped and set nothing; the harness
 clears every switch before composing an arm). "Reads it" names the file that resolves the
 variable. "Change" names the driver change of the harness plan (`DR<n>`) where one exists, and the
-task that made it.*
+task that made it.* *Arm names are the matrix's names since 2026-09-15 (`AR/A0/A1/A2`, `BR/B0/B1/B2`;
+task A78 (arm-renames)); a run record or a document dated earlier spells the two Phase A arms after
+the control and the partitioned optimisation arm differently — the table
+`harness/core/records.py::RECORDED_ARM_NAMES` says how. The `A1`, `A2` in "inherited (A1, A2, A18,
+A19)" below are task numbers, not arms.*
 
 | variable | values | arms that set it | reads it | change / task |
 |---|---|---|---|---|
-| `PROCESS_ARCH_MDA` | `flat`, `partitioned` (unset = upstream's loop) | `A0`,`A0p`,`B0`,`B1` → `flat`; `A1`,`B3` → `partitioned` | `solver/module_solve.py`, read back in `caller.py` | inherited (VP4, A25/A28); renamed by DR1 (A56) |
+| `PROCESS_ARCH_MDA` | `flat`, `partitioned` (unset = upstream's loop) | `A0`,`A1`,`B0`,`B1` → `flat`; `A2`,`B2` → `partitioned` | `solver/module_solve.py`, read back in `caller.py` | inherited (VP4, A25/A28); renamed by DR1 (A56) |
 | `PROCESS_ARCH_TAU` | a number, default `1e-6` | every non-reference arm | `solver/module_solve.py` | inherited (A25, D15); the only tolerance since D23 |
 | `PROCESS_ARCH_COUPLING_STATE` | a file | every non-reference arm | `solver/module_solve.py` | inherited; renamed by DR1 (A56) |
 | `PROCESS_ARCH_WRITE_SETS` | a file | every non-reference arm | `solver/module_solve.py` | inherited; renamed by DR1 (A56) |
-| `PROCESS_ARCH_ARRANGEMENT_NODE` | `build_after_physics` | `A1`, `B3` | `caller.py` | inherited (VP1, A3); renamed by DR1 (A56) |
-| `PROCESS_ARCH_ARRANGEMENT_METHOD` | `fw_geometry` | `A1`, `B3` | `caller.py` | inherited (VP6, A40, D19); renamed by DR1 (A56) |
-| `PROCESS_ARCH_DEFER_PER_CALL` | `feedforward`, `feedforward_lifted` | `A1`, `B3` (`feedforward_lifted` on pulsed configurations) | `caller.py` | inherited (VP2, A13); renamed by DR1 (A56) |
-| `PROCESS_ARCH_DEFER_PER_RUN` | a file | `A1`, `B3` | `caller.py` | inherited (VP2c, A33); renamed by DR1 (A56) |
-| `PROCESS_ARCH_BURN_TIME_OWNER` | `loop` (default), `optimiser`, `constant:<hex float>` | `A0p`,`A1` → `constant:…`; `B1`,`B3` → `optimiser` (pulsed configurations only) | `solver/subsolve.py`, read back in `caller.py`, named in `solver/constraints.py` | inherited (VP5, A4/A34); folded from two switches by DR1 (A56) |
-| `PROCESS_ARCH_OUTPUT_LOOP` | `upstream` (default), `none` | `B1`, `B3` → `none` | `caller.py` | DR2 (A57) |
+| `PROCESS_ARCH_ARRANGEMENT_NODE` | `build_after_physics` | `A2`, `B2` | `caller.py` | inherited (VP1, A3); renamed by DR1 (A56) |
+| `PROCESS_ARCH_ARRANGEMENT_METHOD` | `fw_geometry` | `A2`, `B2` | `caller.py` | inherited (VP6, A40, D19); renamed by DR1 (A56) |
+| `PROCESS_ARCH_DEFER_PER_CALL` | `feedforward`, `feedforward_lifted` | `A2`, `B2` (`feedforward_lifted` on pulsed configurations) | `caller.py` | inherited (VP2, A13); renamed by DR1 (A56) |
+| `PROCESS_ARCH_DEFER_PER_RUN` | a file | `A2`, `B2` | `caller.py` | inherited (VP2c, A33); renamed by DR1 (A56) |
+| `PROCESS_ARCH_BURN_TIME_OWNER` | `loop` (default), `optimiser`, `constant:<hex float>` | `A1`,`A2` → `constant:…`; `B1`,`B2` → `optimiser` (pulsed configurations only) | `solver/subsolve.py`, read back in `caller.py`, named in `solver/constraints.py` | inherited (VP5, A4/A34); folded from two switches by DR1 (A56) |
+| `PROCESS_ARCH_OUTPUT_LOOP` | `upstream` (default), `none` | `B1`, `B2` → `none` | `caller.py` | DR2 (A57) |
 | `PROCESS_ARCH_PREDICATE` | `frozen` (default), `mixed` | none in the campaign; the §3.6 trial only | `solver/module_solve.py`, passed at the call site in `caller.py` | DR5 (A59) |
 | `PROCESS_ARCH_PASS_TRACE`, `…_PASS_TRACE_FULL_FROM` | a file; a number | never; observation only | `solver/module_solve.py` | inherited (A31) |
 | `PROCESS_IDF_PROBE`, `…_PROBE_OUT` | `baseline`, `modules`, `harvest`, `frozen`; a file | never by an arm; the census stage only | `core/_idf_probe.py` and its mode modules | inherited (A1, A2, A18, A19) |
@@ -1025,7 +1029,7 @@ rule, not to the models: an arm whose solve has converged the coupling state to 
 left for it to find, and re-solving the state before writing means the files do not hold the
 numbers the optimiser accepted. `none` calls `finalise` once on the accepted state. The two
 counters make the second loop's cost a measured column (13/14 reference optimisations settle it
-at 2 sweeps; `0` under `none` is a count, not a claim). Arms `B1` and `B3` set `none` (plan §3.3);
+at 2 sweeps; `0` under `none` is a count, not a claim). Arms `B1` and `B2` set `none` (plan §3.3);
 `BR` and `B0` keep the loop.
 
 **Driver, not model.** Unset, the path is upstream's line for line. The models run in the loop

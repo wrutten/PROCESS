@@ -78,7 +78,7 @@ YARDSTICK_PAIR = ("BR", "B0")
 #: differs from the flat control by the stopping rule, which is not what this
 #: check controls, and a verdict printed against it would be a verdict on the
 #: wrong comparison.
-ACCEPTANCE_PAIRS: tuple[str, ...] = ("B1", "B3")
+ACCEPTANCE_PAIRS: tuple[str, ...] = ("B1", "B2")
 
 
 def _fmt_ratio(value: Any) -> str:

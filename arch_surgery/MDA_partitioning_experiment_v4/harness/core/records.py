@@ -16,7 +16,7 @@ other, and the omission would surface as a missing column in a table months
 later.  Here the field list is **data**, both entry points fill it, and one
 function refuses a record that does not carry what it declares.
 
-Five refusals live here, and none of them is a warning:
+Six refusals live here, and none of them is a warning:
 
 ``assert_complete``
     a finished record missing a declared field.  A summary computed over
@@ -48,6 +48,14 @@ Five refusals live here, and none of them is a warning:
     a record that does not say what kind of run made it.  A gate run and a
     campaign run look identical afterwards, and one of them is not a
     measurement.
+
+``translate_recorded_arm_names`` (inside :func:`read`)
+    a record naming an arm neither the matrix nor the recorded-name table
+    knows.  The arms were renamed on 2026-09-15 and the records were not
+    re-made, so a record's arm name is the name at the time of the run; the
+    one table :data:`RECORDED_ARM_NAMES` is applied where the record is read,
+    and a name nobody declared is refused there rather than kept under a
+    guess or dropped from a population without a word.
 
 ``assert_both_rulers``
     a finished record whose exit audit names one convergence ruler and not
@@ -1000,6 +1008,206 @@ def attempt_accounting(
     return block
 
 
+# --------------------------------------------------------------------------
+# arm names: what the matrix calls an arm today, and what a record calls it
+# --------------------------------------------------------------------------
+
+#: The arm renaming of **2026-09-15**, as a translation from the name a record
+#: made before it carries to the name the matrix uses today.  The user's
+#: ruling: *"In the v4 report, rename A0p and A1 to A1 and A2, and B3 to B2.
+#: That makes the naming of the rungs reflect the parallelism in the switch
+#: matrix … it should be applied consistently throughout the v4 folder."*  The
+#: rungs then read ``AR/A0/A1/A2`` against ``BR/B0/B1/B2`` — stopping rule,
+#: burn-time ownership, partitioning — one letter apart per rung (task **A78
+#: (arm-renames)**).
+#:
+#: **The records were not re-made.**  The campaign's 949 records and every gate
+#: record made before that date stamp ``campaign_arm`` and ``job_identity.arm``
+#: with the old names, and a record's name is the name at the time of the run.
+#: This table is applied in **one** place, :func:`read`, so that every reader
+#: of a record — the pool's resume comparison, the tallies, the gates, the
+#: population marker, the stamp surveys — sees today's names, and a record made
+#: today, which stamps :data:`ARM_NAMING` (see :func:`translate_recorded_arm_names`),
+#: passes through untouched.  Directory names on disk keep the names they were
+#: made under: the record is the truth and the path is where the pool found
+#: it (``pool.directory_for`` resolves a job's directory by its digest).
+#:
+#: Reversal: empty this table and the read returns every record as written.
+RECORDED_ARM_NAMES: dict[str, str] = {"A0p": "A1", "A1": "A2", "B3": "B2"}
+
+#: The field a record made **after** the renaming carries, and its value: the
+#: name of the naming scheme its arm fields are written in.  Stamped by the
+#: pool beside ``job_identity`` (``pool.stamp_identity``), never by hand.  A
+#: record without it was made under the scheme before the renaming and is
+#: translated through :data:`RECORDED_ARM_NAMES`; a record with it is not.
+#: This is what lets today's ``A1`` (the flat arm with a constant owning the
+#: burn time) be told from a pre-renaming record's ``A1`` (today's ``A2``):
+#: the two spell the same and mean different arms, and nothing but a stamp
+#: can separate them.  Deliberately **not** a field of :data:`SCHEMA`: a schema
+#: field is required of every record, and requiring this one of the 949
+#: campaign records would make ``--resume`` cross the renaming as though it
+#: were a schema change (harness plan amendment 17), which it is not — no
+#: quantity in any record changed.
+ARM_NAMING_FIELD = "arm_naming"
+ARM_NAMING = "rungs-2026-09-15"
+
+#: The field a translated record carries **in memory** beside the translated
+#: names: what the record said on disk, so that a reader can always get back to
+#: the bytes.  Never written to disk — the record on disk stays as the run
+#: wrote it.
+ARM_NAME_TRANSLATION_FIELD = "arm_name_translation"
+
+
+def _matrix_arm_names() -> frozenset[str]:
+    """The arm names the matrix knows today.  Imported lazily: ``arms`` does
+    not import this module, but keeping the schema module free of experiment
+    imports at load time is what lets the child import it alone."""
+    from ..experiment import arms as arms_mod  # noqa: PLC0415
+
+    return frozenset(arms_mod.ARMS)
+
+
+def translate_recorded_arm_names(
+    record: Mapping[str, Any], *, where: str = ""
+) -> dict[str, Any]:
+    """*record* with its arm fields in today's names, or a refusal by name.
+
+    The one application of :data:`RECORDED_ARM_NAMES`.  Three cases:
+
+    * the record carries :data:`ARM_NAMING_FIELD` = :data:`ARM_NAMING` — made
+      after the renaming, already in today's names; returned unchanged after
+      its arm is checked against the matrix;
+    * the record carries no naming stamp — made before the renaming; its
+      ``campaign_arm`` and ``job_identity.arm`` go through the table, and
+      where the arm's name changed its ``job_digest`` is **re-derived** over
+      the translated identity, the stamped digest kept in the record's
+      :data:`ARM_NAME_TRANSLATION_FIELD` block as ``job_digest_as_stamped``
+      (that block is the whole in-memory trace of the translation, one field,
+      so that a gate comparing two records value for value has one name to
+      set aside).  The digest is a pure function of the
+      identity and the identity is now spelled in today's names, so the
+      stamped digest — a digest of the old spelling — identifies nothing the
+      pool composes today; the re-derived one is what the pool's job computes,
+      which is what lets ``--resume`` keep the record.  The re-derivation
+      happens only where the stamped digest re-derives from the stamped
+      identity in the first place; a record whose digest never matched its
+      identity keeps its mismatch and is refused downstream as before;
+    * the record names an arm that neither the table nor the matrix knows —
+      **refused**, naming the arm and the record.  Never kept under a name
+      nobody declared, never dropped from a population without a word.
+
+    A record with no ``campaign_arm`` at all (the ``no_record`` row for a
+    directory without a record; a census record from before arms were stamped)
+    is returned as it is.
+    """
+    out = dict(record)
+    recorded = out.get("campaign_arm")
+    if recorded is None:
+        return out
+    known = _matrix_arm_names()
+    tag = f" ({where})" if where else ""
+    scheme = out.get(ARM_NAMING_FIELD)
+    if scheme is not None:
+        if scheme != ARM_NAMING:
+            raise RecordError(
+                f"record{tag} stamps {ARM_NAMING_FIELD}={scheme!r}, a naming "
+                f"scheme this harness does not know (it knows {ARM_NAMING!r} "
+                f"and, unstamped, the scheme before 2026-09-15).  Refused "
+                f"rather than read under a guess at what its arm names mean."
+            )
+        if recorded not in known:
+            raise RecordError(
+                f"record{tag} names arm {recorded!r}, which the matrix does "
+                f"not know (arms: {', '.join(sorted(known))}).  Refused by "
+                f"name rather than kept under one nobody declared."
+            )
+        return out
+    if recorded not in RECORDED_ARM_NAMES and recorded not in known:
+        raise RecordError(
+            f"record{tag} names arm {recorded!r}, which neither "
+            f"records.RECORDED_ARM_NAMES ({', '.join(RECORDED_ARM_NAMES)}) nor "
+            f"the matrix ({', '.join(sorted(known))}) knows.  Refused by name "
+            f"rather than kept under one nobody declared or dropped without "
+            f"a word."
+        )
+    today = RECORDED_ARM_NAMES.get(recorded, recorded)
+    out["campaign_arm"] = today
+    translation: dict[str, Any] = {
+        "recorded_campaign_arm": recorded,
+        "campaign_arm": today,
+        "table": "harness.core.records.RECORDED_ARM_NAMES",
+        "scheme_of_the_record": "the arm names before 2026-09-15 (unstamped)",
+    }
+    identity = out.get("job_identity")
+    if isinstance(identity, Mapping):
+        identity = dict(identity)
+        recorded_identity_arm = identity.get("arm")
+        if isinstance(recorded_identity_arm, str):
+            if (
+                recorded_identity_arm not in RECORDED_ARM_NAMES
+                and recorded_identity_arm not in known
+            ):
+                raise RecordError(
+                    f"record{tag} stamps job_identity.arm={recorded_identity_arm!r}, "
+                    f"which neither records.RECORDED_ARM_NAMES nor the matrix "
+                    f"knows.  Refused by name."
+                )
+            identity_arm = RECORDED_ARM_NAMES.get(
+                recorded_identity_arm, recorded_identity_arm
+            )
+            translation["recorded_job_identity_arm"] = recorded_identity_arm
+            translation["job_identity_arm"] = identity_arm
+            stamped_digest = out.get("job_digest")
+            if identity_arm != recorded_identity_arm:
+                identity["arm"] = identity_arm
+                if isinstance(stamped_digest, str) and job_digest(
+                    record["job_identity"]
+                ) == stamped_digest:
+                    out["job_digest"] = job_digest(identity)
+                    translation["job_digest_as_stamped"] = stamped_digest
+                    translation["job_digest"] = out["job_digest"]
+                    translation["job_digest_note"] = (
+                        "re-derived over the translated job_identity; the "
+                        "stamped digest is of the old spelling and identifies "
+                        "no job the pool composes today"
+                    )
+                else:
+                    translation["job_digest_note"] = (
+                        "left as stamped: it did not re-derive from the stamped "
+                        "job_identity, so the record keeps its mismatch"
+                    )
+            out["job_identity"] = identity
+    # The record in memory differs from the bytes on disk in the translated
+    # names and, where a name changed, in this one trace field -- nothing
+    # else.  The naming stamp itself is not added in memory: a gate comparing
+    # two records value for value would otherwise see a field neither run
+    # wrote, and what the reader adds is kept to one name.
+    if today != recorded or translation.get("job_identity_arm") != translation.get(
+        "recorded_job_identity_arm"
+    ):
+        out[ARM_NAME_TRANSLATION_FIELD] = translation
+    return out
+
+
+def stamped_as_today(record: Mapping[str, Any]) -> dict[str, Any]:
+    """*record*, as read, made safe to write to disk again.
+
+    A record that came through :func:`read` carries today's arm names and no
+    naming stamp (the stamp is the pool's, on disk).  Written back as it is —
+    a tooth's doctored copy, a scratch record — it would be read a second time
+    through :data:`RECORDED_ARM_NAMES`, and an arm whose today's name is also a
+    key of the table (``A1``) would come back as another arm.  So a copy that
+    goes to disk gets the stamp and loses the in-memory trace.  The one rule:
+    **a record read through** :func:`read` **and written again goes through
+    here.**
+    """
+    out = dict(record)
+    out.pop(ARM_NAME_TRANSLATION_FIELD, None)
+    if out.get("campaign_arm") is not None:
+        out[ARM_NAMING_FIELD] = ARM_NAMING
+    return out
+
+
 def read(outdir: Path | str) -> dict[str, Any]:
     """One record from a run directory.  An absent one is a record, not a gap.
 
@@ -1007,6 +1215,14 @@ def read(outdir: Path | str) -> dict[str, Any]:
     a crashed subprocess that wrote nothing is a taxonomy row, and turning it
     into an exception is how a whole class of failures once left a tally
     silently.
+
+    **The one place a record's arm names are translated** into today's names
+    (:func:`translate_recorded_arm_names`, :data:`RECORDED_ARM_NAMES`); every
+    reader of a run record goes through here so that all of them see the same
+    names, and a record naming an arm nobody declared is refused here, by
+    name.  A reader that needs the bytes as written — the pool's own
+    ``stamp_identity``, a tooth that stales a record on disk and writes it
+    back — reads the JSON itself and says so.
     """
     path = Path(outdir) / "metrics.json"
     if not path.exists():
@@ -1017,7 +1233,7 @@ def read(outdir: Path | str) -> dict[str, Any]:
             "why": "the run wrote no record; the subprocess did not reach the write",
         }
     try:
-        return json.loads(path.read_text())
+        record = json.loads(path.read_text())
     except json.JSONDecodeError as exc:
         return {
             "status": "no_record",
@@ -1025,6 +1241,14 @@ def read(outdir: Path | str) -> dict[str, Any]:
             "record_path": str(path),
             "why": f"the record is not readable JSON: {exc}",
         }
+    if not isinstance(record, Mapping):
+        return {
+            "status": "no_record",
+            "failure_class": "machinery",
+            "record_path": str(path),
+            "why": f"the record is JSON but not an object ({type(record).__name__})",
+        }
+    return translate_recorded_arm_names(record, where=str(path))
 
 
 def job_digest(identity: Mapping[str, Any]) -> str:

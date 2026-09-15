@@ -483,14 +483,23 @@ PROBE_VARIABLES: tuple[str, ...] = (
 )
 
 
-#: Arms the earlier revision ran under different names.  A lookup that misses
-#: raises: a reference a gate cannot find must refuse, never pass over an
-#: empty comparison (trap T11).
-PREVIOUS_ARM_NAMES: dict[str, str] = {"R": "BR"}
+#: Arms the earlier revision (V3) ran under different names: V3's name -> V4's.
+#: A lookup that misses raises: a reference a gate cannot find must refuse,
+#: never pass over an empty comparison (trap T11).  The keys are **V3's**
+#: spellings: since the renaming of 2026-09-15 (``records.RECORDED_ARM_NAMES``)
+#: V4's partitioned evaluation arm is ``A2`` (V3 called it ``A1``) and its
+#: partitioned optimisation arm is ``B2`` (V3 called it ``B3``); V4's ``A1``
+#: is the flat arm with a constant owning the burn time, which V3 never ran
+#: (``reference.ARMS_WITHOUT_PREVIOUS_RECORDS``).
+PREVIOUS_ARM_NAMES: dict[str, str] = {"R": "BR", "A1": "A2", "B3": "B2"}
 
-#: Arms the earlier revision ran that V4 does not: ``A1u`` was the prime-free
-#: counterfactual, retired with the prime's own gate; ``B2`` repeated the
-#: block schedule and measured nothing the exit audit does not (D22).
+#: Arms the earlier revision (V3) ran that V4 does not, **in V3's spellings**:
+#: ``A1u`` was the prime-free counterfactual, retired with the prime's own
+#: gate; V3's ``B2`` — the joint-test arm, which repeated the block schedule —
+#: measured nothing the exit audit does not (D22) and was removed.  V4's own
+#: ``B2`` is a different arm (the partitioned optimisation arm, V3's ``B3``)
+#: and shares nothing with it but the spelling; the self-check compares by
+#: what each V4 arm was called in V3, never by the bare string.
 RETIRED_ARM_NAMES: tuple[str, ...] = ("A1u", "B2")
 
 

@@ -1174,7 +1174,7 @@ def _read_record(directory: Path, *, side: str, key: str) -> dict[str, Any]:
             f"that cannot find one of its two sides must refuse, never skip -- "
             f"a check with no population is not a check (trap T11)."
         )
-    return json.loads(path.read_text())
+    return records_mod.read(directory)
 
 
 def _assert_same_audit_position(
