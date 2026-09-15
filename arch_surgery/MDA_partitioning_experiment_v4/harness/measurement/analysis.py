@@ -2245,6 +2245,172 @@ def _seed_set(
     )
 
 
+def _exception_class_name(record: Mapping[str, Any]) -> str:
+    """The class name of the exception a crashed run raised, from the last
+    line of its traceback: ``pkg.module.Name: message`` reads ``Name``."""
+    line = last_traceback_line(record)
+    if not line:
+        return "no traceback"
+    head = line.split(":", 1)[0].strip()
+    return head.rsplit(".", 1)[-1] or "no traceback"
+
+
+ACCEPTED = "accepted"
+COUPLING_LOOP_CAP = "coupling-loop cap (ModuleSolveFailure)"
+
+
+def outcome_of(record: Mapping[str, Any]) -> str:
+    """One outcome label per start, re-derived from the declaration in
+    ``stats.outcome_class``'s docstring: accepted (status ok and ifail == 1);
+    ``finished, ifail = k`` for a finished run with another exit code;
+    ``crashed (<Exception>)`` for the harness's failure class ``crashed``
+    (PROCESS's own code raised; the class name from the traceback);
+    the coupling-loop cap for failure class ``unconverged``
+    (``ModuleSolveFailure``); any other failure class by name."""
+    if at_an_accepted_optimum(record):
+        return ACCEPTED
+    if completed(record):
+        ifail = (record.get("mfile") or {}).get("ifail")
+        if isinstance(ifail, float) and ifail.is_integer():
+            ifail = int(ifail)
+        return f"finished, ifail = {ifail}"
+    failure_class = str(record.get("failure_class") or "unknown")
+    if failure_class == "crashed":
+        return f"crashed ({_exception_class_name(record)})"
+    if failure_class == "unconverged":
+        return COUPLING_LOOP_CAP
+    return failure_class
+
+
+def _outcome_rank(label: str) -> tuple[int, str]:
+    if label == ACCEPTED:
+        return (0, label)
+    if label.startswith("finished, ifail = "):
+        return (1, label)
+    if label.startswith("crashed ("):
+        return (2, label)
+    if label == COUPLING_LOOP_CAP:
+        return (3, label)
+    return (4, label)
+
+
+def _per_arm_success(
+    population: Population,
+    configuration: str,
+    index: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    source: str,
+) -> tuple[Recomputed, Recomputed]:
+    """Reliability per arm over the starts offered (task A82
+    (per-arm-success), decision D29): accepted optima, the other starts by
+    outcome, the starts lost that another arm accepted, the seed set beside;
+    and the per-seed table behind it.  Re-derived from the record fields
+    ``status``, ``mfile.ifail``, ``failure_class`` and ``traceback``."""
+    order = arm_order(index)
+    seeds = sorted({seed for rows in index.values() for seed in rows})
+    outcome: dict[tuple[str, int], str] = {
+        (arm, seed): outcome_of(index[arm][seed])
+        for arm in order
+        for seed in seeds
+        if seed in index[arm]
+    }
+    accepted_at: dict[int, list[str]] = {
+        seed: [arm for arm in order if outcome.get((arm, seed)) == ACCEPTED]
+        for seed in seeds
+    }
+    in_set = set(every_arm_converged(index, seeds))
+    classes = sorted(
+        {label for label in outcome.values() if label != ACCEPTED},
+        key=_outcome_rank,
+    )
+    rows: list[dict[str, Any]] = []
+    for arm in order:
+        offered = [seed for seed in seeds if (arm, seed) in outcome]
+        accepted = [seed for seed in offered if outcome[(arm, seed)] == ACCEPTED]
+        lost = [
+            seed
+            for seed in offered
+            if outcome[(arm, seed)] != ACCEPTED and accepted_at[seed]
+        ]
+        row: dict[str, Any] = {
+            "arm": arm,
+            "offered": len(offered),
+            "accepted": len(accepted),
+        }
+        named: list[str] = []
+        for label in classes:
+            of_class = [seed for seed in offered if outcome[(arm, seed)] == label]
+            row[label] = len(of_class)
+            if of_class:
+                named.append(f"{label}: {_join_seeds(of_class)}")
+        row["lost_another_arm_accepted"] = len(lost)
+        row["seed_set"] = len(in_set)
+        row["seeds_not_accepted"] = joined(named)
+        row["lost_seeds"] = _join_seeds(lost)
+        rows.append(row)
+    arms_text = " · ".join(order)
+    per_arm = Recomputed(
+        name=f"per-arm success — {configuration} — {source}",
+        caption=(
+            f"units: counts of starts.  A row is one optimisation arm on this "
+            f"configuration.  A column is the starts offered, the accepted "
+            f"optima, every other start by its outcome, the starts lost that "
+            f"another arm accepted, and the seed set beside.  Population: "
+            f"{population.what}; the arms here are {arms_text} at seeds "
+            f"{_join_seeds(seeds)}.  Construction: accepted is status ok AND "
+            f"the output file's ifail == 1; a finished start with another exit "
+            f"code carries it; a crashed start is PROCESS's own exception, "
+            f"named from the traceback, or the coupling-state loop's sweep cap "
+            f"(ModuleSolveFailure) by the harness's failure class; a start is "
+            f"lost when this arm did not accept and another did.  Reported, "
+            f"not accepted on (D29)."
+        ),
+        columns=(
+            "arm", "offered", "accepted", *classes,
+            "lost_another_arm_accepted", "seed_set", "seeds_not_accepted",
+            "lost_seeds",
+        ),
+        key_columns=("arm",),
+        rows=tuple(rows),
+        denominator=len(seeds),
+        denominator_is=f"starts offered per arm on {configuration}",
+        composite=("seeds_not_accepted", "lost_seeds"),
+    )
+    seed_rows: list[dict[str, Any]] = []
+    for seed in seeds:
+        row = {"seed": seed}
+        for arm in order:
+            row[arm] = outcome.get((arm, seed), "not run")
+        row["n_accepted"] = len(accepted_at[seed])
+        row["in_seed_set"] = "yes" if seed in in_set else "no"
+        row["lost_by"] = ", ".join(
+            arm
+            for arm in order
+            if (arm, seed) in outcome
+            and outcome[(arm, seed)] != ACCEPTED
+            and accepted_at[seed]
+        ) or "—"
+        seed_rows.append(row)
+    by_seed = Recomputed(
+        name=f"per-arm success by seed — {configuration} — {source}",
+        caption=(
+            f"units: outcome labels (text) and counts of arms.  A row is one "
+            f"seed offered to every arm of the group.  A column is each arm's "
+            f"outcome at that seed, how many arms accepted, whether the seed "
+            f"is in the seed set, and which arms lost it while another "
+            f"accepted.  Population: {population.what}; the arms here are "
+            f"{arms_text} at seeds {_join_seeds(seeds)}.  Construction: the "
+            f"per-seed part of the per-arm success table, same labels."
+        ),
+        columns=("seed", *order, "n_accepted", "in_seed_set", "lost_by"),
+        key_columns=("seed",),
+        rows=tuple(seed_rows),
+        denominator=len(seeds),
+        denominator_is=f"distinct seeds run on {configuration}",
+        composite=(*order, "in_seed_set", "lost_by"),
+    )
+    return per_arm, by_seed
+
+
 def _failure_table(
     population: Population,
     configuration: str,
@@ -2965,6 +3131,10 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                         )
                         if modules is not None:
                             produced[modules.name] = modules
+                        for success in _per_arm_success(
+                            population, config.name, index, label
+                        ):
+                            produced[success.name] = success
                         failures = _failure_table(
                             population, config.name, index, converged, label
                         )
