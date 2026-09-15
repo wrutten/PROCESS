@@ -1,6 +1,6 @@
 # A82 (per-arm-success) — reliability stated per arm, the case study named, the wall-clock section withdrawn
 
-> **Document status** — **OPEN**. Task report of **A82 (per-arm-success)**, branch
+> **Document status** — **MERGED 2026-09-15** (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A82_runs/` (latest resume-compatible). Orchestrator's assessment at the end.. Task report of **A82 (per-arm-success)**, branch
 > `A82-per-arm-success` off `architecture_surgery` at `4878688e` (after A80
 > (report-accuracy-audit)'s merge). Zero PROCESS runs: every number below comes from the campaign's
 > 949 records at `57dc0c14`, read through the harness, and from a committed script named beside it
