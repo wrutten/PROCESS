@@ -1,7 +1,9 @@
 # A85 (v3-table-formats) — the report's tables in the V3 report's forms
 
 > **Document status** — **OPEN**, task **A85 (v3-table-formats)**, branch `A85-v3-table-formats`
-> (worktree `.claude/worktrees/A85-v3-table-formats`), base `4b902124`, tip `a6692664`.
+> (worktree `.claude/worktrees/A85-v3-table-formats`), base `4b902124`, tip `69f53191` — the
+> last commit to touch code or a generated document is `a6692664`, which is where every gate
+> verdict this report cites was pressed; `69f53191` is this document.
 > Specification: [`../plans/REPORT_TABLE_FORMATS.md`](../plans/REPORT_TABLE_FORMATS.md) (RULING,
 > 2026-09-15). **Zero PROCESS runs**; `EXECUTION_APPROVED` untouched; no file under
 > `MDA_partitioning_experiment_v4/PROCESS/`, `harness/child/` or the root `process/` changed.
@@ -257,8 +259,9 @@ on an uncommitted tree hides.
 | `run_kind_separation` | **`a6692664`** | yes — the tip |
 | `self_containment` | **`a6692664`** | yes — the tip |
 
-`a6692664` **is** the branch tip, so the question of later commits changing the code does not
-arise for these four. The `gate_table` stage record's `records_read` names the commit of each of
+`a6692664` was the branch tip when the four were pressed, and it is **the last commit that
+touches code or a generated document**: the only commit after it is `69f53191`, this report. So
+the code at the tip is the code these four verdicts named. The `gate_table` stage record's `records_read` names the commit of each of
 the thirty verdicts it read: **4 at `a6692664`** (the four above, the only gates this task's
 change alters what they read) and 26 at the commits they were pressed at in the seeded records
 tree — `8996b843` 23, `6f5ba612` 2, `350a58c4` 1 — which is the records-reuse rule (a from-scratch
