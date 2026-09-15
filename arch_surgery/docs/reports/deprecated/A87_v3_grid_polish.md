@@ -1,6 +1,6 @@
 # A87 (v3-grid-polish) — the three grids that were still not the previous revision's
 
-> **Document status** — **OPEN.** Task **A87 (v3-grid-polish)**, branch `A87-v3-grid-polish`
+> **Document status** — **MERGED 2026-09-15** at `8b11bc88` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A87_runs/` (latest resume-compatible). Orchestrator's assessment at the end. Originally: **OPEN.** Task **A87 (v3-grid-polish)**, branch `A87-v3-grid-polish`
 > (worktree `.claude/worktrees/A87-v3-grid-polish`), base `f1848d63`, tip **`91098b8c`** —
 > **which is the last commit that touches code or a generated document, and is where every gate
 > verdict this report cites was pressed** (rule xiii); the only commit after it is this document.
