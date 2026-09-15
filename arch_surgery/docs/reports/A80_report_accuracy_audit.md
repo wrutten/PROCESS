@@ -404,3 +404,18 @@ the user's. The two wordings are in §7.
 ## 10. Change log
 
 - 2026-09-15 — task opened at `589138ef`; the work above; report written at `0d407ca7`.
+
+## 11. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `2a16c921` by the orchestrating session — the author of §5 and §6 that this task audited, so the checks below are on the auditor's three headline findings, by my own reading of the campaign records, not on my own prose.*
+
+**Checks.**
+1. **`ε = 1` on `B1 → B2`.** From the 949 records at `57dc0c14`, by a script of my own: on every seed where both arms reached an accepted optimum, `sweeps_per_eval.n_evaluations` is equal for `B1` and `B2` — 22 of 22 seeds on `large_tokamak_nof`, 11 of 11 on `low_aspect_ratio_DEMO`, 0 differing. The finding holds; §4.3's "does not hold in evaluations" was a reading of `B0 → B2` against an expectation declared on `B1 → B2`, and §5.1's defence used iterations. I wrote both sentences; they were wrong as the auditor says.
+2. **28 crashed = 20 + 8.** Status `crashed` records classified by exception text: 8 `ModuleSolveFailure` (the coupling-state loop's 20-sweep cap), all on `low_aspect_ratio_DEMO`; 20 with PROCESS's own `RuntimeError` (14 by exact text, 6 with the text one level down) across both configurations. Confirmed.
+3. **The low-aspect-ratio seed set.** Per-seed `ifail` pattern across `BR/B0/B1/B2` over the 25 starts: 11 seeds `(1,1,1,1)`; **9 seeds `(5,5,5,5)`** — every arm finished with VMCON's ladder exhausted; 2 all-crash; 2 `BR` at `ifail = 5` with the three coupling-state arms crashed; **1 seed `(1,1,crash,crash)`** — seed 10, lost to the intervention arms alone. That is 11 + 9 + 2 + 2 + 1 = 25, and accepted optima 12 / 12 / 11 / 11. The auditor's restatement is exact; the previous wording ("13 configuration-invalid — 2 crash in every arm and the rest fail to converge in at least one") was mine and conflated the definitions.
+4. **Gates and scope.** `recomputation` 14 445 / 0, `tally_contracts` 303 / 0 (+256 reference), `run_kind_separation` 3 000 / 0, `self_containment` 52 / 0, all stamped `1f378e58`, the commit that holds the last tally/analysis change (the later commits re-render and edit prose only, verified by `git show --stat`). Nothing under `PROCESS/`, `harness/child/` or the root `process/` changed. I-26's fix is in both implementations (`tally_optimisation.py`, `analysis.py`) with the old ratio kept beside as *sweeps median* and the schema sentence corrected — the form the brief allowed.
+5. **The four "cannot verify" rows** are honest: two cite V3 or A43 results outside this folder's records, one is a gate's internal tooth count, one is the transfer's problem-call ratio that §5.2 already reserves to I-17. The one *withdrawn* row is a dated Appendix C entry kept as history with the split recorded in the new entry — the right treatment.
+
+**Remarks.** The audit found what an author cannot: my interpretive sentences one layer above the cells. That no headline ratio, residual or verdict moved is the report's design working (every cell rendered, every cell recomputed); that three readings of those cells were wrong is why the audit was needed. The one ruling it surfaces — the predicate trial's pre-declared adoption rule (§3.6) was satisfied by G8 and not applied; the campaign ran on `frozen` — is the user's; nothing acceptance-bearing depends on the ruler, and §5.6 now says so and defers. Put to the user as a D30 candidate at the merge.
+
+**Verdict: merge.** 147 rows, 89 hold, 53 corrected (45 distinct), 1 withdrawn, 4 cannot verify; the three findings that change what a reader takes away are confirmed from the records by a different route; I-26 closed; zero PROCESS runs; gates PASS at the commit named.
