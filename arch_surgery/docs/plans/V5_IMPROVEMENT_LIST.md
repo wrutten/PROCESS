@@ -89,7 +89,7 @@ the table is misled, and a V5 decomposition must read `sweeps_per_eval.n_evaluat
 the V4 data, to be minted as its own task, not a V5 item; it is recorded here so the V5 construction
 does not inherit the field.
 
-**A related hazard, proposed by the agent, not the user.** D22 made `st_regression`'s place
+**A related hazard, proposed by the agent — answered by the user 2026-09-15** (*"D22 - the conclusion was to keep. that is fine for v5 as well"*, confirmed in the orchestrating session): **`st_regression` stays in V5 unconditionally, as in V4**; the configuration set is declared without a drop rule. The hazard as written, for the record: D22 made `st_regression`'s place
 conditional on an outcome (*"if A43 shows st's trust-mode `B3` unreliable, st is dropped"*). It did
 not fire, but a configuration dropped on a measured outcome is a selection at configuration level —
 the same shape as a one-sided rule, one grain coarser. A V5 plan should either declare configuration
