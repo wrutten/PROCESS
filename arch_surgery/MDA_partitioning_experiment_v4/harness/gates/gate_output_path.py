@@ -548,7 +548,7 @@ def _output_path_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
 
         with tempfile.TemporaryDirectory() as td:
             try:
-                _snapshot(Path(td), "before_finalise", key="B3/tooth")
+                _snapshot(Path(td), "before_finalise", key="B2/tooth")
             except GateError as exc:
                 return True, f"refused: {str(exc).splitlines()[0][:160]}"
         return False, "a missing snapshot did not refuse"

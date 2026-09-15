@@ -24,17 +24,35 @@ the gate modules' own job constructors** and requires the two digests to
 differ — and the one pair that must *agree* (the three gates' entry reference,
 one construction) to agree.
 
+**A record's arm name is the name at the time of the run.**  The arm renaming
+of 2026-09-15 (``records.RECORDED_ARM_NAMES``, task A78 (arm-renames)) left
+the campaign's 949 records and every earlier gate record stamped with the old
+names; the records were not re-made.  The one translation is applied by
+``records.read``, and the pool resolves a job's directory by the translated
+digest.  This gate binds that: the table's values are arms of the matrix and
+distinct; every record under ``runs/`` reads under a name the matrix knows,
+and the verdict counts how many were read under a translated name; and the
+teeth show a pre-renaming record of a renamed arm is complete for today's job,
+a post-renaming record (stamped ``arm_naming``) is not translated, an arm
+nobody declared is refused by name, and a canonical directory occupied by
+another job's record is not removed.
+
 Teeth: a record whose digest matches but whose child-stamped δ differs is
 refused; a record with no digest is incomplete; a digest that does not
 re-derive from the stamped identity is refused; an unclassified job field
-refuses the module; a by-design pair doctored to collide is reported.
+refuses the module; a by-design pair doctored to collide is reported; and the
+four arm-name teeth above.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import json
+import tempfile
 from pathlib import Path
 from typing import Any
+
+from ..experiment import arms as arms_mod
 
 from ..core import pool as pool_mod
 from ..core import records as records_mod
@@ -134,16 +152,16 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
     g1_after = dataclasses.replace(g1, outdir=neutrality_run_dir(campaign, "after", config.name, "BR"))
     pairs.append({"class": "G1 before vs after capture (same identity; explicit directories)", "a": g1, "b": g1_after, "must": "agree", "directories_must": "differ"})
 
-    # GR: its B3 at seed 0 against G5's B3 at seed 0 (audit position, overrides, δ).
+    # GR: its B2 at seed 0 against G5's B2 at seed 0 (audit position, overrides, δ).
     root = Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH
     planned, _prereq = reproduction_mod.plan(campaign, root)
-    gr_b3 = next((i.job for i in planned if i.run.arm == "B3" and i.run.seed == 0 and i.run.configuration == config.name), None)
-    if gr_b3 is not None:
-        pairs.append({"class": "GR's B3 seed 0 vs G5's B3 seed 0 (audit position, reproduction overrides)", "a": gr_b3, "b": from_matrix, "must": "differ"})
+    gr_b2 = next((i.job for i in planned if i.run.arm == "B2" and i.run.seed == 0 and i.run.configuration == config.name), None)
+    if gr_b2 is not None:
+        pairs.append({"class": "GR's B2 seed 0 vs G5's B2 seed 0 (audit position, reproduction overrides)", "a": gr_b2, "b": from_matrix, "must": "differ"})
         _chosen, tooth_job = reproduction_mod.composition_tooth_job(planned, campaign)
         if tooth_job is not None:
-            gr_same = next(i.job for i in planned if i.run.arm == "B3" and i.run.seed == 0 and i.run.configuration == tooth_job.config.name)
-            pairs.append({"class": "GR composition tooth vs GR's planned B3 (override_env)", "a": tooth_job, "b": gr_same, "must": "differ"})
+            gr_same = next(i.job for i in planned if i.run.arm == "B2" and i.run.seed == 0 and i.run.configuration == tooth_job.config.name)
+            pairs.append({"class": "GR composition tooth vs GR's planned B2 (override_env)", "a": tooth_job, "b": gr_same, "must": "differ"})
 
     # G8: the two rulers; and the frozen trial run against G6's pairing run of the same arm and seed.
     entries8 = {c.name: _synthetic_reference(campaign, c) for c in configs}
@@ -215,6 +233,71 @@ def check_pairs(pairs: list[dict[str, Any]], campaign: Campaign) -> list[dict[st
 # --------------------------------------------------------------------------
 
 
+def arm_name_translation_survey(campaign: Campaign) -> dict[str, Any]:
+    """Every record under ``runs/`` by how its arm name was read.
+
+    Three classes, counted with the denominator beside them: *stamped* (made
+    after the renaming, ``arm_naming`` on disk, read as written); *translated*
+    (unstamped, its arm renamed by the table); *unchanged* (unstamped, its arm
+    not in the table).  A record naming an arm nobody declared raises out of
+    ``records.read`` and is listed as a refusal, not counted into a class.
+    """
+    root = Path(campaign.runs_dir)
+    counts = {"stamped": 0, "translated": 0, "unchanged": 0, "no_arm": 0}
+    by_translation: dict[str, int] = {}
+    refusals: list[str] = []
+    n = 0
+    if root.exists():
+        for path in sorted(root.rglob("metrics.json")):
+            n += 1
+            try:
+                on_disk = json.loads(path.read_text())
+            except Exception:  # noqa: BLE001 - an unreadable record is no arm
+                counts["no_arm"] += 1
+                continue
+            if not isinstance(on_disk, dict) or on_disk.get("campaign_arm") is None:
+                counts["no_arm"] += 1
+                continue
+            try:
+                record = records_mod.read(path.parent)
+            except records_mod.RecordError as exc:
+                refusals.append(f"{path.relative_to(root)}: {exc}")
+                continue
+            if on_disk.get(records_mod.ARM_NAMING_FIELD) is not None:
+                counts["stamped"] += 1
+            elif records_mod.ARM_NAME_TRANSLATION_FIELD in record:
+                counts["translated"] += 1
+                key = (
+                    f"{on_disk.get('campaign_arm')} -> {record.get('campaign_arm')}"
+                )
+                by_translation[key] = by_translation.get(key, 0) + 1
+            else:
+                counts["unchanged"] += 1
+    return {
+        "n_records": n,
+        "by_class": counts,
+        "translated_by_name": dict(sorted(by_translation.items())),
+        "refusals": refusals,
+        "table": dict(records_mod.RECORDED_ARM_NAMES),
+        "naming_stamp": {records_mod.ARM_NAMING_FIELD: records_mod.ARM_NAMING},
+    }
+
+
+def check_translation_table() -> list[str]:
+    """What is wrong with ``records.RECORDED_ARM_NAMES``, if anything."""
+    problems: list[str] = []
+    table = records_mod.RECORDED_ARM_NAMES
+    for old, new in table.items():
+        if new not in arms_mod.ARMS:
+            problems.append(f"the table maps {old!r} to {new!r}, which is not an arm of the matrix")
+    values = list(table.values())
+    if len(set(values)) != len(values):
+        problems.append(f"the table maps two recorded names to one arm: {values}")
+    if not records_mod.ARM_NAMING:
+        problems.append("the naming stamp records.ARM_NAMING is empty")
+    return problems
+
+
 def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     declared = sorted(f.name for f in dataclasses.fields(pool_mod.Job))
     classified = sorted(
@@ -223,22 +306,36 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     fields_ok = declared == classified
     rows = check_pairs(by_design_pairs(campaign), campaign)
     _HELD["rows"] = rows
-    n_compared = len(declared) + len(rows)
-    n_mismatched = (0 if fields_ok else len(set(declared) ^ set(classified))) + sum(
-        1 for r in rows if not r["holds"]
+    table_problems = check_translation_table()
+    survey = arm_name_translation_survey(campaign)
+    n_compared = len(declared) + len(rows) + len(records_mod.RECORDED_ARM_NAMES) + survey["n_records"]
+    n_mismatched = (
+        (0 if fields_ok else len(set(declared) ^ set(classified)))
+        + sum(1 for r in rows if not r["holds"])
+        + len(table_problems)
+        + len(survey["refusals"])
     )
     return {
-        "passed": fields_ok and all(r["holds"] for r in rows),
+        "passed": (
+            fields_ok
+            and all(r["holds"] for r in rows)
+            and not table_problems
+            and not survey["refusals"]
+        ),
         "criterion": (
             "every field of pool.Job is classified as identity or non-identity; "
             "every class of deliberate second run composes to a job digest "
             "different from the run it is compared against, and the one job "
-            "three gates share composes to one digest"
+            "three gates share composes to one digest; the recorded-arm-name "
+            "table maps onto distinct arms of the matrix, and every record "
+            "under runs/ reads under an arm the matrix knows"
         ),
         "population": (
             f"{len(declared)} Job field(s); {len(rows)} by-design pair(s) "
             f"({sum(1 for r in rows if r['must'] == 'differ')} must differ, "
-            f"{sum(1 for r in rows if r['must'] == 'agree')} must agree)"
+            f"{sum(1 for r in rows if r['must'] == 'agree')} must agree); "
+            f"{len(records_mod.RECORDED_ARM_NAMES)} recorded-name row(s); "
+            f"{survey['n_records']} record(s) under runs/ read by arm name"
         ),
         "n_compared": n_compared,
         "n_mismatched": n_mismatched,
@@ -247,6 +344,16 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "job_fields": declared,
         "pool_root": str(pool_mod.POOL_SUBPATH),
         "pairs": rows,
+        "arm_names": {
+            "table_problems": table_problems,
+            "survey": survey,
+            "note": (
+                "a record's arm name is the name at the time of the run; the "
+                "records were not re-made at the renaming of 2026-09-15, the "
+                "table is applied once in records.read, and pool.directory_for "
+                "resolves a job's directory by the translated digest"
+            ),
+        },
     }
 
 
@@ -347,6 +454,156 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         finally:
             pool_mod.JOB_IDENTITY_FIELDS = original
 
+    def _renamed_job() -> pool_mod.Job:
+        """Today's job of an arm the table renamed, on a configuration that runs it."""
+        renamed = [new for new in records_mod.RECORDED_ARM_NAMES.values() if new in arms_mod.ARMS]
+        for config in campaign.configurations:
+            for arm in renamed:
+                if arm not in config.skips and arms_mod.ARMS[arm].phase == "A":
+                    return pool_mod.Job(
+                        phase="A", arm=arm, config=config, seed=1, regime="perturbed",
+                        delta=campaign.delta, run_kind="gate",
+                    )
+        raise RuntimeError("no renamed evaluation arm is active on any configuration")
+
+    def _old_spelling(arm: str) -> str:
+        for old, new in records_mod.RECORDED_ARM_NAMES.items():
+            if new == arm:
+                return old
+        raise KeyError(arm)
+
+    def _read_from_disk(record: dict[str, Any]) -> dict[str, Any]:
+        """Write *record* to a scratch directory outside runs/ and read it back
+        through the one reader.  The disk round trip is the point: the
+        translation is applied by ``records.read``, nowhere else."""
+        with tempfile.TemporaryDirectory(prefix="arm_names_tooth_") as td:
+            (Path(td) / "metrics.json").write_text(json.dumps(record))
+            return records_mod.read(td)
+
+    def a_pre_renaming_record_of_a_renamed_arm_is_todays_job() -> tuple[bool, str]:
+        job = _renamed_job()
+        old = _old_spelling(job.arm)
+        record = _complete_record_of(job, campaign)
+        # As the run wrote it before the renaming: the old spelling in both
+        # stamps, the digest over the old identity, no naming stamp.
+        record["campaign_arm"] = old
+        record["job_identity"] = dict(record["job_identity"], arm=old)
+        record["job_digest"] = records_mod.job_digest(record["job_identity"])
+        record.pop(records_mod.ARM_NAMING_FIELD, None)
+        old_digest = record["job_digest"]
+        read = _read_from_disk(record)
+        why = _why(read, job)
+        identity = job.identity(Path(campaign.runs_dir))
+        return (
+            why is None
+            and read.get("campaign_arm") == job.arm
+            and read.get("job_digest") == records_mod.job_digest(identity)
+            and read.get("job_digest_as_stamped") == old_digest
+        ), (
+            f"a complete record of {job.key} written as the run wrote it before "
+            f"the renaming (campaign_arm={old!r}, digest {old_digest[:12]}…) reads "
+            f"back as {read.get('campaign_arm')!r} with digest "
+            f"{str(read.get('job_digest'))[:12]}… (stamped one kept as "
+            f"job_digest_as_stamped {str(read.get('job_digest_as_stamped'))[:12]}…) "
+            f"and is {'complete for' if why is None else 'NOT complete for'} today's job"
+            + (f": {why}" if why else "")
+        )
+
+    def a_post_renaming_record_is_not_translated() -> tuple[bool, str]:
+        job = _renamed_job()
+        record = _complete_record_of(job, campaign)
+        record[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
+        stamped = _read_from_disk(record)
+        unstamped_record = dict(record)
+        unstamped_record.pop(records_mod.ARM_NAMING_FIELD)
+        unstamped = _read_from_disk(unstamped_record)
+        # The same bytes minus the stamp: the stamp alone decides.  Today's
+        # name of the renamed arm is also a *key* of the table, so without
+        # the stamp the record would be read as a different arm.
+        would_be = records_mod.RECORDED_ARM_NAMES.get(job.arm, job.arm)
+        return (
+            _why(stamped, job) is None
+            and stamped.get("campaign_arm") == job.arm
+            and records_mod.ARM_NAME_TRANSLATION_FIELD not in stamped
+            and unstamped.get("campaign_arm") == would_be
+            and (would_be == job.arm or _why(unstamped, job) is not None)
+        ), (
+            f"a record of {job.key} stamped {records_mod.ARM_NAMING_FIELD}="
+            f"{records_mod.ARM_NAMING!r} reads back as {stamped.get('campaign_arm')!r} "
+            f"and is {'complete' if _why(stamped, job) is None else 'NOT complete'} "
+            f"for the job; the same bytes without the stamp read back as "
+            f"{unstamped.get('campaign_arm')!r}"
+            + (
+                f" and are {'NOT complete' if _why(unstamped, job) else 'complete'} for it"
+                if would_be != job.arm
+                else " (this arm's name is not a key of the table)"
+            )
+        )
+
+    def an_arm_nobody_declared_is_refused_by_name() -> tuple[bool, str]:
+        job = _job()
+        record = _complete_record_of(job, campaign)
+        record["campaign_arm"] = "ZZ"
+        record["job_identity"] = dict(record["job_identity"], arm="ZZ")
+        record["job_digest"] = records_mod.job_digest(record["job_identity"])
+        record.pop(records_mod.ARM_NAMING_FIELD, None)
+        try:
+            _read_from_disk(record)
+        except records_mod.RecordError as exc:
+            unstamped_refused, unstamped_said = True, str(exc)
+        else:
+            unstamped_refused, unstamped_said = False, "ACCEPTED"
+        record[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
+        try:
+            _read_from_disk(record)
+        except records_mod.RecordError as exc:
+            stamped_refused, stamped_said = True, str(exc)
+        else:
+            stamped_refused, stamped_said = False, "ACCEPTED"
+        return (
+            unstamped_refused and "'ZZ'" in unstamped_said
+            and stamped_refused and "'ZZ'" in stamped_said
+        ), (
+            f"a record naming arm 'ZZ': unstamped, "
+            f"{'refused' if unstamped_refused else 'ACCEPTED'} "
+            f"({unstamped_said[:90]}…); stamped {records_mod.ARM_NAMING!r}, "
+            f"{'refused' if stamped_refused else 'ACCEPTED'} ({stamped_said[:90]}…)"
+        )
+
+    def a_canonical_directory_taken_by_another_jobs_record() -> tuple[bool, str]:
+        job = _renamed_job()
+        # Another arm of the same phase at the same seed: the flat control,
+        # which every configuration runs.
+        other = pool_mod.Job(
+            phase=job.phase, arm="A0", config=job.config, seed=job.seed,
+            regime=job.regime, delta=job.delta, run_kind=job.run_kind,
+        )
+        record = _complete_record_of(other, campaign)
+        record[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
+        identity = job.identity(Path(campaign.runs_dir))
+        with tempfile.TemporaryDirectory(prefix="arm_names_tooth_") as td:
+            (Path(td) / "metrics.json").write_text(json.dumps(record))
+            try:
+                pool_mod.assert_not_another_jobs_record(job, identity, Path(td))
+            except pool_mod.PoolError as exc:
+                refused, said = True, str(exc)
+            else:
+                refused, said = False, "ACCEPTED"
+            try:
+                pool_mod.assert_not_another_jobs_record(
+                    other, other.identity(Path(campaign.runs_dir)), Path(td)
+                )
+            except pool_mod.PoolError as exc:
+                own_refused, own_said = True, str(exc)
+            else:
+                own_refused, own_said = False, "accepted"
+        return (refused and not own_refused), (
+            f"{job.key}'s canonical directory holding a record of {other.key}: "
+            f"removal {'refused' if refused else 'ALLOWED'} ({said[:100]}…); "
+            f"the same directory asked for by {other.key} itself: "
+            f"{'REFUSED' if own_refused else 'allowed'} ({own_said[:60]})"
+        )
+
     def a_by_design_pair_made_to_collide() -> tuple[bool, str]:
         from . import gate_composition
 
@@ -393,6 +650,46 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             what="G5's hand-composed run with its override_env cleared",
             must="be reported as a pair that does not hold",
             check=a_by_design_pair_made_to_collide,
+        ),
+        Tooth(
+            name="a pre-renaming record of a renamed arm is today's job",
+            what=(
+                "a complete record written with the arm's old spelling in both "
+                "stamps, the digest over the old identity and no naming stamp, "
+                "read back through records.read"
+            ),
+            must=(
+                "read under today's name with the digest re-derived, the stamped "
+                "one kept beside it, and be complete for today's job"
+            ),
+            check=a_pre_renaming_record_of_a_renamed_arm_is_todays_job,
+        ),
+        Tooth(
+            name="a post-renaming record is not translated",
+            what=(
+                "the same complete record of a renamed arm with and without the "
+                "arm_naming stamp"
+            ),
+            must=(
+                "read as written with the stamp, and as the table's translation "
+                "without it -- the stamp alone tells today's A1 from yesterday's"
+            ),
+            check=a_post_renaming_record_is_not_translated,
+        ),
+        Tooth(
+            name="an arm nobody declared is refused by name",
+            what="a complete record naming arm 'ZZ', unstamped and stamped",
+            must="raise RecordError naming the arm, both ways",
+            check=an_arm_nobody_declared_is_refused_by_name,
+        ),
+        Tooth(
+            name="a canonical directory taken by another job's record",
+            what=(
+                "a renamed arm's canonical directory holding a complete record "
+                "of a different arm at the same seed"
+            ),
+            must="refuse removal (PoolError), and allow it for the record's own job",
+            check=a_canonical_directory_taken_by_another_jobs_record,
         ),
     )
 

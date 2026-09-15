@@ -108,7 +108,7 @@ PRIME_TERM = "arrangement_method"
 #: The two arrangements G2 compares the prime across: the flat control and the
 #: partitioned arm.  Both are evaluation-phase arms, because one ``call_models``
 #: is all the claim is about.
-G2_ARRANGEMENTS: tuple[tuple[str, str], ...] = (("flat", "A0"), ("partitioned", "A1"))
+G2_ARRANGEMENTS: tuple[tuple[str, str], ...] = (("flat", "A0"), ("partitioned", "A2"))
 
 #: The configuration G3c covers, and the displaced entry it adds: the previous
 #: revision's census on this configuration measured both a cold and a displaced
@@ -460,7 +460,7 @@ def prime_map_gate(campaign: Campaign) -> Gate:
 #
 # The previous revision's chain was ``per_module`` + the node arrangement + the
 # per-call deferral + the lift and its pin, and **nothing else**: it did not set
-# the per-run deferral at all.  This revision's arm `A1` is that composition
+# the per-run deferral at all.  This revision's arm `A2` is that composition
 # **plus** the per-run deferral, because the matrix puts the deferral inside the
 # intervention.  Read against the whole-state audit, the two are not the same
 # measurement and cannot be: three nodes that ran on every sweep now run once,
@@ -589,7 +589,7 @@ def cold_chain_jobs(
                             on,
                             pool_mod.Job(
                                 phase="A",
-                                arm="A1",
+                                arm="A2",
                                 config=config,
                                 seed=seed,
                                 regime="perturbed" if delta else "unperturbed",

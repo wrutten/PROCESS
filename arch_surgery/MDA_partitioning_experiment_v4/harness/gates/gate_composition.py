@@ -27,7 +27,7 @@ The second half is not redundant with the first.  Two environments that agree as
 dictionaries still have to reach the driver through ``pool``, and the run is
 where the composition becomes a *measurement* rather than a string.
 
-The arm is ``B3`` — the full intervention, the arm with the most switches set
+The arm is ``B2`` — the full intervention, the arm with the most switches set
 and therefore the one a composition error is most likely to reach.
 
 Criterion inherited, and its source
@@ -42,7 +42,7 @@ means nothing.
 
 The hand-written column, and why it is written out
 ---------------------------------------------------
-:data:`PLAN_COLUMN` is the plan's ``B3`` column, transcribed by hand.  Writing it
+:data:`PLAN_COLUMN` is the plan's ``B2`` column, transcribed by hand.  Writing it
 out is the point: a table derived from ``arms.py`` would be ``arms.py`` checking
 itself.  What is *not* written out is anything that is not a matrix cell — the
 tolerance, and the two committed artifact paths — because those are declared
@@ -67,7 +67,7 @@ from ..core.config import Campaign, Config
 from ..core.framework import Gate, GateError, Tooth
 
 #: The arm this gate composes two ways.
-G5_ARM = "B3"
+G5_ARM = "B2"
 
 #: The experiment plan's §3.2 column for that arm, transcribed by hand, in the
 #: plan's own row order.  ``None`` means the switch is not set at all; a callable

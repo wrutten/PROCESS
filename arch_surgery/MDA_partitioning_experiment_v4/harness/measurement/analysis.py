@@ -13,7 +13,11 @@ imports **no** part of the tally: not ``harness/measurement/stats.py``, not eith
 ``tally*`` module, not ``harness/measurement/tables.py``.  Every construction below is
 re-derived from the declaration — the docstring in ``stats.py``, which the
 experiment plan's §3.4–§3.6 wrote — and from the record fields
-``harness/core/records.py`` declares.  An analysis that imported the constructions
+``harness/core/records.py`` declares.  Records are read through
+``records.read``, the one reader, so that the arm names are the matrix's names
+today (``records.RECORDED_ARM_NAMES``, the renaming of 2026-09-15): a name is
+not a construction, and two readers spelling one arm two ways would compare
+nothing.  An analysis that imported the constructions
 would agree with the tally by construction and would prove nothing.  What it
 *does* read is the tally's **output**: the two stage records
 ``runs/gates/tally_evaluation/measurements.json`` and
@@ -70,6 +74,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from harness.core import framework
+from harness.core import records as records_mod
 from harness.experiment.arms import MATRIX_ORDER
 from harness.core.config import EXECUTION_APPROVED, Campaign, default_campaign
 
@@ -145,7 +150,7 @@ YARDSTICK_PAIR = ("BR", "B0")
 
 #: The arms check 2's acceptance rule is read on.  Every other pair is
 #: published beside it, outside the rule.
-ACCEPTANCE_PAIRS: tuple[str, ...] = ("B1", "B3")
+ACCEPTANCE_PAIRS: tuple[str, ...] = ("B1", "B2")
 
 #: The two convergence tests, by the name the record gives each.  Never pooled:
 #: an arm stops on exactly one of them and their widths differ by nearly two
@@ -1025,16 +1030,10 @@ def source_records(
         path = Path(directory) / "metrics.json"
         if not path.exists():
             continue
-        try:
-            out.append(json.loads(path.read_text()))
-        except Exception:  # noqa: BLE001 - an unreadable record is a row
-            out.append(
-                {
-                    "status": "no_record",
-                    "failure_class": "machinery",
-                    "record_path": str(path),
-                }
-            )
+        # Through the one reader, so the arm names are the matrix's names
+        # today (records.RECORDED_ARM_NAMES); an unreadable record comes back
+        # as a ``no_record`` row, which is a row.
+        out.append(records_mod.read(path.parent))
     return out
 
 
@@ -1177,7 +1176,7 @@ def evaluation_reference_arm(pulsed: bool, present: Iterable[str]) -> str:
     """
     if not pulsed:
         return "A0"
-    return "A0p" if "A0p" in set(present) else "A0"
+    return "A1" if "A1" in set(present) else "A0"
 
 
 # --------------------------------------------------------------------------
@@ -1547,7 +1546,7 @@ def _matched_accuracy(
 # predicate module is imported, so agreement with the tally is agreement of two
 # readings of one declaration and not of one code path with itself.
 
-FIXED_POINT_LADDER: tuple[str, ...] = ("AR", "A0", "A0p", "A1")
+FIXED_POINT_LADDER: tuple[str, ...] = ("AR", "A0", "A1", "A2")
 
 
 def _decode_state_value(record: Mapping[str, Any]) -> Any:
@@ -1718,10 +1717,9 @@ def _directories_by_digest(campaign: Campaign, source: Source) -> dict[str, Path
         path = Path(directory) / "metrics.json"
         if not path.exists():
             continue
-        try:
-            digest = json.loads(path.read_text()).get("job_digest")
-        except Exception:  # noqa: BLE001 - an unreadable record has no digest
-            continue
+        # The digest as ``records.read`` reports it -- over the identity in
+        # today's arm names -- which is the digest the tally's RunRow carries.
+        digest = records_mod.read(path.parent).get("job_digest")
         if digest:
             out[str(digest)] = Path(directory)
     return out
@@ -1743,10 +1741,10 @@ def _fixed_point_distance(
     report: list[tuple[str, str, str]] = []
     for base, arm in zip(ladder, ladder[1:]):
         report.append(
-            (base, arm, "headline" if (arm == "A1" and base == headline_base) else "rung")
+            (base, arm, "headline" if (arm == "A2" and base == headline_base) else "rung")
         )
-    if "A0" in ladder and "A1" in ladder and headline_base != "A0":
-        report.append(("A0", "A1", "beside"))
+    if "A0" in ladder and "A2" in ladder and headline_base != "A0":
+        report.append(("A0", "A2", "beside"))
     if not report:
         return None
     artifact = json.loads(Path(config.coupling_state_path).read_text())
@@ -1866,7 +1864,7 @@ def _fixed_point_distance(
             f"arms' exit coupling states at the same entry, in the units "
             f"τ = {tau:g} is stated in.  A row is one pair of arms: each rung "
             f"of the evaluation phase's ladder and, marked headline, the "
-            f"partitioned arm against {headline_base}; A1/A0 beside on a "
+            f"partitioned arm against {headline_base}; A2/A0 beside on a "
             f"pulsed configuration.  A column is the pairs the two arms share "
             f"(by {paired_on}), how many were compared and why the rest were "
             f"not, the restricted distance's median, p90 and worst pair, the "
@@ -1907,17 +1905,17 @@ def _ownership_rung(
         return None
     grouped = by_arm(population, configuration)
     indexed = by_arm_and_seed(population, configuration)
-    if not indexed.get("A0p"):
+    if not indexed.get("A1"):
         return None
     flat = [r for r in grouped.get("A0", []) if completed(r)]
     reference, values, paired = _pair_on(
-        indexed, "A0", "A0p", "node_calls_single_eval"
+        indexed, "A0", "A1", "node_calls_single_eval"
     )
     ratio = ratio_three_ways(reference, values) if reference else {}
     pinned = [
-        indexed["A0p"][seed]
-        for seed in sorted(indexed.get("A0p", {}))
-        if completed(indexed["A0p"][seed])
+        indexed["A1"][seed]
+        for seed in sorted(indexed.get("A1", {}))
+        if completed(indexed["A1"][seed])
     ]
     residuals = [
         abs((r.get("lift_residual") or {}).get("raw_s"))
@@ -1942,7 +1940,7 @@ def _ownership_rung(
         "relative_median": middle(relatives),
     }
     return Recomputed(
-        name=f"ownership rung A0 → A0p — {configuration} — {source}",
+        name=f"ownership rung A0 → A1 — {configuration} — {source}",
         caption=(
             f"units: the node-call ratio is dimensionless; the burn-time "
             f"residual is in seconds and relative to the burn time.  A row is "
@@ -1963,7 +1961,7 @@ def _ownership_rung(
         key_columns=("n", "paired_seeds"),
         rows=(row,),
         denominator=len(flat) + len(pinned),
-        denominator_is=f"A0 and A0p runs of {configuration}",
+        denominator_is=f"A0 and A1 runs of {configuration}",
         composite=("paired_seeds", "residual_s_bracket"),
     )
 
@@ -3671,7 +3669,7 @@ def _tooth_a_demonstration_record(
         [
             {
                 "campaign_phase": "B",
-                "campaign_arm": "B3",
+                "campaign_arm": "B2",
                 "campaign_configuration": "st_regression",
                 "campaign_seed": 0,
                 FORCED_BUDGET_STAMP: 3,

@@ -18,12 +18,12 @@ A62 (exit-audit-restore), §5.3).  That number is the distance between the
 written file and a fixed point of the solve's own map: issue **I-21**'s handle.
 
 What had not been measured is whether the **one-call output path** —
-``finalise_once``, which arms ``B1`` and ``B3`` take *as the campaign composes
-them* — writes the same gap.  GR's ``B1``/``B3`` records cannot say: that gate
+``finalise_once``, which arms ``B1`` and ``B2`` take *as the campaign composes
+them* — writes the same gap.  GR's ``B1``/``B2`` records cannot say: that gate
 runs them with the output-time loop switched back on, so their ``after_run``
 numbers are numbers of the loop path.  This gate makes the six runs that
 settle it: at seed 0, unperturbed, on the two pulsed configurations, the arms
-``BR`` (the loop, ``mda_output``), ``B1`` and ``B3`` (one call,
+``BR`` (the loop, ``mda_output``), ``B1`` and ``B2`` (one call,
 ``finalise_once``), each composed **exactly as the campaign composes them** —
 no override except the audit position — and each asked for
 ``--audit-position after_run``.
@@ -90,7 +90,7 @@ AUDIT_POSITION = records_mod.AUDIT_POSITION_AFTER_RUN
 #: The arms, in the order the plan's matrix lists them: the loop path, then the
 #: two one-call arms.  Every one is composed from the matrix; the only thing
 #: this gate sets is the audit position.
-ARMS: tuple[str, ...] = ("BR", "B1", "B3")
+ARMS: tuple[str, ...] = ("BR", "B1", "B2")
 
 #: The matrix row that decides which output path an arm takes, and what the
 #: driver must stamp for each of its cells.
@@ -467,7 +467,7 @@ def declared_position_beside(
         out["available"] = False
         out["why"] = "gate output_path has no record for this cell in this tree"
         return out
-    record = json.loads(path.read_text())
+    record = records_mod.read(directory)
     audit = record.get("exit_audit") or {}
     out["available"] = True
     out["tree_git_head"] = record.get("tree_git_head")
@@ -664,7 +664,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
                 if (directory / "metrics.json").exists() and (directory / "command.json").exists():
                     key = f"{arm}/{config.name}/seed000"
                     return (
-                        json.loads((directory / "metrics.json").read_text()),
+                        records_mod.read(directory),
                         json.loads((directory / "command.json").read_text()),
                         arm,
                         key,
@@ -745,7 +745,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         ),
         Tooth(
             "a_one_call_arm_whose_output_path_reads_mda_output",
-            "a throwaway copy of a B1/B3 record with output_path 'mda_output' and two output-time sweeps",
+            "a throwaway copy of a B1/B2 record with output_path 'mda_output' and two output-time sweeps",
             "FAIL checks (1b) and (1c)",
             a_one_call_arm_whose_output_path_reads_mda_output,
         ),
@@ -772,7 +772,7 @@ def gate(campaign: Campaign) -> Gate:
         plan_name=None,
         needs_runs=True,
         binds=(
-            "the written-file gap on the one-call output path: BR, B1 and B3 "
+            "the written-file gap on the one-call output path: BR, B1 and B2 "
             "at seed 0 on the pulsed configurations, campaign-composed, audited "
             "after the run (issue I-21)"
         ),

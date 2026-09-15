@@ -81,11 +81,11 @@ from ..core.framework import Gate, GateError, Tooth
 #: measured by ``gates.entry_references``.  An earlier revision of this comment
 #: said the opposite; the two passages disagreed, and D26 ruled for the chain's
 #: reading.
-PAIRED_ARMS: tuple[str, ...] = ("AR", "A0", "A0p", "A1")
+PAIRED_ARMS: tuple[str, ...] = ("AR", "A0", "A1", "A2")
 
 #: The arms whose warm landing is checked.  Both block arms of the plan's §7.5
 #: table: the partitioned arm, and the flat arm that pins the burn time.
-WARM_ARMS: tuple[str, ...] = ("A0p", "A1")
+WARM_ARMS: tuple[str, ...] = ("A1", "A2")
 
 #: Which seed the entry pairing is checked at.  The first *displaced* one — an
 #: undisplaced entry is the snapshot itself and would pair trivially.

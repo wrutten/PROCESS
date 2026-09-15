@@ -20,7 +20,7 @@ This module is never imported by the pool that starts it — it is executed.
 Usage::
 
     PYTHONPATH=<tree> python harness/child/optimise.py \\
-        --tree <tree> --configuration <name> --arm B3 --seed 1 \\
+        --tree <tree> --configuration <name> --arm B2 --seed 1 \\
         --input <input file> --coupling-state <artifact> --outdir <dir>
 """
 

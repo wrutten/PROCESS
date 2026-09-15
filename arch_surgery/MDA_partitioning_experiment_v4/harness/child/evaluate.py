@@ -43,7 +43,7 @@ is the sequence the evaluator itself executes.
 Usage::
 
     PYTHONPATH=<tree> python harness/child/evaluate.py \\
-        --tree <tree> --configuration <name> --arm A1 --seed 1 \\
+        --tree <tree> --configuration <name> --arm A2 --seed 1 \\
         --input <input file> --coupling-state <artifact> --outdir <dir> \\
         [--delta 0.10] [--entry-state <y_exit.json>] \\
         [--stencil-column 7 --stencil-sign +1]

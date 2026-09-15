@@ -342,7 +342,7 @@ DRIVER_FIXED_ARTIFACTS: dict[str, str] = {
 #: On k = 0 there is no burn-time coupling: the ownership rung has nothing to
 #: move, so the two arms that carry it collapse onto their predecessors.
 _STEADY_STATE_SKIPS = {
-    "A0p": "steady state (no burn-time coupling): A0p composes to A0",
+    "A1": "steady state (no burn-time coupling): A1 composes to A0",
     "B1": "steady state (no burn-time coupling): B1 composes to B0",
 }
 

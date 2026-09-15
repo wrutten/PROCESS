@@ -127,7 +127,9 @@
       "AR": "the previous revision had no evaluation-phase reference arm.  Covered instead by a G1-shape check: one evaluation with every architecture switch cleared must reproduce the first call_models of BR at seed 0 on that call's node calls, sweeps and objective hex",
       "A0p": "the previous revision never ran the flat arm with the burn time owned by a constant.  Covered instead by the warm-equivalence gate G6: pinned at the reference's converged burn time it must reproduce the reference fixed point, cross-state residual below the tolerance and the pinned component bit-identical"
     },
-    "how_to_re_derive": "python harness/reference.py --extract --previous-runs <repo>/arch_surgery/MDA_partitioning_experiment_v3/runs; python harness/reference.py --verify re-derives it and requires byte-for-byte equality"
+    "how_to_re_derive": "python harness/reference.py --extract --previous-runs <repo>/arch_surgery/MDA_partitioning_experiment_v3/runs; python harness/reference.py --verify re-derives it and requires byte-for-byte equality",
+    "arm_naming": "rungs-2026-09-15",
+    "arm_names_note": "the 'arm' fields were rewritten into the matrix's names of 2026-09-15 by reference.py --rename-arms (task A78 (arm-renames)) through records.RECORDED_ARM_NAMES; 'previous_arm', 'source_path' and every compared value are the previous revision's and were not touched"
   },
   "entries": [
     {
@@ -323,7 +325,7 @@
       }
     },
     {
-      "arm": "B3",
+      "arm": "B2",
       "previous_arm": "B3",
       "configuration": "large_tokamak_nof",
       "phase": "B",
@@ -361,7 +363,7 @@
       }
     },
     {
-      "arm": "B3",
+      "arm": "B2",
       "previous_arm": "B3",
       "configuration": "low_aspect_ratio_DEMO",
       "phase": "B",
@@ -399,7 +401,7 @@
       }
     },
     {
-      "arm": "B3",
+      "arm": "B2",
       "previous_arm": "B3",
       "configuration": "st_regression",
       "phase": "B",
@@ -518,7 +520,7 @@
       }
     },
     {
-      "arm": "A1",
+      "arm": "A2",
       "previous_arm": "A1",
       "configuration": "large_tokamak_nof",
       "phase": "A",
@@ -549,7 +551,7 @@
       }
     },
     {
-      "arm": "A1",
+      "arm": "A2",
       "previous_arm": "A1",
       "configuration": "low_aspect_ratio_DEMO",
       "phase": "A",
@@ -580,7 +582,7 @@
       }
     },
     {
-      "arm": "A1",
+      "arm": "A2",
       "previous_arm": "A1",
       "configuration": "st_regression",
       "phase": "A",
@@ -611,7 +613,7 @@
       }
     },
     {
-      "arm": "B3",
+      "arm": "B2",
       "previous_arm": "B3",
       "configuration": "large_tokamak_nof",
       "phase": "B",
@@ -649,7 +651,7 @@
       }
     },
     {
-      "arm": "B3",
+      "arm": "B2",
       "previous_arm": "B3",
       "configuration": "low_aspect_ratio_DEMO",
       "phase": "B",
@@ -687,7 +689,7 @@
       }
     },
     {
-      "arm": "B3",
+      "arm": "B2",
       "previous_arm": "B3",
       "configuration": "st_regression",
       "phase": "B",

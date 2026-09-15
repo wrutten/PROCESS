@@ -108,8 +108,11 @@ Check = framework.Check
 # two burn-time settings become one owner, with a constant that lacks the lift
 # refused rather than read as some other owner.
 
-#: Arm names as the previous revision spelled them, for the comparison only.
-_PREVIOUS_NAME = {"BR": "R", "A0": "A0", "A1": "A1", "B0": "B0", "B1": "B1", "B3": "B3"}
+#: Arm names as the previous revision (V3) spelled them, for the comparison
+#: only: V4's name -> V3's.  V4's ``A2`` was V3's ``A1`` and V4's ``B2`` was
+#: V3's ``B3`` (the renaming of 2026-09-15, ``records.RECORDED_ARM_NAMES``);
+#: the right-hand sides below are V3's spellings and stay as V3 wrote them.
+_PREVIOUS_NAME = {"BR": "R", "A0": "A0", "A2": "A1", "B0": "B0", "B1": "B1", "B2": "B3"}
 
 
 def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str]:
@@ -138,7 +141,7 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
         if pulsed:
             env["PROCESS_ARCH_LIFT"] = "burn_time"
         return env
-    if arm in ("A1", "B3"):
+    if arm in ("A2", "B2"):
         env = {
             **base,
             "PROCESS_ARCH_SEQUENCE": "build_after_physics",
@@ -154,11 +157,11 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
         # runs the lifted input file and takes the other.  A steady-state
         # configuration has one artifact and both roles resolve to it.
         env["PROCESS_ARCH_POST_SOLVE"] = (
-            "<defer_per_run_lifted>" if (arm == "B3" and pulsed) else "<defer_per_run>"
+            "<defer_per_run_lifted>" if (arm == "B2" and pulsed) else "<defer_per_run>"
         )
         if pulsed:
             env["PROCESS_ARCH_LIFT"] = "burn_time"
-            if arm == "A1":
+            if arm == "A2":
                 env["PROCESS_ARCH_PIN_BURN_TIME"] = "<pin>"
         return env
     raise KeyError(arm)
@@ -288,7 +291,7 @@ def check_composition(campaign: Campaign) -> Check:
 
     # --- the pin is required where a constant owns the burn time -----------
     for config in campaign.configurations:
-        for name in ("A0p", "A1"):
+        for name in ("A1", "A2"):
             if name in config.skips or not config.pulsed:
                 continue
             try:
@@ -496,27 +499,27 @@ def check_composition(campaign: Campaign) -> Check:
         "B0's analysis-loop switch set to the partitioned value must not "
         "match the previous revision's B0",
     )
-    missing = comparable("B3", config)
+    missing = comparable("B2", config)
     missing.pop("arrangement_method", None)
     check.tooth(
         "one switch dropped from an arm",
-        missing != previous_roles("B3", config),
-        "B3 without the method-arrangement switch must not match the "
-        "previous revision's B3",
+        missing != previous_roles("B2", config),
+        "B2 without the method-arrangement switch must not match the "
+        "previous revision's partitioned optimisation arm (V3's B3)",
     )
     pulsed = [c for c in campaign.configurations if c.pulsed]
     if pulsed:
-        swapped = comparable("A1", pulsed[0])
+        swapped = comparable("A2", pulsed[0])
         swapped["defer_per_run"] = "<defer_per_run_lifted>"
         check.tooth(
             "the wrong per-run artifact handed to an arm",
-            swapped != previous_roles("A1", pulsed[0]),
+            swapped != previous_roles("A2", pulsed[0]),
             "the evaluation phase's block arm runs the committed input file, "
             "so it takes the artifact stamped for the base constraint set; "
             "handing it the lifted input file's artifact must not match",
         )
-        folded = comparable("B3", pulsed[0])
-        theirs = dict(_previous_environment("B3", pulsed[0], campaign))
+        folded = comparable("B2", pulsed[0])
+        theirs = dict(_previous_environment("B2", pulsed[0], campaign))
         theirs.pop("PROCESS_ARCH_OUTER", None)
         check.tooth(
             "the fold read as a difference",
@@ -527,7 +530,7 @@ def check_composition(campaign: Campaign) -> Check:
             "must leave the two asking for the same thing -- if it did not, "
             "the comparison above would be treating a rename as a change",
         )
-        unfolded = dict(_previous_environment("B3", pulsed[0], campaign))
+        unfolded = dict(_previous_environment("B2", pulsed[0], campaign))
         unfolded["PROCESS_ARCH_OUTER"] = "verify"
         check.tooth(
             "a schedule policy the fold does not cover",
@@ -542,13 +545,13 @@ def check_composition(campaign: Campaign) -> Check:
     if steady:
         caught = False
         try:
-            arms_mod.env_for("A0p", steady[0], campaign=campaign, pending_ok=True)
+            arms_mod.env_for("A1", steady[0], campaign=campaign, pending_ok=True)
         except sw.SwitchError:
             caught = True
         check.tooth(
             "a skipped arm asked to compose",
             caught,
-            f"A0p on {steady[0].name} is recorded as skipped and must refuse",
+            f"A1 on {steady[0].name} is recorded as skipped and must refuse",
         )
     return check
 
@@ -605,11 +608,41 @@ def check_rungs() -> Check:
                 f"{'do' if rung_row.same_in_both_phases else 'do not'}"
             )
 
-    # No arm, rung or column may name the removed arm.
+    # No arm of the matrix may *be* a retired arm of the previous revision.
+    # Compared by what each V4 arm was called in V3 -- ``_PREVIOUS_NAME`` --
+    # never by the bare string: since the renaming of 2026-09-15 V4's ``B2``
+    # (the partitioned optimisation arm, V3's ``B3``) spells the same as V3's
+    # retired joint-test arm ``B2`` and is not it.  A V4 arm V3 never ran
+    # (``reference.ARMS_WITHOUT_PREVIOUS_RECORDS``) cannot be a retired one,
+    # and every other arm must have a V3 name here, or the check is silent
+    # about it.
+    from harness.gates import reference as reference_mod  # noqa: PLC0415
+
     check.n_compared += 1
-    for retired in sw.RETIRED_ARM_NAMES:
-        if retired in arms_mod.ARMS:
-            check.fail(f"{retired} was removed from the arm set but is present")
+    for name in arms_mod.ARMS:
+        previous = _PREVIOUS_NAME.get(name)
+        if previous in sw.RETIRED_ARM_NAMES:
+            check.fail(
+                f"{name} is the previous revision's {previous}, which was "
+                f"removed from the arm set (D22) but is present"
+            )
+    unnamed = sorted(
+        name
+        for name in arms_mod.ARMS
+        if name not in _PREVIOUS_NAME
+        and name not in reference_mod.ARMS_WITHOUT_PREVIOUS_RECORDS
+    )
+    if unnamed:
+        check.fail(
+            f"{unnamed} have no entry in the self-check's V3 name map, so the "
+            f"retired-arm check cannot say whether they are a removed arm"
+        )
+    for name, previous in _PREVIOUS_NAME.items():
+        if reference_mod.previous_arm_name(name) != previous:
+            check.fail(
+                f"the self-check's V3 name map says {name} was {previous!r}; "
+                f"the reference module says {reference_mod.previous_arm_name(name)!r}"
+            )
 
     # --- teeth -------------------------------------------------------------
     ladder = arms_mod.RUNGS[2]
@@ -631,7 +664,7 @@ def check_rungs() -> Check:
     )
     check.tooth(
         "an arm compared with itself",
-        arms_mod.rung("B3", "B3") == {},
+        arms_mod.rung("B2", "B2") == {},
         "an arm differs from itself in nothing, so an empty difference is "
         "reachable and a non-empty one means something",
     )

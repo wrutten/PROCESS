@@ -93,13 +93,13 @@ def reference_arm(pulsed: bool, present: Any = None) -> tuple[str, str]:
             "steady state: there is no burn-time coupling, the pinned flat "
             "control degenerates onto the plain one and is skipped"
         )
-    if present is None or "A0p" in present:
-        return "A0p", (
+    if present is None or "A1" in present:
+        return "A1", (
             "pulsed: the declared reference, because it and the partitioned "
             "arm sit on the same reduced map"
         )
     return "A0", (
-        "pulsed, but this population carries no A0p run, so the ratio falls "
+        "pulsed, but this population carries no A1 run, so the ratio falls "
         "back to the plain flat control — the previous revision's "
         "construction, in which the burn-time residual is reported separately "
         "rather than being part of the arm.  This is a FALLBACK and not the "
@@ -538,27 +538,27 @@ def matched_accuracy(
 
 #: The evaluation phase's ladder, in rung order (plan §3.2): adjacent arms
 #: differ by one named thing.  A configuration that skips an arm (st skips
-#: A0p) has the rung across the gap.
-LADDER: tuple[str, ...] = ("AR", "A0", "A0p", "A1")
+#: A1) has the rung across the gap.
+LADDER: tuple[str, ...] = ("AR", "A0", "A1", "A2")
 
 
 def ladder_pairs(present: Sequence[str], headline_base: str) -> list[tuple[str, str, str]]:
     """``(base, arm, role)`` for every pair the fixed-point distance reports.
 
     One row per rung of the ladder among the arms present — ``AR → A0`` (the
-    stopping rule), ``A0 → A0p`` (ownership), ``A0p → A1`` (the partition) —
+    stopping rule), ``A0 → A1`` (ownership), ``A1 → A2`` (the partition) —
     with the partitioned arm against the declared reference marked
-    ``headline``, and on a pulsed configuration ``A0 → A1`` beside, which is
+    ``headline``, and on a pulsed configuration ``A0 → A2`` beside, which is
     the previous revision's pair and the steady-state configuration's
     headline, so the three configurations share a readable row.
     """
     ladder = [arm for arm in LADDER if arm in present]
     out: list[tuple[str, str, str]] = []
     for base, arm in zip(ladder, ladder[1:]):
-        role = "headline" if (arm == "A1" and base == headline_base) else "rung"
+        role = "headline" if (arm == "A2" and base == headline_base) else "rung"
         out.append((base, arm, role))
-    if "A0" in ladder and "A1" in ladder and headline_base != "A0":
-        out.append(("A0", "A1", "beside"))
+    if "A0" in ladder and "A2" in ladder and headline_base != "A0":
+        out.append(("A0", "A2", "beside"))
     return out
 
 
@@ -790,7 +790,7 @@ def fixed_point_distance(
                 "one pair of arms: each rung of the evaluation phase's ladder "
                 "(adjacent arms, differing by one named thing) and, marked "
                 f"headline, the partitioned arm against {headline_base} "
-                f"({why_base}); on a pulsed configuration A1/A0 is published "
+                f"({why_base}); on a pulsed configuration A2/A0 is published "
                 "beside, the previous revision's pair"
             ),
             column_is=(
@@ -887,14 +887,14 @@ def ownership_rung(
     flat = [r for r in by_arm.get("A0", []) if stats_mod.finished(r)]
     rows: list[dict[str, Any]] = []
     reference, values, paired_seeds = _paired(
-        by_seed, "A0", "A0p", "node_calls_single_eval"
+        by_seed, "A0", "A1", "node_calls_single_eval"
     )
     ratio = stats_mod.ratio_triple(reference, values) if reference else {}
     pinned = [
-        by_seed["A0p"][seed] for seed in sorted(by_seed.get("A0p", {}))
-        if stats_mod.finished(by_seed["A0p"][seed])
+        by_seed["A1"][seed] for seed in sorted(by_seed.get("A1", {}))
+        if stats_mod.finished(by_seed["A1"][seed])
     ]
-    if not by_seed.get("A0p"):
+    if not by_seed.get("A1"):
         return None
     residuals = [
         (r.get("lift_residual") or {}).get("raw_s")
@@ -921,7 +921,7 @@ def ownership_rung(
         }
     )
     return Table(
-        name=f"ownership rung A0 → A0p — {configuration} — {source}",
+        name=f"ownership rung A0 → A1 — {configuration} — {source}",
         caption=Caption(
             units="node-call ratio dimensionless; the burn-time residual in "
             "seconds and relative to the burn time",
@@ -952,7 +952,7 @@ def ownership_rung(
         columns=(
             Column("n", "n", fmt=_fmt_int),
             Column("paired_seeds", f"paired at {_paired_with(population)}"),
-            Column("pooled", "A0p/A0 pooled", fmt=_fmt_ratio),
+            Column("pooled", "A1/A0 pooled", fmt=_fmt_ratio),
             Column("median", "median", fmt=_fmt_ratio),
             Column("worse", "worse", fmt=_fmt_int),
             Column("residual_s_median", "burn-time residual, s (median)", fmt=_fmt_exp),
@@ -961,7 +961,7 @@ def ownership_rung(
         ),
         rows=tuple(rows),
         denominator=len(flat) + len(pinned),
-        denominator_is=f"A0 and A0p {population.runs_word} of {configuration}",
+        denominator_is=f"A0 and A1 {population.runs_word} of {configuration}",
         acceptance=True,
     )
 

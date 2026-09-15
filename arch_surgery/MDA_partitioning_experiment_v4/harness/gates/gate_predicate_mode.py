@@ -111,7 +111,7 @@ _git_head = framework.git_head
 #: licenses the optimisation phase under `mixed` **only if** the evaluation
 #: phase shows a decisive pass on an in-loop component, so running it here
 #: would be spending the licence before it is granted.
-PREDICATE_MODE_ARMS: tuple[str, ...] = ("A0", "A1")
+PREDICATE_MODE_ARMS: tuple[str, ...] = ("A0", "A2")
 PREDICATE_MODE_SEEDS: tuple[int, ...] = (1, 2)
 
 #: Record leaves that differ between the two runs of a pair **by construction**,
