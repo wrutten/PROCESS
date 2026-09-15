@@ -381,3 +381,15 @@ D-rows are the user's to mint. Items (a) and (b) above are proposals, not entrie
 
 Nothing under `arch_surgery/MDA_partitioning_experiment_v4/PROCESS/`, `harness/child/` or the root
 `process/` changed. `EXECUTION_APPROVED` untouched. Nothing pushed.
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `ee307296` by the orchestrating session, by checks that differ from the agent's; gates the merge.*
+
+**Checks.** (1) **Census by my own script** over the rendered headings and grids of the branch's report: 17 tables — Tables 7–9 in §4, D.1–D.14 in Appendix D — and **0 with a single row** (data rows counted after the sub-heading rows); the widest is D.3 at 25 columns (the entry reference's three constructions merged, 6 rows), the longest D.5 at 66 rows (matched accuracy, all regimes and rulers stacked). Against the spec's target of about fifteen: met. (2) **The headline cells against their pre-A83 values**: Table 7's TOTAL rows read 0.5625 / 0.5772 / 0.5016 and Table 8's `all counted nodes` 0.6391 / 0.4504 / 0.5330, the same digits as D.7 and D.2–D.4 before; Table 9 is D.5 unchanged. (3) **Gate records** in the worktree: `recomputation` 15 122 / 0, `tally_contracts` 321 / 0, `run_kind_separation` 3 000 / 0, `self_containment` 52 / 0, all stamped `55da17b4` — the last commit that touched code (the three after it are README, the check's census and the report). (4) **Scope by diff**: eight files, nothing under `PROCESS/`, `harness/child/` or the root `process/`. (5) The agent's decision (b) — the regime as a *row key* on the block, distance, cost-per-call and accuracy tables rather than the spec's column groups — is right: the column-group form would have dropped cells from the report, which the spec's own rule (no cell lost) outranks; the reversal is declared.
+
+**Fixed in this commit, not deferred.** The stale §4.1 prose the agent found and was forbidden to touch (three numbers: `recomputation` 101 tables / 14 394 → 107 / 15 122; `tally_contracts` 559 = 303 + 256 → 577 = 321 + 256, stale since A82 grew the table set) is brought to Table D.1's cells here, with the correction named in A83's Appendix C entry.
+
+**Findings for the record, none blocking.** Tables 7–9 now carry the right rows in the right place, but two presentation points remain against the user's own mock-up: the mean and its `[min, max]` are separate columns (Table 8 runs to 16), where one cell `3 957 [3 516, 4 560]` reads better; and the sub-heading rows carry the tally's full table name (`large_tokamak_nof · campaign_optimisation · BR·B0·B1·B2 — n = 22 (seeds on which every arm … converged)`) where `large_tokamak_nof (n = 22)` would do. Both are a rendering pass over the `Layout` declarations, no cell touched — a small follow-up if the user wants it.
+
+**Verdict: merge.** The rule *one construction, one table* is met (82 → 14 in the appendix, 162 → 12 in the companion, 0 one-row tables), the headline tables sit in §4 with their discussion, every old cell is present with the same value by the agent's committed check and the headline cells by my reading, gates PASS at the code commit, zero PROCESS runs.

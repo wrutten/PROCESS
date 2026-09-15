@@ -747,9 +747,9 @@ reproduces the previous revision's twenty records on 256 of 256 compared values;
 gate G1 finds 0 of 54 144 compared values changed across the driver commits it straddles (2 825
 record values and 51 319 output-file lines, the two counts its cell now shows); the recomputation
 row states that a second implementation sharing no construction with the tally reproduced every
-published cell — **101 tables, 14 394 cells compared, 0 mismatched**; `tally_contracts` reproduces
-the 256 reference cells and finds every emitted table captioned with a counted denominator (its 559
-compared are 303 table checks + 256 cells, two counts the cell shows since A80);
+published cell — **107 tables, 15 122 cells compared, 0 mismatched**; `tally_contracts` reproduces
+the 256 reference cells and finds every emitted table captioned with a counted denominator (its 577
+compared are 321 table checks + 256 cells, two counts the cell shows since A80);
 `run_kind_separation` shows the 949 campaign records and no gate or smoke record in every published
 population. Two PASS rows carry a nonzero *mismatched*: the frozen-physics gate `g0prime`, which
 counts the single model file the user approved as differing, by name (1 of 77), and `copy_identity`,
