@@ -974,7 +974,7 @@ def teeth(
     # 4 — missing key: delete a compared field from a copy of a run record.
     stripped = Path(root) / "_teeth" / "missing_key"
     stripped.mkdir(parents=True, exist_ok=True)
-    record = records_mod.read(sample.job.outdir)
+    record = records_mod.stamped_as_today(records_mod.read(sample.job.outdir))
     dropped = reference_mod.REFERENCE_FIELDS[sample.run.phase][0]
     record.pop(dropped.split(".")[0], None)
     (stripped / "metrics.json").write_text(json.dumps(record))

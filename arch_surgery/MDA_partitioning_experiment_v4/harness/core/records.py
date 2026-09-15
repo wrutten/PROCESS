@@ -1189,6 +1189,25 @@ def translate_recorded_arm_names(
     return out
 
 
+def stamped_as_today(record: Mapping[str, Any]) -> dict[str, Any]:
+    """*record*, as read, made safe to write to disk again.
+
+    A record that came through :func:`read` carries today's arm names and no
+    naming stamp (the stamp is the pool's, on disk).  Written back as it is —
+    a tooth's doctored copy, a scratch record — it would be read a second time
+    through :data:`RECORDED_ARM_NAMES`, and an arm whose today's name is also a
+    key of the table (``A1``) would come back as another arm.  So a copy that
+    goes to disk gets the stamp and loses the in-memory trace.  The one rule:
+    **a record read through** :func:`read` **and written again goes through
+    here.**
+    """
+    out = dict(record)
+    out.pop(ARM_NAME_TRANSLATION_FIELD, None)
+    if out.get("campaign_arm") is not None:
+        out[ARM_NAMING_FIELD] = ARM_NAMING
+    return out
+
+
 def read(outdir: Path | str) -> dict[str, Any]:
     """One record from a run directory.  An absent one is a record, not a gap.
 
