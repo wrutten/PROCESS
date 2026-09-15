@@ -1,23 +1,31 @@
-"""Re-point every table citation in the report at the table set A86 renders.
+"""Re-point every table citation in the report at the table set A87 renders.
 
-**A table number is a position, not a name** (trap T17).  Task **A86
-(v3-tables-remainder)** built the eleven tables of the previous revision's §4
-and §5 that A85 had not, moved the taxonomy, the same-optimum table and the
-cost sums into the main text, and put the main text's tables into **reading
-order** — so every number in both documents moved, and the hand-written text
-cites them.
+**A table number is a position, not a name** (trap T17).  Task **A87
+(v3-grid-polish)** took the reliability table out of the main text — the
+twenty-three-column merge of per-arm success, the failure taxonomy and the
+seed set — and put the per-arm success construction alone in its place, in the
+previous revision's §5.1 form; the merged whole went to Appendix D, first of
+the optimisation phase's group.  So **no main-text number moves** (the new
+grid takes the old one's slot, Table 11), every appendix number from D.12 on
+moves by one, and the companion's full versions re-order because the main
+text's table no longer has one of its own.
 
 This script is that re-pointing, committed and executed (protocol §15) rather
 than done by hand.  It works from a **map of layout → old number → new
-number** rather than from a shift, because the moves are not a shift: the
-per-module evaluation table went from 12 to 10 while the iteration multiplier
-went from 8 to 13, and two appendix tables became main-text ones.  A citation
-is rewritten to a placeholder first and then to its new number, so a number
-that is both an old and a new one is never rewritten twice.
+number** rather than from a shift, because a shift is not what a move is: the
+companion's per-arm-success full version went from F.10 to F.13 while the
+three below it each rose by one.  A citation is rewritten to a placeholder
+first and then to its new number, so a number that is both an old and a new
+one is never rewritten twice.
 
-Every phrase it cannot find is reported, not skipped silently — the previous
-revision of this script left three citations behind before A85 found them by
-re-reading every one, which is the addition trap T17 now carries.
+**A number that still resolves can still be the wrong table** (trap T17's
+addition).  Table 11 is still called *per-arm success* and is still in §4.3,
+but it no longer carries the failure taxonomy's *ok* column, its tracebacks or
+the seed-set table's *retried seeds per arm* — three sentences cited it for
+exactly those, and each is re-pointed by a phrase below after re-reading every
+citation in the document and asking what its sentence is about.
+
+Every phrase it cannot find is reported, not skipped silently.
 
 Run from the V4 folder, after ``--plan-tables write``:
 
@@ -34,49 +42,32 @@ REPORT = HERE / "EXPERIMENT_REPORT.md"
 #: ``old citation → new citation``, by prefix.  The layout each names is in
 #: the comment, because a number is a position and the layout is the name.
 MOVES: dict[str, dict[int, str]] = {
-    # --- the main text.  §3's Tables 1-6 are hand-written and do not move.
-    "": {
-        7: "9",    # node calls per block
-        8: "13",   # the iteration multiplier
-        9: "14",   # the evaluation count ε
-        10: "15",  # node calls per evaluation ρ
-        11: "16",  # node calls per run R
-        12: "10",  # module sweeps per run, the evaluation phase
-        13: "18",  # module sweeps per run, the optimisation phase
-    },
-    # --- Appendix D.  D.1 (the gate table) does not move; D.10 and D.11
-    #     became main-text Tables 11 and 12.
+    # --- the main text.  Nothing moves: the per-arm success grid takes the
+    #     merged table's slot (Table 11) and §3's Tables 1-6 are hand-written.
+    "": {},
+    # --- Appendix D.  D.1-D.11 do not move; D.12 is the merged reliability
+    #     table, arriving at the head of the optimisation phase's group.
     "D.": {
-        2: "D.3",    # node calls per block, the other three regimes
-        3: "D.4",    # the reference entries
-        4: "D.5",    # cost per call
-        5: "D.6",    # matched accuracy
-        6: "D.9",    # fixed-point distance
-        7: "D.10",   # the ownership rung
-        8: "D.11",   # failure taxonomy, the evaluation phase
-        9: "D.13",   # node calls per module
-        10: "11",    # per-arm success — now a main-text table
-        11: "12",    # same optimum (check 1) — now a main-text table
-        12: "D.16",  # iteration multiplier (check 2)
-        13: "D.17",  # cost (check 4)
-        14: "D.20",  # achieved accuracy
-        15: "D.21",  # the lift closed (check 3)
+        12: "D.13",  # the problem each configuration poses
+        13: "D.14",  # node calls per module
+        14: "D.15",  # the location diagnostic
+        15: "D.16",  # the identity B1 -> B2
+        16: "D.17",  # iteration multiplier (check 2)
+        17: "D.18",  # cost (check 4)
+        18: "D.19",  # cost against both anchors
+        19: "D.20",  # sweeps and prime calls
+        20: "D.21",  # achieved accuracy
+        21: "D.22",  # the lift closed (check 3)
     },
-    # --- the companion file.
+    # --- the companion file.  F.1-F.9 do not move.  The full versions
+    #     re-order: the main text's per-arm success grid no longer renders
+    #     one of its own (it names the merged table's, `per_seed_columns_in`),
+    #     so the three that followed rise by one and it falls to F.13.
     "F.": {
-        1: "F.3",    # module sweeps, the other three regimes
-        2: "F.4",    # per-sweep overhead, the evaluation phase
-        3: "F.5",    # the predicate trial
-        4: "F.6",    # per-arm success by seed
-        5: "F.7",    # the failure table
-        6: "F.8",    # the attempt-summation identity
-        7: "F.9",    # per-sweep overhead, the optimisation phase
-        8: "F.11",   # the reference entries, full
-        9: "F.12",   # cost per call, full
-        10: "F.13",  # the ownership rung, full
-        11: "F.10",  # per-arm success, full
-        12: "F.14",  # iteration multiplier, full
-        13: "F.15",  # achieved accuracy, full
+        10: "F.13",  # per-arm success, full -> the merged table's full version
+        11: "F.10",  # the reference entries, full
+        12: "F.11",  # cost per call, full
+        13: "F.12",  # the ownership rung, full
     },
 }
 
@@ -87,49 +78,27 @@ MOVES: dict[str, dict[int, str]] = {
 #: placeholder **before** the number map runs and restored after it, so the
 #: numbers inside its replacement are final and are never swept twice.
 PHRASES: list[tuple[str, str]] = [
-    # --- the range of every rendered table, in §4.4 and §6 ----------------
-    ("Tables 7–9 and Tables D.2–D.15",
-     "Tables 7–18 and Tables D.2–D.21"),
-    # --- four numbers that no longer exist (stale since A79) --------------
-    # The stencil regimes are rows of the cost-per-call table and blocks of
-    # the companion's stencil grids, not tables of their own.
-    ("(Table D.4 and\nD.37–D.42)", "(Table D.5 and companion Table F.2)"),
-    # The per-configuration cost tables are row groups of check 4's table.
-    ("(Table D.13,\nD.73–D.75, D.82–D.83)", "(Table D.17)"),
-    # Per-arm success is now a main-text table.
-    ("(Tables\nD.67–D.69, added 2026-09-15 under D29)",
-     "(Table 11, added 2026-09-15 under D29)"),
-    ("(Tables\n  D.76–D.78, columns", "(Table D.17, columns"),
+    # --- the range of every rendered table, in §4.4 ------------------------
+    ("Tables 7–18 and Tables D.2–D.21",
+     "Tables 7–18 and Tables D.2–D.22"),
     # --- citations that would survive the map as a **plausible wrong one**
-    #     (trap T17's addition): the number resolves, and the table it now
-    #     names is not what the sentence is about.  Each was found by
-    #     re-reading every citation after the map, not by the checker.
-    # The ownership rung's per-call ratio is the per-call cost table's own
-    # `A0→A1` column, not the per-block table's.
-    ("**The ownership rung `A0 → A1` (Table 7, displaced entries).**",
-     "**The ownership rung `A0 → A1` (Table 8, displaced entries).**"),
-    ("**`A0 → A1` — ownership of the burn time (Table 7).**",
-     "**`A0 → A1` — ownership of the burn time (Table 8).**"),
-    # The paragraph now sits under check 1's own table, which carries the
-    # verdicts it reads.
-    ("**The same fixed point, not merely an equally converged one (Tables D.5 and D.6).**",
-     "**The same fixed point, not merely an equally converged one (Table 7; "
-     "Tables D.6 and D.9).**"),
-    # Check 4's headline is the cost-sums table in §4.3; the per-arm table is
-    # the appendix's.
-    ("**RQ2 — the partitioning inside the optimisation, `B0 → B2` (Table D.13, headline Tables 11 and 13).**",
-     "**RQ2 — the partitioning inside the optimisation, `B0 → B2` (Table 17; "
-     "per arm Table D.17; headline Tables 16 and 18).**"),
-    # `per module Table 8` named the iteration multiplier and `the path
-    # Table 9` named one of the path's four tables: two citations A85's
-    # re-pointing left pointing at a plausible wrong table.
-    ("(RQ2; Table D.13;\nper module Table 8; the path Table 9)",
-     "(RQ2; Tables 17 and D.17;\nper module Table 18; the path Tables 13–16)"),
-    # A doubled word the previous re-pointing left behind, three times.
-    ("are companion\ncompanion Table F.2.", "are companion Table F.4."),
-    ("companion\ncompanion Table F.5;", "companion Table F.7;"),
-    ("companion companion Table F.6 (the identity) and companion Table F.7",
-     "companion Table F.8 (the identity) and companion Table F.9"),
+    #     (trap T17's addition).  Table 11 kept its number and its name and
+    #     lost three column sets to Appendix D's merged table; each sentence
+    #     below was reading one of them.
+    # The traceback text is the failure taxonomy's `detail` column.
+    ("`block FLAT did not converge in 20 sweeps` on 2 / 3 starts, Table 11)*",
+     "`block FLAT did not converge in 20 sweeps` on 2 / 3 starts, Table 11; "
+     "the message is Table D.12's)*"),
+    # The paragraph reads the per-arm grid **and** the taxonomy's tracebacks
+    # and the seed-set table's invalid and retried seeds.
+    ("**The population (Table 11).**", "**The population (Tables 11 and D.12).**"),
+    # *ok* is the failure taxonomy's column, not a column of Table 11.
+    ("counted *ok*\nin Table 11 and *failed* in companion Table F.7",
+     "counted *ok*\nin Table D.12 and *failed* in companion Table F.7"),
+    # The retried seeds per arm are the seed-set table's column.
+    ("retried seeds per arm across the 25 offered (Table 11; companion Table F.7;",
+     "retried seeds per arm across the 25 offered (Tables 11 and D.12; "
+     "companion Table F.7;"),
 ]
 
 def hold_rendered(text: str) -> tuple[str, list[str]]:

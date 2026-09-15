@@ -161,7 +161,7 @@ def main() -> int:
         for config in CONFIGS:
             counts = {arm: len(seeds) for arm, seeds in sorted(idx[config].items())}
             line(
-                f"{name} {config}: points per arm (Table D.5: nvar per arm)",
+                f"{name} {config}: points per arm (Table D.13: vars per configuration)",
                 counts,
                 {a: nvar[config] for a in counts},
                 "the plan's §3.4 says 2(nvar + 1) per arm 'plus the lifted column on the pinned arms'; as built every Phase A arm reads the committed input file and has nvar points per sign",
@@ -169,7 +169,7 @@ def main() -> int:
     n_stencil = len(sources["campaign_stencil_forward"]) + len(sources["campaign_stencil_backward"])
     line("stencil evaluations in all (plan §3.10 budget: 418)", n_stencil, 418)
 
-    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, Table 11) ==")
+    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, Tables 11 and D.12) ==")
     idx = by_config_arm_seed(sources["campaign_optimisation"])
     reported_n = {"large_tokamak_nof": 22, "low_aspect_ratio_DEMO": 11, "st_regression": 22}
     reported_invalid = {"large_tokamak_nof": 3, "low_aspect_ratio_DEMO": 13, "st_regression": 1}
@@ -211,7 +211,7 @@ def main() -> int:
                 )
             print(f"             seed {s:>2}: " + "; ".join(disp))
 
-    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, Table 11, D.11) ==")
+    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, Tables 11 and D.12; companion F.6) ==")
     for config in CONFIGS:
         by_arm = idx[config]
         crashed = {arm: sorted(s for s, r in rows.items() if r.get("failure_class") == "crashed") for arm, rows in sorted(by_arm.items())}
@@ -272,7 +272,7 @@ def main() -> int:
             diffs[int(r["n_arrangement_method_calls"]) - int(r["dispatch_sweeps"])] += 1
             total += int(r["n_arrangement_method_calls"])
         print(f"  {config} B2 over the seed set (n = {len(converged)}): n_arrangement_method_calls − dispatch_sweeps, histogram {dict(diffs)}")
-        line(f"{config} B2: Σ arrangement-method calls over the seed set (Table D.19's cell)", total, {"large_tokamak_nof": 117281, "low_aspect_ratio_DEMO": 157504, "st_regression": 280776}[config])
+        line(f"{config} B2: Σ arrangement-method calls over the seed set (Table D.20's cell)", total, {"large_tokamak_nof": 117281, "low_aspect_ratio_DEMO": 157504, "st_regression": 280776}[config])
         print(f"           per run: mean {total / max(len(converged), 1):.1f}; per evaluation (Σ calls / Σ ε): {total / max(sum(stats_mod.n_evaluations(rows[s]) or 0 for s in converged), 1):.2f}  — the report's §4.3 said 13.2 / 12.9 / 14.8 (the evaluation phase's figure)")
     # the evaluation phase's figure, for the record
     idxA = by_config_arm_seed(sources["campaign_displaced"])
@@ -331,7 +331,7 @@ def main() -> int:
         worst = max(ratios)
         print(f"  pairs read: {len(ratios)}; largest frozen/mixed audit ratio {worst[0]:.2f}× on {worst[1]} {worst[2]} seed {worst[3]}; all: " + ", ".join(f"{r[0]:.2f}" for r in ratios))
     else:
-        print(f"  could not read the audit pair from the verdict record (keys: {sorted(verdict)[:20]}) — read companion Table F.13's hex columns instead")
+        print(f"  could not read the audit pair from the verdict record (keys: {sorted(verdict)[:20]}) — read companion Table F.5's exit-audit columns instead")
 
     print("\n== 10. The gate table: 30 gates, 167 teeth (§4.1, D.1) ==")
     gate_table = json.loads((Path(campaign.runs_dir) / "gates" / "gate_table" / "measurements.json").read_text())

@@ -98,8 +98,11 @@ run executes (harness plan amendment 13, rule (vi)).
 - `measurement/plan_tables.py` renders the report's tables from the stage records. **One
   construction, one table** (`LAYOUTS`, a declaration per construction): the tally emits a table per
   *(configuration, source)*, and the renderer combines them into one grid — `stack` puts the
-  configurations and regimes in row groups under a bold sub-heading row that states each group's own
-  n; `merge` aligns several constructions of one configuration on a join column, so a fact stated
+  configurations and regimes in row groups under a bold sub-heading row that names the group's
+  configuration, its regime where the table holds more than one, and its own n, and **nothing
+  more**: the tally's table name is on the construction line under the grid and what the n counts
+  is in the caption, said once for the grid rather than once per group (task A87
+  (v3-grid-polish)); `merge` aligns several constructions of one configuration on a join column, so a fact stated
   once per configuration (the seed set, the entry reference) is a column of the table it qualifies
   rather than a table of its own; `single` passes through a construction the tally already emits
   whole. **The previous revision's cell formats** are the layouts' too (task A85
@@ -115,8 +118,17 @@ run executes (harness plan amendment 13, rule (vi)).
   phase's whole ladder); `bold` marks the result column and the verdict; `blank_repeats` blanks a
   repeated key on continuation rows; `omit` drops a column whose cell is the same label on every
   row the grid keeps and states it in the caption instead, as the previous revision's grids did
-  (task A86 (v3-tables-remainder)); and a `fraction` merge puts a count and its denominator in one
-  cell (`0/22`). Every one of them is a
+  (task A86 (v3-tables-remainder)); a `fraction` merge puts a count and its denominator in one
+  cell (`0/22`); and a `verdict` merge puts a ratio at two quantiles and the verdict read against
+  it in one cell (`0.76, 5.64 → **PASS**`, emboldening the verdict and no more), with `—` where
+  the pair does not exist (task A87 (v3-grid-polish)). `column_order` declares the order a
+  combined grid's columns print in, so a column set is not left in the order the first
+  configuration to exhibit it happened to give it. Two layouts may **share** their stage tables by
+  naming each other in `shares_tables_with`, and a cell then appears in two tables — per-arm
+  success is the main text's grid in the previous revision's §5.1 form and a constituent of the
+  appendix's merged reliability table; the second names the first's companion full version in
+  `per_seed_columns_in` rather than rendering a copy of it. **A cell may appear in more than one
+  table; it may never be lost or changed.** Every one of them is a
   rendering of cells a stage record already carries, and
   `report_cells_preserved.py` puts each old row through the same declarations — the omission
   included, counted and named in its output — before looking for it, so a merge that dropped or
