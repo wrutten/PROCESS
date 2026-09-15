@@ -1,7 +1,7 @@
 # A86 (v3-tables-remainder) — the rest of the previous revision's §4 and §5 tables
 
-> **Document status** — **OPEN.** Task **A86 (v3-tables-remainder)**, branch
-> `A86-v3-tables-remainder` (worktree `.claude/worktrees/A86-v3-tables-remainder`), base
+> **Document status** — **MERGED 2026-09-15** at `150c7ed3` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A86_runs/` (latest resume-compatible). Orchestrator's assessment at the end; its two residual grids are task A87 (v3-grid-polish), its finding issue I-27. Task **A86 (v3-tables-remainder)**, branch
+> `A86-v3-tables-remainder` (worktree `.claude/worktrees/A86-v3-tables-remainder`, retired), base
 > `ab3d339a`, tip `52a77127` — **which is the last commit that touches code or a generated
 > document, and is where every gate verdict this report cites was pressed** (rule xiii); the
 > only commit after it is this document. Specification:
