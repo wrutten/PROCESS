@@ -115,7 +115,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"section 4 at {args.base}: {len(old)} lines; now: {len(new)} lines")
     print(f"reverse translation applied: {' , '.join(f'{t} -> {r}' for t, r in pairs)}; {n_tokens_translated} token(s) reversed")
     print(f"lines differing before the reverse translation: {raw_differing} of {max(len(old), len(new))}")
-    print(f"lines differing after the reverse translation: {len(differing)} of {max(len(old), len(new))}")
+    positions = sum(1 for a, b in zip(old, reversed_new) if a != b) + abs(len(old) - len(new))
+    print(
+        f"lines differing after the reverse translation: {positions} of "
+        f"{max(len(old), len(new))} line position(s) ({len(differing)} unified-diff lines)"
+    )
     if len(old) == len(new):
         # Which subsection each residual difference falls in, so that a reader
         # can see whether the measurement tables (§4.2-§4.4) moved or only the
