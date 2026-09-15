@@ -174,6 +174,16 @@ PREDICATE_PAIR_EXCLUSIONS: dict[str, str] = {
     "exit_audit.rulers_note": (
         "prose, identical on both sides, excluded beside the stamps it explains"
     ),
+    "arm_name_translation": (
+        "the in-memory trace records.read leaves on a record made before the "
+        "arm renaming of 2026-09-15 (records.RECORDED_ARM_NAMES): the recorded "
+        "and translated names, the digest as stamped and as re-derived.  The "
+        "two digests are of the identity and differ between the pair's two "
+        "jobs for the same reason job_digest does; the names are the same on "
+        "both sides and are compared where they matter -- campaign_arm and "
+        "job_identity.arm are not excluded.  Absent on a record made after the "
+        "renaming (task A78 (arm-renames))"
+    ),
 }
 
 

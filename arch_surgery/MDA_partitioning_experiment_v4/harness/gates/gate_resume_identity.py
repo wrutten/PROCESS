@@ -494,17 +494,19 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         read = _read_from_disk(record)
         why = _why(read, job)
         identity = job.identity(Path(campaign.runs_dir))
+        trace = read.get(records_mod.ARM_NAME_TRANSLATION_FIELD) or {}
         return (
             why is None
             and read.get("campaign_arm") == job.arm
             and read.get("job_digest") == records_mod.job_digest(identity)
-            and read.get("job_digest_as_stamped") == old_digest
+            and trace.get("job_digest_as_stamped") == old_digest
         ), (
             f"a complete record of {job.key} written as the run wrote it before "
             f"the renaming (campaign_arm={old!r}, digest {old_digest[:12]}…) reads "
             f"back as {read.get('campaign_arm')!r} with digest "
             f"{str(read.get('job_digest'))[:12]}… (stamped one kept as "
-            f"job_digest_as_stamped {str(read.get('job_digest_as_stamped'))[:12]}…) "
+            f"{records_mod.ARM_NAME_TRANSLATION_FIELD}.job_digest_as_stamped "
+            f"{str(trace.get('job_digest_as_stamped'))[:12]}…) "
             f"and is {'complete for' if why is None else 'NOT complete for'} today's job"
             + (f": {why}" if why else "")
         )

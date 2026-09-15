@@ -1080,8 +1080,11 @@ def translate_recorded_arm_names(
     * the record carries no naming stamp — made before the renaming; its
       ``campaign_arm`` and ``job_identity.arm`` go through the table, and
       where the arm's name changed its ``job_digest`` is **re-derived** over
-      the translated identity, the stamped digest kept beside it as
-      ``job_digest_as_stamped``.  The digest is a pure function of the
+      the translated identity, the stamped digest kept in the record's
+      :data:`ARM_NAME_TRANSLATION_FIELD` block as ``job_digest_as_stamped``
+      (that block is the whole in-memory trace of the translation, one field,
+      so that a gate comparing two records value for value has one name to
+      set aside).  The digest is a pure function of the
       identity and the identity is now spelled in today's names, so the
       stamped digest — a digest of the old spelling — identifies nothing the
       pool composes today; the re-derived one is what the pool's job computes,
@@ -1160,7 +1163,6 @@ def translate_recorded_arm_names(
                 if isinstance(stamped_digest, str) and job_digest(
                     record["job_identity"]
                 ) == stamped_digest:
-                    out["job_digest_as_stamped"] = stamped_digest
                     out["job_digest"] = job_digest(identity)
                     translation["job_digest_as_stamped"] = stamped_digest
                     translation["job_digest"] = out["job_digest"]

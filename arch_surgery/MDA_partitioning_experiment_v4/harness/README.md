@@ -927,7 +927,7 @@ old names too. One table says what each old name is today — `core/records.py`'
 place, `records.read`, so every reader of a record sees today's names. A record made after the
 renaming stamps the naming scheme (`arm_naming`, written by the pool beside `job_identity`) and is
 read as written; a record without the stamp is translated, its `job_digest` re-derived over the
-translated identity with the stamped digest kept beside it as `job_digest_as_stamped`, so that
+translated identity with the stamped digest kept in the one in-memory trace field `arm_name_translation` (as `job_digest_as_stamped`), so that
 `--resume` keeps it (the pool's job computes the same digest). Nothing is written back to disk. A
 record naming an arm neither the table nor the matrix knows is **refused by name** where it is
 read. The pool resolves a job's directory by that digest (`pool.directory_for`) wherever a record
