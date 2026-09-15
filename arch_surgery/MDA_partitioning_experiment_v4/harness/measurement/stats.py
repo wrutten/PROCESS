@@ -93,6 +93,9 @@ __all__ = [
     "node_groups",
     "per_node_census",
     "census_by_group",
+    "module_sweeps",
+    "dsm_rows_by_group",
+    "weighted_total",
     "n_evaluations",
     "per_seed_ratio_summary",
 ]
@@ -1582,6 +1585,128 @@ def census_by_group(
         for g in groups
     }
 
+
+def module_sweeps(
+    counted: Mapping[str, int], groups: Sequence[Mapping[str, Any]]
+) -> dict[str, float]:
+    """**Module sweeps in one run** — the cell of the per-module headline tables.
+
+    A module is *swept* when the schedule walks it, and every model node
+    inside it runs once per sweep.  So the module's sweep count is the census
+    count that **all of its nodes share**, and the table's cell is a sweep
+    count rather than a node-call count: a ratio of sweeps does not depend on
+    whether one counts model calls or DSM rows, which a ratio of node calls
+    does (the previous revision's §4.5 demoted the node-weighted total for
+    exactly this reason).
+
+    The premise is checked, never assumed: **if two nodes of one group carry
+    different census counts the construction refuses**, naming the group, the
+    counts and the run.  The previous revision refused the same way, and the
+    check is a tooth of gate ``tally_contracts``.  A group with no node seen
+    is absent from the result rather than reading 0, as :func:`node_groups`
+    leaves it absent.
+
+    Returns ``{group: sweeps}``.
+    """
+    out: dict[str, float] = {}
+    for group in groups:
+        name = str(group["group"])
+        nodes = [str(n) for n in group["nodes"]]
+        if not nodes:
+            continue
+        counts = {node: int(counted.get(node, 0)) for node in nodes}
+        distinct = sorted(set(counts.values()))
+        if len(distinct) != 1:
+            raise StatsError(
+                f"group {name!r} executed its nodes unequally — {counts} — so "
+                f"its cell is not a sweep count.  The per-module table states "
+                f"module sweeps per run and is refused rather than printed "
+                f"over a group whose members did not execute together."
+            )
+        out[name] = float(distinct[0])
+    return out
+
+
+def dsm_rows_by_group(
+    node_map: Mapping[str, Any], groups: Sequence[Mapping[str, Any]]
+) -> dict[str, dict[str, int]]:
+    """**`models` per group**, under the two defensible attributions (trap T9).
+
+    ``models`` is the number of collapsed-DSM rows a group resolves, so that
+    ``total calls = Σ sweeps × models``.  The committed node map
+    (``harness/data/dsm_node_map.json``) pins rows **per module**
+    (``units.dsm_rows``) and pins a row for only four individual nodes,
+    nulling the rest, because trap T9 forbids reading the dependency-analysis
+    repository's exports live.  The once-per-run group is assembled from
+    nodes that live in other modules' row ranges, so **how many rows it owns
+    is unknown** and the total is published as an interval rather than a
+    point estimate:
+
+    ``v = 1``
+        each once-per-run node owns a row of its own, taken out of the module
+        the map assigns it — the case the measured liveness supports, since a
+        row credited to its home module would be credited that module's sweep
+        count, which the node does not have;
+    ``v = 0``
+        the once-per-run nodes own no row and their home modules keep every
+        row — the point estimate the previous revision published before the
+        inconsistency was named.
+
+    Returns ``{group: {"v1": rows, "v0": rows}}``.  No per-module *ratio* is
+    affected by the choice: a ratio of sweeps never reads ``models``.
+    """
+    rows = (node_map.get("units") or {}).get("dsm_rows") or {}
+    nodes = node_map.get("nodes") or {}
+    missing = sorted(g for g in NODE_GROUP_ORDER if g not in rows)
+    if missing:
+        raise StatsError(
+            f"the committed node map states no DSM row count for {missing}; "
+            f"`models` would be guessed, so the per-module total is refused"
+        )
+    out: dict[str, dict[str, int]] = {}
+    once = next(
+        (g for g in groups if str(g["group"]) == ONCE_PER_RUN_GROUP), None
+    )
+    home: dict[str, int] = {}
+    if once is not None:
+        for node in once["nodes"]:
+            placed = str((nodes.get(str(node)) or {}).get("module") or "")
+            if placed not in rows:
+                raise StatsError(
+                    f"once-per-run node {node!r} is placed in module "
+                    f"{placed!r}, which the node map gives no row count; the "
+                    f"v = 1 attribution cannot be formed and the total is "
+                    f"refused"
+                )
+            home[placed] = home.get(placed, 0) + 1
+    for group in groups:
+        name = str(group["group"])
+        if name == ONCE_PER_RUN_GROUP:
+            out[name] = {"v1": len(group["nodes"]), "v0": 0}
+        else:
+            whole = int(rows[name])
+            out[name] = {"v1": whole - home.get(name, 0), "v0": whole}
+    return out
+
+
+def weighted_total(
+    sweeps: Mapping[str, float], models: Mapping[str, Mapping[str, int]], *, case: str
+) -> float | None:
+    """``Σ sweeps × models`` over the groups, under one row attribution.
+
+    ``case`` is ``"v1"`` or ``"v0"``.  A group the run has no sweep count for
+    contributes nothing and the total is ``None`` if no group does, so a total
+    is never a sum over a population quietly smaller than the table's rows
+    (trap T11).
+    """
+    if case not in ("v1", "v0"):
+        raise StatsError(f"no row attribution {case!r}: it is 'v1' or 'v0'")
+    terms = [
+        float(value) * int(models[group][case])
+        for group, value in sweeps.items()
+        if group in models and value is not None
+    ]
+    return sum(terms) if terms else None
 
 def n_evaluations(record: Mapping[str, Any]) -> int | None:
     """**The run's evaluations of the model set** — ``sweeps_per_eval.n_evaluations``.

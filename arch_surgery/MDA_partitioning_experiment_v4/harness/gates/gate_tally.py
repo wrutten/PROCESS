@@ -25,7 +25,7 @@ the previous revision's published cells.
    missing a declared field, no record carrying one ruler and not both, no
    record whose per-attempt costs do not sum to the run total.
 
-**Ten teeth**, one per way a tally can go wrong quietly.  Each constructs the
+**Twelve teeth**, one per way a tally can go wrong quietly.  Each constructs the
 break and requires the refusal; a tooth that does not trip fails the gate.
 
 Written by task **A53 (harness-tally)**.
@@ -392,6 +392,61 @@ def _tooth_check_two_constructions() -> tuple[bool, str]:
     )
 
 
+def _tooth_unequal_module_execution() -> tuple[bool, str]:
+    """Move one node of a group by one call and require the sweep count to be
+    refused rather than averaged.
+
+    The per-module tables state **module sweeps per run**, which is only a
+    quantity because every model node of a group runs once per sweep.  A
+    group whose members did not execute together has no sweep count, and a
+    mean over them would be a number with no unit printed under a heading
+    that claims one.  Task **A85 (v3-table-formats)**.
+    """
+    groups = [{"group": "M1", "nodes": ["physics", "plasma_geom"]}]
+    counted = {"physics": 4, "plasma_geom": 4}
+    sound = stats_mod.module_sweeps(counted, groups)
+    if sound != {"M1": 4.0}:
+        return False, (
+            f"an equally-executed group read {sound}; it must read 4 sweeps"
+        )
+    doctored = dict(counted, plasma_geom=5)
+    return _refuses(
+        lambda: stats_mod.module_sweeps(doctored, groups),
+        what="a group whose two nodes executed 4 and 5 times",
+    )
+
+
+def _tooth_row_attribution_not_guessed() -> tuple[bool, str]:
+    """Withhold a module's DSM row count and require the total to be refused.
+
+    ``models`` is what makes ``Σ sweeps × models`` a number; a map that does
+    not state it would otherwise be silently filled in with a guess, which is
+    exactly the reading of another repository's exports trap T9 forbids.
+    Task **A85 (v3-table-formats)**.
+    """
+    node_map = {
+        "module_order": {"M1": 0, "M2": 1, "M3": 2, "PULSE": 3, "FF": 4},
+        "units": {"dsm_rows": {"M1": 24, "M2": 10, "M3": 12, "PULSE": 1, "FF": 5}},
+        "nodes": {"vacuum": {"module": "M3"}},
+    }
+    groups = [
+        {"group": "M3", "nodes": ["fw", "shield"]},
+        {"group": "once per run", "nodes": ["vacuum"]},
+    ]
+    sound = stats_mod.dsm_rows_by_group(node_map, groups)
+    if sound["M3"] != {"v1": 11, "v0": 12} or sound["once per run"] != {"v1": 1, "v0": 0}:
+        return False, (
+            f"the two attributions read {sound}; M3 must read 11 rows under "
+            f"v = 1 and 12 under v = 0, and the once-per-run group 1 and 0"
+        )
+    short = copy.deepcopy(node_map)
+    del short["units"]["dsm_rows"]["M3"]
+    return _refuses(
+        lambda: stats_mod.dsm_rows_by_group(short, groups),
+        what="a node map stating no DSM row count for M3",
+    )
+
+
 def _tooth_summation_broken() -> tuple[bool, str]:
     """Break the attempt summation by one and require both refusals."""
     record = {
@@ -628,7 +683,7 @@ def pool_tally_jobs(campaign: Campaign) -> list[dict[str, Any]]:
 
 
 def gate(campaign: Campaign) -> Gate:
-    """The tally's gate, with its eleven teeth."""
+    """The tally's gate, with its thirteen teeth."""
     return Gate(
         name="tally_contracts",
         binds="every table the tally emits, and the cells it reproduces",
@@ -689,6 +744,20 @@ def gate(campaign: Campaign) -> Gate:
                 "with no column saying so",
                 must="REFUSE",
                 check=_tooth_audit_position_mix,
+            ),
+            Tooth(
+                name="a module executed unequally",
+                what="a node group whose members ran 4 and 5 times, offered "
+                "to the construction that states module sweeps per run",
+                must="REFUSE",
+                check=_tooth_unequal_module_execution,
+            ),
+            Tooth(
+                name="a DSM row count the map does not state",
+                what="a node map with no row count for M3, offered to the "
+                "construction that weights the per-module total",
+                must="REFUSE",
+                check=_tooth_row_attribution_not_guessed,
             ),
             Tooth(
                 name="a demonstration record in a population",

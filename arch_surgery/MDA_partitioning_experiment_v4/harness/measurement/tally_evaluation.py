@@ -79,7 +79,13 @@ from harness.measurement import stats as stats_mod
 from harness.measurement import tally as tally_mod
 from harness.measurement import tables as tables_mod
 from harness.core.config import Campaign
-from harness.measurement.tables import Caption, Column, Table, cell_list
+from harness.measurement.tables import (
+    Caption,
+    Column,
+    Table,
+    cell_list,
+    sweep_cell,
+)
 
 __all__ = ["tally", "print_tally", "PHASE", "pairing_key", "node_grouping"]
 
@@ -1491,6 +1497,249 @@ def node_calls_per_block(
     )
 
 
+#: How the total row's `models` cell and its ratio are spelled when the two
+#: DSM-row attributions disagree: the previous revision's `[v = 1, v = 0]`.
+def _fmt_cell(value: Any) -> str:
+    """A ratio, or a pre-composed cell (the total row's bracket) unchanged."""
+    if value is None:
+        return "—"
+    if isinstance(value, str):
+        return value
+    return f"{value:.4f}"
+
+
+TOTAL_ROW = "total calls"
+
+
+def module_sweeps(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    configuration: str,
+    source: str,
+) -> Table | None:
+    """**Module sweeps per run** — the evaluation phase's per-module headline.
+
+    The shape the previous revision's §4.5 published and the user asked for
+    again on 2026-09-15: one block per configuration, one row per node group
+    and a **total calls** row, a ``models`` column holding the group's
+    collapsed-DSM row count, and one column per arm holding the **number of
+    times that group was swept in one evaluation** as the mean over the arm's
+    finished runs with its ``[min, max]`` seed bracket — a bare integer where
+    every run agreed.  The ratio column is the result.
+
+    Why sweeps and not node calls: within a group every model node executes
+    once per sweep (:func:`stats.module_sweeps` refuses the run if they did
+    not), so the cell is a sweep count and **its ratio does not depend on
+    whether one counts model calls or DSM rows**.  The *total* does, and is
+    published as an interval over the two defensible attributions of the
+    once-per-run nodes' rows (:func:`stats.dsm_rows_by_group`, trap T9) rather
+    than as a point estimate.
+
+    The per-arm total cells are the ``v = 1`` case; the ratio cell carries
+    both, ``[v = 1, v = 0]``, exactly as the previous revision printed it.
+    """
+    by_arm = _by_arm(population, configuration)
+    if not by_arm:
+        return None
+    finished = {
+        arm: [r for r in records if stats_mod.finished(r)]
+        for arm, records in by_arm.items()
+    }
+    every = [r for records in finished.values() for r in records]
+    if not every:
+        return None
+    config = next(c for c in campaign.configurations if c.name == configuration)
+    groups = node_grouping(campaign, configuration, every, phase=PHASE)
+    node_map = json.loads(
+        (Path(campaign.data_dir) / "dsm_node_map.json").read_text()
+    )
+    models = stats_mod.dsm_rows_by_group(node_map, groups)
+    base, why_base = reference_arm(config.pulsed, set(by_arm))
+    by_seed = _by_arm_and_seed(population, configuration)
+
+    # per run, sweeps per group and the two weighted totals
+    per_arm_sweeps: dict[str, dict[str, list[float]]] = {}
+    per_arm_total: dict[str, dict[str, list[float]]] = {}
+    for arm, records in finished.items():
+        for record in records:
+            sweeps = stats_mod.module_sweeps(
+                stats_mod.per_node_census(record, phase=PHASE), groups
+            )
+            for group, value in sweeps.items():
+                per_arm_sweeps.setdefault(group, {}).setdefault(arm, []).append(value)
+            for case in ("v1", "v0"):
+                total = stats_mod.weighted_total(sweeps, models, case=case)
+                if total is not None:
+                    per_arm_total.setdefault(case, {}).setdefault(arm, []).append(total)
+
+    paired = (
+        sorted(
+            k
+            for k in set(by_seed.get(base, {})) & set(by_seed.get("A2", {}))
+            if stats_mod.finished(by_seed[base][k])
+            and stats_mod.finished(by_seed["A2"][k])
+        )
+        if base in by_seed and "A2" in by_seed
+        else []
+    )
+
+    def _sweeps_at(arm: str, key: Any) -> dict[str, float]:
+        return stats_mod.module_sweeps(
+            stats_mod.per_node_census(by_seed[arm][key], phase=PHASE), groups
+        )
+
+    rows: list[dict[str, Any]] = []
+    for group in groups:
+        name = str(group["group"])
+        row: dict[str, Any] = {
+            "module": name,
+            "models": models[name]["v1"],
+            "reference": base,
+        }
+        for arm in LADDER:
+            values = per_arm_sweeps.get(name, {}).get(arm)
+            row[f"{arm}_mean"] = _mean(values) if values else None
+            row[f"{arm}_bracket"] = _bracket(values) if values else "—"
+        ratio = None
+        if paired:
+            left = [_sweeps_at(base, k).get(name, 0.0) for k in paired]
+            right = [_sweeps_at("A2", k).get(name, 0.0) for k in paired]
+            ratio = (sum(right) / sum(left)) if sum(left) else None
+        row["ratio"] = ratio
+        row["n_pairs"] = len(paired)
+        rows.append(row)
+
+    total: dict[str, Any] = {
+        "module": TOTAL_ROW,
+        "models": sum(models[str(g["group"])]["v1"] for g in groups),
+        "reference": base,
+    }
+    for arm in LADDER:
+        values = per_arm_total.get("v1", {}).get(arm)
+        total[f"{arm}_mean"] = _mean(values) if values else None
+        total[f"{arm}_bracket"] = "—"
+    both: list[float] = []
+    for case in ("v1", "v0"):
+        if not paired:
+            continue
+        left = [
+            stats_mod.weighted_total(_sweeps_at(base, k), models, case=case) or 0.0
+            for k in paired
+        ]
+        right = [
+            stats_mod.weighted_total(_sweeps_at("A2", k), models, case=case) or 0.0
+            for k in paired
+        ]
+        if sum(left):
+            both.append(sum(right) / sum(left))
+    total["ratio"] = (
+        f"[{min(both):.3f}, {max(both):.3f}]" if len(both) == 2 else None
+    )
+    total["n_pairs"] = len(paired)
+    rows.append(total)
+
+    executed = int(
+        ((node_map.get("units") or {}).get("dsm_rows") or {}).get(
+            "executed_in_a_sweep"
+        )
+        or 0
+    )
+    attributed = int(total["models"])
+    return Table(
+        name=f"module sweeps per run — {configuration} — {source}",
+        caption=Caption(
+            units=(
+                "sweeps of a node group per `call_models` evaluation; `models` "
+                "is a count of collapsed-DSM rows; the total row is "
+                "Σ sweeps × models, a count of DSM-row executions; ratios are "
+                "dimensionless"
+            ),
+            row_is=(
+                "one node group of this configuration — the three modules, the "
+                "pulse node, the feed-forward tail and the once-per-run "
+                "deferred nodes as the committed node map and the "
+                "configuration's per-run artifact place them — then the total "
+                "over those rows"
+            ),
+            column_is=(
+                "the group's collapsed-DSM row count, or one arm's mean sweeps "
+                "of that group per evaluation over its finished runs with the "
+                "observed [min, max] seed bracket, or the pooled ratio of A2 "
+                "to the declared reference arm over the runs both sides "
+                "finished"
+            ),
+            population=(
+                f"{population.what}; {len(every)} finished run(s) of "
+                f"{configuration}"
+            ),
+            construction=(
+                "stats.module_sweeps — the census count every node of the "
+                "group shares, the construction refusing the run if the "
+                "group's nodes did not execute equally often; the mean is the "
+                "arithmetic mean over the arm's finished runs; the ratio is "
+                "Σ A2 / Σ reference over the paired runs; the total row is "
+                "stats.weighted_total (Σ sweeps × models) with models from "
+                "stats.dsm_rows_by_group"
+            ),
+            clauses=(
+                "a cell is a **sweep** count, not a node-call count: within a "
+                "group every model node runs once per sweep, so the ratio does "
+                "not depend on whether one counts model calls or DSM rows",
+                "the total does depend on it, and its ratio cell is the "
+                "interval over the two defensible attributions of the "
+                "once-per-run nodes' DSM rows — `[v = 1, v = 0]`, v = 1 giving "
+                "each of them a row of its own and v = 0 leaving the rows with "
+                "the module the map assigns them (trap T9: per-node DSM rows "
+                "are not readable here); the per-arm total cells are the "
+                "v = 1 case",
+                f"the committed node map states {executed} DSM rows execute in "
+                f"a sweep and this configuration attributes {attributed} of "
+                f"them; the remainder are rows of nodes that execute on no "
+                f"configuration of this experiment and are in no row",
+                "reported, not accepted on: the acceptance quantities are the "
+                "cost-per-call and matched-accuracy tables'",
+                f"the reference arm is {base} ({why_base})",
+            ),
+            how_to_read=(
+                "read the ratio column down the modules: it is the result, and "
+                "it is unit-free; the total row is for reconciliation and is "
+                "an interval"
+            ),
+            summary=(
+                f"Module sweeps per run on {configuration}, "
+                f"{tally_mod.source_phrase(source)}: how often each node group "
+                f"was swept in one evaluation, as the mean over the finished "
+                f"runs with its [min, max] bracket (a bare integer where every "
+                f"run agreed). `models` is the group's collapsed-DSM row "
+                f"count, so total calls = Σ sweeps × models; the total's ratio "
+                f"is the `[v = 1, v = 0]` interval over the once-per-run "
+                f"nodes' unknown rows. Reported, not accepted on."
+            ),
+        ),
+        columns=(
+            Column("module", "module"),
+            Column("models", "models", fmt=_fmt_int),
+            *[
+                item
+                for arm in LADDER
+                for item in (
+                    Column(f"{arm}_mean", f"{arm} mean", fmt=sweep_cell),
+                    Column(f"{arm}_bracket", f"{arm} [min, max]"),
+                )
+            ],
+            Column("reference", "reference"),
+            Column("ratio", "A2 / reference", fmt=_fmt_cell),
+            Column("n_pairs", "pairs", fmt=_fmt_int),
+        ),
+        rows=tuple(rows),
+        denominator=len(every),
+        denominator_is=(
+            f"finished evaluation-phase {population.runs_word} of "
+            f"{configuration} in this source"
+        ),
+        kind="module_sweeps",
+    )
+
 def predicate_trial(campaign: Campaign, records_dir: Path) -> Table | None:
     """§4.2.5 — the predicate trial, from the trial gate's own verdict.
 
@@ -1692,6 +1941,11 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             emitted.append(
                 failure_taxonomy(campaign, population, config.name, source.name)
             )
+            modules = module_sweeps(
+                campaign, population, config.name, source.name
+            )
+            if modules is not None:
+                emitted.append(modules)
         stacked = node_calls_per_block(campaign, population, source.name)
         if stacked is not None:
             emitted.append(stacked)

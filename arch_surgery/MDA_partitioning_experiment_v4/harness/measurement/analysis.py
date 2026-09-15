@@ -3104,6 +3104,11 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                         population, config.name, source.name
                     )
                     produced[taxonomy_table.name] = taxonomy_table
+                    sweeps = _module_sweeps_evaluation(
+                        campaign, population, config.name, source.name
+                    )
+                    if sweeps is not None:
+                        produced[sweeps.name] = sweeps
                 stacked = _node_calls_per_block(campaign, population, source.name)
                 if stacked is not None:
                     produced[stacked.name] = stacked
@@ -3131,6 +3136,11 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                         )
                         if modules is not None:
                             produced[modules.name] = modules
+                        sweeps = _module_sweeps_optimisation(
+                            campaign, population, config.name, index, converged, label
+                        )
+                        if sweeps is not None:
+                            produced[sweeps.name] = sweeps
                         for success in _per_arm_success(
                             population, config.name, index, label
                         ):
@@ -3207,6 +3217,10 @@ OPTIMISATION_LADDER: tuple[str, ...] = ("BR", "B0", "B1", "B2")
 #: gate compares (the row keys).
 GROUP_ORDER: tuple[str, ...] = ("M1", "M2", "M3", "PULSE", "FF")
 ONCE_PER_RUN = "once per run"
+
+#: The last row of the per-module tables: Σ sweeps × models over the rows
+#: above it (task A85 (v3-table-formats)).
+TOTAL_CALLS_ROW = "total calls"
 MEMBERS_NAMED_UP_TO = 4
 
 
@@ -3326,6 +3340,346 @@ def _ratio_summary(pairs: Sequence[tuple[float, float]]) -> dict[str, Any]:
         "n_above_one": sum(1 for r in ratios if r > 1),
     }
 
+
+def _sweeps_by_group(
+    counted: Mapping[str, int], groups: Sequence[tuple[str, Sequence[str]]]
+) -> dict[str, float]:
+    """Module sweeps in one run, re-derived: the count the group's nodes share.
+
+    Independent of the tally's construction and of its refusal: this one
+    checks the same premise by taking the set of the group's counts and
+    refusing a set with more than one member, naming the group and the counts.
+    """
+    out: dict[str, float] = {}
+    for group, nodes in groups:
+        if not nodes:
+            continue
+        counts = sorted({int(counted.get(node, 0)) for node in nodes})
+        if len(counts) != 1:
+            raise AnalysisError(
+                f"group {group!r} carries census counts {counts} across its "
+                f"nodes {list(nodes)}; a module sweep count is the count all "
+                f"of its nodes share, so the re-derivation refuses the run"
+            )
+        out[group] = float(counts[0])
+    return out
+
+
+def _rows_by_group(
+    campaign: Campaign, groups: Sequence[tuple[str, Sequence[str]]]
+) -> dict[str, dict[str, int]]:
+    """``models`` per group under the two row attributions, re-derived.
+
+    ``v1`` gives each once-per-run node a collapsed-DSM row of its own, taken
+    from the module the committed map assigns it; ``v0`` leaves every row with
+    that module.  Per-node rows are not readable here (trap T9), which is why
+    the total is an interval and not a number.
+    """
+    node_map = _node_map(campaign)
+    rows = (node_map.get("units") or {}).get("dsm_rows") or {}
+    placement = node_map.get("nodes") or {}
+    absent = sorted(g for g in GROUP_ORDER if g not in rows)
+    if absent:
+        raise AnalysisError(
+            f"the node map states no DSM row count for {absent}; `models` "
+            f"would be guessed and the total is refused"
+        )
+    taken: dict[str, int] = {}
+    for group, nodes in groups:
+        if group != ONCE_PER_RUN:
+            continue
+        for node in nodes:
+            home = str((placement.get(str(node)) or {}).get("module") or "")
+            if home not in rows:
+                raise AnalysisError(
+                    f"once-per-run node {node!r} sits in module {home!r}, "
+                    f"which the node map gives no row count"
+                )
+            taken[home] = taken.get(home, 0) + 1
+    out: dict[str, dict[str, int]] = {}
+    for group, nodes in groups:
+        if group == ONCE_PER_RUN:
+            out[group] = {"v1": len(nodes), "v0": 0}
+        else:
+            out[group] = {
+                "v1": int(rows[group]) - taken.get(group, 0),
+                "v0": int(rows[group]),
+            }
+    return out
+
+
+def _total_calls(
+    sweeps: Mapping[str, float], models: Mapping[str, Mapping[str, int]], case: str
+) -> float:
+    """``Σ sweeps × models``, re-derived, under one row attribution."""
+    return float(
+        sum(
+            value * models[group][case]
+            for group, value in sweeps.items()
+            if group in models
+        )
+    )
+
+
+def _module_sweeps_evaluation(
+    campaign: Campaign, population: Population, configuration: str, source: str
+) -> Recomputed | None:
+    """The evaluation phase's per-module headline re-derived: module sweeps
+    per run, `models` and the bracketed Σ sweeps × models total."""
+    grouped = by_arm(population, configuration)
+    if not grouped:
+        return None
+    finished = {arm: [r for r in rs if completed(r)] for arm, rs in grouped.items()}
+    every = [r for rs in finished.values() for r in rs]
+    if not every:
+        return None
+    config = next(c for c in campaign.configurations if c.name == configuration)
+    groups = _groups(campaign, configuration, every, optimisation=False)
+    models = _rows_by_group(campaign, groups)
+    base = evaluation_reference_arm(config.pulsed, grouped)
+    indexed = by_arm_and_seed(population, configuration)
+
+    def sweeps_of(record: Mapping[str, Any]) -> dict[str, float]:
+        return _sweeps_by_group(_census(record, optimisation=False), groups)
+
+    per_group: dict[str, dict[str, list[float]]] = {}
+    per_total: dict[str, dict[str, list[float]]] = {}
+    for arm, rs in finished.items():
+        for record in rs:
+            sweeps = sweeps_of(record)
+            for group, value in sweeps.items():
+                per_group.setdefault(group, {}).setdefault(arm, []).append(value)
+            for case in ("v1", "v0"):
+                per_total.setdefault(case, {}).setdefault(arm, []).append(
+                    _total_calls(sweeps, models, case)
+                )
+    keys = (
+        sorted(
+            k
+            for k in set(indexed.get(base, {})) & set(indexed.get("A2", {}))
+            if completed(indexed[base][k]) and completed(indexed["A2"][k])
+        )
+        if base in indexed and "A2" in indexed
+        else []
+    )
+    rows: list[dict[str, Any]] = []
+    for group, _nodes in groups:
+        row: dict[str, Any] = {
+            "module": group,
+            "models": models[group]["v1"],
+            "reference": base,
+        }
+        for arm in EVALUATION_LADDER:
+            values = per_group.get(group, {}).get(arm) or []
+            row[f"{arm}_mean"] = arithmetic_mean(values) if values else None
+            span = extremes(values)
+            row[f"{arm}_bracket"] = (
+                "—" if span is None else f"[{span[0]:g}, {span[1]:g}]"
+            )
+        left = [sweeps_of(indexed[base][k]).get(group, 0.0) for k in keys]
+        right = [sweeps_of(indexed["A2"][k]).get(group, 0.0) for k in keys]
+        row["ratio"] = (sum(right) / sum(left)) if sum(left) else None
+        row["n_pairs"] = len(keys)
+        rows.append(row)
+    total: dict[str, Any] = {
+        "module": TOTAL_CALLS_ROW,
+        "models": sum(models[g]["v1"] for g, _ in groups),
+        "reference": base,
+    }
+    for arm in EVALUATION_LADDER:
+        values = per_total.get("v1", {}).get(arm) or []
+        total[f"{arm}_mean"] = arithmetic_mean(values) if values else None
+        total[f"{arm}_bracket"] = "—"
+    both: list[float] = []
+    for case in ("v1", "v0"):
+        left = [_total_calls(sweeps_of(indexed[base][k]), models, case) for k in keys]
+        right = [_total_calls(sweeps_of(indexed["A2"][k]), models, case) for k in keys]
+        if sum(left):
+            both.append(sum(right) / sum(left))
+    total["ratio"] = (
+        f"[{min(both):.3f}, {max(both):.3f}]" if len(both) == 2 else None
+    )
+    total["n_pairs"] = len(keys)
+    rows.append(total)
+    return Recomputed(
+        name=f"module sweeps per run — {configuration} — {source}",
+        caption=(
+            "recomputed: the count every node of a group shares in the "
+            "measured evaluation's census, mean per arm over finished runs "
+            "with [min, max], Σ A2 / Σ reference over the pairs both sides "
+            "finished, and Σ sweeps × models with `models` under the two "
+            "attributions of the once-per-run nodes' DSM rows"
+        ),
+        columns=(
+            "module",
+            "models",
+            *[
+                c
+                for arm in EVALUATION_LADDER
+                for c in (f"{arm}_mean", f"{arm}_bracket")
+            ],
+            "reference",
+            "ratio",
+            "n_pairs",
+        ),
+        key_columns=("module",),
+        rows=tuple(rows),
+        denominator=len(every),
+        denominator_is=(
+            f"finished evaluation-phase runs of {configuration} in this source"
+        ),
+        composite=(
+            *[f"{arm}_bracket" for arm in EVALUATION_LADDER],
+            "ratio",
+        ),
+    )
+
+
+def _module_sweeps_optimisation(
+    campaign: Campaign,
+    population: Population,
+    configuration: str,
+    index: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    label: str,
+) -> Recomputed | None:
+    """The optimisation phase's per-module headline re-derived: module sweeps
+    per run over the seed set, with the ratio read three ways."""
+    base, arm = "B0", "B2"
+    if base not in index or arm not in index:
+        return None
+    records = [
+        index[a][s]
+        for a in arm_order(index)
+        for s in converged
+        if s in index[a] and completed(index[a][s])
+    ]
+    if not records:
+        return None
+    groups = _groups(campaign, configuration, records, optimisation=True)
+    models = _rows_by_group(campaign, groups)
+
+    def sweeps_of(record: Mapping[str, Any]) -> dict[str, float]:
+        return _sweeps_by_group(_census(record, optimisation=True), groups)
+
+    seeds = [
+        s
+        for s in converged
+        if s in index[base]
+        and s in index[arm]
+        and completed(index[base][s])
+        and completed(index[arm][s])
+    ]
+    rows: list[dict[str, Any]] = []
+    for group, _nodes in groups:
+        row: dict[str, Any] = {"module": group, "models": models[group]["v1"]}
+        for a in OPTIMISATION_LADDER:
+            values = [
+                sweeps_of(index[a][s])[group]
+                for s in converged
+                if a in index and s in index[a] and completed(index[a][s])
+            ]
+            row[f"{a}_mean"] = (sum(values) / len(values)) if values else None
+            span = extremes(values)
+            row[f"{a}_bracket"] = (
+                "—" if span is None else f"[{span[0]:g}, {span[1]:g}]"
+            )
+        summary = _ratio_summary(
+            [
+                (sweeps_of(index[base][s])[group], sweeps_of(index[arm][s])[group])
+                for s in seeds
+            ]
+        )
+        row.update(
+            {
+                "pooled": summary["pooled"],
+                "median": summary["median"],
+                "bracket": (
+                    "—"
+                    if summary["min"] is None
+                    else f"[{summary['min']:.3f}, {summary['max']:.3f}]"
+                ),
+                "n_above_one": summary["n_above_one"],
+                "n_pairs": summary["n"],
+            }
+        )
+        rows.append(row)
+    total: dict[str, Any] = {
+        "module": TOTAL_CALLS_ROW,
+        "models": sum(models[g]["v1"] for g, _ in groups),
+    }
+    for a in OPTIMISATION_LADDER:
+        values = [
+            _total_calls(sweeps_of(index[a][s]), models, "v1")
+            for s in converged
+            if a in index and s in index[a] and completed(index[a][s])
+        ]
+        total[f"{a}_mean"] = (sum(values) / len(values)) if values else None
+        total[f"{a}_bracket"] = "—"
+    both: list[float] = []
+    for case in ("v1", "v0"):
+        left = [_total_calls(sweeps_of(index[base][s]), models, case) for s in seeds]
+        right = [_total_calls(sweeps_of(index[arm][s]), models, case) for s in seeds]
+        if sum(left):
+            both.append(sum(right) / sum(left))
+    summary = _ratio_summary(
+        [
+            (
+                _total_calls(sweeps_of(index[base][s]), models, "v1"),
+                _total_calls(sweeps_of(index[arm][s]), models, "v1"),
+            )
+            for s in seeds
+        ]
+    )
+    total.update(
+        {
+            "pooled": (
+                f"[{min(both):.3f}, {max(both):.3f}]" if len(both) == 2 else None
+            ),
+            "median": summary["median"],
+            "bracket": (
+                "—"
+                if summary["min"] is None
+                else f"[{summary['min']:.3f}, {summary['max']:.3f}]"
+            ),
+            "n_above_one": summary["n_above_one"],
+            "n_pairs": summary["n"],
+        }
+    )
+    rows.append(total)
+    return Recomputed(
+        name=f"module sweeps per run — {configuration} — {label}",
+        caption=(
+            "recomputed: the count every node of a group shares in the whole "
+            "run's census, per-run mean and [min, max] per arm over the seed "
+            "set, B2/B0 pooled, as the per-run median with its bracket and as "
+            "runs above 1, and Σ sweeps × models with `models` under the two "
+            "attributions of the once-per-run nodes' DSM rows"
+        ),
+        columns=(
+            "module",
+            "models",
+            *[
+                c
+                for a in OPTIMISATION_LADDER
+                for c in (f"{a}_mean", f"{a}_bracket")
+            ],
+            "pooled",
+            "median",
+            "bracket",
+            "n_above_one",
+            "n_pairs",
+        ),
+        key_columns=("module",),
+        rows=tuple(rows),
+        denominator=len(converged),
+        denominator_is=f"seeds on which every arm of {configuration} converged",
+        composite=(
+            *[f"{a}_bracket" for a in OPTIMISATION_LADDER],
+            "bracket",
+            "pooled",
+        ),
+    )
 
 def _node_calls_per_block(
     campaign: Campaign, population: Population, source: str

@@ -1223,19 +1223,34 @@ def _scratch_records(destination: Path) -> tuple[int, int]:
     # configuration, per source, combined into one).  The recomputed stage's
     # carries no kind, as the analysis's tables do not, and is rendered
     # nowhere.
+    # The scratch tables carry the **columns their layout declares** — the
+    # merge parts and the bolded result column — so the fixture goes through
+    # the renderer's real path rather than round a stub it cannot render.  A
+    # layout naming a column its tables do not have is a refusal (task A85
+    # (v3-table-formats)), and a fixture that dodged it would make this
+    # check pass on a rendering nobody exercises.
     scratch_table = {
         "tally_evaluation": (
             "cost_per_call",
             "cost per call — a_scratch_configuration — campaign_displaced",
+            ("arm", "calls_per_eval", "calls_bracket", "pooled"),
+            ("A0", "1", "[1, 1]", "1.0000"),
         ),
         "tally_optimisation": (
             "cost",
             "cost (check 4) — a_scratch_configuration — campaign_optimisation",
+            ("arm", "node_calls_mean", "bracket", "with_pooled"),
+            ("B0", "1", "[1, 1]", "1.0000"),
         ),
-        "recomputed_tables": ("", "a_scratch_table_of_recomputed_tables"),
+        "recomputed_tables": (
+            "",
+            "a_scratch_table_of_recomputed_tables",
+            ("a",),
+            ("1",),
+        ),
     }
     for stage in ("tally_evaluation", "tally_optimisation", "recomputed_tables"):
-        kind, name = scratch_table[stage]
+        kind, name, keys, cells = scratch_table[stage]
         stage_records[stage] = {
             "population": "a scratch population of 1",
             "runs_provenance": {"n_records": 0, "heads": []},
@@ -1247,9 +1262,14 @@ def _scratch_records(destination: Path) -> tuple[int, int]:
                     "caption": "a scratch table, owned by the self-check.",
                     "denominator": 1,
                     "denominator_is": "one scratch row",
-                    "columns": ["a"],
-                    "rows": [{"a": 1}],
-                    "markdown": "| a |\n|---|\n| 1 |",
+                    "columns": [{"key": key, "heading": key} for key in keys],
+                    "rows": [dict(zip(keys, cells))],
+                    "cells": [list(cells)],
+                    "markdown": (
+                        "| " + " | ".join(keys) + " |\n"
+                        + "|" + "|".join("---" for _ in keys) + "|\n"
+                        + "| " + " | ".join(cells) + " |"
+                    ),
                 }
             ],
         }
