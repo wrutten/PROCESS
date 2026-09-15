@@ -214,6 +214,77 @@ TALLY_STAGES: tuple[str, ...] = ("tally_evaluation", "tally_optimisation")
 
 
 @dataclass(frozen=True)
+class Merged:
+    """**Several of a constituent's columns as one cell**, the V3 report's form.
+
+    The previous revision's tables put a mean and its seed bracket in *one*
+    cell — ``1978 [1758, 2280]`` — and a median and its p90 in one —
+    ``5.04e-10 / 2.96e-9``.  The user asked for those forms back on
+    2026-09-15 (*"How I want them formatted is based on v3 report section 4
+    and 5"*), and a sixteen-column grid of alternating ``mean`` /
+    ``[min, max]`` columns is what made that necessary.
+
+    This is a **rendering** declaration and no cell is lost: the merged cell
+    is the constituents' own rendered cells joined, and
+    ``report_cells_preserved.py`` reads the same declaration to prove that
+    every part is still present, in the same row, with the same value.
+
+    ``join``:
+
+    ``"bracket"``
+        ``mean [min, max]``, and — the previous revision's own rule — the
+        **bare value** where the bracket is degenerate and equals the mean,
+        so a column every run agreed on reads ``4`` and not ``4 [4, 4]``.
+    ``"slash"``
+        ``median / p90``: two order statistics of one distribution.
+    """
+
+    #: The merged column's key and heading.
+    key: str
+    heading: str
+    #: The constituent column keys it consumes, in order.
+    parts: tuple[str, ...]
+    join: str = "bracket"
+
+
+def _merge_cells(parts: Sequence[str], join: str) -> str:
+    """Two rendered cells as one, under :class:`Merged`'s join."""
+    values = [str(p).strip() for p in parts]
+    if join == "bracket":
+        head, bracket = (values + ["", ""])[:2]
+        if not head and not bracket:
+            return ""
+        if head in ("", "—") and bracket in ("", "—"):
+            return head or bracket or ""
+        if bracket in ("", "—"):
+            return head
+        ends = [e.strip() for e in bracket.strip("[]").split(",")]
+        if len(ends) == 2 and ends[0] == ends[1]:
+            try:
+                same = float(head) == float(ends[0])
+            except ValueError:
+                same = False
+            if same:
+                return ends[0]
+        return f"{head} {bracket}"
+    if join == "slash":
+        if not any(values):
+            # every part empty: a group heading row, not a missing value.
+            return ""
+        return " / ".join(values)
+    raise PlanTablesError(f"no cell join {join!r}: it is 'bracket' or 'slash'")
+
+
+#: How a configuration is written in a block heading line and in a row group
+#: label: the report's own short names (§4), not the previous revision's.
+SHORT_NAMES: dict[str, str] = {
+    "large_tokamak_nof": "nof",
+    "low_aspect_ratio_DEMO": "lad",
+    "st_regression": "st",
+}
+
+
+@dataclass(frozen=True)
 class Layout:
     """**How one construction becomes one table.**
 
@@ -300,6 +371,31 @@ class Layout:
     join: str | None = None
     #: Column key → heading, where the constituents disagree.
     headings: tuple[tuple[str, str], ...] = ()
+    # ---------------- the V3 forms (task A85 (v3-table-formats)) -----------
+    #: Cells the V3 report put in one cell and this rendering does too.
+    merges: tuple[Merged, ...] = ()
+    #: ``(column key, accepted cell values)``: the rows this table keeps.  A
+    #: construction the previous revision published as **several tables of
+    #: one shape** — the iteration multiplier, the evaluation count and the
+    #: node-call rate are three tables, each one quantity — is one tally
+    #: table here, and each layout takes its own rows.  Two layouts may claim
+    #: one stage table only when each declares a selection, and the
+    #: selections must not overlap: a row rendered twice is a cell published
+    #: twice under two numbers.
+    select: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    #: Columns printed in bold: the result column and the verdict, as the
+    #: previous revision printed them.
+    bold: tuple[str, ...] = ()
+    #: ``True`` to print one **grid per constituent** under a bold heading
+    #: line (``**`nof`** (n = 22)``) instead of one grid with sub-heading
+    #: rows — the previous revision's per-module form, which the user's three
+    #: images are.
+    blocks: bool = False
+    #: Columns whose repeated consecutive value is blanked, so a
+    #: cross-configuration table names its configuration once and leaves the
+    #: continuation rows empty, as the previous revision's §4.4, §5.1, §5.2
+    #: and §5.5 tables did.
+    blank_repeats: tuple[str, ...] = ()
 
 
 #: The source families, in the order their tables print, with the label the
@@ -331,6 +427,8 @@ LAYOUTS: tuple[Layout, ...] = (
         where="main",
         mode="single",
         caption="",
+        bold=("ratio",),
+        blank_repeats=("configuration",),
         why=(
             "Headline shape 3 on the acceptance regime, in §4.2 where RQ1 is "
             "answered.  The tally emits it already stacked over the "
@@ -344,8 +442,31 @@ LAYOUTS: tuple[Layout, ...] = (
         title="node calls per module",
         stage="tally_optimisation",
         kinds=("node_calls_per_module",),
-        where="main",
+        where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="BR",
+                heading="BR",
+                parts=("BR_mean", "BR_bracket"),
+            ),
+            Merged(
+                key="B0",
+                heading="B0",
+                parts=("B0_mean", "B0_bracket"),
+            ),
+            Merged(
+                key="B1",
+                heading="B1",
+                parts=("B1_mean", "B1_bracket"),
+            ),
+            Merged(
+                key="B2",
+                heading="B2",
+                parts=("B2_mean", "B2_bracket"),
+            ),
+        ),
+        bold=("pooled",),
         caption=(
             "Node calls per run by node group and arm, the three "
             "configurations stacked, each over its own seed set (mean, "
@@ -356,26 +477,197 @@ LAYOUTS: tuple[Layout, ...] = (
             "solve-phase total. `B1` is inactive on `st_regression`."
         ),
         why=(
-            "Headline shape 1, in §4.3 where RQ2 is answered.  Three tables "
-            "of six or seven rows, one per configuration, differing only in "
-            "the population — the case the *one construction, one table* rule "
-            "is written for.  Stacked, because the statistic is sixteen "
-            "columns wide and a configuration column group would be forty-"
-            "eight."
+            "The per-module construction in **node-call** units, which check "
+            "4's solve-phase total is read from (its last row is the part "
+            "outside the solve phase).  Task **A85 (v3-table-formats)** moved "
+            "it out of the main text: the previous revision's per-module "
+            "headline — the one the user asked for — states module **sweeps** "
+            "per run, and that table is now §4.3's.  Kept here whole, because "
+            "the solve-phase decomposition is a cell set the sweeps table "
+            "does not carry.  Each arm's mean and bracket are one cell, as "
+            "the previous revision printed them."
         ),
     ),
     Layout(
-        name="optimiser_path",
-        title="the optimiser's path",
+        name="iteration_multiplier_headline",
+        title="the iteration multiplier",
         stage="tally_optimisation",
         kinds=("optimiser_path",),
         where="main",
         mode="single",
-        caption="",
+        select=(("quantity", ("iterations (summed over attempts)",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        blank_repeats=("quantity",),
+        caption=(
+            "Optimiser iterations per run, summed over the optimiser's retry attempts, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` as the mean of the per-seed ratios, as their median with the observed [min, max] seed bracket — the check-2 acceptance quantity, bound ≤ 1.05 — and as the count of seeds on which `B2` took strictly more iterations. `B1` is inactive on `st_regression`."
+        ),
         why=(
-            "Headline shape 2, in §4.3 beside shape 1: R = ρ × ε read down "
-            "each configuration's four rows.  The tally emits it over the "
-            "configurations already."
+            "The previous revision's §5.3 table, reproduced (task A85 (v3-table-formats), the user's ruling of 2026-09-15).  Its shape holds **one quantity per table**, so the optimiser's path — which the tally emits as four quantities stacked — is rendered as four tables of that shape, each taking its own rows by a declared selection.  This is the first, and it is the one check 2 is read from."
+        ),
+    ),
+    Layout(
+        name="evaluation_count",
+        title="the evaluation count ε",
+        stage="tally_optimisation",
+        kinds=("optimiser_path",),
+        where="main",
+        mode="single",
+        select=(("quantity", ("evaluations of the model set, ε",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        blank_repeats=("quantity",),
+        caption=(
+            "Evaluations of the model set per run (`sweeps_per_eval.n_evaluations`, the field issue I-26 named as the correct one), one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same three ways. This is the ε of R = ρ × ε and it is a count of optimiser probes, not a cost."
+        ),
+        why=(
+            "The same shape as the iteration multiplier, one quantity over: the previous revision's §5.3 form holds one quantity per table, and ε and ρ were rows of task A79's Table 9.  Selected from the same stage table."
+        ),
+    ),
+    Layout(
+        name="node_calls_per_evaluation",
+        title="node calls per evaluation ρ",
+        stage="tally_optimisation",
+        kinds=("optimiser_path",),
+        where="main",
+        mode="single",
+        select=(("quantity", ("node calls per evaluation, ρ",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        blank_repeats=("quantity",),
+        caption=(
+            "Model-node executions per evaluation of the model set, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same three ways. This is the ρ of R = ρ × ε — the per-call term the partition acts on, and the stable one."
+        ),
+        why=(
+            "The third quantity of the optimiser's path, in the previous revision's one-quantity-per-table shape."
+        ),
+    ),
+    Layout(
+        name="node_calls_per_run",
+        title="node calls per run R",
+        stage="tally_optimisation",
+        kinds=("optimiser_path",),
+        where="main",
+        mode="single",
+        select=(("quantity", ("node calls per run, R = ρ × ε",)),),
+        merges=(
+            Merged(
+                key="ratio_median",
+                heading="B2/B0 median [min, max]",
+                parts=("ratio_median", "ratio_bracket"),
+            ),
+        ),
+        bold=("ratio_median",),
+        blank_repeats=("quantity",),
+        caption=(
+            "Model-node executions per run, one row per configuration over its own seed set: the mean per arm, then `B2` against `B0` read the same three ways. R = ρ × ε per seed, so this row reproduces check 4's cost ratio by another road."
+        ),
+        why=(
+            "The fourth quantity of the optimiser's path, in the previous revision's one-quantity-per-table shape; read against check 4's cost table, which sums the solve phase alone."
+        ),
+    ),
+    Layout(
+        name="module_sweeps_evaluation",
+        title="module sweeps per run, the evaluation phase",
+        stage="tally_evaluation",
+        kinds=("module_sweeps",),
+        sources=("campaign_displaced",),
+        where="main",
+        mode="stack",
+        blocks=True,
+        merges=(
+            Merged(key="AR", heading="AR", parts=("AR_mean", "AR_bracket")),
+            Merged(key="A0", heading="A0", parts=("A0_mean", "A0_bracket")),
+            Merged(key="A1", heading="A1", parts=("A1_mean", "A1_bracket")),
+            Merged(key="A2", heading="A2", parts=("A2_mean", "A2_bracket")),
+        ),
+        bold=("ratio",),
+        caption=(
+            "**Module sweeps per run**: how often each node group was swept "
+            "in one `call_models` evaluation, one block per configuration "
+            "over its own 25 displaced-entry runs, as the mean with its "
+            "[min, max] seed bracket — a bare integer where every run agreed "
+            "exactly. `models` is the group's collapsed-DSM row count, so "
+            "total calls = Σ sweeps × models. **The ratio column is the "
+            "result**, and it is unit-free: within a group every model node "
+            "runs once per sweep (the construction refuses the run if they "
+            "did not), so a ratio of sweeps does not depend on whether one "
+            "counts model calls or DSM rows. The total does, and its ratio "
+            "cell is the `[v = 1, v = 0]` interval over the two defensible "
+            "attributions of the once-per-run nodes' rows (trap T9); the "
+            "per-arm total cells are the v = 1 case. Reported, not accepted "
+            "on."
+        ),
+        why=(
+            "**The previous revision's §4.5 table, reproduced** — one of the "
+            "three the user gave as images on 2026-09-15 (*\"How I want them "
+            "formatted is based on v3 report section 4 and 5\"*).  Per-"
+            "configuration **blocks** under a bold heading line rather than "
+            "one grid with sub-heading rows, because that is the form of the "
+            "image: three short grids of the same six rows read down, and a "
+            "single grid of eighteen rows does not.  The other three regimes "
+            "are the same three blocks in the companion file."
+        ),
+    ),
+    Layout(
+        name="module_sweeps_optimisation",
+        title="module sweeps per run, the optimisation phase",
+        stage="tally_optimisation",
+        kinds=("module_sweeps",),
+        where="main",
+        mode="stack",
+        blocks=True,
+        merges=(
+            Merged(key="BR", heading="BR", parts=("BR_mean", "BR_bracket")),
+            Merged(key="B0", heading="B0", parts=("B0_mean", "B0_bracket")),
+            Merged(key="B1", heading="B1", parts=("B1_mean", "B1_bracket")),
+            Merged(key="B2", heading="B2", parts=("B2_mean", "B2_bracket")),
+            Merged(
+                key="median",
+                heading="B2/B0 per-run median [min, max]",
+                parts=("median", "bracket"),
+            ),
+        ),
+        bold=("pooled",),
+        caption=(
+            "**Module sweeps per run**: how often each node group was swept "
+            "in one whole optimisation, one block per configuration over its "
+            "own seed set, as the mean with its [min, max] seed bracket. "
+            "`models` is the group's collapsed-DSM row count, so total calls "
+            "= Σ sweeps × models, bracketed `[v = 1, v = 0]` over the "
+            "once-per-run nodes' unknown rows (trap T9). **The per-module "
+            "ratio column is the result** and is unit-free; the last two "
+            "columns give that ratio's per-run distribution, which the pooled "
+            "figure does not show. These are whole-run census counts: the "
+            "output pass runs every node once and so adds exactly one sweep "
+            "to every row in every arm — symmetric across arms, and it "
+            "cancels from every ratio here — while check 4 sums the solve "
+            "phase alone. `B1` is inactive on `st_regression`. Reported, not "
+            "accepted on."
+        ),
+        why=(
+            "**The previous revision's §5.5.1 table, reproduced** — the "
+            "second of the user's three images.  Blocks for the same reason "
+            "as the evaluation phase's, and beside it so the two phases' "
+            "per-module results are read in one shape."
         ),
     ),
     # ---------------- Appendix D: the evaluation phase ---------------------
@@ -443,6 +735,14 @@ LAYOUTS: tuple[Layout, ...] = (
         sources=_EVALUATION_REGIMES,
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="calls_per_eval",
+                heading="node calls per evaluation [min, max]",
+                parts=("calls_per_eval", "calls_bracket"),
+            ),
+        ),
+        bold=("pooled",),
         caption=(
             "Node calls per `call_models` evaluation by arm, configuration "
             "and regime, with the ratio against the declared reference read "
@@ -474,6 +774,21 @@ LAYOUTS: tuple[Layout, ...] = (
         sources=_EVALUATION_REGIMES,
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="restricted_median",
+                heading="restricted median / p90",
+                parts=("restricted_median", "restricted_p90"),
+                join="slash",
+            ),
+            Merged(
+                key="whole_median",
+                heading="whole-state median / p90",
+                parts=("whole_median", "whole_p90"),
+                join="slash",
+            ),
+        ),
+        blank_repeats=("arm",),
         caption=(
             "Exit accuracy by arm, configuration and regime on both rulers: "
             "the restricted maximum scaled residual (median, p90), its argmax "
@@ -498,6 +813,20 @@ LAYOUTS: tuple[Layout, ...] = (
         kinds=("fixed_point_distance",),
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="restricted_median",
+                heading="restricted median / p90",
+                parts=("restricted_median", "restricted_p90"),
+                join="slash",
+            ),
+            Merged(
+                key="whole_median",
+                heading="whole-state median / p90",
+                parts=("whole_median", "whole_p90"),
+                join="slash",
+            ),
+        ),
         caption=(
             "The distance between two arms' exit states on the restricted "
             "component set, by configuration, regime and pair: median, p90, "
@@ -525,6 +854,14 @@ LAYOUTS: tuple[Layout, ...] = (
         kinds=("ownership_rung",),
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="residual_s_median",
+                heading="burn-time residual, s: median [min, max]",
+                parts=("residual_s_median", "residual_s_bracket"),
+            ),
+        ),
+        bold=("pooled",),
         caption=(
             "What pinning the burn time to a constant costs per call, and the "
             "inconsistency it leaves: six rows, one per pulsed configuration "
@@ -600,6 +937,21 @@ LAYOUTS: tuple[Layout, ...] = (
         kinds=("same_optimum",),
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="r_median",
+                heading="relative Δ objf, median / p90",
+                parts=("r_median", "r_p90"),
+                join="slash",
+            ),
+            Merged(
+                key="threshold_median",
+                heading="threshold median / p90",
+                parts=("threshold_median", "threshold_p90"),
+                join="slash",
+            ),
+        ),
+        bold=("verdict",),
         caption=(
             "Check 1 by configuration and arm pair: the paired relative "
             "objective difference at median and p90 against the pair's own "
@@ -617,6 +969,7 @@ LAYOUTS: tuple[Layout, ...] = (
         kinds=("iteration_multiplier",),
         where="report",
         mode="stack",
+        bold=("summed_median", "acceptance"),
         caption=(
             "Check 2 by configuration and arm pair: the iteration ratio "
             "summed over the optimiser's attempts (the acceptance "
@@ -641,6 +994,14 @@ LAYOUTS: tuple[Layout, ...] = (
         kinds=("cost",),
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="node_calls_mean",
+                heading="node calls per run [min, max]",
+                parts=("node_calls_mean", "bracket"),
+            ),
+        ),
+        bold=("with_pooled",),
         caption=(
             "Check 4 by configuration and arm: solve-phase model-node "
             "executions per run over the seed set with the observed bracket, "
@@ -658,6 +1019,15 @@ LAYOUTS: tuple[Layout, ...] = (
         kinds=("achieved_accuracy",),
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="restricted_median",
+                heading="restricted median / max",
+                parts=("restricted_median", "restricted_max"),
+                join="slash",
+            ),
+        ),
+        blank_repeats=("arm",),
         caption=(
             "What each arm left at its accepted optimum, by configuration, "
             "arm and ruler: the restricted maximum scaled residual as median "
@@ -674,6 +1044,13 @@ LAYOUTS: tuple[Layout, ...] = (
         kinds=("lift_closed",),
         where="report",
         mode="stack",
+        merges=(
+            Merged(
+                key="residual_s_median",
+                heading="residual, s: median [min, max]",
+                parts=("residual_s_median", "bracket"),
+            ),
+        ),
         caption=(
             "Check 3 on the two pulsed configurations: constraint 93's "
             "residual at every accepted optimum of the arms that carry the "
@@ -684,6 +1061,38 @@ LAYOUTS: tuple[Layout, ...] = (
         why="Two tables of two rows.",
     ),
     # ---------------- the companion file ------------------------------------
+    Layout(
+        name="module_sweeps_other_regimes",
+        title="module sweeps per run, the other three regimes",
+        stage="tally_evaluation",
+        kinds=("module_sweeps",),
+        sources=("campaign_entry_references", *_STENCILS),
+        where="companion",
+        mode="stack",
+        blocks=True,
+        merges=(
+            Merged(key="AR", heading="AR", parts=("AR_mean", "AR_bracket")),
+            Merged(key="A0", heading="A0", parts=("A0_mean", "A0_bracket")),
+            Merged(key="A1", heading="A1", parts=("A1_mean", "A1_bracket")),
+            Merged(key="A2", heading="A2", parts=("A2_mean", "A2_bracket")),
+        ),
+        bold=("ratio",),
+        caption=(
+            "**Module sweeps per run** in the three regimes the report's "
+            "table does not show — the entry reference and the forward and "
+            "backward stencil points — one block per configuration and "
+            "regime, in the same form: the mean with its [min, max] bracket, "
+            "a bare integer where every run agreed, `models` the group's "
+            "collapsed-DSM row count, the total Σ sweeps × models with its "
+            "`[v = 1, v = 0]` interval. The entry reference carries one `A0` "
+            "run per configuration and so no pair and no ratio."
+        ),
+        why=(
+            "The acceptance regime's blocks are the report's; these confirm "
+            "them and belong beside the other per-regime detail, in the same "
+            "form so the two are read the same way."
+        ),
+    ),
     Layout(
         name="per_sweep_overhead_evaluation",
         title="per-sweep overhead, the evaluation phase",
@@ -903,6 +1312,7 @@ GROUPS: tuple[Group, ...] = (
             "repeated here."
         ),
         layouts=(
+            "node_calls_per_module",
             "per_arm_success",
             "same_optimum",
             "iteration_multiplier",
@@ -930,7 +1340,11 @@ COMPANION_GROUPS: tuple[dict[str, Any], ...] = (
             "Populations and constructions are as declared in Appendix D.0 of "
             "the report."
         ),
-        "layouts": ("per_sweep_overhead_evaluation", "predicate_trial"),
+        "layouts": (
+            "module_sweeps_other_regimes",
+            "per_sweep_overhead_evaluation",
+            "predicate_trial",
+        ),
     },
     {
         "number": "F.2",
@@ -1253,8 +1667,29 @@ def _table_block(
             f"{full_version}."
         )
     lines = [f"**Table {number}.** *{caption} {denominator}{omitted}*", ""]
-    lines.extend(_grid_lines(table, omit=omit))
-    lines.append("")
+    blocks = table.get("blocks")
+    if blocks:
+        # One grid per block, each under its own bold heading line — the
+        # previous revision's per-configuration form (task A85
+        # (v3-table-formats)).  The caption above is the table's, stated once.
+        columns = table.get("columns") or []
+        keep = [
+            i for i, c in enumerate(columns) if _column_key(c) not in set(omit)
+        ]
+        header = [
+            "| " + " | ".join(_column_heading(columns[i]) for i in keep) + " |",
+            "|" + "|".join("---" for _ in keep) + "|",
+        ]
+        for block in blocks:
+            lines.append(str(block["label"]))
+            lines.append("")
+            lines.extend(header)
+            for row in block["cells"]:
+                lines.append("| " + " | ".join(str(row[i]) for i in keep) + " |")
+            lines.append("")
+    else:
+        lines.extend(_grid_lines(table, omit=omit))
+        lines.append("")
     lines.append(f"<sub>`{table['table']}`</sub>")
     combines = table.get("combines") or []
     if combines:
@@ -1313,8 +1748,15 @@ class Placed:
     configuration: str | None = None
     source: str | None = None
     source_family: str | None = None
-    #: The layout that renders it, or ``None`` for a stage rendered nowhere.
-    layout: Layout | None = None
+    #: The layout(s) that render it — several only where each takes a
+    #: declared, disjoint selection of its rows — or ``None`` for a stage
+    #: rendered nowhere.
+    layouts: tuple[Layout, ...] = ()
+
+    @property
+    def layout(self) -> Layout | None:
+        """The first layout that renders it, for the callers that want one."""
+        return self.layouts[0] if self.layouts else None
 
 
 def _identify(name: str) -> tuple[str, str | None, str | None]:
@@ -1343,12 +1785,14 @@ def _family(source: str | None) -> str | None:
     return source.split(" · ")[0].strip()
 
 
-def _layout_for(placed: Placed) -> Layout | None:
-    """The one layout that renders *placed*, or a refusal naming the choice.
+def _layout_for(placed: Placed) -> list[Layout] | None:
+    """The layout(s) that render *placed*, or a refusal naming the choice.
 
-    Two layouts claiming one table, or none claiming it, are both
-    declarations that have fallen behind the tally: the appendix's shape is a
-    declaration and is never guessed at.
+    Normally one.  Several only where each declares a disjoint selection of
+    the table's rows — how a construction the previous revision published as
+    several tables of one shape is rendered from the one table the tally
+    emits.  None claiming it is a declaration that has fallen behind the
+    tally: the appendix's shape is declared and never guessed at.
     """
     matches = [
         layout
@@ -1359,13 +1803,34 @@ def _layout_for(placed: Placed) -> Layout | None:
         and (not layout.sources or placed.source_family in layout.sources)
     ]
     if len(matches) > 1:
-        raise PlanTablesError(
-            f"table {placed.table.get('table')!r} is claimed by "
-            f"{[m.name for m in matches]}; a table belongs to exactly one "
-            f"layout, and two claiming it is a declaration that has fallen "
-            f"behind the tally"
-        )
-    return matches[0] if matches else None
+        # Several layouts may claim one stage table when each takes a
+        # declared, disjoint set of its rows: the previous revision published
+        # the iteration multiplier, the evaluation count and the node-call
+        # rate as three tables of one shape, and this rendering does too.
+        # Undeclared or overlapping claims are still a declaration that has
+        # fallen behind the tally.
+        undeclared = [m.name for m in matches if not m.select]
+        if undeclared:
+            raise PlanTablesError(
+                f"table {placed.table.get('table')!r} is claimed by "
+                f"{[m.name for m in matches]}, of which {undeclared} select "
+                f"no rows; two layouts may share a table only when each "
+                f"declares which of its rows it takes"
+            )
+        seen: dict[tuple[str, str], str] = {}
+        for layout in matches:
+            for key, values in layout.select:
+                for value in values:
+                    other = seen.get((key, value))
+                    if other is not None:
+                        raise PlanTablesError(
+                            f"table {placed.table.get('table')!r}: layouts "
+                            f"{other!r} and {layout.name!r} both select "
+                            f"{key}={value!r}; a row rendered twice is a cell "
+                            f"published twice under two table numbers"
+                        )
+                    seen[(key, value)] = layout.name
+    return matches if matches else None
 
 
 def _place(records: Mapping[str, Mapping[str, Any]]) -> list[Placed]:
@@ -1396,8 +1861,9 @@ def _place(records: Mapping[str, Mapping[str, Any]]) -> list[Placed]:
                 source=source,
                 source_family=_family(source),
             )
-            row.layout = _layout_for(row)
-            if row.layout is None:
+            found = _layout_for(row)
+            row.layouts = tuple(found or ())
+            if not row.layouts:
                 raise PlanTablesError(
                     f"stage {stage!r} emitted {table.get('table')!r} (kind "
                     f"{kind!r}, source {row.source_family!r}, detail="
@@ -1610,24 +2076,246 @@ def _merge(
     return grid
 
 
+def _block_label(placed: Placed, layout: Layout) -> str:
+    """The bold heading **line** over one block of a per-configuration table.
+
+    The previous revision's form, which the user's three images are:
+    ``**`nof`** (n = 22)``, with the arm set named where it is not the
+    configuration's full ladder.  The configuration is written short — the
+    report's own ``nof / lad / st`` (§4), not the previous revision's ``tok``,
+    because the report names that configuration ``nof`` throughout and a
+    table that renamed it would be a table the prose cannot cite.
+    """
+    name = SHORT_NAMES.get(str(placed.configuration), str(placed.configuration or ""))
+    parts = [f"n = {placed.table.get('denominator')}"]
+    what = str(placed.table.get("denominator_is") or "").strip()
+    if what:
+        parts.append(what)
+    source = str(placed.source or "")
+    if " · " in source:
+        parts.append(f"arms {source.split(' · ', 1)[1]}")
+    return f"**`{name}`** ({' — '.join(parts)})"
+
+
+def _apply_select(
+    layout: Layout, columns: Sequence[Mapping[str, str]], grid: Sequence[Sequence[str]]
+) -> list[list[str]]:
+    """The rows this layout takes, of a stage table several layouts share."""
+    if not layout.select:
+        return [list(row) for row in grid]
+    keys = [c["key"] for c in columns]
+    kept: list[list[str]] = []
+    for row in grid:
+        take = True
+        for key, values in layout.select:
+            if key not in keys:
+                raise PlanTablesError(
+                    f"layout {layout.name!r} selects on column {key!r}, which "
+                    f"its tables do not have (they have {keys})"
+                )
+            if str(row[keys.index(key)]).strip() not in values:
+                take = False
+                break
+        if take:
+            kept.append(list(row))
+    if not kept:
+        raise PlanTablesError(
+            f"layout {layout.name!r} selected no row at all ({layout.select}); "
+            f"a table with no row is a section with a hole in it (trap T11)"
+        )
+    return kept
+
+
+def _apply_merges(
+    layout: Layout, columns: Sequence[Mapping[str, str]], grid: Sequence[Sequence[str]]
+) -> tuple[list[dict[str, str]], list[list[str]]]:
+    """The declared columns joined into one cell each, in place."""
+    if not layout.merges:
+        return [dict(c) for c in columns], [list(row) for row in grid]
+    keys = [c["key"] for c in columns]
+    consumed: dict[str, Merged] = {}
+    for merged in layout.merges:
+        for part in merged.parts:
+            if part not in keys:
+                raise PlanTablesError(
+                    f"layout {layout.name!r} merges column {part!r}, which its "
+                    f"tables do not have (they have {keys})"
+                )
+            if part in consumed:
+                raise PlanTablesError(
+                    f"layout {layout.name!r} merges column {part!r} into both "
+                    f"{consumed[part].key!r} and {merged.key!r}; a cell may be "
+                    f"rendered once"
+                )
+            consumed[part] = merged
+    out_columns: list[dict[str, str]] = []
+    plan: list[tuple[str, Any]] = []
+    for column in columns:
+        key = column["key"]
+        merged = consumed.get(key)
+        if merged is None:
+            out_columns.append(dict(column))
+            plan.append(("copy", keys.index(key)))
+        elif key == merged.parts[0]:
+            out_columns.append({"key": merged.key, "heading": merged.heading})
+            plan.append(("merge", merged))
+    out_grid: list[list[str]] = []
+    for row in grid:
+        cells: list[str] = []
+        for what, argument in plan:
+            if what == "copy":
+                cells.append(str(row[argument]))
+            else:
+                cells.append(
+                    _merge_cells(
+                        [str(row[keys.index(part)]) for part in argument.parts],
+                        argument.join,
+                    )
+                )
+        out_grid.append(cells)
+    return out_columns, out_grid
+
+
+def _apply_bold(
+    layout: Layout, columns: Sequence[Mapping[str, str]], grid: Sequence[Sequence[str]]
+) -> list[list[str]]:
+    """The result column and the verdict in bold, as the previous revision
+    printed them.  A cell already bold, empty or a dash is left alone — a
+    group heading row is not a result."""
+    if not layout.bold:
+        return [list(row) for row in grid]
+    keys = [c["key"] for c in columns]
+    positions = [keys.index(k) for k in layout.bold if k in keys]
+    missing = [k for k in layout.bold if k not in keys]
+    if missing:
+        raise PlanTablesError(
+            f"layout {layout.name!r} bolds column(s) {missing}, which its "
+            f"tables do not have (they have {keys})"
+        )
+    out: list[list[str]] = []
+    for row in grid:
+        cells = [str(c) for c in row]
+        if cells and cells[0].startswith("**"):
+            out.append(cells)
+            continue
+        for index in positions:
+            value = cells[index].strip()
+            if value and value != "—" and not value.startswith("**"):
+                cells[index] = f"**{value}**"
+        out.append(cells)
+    return out
+
+
+def _apply_blank_repeats(
+    layout: Layout, columns: Sequence[Mapping[str, str]], grid: Sequence[Sequence[str]]
+) -> list[list[str]]:
+    """A repeated key cell blanked on continuation rows — the previous
+    revision's cross-configuration form, where the configuration is named
+    once and its further rows leave the cell empty."""
+    if not layout.blank_repeats:
+        return [list(row) for row in grid]
+    keys = [c["key"] for c in columns]
+    positions = [keys.index(k) for k in layout.blank_repeats if k in keys]
+    missing = [k for k in layout.blank_repeats if k not in keys]
+    if missing:
+        raise PlanTablesError(
+            f"layout {layout.name!r} blanks repeats of {missing}, which its "
+            f"tables do not have (they have {keys})"
+        )
+    out: list[list[str]] = []
+    previous: list[str] | None = None
+    for row in grid:
+        cells = [str(c) for c in row]
+        if cells and cells[0].startswith("**"):
+            previous = None
+            out.append(cells)
+            continue
+        if previous is not None:
+            # Hierarchical: a cell is blanked only while every blanked column
+            # to its left also repeats, so a new configuration re-states its
+            # name and everything under it.
+            for depth, index in enumerate(positions):
+                if all(
+                    cells[positions[j]] == previous[positions[j]]
+                    for j in range(depth + 1)
+                ):
+                    cells[index] = ""
+                else:
+                    break
+        previous = [str(c) for c in row]
+        out.append(cells)
+    return out
+
+
+def _transform(
+    layout: Layout,
+    columns: Sequence[Mapping[str, str]],
+    grid: Sequence[Sequence[str]],
+) -> tuple[list[dict[str, str]], list[list[str]]]:
+    """The V3 forms, in one order: rows selected, cells merged, results
+    bolded, repeated keys blanked.  Every step is a **rendering** of cells a
+    stage record already carries."""
+    rows = _apply_select(layout, columns, grid)
+    out_columns, rows = _apply_merges(layout, columns, rows)
+    rows = _apply_bold(layout, out_columns, rows)
+    rows = _apply_blank_repeats(layout, out_columns, rows)
+    return out_columns, rows
+
+
 def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
     """One construction's tables as one table, under the layout's mode."""
     constituents = list(constituents)
-    if layout.mode == "single" or len(constituents) == 1:
-        # Nothing to combine: the table is rendered as the stage emitted it,
-        # with its own caption and its own denominator.
+    overrides = dict(layout.headings)
+    single = layout.mode == "single" or (
+        len(constituents) == 1 and not layout.blocks
+    )
+    if single:
+        source = constituents[0].table
+        columns = [
+            {"key": _column_key(c), "heading": overrides.get(_column_key(c), _column_heading(c))}
+            for c in source.get("columns") or []
+        ]
+        grid = [[str(cell) for cell in row] for row in (source.get("cells") or [])]
+        columns, grid = _transform(layout, columns, grid)
+        table = dict(source)
+        table["columns"] = columns
+        table["cells"] = grid
+        if layout.caption:
+            table["caption_summary"] = layout.caption
+        # A single-constituent table names itself by its **layout** and says
+        # which stage table it was built from, exactly as a combined one
+        # does.  Without that a layout that selects rows or merges cells
+        # would print the stage table's name over a grid that is not the
+        # whole of it, and a cell could not be traced to the declaration
+        # that rendered it (trap T17; task A85 (v3-table-formats)).
+        table["table"] = layout.title
+        table["combines"] = [source.get("table")]
         return Combined(
             layout=layout,
             constituents=constituents,
-            table=constituents[0].table,
+            table=table,
             where=layout.where,
         )
-    overrides = dict(layout.headings)
     columns = _union_columns(constituents, overrides, layout)
-    if layout.mode == "stack":
-        grid = _stack(constituents, columns, overrides)
+    blocks: list[dict[str, Any]] | None = None
+    if layout.blocks:
+        blocks = []
+        grid = []
+        for placed in constituents:
+            rows = [
+                [row.get((c["key"], c["heading"]), "") for c in columns]
+                for row in _cells_by_key(placed, overrides)
+            ]
+            block_columns, rows = _transform(layout, columns, rows)
+            blocks.append({"label": _block_label(placed, layout), "cells": rows})
+            grid.extend(rows)
+        columns = block_columns
+    elif layout.mode == "stack":
+        columns, grid = _transform(layout, columns, _stack(constituents, columns, overrides))
     elif layout.mode == "merge":
-        grid = _merge(constituents, columns, overrides, layout)
+        columns, grid = _transform(
+            layout, columns, _merge(constituents, columns, overrides, layout)
+        )
     else:
         raise PlanTablesError(f"layout {layout.name!r} has no mode {layout.mode!r}")
     omits = sorted({
@@ -1635,6 +2323,8 @@ def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
         for placed in constituents
         for key in (placed.table.get("report_omits") or [])
     })
+    merged_away = {part for m in layout.merges for part in m.parts}
+    omits = [key for key in omits if key not in merged_away]
     audit_positions = sorted({
         position
         for placed in constituents
@@ -1649,8 +2339,11 @@ def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
         "caption": layout.caption,
         "denominator": len(constituents),
         "denominator_is": (
-            "row group(s) of this table, each over its own population with "
-            "its own n in its sub-heading row; never pooled"
+            "block(s) of this table, each over its own population with its "
+            "own n in its heading line; never pooled"
+            if layout.blocks
+            else "row group(s) of this table, each over its own population "
+            "with its own n in its sub-heading row; never pooled"
         ),
         "acceptance": any(p.table.get("acceptance") for p in constituents),
         "audit_positions": audit_positions,
@@ -1659,6 +2352,8 @@ def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
         "cells": grid,
         "combines": [p.table.get("table") for p in constituents],
     }
+    if blocks is not None:
+        table["blocks"] = blocks
     return Combined(
         layout=layout,
         constituents=constituents,
@@ -1671,7 +2366,7 @@ def _all_combined(placed: Sequence[Placed]) -> list[Combined]:
     """Every combined table, in the layouts' declared order."""
     out: list[Combined] = []
     for layout in LAYOUTS:
-        constituents = [p for p in placed if p.layout is layout]
+        constituents = [p for p in placed if layout in p.layouts]
         if not constituents:
             continue
         if layout.mode == "merge":

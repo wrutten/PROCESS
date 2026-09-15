@@ -8,7 +8,109 @@
 
 The per-run tables of the evaluation phase, one construction per table with the configurations and regimes as row groups: what each finished run's convergence test cost (one row per run; the two predicates in columns of their own, never summed) and the predicate trial (one row per pair of runs under the two rulers). Populations and constructions are as declared in Appendix D.0 of the report.
 
-**Table F.1.** *What each finished evaluation-phase run's convergence test cost, one row per run, configurations and regimes stacked: sweeps, and for the test the arm stops on its evaluations, components compared and mean width. The two predicates are never summed. n = 12 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.1.** ***Module sweeps per run** in the three regimes the report's table does not show — the entry reference and the forward and backward stencil points — one block per configuration and regime, in the same form: the mean with its [min, max] bracket, a bare integer where every run agreed, `models` the group's collapsed-DSM row count, the total Σ sweeps × models with its `[v = 1, v = 0]` interval. The entry reference carries one `A0` run per configuration and so no pair and no ratio. n = 9 (block(s) of this table, each over its own population with its own n in its heading line; never pooled).*
+
+**`nof`** (n = 1 — finished evaluation-phase campaign runs of large_tokamak_nof in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | — | 6 | — | — | A0 | — | 0 |
+| M2 | 10 | — | 6 | — | — | A0 | — | 0 |
+| M3 | 11 | — | 6 | — | — | A0 | — | 0 |
+| PULSE | 1 | — | 6 | — | — | A0 | — | 0 |
+| once per run | 3 | — | 6 | — | — | A0 | — | 0 |
+| total calls | 49 | — | 294 | — | — | A0 | — | 0 |
+
+**`lad`** (n = 1 — finished evaluation-phase campaign runs of low_aspect_ratio_DEMO in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | — | 5 | — | — | A0 | — | 0 |
+| M2 | 10 | — | 5 | — | — | A0 | — | 0 |
+| M3 | 11 | — | 5 | — | — | A0 | — | 0 |
+| PULSE | 1 | — | 5 | — | — | A0 | — | 0 |
+| once per run | 3 | — | 5 | — | — | A0 | — | 0 |
+| total calls | 49 | — | 245 | — | — | A0 | — | 0 |
+
+**`st`** (n = 1 — finished evaluation-phase campaign runs of st_regression in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | — | 7 | — | — | A0 | — | 0 |
+| M2 | 10 | — | 7 | — | — | A0 | — | 0 |
+| M3 | 11 | — | 7 | — | — | A0 | — | 0 |
+| once per run | 4 | — | 7 | — | — | A0 | — | 0 |
+| total calls | 49 | — | 343 | — | — | A0 | — | 0 |
+
+**`nof`** (n = 80 — finished evaluation-phase campaign runs of large_tokamak_nof in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | 2.95 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 1.9 [1, 3] | A1 | **0.6333** | 20 |
+| M2 | 10 | 2.95 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 2.45 [1, 5] | A1 | **0.8167** | 20 |
+| M3 | 11 | 2.95 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 2.25 [1, 3] | A1 | **0.7500** | 20 |
+| PULSE | 1 | 2.95 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 1 | A1 | **0.3333** | 20 |
+| once per run | 3 | 2.95 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 0 | A1 | **0.0000** | 20 |
+| total calls | 49 | 144.6 | 154.3 | 147 | 95.85 | A1 | **[0.652, 0.696]** | 20 |
+
+**`lad`** (n = 76 — finished evaluation-phase campaign runs of low_aspect_ratio_DEMO in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | 3.211 [2, 5] | 3.158 [2, 5] | 3 [2, 4] | 1.895 [1, 3] | A1 | **0.6316** | 19 |
+| M2 | 10 | 3.211 [2, 5] | 3.158 [2, 5] | 3 [2, 4] | 2.368 [1, 4] | A1 | **0.7895** | 19 |
+| M3 | 11 | 3.211 [2, 5] | 3.158 [2, 5] | 3 [2, 4] | 2.368 [2, 3] | A1 | **0.7895** | 19 |
+| PULSE | 1 | 3.211 [2, 5] | 3.158 [2, 5] | 3 [2, 4] | 1 | A1 | **0.3333** | 19 |
+| once per run | 3 | 3.211 [2, 5] | 3.158 [2, 5] | 3 [2, 4] | 0 | A1 | **0.0000** | 19 |
+| total calls | 49 | 157.3 | 154.7 | 147 | 96.21 | A1 | **[0.654, 0.699]** | 19 |
+
+**`st`** (n = 42 — finished evaluation-phase campaign runs of st_regression in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | 3 [2, 4] | 3.214 [2, 4] | — | 2.214 [1, 4] | A0 | **0.6889** | 14 |
+| M2 | 10 | 3 [2, 4] | 3.214 [2, 4] | — | 2.071 [1, 4] | A0 | **0.6444** | 14 |
+| M3 | 11 | 3 [2, 4] | 3.214 [2, 4] | — | 2.357 [1, 3] | A0 | **0.7333** | 14 |
+| once per run | 4 | 3 [2, 4] | 3.214 [2, 4] | — | 0 | A0 | **0.0000** | 14 |
+| total calls | 49 | 147 | 157.5 | — | 99.79 | A0 | **[0.634, 0.691]** | 14 |
+
+**`nof`** (n = 80 — finished evaluation-phase campaign runs of large_tokamak_nof in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | 2.9 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 1.9 [1, 3] | A1 | **0.6333** | 20 |
+| M2 | 10 | 2.9 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 2.45 [1, 5] | A1 | **0.8167** | 20 |
+| M3 | 11 | 2.9 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 2.35 [1, 3] | A1 | **0.7833** | 20 |
+| PULSE | 1 | 2.9 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 1 | A1 | **0.3333** | 20 |
+| once per run | 3 | 2.9 [2, 4] | 3.15 [2, 5] | 3 [2, 5] | 0 | A1 | **0.0000** | 20 |
+| total calls | 49 | 142.1 | 154.3 | 147 | 96.95 | A1 | **[0.660, 0.704]** | 20 |
+
+**`lad`** (n = 76 — finished evaluation-phase campaign runs of low_aspect_ratio_DEMO in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | 3.211 [2, 5] | 3.263 [2, 5] | 3.053 [2, 4] | 1.895 [1, 3] | A1 | **0.6207** | 19 |
+| M2 | 10 | 3.211 [2, 5] | 3.263 [2, 5] | 3.053 [2, 4] | 2.421 [1, 4] | A1 | **0.7931** | 19 |
+| M3 | 11 | 3.211 [2, 5] | 3.263 [2, 5] | 3.053 [2, 4] | 2.526 [2, 3] | A1 | **0.8276** | 19 |
+| PULSE | 1 | 3.211 [2, 5] | 3.263 [2, 5] | 3.053 [2, 4] | 1 | A1 | **0.3276** | 19 |
+| once per run | 3 | 3.211 [2, 5] | 3.263 [2, 5] | 3.053 [2, 4] | 0 | A1 | **0.0000** | 19 |
+| total calls | 49 | 157.3 | 159.9 | 149.6 | 98.47 | A1 | **[0.658, 0.704]** | 19 |
+
+**`st`** (n = 42 — finished evaluation-phase campaign runs of st_regression in this source)
+
+| module | models | AR | A0 | A1 | A2 | reference | A2 / reference | pairs |
+|---|---|---|---|---|---|---|---|---|
+| M1 | 24 | 3.143 [2, 4] | 3.357 [2, 5] | — | 2.214 [1, 4] | A0 | **0.6596** | 14 |
+| M2 | 10 | 3.143 [2, 4] | 3.357 [2, 5] | — | 2.214 [1, 5] | A0 | **0.6596** | 14 |
+| M3 | 11 | 3.143 [2, 4] | 3.357 [2, 5] | — | 2.357 [1, 3] | A0 | **0.7021** | 14 |
+| once per run | 4 | 3.143 [2, 4] | 3.357 [2, 5] | — | 0 | A0 | **0.0000** | 14 |
+| total calls | 49 | 154 | 164.5 | — | 101.2 | A0 | **[0.615, 0.671]** | 14 |
+
+<sub>`module sweeps per run, the other three regimes`</sub>
+
+<sub>combining 9 stage table(s): `module sweeps per run — large_tokamak_nof — campaign_entry_references`; `module sweeps per run — low_aspect_ratio_DEMO — campaign_entry_references`; `module sweeps per run — st_regression — campaign_entry_references`; `module sweeps per run — large_tokamak_nof — campaign_stencil_forward`; `module sweeps per run — low_aspect_ratio_DEMO — campaign_stencil_forward`; `module sweeps per run — st_regression — campaign_stencil_forward`; `module sweeps per run — large_tokamak_nof — campaign_stencil_backward`; `module sweeps per run — low_aspect_ratio_DEMO — campaign_stencil_backward`; `module sweeps per run — st_regression — campaign_stencil_backward`</sub>
+
+**Table F.2.** *What each finished evaluation-phase run's convergence test cost, one row per run, configurations and regimes stacked: sweeps, and for the test the arm stops on its evaluations, components compared and mean width. The two predicates are never summed. n = 12 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | arm | seed | stops on | dispatch sweeps | coupling-state tests | components compared | mean width | width by block | objective/constraint tests | values compared | mean width | empty-visit sweep share |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -703,7 +805,7 @@ The per-run tables of the evaluation phase, one construction per table with the 
 
 <sub>combining 12 stage table(s): `per-sweep overhead — large_tokamak_nof — campaign_entry_references`; `per-sweep overhead — low_aspect_ratio_DEMO — campaign_entry_references`; `per-sweep overhead — st_regression — campaign_entry_references`; `per-sweep overhead — large_tokamak_nof — campaign_displaced`; `per-sweep overhead — low_aspect_ratio_DEMO — campaign_displaced`; `per-sweep overhead — st_regression — campaign_displaced`; `per-sweep overhead — large_tokamak_nof — campaign_stencil_forward`; `per-sweep overhead — low_aspect_ratio_DEMO — campaign_stencil_forward`; `per-sweep overhead — st_regression — campaign_stencil_forward`; `per-sweep overhead — large_tokamak_nof — campaign_stencil_backward`; `per-sweep overhead — low_aspect_ratio_DEMO — campaign_stencil_backward`; `per-sweep overhead — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.2.** *The predicate trial, frozen against mixed: per pair of runs, the decisive passes as crossings and as verdict changes, bit-identity, and the exit audit on both rulers. The decisive components carry |y|/s up to 54.59. From gate predicate_mode's verdict. n = 12 (pairs of runs, one per ruler).*
+**Table F.3.** *The predicate trial, frozen against mixed: per pair of runs, the decisive passes as crossings and as verdict changes, bit-identity, and the exit audit on both rulers. The decisive components carry |y|/s up to 54.59. From gate predicate_mode's verdict. n = 12 (pairs of runs, one per ruler).*
 
 | configuration | arm | seed | predicate evaluations | decisive passes: crossings | decisive passes: verdicts changed | pair bit-identical | frozen run · frozen ruler | frozen run · mixed ruler | mixed run · frozen ruler | mixed run · mixed ruler |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -720,13 +822,15 @@ The per-run tables of the evaluation phase, one construction per table with the 
 | st_regression | A2 | 1 | 16 | 1 | 0 | yes | 0x1.fabf584472547p-3 | 0x1.3cec1f486b6d0p-3 | 0x1.fabf584472547p-3 | 0x1.3cec1f486b6d0p-3 |
 | st_regression | A2 | 2 | 16 | 1 | 0 | yes | 0x1.e15dc1afec083p-3 | 0x1.ccd4e2d6e3fcap-4 | 0x1.e15dc1afec083p-3 | 0x1.ccd4e2d6e3fcap-4 |
 
-<sub>`the predicate trial — frozen against mixed`</sub>
+<sub>`the predicate trial`</sub>
+
+<sub>combining 1 stage table(s): `the predicate trial — frozen against mixed`</sub>
 
 ## F.2 The optimisation phase — one row per seed or per run
 
 The per-seed and per-run tables of the optimisation phase, one construction per table with the configurations as row groups: per-arm success by seed (every start offered, each arm's outcome class there), the failure table (every seed outside the seed set, with what failed there and what the other arms cost at the same start), the attempt-summation identity (every run's per-attempt costs against its solve-phase total) and the per-run overhead.
 
-**Table F.3.** *Every start offered, configurations stacked: each arm's outcome class at that seed, how many arms accepted it, whether it is in the seed set, and which arms lost it where another accepted. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.4.** *Every start offered, configurations stacked: each arm's outcome class at that seed, how many arms accepted it, whether it is in the seed set, and which arms lost it where another accepted. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | seed | BR | B0 | B1 | B2 | arms accepted | in the seed set | lost by (another arm accepted) |
 |---|---|---|---|---|---|---|---|
@@ -813,7 +917,7 @@ The per-seed and per-run tables of the optimisation phase, one construction per 
 
 <sub>combining 3 stage table(s): `per-arm success by seed — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `per-arm success by seed — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `per-arm success by seed — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.4.** *Every seed outside the seed set, configurations stacked: which arms failed there, what `ifail` and how many attempts, what the failed arm and the other arms cost at that start, and whether the seed is configuration-invalid (no arm accepted it). n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.5.** *Every seed outside the seed set, configurations stacked: which arms failed there, what `ifail` and how many attempts, what the failed arm and the other arms cost at that start, and whether the seed is configuration-invalid (no arm accepted it). n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | seed | failed arm(s) | not run | ifail | attempts | failed arm node calls | other arms' node calls | configuration-invalid |
 |---|---|---|---|---|---|---|---|
@@ -845,7 +949,7 @@ The per-seed and per-run tables of the optimisation phase, one construction per 
 
 <sub>combining 3 stage table(s): `the failure table — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `the failure table — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `the failure table — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.5.** *The identity that licenses summing an optimisation's cost over the optimiser's attempts, one row per run, configurations stacked: the per-attempt costs, their sum, the solve-phase total and the residual between them. A run that did not finish with status ok has no solve-phase total by construction and reads NO with no residual. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.6.** *The identity that licenses summing an optimisation's cost over the optimiser's attempts, one row per run, configurations stacked: the per-attempt costs, their sum, the solve-phase total and the residual between them. A run that did not finish with status ok has no solve-phase total by construction and reads NO with no residual. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | arm | seed | attempts | retried | node calls per attempt | = solve-phase total | residual | sweeps per attempt | = solve-phase total | residual | decomposes |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -1132,7 +1236,7 @@ The per-seed and per-run tables of the optimisation phase, one construction per 
 
 <sub>combining 3 stage table(s): `the attempt summation identity — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `the attempt summation identity — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `the attempt summation identity — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.6.** *What each optimisation run's convergence test cost, one row per run, configurations stacked: dispatch sweeps and the solve-phase part of them, the output-time loop's sweeps, and for the test the arm stops on its evaluations, components compared and mean width. The two predicates are never summed. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.7.** *What each optimisation run's convergence test cost, one row per run, configurations stacked: dispatch sweeps and the solve-phase part of them, the output-time loop's sweeps, and for the test the arm stops on its evaluations, components compared and mean width. The two predicates are never summed. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | arm | seed | stops on | dispatch sweeps | of which solve phase | output-time loop | coupling-state tests | components compared | mean width | width by block | objective/constraint tests | values compared | mean width | empty-visit sweep share |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1395,7 +1499,7 @@ The per-seed and per-run tables of the optimisation phase, one construction per 
 
 The full versions of the report's tables whose columns listing a value per seed inside one cell (the paired seeds, the seeds of the set, the attempts per seed, the components above τ per run) the report omits. Every other cell is identical to the report's.
 
-**Table F.7.** *The entry reference, one row per configuration and ruler: what one flat `A0` evaluation from the input file's own design point cost, what it left at exit on both rulers, and whether it finished. This is the once-per-run cold-start term of plan §3.4, reported beside the displaced and stencil regimes and never pooled with them; it carries one run per configuration, so there is no pair, no ratio and no bracket. The cost and outcome cells are per configuration and repeat down its two ruler rows. n = 9 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.8.** *The entry reference, one row per configuration and ruler: what one flat `A0` evaluation from the input file's own design point cost, what it left at exit on both rulers, and whether it finished. This is the once-per-run cold-start term of plan §3.4, reported beside the displaced and stencil regimes and never pooled with them; it carries one run per configuration, so there is no pair, no ratio and no bracket. The cost and outcome cells are per configuration and repeat down its two ruler rows. n = 9 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with A0 at seeds | vs A0 pooled | vs A0 median | worse | ruler | n (runs) | with a restricted statistic | restricted median | restricted p90 | restricted argmax | whole-state median | whole-state p90 | components excluded | audit position | audit instrument (snapshot positions taken) | scheduled | ok | rows sum | detail (traceback's last line × count) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1413,79 +1517,79 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>combining 9 stage table(s): `cost per call — large_tokamak_nof — campaign_entry_references`; `matched accuracy — large_tokamak_nof — campaign_entry_references`; `failure taxonomy — large_tokamak_nof — campaign_entry_references`; `cost per call — low_aspect_ratio_DEMO — campaign_entry_references`; `matched accuracy — low_aspect_ratio_DEMO — campaign_entry_references`; `failure taxonomy — low_aspect_ratio_DEMO — campaign_entry_references`; `cost per call — st_regression — campaign_entry_references`; `matched accuracy — st_regression — campaign_entry_references`; `failure taxonomy — st_regression — campaign_entry_references`</sub>
 
-**Table F.8.** *Node calls per `call_models` evaluation by arm, configuration and regime, with the ratio against the declared reference read three ways: pooled, as the per-run median, and as the count of runs on which the arm cost more. The reference is `A1` on a pulsed configuration and `A0` on `st_regression`; each sub-heading row names its regime and its own n. Prime (arrangement-method) calls stand beside the node calls and are never in them. n = 9 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.9.** *Node calls per `call_models` evaluation by arm, configuration and regime, with the ratio against the declared reference read three ways: pooled, as the per-run median, and as the count of runs on which the arm cost more. The reference is `A1` on a pulsed configuration and `A0` on `st_regression`; each sub-heading row names its regime and its own n. Prime (arrangement-method) calls stand beside the node calls and are never in them. n = 9 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
-| arm | ok/run | node calls / eval | bracket | sweeps / eval | sweeps by block | arrangement·method calls | paired with the reference at | vs reference pooled | vs reference median | worse |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **large_tokamak_nof · campaign_displaced — n = 100 (evaluation-phase campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 25/25 | 104.2 | [84, 105] | 4.96 | — | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 0.9688 | 1.0000 | 0 |
-| A0 | 25/25 | 115.9 | [105, 126] | 5.52 | FLAT 138 | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 1.0781 | 1.0000 | 10 |
-| A1 | 25/25 | 107.5 | [84, 126] | 5.12 | FLAT 128 | 0.0 | — | — | — | — |
-| A2 | 25/25 | 60.5 | [60, 63] | 13.16 | FF 0, M1 100, M2 129, M3 75, PULSE 0 | 13.2 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 0.5625 | 0.5714 | 0 |
-| **low_aspect_ratio_DEMO · campaign_displaced — n = 100 (evaluation-phase campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 25/25 | 105.0 | [105, 105] | 5.00 | — | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 1.0163 | 1.0000 | 2 |
-| A0 | 25/25 | 105.0 | [105, 105] | 5.00 | FLAT 125 | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 1.0163 | 1.0000 | 2 |
-| A1 | 25/25 | 103.3 | [84, 105] | 4.92 | FLAT 123 | 0.0 | — | — | — | — |
-| A2 | 25/25 | 59.6 | [57, 60] | 12.88 | FF 0, M1 100, M2 122, M3 75, PULSE 0 | 12.9 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 0.5772 | 0.5714 | 0 |
-| **st_regression · campaign_displaced — n = 75 (evaluation-phase campaign runs of st_regression)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 25/25 | 103.3 | [84, 105] | 4.92 | — | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 0.8425 | 0.8333 | 0 |
-| A0 | 25/25 | 122.6 | [105, 126] | 5.84 | FLAT 146 | 0.0 | — | — | — | — |
-| A2 | 25/25 | 61.5 | [59, 62] | 14.84 | FF 0, M1 100, M2 146, M3 75, PULSE 25 | 14.8 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 0.5016 | 0.4921 | 0 |
-| **large_tokamak_nof · campaign_stencil_forward — n = 80 (evaluation-phase campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 20/20 | 62.0 | [42, 84] | 2.95 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 0.9833 | 1.0000 | 0 |
-| A0 | 20/20 | 66.2 | [42, 105] | 3.15 | FLAT 63 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 1.0500 | 1.0000 | 3 |
-| A1 | 20/20 | 63.0 | [42, 105] | 3.00 | FLAT 60 | 0.0 | — | — | — | — |
-| A2 | 20/20 | 39.1 | [20, 55] | 7.60 | FF 0, M1 38, M2 49, M3 45, PULSE 0 | 7.6 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 0.6214 | 0.6071 | 0 |
-| **low_aspect_ratio_DEMO · campaign_stencil_forward — n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 19/19 | 67.4 | [42, 105] | 3.21 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 1.0702 | 1.0000 | 4 |
-| A0 | 19/19 | 66.3 | [42, 105] | 3.16 | FLAT 60 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 1.0526 | 1.0000 | 3 |
-| A1 | 19/19 | 63.0 | [42, 84] | 3.00 | FLAT 57 | 0.0 | — | — | — | — |
-| A2 | 19/19 | 40.3 | [33, 55] | 7.63 | FF 0, M1 36, M2 45, M3 45, PULSE 0 | 7.6 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 0.6399 | 0.6071 | 0 |
-| **st_regression · campaign_stencil_forward — n = 42 (evaluation-phase campaign runs of st_regression)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 14/14 | 63.0 | [42, 84] | 3.00 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | 0.9333 | 1.0000 | 0 |
-| A0 | 14/14 | 67.5 | [42, 84] | 3.21 | FLAT 45 | 0.0 | — | — | — | — |
-| A2 | 14/14 | 38.9 | [19, 50] | 8.64 | FF 0, M1 31, M2 29, M3 33, PULSE 14 | 8.6 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | 0.5767 | 0.5714 | 0 |
-| **large_tokamak_nof · campaign_stencil_backward — n = 80 (evaluation-phase campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 20/20 | 60.9 | [42, 84] | 2.90 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 0.9667 | 1.0000 | 0 |
-| A0 | 20/20 | 66.2 | [42, 105] | 3.15 | FLAT 63 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 1.0500 | 1.0000 | 3 |
-| A1 | 20/20 | 63.0 | [42, 105] | 3.00 | FLAT 60 | 0.0 | — | — | — | — |
-| A2 | 20/20 | 40.4 | [20, 55] | 7.70 | FF 0, M1 38, M2 49, M3 47, PULSE 0 | 7.7 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 0.6405 | 0.6071 | 0 |
-| **low_aspect_ratio_DEMO · campaign_stencil_backward — n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 19/19 | 67.4 | [42, 105] | 3.21 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 1.0517 | 1.0000 | 4 |
-| A0 | 19/19 | 68.5 | [42, 105] | 3.26 | FLAT 62 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 1.0690 | 1.0000 | 4 |
-| A1 | 19/19 | 64.1 | [42, 84] | 3.05 | FLAT 58 | 0.0 | — | — | — | — |
-| A2 | 19/19 | 42.4 | [33, 55] | 7.84 | FF 0, M1 36, M2 46, M3 48, PULSE 0 | 7.8 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 0.6609 | 0.7143 | 0 |
-| **st_regression · campaign_stencil_backward — n = 42 (evaluation-phase campaign runs of st_regression)** |  |  |  |  |  |  |  |  |  |  |
-| AR | 14/14 | 66.0 | [42, 84] | 3.14 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | 0.9362 | 1.0000 | 0 |
-| A0 | 14/14 | 70.5 | [42, 105] | 3.36 | FLAT 47 | 0.0 | — | — | — | — |
-| A2 | 14/14 | 39.4 | [19, 53] | 8.79 | FF 0, M1 31, M2 31, M3 33, PULSE 14 | 8.8 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | 0.5583 | 0.5238 | 0 |
+| arm | ok/run | node calls per evaluation [min, max] | sweeps / eval | sweeps by block | arrangement·method calls | paired with the reference at | vs reference pooled | vs reference median | worse |
+|---|---|---|---|---|---|---|---|---|---|
+| **large_tokamak_nof · campaign_displaced — n = 100 (evaluation-phase campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |  |  |
+| AR | 25/25 | 104.2 [84, 105] | 4.96 | — | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **0.9688** | 1.0000 | 0 |
+| A0 | 25/25 | 115.9 [105, 126] | 5.52 | FLAT 138 | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **1.0781** | 1.0000 | 10 |
+| A1 | 25/25 | 107.5 [84, 126] | 5.12 | FLAT 128 | 0.0 | — | — | — | — |
+| A2 | 25/25 | 60.5 [60, 63] | 13.16 | FF 0, M1 100, M2 129, M3 75, PULSE 0 | 13.2 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **0.5625** | 0.5714 | 0 |
+| **low_aspect_ratio_DEMO · campaign_displaced — n = 100 (evaluation-phase campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |  |  |
+| AR | 25/25 | 105 | 5.00 | — | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **1.0163** | 1.0000 | 2 |
+| A0 | 25/25 | 105 | 5.00 | FLAT 125 | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **1.0163** | 1.0000 | 2 |
+| A1 | 25/25 | 103.3 [84, 105] | 4.92 | FLAT 123 | 0.0 | — | — | — | — |
+| A2 | 25/25 | 59.6 [57, 60] | 12.88 | FF 0, M1 100, M2 122, M3 75, PULSE 0 | 12.9 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **0.5772** | 0.5714 | 0 |
+| **st_regression · campaign_displaced — n = 75 (evaluation-phase campaign runs of st_regression)** |  |  |  |  |  |  |  |  |  |
+| AR | 25/25 | 103.3 [84, 105] | 4.92 | — | 0.0 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **0.8425** | 0.8333 | 0 |
+| A0 | 25/25 | 122.6 [105, 126] | 5.84 | FLAT 146 | 0.0 | — | — | — | — |
+| A2 | 25/25 | 61.5 [59, 62] | 14.84 | FF 0, M1 100, M2 146, M3 75, PULSE 25 | 14.8 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **0.5016** | 0.4921 | 0 |
+| **large_tokamak_nof · campaign_stencil_forward — n = 80 (evaluation-phase campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |  |  |
+| AR | 20/20 | 62.0 [42, 84] | 2.95 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **0.9833** | 1.0000 | 0 |
+| A0 | 20/20 | 66.2 [42, 105] | 3.15 | FLAT 63 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **1.0500** | 1.0000 | 3 |
+| A1 | 20/20 | 63.0 [42, 105] | 3.00 | FLAT 60 | 0.0 | — | — | — | — |
+| A2 | 20/20 | 39.1 [20, 55] | 7.60 | FF 0, M1 38, M2 49, M3 45, PULSE 0 | 7.6 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **0.6214** | 0.6071 | 0 |
+| **low_aspect_ratio_DEMO · campaign_stencil_forward — n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |  |  |
+| AR | 19/19 | 67.4 [42, 105] | 3.21 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **1.0702** | 1.0000 | 4 |
+| A0 | 19/19 | 66.3 [42, 105] | 3.16 | FLAT 60 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **1.0526** | 1.0000 | 3 |
+| A1 | 19/19 | 63.0 [42, 84] | 3.00 | FLAT 57 | 0.0 | — | — | — | — |
+| A2 | 19/19 | 40.3 [33, 55] | 7.63 | FF 0, M1 36, M2 45, M3 45, PULSE 0 | 7.6 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **0.6399** | 0.6071 | 0 |
+| **st_regression · campaign_stencil_forward — n = 42 (evaluation-phase campaign runs of st_regression)** |  |  |  |  |  |  |  |  |  |
+| AR | 14/14 | 63.0 [42, 84] | 3.00 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | **0.9333** | 1.0000 | 0 |
+| A0 | 14/14 | 67.5 [42, 84] | 3.21 | FLAT 45 | 0.0 | — | — | — | — |
+| A2 | 14/14 | 38.9 [19, 50] | 8.64 | FF 0, M1 31, M2 29, M3 33, PULSE 14 | 8.6 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | **0.5767** | 0.5714 | 0 |
+| **large_tokamak_nof · campaign_stencil_backward — n = 80 (evaluation-phase campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |  |  |
+| AR | 20/20 | 60.9 [42, 84] | 2.90 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **0.9667** | 1.0000 | 0 |
+| A0 | 20/20 | 66.2 [42, 105] | 3.15 | FLAT 63 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **1.0500** | 1.0000 | 3 |
+| A1 | 20/20 | 63.0 [42, 105] | 3.00 | FLAT 60 | 0.0 | — | — | — | — |
+| A2 | 20/20 | 40.4 [20, 55] | 7.70 | FF 0, M1 38, M2 49, M3 47, PULSE 0 | 7.7 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **0.6405** | 0.6071 | 0 |
+| **low_aspect_ratio_DEMO · campaign_stencil_backward — n = 76 (evaluation-phase campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |  |  |
+| AR | 19/19 | 67.4 [42, 105] | 3.21 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **1.0517** | 1.0000 | 4 |
+| A0 | 19/19 | 68.5 [42, 105] | 3.26 | FLAT 62 | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **1.0690** | 1.0000 | 4 |
+| A1 | 19/19 | 64.1 [42, 84] | 3.05 | FLAT 58 | 0.0 | — | — | — | — |
+| A2 | 19/19 | 42.4 [33, 55] | 7.84 | FF 0, M1 36, M2 46, M3 48, PULSE 0 | 7.8 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **0.6609** | 0.7143 | 0 |
+| **st_regression · campaign_stencil_backward — n = 42 (evaluation-phase campaign runs of st_regression)** |  |  |  |  |  |  |  |  |  |
+| AR | 14/14 | 66.0 [42, 84] | 3.14 | — | 0.0 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | **0.9362** | 1.0000 | 0 |
+| A0 | 14/14 | 70.5 [42, 105] | 3.36 | FLAT 47 | 0.0 | — | — | — | — |
+| A2 | 14/14 | 39.4 [19, 53] | 8.79 | FF 0, M1 31, M2 31, M3 33, PULSE 14 | 8.8 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | **0.5583** | 0.5238 | 0 |
 
 <sub>`cost per call`</sub>
 
 <sub>combining 9 stage table(s): `cost per call — large_tokamak_nof — campaign_displaced`; `cost per call — low_aspect_ratio_DEMO — campaign_displaced`; `cost per call — st_regression — campaign_displaced`; `cost per call — large_tokamak_nof — campaign_stencil_forward`; `cost per call — low_aspect_ratio_DEMO — campaign_stencil_forward`; `cost per call — st_regression — campaign_stencil_forward`; `cost per call — large_tokamak_nof — campaign_stencil_backward`; `cost per call — low_aspect_ratio_DEMO — campaign_stencil_backward`; `cost per call — st_regression — campaign_stencil_backward`</sub>
 
-**Table F.9.** *What pinning the burn time to a constant costs per call, and the inconsistency it leaves: six rows, one per pulsed configuration and regime. `st_regression` is steady-state and has no burn-time coupling, so the rung does not exist there. n = 6 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.10.** *What pinning the burn time to a constant costs per call, and the inconsistency it leaves: six rows, one per pulsed configuration and regime. `st_regression` is steady-state and has no burn-time coupling, so the rung does not exist there. n = 6 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
-| n | paired at | A1/A0 pooled | median | worse | burn-time residual, s (median) | bracket, s | relative (median) |
-|---|---|---|---|---|---|---|---|
-| **large_tokamak_nof · campaign_displaced — n = 50 (A0 and A1 campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |
-| 25 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 0.9275 | 1.0000 | 0 | 1.546e+02 | [12.8111, 406.884] | 6.298e-02 |
-| **low_aspect_ratio_DEMO · campaign_displaced — n = 50 (A0 and A1 campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |
-| 25 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | 0.9840 | 1.0000 | 0 | 5.258e+02 | [1.64882, 1436.26] | 5.275e-02 |
-| **large_tokamak_nof · campaign_stencil_forward — n = 40 (A0 and A1 campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |
-| 20 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 0.9524 | 1.0000 | 0 | 1.173e+00 | [2.61319e-07, 13.1365] | 4.566e-04 |
-| **low_aspect_ratio_DEMO · campaign_stencil_forward — n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |
-| 19 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 0.9500 | 1.0000 | 0 | 4.176e+00 | [0, 34.2015] | 4.016e-04 |
-| **large_tokamak_nof · campaign_stencil_backward — n = 40 (A0 and A1 campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |  |
-| 20 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | 0.9524 | 1.0000 | 0 | 1.175e+00 | [2.61418e-07, 13.1158] | 4.574e-04 |
-| **low_aspect_ratio_DEMO · campaign_stencil_backward — n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |  |
-| 19 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | 0.9355 | 1.0000 | 0 | 4.184e+00 | [0, 34.1746] | 4.024e-04 |
+| n | paired at | A1/A0 pooled | median | worse | burn-time residual, s: median [min, max] | relative (median) |
+|---|---|---|---|---|---|---|
+| **large_tokamak_nof · campaign_displaced — n = 50 (A0 and A1 campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |
+| 25 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **0.9275** | 1.0000 | 0 | 1.546e+02 [12.8111, 406.884] | 6.298e-02 |
+| **low_aspect_ratio_DEMO · campaign_displaced — n = 50 (A0 and A1 campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |
+| 25 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | **0.9840** | 1.0000 | 0 | 5.258e+02 [1.64882, 1436.26] | 5.275e-02 |
+| **large_tokamak_nof · campaign_stencil_forward — n = 40 (A0 and A1 campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |
+| 20 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **0.9524** | 1.0000 | 0 | 1.173e+00 [2.61319e-07, 13.1365] | 4.566e-04 |
+| **low_aspect_ratio_DEMO · campaign_stencil_forward — n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |
+| 19 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **0.9500** | 1.0000 | 0 | 4.176e+00 [0, 34.2015] | 4.016e-04 |
+| **large_tokamak_nof · campaign_stencil_backward — n = 40 (A0 and A1 campaign runs of large_tokamak_nof)** |  |  |  |  |  |  |
+| 20 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 | **0.9524** | 1.0000 | 0 | 1.175e+00 [2.61418e-07, 13.1158] | 4.574e-04 |
+| **low_aspect_ratio_DEMO · campaign_stencil_backward — n = 38 (A0 and A1 campaign runs of low_aspect_ratio_DEMO)** |  |  |  |  |  |  |
+| 19 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 | **0.9355** | 1.0000 | 0 | 4.184e+00 [0, 34.1746] | 4.024e-04 |
 
 <sub>`the ownership rung A0 → A1`</sub>
 
 <sub>combining 6 stage table(s): `ownership rung A0 → A1 — large_tokamak_nof — campaign_displaced`; `ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_displaced`; `ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_forward`; `ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_stencil_forward`; `ownership rung A0 → A1 — large_tokamak_nof — campaign_stencil_backward`; `ownership rung A0 → A1 — low_aspect_ratio_DEMO — campaign_stencil_backward`</sub>
 
-**Table F.10.** *Reliability read both ways, configurations stacked. Per arm, of the 25 starts offered: accepted optima (status ok and the output file's `ifail == 1`), the other starts by outcome class, and the starts lost that another arm accepted. Beside them, per configuration and repeated down its arm rows: the **seed set** — the seeds on which *every* arm reached an accepted optimum, which every other optimisation table's n is — with the configuration-invalid seeds and the retried seeds per arm. Reported, not accepted on (D29, 2026-09-15). n = 9 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.11.** *Reliability read both ways, configurations stacked. Per arm, of the 25 starts offered: accepted optima (status ok and the output file's `ifail == 1`), the other starts by outcome class, and the starts lost that another arm accepted. Beside them, per configuration and repeated down its arm rows: the **seed set** — the seeds on which *every* arm reached an accepted optimum, which every other optimisation table's n is — with the configuration-invalid seeds and the retried seeds per arm. Reported, not accepted on (D29, 2026-09-15). n = 9 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | arm | starts offered | accepted optima | crashed (RuntimeError) | lost, another arm accepted | seed set (every arm accepted) | seeds not accepted, by class | seeds lost that another arm accepted | scheduled | crashed | ok | rows sum | detail (traceback's last line × count) | arms | which | seeds offered | n (every arm converged) | seeds in the set | configuration-invalid seeds | retried seeds per arm | finished, ifail = 5 | coupling-loop cap (ModuleSolveFailure) | unconverged |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -1508,57 +1612,57 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>combining 9 stage table(s): `per-arm success — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `failure taxonomy — large_tokamak_nof — campaign_optimisation`; `the seed set — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `per-arm success — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `failure taxonomy — low_aspect_ratio_DEMO — campaign_optimisation`; `the seed set — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `per-arm success — st_regression — campaign_optimisation · BR·B0·B2`; `failure taxonomy — st_regression — campaign_optimisation`; `the seed set — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.11.** *Check 2 by configuration and arm pair: the iteration ratio summed over the optimiser's attempts (the acceptance construction) as median and as a ratio of sums, the final-attempt construction beside it, the evaluation-count ratio ε from `sweeps_per_eval.n_evaluations` with the seeds on which it is exactly 1, and the dispatch-sweep ratio — a mechanism, not a cost. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.12.** *Check 2 by configuration and arm pair: the iteration ratio summed over the optimiser's attempts (the acceptance construction) as median and as a ratio of sums, the final-attempt construction beside it, the evaluation-count ratio ε from `sweeps_per_eval.n_evaluations` with the seeds on which it is exactly 1, and the dispatch-sweep ratio — a mechanism, not a cost. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
 | pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | attempts per seed (base/arm) | constructions disagree |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **large_tokamak_nof · campaign_optimisation · BR·B0·B1·B2 — n = 22 (seeds on which every arm of large_tokamak_nof converged)** |  |  |  |  |  |  |  |  |  |  |  |
-| B0 → BR (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 22 | 0.9795 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
-| B0 → B1 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0476 | 0 | 1.0139 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
-| B0 → B2 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0476 | 0 | 2.6524 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
-| B1 → B2 (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 22 | 2.6158 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B0 → BR (beside) | 22 | **1.0000** | 1.0000 | **beside** | 1.0000 | 1.0000 | 1.0000 | 22 | 0.9795 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B0 → B1 | 22 | **1.0000** | 0.9942 | **PASS** | 1.0000 | 0.9942 | 1.0476 | 0 | 1.0139 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B0 → B2 | 22 | **1.0000** | 0.9942 | **PASS** | 1.0000 | 0.9942 | 1.0476 | 0 | 2.6524 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B1 → B2 (beside) | 22 | **1.0000** | 1.0000 | **beside** | 1.0000 | 1.0000 | 1.0000 | 22 | 2.6158 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
 | **low_aspect_ratio_DEMO · campaign_optimisation · BR·B0·B1·B2 — n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged)** |  |  |  |  |  |  |  |  |  |  |  |
-| B0 → BR (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 11 | 1.0352 | 0:1/1, 1:2/2, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
-| B0 → B1 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8468 | 0 | 0.8046 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
-| B0 → B2 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8468 | 0 | 2.1169 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
-| B1 → B2 (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 11 | 2.6335 | 0:1/1, 1:1/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 0 |
+| B0 → BR (beside) | 11 | **1.0000** | 1.0000 | **beside** | 1.0000 | 1.0000 | 1.0000 | 11 | 1.0352 | 0:1/1, 1:2/2, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B0 → B1 | 11 | **0.8125** | 0.7012 | **PASS** | 0.8333 | 1.0088 | 0.8468 | 0 | 0.8046 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B0 → B2 | 11 | **0.8125** | 0.7012 | **PASS** | 0.8333 | 1.0088 | 0.8468 | 0 | 2.1169 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B1 → B2 (beside) | 11 | **1.0000** | 1.0000 | **beside** | 1.0000 | 1.0000 | 1.0000 | 11 | 2.6335 | 0:1/1, 1:1/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 0 |
 | **st_regression · campaign_optimisation · BR·B0·B2 — n = 22 (seeds on which every arm of st_regression converged)** |  |  |  |  |  |  |  |  |  |  |  |
-| B0 → BR (beside) | 22 | 1.0000 | 1.2405 | beside | 1.0000 | 0.9221 | 1.0000 | 15 | 0.9906 | 0:1/1, 1:1/1, 2:2/2, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/2, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/3 | 3 |
-| B0 → B2 | 22 | 1.0000 | 0.9530 | PASS | 1.0000 | 1.0019 | 1.0000 | 14 | 2.7767 | 0:1/1, 1:1/1, 2:2/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/1 | 1 |
+| B0 → BR (beside) | 22 | **1.0000** | 1.2405 | **beside** | 1.0000 | 0.9221 | 1.0000 | 15 | 0.9906 | 0:1/1, 1:1/1, 2:2/2, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/2, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/3 | 3 |
+| B0 → B2 | 22 | **1.0000** | 0.9530 | **PASS** | 1.0000 | 1.0019 | 1.0000 | 14 | 2.7767 | 0:1/1, 1:1/1, 2:2/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/1 | 1 |
 
 <sub>`iteration multiplier (check 2)`</sub>
 
 <sub>combining 3 stage table(s): `iteration multiplier (check 2) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `iteration multiplier (check 2) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `iteration multiplier (check 2) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.12.** *What each arm left at its accepted optimum, by configuration, arm and ruler: the restricted maximum scaled residual as median and maximum, its argmax component, and the whole-state median beside it. Matched accuracy is the condition the cost ratios are read under; this table is where it is met or not. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
+**Table F.13.** *What each arm left at its accepted optimum, by configuration, arm and ruler: the restricted maximum scaled residual as median and maximum, its argmax component, and the whole-state median beside it. Matched accuracy is the condition the cost ratios are read under; this table is where it is met or not. n = 3 (row group(s) of this table, each over its own population with its own n in its sub-heading row; never pooled).*
 
-| arm | ruler | n (runs) | with a restricted statistic | restricted median | restricted max | restricted argmax | components above τ | whole-state median | components excluded | audit position | audit instrument |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **large_tokamak_nof · campaign_optimisation · BR·B0·B1·B2 — n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group)** |  |  |  |  |  |  |  |  |  |  |  |
-| BR | frozen | 22 | 22 | 1.150e-11 | 1.332e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| BR | mixed | 22 | 22 | 1.150e-11 | 1.253e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B0 | frozen | 22 | 22 | 1.150e-11 | 1.332e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B0 | mixed | 22 | 22 | 1.150e-11 | 1.253e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B1 | frozen | 22 | 22 | 0 | 7.257e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B1 | mixed | 22 | 22 | 0 | 6.928e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B2 | frozen | 22 | 22 | 0 | 7.257e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.066e+00 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B2 | mixed | 22 | 22 | 0 | 6.928e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.000e+00 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| **low_aspect_ratio_DEMO · campaign_optimisation · BR·B0·B1·B2 — n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group)** |  |  |  |  |  |  |  |  |  |  |  |
-| BR | frozen | 23 | 23 | 0 | inf | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.eta_cd_dimensionless_hcd_primary, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| BR | mixed | 23 | 23 | 0 | inf | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.eta_cd_dimensionless_hcd_primary, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B0 | frozen | 21 | 21 | 0 | 5.315e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B0 | mixed | 21 | 21 | 0 | 3.995e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B1 | frozen | 20 | 20 | 0 | 5.315e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B1 | mixed | 20 | 20 | 0 | 4.365e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B2 | frozen | 20 | 20 | 0 | 5.315e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.007e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B2 | mixed | 20 | 20 | 0 | 3.995e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.000e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| **st_regression · campaign_optimisation · BR·B0·B2 — n = 75 (optimisation-phase runs of st_regression in this arm group)** |  |  |  |  |  |  |  |  |  |  |  |
-| BR | frozen | 25 | 25 | 4.875e-14 | 5.040e-14 | blanket.deg_blkt_inboard_poloidal_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.875e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| BR | mixed | 25 | 25 | 4.871e-14 | 5.035e-14 | blanket.deg_blkt_inboard_poloidal_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.871e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B0 | frozen | 25 | 25 | 4.894e-14 | 4.967e-14 | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.big_q_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.894e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B0 | mixed | 25 | 25 | 4.889e-14 | 4.962e-14 | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.big_q_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.889e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B2 | frozen | 25 | 25 | 7.497e-12 | 3.587e-11 | current_drive.radius_beam_tangency_max, fwbs.p_cp_shield_nuclear_heat_mw, heat_transport.tlvpmw, physics.f_beta_alpha_beam_thermal, superconducting_tfcoil.a_tf_plasma_case | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.598e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
-| B2 | mixed | 25 | 25 | 6.643e-12 | 3.585e-11 | current_drive.radius_beam_tangency_max, fwbs.p_cp_shield_nuclear_heat_mw, heat_transport.tlvpmw, physics.f_beta_alpha_beam_thermal, superconducting_tfcoil.a_tf_plasma_case | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.000e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| arm | ruler | n (runs) | with a restricted statistic | restricted median / max | restricted argmax | components above τ | whole-state median | components excluded | audit position | audit instrument |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **large_tokamak_nof · campaign_optimisation · BR·B0·B1·B2 — n = 100 (optimisation-phase runs of large_tokamak_nof in this arm group)** |  |  |  |  |  |  |  |  |  |  |
+| BR | frozen | 22 | 22 | 1.150e-11 / 1.332e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 22 | 22 | 1.150e-11 / 1.253e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B0 | frozen | 22 | 22 | 1.150e-11 / 1.332e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 22 | 22 | 1.150e-11 / 1.253e-11 | heat_transport.tlvpmw | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.150e-11 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B1 | frozen | 22 | 22 | 0 / 7.257e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 22 | 22 | 0 / 6.928e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B2 | frozen | 22 | 22 | 0 / 7.257e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.066e+00 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 22 | 22 | 0 / 6.928e-16 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.c_pf_cs_coil_flat_top_ma | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.000e+00 | 122 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| **low_aspect_ratio_DEMO · campaign_optimisation · BR·B0·B1·B2 — n = 100 (optimisation-phase runs of low_aspect_ratio_DEMO in this arm group)** |  |  |  |  |  |  |  |  |  |  |
+| BR | frozen | 23 | 23 | 0 / inf | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.eta_cd_dimensionless_hcd_primary, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 23 | 23 | 0 / inf | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.eta_cd_dimensionless_hcd_primary, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B0 | frozen | 21 | 21 | 0 / 5.315e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 21 | 21 | 0 / 3.995e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B1 | frozen | 20 | 20 | 0 / 5.315e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 20 | 20 | 0 / 4.365e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 0 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B2 | frozen | 20 | 20 | 0 / 5.315e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.007e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 20 | 20 | 0 / 3.995e-15 | blanket.deg_blkt_inboard_poloidal_plasma, pf_coil.f_j_cs_start_end_flat_top | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.000e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| **st_regression · campaign_optimisation · BR·B0·B2 — n = 75 (optimisation-phase runs of st_regression in this arm group)** |  |  |  |  |  |  |  |  |  |  |
+| BR | frozen | 25 | 25 | 4.875e-14 / 5.040e-14 | blanket.deg_blkt_inboard_poloidal_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.875e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 25 | 25 | 4.871e-14 / 5.035e-14 | blanket.deg_blkt_inboard_poloidal_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.871e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B0 | frozen | 25 | 25 | 4.894e-14 / 4.967e-14 | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.big_q_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.894e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 25 | 25 | 4.889e-14 / 4.962e-14 | blanket.deg_blkt_inboard_poloidal_plasma, current_drive.big_q_plasma, physics.f_beta_alpha_beam_thermal | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 4.889e-14 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+| B2 | frozen | 25 | 25 | 7.497e-12 / 3.587e-11 | current_drive.radius_beam_tangency_max, fwbs.p_cp_shield_nuclear_heat_mw, heat_transport.tlvpmw, physics.f_beta_alpha_beam_thermal, superconducting_tfcoil.a_tf_plasma_case | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.598e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
+|  | mixed | 25 | 25 | 6.643e-12 / 3.585e-11 | current_drive.radius_beam_tangency_max, fwbs.p_cp_shield_nuclear_heat_mw, heat_transport.tlvpmw, physics.f_beta_alpha_beam_thermal, superconducting_tfcoil.a_tf_plasma_case | 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 | 1.000e+00 | 123 | entry_to_write_output_files | snapshot at before_finalise,entry_to_write_output_files |
 
 <sub>`achieved accuracy at the accepted optimum`</sub>
 

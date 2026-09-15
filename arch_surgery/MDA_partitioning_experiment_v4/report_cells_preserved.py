@@ -117,7 +117,20 @@ def grids(text: str) -> list[Grid]:
         body = [_cells(line) for line in block[2:]]
         name = ""
         combines: list[str] = []
-        for look in lines[i : i + 6]:
+        # A table rendered as **per-configuration blocks** prints several
+        # grids under one caption and names itself once, after the last of
+        # them; so the search runs forward to the first construction line or
+        # to the next table's caption, whichever comes first, and every grid
+        # of the table is given that name (task A85 (v3-table-formats)).
+        ahead: list[str] = []
+        for look in lines[i:]:
+            if look.startswith("**Table "):
+                break
+            ahead.append(look)
+            if _SUB.match(look.strip()):
+                ahead.extend(lines[i + len(ahead) : i + len(ahead) + 3])
+                break
+        for look in ahead:
             found = _SUB.match(look.strip())
             if found and not name:
                 name = found.group(1)
@@ -164,6 +177,38 @@ def _kind_of(name: str, kinds: dict[str, str]) -> str:
     return kinds.get(_construction_key(name), "")
 
 
+def _headings_of(
+    row: dict[str, str],
+    name: str,
+    layout: Any,
+    kinds: dict[str, str],
+    by_heading: dict[tuple[str, str], str],
+) -> list[tuple[str, str, str]]:
+    """One old row as ``[(column key, heading, cell)]`` in the host's spelling.
+
+    The key is the stage table's own column key — what a layout's ``merges``,
+    ``bold`` and ``blank_repeats`` name — resolved through the stage records'
+    ``(kind, heading) → key`` map, so a heading a layout renamed is still the
+    same column.
+    """
+    overrides = dict(getattr(layout, "headings", ()) or ())
+    # A heading the layout already renamed is resolved back to its key by the
+    # same declaration: the old document printed the renamed heading, so the
+    # stage records' (kind, heading) map does not hold it.
+    renamed = {heading: key for key, heading in overrides.items()}
+    # The construction a stage table's name starts with, or — where the old
+    # grid was already a combined one and printed its **layout's** title —
+    # the kind that layout renders.
+    kind = _kind_of(name, kinds) or (
+        (getattr(layout, "kinds", ()) or ("",))[0] if layout is not None else ""
+    )
+    out: list[tuple[str, str, str]] = []
+    for heading, cell in row.items():
+        key = renamed.get(heading) or by_heading.get((kind, heading)) or heading
+        out.append((key, overrides.get(key, heading), cell))
+    return out
+
+
 def _translate(
     row: dict[str, str],
     name: str,
@@ -171,18 +216,57 @@ def _translate(
     layouts: dict[str, Any],
     kinds: dict[str, str],
     keys_by_heading: dict[tuple[str, str], str],
-) -> dict[str, str]:
-    """One old row with its headings read as *host* spells them."""
+) -> tuple[dict[str, str], set[str]]:
+    """**One old row as the new grid must carry it**, under the host layout's
+    declared rendering, and the headings on which a blank is a match.
+
+    A rendering change moves cells; it never changes them.  Task **A85
+    (v3-table-formats)** put the previous revision's forms back — a mean and
+    its bracket in one cell, a median and its p90 in one, the result column in
+    bold, a repeated key blanked on continuation rows — so the old row is
+    **put through the same declarations** before it is looked for, using the
+    renderer's own ``_merge_cells``.  The parts of a merged cell are therefore
+    still proved present, in the same row, with the same values: a merge that
+    dropped or swapped a part would not reproduce the cell.
+    """
+    sys.path.insert(0, str(HERE))
+    from harness.measurement import plan_tables  # noqa: PLC0415
+
     layout = layouts.get(host.name)
-    overrides = dict(getattr(layout, "headings", ()) or ())
-    if not overrides:
-        return dict(row)
-    kind = _kind_of(name, kinds)
-    out: dict[str, str] = {}
-    for heading, cell in row.items():
-        key = keys_by_heading.get((kind, heading))
-        out[overrides.get(key, heading) if key else heading] = cell
-    return out
+    triples = _headings_of(row, name, layout, kinds, keys_by_heading)
+    if layout is None:
+        return {heading: cell for _key, heading, cell in triples}, set()
+    by_key = {key: cell for key, _heading, cell in triples}
+    merges = tuple(getattr(layout, "merges", ()) or ())
+    consumed = {part for merged in merges for part in merged.parts}
+    out: list[tuple[str, str, str]] = []
+    for key, heading, cell in triples:
+        merged = next((m for m in merges if key == m.parts[0]), None)
+        if merged is not None:
+            out.append(
+                (
+                    merged.key,
+                    merged.heading,
+                    plan_tables._merge_cells(
+                        [by_key.get(part, "") for part in merged.parts],
+                        merged.join,
+                    ),
+                )
+            )
+        elif key not in consumed:
+            out.append((key, heading, cell))
+    bold = set(getattr(layout, "bold", ()) or ())
+    blanked = set(getattr(layout, "blank_repeats", ()) or ())
+    wanted: dict[str, str] = {}
+    may_be_blank: set[str] = set()
+    for key, heading, cell in out:
+        value = str(cell).strip()
+        if key in bold and value and value != "—" and not value.startswith("**"):
+            value = f"**{value}**"
+        wanted[heading] = value
+        if key in blanked:
+            may_be_blank.add(heading)
+    return wanted, may_be_blank
 
 
 def keys_by_heading() -> tuple[dict[tuple[str, str], str], dict[str, str]]:
@@ -248,7 +332,11 @@ def compare(base: str) -> dict[str, Any]:
 
     where: dict[str, list[Grid]] = collections.defaultdict(list)
     for grid in new:
-        for name in grid.names:
+        # A grid is found by the construction name printed under it **and**
+        # by each stage table it says it combines: the documents before this
+        # task already printed combined grids named by their layout, so a
+        # containment keyed only on the constituents would find none of them.
+        for name in dict.fromkeys([grid.name, *grid.combines]):
             where[name].append(grid)
 
     n_rows = n_cells = n_numeric = 0
@@ -297,7 +385,9 @@ def compare(base: str) -> dict[str, Any]:
             best = 0
             worst: dict[str, str] = {}
             for host in hosts:
-                wanted = _translate(row, grid.name, host, layouts, kinds, by_heading)
+                wanted, may_be_blank = _translate(
+                    row, grid.name, host, layouts, kinds, by_heading
+                )
                 for candidate in host.rows:
                     if _group_row(candidate):
                         continue
@@ -305,6 +395,10 @@ def compare(base: str) -> dict[str, Any]:
                         1
                         for heading, cell in wanted.items()
                         if candidate.get(heading) == cell
+                        or (
+                            heading in may_be_blank
+                            and candidate.get(heading) == ""
+                        )
                     )
                     if agree == len(wanted):
                         hit = True
