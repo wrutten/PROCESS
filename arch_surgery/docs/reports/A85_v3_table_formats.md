@@ -1,7 +1,7 @@
 # A85 (v3-table-formats) — the report's tables in the V3 report's forms
 
 > **Document status** — **OPEN**, task **A85 (v3-table-formats)**, branch `A85-v3-table-formats`
-> (worktree `.claude/worktrees/A85-v3-table-formats`), base `4b902124`, tip `69f53191` — the
+> (worktree `.claude/worktrees/A85-v3-table-formats`), base `4b902124`, tip `7c5a3b48` (the report; `69f53191` its §5) — the
 > last commit to touch code or a generated document is `a6692664`, which is where every gate
 > verdict this report cites was pressed; `69f53191` is this document.
 > Specification: [`../plans/REPORT_TABLE_FORMATS.md`](../plans/REPORT_TABLE_FORMATS.md) (RULING,
@@ -415,3 +415,23 @@ verification presses.
 | `3aa1ffb8` | `harness/README.md` §0 |
 | `3893d9f1` | this report |
 | `a6692664` | the companion's closing line, 107 → 122: `--measure all --resume` at the clean tip re-pressed `recomputed_tables`, which the first press had left stale. **The first press was on an uncommitted tree and is superseded** (§5); every verdict this report cites is from the second press, all four stamped `a6692664` |
+
+---
+
+## Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `7c5a3b48` by the orchestrating session, by checks that differ from the agent's; gates the merge.*
+
+**The press was sent back once.** The first press stamped `recomputation` with the base `4b902124` (17:07:40, ten seconds before the branch's first commit) and `tally_contracts` with `d6e8c229` (before the teeth commit), and nothing was re-pressed after the renderer commit `a5e180be` — verdicts named code that was not the code under test (rule xiii). The agent re-pressed at a clean tip and the re-press found one stale line the first press had published (the companion's *107 table(s)* → 122), which is exactly why the rule exists. §5 now states the first press as superseded; every verdict cited is from the second.
+
+**Checks.** (1) **Stamps read from the four `gate.json` files themselves**: `recomputation`, `tally_contracts`, `run_kind_separation`, `self_containment` each carry one `tree_git_head`, `a6692664`, all PASS; `git diff --stat a6692664..7c5a3b48` touches only this report, so `a6692664` is the code the verdicts name. (2) **`--plan-tables check` re-run by me** on the clean worktree: seven §4 blocks, Appendix D 879/879, companion 1 671/1 671, all IDENTICAL; 33 + 71 + 20 references, 0 dangling. (3) **`report_cells_preserved.py --base 4b902124` re-run by me**: 1 761 rows, 19 426 cells, 0 missing, 2 differing — both the gate table's own rows, whose populations grew (107 → 122 tables, 15 122 → 16 276 cells, 577 → 622, 11 → 13 teeth), as expected. (4) **Census by my own counts** of the caption lines: 13 `Table n` (6 in §3, 7 in §4), 15 `Table D.n`, 13 `Table F.n`, 0 grids with a single data row. (5) **The rendered grids against V3's grids**, side by side. Table 13's `nof` block has V3 §5.5.1's columns in V3's order and V3's cell spelling (`1978 [1758, 2280]`, bold ratio, bracketed total); `BR` and `B0` reproduce V3's `R` and `B0` to the sweep (1978 / 2028 [1793, 2396]), and `B1`/`B2` sit 2 sweeps below V3's on every live module (2041 vs 2043; 1389 vs 1391) with the once-per-run row at 2 where V3's `vacuum` row read 4 — the same campaign-level difference in both places, a measurement of V4's campaign, not a rendering fault, and every cell is under `recomputation`. Table 12 reproduces V3 §4.5's cells where the two campaigns coincide (`A0` 5.52 [5, 6] on `nof`; `A2` 4 / 5.16 / 3 / 1 / 0; total 181.6). Table 8's medians are the headline medians (1.0000 / 0.8125 / 1.0000). (6) **Scope by diff**: 15 files, nothing under `PROCESS/`, `harness/child/` or the root `process/`; zero PROCESS runs by the agent's stamp survey (1 102 records byte-identical before and after).
+
+**A deviation the agent did not record.** Table 8's column **`B2/B0 mean`** is the *mean of the per-seed ratios* (the tally's declared construction, the caption says so). V3's column of the same name was the **ratio of the means** — *"equal to the ratio of the sums over the same seeds — the campaign-cost statistic"* (V3 §5.3's caption). The two differ by a lot on `lad`: V4 prints 1.3842; the ratio of the means printed beside it is 20.91 / 29.82 = 0.701. Neither number is wrong, but a V3-shaped table with a V3 column heading and a different statistic under it is the kind of deviation the user asked to have justified, and §3 does not list it. It goes to A86 (v3-tables-remainder): either add the ratio-of-means column under V3's heading (a new cell in tally and analysis) or rename the existing column so it cannot be read as V3's. The same column exists on Tables 9–11.
+
+**Other residual departures from the V3 grids, all for A86.** `runs B2 > B0` as two columns (`0` | `22`) where V3 printed one cell `0/22`; the block heading line carries the source's whole population sentence where V3 printed **`tok`** (n = 22) — and Table 12's line reads n = 100 (four arms pooled) where V3's read n = 25 (the agent's Limit 3 defends it by T11; V3's `(n = 25)` with the `pairs` column beside is the form the user asked for, and the heading can say `n = 25 per arm`); Tables 8–11 carry `quantity` and `arms` columns V3 did not have (the arm set belongs in the caption, where the agent already put it); `M3` for V3's `M3 live`; V3's `vacuum` and `FF` rows are one `once per run` row (deviation 1 — justified by V4's derived grouping, and I accept it, but the caption should name the nodes in the row: `costs`, `vacuum`, `water_use`, and `pulse` on st). `nof` for `tok` (deviation 4) is right and stays.
+
+**Not written by the agent: the report's Appendix C entry** — the second task in a row to omit it; added in this commit. The header's tip is corrected to `7c5a3b48` here too.
+
+**Eleven tables are not built** (the agent's §7, with what each needs). The brief mapped eighteen; the agent chose the three images and the renderer's V3 forms and says so in decision 1. That was the right order of work and the remainder is mechanical, but it is the user's ruling that is half executed, so the remainder is dispatched at once as A86 rather than parked.
+
+**Verdict: merge.** The three tables the user gave as images exist in V3's forms with the arm translation applied, V3's cell spelling is in force across the report, the new cells (1 154) are computed twice and compared with 0 mismatched, every old cell is present unchanged by the agent's committed check and by my re-run of it, the four verdicts are pressed on the committed code they name, and zero PROCESS runs were made.
