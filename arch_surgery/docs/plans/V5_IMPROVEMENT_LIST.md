@@ -110,6 +110,15 @@ The per-module optimisation-phase split (V4 report Tables D.2–D.4) and the per
 
 ---
 
+
+### 3. Reliability as a published measure — per-arm success rate over every start, and data profiles *(user, 2026-09-15, D29 (1), from A81 (benchmarking-practices) F1)*
+
+The benchmarking literature (Beiranvand, Hare & Lucet 2017 §4.2) counts failures against the algorithm; V4 filters them into a seed set on which every arm converged and states the set's size (22 / 11 / 22 of 25) but not each arm's rate. On the low-aspect-ratio machine the intervention arms fail one start the flat arms solve (seed 10); on the spherical tokamak two failures are asymmetric and cancel in count, not in cost. A V5 plan declares the success rate per arm over all starts (denominator: starts offered) as a published measure with its own pre-declared expectation, and publishes a **data profile** per configuration (fraction of starts solved within a node-call budget, one curve per arm) beside the medians and brackets — constructible from the records, no extra run. A82 (per-arm-success) adds the table to V4 as a descriptive cell; the profile and the expectation are V5's.
+
+### 4. Verdict sensitivity — the same-optimum floor and factor re-tallied at neighbouring values *(user, 2026-09-15, D29 (1), from A81 F5)*
+
+V4's `lad` same-optimum FAIL sits at 2.15× the 1e-6 floor with the factor F at one value. A V5 plan pre-declares the verdict at the chosen setting **and** publishes the re-tally at neighbouring settings (F ∈ {3, 10, 30}; floor ∈ {1e-7, 1e-6, 1e-5}) so a reader sees whether a verdict is a threshold artefact — the tally can produce the grid from the records at no run; only the declared cell is a verdict.
+
 *Candidates proposed elsewhere and not yet listed here:* A76 (fixed-point-distance)'s report §7 (d)
 notes that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
 carry a pre-declared acceptance rule in a V5 plan (a natural form: headline median and p90 below τ,
