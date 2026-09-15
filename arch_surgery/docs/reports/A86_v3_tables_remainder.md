@@ -2,7 +2,7 @@
 
 > **Document status** — **OPEN.** Task **A86 (v3-tables-remainder)**, branch
 > `A86-v3-tables-remainder` (worktree `.claude/worktrees/A86-v3-tables-remainder`), base
-> `ab3d339a`, tip `9631dd7e` — **which is the last commit that touches code or a generated
+> `ab3d339a`, tip `52a77127` — **which is the last commit that touches code or a generated
 > document, and is where every gate verdict this report cites was pressed** (rule xiii); the
 > only commit after it is this document. Specification:
 > [`../plans/REPORT_TABLE_FORMATS.md`](../plans/REPORT_TABLE_FORMATS.md) (RULING, 2026-09-15) and
@@ -31,7 +31,7 @@ gate table's own two rows, whose populations grew.
 
 ### 1.1 The census
 
-| | before (`ab3d339a`) | after (`9631dd7e`) |
+| | before (`ab3d339a`) | after (`52a77127`) |
 |---|---|---|
 | tables in §4 (main text) | 7 | **12** |
 | tables in Appendix D | 15 | **21** |
@@ -120,7 +120,7 @@ Four declarations in `harness/measurement/stats.py`, each with an independently 
 | `stats.namespace_residuals` | each excluded namespace's maximum scaled residual in one run, from that run's own `audit_residual.json` | refuses a file naming no `excluded_keys` (the namespaces would be a list typed by hand) and a ruler the file does not carry | *an exclusion list the run did not state* — both REFUSED |
 | `stats.figure_of_merit` | the objective's name and sense, parsed from the **frozen tree's** `FiguresOfMerit` and never imported | refuses a figure of merit the enum does not carry, rather than printing the integer | *a figure of merit the enum does not carry* — `i_figure_merit = 6`: REFUSED |
 
-**Agreement.** Gate `recomputation`, `--resume`, at `9631dd7e`: **141 tables, 17 554 compared,
+**Agreement.** Gate `recomputation`, `--resume`, at `52a77127`: **141 tables, 17 554 compared,
 0 mismatched**, over 949 campaign run records made at `57dc0c14`. Of those, **17 454 are cells of
 the tables** (1 486 rows; 13 010 from a construction, 4 444 composed as a string) and 99 are the
 published values beside them (48 similarity verdicts, 3 seed sets). Before the task: 122 tables,
@@ -133,7 +133,7 @@ of `location diagnostic`, `the identity B1 → B2`, `cost sums (check 4)`, `cost
 anchors`, `sweeps and prime calls` and `problem definition`. One further **cell** is not a new
 table: the optimiser's path gains `ratio_pooled`, the ratio of the means (deviation (i) below).
 
-**Gate `tally_contracts`** (`--resume`, at `9631dd7e`): **PASS, 679 compared (423 table checks +
+**Gate `tally_contracts`** (`--resume`, at `52a77127`): **PASS, 679 compared (423 table checks +
 256 reference cells), 0 mismatched, 17 of 17 teeth tripped**, the four new ones among them
 (163 → 167 teeth in the gate table).
 
@@ -232,7 +232,7 @@ not citations; each is put behind a placeholder so no number moves twice.
 
 ## 5. Verification
 
-The sequence, worktree root, tree clean and committed at **`9631dd7e`** at every step, nothing else
+The sequence, worktree root, tree clean and committed at **`52a77127`** at every step, nothing else
 running. **Zero PROCESS runs.**
 
 | # | step | result |
@@ -240,10 +240,10 @@ running. **Zero PROCESS runs.**
 | 1 | `--measure all --resume` | five stages re-pressed: `tally_evaluation` **93** tables, `tally_optimisation` **48**, `recomputed_tables` **141**, `gate_table`, `exclusion_review`; **0 runs made** |
 | 2 | `--plan-tables write` | both documents written; 12 + 21 + 15 tables |
 | 3 | `--plan-tables check` | **IDENTICAL** for all twelve §4 blocks, Appendix D (1 129/1 129 lines) and the companion (1 705/1 705); **0 dangling** references |
-| 4 | `--gate recomputation --resume` | **PASS** at `9631dd7e` — 141 tables, **17 554 compared, 0 mismatched**, 9/9 teeth |
-| 5 | `--gate tally_contracts --resume` | **PASS** at `9631dd7e` — **679 compared (423 + 256), 0 mismatched**, **17/17 teeth**, the four new ones tripped |
-| 6 | `--gate run_kind_separation --resume` | **PASS** at `9631dd7e` — 3 000 compared, 0 mismatched, 9/9 teeth |
-| 7 | `--gate self_containment --resume` | **PASS** at `9631dd7e` — 52 files, 0 mismatched, 1/1 tooth |
+| 4 | `--gate recomputation --resume` | **PASS** at `52a77127` — 141 tables, **17 554 compared, 0 mismatched**, 9/9 teeth |
+| 5 | `--gate tally_contracts --resume` | **PASS** at `52a77127` — **679 compared (423 + 256), 0 mismatched**, **17/17 teeth**, the four new ones tripped |
+| 6 | `--gate run_kind_separation --resume` | **PASS** at `52a77127` — 3 000 compared, 0 mismatched, 9/9 teeth |
+| 7 | `--gate self_containment --resume` | **PASS** at `52a77127` — 52 files, 0 mismatched, 1/1 tooth |
 | 8 | `--measure gate_table --resume` | **30 PASS, 0 FAIL, 167 of 167 teeth tripped** |
 | 9 | `--plan-tables write`, then `check` again | **IDENTICAL** everywhere, **0 dangling**; nothing re-rendered, tree clean |
 | 10 | `--selfcheck` | **PASS** |
@@ -252,22 +252,24 @@ running. **Zero PROCESS runs.**
 
 | verdict | `tree_git_head` | is that the tip's code? |
 |---|---|---|
-| `recomputation` | **`9631dd7e`** | yes — the tip |
-| `tally_contracts` | **`9631dd7e`** | yes — the tip |
-| `run_kind_separation` | **`9631dd7e`** | yes — the tip |
-| `self_containment` | **`9631dd7e`** | yes — the tip |
+| `recomputation` | **`52a77127`** | yes — the tip |
+| `tally_contracts` | **`52a77127`** | yes — the tip |
+| `run_kind_separation` | **`52a77127`** | yes — the tip |
+| `self_containment` | **`52a77127`** | yes — the tip |
 
-`9631dd7e` is **the last commit that touches code or a generated document**: the only commit after
-it is this report. An earlier press at `8b7d38a5` is superseded — the slash-merge collapse was
-withdrawn after it (deviation xi), which is a code change, so every verdict was pressed again.
+`52a77127` is **the last commit that touches code or a generated document**: the only commit after
+it is this report. Two earlier presses are superseded and this report cites neither — one at
+`8b7d38a5`, before the slash-merge collapse was withdrawn (deviation xi, a code change), and one at
+`9631dd7e`, before §4.3's opening paragraphs were put in table order. Every verdict was pressed
+again at the tip each time.
 The `gate_table` stage record's `records_read` names the commit of each of the thirty verdicts it
-read: **4 at `9631dd7e`** (the four above, the only gates this task's change alters what they read)
+read: **4 at `52a77127`** (the four above, the only gates this task's change alters what they read)
 and 26 at the commits they were pressed at in the seeded records tree — `8996b843` 23,
 `6f5ba612` 2, `350a58c4` 1 — which is the records-reuse rule.
 
 The two tally stage records and `recomputed_tables` carry no commit of their own by design: a stage
 over **run** records is provenanced by `runs_provenance`, which the analysis compares against its
-own survey of the same runs. All three were re-pressed at `9631dd7e` in steps 1 and 4–5.
+own survey of the same runs. All three were re-pressed at `52a77127` in steps 1 and 4–5.
 
 ### 5.2 The standing checks
 
@@ -385,5 +387,6 @@ items surfaced and are not this task's: Table 11's width (Limit 1), and the thre
 | `654ff0b1` | four teeth for the new constructions' premises; `report_counts_check.py`'s constants and its stale table numbers |
 | `d553a132` | §4.1's and §4.4's gate counts; `harness/README.md` §0; the report's Appendix C entry |
 | `8b7d38a5` | the evaluation phase's block heading line at `n = 25 per arm`; both documents re-rendered |
-| `9631dd7e` | the slash-merge collapse withdrawn (deviation xi) — **the tip, and where every verdict this report cites was pressed** |
+| `9631dd7e` | the slash-merge collapse withdrawn (deviation xi) |
+| `52a77127` | §4.3's opening paragraphs in table order — **the tip, and where every verdict this report cites was pressed** |
 | *(this file)* | this report |
