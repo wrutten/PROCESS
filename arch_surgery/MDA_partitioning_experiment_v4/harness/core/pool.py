@@ -199,7 +199,7 @@ class Job:
                 value = _render_path(value, runs_dir)
             elif isinstance(value, Mapping):
                 value = {
-                    str(k): (None if v is None else str(v))
+                    str(k): (None if v is None else _render_string(str(v), runs_dir))
                     for k, v in sorted(value.items())
                 }
             rendered[name] = value
@@ -225,6 +225,36 @@ def _render_path(path: Path, runs_dir: Path | None) -> str:
         except ValueError:
             pass
     return path.as_posix()
+
+
+def _render_string(value: str, runs_dir: Path | None) -> str:
+    """A mapping value, with an absolute path under the experiment directory
+    made relative to it.
+
+    ``override_env`` values are strings, and gate G5's hand-composed run puts
+    the three committed artifact paths in it.  Rendered as the absolute paths
+    they are, the identity — and so the digest and the record — was one per
+    working tree, and the job never resumed anywhere but where it was made
+    (found by A78 (arm-renames)' press: `--jobs all` listed those three jobs
+    "no record on disk" in every worktree but the one that made them).  A
+    value that is an absolute path under the experiment directory (the parent
+    of ``runs/``) is rendered relative to it, ``experiment:harness/data/…``;
+    one under ``runs/`` relative to that, as :func:`_render_path` does; any
+    other string is left as it is.  Only G5's three hand-composed jobs carry
+    such a value, so only their digests changed.
+    """
+    if runs_dir is None or not value.startswith("/"):
+        return value
+    runs = Path(runs_dir).resolve()
+    path = Path(value)
+    try:
+        return path.resolve().relative_to(runs).as_posix()
+    except ValueError:
+        pass
+    try:
+        return "experiment:" + path.resolve().relative_to(runs.parent).as_posix()
+    except ValueError:
+        return value
 
 
 #: Every field of :class:`Job` the pool composes into a run — the command line

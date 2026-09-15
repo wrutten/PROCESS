@@ -30,6 +30,16 @@ where the composition becomes a *measurement* rather than a string.
 The arm is ``B2`` — the full intervention, the arm with the most switches set
 and therefore the one a composition error is most likely to reach.
 
+The two records need not come from the same working tree — under ``--resume``
+the from-the-matrix record is kept from an earlier press and the hand-composed
+one may be made here — so the one compared value that carries paths,
+``resolved_switches``, is compared with its artifact paths made **relative to
+the experiment directory of the record that carries them** (the parent of the
+record's own ``tree`` stamp; :func:`portable_resolved_switches`).  Every other
+value is compared exactly as resolved.  Before A78 (arm-renames) the paths were
+compared absolute, and a press in any worktree but the one that made the kept
+records failed on three paths with every physics value equal.
+
 Criterion inherited, and its source
 -----------------------------------
 Experiment plan §3.9's G5 row: *"the arm composed from the matrix equals the arm
@@ -145,9 +155,48 @@ COMPARED: tuple[tuple[str, str], ...] = (
     # What the driver **resolved**, read back from the imported modules rather
     # than as the harness asked.  This is what makes a switch left unset and a
     # switch set to its default comparable: they compose different environments
-    # and must resolve to the same thing.
+    # and must resolve to the same thing.  Compared through
+    # :func:`portable_resolved_switches`: a value that is an absolute path
+    # under the experiment directory the record was made in (the parent of
+    # the record's own ``tree`` stamp) is compared relative to that directory,
+    # every other value exactly as resolved — two records of one job made in
+    # two working trees agree on which committed artifact each switch named,
+    # not on where the tree happened to be checked out.
     ("resolved_switches", "resolved_switches"),
 )
+
+
+def portable_resolved_switches(record: Mapping[str, Any]) -> dict[str, Any]:
+    """The record's ``resolved_switches`` with artifact paths made tree-relative.
+
+    The experiment directory of the record is the parent of its ``tree`` stamp
+    (``…/MDA_partitioning_experiment_v4/PROCESS``), so the relativisation uses
+    what the record says about itself and needs nothing from this tree.  A
+    string value that is an absolute path under that directory becomes its
+    posix path relative to it, prefixed ``experiment:``; any other value —
+    the mode names, the booleans, the node lists, the tolerance, a path
+    outside the experiment directory — is returned exactly as resolved.
+    """
+    resolved = record.get("resolved_switches") or {}
+    tree = record.get("tree")
+    root = Path(str(tree)).parent if tree else None
+    out: dict[str, Any] = {}
+    for name, value in resolved.items():
+        if root is not None and isinstance(value, str) and value.startswith("/"):
+            try:
+                value = "experiment:" + Path(value).relative_to(root).as_posix()
+            except ValueError:
+                pass
+        out[name] = value
+    return out
+
+
+def compared_value(record: Mapping[str, Any], label: str, path: str) -> Any:
+    """One compared value of *record*: ``resolved_switches`` made portable,
+    every other value read exactly as the record carries it."""
+    if label == "resolved_switches":
+        return portable_resolved_switches(record)
+    return records_mod.resolve_path(record, path)
 
 _HELD: dict[str, Any] = {}
 
@@ -294,8 +343,8 @@ def switch_composition_body(
         values: dict[str, Any] = {}
         differing_values: list[str] = []
         for label, path in COMPARED:
-            left = records_mod.resolve_path(a, path)
-            right = records_mod.resolve_path(b, path)
+            left = compared_value(a, label, path)
+            right = compared_value(b, label, path)
             values[label] = {"from_the_matrix": left, "switch_by_switch": right}
             if left != right:
                 differing_values.append(label)
@@ -395,12 +444,63 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"composition must be one differing name, not none"
         )
 
+    def a_resolved_switch_value_differing() -> tuple[bool, str]:
+        """The portable comparison must still see a resolved value differ,
+        and must not see a path differ by its worktree alone."""
+        rows = [r for r in (_HELD.get("rows") or []) if "values" in r]
+        if not rows:
+            return False, "the gate compared no run"
+        row = rows[0]
+        left = dict(row["values"]["resolved_switches"]["from_the_matrix"])
+        right = dict(row["values"]["resolved_switches"]["switch_by_switch"])
+        mode_key = "process.core.solver.module_solve.MDA_MODE"
+        doctored = dict(right)
+        doctored[mode_key] = "flat" if right.get(mode_key) != "flat" else "partitioned"
+        value_seen = doctored != left
+        # The same record, re-rooted in another worktree: every artifact path
+        # rewritten under a different checkout, tree stamp moved with it.
+        record = {
+            "tree": "/elsewhere/another-worktree/arch_surgery/MDA_partitioning_experiment_v4/PROCESS",
+            "resolved_switches": {
+                name: (
+                    "/elsewhere/another-worktree/arch_surgery/MDA_partitioning_experiment_v4/"
+                    + value[len("experiment:"):]
+                    if isinstance(value, str) and value.startswith("experiment:")
+                    else value
+                )
+                for name, value in left.items()
+            },
+        }
+        n_paths = sum(
+            1 for v in left.values() if isinstance(v, str) and v.startswith("experiment:")
+        )
+        path_ignored = portable_resolved_switches(record) == left
+        return value_seen and path_ignored and n_paths > 0, (
+            f"{row['configuration']}: {mode_key} flipped on one side — the "
+            f"comparison {'disagrees' if value_seen else 'AGREES'}; the same "
+            f"resolved switches re-rooted under another worktree ({n_paths} "
+            f"artifact path(s)) — the comparison "
+            f"{'agrees' if path_ignored else 'DISAGREES'}"
+        )
+
     return (
         Tooth(
             name="norm_objf hex",
             what="one character appended to the objective's hex literal",
             must="make the comparison disagree",
             check=objective_hex,
+        ),
+        Tooth(
+            name="a resolved switch value differing, and a path re-rooted",
+            what=(
+                "the driver's resolved MDA mode flipped on one side; the "
+                "artifact paths of one side rewritten under another worktree"
+            ),
+            must=(
+                "disagree on the value and agree on the re-rooted paths -- the "
+                "comparison sees which artifact, not where the tree was"
+            ),
+            check=a_resolved_switch_value_differing,
         ),
         Tooth(
             name="n_call_models",
