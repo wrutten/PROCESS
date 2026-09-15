@@ -333,14 +333,13 @@ def pool_root(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir) / POOL_SUBPATH
 
 
-def directory_for(job: Job, campaign: Campaign) -> Path:
-    """The directory this job runs in: its own ``outdir``, or the pool's.
+def canonical_directory_for(job: Job, campaign: Campaign) -> Path:
+    """Where this job's record goes when none exists yet: its own ``outdir``,
+    or the pool's directory — a pure function of the identity.
 
-    The pool's directory is a pure function of the identity, so a gate that
-    wants to *read* a job's record resolves it here without running anything,
-    and two gates composing the same job resolve to the same place.  The name
-    carries the readable fields first and the digest's first sixteen hex digits
-    last: the digest is what makes it unique, the rest is for a reader.
+    The pool's name carries the readable fields first and the digest's first
+    sixteen hex digits last: the digest is what makes it unique, the rest is
+    for a reader.
     """
     if job.outdir is not None:
         return Path(job.outdir)
@@ -351,6 +350,106 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
         f"seed{int(identity['seed']):03d}_{identity['run_kind']}_{digest[:16]}"
     )
     return pool_root(campaign) / name
+
+
+#: Every record under a campaign's ``runs/``, by job digest — the digest as
+#: :func:`records.read` reports it, that is, in today's arm names.  Built once
+#: per process per ``runs/`` root, on first use, and kept current by
+#: :func:`run` for the records it writes.  It exists because a record's
+#: directory can carry a name the record no longer goes by: the arm renaming of
+#: 2026-09-15 (``records.RECORDED_ARM_NAMES``) left every campaign directory
+#: of a renamed arm under the arm's old name — and, for two of the three, the
+#: old name is another arm's new one.  The record is the truth; the path is
+#: where the pool found it.
+_RECORD_INDEX: dict[str, dict[str, list[Path]]] = {}
+_RECORD_INDEX_GUARD = threading.Lock()
+
+
+def _record_index(campaign: Campaign) -> dict[str, list[Path]]:
+    key = str(Path(campaign.runs_dir).resolve())
+    with _RECORD_INDEX_GUARD:
+        index = _RECORD_INDEX.get(key)
+        if index is None:
+            index = {}
+            root = Path(campaign.runs_dir)
+            if root.exists():
+                for path in sorted(root.rglob("metrics.json")):
+                    record = records_mod.read(path.parent)
+                    digest = record.get("job_digest")
+                    if isinstance(digest, str):
+                        index.setdefault(digest, []).append(path.parent.resolve())
+            _RECORD_INDEX[key] = index
+        return index
+
+
+def _index_record(campaign: Campaign, digest: str, directory: Path) -> None:
+    """Tell the index where :func:`run` just put a record of *digest*."""
+    index = _record_index(campaign)
+    with _RECORD_INDEX_GUARD:
+        index[digest] = [Path(directory).resolve()]
+
+
+def forget_record_index() -> None:
+    """Drop the index so the next resolution re-reads ``runs/``.  For a caller
+    that moved records on disk in this process — a tooth, a relocation."""
+    with _RECORD_INDEX_GUARD:
+        _RECORD_INDEX.clear()
+
+
+def directory_for(job: Job, campaign: Campaign) -> Path:
+    """The directory this job's record is in, or goes in: **resolved by digest**.
+
+    A gate that wants to *read* a job's record resolves it here without running
+    anything, and two gates composing the same job resolve to the same place.
+    The rule, in order:
+
+    1. the job's canonical directory (:func:`canonical_directory_for`) holds a
+       record of the same **readable identity** — arm, configuration, seed,
+       phase, regime, run kind, as ``records.read`` reports them — then that
+       directory is the job's, whatever the record's state (the resume
+       comparison decides whether it is kept);
+    2. otherwise, a record of exactly this job's **digest** is on disk under
+       ``runs/`` — then that directory, whatever it is called, is the job's;
+    3. otherwise the canonical directory, where the run will be made.
+
+    Step 2 goes by digest and not by path because a directory name is the
+    arm's name *at the time of the run*: after the renaming of 2026-09-15
+    (``records.RECORDED_ARM_NAMES``) the directory ``…/evaluation/<config>/A1/``
+    holds the records of today's ``A2``, and today's ``A1`` has its records
+    under its old name.  A path-based lookup would hand ``A1`` the record of
+    ``A2`` and, finding it not the same job, re-make ``A1`` on top of it.
+    Step 1 comes first so that a caller naming an explicit directory for a
+    deliberate second record of one identity — gate G1's two captures, at two
+    commits by construction — keeps the directory it named.
+
+    Two directories holding the same digest at step 2 is a refusal: the pool
+    cannot say which record is the job's.
+    """
+    canonical = canonical_directory_for(job, campaign)
+    identity = job.identity(Path(campaign.runs_dir))
+    if (canonical / "metrics.json").exists():
+        existing = records_mod.read(canonical)
+        if all(
+            existing.get(records_mod.IDENTITY_FIELDS_STAMPED_BY_THE_CHILD[name])
+            == identity.get(name)
+            for name in records_mod.READABLE_IDENTITY_FIELDS
+        ):
+            return canonical
+    digest = records_mod.job_digest(identity)
+    hits = _record_index(campaign).get(digest, [])
+    if not hits:
+        return canonical
+    resolved_canonical = canonical.resolve()
+    if resolved_canonical in hits:
+        return canonical
+    if len(hits) > 1:
+        raise PoolError(
+            f"{job.key}: {len(hits)} directories under {campaign.runs_dir} hold "
+            f"a record of this job's digest {digest[:16]} and none is the "
+            f"canonical {canonical}: {[str(h) for h in hits]}.  The pool cannot "
+            f"say which is the job's record; refused rather than picked."
+        )
+    return hits[0]
 
 
 def directories_for(jobs: Sequence[Job], campaign: Campaign) -> list[Path]:
@@ -702,6 +801,43 @@ def _kept(job: Job, identity: Mapping[str, Any], digest: str, outdir: Path) -> d
     }
 
 
+def assert_not_another_jobs_record(
+    job: Job, identity: Mapping[str, Any], outdir: Path
+) -> None:
+    """Refuse to re-make *job* on top of a record of a **different** job.
+
+    Re-making a run removes its directory first.  Before the renaming of
+    2026-09-15 a directory could hold only its own job's record, because the
+    layout named every directory after the job; since then a canonical
+    directory can be occupied by another arm's record — ``…/A1/seed001`` holds
+    the arm now called ``A2`` (``records.RECORDED_ARM_NAMES``) — and removing it would destroy a campaign
+    record to make room for a gate run.  :func:`directory_for` resolves the
+    job's own record by digest wherever one exists, so this is reached only
+    when the job has no record anywhere and its canonical directory is taken.
+    The readable half of the identity — arm, configuration, seed, phase,
+    regime, run kind — decides: a record of the same readable job (a stale or
+    incomplete one) is re-made as before; one of another job is refused.
+    """
+    if not (outdir / "metrics.json").exists():
+        return
+    existing = records_mod.read(outdir)
+    if existing.get("status") == "no_record" and "campaign_arm" not in existing:
+        return
+    for name in records_mod.READABLE_IDENTITY_FIELDS:
+        child_name = records_mod.IDENTITY_FIELDS_STAMPED_BY_THE_CHILD[name]
+        if existing.get(child_name) != identity.get(name):
+            raise PoolError(
+                f"{job.key}: {outdir} holds a record of another job "
+                f"({child_name}={existing.get(child_name)!r}, this job's {name} "
+                f"is {identity.get(name)!r}; its digest "
+                f"{str(existing.get('job_digest'))[:16]}, stamped at "
+                f"{str(existing.get('tree_git_head'))[:8]}).  Refusing to remove "
+                f"it to make room: the record is the truth and the path is where "
+                f"the pool found it — see records.RECORDED_ARM_NAMES and "
+                f"pool.directory_for."
+            )
+
+
 def stamp_identity(outdir: Path, identity: Mapping[str, Any], digest: str) -> None:
     """Write ``job_identity`` and ``job_digest`` into the record on disk.
 
@@ -718,6 +854,11 @@ def stamp_identity(outdir: Path, identity: Mapping[str, Any], digest: str) -> No
         return
     record["job_identity"] = dict(identity)
     record["job_digest"] = digest
+    # The naming scheme the arm fields are written in.  A record made after
+    # the arm renaming of 2026-09-15 says so here, and ``records.read`` then
+    # leaves its names alone; one without the stamp is read through
+    # ``records.RECORDED_ARM_NAMES``.
+    record[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
     if isinstance(record.get("completeness"), Mapping):
         try:
             records_mod.assert_usable(record, where="the pool's stamp")
@@ -768,6 +909,7 @@ def run(
                 _MADE_THIS_INVOCATION[digest] = str(outdir)
                 return kept
         if outdir.exists():
+            assert_not_another_jobs_record(job, identity, outdir)
             shutil.rmtree(outdir)
         outdir.mkdir(parents=True, exist_ok=True)
 
@@ -847,6 +989,7 @@ def run(
         stamp_identity(outdir, identity, digest)
         record = records_mod.read(outdir)
         _MADE_THIS_INVOCATION[digest] = str(outdir)
+        _index_record(campaign, digest, outdir)
     wall = time.perf_counter() - started
     print(
         f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} rc={rc} "

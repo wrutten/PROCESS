@@ -106,7 +106,7 @@ from ..core.framework import Gate, GateError, Tooth
 
 #: The arm the gate runs.  The partitioned arm is the one whose restricted
 #: statistic the experiment reports, so it is the one the gate binds.
-G4_ARM = "A1"
+G4_ARM = "A2"
 
 #: How far a doctored component is displaced.  The previous revision's value,
 #: unchanged: large enough to be far above any tolerance, small enough that the
@@ -640,7 +640,7 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
 
 #: The arm whose optimisation records the restricted statistic is read from:
 #: the full intervention, which is the arm the experiment reports it for.
-OPTIMISATION_ARM = "B3"
+OPTIMISATION_ARM = "B2"
 
 
 def optimisation_phase_statistic(
@@ -670,10 +670,7 @@ def optimisation_phase_statistic(
     pool_mod.run_all(own, campaign, resume=resume)
     rows: list[dict[str, Any]] = []
     for path in sorted(root.rglob("metrics.json")):
-        try:
-            record = json.loads(path.read_text())
-        except Exception:  # noqa: BLE001 - a half-written record is not a row
-            continue
+        record = records_mod.read(path.parent)  # arm names as the matrix spells them today
         if record.get("campaign_phase") != "B" or record.get("status") != "ok":
             continue
         if record.get("force_maxcal") is not None:
