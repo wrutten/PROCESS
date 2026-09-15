@@ -20,7 +20,7 @@ plan is typed by hand.
 
 **The one button.** `experiment_runner.py` is the only entry point. Every flag selects a stage:
 `--gate` runs one or all gates, `--measure` runs the tally and analysis stages, `--plan-tables`
-renders the plan's results section, `--selfcheck` runs the harness's own tests, `--smoke` runs the
+renders the report's results appendix and its companion file, `--selfcheck` runs the harness's own tests, `--smoke` runs the
 campaign's chain at one seed, `--run` runs one PROCESS job by hand. Failure paths are reachable from
 the same button, so a refused start or a failed gate is a result rather than a crash.
 
@@ -95,8 +95,13 @@ run executes (harness plan amendment 13, rule (vi)).
 - `measurement/analysis.py` is a **deliberate second implementation** of every published cell,
   sharing no helper with the tally. Gate `recomputation` compares the two. Agreement means the tables
   are not an artefact of one piece of code.
-- `measurement/plan_tables.py` renders the plan's §4 from the stage records, and its check mode diffs
-  the committed §4 without writing.
+- `measurement/plan_tables.py` renders the report's **Appendix D — Results tables** (summarising
+  tables only, numbered `Table D.n`, one short caption each, the constructions declared once in
+  D.0) and the companion file `RESULTS_TABLES_FULL.md` (every per-run, per-seed and per-pair table
+  and the second implementation's tables, `Table F.n`) from the stage records; its check mode diffs
+  both committed documents without writing and resolves every `Table D.n` / `Table F.n` reference
+  in the hand-written text. The report's §4 is hand-written conclusions pointing at those numbers
+  (task A79 (report-captions), 2026-09-15).
 
 ### Layer 5 — the gates: `harness/gates/`
 
@@ -152,9 +157,11 @@ true.
 A run record is written by `child/`, stamped by `core/`, kept or re-made by the pool. The tally reads
 a declared set of records and writes a stage record naming them. The analysis recomputes the same
 cells independently. The recomputation gate compares. The gate table stage collects every verdict.
-The renderer writes §4 from those stage records and refuses if any record it reads has been outrun.
-Every caption states the population, the audit position and the instrument version. That chain is
-what lets the plan's tables be read without trusting anyone's memory.
+The renderer writes Appendix D and the companion file from those stage records and refuses if any
+record it reads has been outrun. Every table declares its units, row, column, population and
+construction (printed once per kind in D.0) and carries a caption of a few lines stating its own
+denominator; every cell is traced by the construction name printed under its table, never by its
+number. That chain is what lets the report's tables be read without trusting anyone's memory.
 
 ---
 
@@ -577,9 +584,9 @@ $PY experiment_runner.py --gate reproduction        # gate GR
 $PY experiment_runner.py --gate all --resume        # all of them, one button
 
 # a measurement stage: it publishes numbers and has nothing to pass
-$PY experiment_runner.py --measure gate_table       # the plan's §4.1 table
-$PY experiment_runner.py --measure tally_evaluation # the plan's §4.2 tables
-$PY experiment_runner.py --measure tally_optimisation  # the plan's §4.3 tables
+$PY experiment_runner.py --measure gate_table       # the report's gate table (Appendix D.1)
+$PY experiment_runner.py --measure tally_evaluation # the evaluation phase's tables (D.2-D.3, companion F.1)
+$PY experiment_runner.py --measure tally_optimisation  # the optimisation phase's tables (D.2, D.4, companion F.2)
 $PY experiment_runner.py --measure all
 
 # the tally's own gate: the cells it must land on, and what a table may not be
@@ -595,10 +602,12 @@ $PY -m harness.measurement.analysis --teeth                          # the six d
 # 'smoke'; no approval needed and no campaign record made
 $PY experiment_runner.py --smoke --resume --census-entry evaluation
 
-# the plan's results section, rendered from the measurement stages' records.
-# 'check' compares it with the section the document carries and writes nothing
-# (exit 3 on a difference); press --measure gate_table after any gate re-run,
-# or the renderer refuses rather than reproducing the older verdict
+# the report's Appendix D and the companion RESULTS_TABLES_FULL.md, rendered from
+# the measurement stages' records.  'check' compares both with what is committed,
+# resolves every Table D.n / F.n reference in the hand-written text and writes
+# nothing (exit 3 on a difference or a dangling reference); press --measure
+# gate_table after any gate re-run, or the renderer refuses rather than
+# reproducing the older verdict
 $PY experiment_runner.py --plan-tables show
 $PY experiment_runner.py --plan-tables check
 $PY experiment_runner.py --plan-tables write
@@ -1325,15 +1334,31 @@ test and their widths differ by nearly two orders of magnitude, so their sum bel
 and a residual table whose rows were audited at two different positions without a column saying so
 is refused.
 
-**`tally_evaluation.py` and `tally_optimisation.py` — the two phases' tables.** Six tables for the
-evaluation phase (cost per call, matched accuracy on both rulers, the fixed-point distance between
-arms — the predicate's residual between two arms' exit states at the same entry, restricted as the
-audit is, reported and not accepted on; added from the exit states on disk after the campaign by
-A76 (fixed-point-distance) — the ownership rung, the per-sweep overhead, the failure taxonomy) plus
-the predicate trial; eight for the optimisation phase (the seed
-set, the failure table, the same-optimum check, check 2 in **both** iteration constructions, the
-attempt summation identity, the cost with and without the retried seeds, the achieved accuracy at
-the accepted optimum, and the lift's residual).
+**`tally_evaluation.py` and `tally_optimisation.py` — the two phases' tables.** Seven table kinds
+for the evaluation phase (cost per call, matched accuracy on both rulers, the fixed-point distance
+between arms — the predicate's residual between two arms' exit states at the same entry, restricted
+as the audit is, reported and not accepted on; added from the exit states on disk after the campaign
+by A76 (fixed-point-distance) — the ownership rung, the per-sweep overhead, the failure taxonomy,
+and **node calls per block** with every configuration stacked) plus the predicate trial; ten for
+the optimisation phase (the seed set, the failure table, the same-optimum check, check 2 in **both**
+iteration constructions, the attempt summation identity, the cost with and without the retried
+seeds, the achieved accuracy at the accepted optimum, the lift's residual, **node calls per
+module** per configuration and **the optimiser's path** over the configurations — iterations, the
+evaluation count ε from `sweeps_per_eval.n_evaluations`, the cost per evaluation ρ and the cost per
+run R = ρ × ε). The last three are the report's headline tables (`docs/plans/REPORT_HEADLINE_TABLES.md`),
+added by A79 (report-captions); their module grouping is derived from the committed node map and
+the configuration's per-run artifact (`stats.node_groups`), never listed by hand.
+
+**Every table carries a `kind`, a `summary` and a `detail` flag** (A79). The kind is the
+construction key the report groups by and the numbers-unchanged proof keys cells by; the summary is
+the caption of a few lines the report prints — what the table shows, its population, the one thing
+not to infer — while the full declaration (units, row, column, construction, clauses, how to read)
+is printed once per kind in the report's D.0 and is the same for every table of a kind; text that
+varies per table (the reference arm and whether it is a fallback, the audit position, a
+population's own share) lives in the summary. A table whose rows are runs, seeds or pairs of runs
+is `detail=True` and goes to the companion file, never the report; `report_omits` names the
+columns that list a value per seed inside one cell, which the report's copy leaves out and the
+companion's keeps.
 
 ### The population problem, and the declared sources
 
@@ -1579,43 +1604,52 @@ tree at the end of a press and refuses if it holds two run kinds.
 
 ---
 
-## 16. The plan's results section, rendered rather than typed
+## 16. The report's results tables, rendered rather than typed
 
-`EXPERIMENT_REPORT.md` §4 carried a template — every cell a *format*, `0.xxx` where a ratio belongs
-and `n` where a count belongs — so the shape could be reviewed before anything was measured.
-`harness/measurement/plan_tables.py` replaces that template with the tables the measurement stages actually
-emitted, by reading their records under `runs/gates/<stage>/measurements.json`:
+`EXPERIMENT_REPORT.md` §4 once carried a template — every cell a *format*, `0.xxx` where a ratio
+belongs and `n` where a count belongs — so the shape could be reviewed before anything was
+measured, and the renderer then filled §4 with the tables the stages emitted. Since task A79
+(report-captions) (2026-09-15, at the user's ruling that the report read as an academic paper does)
+the tables are **Appendix D — Results tables** and §4 is hand-written conclusions that point at them
+by number. `harness/measurement/plan_tables.py` reads the stages' records under
+`runs/gates/<stage>/measurements.json` and writes two documents:
 
-| §4 subsection | rendered from |
-|---|---|
-| 4.1 Gates | `--measure gate_table` |
-| 4.2 The evaluation phase | `--measure tally_evaluation` |
-| 4.3 The optimisation phase | `--measure tally_optimisation` |
-| 4.4 The same cells, computed a second time | `--measure recomputed_tables` |
+| document | holds | rendered from |
+|---|---|---|
+| `EXPERIMENT_REPORT.md`, the block between `## Appendix D — Results tables` and the end marker `<!-- plan_tables: end of the rendered results tables -->` | D.0 the constructions and populations, declared once per table kind from the stages' own records; D.1 the gate table; D.2 the three headline tables; D.3 the evaluation phase's and D.4 the optimisation phase's **summarising** tables (per arm or arm pair and configuration), `Table D.1`–`D.n` in emission order, one caption of a few lines each, the construction name printed under each grid | `--measure gate_table`, `tally_evaluation`, `tally_optimisation` |
+| `RESULTS_TABLES_FULL.md`, whole | F.1–F.2 every table with a row per run, seed or pair of runs; F.3 the full versions of the report's tables whose per-seed columns it omits; F.4 every table of the second implementation; `Table F.1`–`F.m`; generated, never hand-edited | the same three stages and `--measure recomputed_tables` |
 
-*Caption: one row per subsection; the right column is the stage whose own record fills it. No cell
-is typed by hand and nothing in the renderer computes a number.*
+*Caption: one row per document the renderer writes; the middle column is what it holds and how it
+is numbered; the right column the stages whose records fill it. No cell is typed by hand and nothing
+in the renderer computes a number.*
 
 It refuses rather than guessing: a stage that has written no record, a stage that emitted no table
-(a section with no population is not a section), and a plan document in which §4's heading or §5's
-has moved or been reworded — a renderer that writes into the wrong part of a shared document is
-worse than one that does nothing.
+(a section with no population is not a section), a tally table without a `kind` or of a kind no
+group of `plan_tables.GROUPS` declares (the grouping is a declaration, and whoever adds a table kind
+places it), and a report in which the appendix heading or the end marker has moved or been reworded
+— a renderer that writes into the wrong part of a shared document is worse than one that does
+nothing.
 
-**And it refuses a stage record the verdicts have outrun.** §4.1 is rendered from the `gate_table`
+**And it refuses a stage record the verdicts have outrun.** D.1 is rendered from the `gate_table`
 *stage* record, not from the verdicts themselves, so a gate re-run after that stage would be
 published here as it was rather than as it is — silently, and it happened once: a re-render
 reproduced a failing row byte for byte after the gate had passed. The stage therefore declares what
 it reads (`Measurement.reads_records`), the framework stamps every record it found — path, digest,
 commit, time, verdict — into `records_read`, and the renderer re-surveys those same patterns and
 refuses when a verdict has been re-made, removed or added since, naming the gate, both commits and
-both times. The order is `--gate …`, then `--measure gate_table`, then `--plan-tables`; pressed the
-other way round the renderer stops instead of publishing the older table. `--plan-tables check`
-compares without writing, for a reader who wants to know whether the document is the one these
-records produce.
+both times. The order is `--gate …`, then `--measure gate_table`, then `--plan-tables write`;
+pressed the other way round the renderer stops instead of publishing the older table.
 
-**What the cells are over is stamped on the section and on every caption.** While
-`EXECUTION_APPROVED` is `False` there is no campaign, so every cell in §4 is over the **gate
+**`--plan-tables check`** compares both committed documents against what the records produce now,
+as a diff and writing nothing, and also resolves every `Table D.n` / `Table F.n` reference in the
+report's hand-written text against the numbers this rendering assigns — **table numbers are
+positional** and move when a table is added, so a dangling reference fails the check. A cell is
+traced by the construction name under its grid, never by its number
+(`results_cells_unchanged.py` is the proof script that keys cells that way).
+
+**What the cells are over is stamped on the appendix and in every caption's denominator.** While
+`EXECUTION_APPROVED` is `False` there is no campaign, so every cell is over the **gate
 population** — one or two seeds per arm — with the commit(s) those records were made at, the audit
 position, the convergence ruler and the exit-audit instrument version, all read back from the
-records themselves rather than written down. The campaign fills the section again, over its own
-seeds, after the user approves execution.
+records themselves rather than written down. The campaign fills the tables again, over its own
+seeds, after the user approves execution; the campaign of 2026-09-14 is what the report carries.

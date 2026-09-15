@@ -1234,15 +1234,15 @@ class Recomputed:
         return tuple(row.get(column) for column in self.key_columns)
 
     def markdown(self) -> str:
-        lines = [f"*Caption: {self.caption}*", ""]
-        lines.append("| " + " | ".join(self.columns) + " |")
+        """The grid alone: header and body.  The caption and the denominator
+        are the record's own fields and the renderer's to place, once (task
+        A79 (report-captions))."""
+        lines = ["| " + " | ".join(self.columns) + " |"]
         lines.append("|" + "|".join("---" for _ in self.columns) + "|")
         for row in self.rows:
             lines.append(
                 "| " + " | ".join(_render(row.get(c)) for c in self.columns) + " |"
             )
-        lines.append("")
-        lines.append(f"*n = {self.denominator} ({self.denominator_is}).*")
         return "\n".join(lines)
 
     def as_record(self) -> dict[str, Any]:
@@ -2916,7 +2916,11 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                         population, config.name, source.name
                     )
                     produced[taxonomy_table.name] = taxonomy_table
+                stacked = _node_calls_per_block(campaign, population, source.name)
+                if stacked is not None:
+                    produced[stacked.name] = stacked
             else:
+                path_groups: list[Any] = []
                 for config in campaign.configurations:
                     whole = by_arm_and_seed(population, config.name)
                     if not whole:
@@ -2933,6 +2937,12 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                         )
                         produced[table.name] = table
                         seed_sets[f"{label}/{config.name}"] = converged
+                        path_groups.append((config.name, arms, index, converged))
+                        modules = _node_calls_per_module(
+                            campaign, population, config.name, index, converged, label
+                        )
+                        if modules is not None:
+                            produced[modules.name] = modules
                         failures = _failure_table(
                             population, config.name, index, converged, label
                         )
@@ -2974,6 +2984,9 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                             optimisation=True,
                         )
                         produced[overhead.name] = overhead
+                path = _optimiser_path(campaign, population, source.name, path_groups)
+                if path is not None:
+                    produced[path.name] = path
     trial = _predicate_trial(records_dir)
     if trial is not None:
         produced[trial.name] = trial
@@ -2986,6 +2999,422 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
         "seed_sets": seed_sets,
         "tables_not_produced": not_produced,
     }
+
+
+# --------------------------------------------------------------------------
+# the headline tables, re-derived (task A79 (report-captions), 2026-09-15)
+# --------------------------------------------------------------------------
+
+#: The rung order of the two phases' arms, for the headline tables' columns.
+EVALUATION_LADDER: tuple[str, ...] = ("AR", "A0", "A1", "A2")
+OPTIMISATION_LADDER: tuple[str, ...] = ("BR", "B0", "B1", "B2")
+
+#: The module groups the node map declares, in the order the report prints
+#: them, and the label of the once-per-run group.  Re-typed here, not
+#: imported: agreement with the tally on the *order* is part of what the
+#: gate compares (the row keys).
+GROUP_ORDER: tuple[str, ...] = ("M1", "M2", "M3", "PULSE", "FF")
+ONCE_PER_RUN = "once per run"
+MEMBERS_NAMED_UP_TO = 4
+
+
+def _node_map(campaign: Campaign) -> dict[str, Any]:
+    return json.loads((Path(campaign.data_dir) / "dsm_node_map.json").read_text())
+
+
+def _once_per_run_nodes(
+    campaign: Campaign, configuration: str, records: Sequence[Mapping[str, Any]]
+) -> list[str]:
+    """The configuration's once-per-run deferred nodes, from the per-run
+    artifact(s) every record names; their node sets must agree, and each
+    record's own audit must have excluded the same set."""
+    names = sorted(
+        {Path(str(r.get("per_run_artifact"))).name for r in records if r.get("per_run_artifact")}
+    )
+    sets: dict[str, tuple[str, ...]] = {}
+    for name in names:
+        path = Path(campaign.data_dir) / name
+        if not path.exists():
+            raise AnalysisError(
+                f"{configuration}: the per-run artifact {name} is not in the "
+                f"data directory; the once-per-run group cannot be derived"
+            )
+        sets[name] = tuple(sorted(str(n) for n in json.loads(path.read_text())["post_solve_nodes"]))
+    if len(set(sets.values())) != 1:
+        raise AnalysisError(
+            f"{configuration}: the records name per-run artifacts with "
+            f"different node sets ({sets}); no one grouping serves them"
+        )
+    once = list(next(iter(sets.values())))
+    for record in records:
+        audited = ((record.get("exit_audit") or {}).get("restricted") or {}).get("per_run_nodes")
+        if audited is not None and set(audited) != set(once):
+            raise AnalysisError(
+                f"{configuration}: {label_of(record)}'s audit excluded "
+                f"{sorted(audited)}, the artifact names {once}"
+            )
+    return once
+
+
+def _census(record: Mapping[str, Any], *, optimisation: bool) -> dict[str, int]:
+    """Per-node model executions: the measured evaluation's census in the
+    evaluation phase, the whole run's in the optimisation phase (which must
+    reconcile with the driver's counter, or the record is refused)."""
+    block = record.get("node_census") or {}
+    counted = block.get("per_node_counted") if optimisation else block.get("counted")
+    if optimisation and block.get("counted_matches_node_calls_total") is False:
+        raise AnalysisError(
+            f"{label_of(record)}: the per-node census does not reconcile with "
+            f"the node counter; a per-module split of it is refused"
+        )
+    if not isinstance(counted, Mapping) or not counted:
+        raise AnalysisError(f"{label_of(record)}: no per-node census")
+    return {str(k): int(v) for k, v in counted.items()}
+
+
+def _groups(
+    campaign: Campaign,
+    configuration: str,
+    records: Sequence[Mapping[str, Any]],
+    *,
+    optimisation: bool,
+) -> list[tuple[str, list[str]]]:
+    """``[(group, nodes)]``: the map's modules less the once-per-run nodes,
+    then the once-per-run nodes; only groups some record's census saw."""
+    node_map = _node_map(campaign)
+    placement = node_map.get("nodes") or {}
+    declared = {m for m in (node_map.get("module_order") or {}) if m != "X"}
+    if declared != set(GROUP_ORDER):
+        raise AnalysisError(
+            f"the node map declares modules {sorted(declared)}; this "
+            f"re-derivation prints {GROUP_ORDER}"
+        )
+    once = set(_once_per_run_nodes(campaign, configuration, records))
+    seen: set[str] = set()
+    for record in records:
+        seen |= set(_census(record, optimisation=optimisation))
+    unplaced = sorted(n for n in seen if n not in placement)
+    if unplaced:
+        raise AnalysisError(
+            f"{configuration}: node(s) {unplaced} are counted and not in the "
+            f"node map; the grouping would be guessed"
+        )
+    grouped: dict[str, list[str]] = {g: [] for g in GROUP_ORDER}
+    grouped[ONCE_PER_RUN] = []
+    for node in sorted(seen):
+        grouped[ONCE_PER_RUN if node in once else str(placement[node]["module"])].append(node)
+    return [(g, nodes) for g, nodes in grouped.items() if nodes]
+
+
+def _members(campaign: Campaign, group: str, nodes: Sequence[str]) -> str:
+    if len(nodes) <= MEMBERS_NAMED_UP_TO:
+        return ", ".join(nodes)
+    label = str(((_node_map(campaign).get("modules") or {}).get(group) or {}).get("label") or group)
+    return f"{label}: {len(nodes)} nodes (the committed node map's members)"
+
+
+def _by_group(counted: Mapping[str, int], groups: Sequence[tuple[str, Sequence[str]]]) -> dict[str, float]:
+    return {g: float(sum(counted.get(n, 0) for n in nodes)) for g, nodes in groups}
+
+
+def _ratio_summary(pairs: Sequence[tuple[float, float]]) -> dict[str, Any]:
+    """Pooled, mean, median, [min, max] and the count above 1 of a per-seed
+    ratio over paired (reference, arm) values; a zero reference is dropped."""
+    usable = [(a, b) for a, b in pairs if a not in (0, None) and b is not None]
+    ratios = [b / a for a, b in usable]
+    total = sum(a for a, _ in pairs if a is not None)
+    span = extremes(ratios)
+    return {
+        "n": len(ratios),
+        "pooled": (sum(b for _, b in pairs if b is not None) / total) if total else None,
+        "mean": (sum(ratios) / len(ratios)) if ratios else None,
+        "median": middle(ratios),
+        "min": None if span is None else span[0],
+        "max": None if span is None else span[1],
+        "n_above_one": sum(1 for r in ratios if r > 1),
+    }
+
+
+def _node_calls_per_block(
+    campaign: Campaign, population: Population, source: str
+) -> Recomputed | None:
+    """Headline shape 3 re-derived: node calls per block, configurations stacked."""
+    rows: list[dict[str, Any]] = []
+    n_finished = 0
+    any_arms = False
+    for config in campaign.configurations:
+        grouped = by_arm(population, config.name)
+        if not grouped:
+            continue
+        any_arms = True
+        finished = {arm: [r for r in rs if completed(r)] for arm, rs in grouped.items()}
+        every = [r for rs in finished.values() for r in rs]
+        n_finished += len(every)
+        if not every:
+            continue
+        groups = _groups(campaign, config.name, every, optimisation=False)
+        base = evaluation_reference_arm(config.pulsed, grouped)
+        indexed = by_arm_and_seed(population, config.name)
+        per_arm: dict[str, dict[str, list[float]]] = {}
+        for arm, rs in finished.items():
+            for record in rs:
+                counted = _census(record, optimisation=False)
+                cells = _by_group(counted, groups)
+                cells["TOTAL"] = float(sum(counted.values()))
+                for group, value in cells.items():
+                    per_arm.setdefault(group, {}).setdefault(arm, []).append(value)
+        keys = (
+            sorted(
+                k
+                for k in set(indexed.get(base, {})) & set(indexed.get("A2", {}))
+                if completed(indexed[base][k]) and completed(indexed["A2"][k])
+            )
+            if base in indexed and "A2" in indexed
+            else []
+        )
+        all_groups = list(groups) + [("TOTAL", [n for _, nodes in groups for n in nodes])]
+        for group, nodes in all_groups:
+            row: dict[str, Any] = {
+                "configuration": config.name,
+                "block": group,
+                "n_nodes": len(nodes),
+                "nodes": _members(campaign, group, nodes) if group != "TOTAL" else "all counted nodes",
+                "reference": base,
+            }
+            for arm in EVALUATION_LADDER:
+                row[arm] = arithmetic_mean(per_arm.get(group, {}).get(arm) or []) if per_arm.get(group, {}).get(arm) else None
+            pairs: list[tuple[float, float]] = []
+            for k in keys:
+                left = _census(indexed[base][k], optimisation=False)
+                right = _census(indexed["A2"][k], optimisation=False)
+                if group == "TOTAL":
+                    pairs.append((float(sum(left.values())), float(sum(right.values()))))
+                else:
+                    pairs.append((_by_group(left, groups)[group], _by_group(right, groups)[group]))
+            total = sum(a for a, _ in pairs)
+            row["ratio"] = (sum(b for _, b in pairs) / total) if total else None
+            row["n_pairs"] = len(keys)
+            rows.append(row)
+    if not any_arms:
+        return None
+    return Recomputed(
+        name=f"node calls per block — {source}",
+        caption=(
+            "recomputed: the measured evaluation's per-node census summed over "
+            "the node map's groups (the once-per-run nodes apart), mean per "
+            "arm over finished runs, and Σ A2 / Σ reference over the pairs "
+            "both sides finished"
+        ),
+        columns=("configuration", "block", "n_nodes", "nodes", *EVALUATION_LADDER, "reference", "ratio", "n_pairs"),
+        key_columns=("configuration", "block"),
+        rows=tuple(rows),
+        denominator=n_finished,
+        denominator_is="finished evaluation-phase runs of every configuration in this source",
+        composite=("nodes",),
+    )
+
+
+def _node_calls_per_module(
+    campaign: Campaign,
+    population: Population,
+    configuration: str,
+    index: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    label: str,
+) -> Recomputed | None:
+    """Headline shape 1 re-derived: node calls per module, one configuration."""
+    base, arm = "B0", "B2"
+    if base not in index or arm not in index:
+        return None
+    records = [
+        index[a][s]
+        for a in arm_order(index)
+        for s in converged
+        if s in index[a] and completed(index[a][s])
+    ]
+    if not records:
+        return None
+    groups = _groups(campaign, configuration, records, optimisation=True)
+    all_nodes = [n for _, nodes in groups for n in nodes]
+    outside = "of which outside the solve phase"
+    everything = "all counted nodes"
+
+    def per_run(record: Mapping[str, Any]) -> dict[str, Any]:
+        counted = _census(record, optimisation=True)
+        cells: dict[str, Any] = _by_group(counted, groups)
+        total = float(sum(counted.values()))
+        cells[everything] = total
+        solve = summed_node_calls(record)
+        cells[outside] = None if solve is None else total - solve
+        return cells
+
+    seeds = [
+        s for s in converged
+        if s in index[base] and s in index[arm]
+        and completed(index[base][s]) and completed(index[arm][s])
+    ]
+    rows: list[dict[str, Any]] = []
+    for group, nodes in list(groups) + [(everything, all_nodes), (outside, [])]:
+        row: dict[str, Any] = {
+            "module": group,
+            "n_nodes": None if group == outside else len(nodes),
+            "nodes": (
+                _members(campaign, group, nodes)
+                if group not in (everything, outside)
+                else ("every node above" if group == everything else "the output path and the exit audit's sweep")
+            ),
+        }
+        for a in OPTIMISATION_LADDER:
+            values = [
+                per_run(index[a][s])[group]
+                for s in converged
+                if a in index and s in index[a] and completed(index[a][s])
+            ]
+            values = [v for v in values if v is not None]
+            row[f"{a}_mean"] = (sum(values) / len(values)) if values else None
+            span = extremes(values)
+            row[f"{a}_bracket"] = "—" if span is None else f"[{span[0]:g}, {span[1]:g}]"
+        pairs = [(per_run(index[base][s])[group], per_run(index[arm][s])[group]) for s in seeds]
+        pairs = [(x, y) for x, y in pairs if x is not None and y is not None]
+        summary = _ratio_summary(pairs)
+        row.update(
+            {
+                "pooled": summary["pooled"],
+                "median": summary["median"],
+                "bracket": "—" if summary["min"] is None else f"[{summary['min']:.3f}, {summary['max']:.3f}]",
+                "n_above_one": summary["n_above_one"],
+                "n_pairs": summary["n"],
+            }
+        )
+        rows.append(row)
+    return Recomputed(
+        name=f"node calls per module — {configuration} — {label}",
+        caption=(
+            "recomputed: the whole run's per-node census summed over the node "
+            "map's groups (the once-per-run nodes apart), per-run mean and "
+            "[min, max] per arm over the seed set, B2/B0 pooled, per-run "
+            "median with [min, max] and the count of runs above 1; the last "
+            "row is the census total less the solve-phase calls summed over "
+            "attempts"
+        ),
+        columns=(
+            "module", "n_nodes", "nodes",
+            *[c for a in OPTIMISATION_LADDER for c in (f"{a}_mean", f"{a}_bracket")],
+            "pooled", "median", "bracket", "n_above_one", "n_pairs",
+        ),
+        key_columns=("module",),
+        rows=tuple(rows),
+        denominator=len(converged),
+        denominator_is=f"seeds on which every arm of {configuration} converged",
+        composite=("nodes", "bracket", *[f"{a}_bracket" for a in OPTIMISATION_LADDER]),
+    )
+
+
+PATH_ROWS: tuple[tuple[str, str], ...] = (
+    ("iterations (summed over attempts)", "iterations"),
+    ("evaluations of the model set, ε", "evaluations"),
+    ("node calls per evaluation, ρ", "calls_per_evaluation"),
+    ("node calls per run, R = ρ × ε", "calls_per_run"),
+)
+
+
+def _evaluations(record: Mapping[str, Any]) -> int | None:
+    """ε re-derived: the histogram's evaluation count **summed over the
+    attempts** (``attempts[].sweeps_per_eval.n_evaluations``) — the tally
+    reads the run-level field, which the driver accumulates across attempts;
+    the two roads must meet, and the gate says whether they do."""
+    attempts = record.get("attempts") or []
+    if not attempts:
+        block = record.get("sweeps_per_eval") or {}
+        return None if block.get("n_evaluations") is None else int(block["n_evaluations"])
+    values = [(a.get("sweeps_per_eval") or {}).get("n_evaluations") for a in attempts]
+    if any(v is None for v in values):
+        return None
+    return sum(int(v) for v in values)
+
+
+def _path_quantity(record: Mapping[str, Any], quantity: str) -> float | None:
+    if quantity == "iterations":
+        value = iterations_summed(record)
+        return None if value is None else float(value)
+    evaluations = _evaluations(record)
+    if quantity == "evaluations":
+        return None if evaluations is None else float(evaluations)
+    calls = summed_node_calls(record)
+    if quantity == "calls_per_run":
+        return calls
+    if calls is None or not evaluations:
+        return None
+    return calls / evaluations
+
+
+def _optimiser_path(
+    campaign: Campaign,
+    population: Population,
+    source: str,
+    groups: Sequence[tuple[str, tuple[str, ...], Mapping[str, Mapping[int, Mapping[str, Any]]], Sequence[int]]],
+) -> Recomputed | None:
+    """Headline shape 2 re-derived: the optimiser's path over the configurations."""
+    base, arm = "B0", "B2"
+    rows: list[dict[str, Any]] = []
+    n_total = 0
+    for configuration, arms, index, converged in groups:
+        if base not in index or arm not in index:
+            continue
+        n_total += len(converged)
+        for text, quantity in PATH_ROWS:
+            row: dict[str, Any] = {
+                "quantity": text,
+                "configuration": configuration,
+                "arms": " · ".join(arms),
+                "n": len(converged),
+            }
+            for a in OPTIMISATION_LADDER:
+                if a not in index:
+                    row[a] = None
+                    continue
+                values = [
+                    _path_quantity(index[a][s], quantity)
+                    for s in converged
+                    if s in index[a] and completed(index[a][s])
+                ]
+                values = [v for v in values if v is not None]
+                row[a] = (sum(values) / len(values)) if values else None
+            pairs = [
+                (_path_quantity(index[base][s], quantity), _path_quantity(index[arm][s], quantity))
+                for s in converged
+                if s in index[base] and s in index[arm]
+                and completed(index[base][s]) and completed(index[arm][s])
+            ]
+            pairs = [(x, y) for x, y in pairs if x is not None and y is not None]
+            summary = _ratio_summary(pairs)
+            row.update(
+                {
+                    "ratio_mean": summary["mean"],
+                    "ratio_median": summary["median"],
+                    "ratio_bracket": "—" if summary["min"] is None else f"[{summary['min']:.3f}, {summary['max']:.3f}]",
+                    "n_above_one": summary["n_above_one"],
+                }
+            )
+            rows.append(row)
+    if not rows:
+        return None
+    return Recomputed(
+        name=f"the optimiser's path over the configurations — {source}",
+        caption=(
+            "recomputed: iterations summed over attempts, evaluations summed "
+            "over attempts[].sweeps_per_eval.n_evaluations, solve-phase node "
+            "calls summed over attempts and their quotient, per arm over the "
+            "seed set, with the B2/B0 per-seed ratio's mean, median, [min, max] "
+            "and count above 1"
+        ),
+        columns=("quantity", "configuration", "arms", "n", *OPTIMISATION_LADDER, "ratio_mean", "ratio_median", "ratio_bracket", "n_above_one"),
+        key_columns=("quantity", "configuration", "arms"),
+        rows=tuple(rows),
+        denominator=n_total,
+        denominator_is="seeds on which every arm converged, summed over the configurations",
+        composite=("arms", "ratio_bracket"),
+    )
 
 
 # --------------------------------------------------------------------------

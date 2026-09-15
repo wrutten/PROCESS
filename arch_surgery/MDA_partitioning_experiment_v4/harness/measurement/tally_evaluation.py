@@ -29,6 +29,22 @@ beside the second:
                        block visits' **sweep** share disclaimed and the two
                        predicates in columns of their own.
 ``failure_taxonomy``   §4.2.6 — every scheduled run a row, denominators stated.
+``node_calls_per_block`` the report's headline shape 3 (``REPORT_HEADLINE_TABLES.md``):
+                       mean node calls per evaluation **per block**, every
+                       configuration stacked in one table per source, with the
+                       ratio of the partitioned arm to its declared reference;
+                       the grouping is derived from the committed node map and
+                       the per-run artifact (added by task A79 (report-captions)).
+
+**Captions, since task A79 (report-captions).** Every table still declares
+units, row, column, population and construction (``tables.Caption``) — that
+declaration is printed **once per table kind** in the report's results
+appendix — and carries a ``summary`` of a few lines, which is what the report
+prints under the table.  Text that varies per table (the reference arm and
+whether it is a fallback, the audit position, a population's own share) lives
+in the summary; the declaration is the same for every table of a kind.  A
+table whose rows are individual runs is marked ``detail`` and is rendered into
+the companion file, not the report.
 
 **What the population is, stated once here and in every caption.** These
 tables are over **one declared population** (``tally.published_sources``): the
@@ -65,7 +81,7 @@ from harness.measurement import tables as tables_mod
 from harness.core.config import Campaign
 from harness.measurement.tables import Caption, Column, Table, cell_list
 
-__all__ = ["tally", "print_tally", "PHASE", "pairing_key"]
+__all__ = ["tally", "print_tally", "PHASE", "pairing_key", "node_grouping"]
 
 PHASE = "A"
 
@@ -318,7 +334,18 @@ def cost_per_call(
                 "stats.ratio_triple — pooled = Σ arm / Σ reference over the "
                 "paired runs; median = nearest-rank upper-middle of the "
                 "per-run ratios; worse = runs on which the arm cost more.  "
-                f"The reference arm is {base} — {why_base}"
+                "The reference arm is the declared one "
+                "(tally_evaluation.reference_arm): A1 on a pulsed "
+                "configuration, A0 on a steady-state one, and A0 as a stated "
+                "fallback where the population carries no A1 run — the "
+                "caption says which"
+            ),
+            summary=(
+                f"Node calls per evaluation by arm on {configuration}, "
+                f"{tally_mod.source_phrase(source)}, with the ratio against "
+                f"{base} pooled, as the per-run median and as runs on which the "
+                f"arm cost more. {_reference_sentence(base, why_base)} Prime "
+                f"calls stand beside the node calls, not in them."
             ),
             clauses=(
                 "the arrangement-method calls are stamped beside the node "
@@ -328,7 +355,9 @@ def cost_per_call(
                 "their sweep share",
                 f"these are {population.runs_word}: the population named "
                 f"above and no other",
-                f"pairs are keyed by {_paired_with(population)}",
+                "pairs are keyed by seed in a displaced or reference source and "
+                "by design-vector column in a stencil source; the pairing "
+                "column's heading says which",
             ),
             how_to_read=(
                 "a pooled ratio below 1 with worse = 0 means the arm was "
@@ -353,6 +382,20 @@ def cost_per_call(
         denominator=denominator,
         denominator_is=f"evaluation-phase {population.runs_word} of {configuration}",
         acceptance=True,
+        kind="cost_per_call",
+        report_omits=("paired_seeds",),
+    )
+
+
+def _reference_sentence(base: str, why_base: str) -> str:
+    """The one thing a cost-ratio caption must say: which arm, and why."""
+    if why_base.startswith("steady state"):
+        return f"{base} is the reference (steady state: no burn-time coupling)."
+    if why_base.startswith("pulsed:"):
+        return f"{base} is the declared reference (the same reduced map as A2)."
+    return (
+        f"**Fallback**: no A1 run here, so the ratio is against {base}, not "
+        f"the declared pair."
     )
 
 
@@ -467,15 +510,9 @@ def matched_accuracy(
                 "derived node → write sets → spec keys, never by a prefix rule"
             ),
             clauses=(
-                "**audit position**: "
-                + (
-                    ", ".join(positions)
-                    if positions
-                    else "not recorded on any run of this population"
-                )
-                + ".  A residual taken at the entry to the output path and one "
-                "taken after the run are different quantities and never share "
-                "an unlabelled table",
+                "**the audit position is a column**: a residual taken at the "
+                "entry to the output path and one taken after the run are "
+                "different quantities and never share an unlabelled table",
                 "**the audit instrument's version is read from the record** "
                 "(stats.audit_instrument), never assumed: task A61 "
                 "(insstrain-diagnosis) classified the largest residual seen at "
@@ -496,13 +533,24 @@ def matched_accuracy(
                 "**n counts runs, not values** (stats.accuracy_population): a "
                 "run whose audit carries no restricted block is counted in n "
                 "and shows in the column beside it, rather than vanishing from "
-                "the denominator of a median, which is trap T11.  Over this "
-                "population "
+                "the denominator of a median, which is trap T11; the caption "
+                "says whether every run of the population carried it",
+            ),
+            summary=(
+                f"Exit accuracy by arm on {configuration}, "
+                f"{tally_mod.source_phrase(source)}: the restricted maximum "
+                f"scaled residual (median, p90) on both rulers, the whole-state "
+                f"maximum and the argmax component; audit position "
+                + (", ".join(positions) if positions else "not recorded")
+                + ". The whole-state column is large for A2 by design and is "
+                "not judged."
                 + (
-                    "every run carried the statistic"
+                    ""
                     if not reasons
-                    else "some did not: " + "; ".join(sorted(reasons))
-                ),
+                    else " Some runs carried no restricted statistic: "
+                    + "; ".join(sorted(reasons))
+                    + "."
+                )
             ),
             how_to_read=(
                 "the restricted column is the declared statistic; the "
@@ -531,6 +579,7 @@ def matched_accuracy(
         denominator_is=f"evaluation-phase {population.runs_word} of {configuration}",
         acceptance=True,
         audit_position_labelled=True,
+        kind="matched_accuracy",
     )
     table.similarity_verdicts = verdicts  # type: ignore[attr-defined]
     return table
@@ -784,17 +833,19 @@ def fixed_point_distance(
             units=(
                 "dimensionless: the largest scaled difference between two "
                 "arms' exit coupling states at the same entry, in the units "
-                f"τ = {tau:g} is stated in"
+                "τ is stated in"
             ),
             row_is=(
                 "one pair of arms: each rung of the evaluation phase's ladder "
                 "(adjacent arms, differing by one named thing) and, marked "
-                f"headline, the partitioned arm against {headline_base} "
-                f"({why_base}); on a pulsed configuration A2/A0 is published "
-                "beside, the previous revision's pair"
+                "headline, the partitioned arm against the declared reference "
+                "(A1 on a pulsed configuration, A0 on a steady-state one); on "
+                "a pulsed configuration A2/A0 is published beside, the "
+                "previous revision's pair"
             ),
             column_is=(
-                f"the pairs the two arms share (by {paired_on}), how many of "
+                "the pairs the two arms share (by seed, or by design-vector "
+                "column in a stencil source), how many of "
                 "them were compared and why the rest were not, the restricted "
                 "distance's median, p90 and worst pair, the components the "
                 "maximum sat on, the pairs with any restricted component at "
@@ -827,9 +878,9 @@ def fixed_point_distance(
                 "offered here because its denominator reads a current value "
                 "and a distance between two states has no current side",
                 "**the exit states are the ones the audit read**: taken at "
-                + (", ".join(positions) if positions else "an unrecorded position")
-                + ", before the audit's own sweep, so a state moved by the "
-                "instrument cannot enter this table",
+                "the audit position the caption names, before the audit's own "
+                "sweep, so a state moved by the instrument cannot enter this "
+                "table",
                 "**n counts the pairs the two arms share**, and n_compared the "
                 "ones on which both exit states exist and both audits carry the "
                 "restriction; the shortfall is named by reason in the column "
@@ -844,6 +895,15 @@ def fixed_point_distance(
                 "the two arms stopped at the same fixed point to within the "
                 "tolerance they were asked for; a pair above τ names an entry "
                 "on which they did not, and the worst-pair column says which"
+            ),
+            summary=(
+                f"Distance between two arms' exit states at the same entry on "
+                f"{configuration}, {tally_mod.source_phrase(source)}: restricted "
+                f"median, p90, worst pair and the pairs with a component "
+                f"≥ τ = {tau:g}, one row per rung of the ladder; headline pair "
+                f"A2/{headline_base}; exit states taken at "
+                + (", ".join(positions) if positions else "an unrecorded position")
+                + ". Reported, not accepted on."
             ),
         ),
         columns=(
@@ -869,6 +929,7 @@ def fixed_point_distance(
             f"evaluation-phase pairs of {configuration} over the ladder's rungs"
         ),
         acceptance=False,
+        kind="fixed_point_distance",
     )
 
 
@@ -948,6 +1009,13 @@ def ownership_rung(
                 "the ratio is the loop's cost of converging the burn time; "
                 "the residual is what holding it constant costs in accuracy"
             ),
+            summary=(
+                f"The rung A0 → A1 on {configuration}, "
+                f"{tally_mod.source_phrase(source)}: the per-call cost of "
+                f"pinning the burn time (A1/A0) and the residual the constant "
+                f"leaves at exit, in seconds and relative to the burn time. "
+                f"Not a claim about the partition."
+            ),
         ),
         columns=(
             Column("n", "n", fmt=_fmt_int),
@@ -963,6 +1031,8 @@ def ownership_rung(
         denominator=len(flat) + len(pinned),
         denominator_is=f"A0 and A1 {population.runs_word} of {configuration}",
         acceptance=True,
+        kind="ownership_rung",
+        report_omits=("paired_seeds",),
     )
 
 
@@ -1020,14 +1090,18 @@ def per_sweep_overhead(
         "repaired**: a block whose members are skipped at the call site is "
         "still visited and still costs a full walk of the model sequence.  The "
         "share quoted is the **sweep** share — the fraction of the run's "
-        "dispatch sweeps those visits cost — and over this population it is "
+        "dispatch sweeps those visits cost — stated per population in the "
+        "caption.  The *visit* share is a different and larger number and is "
+        "never quoted: a block visited with no members costs no sweep at all"
+    )
+    shares_sentence = (
+        "The empty-visit sweep share over this population is "
         + (
             ", ".join(f"{v:g} %" for v in shares_seen)
             if shares_seen
             else "not computable on any run here"
         )
-        + ".  The *visit* share is a different and larger number and is never "
-        "quoted: a block visited with no members costs no sweep at all"
+        + "."
     )
     return Table(
         name=f"per-sweep overhead — {configuration} — {source}",
@@ -1062,6 +1136,13 @@ def per_sweep_overhead(
                 "the other test's columns are 0 or blank for that arm, which "
                 "is the point of keeping them apart"
             ),
+            summary=(
+                f"Convergence-test cost per finished run on {configuration}, "
+                f"{tally_mod.source_phrase(source)}: sweeps, and for the test "
+                f"the arm stops on its evaluations, components compared and "
+                f"mean width; the two predicates are never summed. "
+                f"{shares_sentence}"
+            ),
         ),
         columns=(
             Column("arm", "arm"),
@@ -1083,6 +1164,8 @@ def per_sweep_overhead(
             f"finished evaluation-phase {population.runs_word} of {configuration}"
         ),
         acceptance=True,
+        kind="per_sweep_overhead",
+        detail=True,
     )
 
 
@@ -1140,6 +1223,12 @@ def failure_taxonomy(
                 "a nonzero crashed column is a machinery result that must be "
                 "explained before any ratio on this configuration is cited"
             ),
+            summary=(
+                f"Every scheduled evaluation of {configuration}, "
+                f"{tally_mod.source_phrase(source)}, by arm and disposition, "
+                f"the rows summing to the scheduled count; the detail is each "
+                f"unfinished run's last traceback line."
+            ),
         ),
         columns=(
             Column("arm", "arm"),
@@ -1152,6 +1241,253 @@ def failure_taxonomy(
         denominator=sum(len(v) for v in by_arm.values()),
         denominator_is=f"evaluation-phase {population.runs_word} of {configuration}",
         acceptance=True,
+        kind="failure_taxonomy",
+    )
+
+
+def node_grouping(
+    campaign: Campaign,
+    configuration: str,
+    records: Sequence[Mapping[str, Any]],
+    *,
+    phase: str,
+) -> list[dict[str, Any]]:
+    """The node groups the per-block and per-module tables print, derived.
+
+    From the committed node map (``harness/data/dsm_node_map.json``) and the
+    configuration's per-run artifact — the one **every record of the
+    configuration names** in ``per_run_artifact``; two records naming two
+    artifacts is a refusal — whose ``post_solve_nodes`` are the once-per-run
+    group.  The artifact's node set is checked against what each record's
+    exit audit stamped as excluded (``exit_audit.restricted.per_run_nodes``)
+    where a record carries it, so the grouping is the one the runs were
+    audited under and not one read off a file nobody ran.  The nodes grouped
+    are the ones any record's census counted (:func:`stats.per_node_census`).
+    """
+    names = sorted(
+        {Path(str(r.get("per_run_artifact"))).name for r in records if r.get("per_run_artifact")}
+    )
+    if not names:
+        raise tally_mod.TallyError(
+            f"{configuration}: no record names a per-run artifact; the "
+            f"once-per-run group would be guessed, so the table is refused"
+        )
+    # The committed input file and the lifted one each have a per-run
+    # artifact (the optimisation phase's flat arms name the first, the lifted
+    # arms the second); the grouping needs their node sets to be the same set,
+    # and refuses otherwise.
+    node_sets: dict[str, list[str]] = {}
+    for name in names:
+        artifact = Path(campaign.data_dir) / name
+        if not artifact.exists():
+            raise tally_mod.TallyError(
+                f"{configuration}: the per-run artifact {name} the records name "
+                f"is not in this tree's data directory"
+            )
+        node_sets[name] = sorted(
+            str(n) for n in json.loads(artifact.read_text())["post_solve_nodes"]
+        )
+    if len({tuple(v) for v in node_sets.values()}) != 1:
+        raise tally_mod.TallyError(
+            f"{configuration}: the records name {names}, whose once-per-run "
+            f"node sets differ ({node_sets}); one grouping cannot serve them "
+            f"and the table is refused rather than grouped by a guess"
+        )
+    per_run = node_sets[names[0]]
+    for record in records:
+        audited = ((record.get("exit_audit") or {}).get("restricted") or {}).get("per_run_nodes")
+        if audited is not None and set(audited) != set(per_run):
+            raise tally_mod.TallyError(
+                f"{configuration}: the exit audit of {stats_mod._label(record)} "
+                f"excluded {sorted(audited)} and the artifact(s) {names} name "
+                f"{sorted(per_run)}; the grouping would not be the one the run "
+                f"was audited under"
+            )
+    node_map = json.loads((Path(campaign.data_dir) / "dsm_node_map.json").read_text())
+    seen: set[str] = set()
+    for record in records:
+        seen |= set(stats_mod.per_node_census(record, phase=phase))
+    return stats_mod.node_groups(node_map, per_run, sorted(seen))
+
+
+#: Up to this many nodes a group's members are listed by name in the table;
+#: a larger group prints the node map's label for the module and its count,
+#: the membership being the committed map's (``harness/data/dsm_node_map.json``).
+MEMBERS_LISTED_UP_TO = 4
+
+
+def group_members(campaign: Campaign, group: str, nodes: Sequence[str]) -> str:
+    """The *which* cell of a node-group row: names, or the map's label."""
+    if len(nodes) <= MEMBERS_LISTED_UP_TO:
+        return ", ".join(nodes)
+    node_map = json.loads((Path(campaign.data_dir) / "dsm_node_map.json").read_text())
+    label = str(((node_map.get("modules") or {}).get(group) or {}).get("label") or group)
+    return f"{label}: {len(nodes)} nodes (the committed node map's members)"
+
+
+def node_calls_per_block(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    source: str,
+) -> Table | None:
+    """The report's headline shape 3: node calls per block, configurations stacked.
+
+    One table per source.  For each configuration the population carries, one
+    row per node group (:func:`node_grouping`) and a TOTAL row; a column per
+    evaluation-phase arm with the **mean node calls per evaluation** over the
+    arm's finished runs (``node_census.counted``, the measured evaluation
+    alone), and the **pooled** ratio of the partitioned arm to the
+    configuration's declared reference (Σ A2 / Σ reference over the pairs both
+    sides finished, keyed as :func:`pairing_key` keys them).  The TOTAL row's
+    ratio is the cost-per-call table's pooled ratio, reached by another road:
+    the census sums to ``node_calls_single_eval`` on every record.
+    """
+    rows: list[dict[str, Any]] = []
+    n_finished = 0
+    any_arms = False
+    for config in campaign.configurations:
+        by_arm = _by_arm(population, config.name)
+        if not by_arm:
+            continue
+        any_arms = True
+        finished_by_arm = {
+            arm: [r for r in records if stats_mod.finished(r)]
+            for arm, records in by_arm.items()
+        }
+        every = [r for records in finished_by_arm.values() for r in records]
+        n_finished += len(every)
+        if not every:
+            continue
+        groups = node_grouping(campaign, config.name, every, phase=PHASE)
+        base, _why = reference_arm(config.pulsed, set(by_arm))
+        by_seed = _by_arm_and_seed(population, config.name)
+        # Per run, calls per group, for the means and the paired ratio.
+        per_group_calls: dict[str, dict[str, list[int]]] = {}
+        for arm, records in finished_by_arm.items():
+            for record in records:
+                counted = stats_mod.per_node_census(record, phase=PHASE)
+                grouped = stats_mod.census_by_group(counted, groups)
+                grouped["TOTAL"] = sum(counted.values())
+                for group, calls in grouped.items():
+                    per_group_calls.setdefault(group, {}).setdefault(arm, []).append(calls)
+        paired_keys = sorted(
+            k
+            for k in set(by_seed.get(base, {})) & set(by_seed.get("A2", {}))
+            if stats_mod.finished(by_seed[base][k]) and stats_mod.finished(by_seed["A2"][k])
+        ) if base in by_seed and "A2" in by_seed else []
+        labels = [(g["group"], g["nodes"]) for g in groups] + [("TOTAL", [n for g in groups for n in g["nodes"]])]
+        for group, nodes in labels:
+            row: dict[str, Any] = {
+                "configuration": config.name,
+                "block": group,
+                "n_nodes": len(nodes),
+                "nodes": group_members(campaign, group, nodes) if group != "TOTAL" else "all counted nodes",
+                "reference": base,
+            }
+            for arm in LADDER:
+                values = per_group_calls.get(group, {}).get(arm)
+                row[arm] = _mean(values) if values else None
+            ratio = None
+            if paired_keys:
+                left = [
+                    stats_mod.census_by_group(
+                        stats_mod.per_node_census(by_seed[base][k], phase=PHASE), groups
+                    ) | {"TOTAL": sum(stats_mod.per_node_census(by_seed[base][k], phase=PHASE).values())}
+                    for k in paired_keys
+                ]
+                right = [
+                    stats_mod.census_by_group(
+                        stats_mod.per_node_census(by_seed["A2"][k], phase=PHASE), groups
+                    ) | {"TOTAL": sum(stats_mod.per_node_census(by_seed["A2"][k], phase=PHASE).values())}
+                    for k in paired_keys
+                ]
+                total_reference = sum(v[group] for v in left)
+                ratio = (
+                    sum(v[group] for v in right) / total_reference
+                    if total_reference
+                    else None
+                )
+            row["ratio"] = ratio
+            row["n_pairs"] = len(paired_keys)
+            rows.append(row)
+    if not any_arms:
+        return None
+    return Table(
+        name=f"node calls per block — {source}",
+        caption=Caption(
+            units="model-node executions per `call_models` evaluation, per "
+            "block; the ratio is dimensionless",
+            row_is="one node group of one configuration (the three modules, "
+            "the pulse node, the feed-forward tail and the once-per-run "
+            "deferred nodes, each as the committed node map and the "
+            "configuration's per-run artifact place them), then that "
+            "configuration's TOTAL over every counted node",
+            column_is="one evaluation-phase arm's mean node calls per "
+            "evaluation over its finished runs, or the pooled ratio of A2 to "
+            "the configuration's declared reference over the pairs both sides "
+            "finished",
+            population=(
+                f"{population.what}; {n_finished} finished run(s) over every "
+                f"configuration the source carries"
+            ),
+            construction=(
+                "stats.per_node_census (node_census.counted — the measured "
+                "evaluation alone, frozen before the exit audit's sweep) "
+                "summed over each group of stats.node_groups; the group's "
+                "mean is the arithmetic mean over the arm's finished runs; the "
+                "ratio is Σ A2 / Σ reference over the paired runs "
+                "(stats.per_seed_ratio_summary's pooled reading), the "
+                "reference being A1 on a pulsed configuration and A0 on a "
+                "steady-state one (tally_evaluation.reference_arm)"
+            ),
+            clauses=(
+                "the once-per-run group holds the configuration's deferred "
+                "nodes whatever module the map assigns them: the partitioned "
+                "arm runs them once, after the solve, so their calls are not a "
+                "module's loop cost",
+                "a group absent from a configuration's rows means no such node "
+                "ran there, not that it cost nothing",
+                "the TOTAL row is the cost-per-call table's per-run mean and "
+                "pooled ratio reached through the census, which sums to "
+                "node_calls_single_eval on every record",
+                "the arrangement-method (prime) calls are not model nodes and "
+                "are not in any row",
+            ),
+            how_to_read=(
+                "read down a configuration's block rows to see where the "
+                "partition's saving sits; a ratio near 1 on a block means the "
+                "block is solved about as often as the flat arm sweeps it"
+            ),
+            summary=(
+                f"Mean node calls per evaluation by block and arm, "
+                f"configurations stacked, {tally_mod.source_phrase(source)}; "
+                f"the ratio is A2 pooled against the configuration's reference "
+                f"(the *reference* column: A1 pulsed, A0 on st). The "
+                f"once-per-run row is the deferred nodes; prime calls are not "
+                f"counted."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("block", "block"),
+            Column("n_nodes", "nodes", fmt=_fmt_int),
+            Column("nodes", "which"),
+            *[
+                Column(arm, arm, fmt=lambda v: "—" if v is None else f"{v:.1f}")
+                for arm in LADDER
+            ],
+            Column("reference", "reference"),
+            Column("ratio", "A2 / reference (pooled)", fmt=_fmt_ratio),
+            Column("n_pairs", "pairs", fmt=_fmt_int),
+        ),
+        rows=tuple(rows),
+        denominator=n_finished,
+        denominator_is=(
+            f"finished evaluation-phase {population.runs_word} of every "
+            f"configuration in this source"
+        ),
+        acceptance=True,
+        kind="node_calls_per_block",
     )
 
 
@@ -1226,14 +1562,21 @@ def predicate_trial(campaign: Campaign, records_dir: Path) -> Table | None:
                 "audited on the frozen and the mixed ruler, so a difference "
                 "between the audit columns of one row is a change of ruler and "
                 "a difference down a column is a change of run",
-                (
-                    "the components that made a pass decisive carry |y|/s up "
-                    f"to {max(ratios):g} over this population"
+                "the size of |y|/s on the components that made a pass "
+                "decisive, or the absence of any such component, is stated per "
+                "population in the caption",
+            ),
+            summary=(
+                "The predicate trial, frozen against mixed: per pair of runs, "
+                "the decisive passes as crossings and as verdict changes, "
+                "bit-identity, and the exit audit on both rulers. "
+                + (
+                    "The decisive components carry |y|/s up to "
+                    f"{max(ratios):g}."
                     if ratios
-                    else "no component made a pass decisive over this "
-                    "population, which is a result about these arms and these "
-                    "seeds, stated with its population"
-                ),
+                    else "No component made a pass decisive."
+                )
+                + " From gate predicate_mode's verdict."
             ),
             how_to_read=(
                 "a pair with no verdict change must be bit-identical, which is "
@@ -1258,6 +1601,8 @@ def predicate_trial(campaign: Campaign, records_dir: Path) -> Table | None:
         denominator=len(rows),
         denominator_is="pairs of runs, one per ruler",
         acceptance=True,
+        kind="predicate_trial",
+        detail=True,
     )
 
 
@@ -1345,6 +1690,9 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             emitted.append(
                 failure_taxonomy(campaign, population, config.name, source.name)
             )
+        stacked = node_calls_per_block(campaign, population, source.name)
+        if stacked is not None:
+            emitted.append(stacked)
     trial = predicate_trial(
         campaign, Path(campaign.runs_dir) / tally_mod.GATE_RUNS_SUBPATH
     )

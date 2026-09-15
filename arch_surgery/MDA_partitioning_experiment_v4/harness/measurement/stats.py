@@ -84,6 +84,13 @@ __all__ = [
     "empty_visit_shares",
     "predicate_widths",
     "fixed_point_distance",
+    "NODE_GROUP_ORDER",
+    "ONCE_PER_RUN_GROUP",
+    "node_groups",
+    "per_node_census",
+    "census_by_group",
+    "n_evaluations",
+    "per_seed_ratio_summary",
 ]
 
 
@@ -1288,4 +1295,174 @@ def fixed_point_distance(
             "upper-middle median and nearest-rank ceil(0.9 n) p90 of the "
             "restricted maximum"
         ),
+    }
+
+
+# --------------------------------------------------------------------------
+# the headline tables' constructions (task A79 (report-captions), 2026-09-15)
+# --------------------------------------------------------------------------
+
+#: The node groups of the partition, in the order the headline tables print
+#: them: the three modules, the articulation point, the feed-forward tail.
+#: Read from the committed node map's ``module_order``, never typed here; this
+#: tuple is the *printing* order and is checked against that map.
+NODE_GROUP_ORDER: tuple[str, ...] = ("M1", "M2", "M3", "PULSE", "FF")
+
+#: The label of the group that holds the configuration's once-per-run deferred
+#: nodes, whatever module the map puts them in: the partitioned arm runs them
+#: once at the end of the solve, so their calls belong to no module's loop.
+ONCE_PER_RUN_GROUP = "once per run"
+
+
+def node_groups(
+    node_map: Mapping[str, Any],
+    per_run_nodes: Sequence[str],
+    nodes_seen: Sequence[str],
+) -> list[dict[str, Any]]:
+    """**The module grouping of the headline tables**, derived and never listed.
+
+    Every node the census counted is placed by the committed node map
+    (``harness/data/dsm_node_map.json``, ``nodes[<node>].module``) into
+    ``M1``, ``M2``, ``M3``, ``PULSE`` or ``FF``, **except** the configuration's
+    once-per-run deferred nodes — the ``post_solve_nodes`` of the per-run
+    artifact the runs name — which form their own group whatever module the map
+    assigns them, because the partitioned arm executes them once per run, after
+    the solve, and their calls are not a module's loop cost.  A node the census
+    saw and the map does not name is a refusal: the grouping would otherwise be
+    guessed.  Groups with no node seen are omitted rather than printed as 0,
+    so a group's absence means *no such node ran here* and not *it cost
+    nothing*.  Returns ``[{"group", "nodes"}]`` in ``NODE_GROUP_ORDER`` with the
+    once-per-run group last.
+    """
+    modules = node_map.get("nodes") or {}
+    order = node_map.get("module_order") or {}
+    unknown = sorted(n for n in nodes_seen if n not in modules)
+    if unknown:
+        raise StatsError(
+            f"the census counted node(s) {unknown} that the committed node map "
+            f"does not place in a module; the grouping would be guessed, so "
+            f"the per-module table is refused"
+        )
+    declared = {m for m in order if m != "X"}
+    if declared != set(NODE_GROUP_ORDER):
+        raise StatsError(
+            f"the node map's module_order names {sorted(declared)} and this "
+            f"construction prints {NODE_GROUP_ORDER}; one of them has moved"
+        )
+    once = set(per_run_nodes)
+    grouped: dict[str, list[str]] = {g: [] for g in NODE_GROUP_ORDER}
+    grouped[ONCE_PER_RUN_GROUP] = []
+    for node in sorted(set(nodes_seen)):
+        if node in once:
+            grouped[ONCE_PER_RUN_GROUP].append(node)
+        else:
+            grouped[str(modules[node]["module"])].append(node)
+    return [
+        {"group": group, "nodes": nodes}
+        for group, nodes in grouped.items()
+        if nodes
+    ]
+
+
+def per_node_census(record: Mapping[str, Any], *, phase: str) -> dict[str, int]:
+    """**Model executions per node, read from the run's own census.**
+
+    The evaluation phase (``phase == "A"``) stamps ``node_census.counted``: the
+    measured evaluation alone, frozen before the exit audit's uncharged sweep,
+    so it sums to ``node_calls_single_eval``.  The optimisation phase
+    (``"B"``) stamps ``node_census.per_node_counted`` over the **whole run** —
+    every attempt, the output path and the exit audit's one sweep — and says
+    whether that sum matches the driver's counter
+    (``counted_matches_node_calls_total``); a record where it does not is a
+    refusal, because a per-module split of a total nobody can reconcile is a
+    table of nothing.  The whole-run count exceeds the solve-phase total by
+    the output path and the audit, and the per-module table prints that
+    difference as its own row rather than apportioning it.
+    """
+    census = record.get("node_census") or {}
+    if phase == "A":
+        counted = census.get("counted")
+    else:
+        counted = census.get("per_node_counted")
+        if census.get("counted_matches_node_calls_total") is False:
+            raise StatsError(
+                f"{_label(record)}: the per-node census sums to "
+                f"{census.get('sum_counted')} and the driver's counter reads "
+                f"{census.get('node_calls_total_reported')}; a per-module split "
+                f"of a total that does not reconcile is refused"
+            )
+    if not isinstance(counted, Mapping) or not counted:
+        raise StatsError(
+            f"{_label(record)}: no per-node census on this record, so the "
+            f"per-module table cannot be built from it"
+        )
+    return {str(k): int(v) for k, v in counted.items()}
+
+
+def census_by_group(
+    counted: Mapping[str, int], groups: Sequence[Mapping[str, Any]]
+) -> dict[str, int]:
+    """Node calls summed over each group's nodes, one run: ``{group: calls}``."""
+    return {
+        str(g["group"]): sum(int(counted.get(node, 0)) for node in g["nodes"])
+        for g in groups
+    }
+
+
+def n_evaluations(record: Mapping[str, Any]) -> int | None:
+    """**The run's evaluations of the model set** — ``sweeps_per_eval.n_evaluations``.
+
+    The count of ``call_models`` entries the driver's histogram saw during
+    the solve, output path excluded, summed over every attempt (the driver
+    accumulates the histogram across the retry ladder).  This is the ε of
+    R = ρ × ε (the V5 improvement list, item 1) and the field issue **I-26**
+    names as the correct one: ``n_model_calls`` counts something else.  Check
+    2's existing *evaluations median* column still reads ``n_model_calls`` and
+    is task A80's to correct; this construction does not touch it.
+    """
+    block = record.get("sweeps_per_eval") or {}
+    value = block.get("n_evaluations")
+    return None if value is None else int(value)
+
+
+def per_seed_ratio_summary(
+    reference: Sequence[float], arm: Sequence[float]
+) -> dict[str, Any]:
+    """**A per-seed ratio, summarised**: the headline tables' second reading.
+
+    Over paired values (element *i* of each is the same seed): the
+    **pooled** ratio Σ arm / Σ reference; the **mean** of the per-seed
+    ratios; their nearest-rank upper-middle **median** and ``[min, max]``;
+    and **``n_above_one``**, the count of seeds on which the arm's value
+    exceeded the reference's (ratio > 1).  The pooled ratio is the campaign's
+    figure; the mean and median are the typical seed's; the count says on how
+    many seeds the direction reversed.  A pair whose reference is 0 or whose
+    side is missing is dropped from the per-seed statistics and counted in
+    ``n_dropped``, never silently.
+    """
+    if len(reference) != len(arm):
+        raise StatsError(
+            f"a per-seed ratio over {len(reference)} reference values and "
+            f"{len(arm)} arm values: the two sides are not the same seeds"
+        )
+    per_seed = [
+        (b / a)
+        for a, b in zip(reference, arm)
+        if a not in (0, None) and b is not None
+    ]
+    total_reference = sum(v for v in reference if v is not None)
+    bracket = seed_bracket(per_seed)
+    return {
+        "n": len(per_seed),
+        "n_dropped": len(reference) - len(per_seed),
+        "pooled": (
+            (sum(v for v in arm if v is not None) / total_reference)
+            if total_reference
+            else None
+        ),
+        "mean": (sum(per_seed) / len(per_seed)) if per_seed else None,
+        "median": median(per_seed),
+        "min": None if bracket is None else bracket[0],
+        "max": None if bracket is None else bracket[1],
+        "n_above_one": sum(1 for r in per_seed if r > 1),
     }
