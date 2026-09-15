@@ -5920,7 +5920,7 @@ implementation plan's.*
 
 ## Appendix C — Change log
 
-*Entries dated before 2026-09-15 use the arm names of their day and are not rewritten: `A0p` is
+*Entries before the renaming entry of 2026-09-15 (including A76's, dated the same day but written before the rename) use the arm names of their day and are not rewritten: `A0p` is
 today's `A1`, `A1` is today's `A2`, `B3` is today's `B2`; a `B2` in those entries is V3's removed
 joint-test arm, not today's partitioned optimisation arm (the renaming entry of 2026-09-15, below).*
 
