@@ -315,3 +315,22 @@ regenerated over the same 949 records; `stage_provenance` is a self-check and pa
 ## 11. Change log
 
 - 2026-09-15 — task opened at `4dac585e`; the work above; report written at `4cfd1b11`.
+
+## 12. Orchestrator's critical assessment (protocol §5)
+
+*Written 2026-09-15 at `0c02fefe` by the orchestrating session, by checks that differ from the agent's; gates the merge.*
+
+**Checks.**
+1. **The headline tables against the report's own prior headlines**, read off the rendered tables, not the agent's numbers: Table D.7's TOTAL rows read `A2/reference` 0.5625 / 0.5772 / 0.5016 — the §5/§6 headline 0.56 / 0.58 / 0.50 as published before this task; Table D.5's `R = ρ × ε` rows give Σ-ratios 27187/42515 = 0.6395, 74312/164997 = 0.4504, 56507/106007 = 0.5331 — the 0.640 / 0.450 / 0.533 of §5 — with medians 0.6452 / 0.5237 / 0.5911 as before; Table D.2's `all counted nodes` row 0.6391 differs from D.5's 0.6414 by the 63 whole-run node calls outside the solve phase, which D.2's last row states. The ε row's 22/21 = 1.0476 median on nof for `B2` and `B1` is the lift's stencil column, the pre-declared expectation of §3.5.
+2. **References.** Every `Table D.n` cited in the report (80 defined, 92 citations plus ranges) resolves; 0 dangling, by a scan of my own. No table in the report has more than 30 grid rows (D.1, the gate table, has exactly 30 — one per gate); no table has a row per seed.
+3. **Captions.** 80 `Table D.n` captions, mean 383 characters, longest 503 — three to four lines; one `*Caption:` per table, the doubling gone. §3's six tables numbered `Table 1`–`6`.
+4. **Scope by diff.** Nothing under `PROCESS/`, `harness/child/` or the root `process/`; `EXECUTION_APPROVED` untouched; the companion file carries a GENERATED, never hand-edited header.
+5. The agent's cell-preservation proof (`results_cells_unchanged.py`, 33 467 / 33 467 with 0 differing) and the gate presses at `9b424b50` I did not repeat; their verdict records are in the worktree at the commit named.
+
+**Findings for the record.**
+- **Table D.5's caption says `n = 55 (… summed over the configurations)`.** Configurations are never pooled (D21 (b)); the per-row `n` column carries the right denominators (22 / 11 / 22) and the caption's summed n should go — a one-line caption fix for A80 alongside its other three findings (§5.8's per-optimisation sentence, I-26's column, the two-counts gate cell).
+- **The "B2/B0 mean" column of Table D.5 is the mean of per-seed ratios** (lad iterations 1.3842 against a median of 0.8125, one seed at 5.909) — as in the user's shape, and the caption says so; a reader should take the pooled Σ-ratio from the arm means beside it. Not a defect; noted so §4/§5 never quote that column as the cost.
+- **Table numbers are positional** (agent's decision item 1). Accepted with the agent's remedy: the construction name printed under each grid is the stable citation, and `check` resolves every number; TRAPS gains **T17** and the harness plan amendment 28 at the merge.
+- The V5 list should gain the per-module split finding (M2 solved about as often as the flat arm sweeps it) as a design input — added as item 2 at the merge, marked as arising from A79, not the user's.
+
+**Verdict: merge.** The user's five rulings are met as stated — few-line numbered captions, big tables in Appendix D with context, no per-seed tables in the report, §4 as conclusions, the three headline shapes as tally output under the recomputation gate; no number changed by the agent's proof and by my cross-reading of the headlines; zero PROCESS runs.
