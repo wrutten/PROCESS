@@ -741,15 +741,19 @@ the arm cost more.*
 
 ### 4.1 Gates
 
-Every table below is read under a passed gate table: **30 gates PASS, 0 FAIL, 161 of 161 teeth
-tripped** (Table D.1). The rows that license the numbers directly: the reproduction gate GR
+Every table below is read under a passed gate table: **30 gates PASS, 0 FAIL, 163 of 163 teeth
+tripped** (Table D.1). *(A85 (v3-table-formats): 161 before it; `tally_contracts` gained two — a
+node group whose members executed unequally has no sweep count, and a node map stating no DSM row
+count for a module refuses the weighted total rather than guessing it.)* The rows that license the numbers directly: the reproduction gate GR
 reproduces the previous revision's twenty records on 256 of 256 compared values; the neutrality
 gate G1 finds 0 of 54 144 compared values changed across the driver commits it straddles (2 825
 record values and 51 319 output-file lines, the two counts its cell now shows); the recomputation
 row states that a second implementation sharing no construction with the tally reproduced every
-published cell — **107 tables, 15 122 cells compared, 0 mismatched**; `tally_contracts` reproduces
-the 256 reference cells and finds every emitted table captioned with a counted denominator (its 577
-compared are 321 table checks + 256 cells, two counts the cell shows since A80);
+published cell — **122 tables, 16 276 cells compared, 0 mismatched**; `tally_contracts` reproduces
+the 256 reference cells and finds every emitted table captioned with a counted denominator (its 622
+compared are 366 table checks + 256 cells, two counts the cell shows since A80);
+*(A85 (v3-table-formats): 107 tables and 15 122 cells before it — the 1 154 new cells are the
+fifteen module-sweep tables, one per configuration and source in each phase.)*
 `run_kind_separation` shows the 949 campaign records and no gate or smoke record in every published
 population. Two PASS rows carry a nonzero *mismatched*: the frozen-physics gate `g0prime`, which
 counts the single model file the user approved as differing, by name (1 of 77), and `copy_identity`,
@@ -1139,7 +1143,7 @@ residual — both are per-run tables and are companion companion Table F.6 (the 
 
 Every cell of Tables 7–9 and Tables D.2–D.15 and of the companion's tally tables was recomputed from the run
 records by `harness/measurement/analysis.py`, which imports none of the tally's constructions, and
-compared without tolerance: **101 tables, 14 394 cells, 0 mismatched** (gate `recomputation`, one
+compared without tolerance: **122 tables, 16 276 cells, 0 mismatched** (gate `recomputation`, one
 row of Table D.1); the recomputed copies themselves are not rendered — that row is the check, and the gate's record holds the cells.
 
 ## 5. Discussion
@@ -1437,7 +1441,7 @@ package's internals are the implementation plan's.*
 | `experiment_runner.py` | one-button entry point: `--selfcheck`, `--gate`, `--measure`, `--plan-tables write\|check`, `--smoke`, `--campaign`, `--jobs`; refused the campaign until approved |
 | `RESULTS_TABLES_FULL.md` | the companion file of Appendix D: every full result matrix (per-run, per-seed and per-pair tables, the full versions of tables whose per-seed columns the report omits, the second implementation's tables), numbered `Table F.n`, generated whole by `--plan-tables write` and guarded by `--plan-tables check`; never hand-edited (A79 (report-captions), 2026-09-15) |
 | `run_stamp_survey.py` | the survey behind "this press re-made no run": `tree_git_head` read out of every run record before and after a press (trap T13) |
-| `report_counts_check.py` | every count the report states — the 949 / 921 / 28, the 25 per arm, the seed sets 22 / 11 / 22 with every seed outside them by arm and disposition, the crash taxonomy by seed, the retried seeds, the prime-calls-per-sweep identity, ε on `B1 → B2` per seed, `AR/A0`, the predicate trial's ruler ratio, the 30 gates / 161 teeth — re-derived from the records through the harness and printed beside the report's figure (A80 (report-accuracy-audit), 2026-09-15) |
+| `report_counts_check.py` | every count the report states — the 949 / 921 / 28, the 25 per arm, the seed sets 22 / 11 / 22 with every seed outside them by arm and disposition, the crash taxonomy by seed, the retried seeds, the prime-calls-per-sweep identity, ε on `B1 → B2` per seed, `AR/A0`, the predicate trial's ruler ratio, the 30 gates / 163 teeth — re-derived from the records through the harness and printed beside the report's figure (A80 (report-accuracy-audit), 2026-09-15) |
 | `PROCESS/` | V4's own copy of the PROCESS package (D20); every V4 driver change lives here; `models/` frozen at `c0ae5b28`, gated. `PROCESS/PROVENANCE.json` names the source commit (`f2dc9243`) and every file's sha256; `PROCESS/copy_gates.py` is the copy-identity gate, G0′ and the smoke import, nine teeth (A46 (process-copy), merged 2026-09-10) |
 | `PROCESS_diff.py` | shows every change the experiment made to PROCESS: a `git diff` of `PROCESS/process/` against the copy's source commit, grouped by file with a plain-language overview (user, 2026-09-10) |
 | `harness/` | the self-contained package (per the implementation plan): `core/`, `experiment/`, `child/`, `gates/`, `measurement/`, `data/` (the committed per-configuration artifacts and input files), `reference/` (the committed reproduction reference), `chain.py`; every verification gate and every measurement stage is implemented here (its own `README.md` is the map) |
