@@ -1645,7 +1645,7 @@ as a diff and writing nothing, and also resolves every `Table D.n` / `Table F.n`
 report's hand-written text against the numbers this rendering assigns — **table numbers are
 positional** and move when a table is added, so a dangling reference fails the check. A cell is
 traced by the construction name under its grid, never by its number
-(`results_cells_unchanged.py` is the proof script that keys cells that way).
+(A79 (report-captions)'s proof script keyed cells that way; removed with the other one-off proofs on 2026-09-15, in history at `c83aec6d`).
 
 **What the cells are over is stamped on the appendix and in every caption's denominator.** While
 `EXECUTION_APPROVED` is `False` there is no campaign, so every cell is over the **gate
