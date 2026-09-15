@@ -113,7 +113,7 @@ REGIMES: tuple[str, ...] = ("unperturbed", "perturbed", "stencil")
 
 #: Where the exit audit's sweep is taken.  It is recorded per run because a
 #: residual table whose arms were audited at different points, without saying
-#: so, is the thing that must not happen (EXPERIMENT_PLAN.md §3.3).
+#: so, is the thing that must not happen (EXPERIMENT_REPORT.md §3.3).
 #:
 #: ``after_single_evaluation`` is the evaluation phase's position: that phase
 #: runs one evaluation and never reaches the output path, so its audit is taken

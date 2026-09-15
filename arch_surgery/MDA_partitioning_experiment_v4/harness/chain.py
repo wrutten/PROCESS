@@ -327,7 +327,7 @@ def refusals(plan: ChainPlan, campaign: Campaign) -> list[str]:
         reasons.append(
             "the plan's execution is not approved: the user flips "
             "EXECUTION_APPROVED in harness/core/config.py in the same commit that "
-            "records the dated approval in EXPERIMENT_PLAN.md.  The smoke does "
+            "records the dated approval in EXPERIMENT_REPORT.md.  The smoke does "
             "not reach this switch — it runs the same chain with the run kind "
             "'smoke', one seed and one configuration"
         )

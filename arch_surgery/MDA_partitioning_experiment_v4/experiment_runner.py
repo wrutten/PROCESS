@@ -393,7 +393,7 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
     campaign plan: every configuration, ``campaign.n_seeds`` seeds, records
     stamped ``campaign``.  ``chain.plan_for`` refuses it until the user has
     approved execution (``EXECUTION_APPROVED`` flipped in the same commit as the
-    dated approval in ``EXPERIMENT_PLAN.md``) and the tree is the experiment's
+    dated approval in ``EXPERIMENT_REPORT.md``) and the tree is the experiment's
     own copy; the refusal is printed and the exit code is 3, so pressing this
     before approval is a reproducible refusal, not a crash (protocol §15).
     Added 2026-09-14 when the user approved execution: until then the preflight
@@ -401,7 +401,7 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
     """
     _rule("campaign — the chain, every configuration, the plan's seeds")
     print("=" * WIDTH)
-    print("MDA partitioning experiment — plan: EXPERIMENT_PLAN.md")
+    print("MDA partitioning experiment — report: EXPERIMENT_REPORT.md")
     print(f"execution approved: {EXECUTION_APPROVED}")
     print("=" * WIDTH)
     try:
@@ -657,7 +657,7 @@ def stage_measure(args: argparse.Namespace, campaign: Campaign) -> int:
 def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
     """The plan's §4, rendered from the measurement stages' own records.
 
-    ``show`` prints it, ``write`` puts it into ``EXPERIMENT_PLAN.md`` in place
+    ``show`` prints it, ``write`` puts it into ``EXPERIMENT_REPORT.md`` in place
     of the section it replaces.  Neither computes a number: every table,
     caption and denominator here is a stage's, read from
     ``runs/gates/<stage>/measurements.json``, so the document and the records
@@ -954,7 +954,7 @@ def main(argv: list[str] | None = None) -> int:
         help="run the campaign: the same chain as --smoke on every configuration "
         "at the plan's seed count, records stamped 'campaign'.  Refused, with "
         "the reasons printed, until EXECUTION_APPROVED is True in the commit that "
-        "records the user's dated approval in EXPERIMENT_PLAN.md",
+        "records the user's dated approval in EXPERIMENT_REPORT.md",
     )
     parser.add_argument(
         "--smoke",
@@ -971,7 +971,7 @@ def main(argv: list[str] | None = None) -> int:
         help="render the experiment plan's section 4 from the measurement "
         "stages' own records — the gate table, the two tally stages and the "
         "recomputed tables — and print it ('show'), compare it line for line "
-        "with the section EXPERIMENT_PLAN.md already carries without writing "
+        "with the section EXPERIMENT_REPORT.md already carries without writing "
         "anything ('check', which exits 3 on a difference), or write it into "
         "the document ('write').  No cell is typed by hand",
     )
@@ -1141,7 +1141,7 @@ def main(argv: list[str] | None = None) -> int:
         return stage_single_run(args, campaign)
 
     print("=" * WIDTH)
-    print("MDA partitioning experiment — plan: EXPERIMENT_PLAN.md")
+    print("MDA partitioning experiment — report: EXPERIMENT_REPORT.md")
     print(f"execution approved: {EXECUTION_APPROVED}   draft mode: "
           f"{args.draft or not EXECUTION_APPROVED}")
     print("=" * WIDTH)

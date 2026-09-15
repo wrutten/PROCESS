@@ -72,7 +72,7 @@ DEFAULT_RECORDS = REPO / "arch_surgery" / "idf_probe" / "runs" / "A65_runs" / "g
 
 DOCS = {
     "README": HARNESS / "README.md",
-    "EXPERIMENT_PLAN": HERE / "EXPERIMENT_PLAN.md",
+    "EXPERIMENT_REPORT": HERE / "EXPERIMENT_REPORT.md",
     "HARNESS_PLAN": REPO / "arch_surgery" / "docs" / "plans"
     / "V4_HARNESS_IMPLEMENTATION_PLAN.md",
     "IMPROVEMENT_LIST": REPO / "arch_surgery" / "docs" / "plans"
@@ -608,7 +608,7 @@ def prose_section(lines: dict[str, Any]) -> dict[str, Any]:
     readme = DOCS["README"].read_text()
     shared: dict[str, int] = {}
     readme_paras = paragraphs(readme)
-    for k in ("HARNESS_PLAN", "EXPERIMENT_PLAN"):
+    for k in ("HARNESS_PLAN", "EXPERIMENT_REPORT"):
         other = DOCS[k].read_text()
         other_norm = " ".join(other.split())
         n = 0
@@ -733,7 +733,7 @@ def _print_runs(sec: dict[str, Any]) -> None:
 def _print_flags(sec: dict[str, Any]) -> None:
     print("\n== 8. flags ==")
     print(f"{sec['n_flags']} flags on experiment_runner.py")
-    keys = ["README", "EXPERIMENT_PLAN", "HARNESS_PLAN", "IMPROVEMENT_LIST", "ASSESSMENT", "archived_reports", "harness_source"]
+    keys = ["README", "EXPERIMENT_REPORT", "HARNESS_PLAN", "IMPROVEMENT_LIST", "ASSESSMENT", "archived_reports", "harness_source"]
     print(f"{'flag':20s} " + " ".join(f"{k[:9]:>9s}" for k in keys))
     for r in sec["flags"]:
         print(f"{r['flag']:20s} " + " ".join(f"{r.get(k, 0):9d}" for k in keys))

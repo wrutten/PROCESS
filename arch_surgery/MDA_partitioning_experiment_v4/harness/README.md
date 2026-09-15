@@ -1558,7 +1558,7 @@ tree at the end of a press and refuses if it holds two run kinds.
 
 ## 16. The plan's results section, rendered rather than typed
 
-`EXPERIMENT_PLAN.md` §4 carried a template — every cell a *format*, `0.xxx` where a ratio belongs
+`EXPERIMENT_REPORT.md` §4 carried a template — every cell a *format*, `0.xxx` where a ratio belongs
 and `n` where a count belongs — so the shape could be reviewed before anything was measured.
 `harness/measurement/plan_tables.py` replaces that template with the tables the measurement stages actually
 emitted, by reading their records under `runs/gates/<stage>/measurements.json`:

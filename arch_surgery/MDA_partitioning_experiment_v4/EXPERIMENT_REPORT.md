@@ -1,35 +1,28 @@
-# MDA Partitioning Experiment V4 — Experiment Plan
+# MDA Partitioning Experiment V4 — Experiment Report
 
-> **Document status** — **EXECUTED AND REPORTED, 2026-09-14** — §4 is the campaign population (949 records at `57dc0c14`), §5 and §6 are written from it. Approval record: **APPROVED FOR EXECUTION, 2026-09-14** (the user: *"You can run the experiment"*, after the D27 rerun of every gate on the
-> final harness — 30 PASS, 152/152 teeth, GR 256/256, G1 byte-neutral, at `03f72479`; `EXECUTION_APPROVED` flipped in this commit). The campaign is
-> pressed from the button (`experiment_runner.py --campaign`) at this commit; its records are stamped `campaign` and §4 is re-rendered from them.
-> Methodology unchanged since the 2026-09-10 draft except by the dated amendments in the text (D24–D27). *Superseded header follows for the record:*
-> DRAFT · NOT APPROVED. Written 2026-09-10 by the orchestrating
-> session at the user's instruction, from
-> [`../docs/plans/V4_IMPROVEMENT_LIST.md`](../docs/plans/V4_IMPROVEMENT_LIST.md) (the candidate
-> list this plan selects from), the V3 plan and report in
-> [`../MDA_partitioning_experiment_v3/`](../MDA_partitioning_experiment_v3/), and the arm matrix
-> settled with the user on 2026-09-10. **V2's and V3's directories are frozen as the record of
-> what ran; nothing in them is edited by V4.** Base commit `c0ae5b28` throughout; the physics is
-> frozen — V4 contains no change under `process/models/`.
+> **Document status** — **EXECUTED AND REPORTED, 2026-09-14.** One document carries the whole
+> experiment: §1–§3 are the **plan as approved** — hypothesis, background and pre-registered method,
+> written 2026-09-10 and changed only by the dated amendments the text and Appendix C record
+> (D24–D27); §4 is the **results**, rendered from the campaign's records by
+> `harness/measurement/plan_tables.py` and never typed by hand; §5 and §6 are the **discussion and
+> conclusion**, written from §4 alone. The file was `EXPERIMENT_PLAN.md` until 2026-09-15, when the
+> user had it renamed to what it had become (*"rename the PLAN file to REPORT"*); the superseded draft
+> header is readable at `3abea2c6` and is summarised in Appendix C.
 >
-> **This document describes the methodology only.** How the measurement harness is built is a
-> separate plan ([`../docs/plans/V4_HARNESS_IMPLEMENTATION_PLAN.md`](../docs/plans/V4_HARNESS_IMPLEMENTATION_PLAN.md),
-> task A45, pending the user's approval); §3.5 here says *what* the implementation must provide,
-> not how.
+> **Approval record:** **APPROVED FOR EXECUTION, 2026-09-14** (the user: *"You can run the
+> experiment"*), after the D27 rerun of every gate on the final harness — 30 PASS, 152/152 teeth,
+> GR 256/256, G1 byte-neutral, at `03f72479`; `EXECUTION_APPROVED` flipped at the approval commit
+> `57dc0c14`. The campaign was pressed from the button (`experiment_runner.py --campaign`) at that
+> commit: **949 records** (921 ok, 28 crashed), stamped `campaign`, kept untracked at
+> `arch_surgery/idf_probe/runs/campaign_57dc0c14/`.
 >
-> **Every §3.7 choice is ruled** (user, 2026-09-10; D20–D22) — the rulings are recorded in §3.7;
-> §4's table format awaits the user's review. Execution is blocked until
-> the user approves this plan by a dated edit of this header and flips the harness's
-> `EXECUTION_APPROVED` flag in the same commit, as V3 did.
->
-> **Both investigations that fed this plan have reported and are merged.** A44 (transfer-gap):
-> the Phase A → Phase B gap is the entry regime (per-evaluation term, uniform) times an
-> evaluation-count term (lift stencil column, retries, trajectory) — absorbed in §3.4/§3.5. A43
-> (st-trust-gap): the outer verification loop never fired in the whole V3 campaign; the `B2`/`B3`
-> difference is inner-solve slack below τ, not a missed coupling; `st_regression` stays (D22's
-> conditional answered *no*) — absorbed in §3.2/§3.3/§3.7 (e)/(g).
-
+> **Scope.** Base commit `c0ae5b28` throughout; the physics is frozen — V4 contains no change under
+> `process/models/`. How the measurement harness is built is the implementation plan's subject
+> ([`../docs/plans/V4_HARNESS_IMPLEMENTATION_PLAN.md`](../docs/plans/V4_HARNESS_IMPLEMENTATION_PLAN.md));
+> §3.5 says *what* the harness must provide, not how. The candidate list this design selected from is
+> [`../docs/plans/V4_IMPROVEMENT_LIST.md`](../docs/plans/V4_IMPROVEMENT_LIST.md); the V3 plan and report
+> are in [`../MDA_partitioning_experiment_v3/`](../MDA_partitioning_experiment_v3/). **V2's and V3's
+> directories are frozen as the record of what ran; nothing in them is edited by V4.**
 ---
 
 ## 1. Introduction
@@ -597,10 +590,11 @@ them. The drift objection D14(c) raised against copies does not apply: the copy 
 not a fork.
 
 **(ii) Measurement harness — `arch_surgery/MDA_partitioning_experiment_v4/`.** Mirrors V2/V3 at
-the top: this plan, the report, `experiment_runner.py` (the one-button entry point, no required
+the top: this document, `experiment_runner.py` (the one-button entry point, no required
 arguments; a draft mode runs preflight, gates and smoke only; refuses the campaign while
 `EXECUTION_APPROVED` is `False`), `phase_a.py`, `phase_b.py`, `runs/` (untracked bulk
-artifacts). Everything else in a self-contained `harness/` package — nothing imported from
+artifacts) *(as built there are no `phase_a.py`/`phase_b.py`: both phases are plans of the harness's
+`chain.py`, pressed by the one button — Appendix C, 2026-09-15)*. Everything else in a self-contained `harness/` package — nothing imported from
 `idf_probe/` or `fixedpoint/`. It must provide: derivation of the per-configuration artifacts
 (coupling-state spec, write sets, `per_run` sets by class-level classification with a committed
 runtime read census — item 6a, lifted input files) as committed stages; arm composition **from the
@@ -616,7 +610,7 @@ reference **refusing**, never passing over an empty comparison.
 
 **(iii) Analysis.** An independent recomputation of every published table from the records
 (`--verify` against the tally cell by cell, `--teeth` doctoring the records to show each
-comparison can fail), producing every table in this plan's §4 in the one format with its
+comparison can fail), producing every table in §4 in the one format with its
 caption. Nothing is published that this script does not regenerate. The DSM overlay of
 improvement-list item 8 is dropped with `B2`: no V4 arm exercises the outer verification loop.
 
@@ -5611,20 +5605,18 @@ implementation plan's.*
 
 | file | role |
 |---|---|
-| `EXPERIMENT_PLAN.md` | this document (no version token in file names inside the versioned folder — user, 2026-09-10); every later change a dated amendment |
-| `EXPERIMENT_REPORT.md` | the report, written from the committed analysis only |
-| `experiment_runner.py` | one-button entry point; draft mode; refuses the campaign until approved |
-| `phase_a.py` | preflight / artifacts / reference / gates / campaign (`AR`, `A0`, `A0p`, `A1`; two amplitudes; predicate trial) / tally |
-| `phase_b.py` | preflight / gates / campaign (`BR`, `B0`, `B1`, `B3`) / tally / timing context |
+| `EXPERIMENT_REPORT.md` | this document — plan (§1–§3), results (§4), discussion and conclusion (§5–§6) in one file; no version token in file names inside the versioned folder (user, 2026-09-10); every change after approval a dated entry in Appendix C. Named `EXPERIMENT_PLAN.md` until 2026-09-15 |
+| `experiment_runner.py` | one-button entry point: `--selfcheck`, `--gate`, `--measure`, `--plan-tables write\|check`, `--smoke`, `--campaign`, `--jobs`; refused the campaign until approved |
+| `harness_survey.py`, `run_stamp_survey.py`, `merged_names_check.py` | surveys of the harness's own documents and run stamps; the merged-names check |
 | `PROCESS/` | V4's own copy of the PROCESS package (D20); every V4 driver change lives here; `models/` frozen at `c0ae5b28`, gated. `PROCESS/PROVENANCE.json` names the source commit (`f2dc9243`) and every file's sha256; `PROCESS/copy_gates.py` is the copy-identity gate, G0′ and the smoke import, nine teeth (A46 (process-copy), merged 2026-09-10) |
 | `PROCESS_diff.py` | shows every change the experiment made to PROCESS: a `git diff` of `PROCESS/process/` against the copy's source commit, grouped by file with a plain-language overview (user, 2026-09-10) |
-| `harness/` | the self-contained package (per the implementation plan); every verification gate is implemented here |
+| `harness/` | the self-contained package (per the implementation plan): `core/`, `experiment/`, `child/`, `gates/`, `measurement/`, `chain.py`; every verification gate and every measurement stage is implemented here (its own `README.md` is the map) |
 | `runs/` | untracked bulk artifacts |
 | `.gitignore` | `runs/` untracked; the copy's `.dat` files re-included against the repository-root `*.dat` pattern (added at A46's merge) |
 
 ## Appendix B — Traceability to the improvement list
 
-*Caption: one row per improvement-list item: where this plan absorbs it, or why not.*
+*Caption: one row per improvement-list item: where the method (§3) absorbs it, or why not.*
 
 | item | absorbed in | status |
 |---|---|---|
@@ -5762,4 +5754,4 @@ implementation plan's.*
 | 2026-09-11 | **A55 (harness-smoke) merged (`bfaee7ce`); the implementation is complete.** §4 is rendered by `harness/plan_tables.py` from the stage records at the commits the marker names: the **gate population**, 24 PASS / 0 FAIL / 139 of 139 teeth, 131 tables, 3 620 cells; the campaign fills it again after execution approval. `--smoke` runs the campaign's own chain at one seed on `st_regression`. Open before the campaign: **D26** (how `AR` is entered in Phase A — awaiting the user), I-21, I-22. This header stays DRAFT · NOT APPROVED until the user's dated approval edit and the `EXECUTION_APPROVED` flip in one commit. |
 | 2026-09-11 | **A63 (stage-provenance) merged (`52264b53`).** §4.1 gains the `stage_provenance` row and reads 25 PASS / 0 FAIL / 147 of 147 teeth; `artifacts_check` reads 93 with its two lifted-input rows pending in that worktree. §4 is now guarded: `--plan-tables` refuses to render from a stage record the verdicts have outrun, and `--plan-tables check` compares this section with the records without writing. |
 | 2026-09-14 | **Execution approved by the user** (*"You can run the experiment"*), approval commit `57dc0c14` (header dated, `EXECUTION_APPROVED = True`; `--campaign` added to the button at `e247e48d`). **The campaign pressed** from a detached worktree at `57dc0c14`, 3 workers: 949 runs, 921 ok, 28 crashed optimisations (PROCESS's own Newton solve, `nan` from displaced starts); a first press attempt was killed with the orchestrator's shell before any record was written and left nothing. The chain stopped at the tally (no campaign source, I-24); A75 (campaign-tally-source, `004eb06b`) added the source family and re-rendered §4 as the campaign population (169 tables). **§5–§6 written from §4**; header EXECUTED AND REPORTED. |
-
+| 2026-09-15 | **Renamed `EXPERIMENT_PLAN.md` → `EXPERIMENT_REPORT.md`** at the user's instruction (*"rename the PLAN file to REPORT"*, *"clean up the framing of the document accordingly"*), with `git mv`. Framing: title; the status header rewritten as a report's — the document's three parts named, the approval record and the campaign's facts kept, the superseded 2026-09-10 draft header removed (it said: draft, not approved; methodology only; every §3.7 choice ruled by D20–D22; A43 and A44 absorbed — all of it recorded in the entries above and readable at `3abea2c6`); Appendix A's file table brought to the folder as it is (`phase_a.py`/`phase_b.py` never built, the surveys and the harness's subpackages added; the separate `EXPERIMENT_REPORT.md` row folded into this one); §3.5 (ii) gains an as-built bracket. No §4 cell, no §3 rule and no §5/§6 sentence changed. Every live reference re-pointed: `plan_tables.plan_path`, `harness_survey`, the runner's messages and docstrings, `config`, `failure`, `records`, `arms`, `switches`, `chain`, the harness README, the queue v2 and the implementation plan. Left as written: V2/V3, the PROCESS copy, `PROVENANCE.json`, archived reports and the archived queue (D17). |

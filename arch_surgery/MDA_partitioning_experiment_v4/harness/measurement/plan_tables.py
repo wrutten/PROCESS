@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """The experiment plan's results section, rendered from the stage records.
 
-``EXPERIMENT_PLAN.md`` §4 carried a template: every cell a *format*, ``0.xxx``
+``EXPERIMENT_REPORT.md`` §4 carried a template: every cell a *format*, ``0.xxx``
 where a ratio belongs and ``n`` where a count belongs, so that the shape could
 be reviewed before anything was measured.  This module replaces that template
 with the tables the measurement stages actually emitted, **by reading their
@@ -524,7 +524,7 @@ def _not_produced_text(rows: Sequence[Any]) -> str:
 
 def plan_path(campaign: Campaign) -> Path:
     """The experiment plan this section belongs to."""
-    return Path(campaign.runs_dir).parent / "EXPERIMENT_PLAN.md"
+    return Path(campaign.runs_dir).parent / "EXPERIMENT_REPORT.md"
 
 
 def section_span(document: Path, lines: Sequence[str]) -> tuple[int, int]:

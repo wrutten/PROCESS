@@ -23,7 +23,7 @@ the convergence predicate's mode, and names no file, field or matrix cell.
 
 The one module-level name is :data:`EXECUTION_APPROVED`.  It is the switch the
 user flips, in the same commit that records the dated approval in
-``EXPERIMENT_PLAN.md``'s status header.
+``EXPERIMENT_REPORT.md``'s status header.
 """
 
 from __future__ import annotations
@@ -45,8 +45,8 @@ REPO_ROOT = EXPERIMENT_DIR.parent.parent
 
 #: Master switch.  While False the runner executes preflight, gates and smoke
 #: work only and refuses every campaign stage.  The user flips it in the same
-#: commit that records the dated approval in EXPERIMENT_PLAN.md.
-EXECUTION_APPROVED = True  # the user, 2026-09-14: "You can run the experiment"; dated approval in EXPERIMENT_PLAN.md's header, this commit
+#: commit that records the dated approval in EXPERIMENT_REPORT.md.
+EXECUTION_APPROVED = True  # the user, 2026-09-14: "You can run the experiment"; dated approval in EXPERIMENT_REPORT.md's header, this commit
 
 
 # --------------------------------------------------------------------------
@@ -142,7 +142,7 @@ class Removal:
 
 @dataclass(frozen=True)
 class Campaign:
-    """Every declared setting of EXPERIMENT_PLAN.md §3.10, plus the paths.
+    """Every declared setting of EXPERIMENT_REPORT.md §3.10, plus the paths.
 
     ``tree`` is the tree the harness runs against — the directory holding the
     ``process`` package.  It is a parameter because V4 runs its *own copy* of
@@ -167,7 +167,7 @@ class Campaign:
     configurations: tuple[Config, ...]
     removed_configurations: tuple[Removal, ...] = ()
 
-    # --- campaign shape (EXPERIMENT_PLAN.md §3.10) -----------------------
+    # --- campaign shape (EXPERIMENT_REPORT.md §3.10) -----------------------
     #: Seeds per configuration per arm, both phases.
     n_seeds: int = 25
     #: The two Phase A entry regimes: a displaced entry at ``delta``, and the

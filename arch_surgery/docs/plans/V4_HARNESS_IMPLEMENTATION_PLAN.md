@@ -15,7 +15,7 @@
 > written under the recommendation in each row.
 >
 > **The methodology is not this document's business.** It is
-> [`../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md`](../../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md)
+> [`../MDA_partitioning_experiment_v4/EXPERIMENT_REPORT.md`](../../MDA_partitioning_experiment_v4/EXPERIMENT_REPORT.md)
 > (the V4 experiment plan) and
 > [`V4_IMPROVEMENT_LIST.md`](V4_IMPROVEMENT_LIST.md) (the item list behind it). This plan says
 > how a harness implements them, and where the harness *forces* a methodological choice it says
@@ -419,7 +419,7 @@ resolved**, read back from the imported modules, and not what the harness asked 
 
 ```
 arch_surgery/MDA_partitioning_experiment_v4/
-├── EXPERIMENT_PLAN.md       the methodology (not this task's)
+├── EXPERIMENT_REPORT.md       the methodology (not this task's)
 ├── V4_EXPERIMENT_REPORT.md     written from the committed analysis only
 ├── experiment_runner.py        THE BUTTON: no arguments, owns the whole chain
 ├── phase_a.py                  Phase A stages
@@ -1514,7 +1514,7 @@ earlier name in this document; §11.4 maps the earlier names to their replacemen
 A file or function is named for **what it does**, never for the task that wrote it or the revision
 it belongs to. `a44_eval_one.py` becomes `evaluate.py`; `v3_reference.json` becomes
 `reproduction_reference.json`; record fields `v3_*`/`v4_*` become `campaign_*`; the plan and report
-inside the versioned folder are `EXPERIMENT_PLAN.md` and `EXPERIMENT_REPORT.md` — the folder
+inside the versioned folder are `EXPERIMENT_REPORT.md` and `EXPERIMENT_REPORT.md` — the folder
 `MDA_partitioning_experiment_v4/` carries the version. **Heritage lives in docstrings and
 metadata**: a module's docstring names the file it descends from and the commit ("derived from
 `arch_surgery/idf_probe/v2_eval_one.py` at `16a6e87e`; task A44 added the stencil-point entry"),

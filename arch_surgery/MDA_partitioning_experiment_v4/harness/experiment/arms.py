@@ -1,6 +1,6 @@
 """The experiment's switch matrix as data, and the environments it composes.
 
-Transcribes EXPERIMENT_PLAN.md §3.2 — the matrix and the rung table — one
+Transcribes EXPERIMENT_REPORT.md §3.2 — the matrix and the rung table — one
 field per matrix row.  Derived from
 ``arch_surgery/MDA_partitioning_experiment_v3/v3_runner.py::env_for`` and
 ``arch_surgery/MDA_partitioning_experiment_v3/phase_a.py::env_for_phase_a`` at
@@ -29,7 +29,7 @@ from .switches import SwitchError
 # --------------------------------------------------------------------------
 
 #: The matrix's independent rows, in the plan's order.  Four further rows of
-#: EXPERIMENT_PLAN.md §3.2 — the stopping rule, the number of schedule passes,
+#: EXPERIMENT_REPORT.md §3.2 — the stopping rule, the number of schedule passes,
 #: whether the burn time is out of the loop, and which input file is read —
 #: are not listed here because they are not choices: each follows from a field
 #: below, and :data:`PLAN_MATRIX` is regenerated from these to prove it.
@@ -184,7 +184,7 @@ class Arm:
         return terms
 
 
-#: The eight arms of EXPERIMENT_PLAN.md §3.2.  There is no ``B2``: the arm
+#: The eight arms of EXPERIMENT_REPORT.md §3.2.  There is no ``B2``: the arm
 #: that repeated the block schedule was removed (D22, the user's ruling of
 #: 2026-09-10) after its verification pass was measured triggering a third
 #: pass zero times in 91 888 calls.  Nothing here may name a rung, a check or
@@ -308,7 +308,7 @@ PHASE_B_ARMS: tuple[str, ...] = tuple(n for n, a in ARMS.items() if a.phase == "
 # the plan's table, transcribed for comparison
 # --------------------------------------------------------------------------
 
-#: EXPERIMENT_PLAN.md §3.2's matrix, cell for cell, as the plan prints it.
+#: EXPERIMENT_REPORT.md §3.2's matrix, cell for cell, as the plan prints it.
 #: :func:`matrix_cell` regenerates each cell from :data:`ARMS`; the two are
 #: compared by the self-check, so a transcription slip is caught rather than
 #: carried into every run of the campaign.
@@ -381,7 +381,7 @@ def matrix() -> dict[str, tuple[str, ...]]:
 
 @dataclass(frozen=True)
 class Rung:
-    """One row of EXPERIMENT_PLAN.md §3.2's rung table.
+    """One row of EXPERIMENT_REPORT.md §3.2's rung table.
 
     ``changes_a`` / ``changes_b`` are the fields the step moves; :func:`rung`
     computes the same thing from the arms, and the self-check compares them.

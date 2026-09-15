@@ -16,7 +16,7 @@
 | **Objective** | Determine whether **the arrangement of solvers and optimisers alone** — every physics and engineering model frozen at `c0ae5b28` — measurably changes the cost of solving PROCESS, by partitioning the global idempotence loop into per-module solvers |
 | **Base commit** | `c0ae5b28`, frozen (D2) |
 | **State** | V4 executed and reported (2026-09-14): the campaign's 949 records at `57dc0c14`, §4–§6 of the plan written from them; every decision D1–D28 recorded here, six issues open, no task open. *At creation (2026-09-14):* harness complete at `03f72479`, approval `57dc0c14`, campaign running. |
-| **Experiment plan** | [`../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md`](../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md) (V4, executed and reported 2026-09-14); [`plans/MDA_PARTITION_EXPERIMENT.md`](plans/MDA_PARTITION_EXPERIMENT.md) (the original two-phase plan, V1/V2 era) |
+| **Experiment plan** | [`../MDA_partitioning_experiment_v4/EXPERIMENT_REPORT.md`](../MDA_partitioning_experiment_v4/EXPERIMENT_REPORT.md) (V4, executed and reported 2026-09-14); [`plans/MDA_PARTITION_EXPERIMENT.md`](plans/MDA_PARTITION_EXPERIMENT.md) (the original two-phase plan, V1/V2 era) |
 
 ---
 
@@ -153,7 +153,7 @@ register.
 
 | Item | State |
 |---|---|
-| The V4 campaign (pressed 2026-09-14 at `57dc0c14`, 949 runs) | **Done and reported** — `EXPERIMENT_PLAN.md` §4–§6, header EXECUTED AND REPORTED; records `../idf_probe/runs/campaign_57dc0c14/` (3 GB, untracked) |
+| The V4 campaign (pressed 2026-09-14 at `57dc0c14`, 949 runs) | **Done and reported** — `EXPERIMENT_REPORT.md` §4–§6, header EXECUTED AND REPORTED; records `../idf_probe/runs/campaign_57dc0c14/` (3 GB, untracked) |
 | Survey tier C (C1 duplication caveat beside decision (6); C2 rule (iii)'s `-P` text vs the pool children; C3 rules (v)/(vi)/(xii) prose-only → pool-level refusal) | **Awaiting the user's ruling** (D27, deferred 2026-09-14); text in `reports/deprecated/A68_harness_simplification_survey.md` §4 |
 | V4 improvement list (`plans/V4_IMPROVEMENT_LIST.md`, items 0–15) | **The list is the authority on each item's state.** Its headings mark 3 (closed in the negative, A58), 12 (A71) and 13 (A73) discharged; 5a is a pre-declared trial (G8 built by A59; adoption is decided on the campaign); 5b requires the user's review and approval; 11 was diagnosed by A61/A62 with the PROCESS-side fix upstream's; 14 and 15 were filed 2026-09-14 by A72/A73 |
 | Outgoing PROCESS defect notes (`reports/outgoing/`, five files) | Filed with the sibling (2026-09-01 NaN; 2026-09-02 five defects; 2026-09-11 `insstrain`/`None` latch, committed there by the user); 2026-09-03 st query and 2026-09-04 first-wall note staged, handoff the orchestrator's under the demonstrated-defect rule |
@@ -174,7 +174,7 @@ Questions 1, 1b–1d, 2 and 3 are answered (the archived queue's "Known open que
 |---|---|
 | This queue (active) / the history | `docs/MASTER_TODO_v2.md` / [`plans/MASTER_TODO.md`](plans/MASTER_TODO.md) (archived) |
 | Agent rules | [`../../CLAUDE.md`](../../CLAUDE.md); traps [`TRAPS.md`](TRAPS.md) (T1–T15, binding) |
-| Experiment plans | V4 (executed and reported 2026-09-14): [`../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md`](../MDA_partitioning_experiment_v4/EXPERIMENT_PLAN.md); V3 and V2: the sibling folders' `EXPERIMENT_PLAN.md` and `V*_EXPERIMENT_REPORT.md`; V1: [`plans/MDA_PARTITION_EXPERIMENT.md`](plans/MDA_PARTITION_EXPERIMENT.md) with `reports/MDA_partition_exp_results.md`; parked lines: `plans/SUBDRIVER_LIFT_EXPERIMENT.md`, `plans/ARCHITECTURE_EXPERIMENT_CANDIDATES.md`; superseded: `plans/deprecated/` |
+| Experiment plans | V4 (executed and reported 2026-09-14): [`../MDA_partitioning_experiment_v4/EXPERIMENT_REPORT.md`](../MDA_partitioning_experiment_v4/EXPERIMENT_REPORT.md); V3 and V2: the sibling folders' `EXPERIMENT_REPORT.md` and `V*_EXPERIMENT_REPORT.md`; V1: [`plans/MDA_PARTITION_EXPERIMENT.md`](plans/MDA_PARTITION_EXPERIMENT.md) with `reports/MDA_partition_exp_results.md`; parked lines: `plans/SUBDRIVER_LIFT_EXPERIMENT.md`, `plans/ARCHITECTURE_EXPERIMENT_CANDIDATES.md`; superseded: `plans/deprecated/` |
 | Harness plan, rules, amendments | [`plans/V4_HARNESS_IMPLEMENTATION_PLAN.md`](plans/V4_HARNESS_IMPLEMENTATION_PLAN.md) — Appendix A (amendments 1–26), Appendix A.1 (the twelve rules and what enforces each), §11 (terminology) |
 | Improvement list | [`plans/V4_IMPROVEMENT_LIST.md`](plans/V4_IMPROVEMENT_LIST.md), items 0–15 (predecessor: `plans/V3_IMPROVEMENT_LIST.md`) |
 | Harness README and button | [`../MDA_partitioning_experiment_v4/harness/README.md`](../MDA_partitioning_experiment_v4/harness/README.md); `../MDA_partitioning_experiment_v4/experiment_runner.py`; the copy's change record `PROCESS/CHANGES.md`, `PROCESS_diff.py` |

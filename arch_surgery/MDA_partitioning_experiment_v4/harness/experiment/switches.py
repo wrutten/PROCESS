@@ -113,7 +113,7 @@ _MISSING = _Missing()
 # the registry
 # --------------------------------------------------------------------------
 #
-# Row order is the order of EXPERIMENT_PLAN.md §3.2's switch list, then the
+# Row order is the order of EXPERIMENT_REPORT.md §3.2's switch list, then the
 # switches an arm never composes.  Every legal value below was read from the
 # driver's own guard tables, not from a document: an unrecognised value is an
 # import-time error in the driver, so a wrong spelling here is refused rather

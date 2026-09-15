@@ -40,7 +40,7 @@ in the child with the right ``PYTHONPATH`` — and a name walk over
 
 Written by task **A50 (harness-run)**; the typed classification is
 **A56 (driver-renames)**'s.  The taxonomy is the harness plan's §4.4 and
-EXPERIMENT_PLAN.md §3.4.
+EXPERIMENT_REPORT.md §3.4.
 """
 
 from __future__ import annotations
