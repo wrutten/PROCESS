@@ -154,10 +154,10 @@ def main() -> int:
         for config in CONFIGS:
             counts = {arm: len(seeds) for arm, seeds in sorted(idx[config].items())}
             line(
-                f"{name} {config}: points per arm (plan text: nvar + 1 on the pinned arms)",
+                f"{name} {config}: points per arm (Tables D.55–D.60: nvar per arm)",
                 counts,
                 {a: nvar[config] for a in counts},
-                "the plan's §3.4 says 2(nvar + 1) per arm 'plus the lifted column on the pinned arms'; as built every arm has nvar points per sign",
+                "the plan's §3.4 says 2(nvar + 1) per arm 'plus the lifted column on the pinned arms'; as built every Phase A arm reads the committed input file and has nvar points per sign",
             )
     n_stencil = len(sources["campaign_stencil_forward"]) + len(sources["campaign_stencil_backward"])
     line("stencil evaluations in all (plan §3.10 budget: 418)", n_stencil, 418)
@@ -336,6 +336,25 @@ def main() -> int:
     line("PASS rows with a nonzero mismatched count", nonzero, [("g0prime", 1)], "§4.1 names one such row; copy_identity's 7 are its recorded permitted-edit files")
     summed = [(r["gate"], r["denominators_summed"]) for r in gate_table["rows"] if len(r.get("denominators_summed") or []) > 1]
     print(f"           rows whose 'compared' sums more than one count: {summed}")
+
+    print("\n== 11. Check 1 per seed on low_aspect_ratio_DEMO: how many pairs exceed the 1e-6 floor, and the worst (§5.1 (a), §6) ==")
+    seeds = sorted({s for arm_rows in idx["low_aspect_ratio_DEMO"].values() for s in arm_rows})
+    converged = stats_mod.every_arm_converged(idx["low_aspect_ratio_DEMO"], seeds)
+    for arm in ("B1", "B2"):
+        pairs = []
+        for s in converged:
+            a = float.fromhex(idx["low_aspect_ratio_DEMO"]["B0"][s]["exact"]["norm_objf"])
+            b = float.fromhex(idx["low_aspect_ratio_DEMO"][arm][s]["exact"]["norm_objf"])
+            pairs.append((abs(a - b) / max(abs(a), abs(b)), s))
+        pairs.sort()
+        above = [(r, s) for r, s in pairs if r > 1e-6]
+        print(
+            f"  B0 → {arm}: {len(above)} of {len(pairs)} pairs above the floor "
+            f"(seeds {[s for _, s in above]}; r = {', '.join(f'{r:.3e}' for r, _ in above)}); "
+            f"worst {pairs[-1][0]:.3e} at seed {pairs[-1][1]}"
+            f" (B0 attempts {stats_mod.n_attempts(idx['low_aspect_ratio_DEMO']['B0'][pairs[-1][1]])})"
+        )
+    print("           the report's §5.1 (a) said 'a slightly different optimum on 2 of 11 seeds'; §6 said 'within 2.2e-6 relative' (the p90)")
 
     print(f"\n{_differs} line(s) DIFFER from the report's figure.")
     return 0 if _differs == 0 else 3

@@ -1551,8 +1551,10 @@ def predicate_trial(campaign: Campaign, records_dir: Path) -> Table | None:
                 "ruler; the record comparison is bit-for-bit with no tolerance"
             ),
             clauses=(
-                "**decisive passes are published as two counts** (the plan's "
-                "§4.2.5 caption rule): *crossings* — evaluations at which some "
+                "**decisive passes are published as two counts** (the two-counts "
+                "caption rule recorded in the report's Appendix C at A59's merge, "
+                "2026-09-11, in what was then its §4.2.5): *crossings* — "
+                "evaluations at which some "
                 "component crossed the tolerance between the rulers — and "
                 "*verdict changes* — evaluations whose verdict changed because "
                 "the crossing component was the one holding the evaluation "
