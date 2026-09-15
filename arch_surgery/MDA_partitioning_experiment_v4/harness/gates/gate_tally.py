@@ -447,6 +447,133 @@ def _tooth_row_attribution_not_guessed() -> tuple[bool, str]:
     )
 
 
+def _tooth_design_vector_by_position() -> tuple[bool, str]:
+    """Offer a design vector with a value in a slot the name map does not name.
+
+    The location diagnostic matches iteration variables **by name**: the lift
+    adds one, so two arms' vectors are of different lengths, and a join by
+    position would compare two different variables and publish the result as
+    a design-point difference.  The construction joins on the solver's slot
+    and refuses a record that has a value where there is no name.  Task
+    **A86 (v3-tables-remainder)**.
+    """
+    record = {
+        "campaign_phase": "B",
+        "mfile": {
+            "itvars": {"itvar001": 1.0, "itvar002": 2.0},
+            "itvar_names": {"itvar001": "rmajor", "itvar002": "dr_cs"},
+        },
+    }
+    sound = stats_mod.iteration_variables(record)
+    if sound != {"rmajor": 1.0, "dr_cs": 2.0}:
+        return False, f"a named vector read {sound}; it must be keyed by name"
+    doctored = copy.deepcopy(record)
+    doctored["mfile"]["itvars"]["itvar003"] = 3.0
+    return _refuses(
+        lambda: stats_mod.iteration_variables(doctored),
+        what="a design vector with a third value and only two names",
+    )
+
+
+def _tooth_unshared_variable_not_compared() -> tuple[bool, str]:
+    """Add a variable to one side only and require it to be **named, not
+    compared**.
+
+    A variable one arm carries and the other does not has no difference; the
+    previous revision's §5.2.2 named it and never compared it.  The
+    construction must report it in ``extra`` and must not let it move the
+    maximum.  Task **A86 (v3-tables-remainder)**.
+    """
+    left = {"rmajor": 8.0, "dr_cs": 0.5}
+    right = {"rmajor": 8.8, "dr_cs": 0.5}
+    sound = stats_mod.point_difference(left, right)
+    if sound["argmax"] != "rmajor" or abs(sound["max"] - 0.8 / 8.8) > 1e-15:
+        return False, f"the shared maximum read {sound}; it must be rmajor"
+    lifted = dict(right, t_plant_pulse_burn=1.0e4)
+    after = stats_mod.point_difference(left, lifted)
+    if after["max"] != sound["max"] or after["argmax"] != "rmajor":
+        return False, (
+            f"a variable on one side only moved the maximum: {after}; it must "
+            f"be named and never compared"
+        )
+    if after["extra"] != ["t_plant_pulse_burn"] or after["n_shared"] != 2:
+        return False, (
+            f"the unshared variable was not named: {after}; extra must hold "
+            f"it and n_shared must stay 2"
+        )
+    return True, (
+        "a variable added to one side alone is named in `extra` and does not "
+        "move the maximum, which stays on rmajor"
+    )
+
+
+def _tooth_excluded_namespaces_not_guessed() -> tuple[bool, str]:
+    """Withhold the run's own exclusion list and require the per-namespace
+    maxima to be refused.
+
+    The excluded namespaces are the run's own ``excluded_keys``; a list typed
+    into the table would be a list of what somebody expected the exclusion to
+    hold, which is the shape of trap T11.  A ruler the file does not carry is
+    refused for the same reason: a maximum on another ruler is a different
+    quantity under the same heading.  Task **A86 (v3-tables-remainder)**.
+    """
+    audit = {
+        "excluded_keys": ["costs.coecap", "costs.c21", "vacuum.vacdshm"],
+        "rulers": {
+            "frozen": {
+                "scaled_hex": {
+                    "costs.coecap": "0x1.0p+0",
+                    "costs.c21": "0x1.0p-1",
+                    "vacuum.vacdshm": "0x1.0p-2",
+                }
+            }
+        },
+    }
+    sound = stats_mod.namespace_residuals(audit, ruler="frozen")
+    if sound != {"costs": 1.0, "vacuum": 0.25}:
+        return False, (
+            f"the per-namespace maxima read {sound}; costs must be 1.0 (the "
+            f"larger of its two components) and vacuum 0.25"
+        )
+    blind = {k: v for k, v in audit.items() if k != "excluded_keys"}
+    refused, why = _refuses(
+        lambda: stats_mod.namespace_residuals(blind, ruler="frozen"),
+        what="an audit residual file naming no excluded_keys",
+    )
+    if not refused:
+        return refused, why
+    return _refuses(
+        lambda: stats_mod.namespace_residuals(audit, ruler="mixed"),
+        what="a ruler the audit residual file does not carry",
+    )
+
+
+def _tooth_objective_name_not_an_integer() -> tuple[bool, str]:
+    """Offer a figure of merit the frozen tree's enum does not carry.
+
+    A problem-definition row that printed the integer where the objective's
+    name belongs is a row whose reader cannot tell which problem was solved,
+    so the construction refuses rather than falling back to the number.  The
+    sense is read from the sign, which the sound case checks in both
+    directions.  Task **A86 (v3-tables-remainder)**.
+    """
+    source = (
+        'class FiguresOfMerit(IntEnum):\n'
+        '    MAJOR_RADIUS = (1, "Plasma major radius")\n'
+        '    PULSE_LENGTH = (14, "Pulse length")\n'
+    )
+    least = stats_mod.figure_of_merit(source, 1)
+    most = stats_mod.figure_of_merit(source, -14)
+    if least["objective"] != "Plasma major radius" or least["sense"] != "minimise":
+        return False, f"a positive figure of merit read {least}"
+    if most["objective"] != "Pulse length" or most["sense"] != "maximise":
+        return False, f"a negative figure of merit read {most}"
+    return _refuses(
+        lambda: stats_mod.figure_of_merit(source, 6),
+        what="a figure of merit the frozen tree's enum does not carry",
+    )
+
+
 def _tooth_summation_broken() -> tuple[bool, str]:
     """Break the attempt summation by one and require both refusals."""
     record = {
@@ -683,7 +810,7 @@ def pool_tally_jobs(campaign: Campaign) -> list[dict[str, Any]]:
 
 
 def gate(campaign: Campaign) -> Gate:
-    """The tally's gate, with its thirteen teeth."""
+    """The tally's gate, with its seventeen teeth."""
     return Gate(
         name="tally_contracts",
         binds="every table the tally emits, and the cells it reproduces",
@@ -758,6 +885,35 @@ def gate(campaign: Campaign) -> Gate:
                 "construction that weights the per-module total",
                 must="REFUSE",
                 check=_tooth_row_attribution_not_guessed,
+            ),
+            Tooth(
+                name="a design vector joined by position",
+                what="an output file with a third iteration-variable value "
+                "and only two names, offered to the construction the "
+                "location diagnostic matches by name",
+                must="REFUSE",
+                check=_tooth_design_vector_by_position,
+            ),
+            Tooth(
+                name="a variable one side alone carries",
+                what="the lifted arm's extra iteration variable added to one "
+                "of two design vectors",
+                must="BE NAMED AND NEVER COMPARED",
+                check=_tooth_unshared_variable_not_compared,
+            ),
+            Tooth(
+                name="an exclusion list the run did not state",
+                what="an audit residual file with its excluded_keys removed, "
+                "and then a ruler it does not carry",
+                must="REFUSE",
+                check=_tooth_excluded_namespaces_not_guessed,
+            ),
+            Tooth(
+                name="a figure of merit the enum does not carry",
+                what="i_figure_merit = 6 offered to the construction that "
+                "names the objective",
+                must="REFUSE",
+                check=_tooth_objective_name_not_an_integer,
             ),
             Tooth(
                 name="a demonstration record in a population",

@@ -159,6 +159,41 @@ def _bracket(values: Sequence[float]) -> str:
     return "—" if bracket is None else f"[{bracket[0]:g}, {bracket[1]:g}]"
 
 
+#: How a similarity verdict that could not be ratioed is named in the check-1
+#: table's *verdict note* column, one word per case.  A **label**, not the
+#: construction's own sentence: the sentence carries the measured ratio
+#: ("ratio 544.3 against F = 10") and a note is a category, so a second
+#: implementation can reproduce it (task A86 (v3-tables-remainder)).
+VERDICT_NOTES: dict[tuple[bool | None, bool], str] = {
+    (True, False): "both quantiles exactly 0 — the trivially-similar clause",
+    (False, False): "one side exactly 0 and the other not: unbounded",
+    (None, False): "a distribution is empty: not judged",
+}
+
+
+def _verdict_note(base: str, median: Mapping[str, Any], p90: Mapping[str, Any]) -> str:
+    """The declared pair's note: the category of each quantile that has no
+    ratio, or the pair's name where both were ratioed."""
+    parts = [
+        VERDICT_NOTES[(part.get("similar"), False)]
+        for part in (median, p90)
+        if part.get("ratio") is None
+    ]
+    if not parts:
+        return f"declared pair A2/{base}"
+    return f"A2/{base}: " + "; ".join(dict.fromkeys(parts))
+
+
+def _range_cell(values: Sequence[float]) -> str:
+    """An observed range as the previous revision's §4.4 printed it: ``5–6``,
+    and a bare value where every run agreed."""
+    bracket = stats_mod.seed_bracket([v for v in values if v is not None])
+    if bracket is None:
+        return "—"
+    low, high = bracket
+    return f"{low:g}" if low == high else f"{low:g}–{high:g}"
+
+
 # --------------------------------------------------------------------------
 # grouping
 # --------------------------------------------------------------------------
@@ -1737,8 +1772,754 @@ def module_sweeps(
             f"finished evaluation-phase {population.runs_word} of "
             f"{configuration} in this source"
         ),
+        # The previous revision's block heading line states the per-arm count
+        # — its `tok` block read `(n = 25)` — while this table's own
+        # denominator is every arm's finished runs in the source.  Both are
+        # counts of a real population, so the per-arm one is declared with the
+        # sentence that says what it counts (trap T11).
+        block_denominator=(
+            max((len(v) for v in finished.values()), default=0),
+            "per arm",
+        ),
         kind="module_sweeps",
     )
+
+# --------------------------------------------------------------------------
+# the previous revision's §4 and §4.4 shapes (task A86 (v3-tables-remainder))
+# --------------------------------------------------------------------------
+
+
+def _configurations_with_the_partition(
+    campaign: Campaign, population: stats_mod.Population
+) -> list[Any]:
+    """The configurations this source carries the partitioned arm on.
+
+    The cross-configuration tables below all state something about `A2`
+    against a reference arm.  The entry-reference source carries one flat
+    `A0` run per configuration and no `A2` at all, so these tables have
+    nothing to say about it — the reference entries have their own table —
+    and the source is skipped rather than rendered as a grid of dashes.
+    """
+    return [
+        config
+        for config in campaign.configurations
+        if "A2" in _by_arm(population, config.name)
+    ]
+
+
+def matched_accuracy_by_configuration(
+    campaign: Campaign, population: stats_mod.Population, source: str
+) -> Table | None:
+    """**Check 1, the headline Phase A check** — the previous revision's §4 table.
+
+    One row per configuration; one column per arm holding the restricted
+    audit maximum's **median and p90** on the frozen ruler; then the two
+    declared ratio pairs — `A2/A1` (the pulsed configurations' rung) and
+    `A2/A0` (the steady-state configuration's, and published beside on the
+    pulsed ones) — each as a median ratio, a p90 ratio and a **verdict**
+    against the similarity factor F.
+
+    The verdicts are :func:`stats.similarity`'s, the same ones the
+    matched-accuracy tables compute per configuration and the stage record
+    carries as ``similarity_verdicts``; until this table they were in no
+    grid.  The mixed ruler is not here: it is a second ruler, and the two are
+    published side by side in the full-distributions table rather than mixed
+    into one column (the previous revision published one ruler in §4 and the
+    distributions in §4.4).
+    """
+    configurations = _configurations_with_the_partition(campaign, population)
+    if not configurations:
+        return None
+    ruler = campaign.predicate_mode_default
+    rows: list[dict[str, Any]] = []
+    n_runs = 0
+    for config in configurations:
+        by_arm = _by_arm(population, config.name)
+        base, _why = reference_arm(config.pulsed, set(by_arm))
+        finished = {
+            arm: [r for r in records if stats_mod.finished(r)]
+            for arm, records in by_arm.items()
+        }
+        n_runs += sum(len(v) for v in finished.values())
+        values: dict[str, list[float]] = {
+            arm: stats_mod.accuracy_population(records, ruler=ruler)["values"]
+            for arm, records in finished.items()
+        }
+        row: dict[str, Any] = {
+            "configuration": config.name,
+            "reference": base,
+            "n": sum(len(v) for v in finished.values()),
+        }
+        for arm in LADDER:
+            row[f"{arm}_median"] = stats_mod.median(values.get(arm) or [])
+            row[f"{arm}_p90"] = stats_mod.p90(values.get(arm) or [])
+        note = f"declared pair A2/{base}"
+        for against in ("A1", "A0"):
+            key = f"A2_over_{against}"
+            a, b = values.get(against) or [], values.get("A2") or []
+            if not a or not b:
+                row[f"{key}_median"] = None
+                row[f"{key}_p90"] = None
+                row[f"{key}_verdict"] = "—"
+                continue
+            med = stats_mod.similarity(
+                stats_mod.median(a), stats_mod.median(b),
+                factor=campaign.similarity_factor,
+            )
+            p90 = stats_mod.similarity(
+                stats_mod.p90(a), stats_mod.p90(b),
+                factor=campaign.similarity_factor,
+            )
+            row[f"{key}_median"] = med.get("ratio")
+            row[f"{key}_p90"] = p90.get("ratio")
+            # A verdict is read only where both quantiles could be judged:
+            # stats.similarity returns None for an empty distribution, which
+            # is a refusal to judge and not a FAIL.
+            if med.get("similar") is None or p90.get("similar") is None:
+                row[f"{key}_verdict"] = "—"
+            else:
+                row[f"{key}_verdict"] = (
+                    "PASS" if (med["similar"] and p90["similar"]) else "FAIL"
+                )
+            if against == base:
+                note = _verdict_note(base, med, p90)
+        row["note"] = note
+        rows.append(row)
+    return Table(
+        name=f"matched accuracy by configuration — {source}",
+        caption=Caption(
+            units="dimensionless: the largest scaled coupling-state residual "
+            "found by one further full sweep past termination; ratios are "
+            "dimensionless",
+            row_is="one configuration",
+            column_is="one arm's restricted audit maximum as median and p90 "
+            "over that arm's finished runs, or one reading of a declared "
+            "pair's similarity ratio, or that pair's verdict",
+            population=(
+                f"{population.what}; {n_runs} finished run(s) over "
+                f"{len(configurations)} configuration(s)"
+            ),
+            construction=(
+                "stats.accuracy_population and stats.restricted_statistic on "
+                f"the {ruler} ruler; median = nearest-rank upper-middle, p90 = "
+                "nearest-rank ceil(0.9 n); the ratio and the verdict are "
+                "stats.similarity — the larger statistic over the smaller, "
+                f"similar when it is within F = {campaign.similarity_factor:g} "
+                "at median **and** p90, with two exact zeros similar by the "
+                "trivially-similar clause"
+            ),
+            clauses=(
+                "**one ruler**: these cells are the frozen ruler's, V4's "
+                "declared one (D30); the mixed ruler is published beside in "
+                "the full-distributions table and the two are never mixed "
+                "into one column",
+                "the declared pair is A2/A1 on a pulsed configuration and "
+                "A2/A0 on a steady-state one — the *reference* column names "
+                "it; the other pair is published beside and is not the "
+                "declared acceptance",
+                "the restricted maximum excludes the components the "
+                "configuration's once-per-run deferred nodes write; the "
+                "whole-state maximum is in the matched-accuracy table and is "
+                "large for A2 by design",
+                "**n counts runs** over every arm of the configuration in "
+                "this source, never values (stats.accuracy_population)",
+            ),
+            how_to_read=(
+                "read the verdict against the ratio pair beside it: the rule "
+                "is within F at median **and** p90, so a PASS needs both"
+            ),
+            summary=(
+                f"Check 1, {tally_mod.source_phrase(source)}: the restricted "
+                f"audit maximum (median / p90, frozen ruler) per arm and "
+                f"configuration, then the partitioned arm against its "
+                f"reference and against the flat control, each as a ratio at "
+                f"both quantiles with the verdict at "
+                f"F = {campaign.similarity_factor:g}. The declared pair is the "
+                f"one the *reference* column names."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("n", "n (runs)", fmt=_fmt_int),
+            *[
+                item
+                for arm in LADDER
+                for item in (
+                    Column(f"{arm}_median", f"{arm} median", fmt=_fmt_exp),
+                    Column(f"{arm}_p90", f"{arm} p90", fmt=_fmt_exp),
+                )
+            ],
+            Column("reference", "reference"),
+            Column("A2_over_A1_median", "A2/A1 med", fmt=_fmt_ratio),
+            Column("A2_over_A1_p90", "A2/A1 p90", fmt=_fmt_ratio),
+            Column("A2_over_A1_verdict", "A2/A1 verdict"),
+            Column("A2_over_A0_median", "A2/A0 med", fmt=_fmt_ratio),
+            Column("A2_over_A0_p90", "A2/A0 p90", fmt=_fmt_ratio),
+            Column("A2_over_A0_verdict", "A2/A0 verdict"),
+            Column("note", "verdict note"),
+        ),
+        rows=tuple(rows),
+        denominator=n_runs,
+        denominator_is=(
+            f"finished evaluation-phase {population.runs_word} over every "
+            f"configuration in this source"
+        ),
+        acceptance=True,
+        kind="matched_accuracy_headline",
+    )
+
+
+def per_call_cost_by_configuration(
+    campaign: Campaign, population: stats_mod.Population, source: str
+) -> Table | None:
+    """**The per-call cost** — the previous revision's check-3 table, per run.
+
+    One row per configuration; one column per arm holding the **mean node
+    calls per evaluation** with its ``[min, max]`` seed bracket; then the
+    ladder's three rungs as pooled ratios — `AR→A0` (the stopping rule),
+    `A0→A1` (ownership) and `A1→A2` (the partition), with `A0→A2` standing
+    in on a steady-state configuration where the ownership rung does not
+    exist — and the partitioned arm's prime calls per evaluation.
+
+    The previous revision summed node calls over its 25 seeds; this states
+    the per-run mean with the bracket, for the reason its own §4.5 rewrite
+    gave: the sums hid both the denominator and the run-to-run spread.
+    """
+    configurations = _configurations_with_the_partition(campaign, population)
+    if not configurations:
+        return None
+    rows: list[dict[str, Any]] = []
+    n_runs = 0
+    for config in configurations:
+        by_arm = _by_arm(population, config.name)
+        by_seed = _by_arm_and_seed(population, config.name)
+        base, _why = reference_arm(config.pulsed, set(by_arm))
+        finished = {
+            arm: [r for r in records if stats_mod.finished(r)]
+            for arm, records in by_arm.items()
+        }
+        n_runs += sum(len(v) for v in finished.values())
+        row: dict[str, Any] = {
+            "configuration": config.name,
+            "reference": base,
+            "n": sum(len(v) for v in finished.values()),
+        }
+        for arm in LADDER:
+            calls = [
+                r.get("node_calls_single_eval") for r in finished.get(arm, [])
+            ]
+            row[f"{arm}_mean"] = _mean(calls) if calls else None
+            row[f"{arm}_bracket"] = _bracket(calls) if calls else "—"
+        rungs = [("AR", "A0"), ("A0", "A1"), ("A1", "A2")]
+        if "A1" not in by_arm:
+            rungs = [("AR", "A0"), ("A0", "A2")]
+        pairs = 0
+        for left, right in (("AR", "A0"), ("A0", "A1"), ("A1", "A2"), ("A0", "A2")):
+            key = f"{left}_to_{right}"
+            if (left, right) not in rungs:
+                row[key] = None
+                continue
+            reference, values, kept = _paired(
+                by_seed, left, right, "node_calls_single_eval"
+            )
+            total = sum(reference)
+            row[key] = (sum(values) / total) if total else None
+            pairs = max(pairs, len(kept))
+        primes = [
+            r.get("n_arrangement_method_calls") for r in finished.get("A2", [])
+        ]
+        row["prime_calls"] = _mean(primes) if primes else None
+        row["n_pairs"] = pairs
+        rows.append(row)
+    return Table(
+        name=f"per-call cost by configuration — {source}",
+        caption=Caption(
+            units="model-node executions per `call_models` evaluation; "
+            "arrangement-method (prime) calls are counted in a column of "
+            "their own; ratios are dimensionless",
+            row_is="one configuration",
+            column_is="one arm's mean node calls per evaluation over its "
+            "finished runs with the observed [min, max] seed bracket, or one "
+            "rung of the ladder as a pooled ratio, or the partitioned arm's "
+            "prime calls per evaluation",
+            population=(
+                f"{population.what}; {n_runs} finished run(s) over "
+                f"{len(configurations)} configuration(s)"
+            ),
+            construction=(
+                "the arithmetic mean of node_calls_single_eval over the arm's "
+                "finished runs, with stats.seed_bracket; each rung's ratio is "
+                "Σ right / Σ left over the runs both sides finished, keyed by "
+                "seed in a displaced source and by design-vector column in a "
+                "stencil source"
+            ),
+            clauses=(
+                "**the ladder's rungs, not one comparison**: AR→A0 is the "
+                "stopping rule alone, A0→A1 the ownership of the burn time, "
+                "A1→A2 the partition; on a steady-state configuration the "
+                "ownership rung does not exist and A0→A2 stands in its place",
+                "the prime calls are stamped beside the node calls and never "
+                "pooled into them (D19), so the cost ratios above exclude "
+                "them by declaration and the column names what is excluded "
+                "(trap T11)",
+                "per-run means with the bracket rather than the previous "
+                "revision's 25-seed sums: a sum hides both the denominator "
+                "and the run-to-run spread",
+            ),
+            how_to_read=(
+                "read the three rung columns across: each is one named "
+                "change, and their product is the end-to-end ratio AR→A2"
+            ),
+            summary=(
+                f"Per-call cost, {tally_mod.source_phrase(source)}: mean node "
+                f"calls per evaluation by arm and configuration with the "
+                f"[min, max] seed bracket, then the ladder's rungs AR→A0, "
+                f"A0→A1 and A1→A2 (A0→A2 where the ownership rung does not "
+                f"exist) as pooled ratios, and the partitioned arm's prime "
+                f"calls per evaluation, which are in no node-call cell."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("n", "n (runs)", fmt=_fmt_int),
+            *[
+                item
+                for arm in LADDER
+                for item in (
+                    Column(f"{arm}_mean", f"{arm} mean", fmt=lambda v: "—" if v is None else f"{v:.1f}"),
+                    Column(f"{arm}_bracket", f"{arm} [min, max]"),
+                )
+            ],
+            Column("AR_to_A0", "AR→A0", fmt=_fmt_ratio),
+            Column("A0_to_A1", "A0→A1", fmt=_fmt_ratio),
+            Column("A1_to_A2", "A1→A2", fmt=_fmt_ratio),
+            Column("A0_to_A2", "A0→A2", fmt=_fmt_ratio),
+            Column("reference", "reference"),
+            Column("prime_calls", "A2 prime calls / eval", fmt=lambda v: "—" if v is None else f"{v:.1f}"),
+            Column("n_pairs", "pairs", fmt=_fmt_int),
+        ),
+        rows=tuple(rows),
+        denominator=n_runs,
+        denominator_is=(
+            f"finished evaluation-phase {population.runs_word} over every "
+            f"configuration in this source"
+        ),
+        acceptance=True,
+        kind="cost_per_call_headline",
+    )
+
+
+def full_distributions(
+    campaign: Campaign, population: stats_mod.Population, source: str
+) -> Table | None:
+    """**The full distributions** — the previous revision's §4.4 table.
+
+    One row per configuration and arm: the restricted audit maximum's
+    minimum, median and maximum on the frozen ruler; the **count of
+    components above τ** summed over the arm's runs and the **worst single
+    run**'s count; the sweeps and node calls per evaluation as **ranges**;
+    and the mixed ruler's median and p90 beside, because V4 audits on both
+    rulers and a table showing one alone reports a change of ruler as a
+    change of accuracy.
+
+    The counts come from each run's own restricted block
+    (``stats.restricted_statistic``'s ``n_above_tau``), which is an integer
+    and needs no ruler to be read — the previous revision's point that the
+    count statistic is cleaner than the magnitude.
+    """
+    configurations = _configurations_with_the_partition(campaign, population)
+    if not configurations:
+        return None
+    rows: list[dict[str, Any]] = []
+    n_runs = 0
+    for config in configurations:
+        by_arm = _by_arm(population, config.name)
+        for arm in _arm_order(by_arm):
+            records = [r for r in by_arm[arm] if stats_mod.finished(r)]
+            n_runs += len(records)
+            block = stats_mod.accuracy_population(
+                records, ruler=campaign.predicate_mode_default
+            )
+            values = block["values"]
+            above = [
+                s.get("n_above_tau")
+                for s in block["statistics"]
+                if s.get("present") and s.get("n_above_tau") is not None
+            ]
+            mixed = stats_mod.accuracy_population(records, ruler="mixed")["values"]
+            sweeps = [
+                r.get("n_model_calls_sweeps")
+                for r in records
+                if r.get("n_model_calls_sweeps") is not None
+            ]
+            calls = [
+                r.get("node_calls_single_eval")
+                for r in records
+                if r.get("node_calls_single_eval") is not None
+            ]
+            bracket = stats_mod.seed_bracket(values)
+            rows.append(
+                {
+                    "configuration": config.name,
+                    "arm": arm,
+                    "n": block["n"],
+                    "min": None if bracket is None else bracket[0],
+                    "median": stats_mod.median(values),
+                    "max": None if bracket is None else bracket[1],
+                    "n_above_tau": sum(above) if above else None,
+                    "worst_run": max(above) if above else None,
+                    "mixed_median": stats_mod.median(mixed),
+                    "mixed_p90": stats_mod.p90(mixed),
+                    "sweeps": _range_cell(sweeps),
+                    "node_calls": _range_cell(calls),
+                }
+            )
+    return Table(
+        name=f"full distributions — {source}",
+        caption=Caption(
+            units="dimensionless for the residual columns; counts for the "
+            "components, sweeps and node calls",
+            row_is="one arm of one configuration",
+            column_is="an order statistic of that arm's restricted audit "
+            "maxima, a count of components left above τ, or the observed "
+            "range of a per-evaluation count",
+            population=(
+                f"{population.what}; {n_runs} finished run(s) over "
+                f"{len(configurations)} configuration(s)"
+            ),
+            construction=(
+                "stats.accuracy_population on both rulers; min and max are "
+                "stats.seed_bracket's ends, median nearest-rank upper-middle, "
+                "p90 nearest-rank ceil(0.9 n); `Σ components > τ` sums each "
+                "run's restricted n_above and `worst run` is the largest of "
+                "them; the range columns are the observed [min, max] of the "
+                "run's own per-evaluation counts"
+            ),
+            clauses=(
+                "**the count statistic needs no ruler**: `Σ components > τ` "
+                "is an integer and says whether anything at all was left "
+                "unconverged, which the magnitude columns cannot",
+                "**both rulers or neither**: the mixed ruler reads lower "
+                "wherever its denominator binds, so its two columns stand "
+                "beside the frozen ruler's rather than replacing them (D30)",
+                "the sweeps and node calls are per **evaluation** and are the "
+                "same quantity the per-call cost table means; here they are "
+                "ranges rather than means, to show that the arms' "
+                "distributions do not overlap",
+            ),
+            how_to_read=(
+                "compare an arm's minimum with another arm's maximum: where "
+                "they do not overlap the verdict is not a close call decided "
+                "by a summary statistic"
+            ),
+            summary=(
+                f"Full restricted-audit distributions by configuration and "
+                f"arm, {tally_mod.source_phrase(source)}: minimum, median and "
+                f"maximum on the frozen ruler, the components left above "
+                f"τ summed over the runs and in the worst single run, the "
+                f"mixed ruler's median and p90 beside, and the per-evaluation "
+                f"sweeps and node calls as observed ranges."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("arm", "arm"),
+            Column("n", "n (runs)", fmt=_fmt_int),
+            Column("min", "min", fmt=_fmt_exp),
+            Column("median", "median", fmt=_fmt_exp),
+            Column("max", "max", fmt=_fmt_exp),
+            Column("n_above_tau", "Σ components > τ", fmt=_fmt_int),
+            Column("worst_run", "worst run", fmt=_fmt_int),
+            Column("mixed_median", "mixed median", fmt=_fmt_exp),
+            Column("mixed_p90", "mixed p90", fmt=_fmt_exp),
+            Column("sweeps", "sweeps"),
+            Column("node_calls", "node calls"),
+        ),
+        rows=tuple(rows),
+        denominator=n_runs,
+        denominator_is=(
+            f"finished evaluation-phase {population.runs_word} over every "
+            f"configuration in this source"
+        ),
+        kind="full_distributions",
+    )
+
+
+def module_scope(campaign: Campaign, population: stats_mod.Population) -> Table | None:
+    """**Module scope** — the previous revision's §4.5 static table.
+
+    One row per node group: the collapsed-DSM rows the committed map gives
+    it, whether it is iterated, and how many of its nodes execute on each
+    configuration with their names.  No run record supplies a *statistic*
+    here; the executing node set is the configuration's own grouping
+    (:func:`node_grouping`), which is derived from the committed node map and
+    the configuration's per-run artifact and checked against what the runs
+    were audited under.
+    """
+    configurations = _configurations_with_the_partition(campaign, population)
+    if not configurations:
+        return None
+    node_map = json.loads(
+        (Path(campaign.data_dir) / "dsm_node_map.json").read_text()
+    )
+    rows_by_module = (node_map.get("units") or {}).get("dsm_rows") or {}
+    modules = node_map.get("modules") or {}
+    grouping: dict[str, list[dict[str, Any]]] = {}
+    n_runs = 0
+    for config in configurations:
+        every = [
+            r
+            for records in _by_arm(population, config.name).values()
+            for r in records
+            if stats_mod.finished(r)
+        ]
+        n_runs += len(every)
+        grouping[config.name] = node_grouping(
+            campaign, config.name, every, phase=PHASE
+        )
+    order: list[str] = []
+    for groups in grouping.values():
+        for group in groups:
+            if str(group["group"]) not in order:
+                order.append(str(group["group"]))
+    rows: list[dict[str, Any]] = []
+    for name in order:
+        row: dict[str, Any] = {
+            "module": name,
+            "label": str((modules.get(name) or {}).get("label") or name),
+            "dsm_rows": (
+                int(rows_by_module[name]) if name in rows_by_module else None
+            ),
+            "iterated": (
+                "—"
+                if name not in modules
+                else ("yes" if (modules.get(name) or {}).get("in_loop") else "no")
+            ),
+        }
+        for config in configurations:
+            group = next(
+                (g for g in grouping[config.name] if str(g["group"]) == name),
+                None,
+            )
+            nodes = [] if group is None else [str(n) for n in group["nodes"]]
+            row[f"{config.name}_n"] = len(nodes)
+            row[f"{config.name}_nodes"] = cell_list(nodes)
+        rows.append(row)
+    return Table(
+        name="module scope",
+        caption=Caption(
+            units="counts of collapsed-DSM rows and of model nodes",
+            row_is="one node group of the partition",
+            column_is="the group's collapsed-DSM row count, whether the map "
+            "places it inside the iterated loop, or how many of its nodes "
+            "execute on one configuration and which",
+            population=(
+                f"{population.what}; the committed node map and the "
+                f"per-run artifact of each of {len(configurations)} "
+                f"configuration(s), checked against {n_runs} finished run(s)"
+            ),
+            construction=(
+                "harness/data/dsm_node_map.json for the row counts and the "
+                "loop membership; tally_evaluation.node_grouping for the "
+                "executing nodes — derived from that map and the "
+                "configuration's per-run artifact, and refused where a "
+                "record's own exit audit excluded a different node set"
+            ),
+            clauses=(
+                "**no cell here is a statistic**: this table says what the "
+                "partition *is* on each configuration, and the tables that "
+                "follow say what it cost",
+                "the once-per-run group is the configuration's deferred "
+                "nodes whatever module the map assigns them, which is why it "
+                "carries no DSM row count of its own (trap T9: per-node rows "
+                "are not readable in this repository)",
+                "a node absent from a configuration's column does not "
+                "execute there — the TF-coil family contributes one member "
+                "per configuration by conductor choice",
+            ),
+            how_to_read=(
+                "read the per-configuration columns across one row to see "
+                "where a module is larger or smaller than on its neighbours"
+            ),
+            summary=(
+                "The node groups of the partition: the collapsed-DSM rows "
+                "the committed map gives each, whether it sits inside the "
+                "iterated loop, and which model nodes execute in it on each "
+                "configuration. Static — derived from the committed node map "
+                "and each configuration's per-run artifact, with no cell read "
+                "from a run's statistics."
+            ),
+        ),
+        columns=(
+            Column("module", "DSM module"),
+            Column("label", "what"),
+            Column("dsm_rows", "DSM rows", fmt=_fmt_int),
+            Column("iterated", "iterated"),
+            *[
+                item
+                for config in configurations
+                for item in (
+                    Column(f"{config.name}_n", f"{config.name}: executing", fmt=_fmt_int),
+                    Column(f"{config.name}_nodes", f"{config.name}: nodes"),
+                )
+            ],
+        ),
+        rows=tuple(rows),
+        denominator=len(configurations),
+        denominator_is="configurations whose grouping this table states",
+        kind="module_scope",
+    )
+
+
+def excluded_namespaces(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    source: str,
+    where: Mapping[str, Path],
+) -> Table | None:
+    """**What the exclusion set is load-bearing for** — the §4.5 second table.
+
+    One row per configuration and arm (the flat control and the partitioned
+    arm); the restricted headline's p90 first, then the p90 across runs of
+    the **per-run maximum scaled residual of each excluded namespace**, read
+    from every run's own ``audit_residual.json``
+    (:func:`stats.namespace_residuals`).
+
+    The namespaces are the runs' own — the keys of each run's
+    ``excluded_keys``, reduced to the part before the dot — so the columns
+    are what the exclusion actually holds rather than what a list here
+    expected it to hold.
+    """
+    configurations = _configurations_with_the_partition(campaign, population)
+    if not configurations:
+        return None
+    ruler = campaign.predicate_mode_default
+    arms = ("A0", "A2")
+    gathered: list[tuple[str, str, int, dict[str, list[float]], list[float]]] = []
+    namespaces: list[str] = []
+    n_runs = 0
+    for config in configurations:
+        by_arm = _by_arm(population, config.name)
+        for arm in arms:
+            records = [
+                r for r in by_arm.get(arm, []) if stats_mod.finished(r)
+            ]
+            if not records:
+                continue
+            per_namespace: dict[str, list[float]] = {}
+            restricted: list[float] = []
+            for record in records:
+                statistic = stats_mod.restricted_statistic(record, ruler=ruler)
+                if statistic.get("present") and statistic.get("max") is not None:
+                    restricted.append(statistic["max"])
+                directory = where.get(str(record.get("job_digest")))
+                if directory is None:
+                    raise tally_mod.TallyError(
+                        f"{stats_mod._label(record)}: this tree holds no "
+                        f"directory for the record's job digest, so its "
+                        f"audit residual vector cannot be read and the "
+                        f"per-namespace table is refused"
+                    )
+                path = Path(directory) / "audit_residual.json"
+                if not path.exists():
+                    raise tally_mod.TallyError(
+                        f"{stats_mod._label(record)}: {path} does not exist, "
+                        f"so the excluded namespaces' residuals would be "
+                        f"guessed; the table is refused"
+                    )
+                maxima = stats_mod.namespace_residuals(
+                    json.loads(path.read_text()), ruler=ruler
+                )
+                for namespace, value in maxima.items():
+                    per_namespace.setdefault(namespace, []).append(value)
+                    if namespace not in namespaces:
+                        namespaces.append(namespace)
+            n_runs += len(records)
+            gathered.append(
+                (config.name, arm, len(records), per_namespace, restricted)
+            )
+    if not gathered:
+        return None
+    namespaces.sort()
+    rows = [
+        {
+            "configuration": configuration,
+            "arm": arm,
+            "n": n,
+            "restricted": stats_mod.p90(restricted),
+            **{
+                f"ns_{namespace}": stats_mod.p90(
+                    per_namespace.get(namespace) or []
+                )
+                for namespace in namespaces
+            },
+        }
+        for configuration, arm, n, per_namespace, restricted in gathered
+    ]
+    return Table(
+        name=f"excluded namespaces — {source}",
+        caption=Caption(
+            units="dimensionless: a scaled coupling-state residual",
+            row_is="one arm of one configuration",
+            column_is="the p90 across that arm's runs of the per-run maximum "
+            "scaled residual — over the restricted set, or over the "
+            "components of one excluded namespace",
+            population=(
+                f"{population.what}; {n_runs} finished run(s) over "
+                f"{len(configurations)} configuration(s), arms "
+                f"{', '.join(arms)}"
+            ),
+            construction=(
+                "stats.namespace_residuals — each run's own "
+                "audit_residual.json, the components its `excluded_keys` "
+                f"names, on the {ruler} ruler, reduced to the maximum per "
+                "namespace; the cell is stats.p90 (nearest-rank ceil(0.9 n)) "
+                "of those per-run maxima"
+            ),
+            clauses=(
+                "**this is the size of what the headline excludes**: had a "
+                "namespace been wrongly excluded, the restricted column "
+                "would read that namespace's number instead of its own",
+                "the flat control's excluded set is at machine noise or "
+                "exactly zero, because it runs every node on every sweep; "
+                "the partitioned arm's is not, because it runs them once "
+                "after the solve",
+                "the namespaces are the runs' own excluded keys, not a list "
+                "typed into this table",
+            ),
+            how_to_read=(
+                "read the restricted column against the namespace columns "
+                "beside it on the same row: the gap between them is what the "
+                "exclusion is worth"
+            ),
+            summary=(
+                f"The exclusion set's size, {tally_mod.source_phrase(source)}: "
+                f"the p90 across runs of the per-run maximum scaled residual, "
+                f"for the restricted set and for each namespace the "
+                f"restriction removes, by configuration and arm. Had a "
+                f"namespace been wrongly excluded the headline would read its "
+                f"column instead of the restricted one."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("arm", "arm"),
+            Column("n", "n (runs)", fmt=_fmt_int),
+            Column("restricted", "restricted (headline)", fmt=_fmt_exp),
+            *[
+                Column(f"ns_{namespace}", f"`{namespace}`", fmt=_fmt_exp)
+                for namespace in namespaces
+            ],
+        ),
+        rows=tuple(rows),
+        denominator=n_runs,
+        denominator_is=(
+            f"finished evaluation-phase {population.runs_word} over every "
+            f"configuration in this source, arms {', '.join(arms)}"
+        ),
+        kind="excluded_namespaces",
+    )
+
 
 def predicate_trial(campaign: Campaign, records_dir: Path) -> Table | None:
     """§4.2.5 — the predicate trial, from the trial gate's own verdict.
@@ -1880,6 +2661,10 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     verdicts: list[dict[str, Any]] = []
     refusals: list[str] = []
     sources: list[dict[str, Any]] = []
+    # Module scope is static — the committed node map and each
+    # configuration's per-run artifact — so it is emitted once, from the
+    # first source that carries the partitioned arm, and never per source.
+    scope: Table | None = None
     for source in tally_mod.published_sources(campaign):
         if PHASE not in source.phases:
             continue
@@ -1949,6 +2734,23 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         stacked = node_calls_per_block(campaign, population, source.name)
         if stacked is not None:
             emitted.append(stacked)
+        # The previous revision's cross-configuration shapes (task A86
+        # (v3-tables-remainder)): one row per configuration, or per
+        # configuration and arm.  Each returns None on a source that carries
+        # no partitioned arm — the entry reference, whose one flat run per
+        # configuration is the reference-entries table's.
+        for built in (
+            matched_accuracy_by_configuration(campaign, population, source.name),
+            per_call_cost_by_configuration(campaign, population, source.name),
+            full_distributions(campaign, population, source.name),
+            excluded_namespaces(campaign, population, source.name, where),
+        ):
+            if built is not None:
+                emitted.append(built)
+        if scope is None:
+            scope = module_scope(campaign, population)
+            if scope is not None:
+                emitted.append(scope)
     trial = predicate_trial(
         campaign, Path(campaign.runs_dir) / tally_mod.GATE_RUNS_SUBPATH
     )

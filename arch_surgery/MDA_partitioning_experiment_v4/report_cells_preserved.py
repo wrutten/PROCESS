@@ -177,6 +177,26 @@ def _kind_of(name: str, kinds: dict[str, str]) -> str:
     return kinds.get(_construction_key(name), "")
 
 
+#: ``(kind, the heading an old document printed) → the column key it names``.
+#:
+#: A heading resolves to a key through the **current** stage records, which
+#: breaks in one case: a heading that has been **reused for a different
+#: statistic**.  Task **A86 (v3-tables-remainder)** added the previous
+#: revision's own ``B2/B0 mean`` — the ratio of the two arms' means, equal to
+#: the ratio of the sums over the same seeds — under that heading, and renamed
+#: the column that used to carry it (the mean of the per-seed ratios) to
+#: ``B2/B0 mean of per-seed ratios``.  An old row's ``B2/B0 mean`` cell is the
+#: latter, and without this declaration it would be looked for under a heading
+#: that now holds a different number.
+#:
+#: Every entry is a rename a task made deliberately and must state which; a
+#: heading that changed meaning by accident is exactly what the check is for,
+#: so this map is never extended to make a failure go away.
+RENAMED_HEADINGS: dict[tuple[str, str], str] = {
+    ("optimiser_path", "B2/B0 mean"): "ratio_mean",
+}
+
+
 def _headings_of(
     row: dict[str, str],
     name: str,
@@ -204,6 +224,22 @@ def _headings_of(
     )
     out: list[tuple[str, str, str]] = []
     for heading, cell in row.items():
+        reused = RENAMED_HEADINGS.get((kind, heading))
+        if reused is not None:
+            # A heading the current grid has given to a **different**
+            # statistic: the old cell is looked for under the heading its own
+            # column carries now, found by inverting the map for that one key.
+            key = reused
+            now = next(
+                (
+                    head
+                    for (a_kind, head), a_key in by_heading.items()
+                    if a_kind == kind and a_key == key
+                ),
+                heading,
+            )
+            out.append((key, overrides.get(key, now), cell))
+            continue
         key = renamed.get(heading) or by_heading.get((kind, heading)) or heading
         out.append((key, overrides.get(key, heading), cell))
     return out
@@ -257,9 +293,17 @@ def _translate(
             out.append((key, heading, cell))
     bold = set(getattr(layout, "bold", ()) or ())
     blanked = set(getattr(layout, "blank_repeats", ()) or ())
+    dropped = set(getattr(layout, "omit", ()) or ())
     wanted: dict[str, str] = {}
     may_be_blank: set[str] = set()
     for key, heading, cell in out:
+        if key in dropped:
+            # A column the layout states in its caption instead of once per
+            # row.  Its cells are not looked for in the grid — they are not
+            # in it — and the count of them is reported, so a rendering that
+            # dropped a column carrying values rather than a label is
+            # visible in the output rather than passing silently.
+            continue
         value = str(cell).strip()
         if key in bold and value and value != "—" and not value.startswith("**"):
             value = f"**{value}**"
@@ -315,6 +359,9 @@ def compare(base: str) -> dict[str, Any]:
     new_companion = grids((HERE / COMPANION).read_text())
     old = old_report + old_companion
     new = new_report + new_companion
+    # ``(kind, column key) -> heading``, so a column a layout omits can be
+    # found in an old row by the heading that row printed.
+    by_heading_reverse = {(kind, key): heading for (kind, heading), key in by_heading.items()}
 
     def _one_row(these: list[Grid]) -> int:
         return sum(
@@ -341,6 +388,7 @@ def compare(base: str) -> dict[str, Any]:
 
     n_rows = n_cells = n_numeric = 0
     kept_rows = kept_cells = kept_numeric = 0
+    into_the_caption: collections.Counter[str] = collections.Counter()
     n_recomputed_grids = 0
     missing_rows = 0
     missing_not_recomputed = 0
@@ -388,6 +436,7 @@ def compare(base: str) -> dict[str, Any]:
                 wanted, may_be_blank = _translate(
                     row, grid.name, host, layouts, kinds, by_heading
                 )
+
                 for candidate in host.rows:
                     if _group_row(candidate):
                         continue
@@ -406,6 +455,16 @@ def compare(base: str) -> dict[str, Any]:
                     if agree > best:
                         best, worst = agree, wanted
                 if hit:
+                    layout = layouts.get(host.name)
+                    kind = _kind_of(grid.name, kinds) or (
+                        (getattr(layout, "kinds", ()) or ("",))[0]
+                        if layout is not None
+                        else ""
+                    )
+                    for key in getattr(layout, "omit", ()) or ():
+                        heading = by_heading_reverse.get((kind, key))
+                        if heading and heading in row:
+                            into_the_caption[f"{host.name}.{heading}"] += 1
                     break
             if not hit:
                 differing.append(
@@ -433,6 +492,7 @@ def compare(base: str) -> dict[str, Any]:
         "n_rows_missing_not_the_second_implementation": missing_not_recomputed,
         "n_rows_differing": len(differing),
         "differing": differing[:20],
+        "cells_stated_in_the_caption": dict(sorted(into_the_caption.items())),
         "withdrawn_by_kind": dict(sorted(withdrawn.items())),
         "constructions_rendered_fewer_times": dict(sorted(fewer.items())),
         "heading_translations": {
@@ -488,10 +548,25 @@ def main(argv: Iterable[str] | None = None) -> int:
             f"{row['cells_matched_at_best']} of {row['cells_in_the_row']} "
             f"cell(s) matched at best — {row['row']}"
         )
+    if RENAMED_HEADINGS:
+        print(
+            "  headings reused for a different statistic, declared and "
+            "translated before comparing:"
+        )
+        for (kind, heading), key in sorted(RENAMED_HEADINGS.items()):
+            print(f"    {kind}: {heading!r} → column key {key!r}")
     if result["heading_translations"]:
         print("  headings the layouts rename, translated before comparing:")
         for key, heading in result["heading_translations"].items():
             print(f"    {key} → {heading!r}")
+    if result["cells_stated_in_the_caption"]:
+        print(
+            "  columns a layout now states in its caption instead of once "
+            "per row (declared, and their cells are not looked for in the "
+            "grid):"
+        )
+        for key, n in result["cells_stated_in_the_caption"].items():
+            print(f"    {n:>5} cell(s)  {key}")
     if result["withdrawn_by_kind"]:
         print("  rendered fewer times than before, by kind (expected):")
         for kind, n in result["withdrawn_by_kind"].items():

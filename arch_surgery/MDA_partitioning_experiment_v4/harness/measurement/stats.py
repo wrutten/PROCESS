@@ -44,6 +44,7 @@ and the previous revision's ``phase_a.py`` / ``phase_b.py`` tallies, read at
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -98,6 +99,10 @@ __all__ = [
     "weighted_total",
     "n_evaluations",
     "per_seed_ratio_summary",
+    "iteration_variables",
+    "point_difference",
+    "namespace_residuals",
+    "figure_of_merit",
 ]
 
 
@@ -1765,4 +1770,167 @@ def per_seed_ratio_summary(
         "min": None if bracket is None else bracket[0],
         "max": None if bracket is None else bracket[1],
         "n_above_one": sum(1 for r in per_seed if r > 1),
+    }
+
+
+# --------------------------------------------------------------------------
+# the previous revision's remaining table shapes (task A86
+# (v3-tables-remainder), 2026-09-15)
+# --------------------------------------------------------------------------
+
+
+def iteration_variables(record: Mapping[str, Any]) -> dict[str, float]:
+    """**The accepted design vector, keyed by iteration-variable name.**
+
+    The output file carries the vector twice over, both keyed by the solver's
+    slot: ``mfile.itvars`` as ``itvar001 … itvarNNN`` and
+    ``mfile.itvar_names`` as the name in each slot.  This construction joins
+    them **on the slot** and returns ``{name: value}``.
+
+    **The premise is checked, never assumed.**  The lift adds one iteration
+    variable on a pulsed configuration, so two arms' vectors are of different
+    lengths and *matching by position would compare two different variables*
+    (the previous revision's §5.2.2 caption: *"Variables are matched by name,
+    never by index"*).  A record with a value in a slot the name map does not
+    carry therefore has no keyed vector at all and is **refused**, rather than
+    being zipped by position.
+    """
+    mfile = record.get("mfile") or {}
+    values = mfile.get("itvars") or {}
+    names = mfile.get("itvar_names") or {}
+    if not values or not names:
+        raise StatsError(
+            f"{_label(record)}: the output file carries no keyed iteration "
+            f"variables (values {len(values)}, names {len(names)}), so there "
+            f"is no design vector to compare by name"
+        )
+    unnamed = sorted(set(values) - set(names))
+    if unnamed:
+        raise StatsError(
+            f"{_label(record)}: the output file carries value(s) {unnamed} "
+            f"with no name.  A design vector matched by index would compare "
+            f"two different variables once the lift has added one, so the "
+            f"keyed vector is refused rather than zipped by position."
+        )
+    return {
+        str(names[slot]): float(value)
+        for slot, value in sorted(values.items())
+        if value is not None
+    }
+
+
+def point_difference(
+    a: Mapping[str, float], b: Mapping[str, float]
+) -> dict[str, Any]:
+    """**How far apart two runs' design points are** — a diagnostic, never an
+    acceptance (decision **D6**).
+
+    Over the variables the two vectors **share by name**, the per-variable
+    relative difference ``|Δx| / max(|x_a|, |x_b|)``; the maximum of those,
+    the variable it sat on, how many variables are shared, and the names
+    carried by one side only — which are reported and **never compared**,
+    because a variable one arm does not have has no difference.
+
+    Returns ``{"max", "argmax", "n_shared", "extra"}``; ``max`` is ``None``
+    where the two share no variable, and a shared pair both of whose values
+    are exactly zero contributes 0, not a division.
+    """
+    shared = sorted(set(a) & set(b))
+    extra = sorted(set(a) ^ set(b))
+    worst: float | None = None
+    argmax: str | None = None
+    for name in shared:
+        scale = max(abs(a[name]), abs(b[name]))
+        gap = 0.0 if scale == 0 else abs(a[name] - b[name]) / scale
+        if worst is None or gap > worst:
+            worst, argmax = gap, name
+    return {
+        "max": worst,
+        "argmax": argmax if worst else argmax,
+        "n_shared": len(shared),
+        "extra": extra,
+    }
+
+
+def namespace_residuals(
+    audit: Mapping[str, Any], *, ruler: str
+) -> dict[str, float]:
+    """**The maximum scaled residual of each excluded namespace, in one run.**
+
+    The restricted statistic excludes the components the configuration's
+    once-per-run deferred nodes write, and the report's headline rests
+    entirely on that exclusion being right.  This construction says how much
+    is behind it: for every component the run's own ``excluded_keys`` names,
+    the scaled residual on the named ruler, grouped by the **namespace** part
+    of the ``namespace.field`` key and reduced to that namespace's maximum.
+
+    ``audit`` is the run's ``audit_residual.json``.  The keys are the run's
+    own — a namespace list typed here would be a list of what somebody
+    expected the exclusion to hold — so a file carrying **no** ``excluded_keys``
+    is refused rather than read as an empty exclusion, and a ruler the file
+    does not carry is refused rather than falling back to another one.
+    """
+    excluded = audit.get("excluded_keys")
+    if excluded is None:
+        raise StatsError(
+            "the audit residual file names no excluded_keys, so which "
+            "components the restriction removed would have to be guessed; "
+            "the per-namespace table is refused rather than built over a "
+            "list typed by hand"
+        )
+    block = (audit.get("rulers") or {}).get(ruler)
+    if not isinstance(block, Mapping):
+        raise StatsError(
+            f"the audit residual file carries no {ruler!r} ruler (it has "
+            f"{sorted((audit.get('rulers') or {}))}); a namespace maximum on "
+            f"another ruler would be a different quantity under this heading"
+        )
+    scaled = block.get("scaled_hex") or {}
+    out: dict[str, float] = {}
+    for key in excluded:
+        raw = scaled.get(str(key))
+        if raw is None:
+            continue
+        value = float.fromhex(str(raw)) if isinstance(raw, str) else float(raw)
+        namespace = str(key).split(".", 1)[0]
+        out[namespace] = max(out.get(namespace, 0.0), value)
+    return out
+
+
+def figure_of_merit(numerics_source: str, i_figure_merit: Any) -> dict[str, Any]:
+    """**The objective's name and sense**, from the frozen tree's own enum.
+
+    ``i_figure_merit`` is an integer in every record and a **negative** value
+    means *maximise* (the previous revision's §5.6 caption).  The name is the
+    description string of the matching member of ``FiguresOfMerit`` in
+    ``process/data_structure/numerics.py`` **of the experiment's frozen
+    copy** — parsed from the file's text, never imported, so that reading the
+    objective's name cannot run model code.
+
+    A figure of merit the enum does not carry is **refused**: a table that
+    printed the integer where the name belongs would be a table whose reader
+    cannot tell which problem was solved.
+    """
+    if i_figure_merit is None:
+        raise StatsError(
+            "a record carries no i_figure_merit, so the problem it solved "
+            "cannot be stated"
+        )
+    number = int(i_figure_merit)
+    members: dict[int, str] = {}
+    for value, description in re.findall(
+        r"=\s*\(\s*(\d+)\s*,\s*\n?\s*\"([^\"]+)\"", numerics_source
+    ):
+        members[int(value)] = description
+    if abs(number) not in members:
+        raise StatsError(
+            f"i_figure_merit {number} names no member of the frozen tree's "
+            f"FiguresOfMerit (it carries {sorted(members)}); the objective "
+            f"would be printed as an integer, which says nothing about which "
+            f"problem was solved"
+        )
+    return {
+        "i_figure_merit": number,
+        "objective": members[abs(number)],
+        "sense": "maximise" if number < 0 else "minimise",
     }

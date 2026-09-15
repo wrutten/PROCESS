@@ -318,6 +318,14 @@ class Table:
     #: The record and the companion file carry every column; the report's
     #: caption names the companion table that does.
     report_omits: tuple[str, ...] = ()
+    #: **The count a per-configuration block's heading line states**, where
+    #: it is not the table's own denominator.  The previous revision's §4.5
+    #: blocks read ``**`tok`** (n = 25)`` — 25 runs *per arm* — while this
+    #: table's denominator is the finished runs of every arm in the source.
+    #: Both are true of different populations, so the smaller one is declared
+    #: here as a count and the sentence that says what it counts, rather than
+    #: derived in the renderer by dividing (task A86 (v3-tables-remainder)).
+    block_denominator: tuple[int, str] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.caption, Caption):
@@ -481,6 +489,11 @@ class Table:
             "how_to_read": self.caption.how_to_read,
             "denominator": self.denominator,
             "denominator_is": self.denominator_is,
+            "block_denominator": (
+                None
+                if self.block_denominator is None
+                else list(self.block_denominator)
+            ),
             "acceptance": self.acceptance,
             "audit_positions": list(self.audit_positions),
             "columns": [
