@@ -1,6 +1,6 @@
 # A79 (report-captions) — the V4 report's tables as an academic paper handles them
 
-> **Document status** — **OPEN, 2026-09-15.** Task report of **A79 (report-captions)**, branch
+> **Document status** — **MERGED 2026-09-15** at `6c9762bd` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A79_runs/` (latest resume-compatible). Orchestrator's assessment §12. Task report of **A79 (report-captions)**, branch
 > `A79-report-captions` off `architecture_surgery` at `4dac585e` (after A78 (arm-renames)). Zero
 > PROCESS runs; every number below comes from a committed script named beside it, run in the
 > worktree at the commit named. The user's rulings of 2026-09-15 this task implements are quoted in

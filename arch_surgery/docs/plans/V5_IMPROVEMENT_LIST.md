@@ -103,6 +103,11 @@ seeds and the report states lad's trajectory change in prose. The bias is in *at
 the headline ratio is said to be the cost of), not in the data, and the fix is to stop gating on
 the trajectory and print its factor.
 
+
+### 2. The partition's saving by block — M2 is solved about as often as the flat arm sweeps it *(arising from A79 (report-captions), 2026-09-15; not the user's)*
+
+The per-module optimisation-phase split (V4 report Tables D.2–D.4) and the per-block evaluation split (Table D.7) show where the saving is *not*: the coils block M2 reads `B2/B0` 0.87 / 0.59 / 0.67 pooled with a per-run median of 0.8765 on the large tokamak and one run above 1, and `A2/A1` 1.0078 / 0.9919 / 1.0000 per evaluation — the block is iterated as often as the flat loop swept it. The saving sits in the plant block (0.51–0.61), the pulse node (0.20) and the once-per-run nodes (0). A V5 partition should take this as a design input: either M2's own fixed point is as expensive as the flat sweep because its coupling is the loop's real work, or the block boundary is drawn through it; a per-block census of M2's internal residual would say which before a new schedule is proposed.
+
 ---
 
 *Candidates proposed elsewhere and not yet listed here:* A76 (fixed-point-distance)'s report §7 (d)
