@@ -1668,4 +1668,4 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>combining 3 stage table(s): `achieved accuracy at the accepted optimum — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`; `achieved accuracy at the accepted optimum — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`; `achieved accuracy at the accepted optimum — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-*The second implementation emitted 107 table(s); none is rendered here. Whether they agree with the tally's, table by table, row by row and cell by cell without tolerance, is gate `recomputation`'s verdict — one row of the report's Table D.1 — and the gate's own record holds every compared cell.*
+*The second implementation emitted 122 table(s); none is rendered here. Whether they agree with the tally's, table by table, row by row and cell by cell without tolerance, is gate `recomputation`'s verdict — one row of the report's Table D.1 — and the gate's own record holds every compared cell.*
