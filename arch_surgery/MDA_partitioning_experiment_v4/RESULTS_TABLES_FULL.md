@@ -1590,32 +1590,34 @@ The full versions of the report's tables whose columns listing a value per seed 
 
 <sub>`the seed set — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table F.44.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside. The *evaluations median* column reads n_model_calls, not ε (issue I-26); the optimiser's-path table reads the declared field. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table F.44.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
-| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | evaluations median | attempts per seed (base/arm) | constructions disagree |
-|---|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 0.9795 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
-| B0 → B1 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0139 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
-| B0 → B2 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 2.6524 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | attempts per seed (base/arm) | constructions disagree |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 22 | 0.9795 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B0 → B1 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0476 | 0 | 1.0139 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B0 → B2 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0476 | 0 | 2.6524 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
+| B1 → B2 (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 22 | 2.6158 | 0:1/1, 1:1/1, 2:1/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 10:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 17:1/1, 18:1/1, 19:1/1, 22:1/1, 23:1/1, 24:1/1 | 0 |
 
 <sub>`iteration multiplier (check 2) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.45.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside. The *evaluations median* column reads n_model_calls, not ε (issue I-26); the optimiser's-path table reads the declared field. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table F.45.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
-| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | evaluations median | attempts per seed (base/arm) | constructions disagree |
-|---|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0352 | 0:1/1, 1:2/2, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
-| B0 → B1 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8046 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
-| B0 → B2 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 2.1169 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | attempts per seed (base/arm) | constructions disagree |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 11 | 1.0352 | 0:1/1, 1:2/2, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B0 → B1 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8468 | 0 | 0.8046 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B0 → B2 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8468 | 0 | 2.1169 | 0:1/1, 1:2/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 1 |
+| B1 → B2 (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 11 | 2.6335 | 0:1/1, 1:1/1, 5:1/1, 6:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 15:1/1, 18:1/1, 19:1/1 | 0 |
 
 <sub>`iteration multiplier (check 2) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table F.46.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside. The *evaluations median* column reads n_model_calls, not ε (issue I-26); the optimiser's-path table reads the declared field. n = 22 (seeds on which every arm of st_regression converged).*
+**Table F.46.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of st_regression converged).*
 
-| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | evaluations median | attempts per seed (base/arm) | constructions disagree |
-|---|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 22 | 1.0000 | 1.2405 | beside | 1.0000 | 0.9221 | 0.9906 | 0:1/1, 1:1/1, 2:2/2, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/2, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/3 | 3 |
-| B0 → B2 | 22 | 1.0000 | 0.9530 | PASS | 1.0000 | 1.0019 | 2.7767 | 0:1/1, 1:1/1, 2:2/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/1 | 1 |
+| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | attempts per seed (base/arm) | constructions disagree |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 22 | 1.0000 | 1.2405 | beside | 1.0000 | 0.9221 | 1.0000 | 15 | 0.9906 | 0:1/1, 1:1/1, 2:2/2, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/2, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/3 | 3 |
+| B0 → B2 | 22 | 1.0000 | 0.9530 | PASS | 1.0000 | 1.0019 | 1.0000 | 14 | 2.7767 | 0:1/1, 1:1/1, 2:2/1, 3:1/1, 4:1/1, 6:1/1, 7:1/1, 8:1/1, 9:1/1, 11:1/1, 12:1/1, 13:1/1, 14:1/1, 15:1/1, 16:1/1, 18:1/1, 19:1/1, 20:1/1, 21:1/1, 22:1/1, 23:1/1, 24:1/1 | 1 |
 
 <sub>`iteration multiplier (check 2) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 

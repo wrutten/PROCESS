@@ -1312,7 +1312,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - *A column is* per arm, the mean over the seed set; for B2 against B0, the mean of the per-seed ratios, their median with [min, max], and the count of seeds on which the ratio exceeds 1.
 - *Construction:* stats.iterations_summed_over_attempts (check 2's declared statistic); stats.n_evaluations (sweeps_per_eval.n_evaluations, the field issue I-26 names — the driver's histogram summed over the attempts, output path excluded); R = solve-phase node calls summed over attempts[] (check 4's unit); ρ = R / ε per run.  Means are arithmetic over the arm's runs in the seed set; the B2/B0 columns are stats.per_seed_ratio_summary (mean and nearest-rank upper-middle median of the per-seed ratios, their [min, max], the count above 1).
 - R = ρ × ε holds per seed by construction, so a configuration's four rows decompose check 4's cost ratio into how many evaluations the optimiser took and what each cost.
-- the iteration row is the same construction as check 2's acceptance column; check 2's *evaluations median* column reads n_model_calls and is not ε (issue I-26).
+- the iteration row is the same construction as check 2's acceptance column, and the ε row the same field as check 2's ε column (issue I-26, closed by task A80 (report-accuracy-audit): until then that column read n_model_calls, the driver's sweep count).
 - B1 is absent on a steady-state configuration and reads —.
 - *How to read:* an ε row near 1 with an R row well below 1 says the partition changed what an evaluation costs and not how many the optimiser needed; a median far from the mean names a few seeds carrying the difference.
 
@@ -1422,11 +1422,13 @@ Every table of this appendix and of the companion file is an instance of one **c
 **iteration multiplier (check 2)** (`iteration_multiplier`, stage `tally_optimisation`; Tables D.70–D.72; companion Tables F.44–F.46; 3 table(s)).
 
 - *Units:* dimensionless ratios of counts.
-- *A row is* one arm against the flat control over the seed set.
-- *A column is* one of check 2's two iteration constructions, its sum ratio, or the evaluation-count ratio beside them.
+- *A row is* one arm against the flat control over the seed set, and the B1 → B2 step beside where both arms are present.
+- *A column is* one of check 2's two iteration constructions, its sum ratio, the evaluation-count ratio ε beside them, the seeds on which ε is exactly 1, and the sweep ratio.
 - *Construction:* stats.iterations_summed_over_attempts (the **declared acceptance statistic**, nearest-rank upper-middle median against 1.05) and stats.iterations_final_attempt (the previous revision's construction, published beside for comparability).  Both are read from attempts[], so a disagreement between them is a disagreement about that list and not about which field was read.
 - the sum ratio is published beside every median because a median of per-seed ratios and the ratio of the sums can point in opposite directions.
-- the evaluation-count ratio is beside both: iterations, even summed, miss the lifted arm's extra stencil column and the line-search evaluations that vary at equal iteration count.
+- the evaluation-count ratio ε is beside both: iterations, even summed, miss the lifted arm's extra stencil column and the line-search evaluations that vary at equal iteration count.  It reads stats.n_evaluations (sweeps_per_eval.n_evaluations, call_models evaluations summed over the attempts) — issue I-26, closed by task A80 (report-accuracy-audit): until then this column read n_model_calls, the driver's count of sweeps of the dispatch body, under a heading that said evaluations.
+- the sweep ratio (n_model_calls, sweeps of the dispatch body over the whole run) is its own column: a block sweep runs one module, not all of them, so it is a mechanism, not a cost, and is never read as ε.
+- *ε = 1 on* counts the seeds on which the two arms took exactly the same number of evaluations; on the B1 → B2 row it is the plan's §3.5 pre-declared expectation, per seed.
 - *constructions disagree* counts the seeds on which the final attempt's pair and the summed pair are not the same numbers — 0 means no run in this population retried.
 - *How to read:* read the acceptance column against the summed median; a final-attempt median that differs from it names the retried seeds, which the attempts column lists.
 
@@ -1438,7 +1440,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 - *Construction:* stats.with_and_without_retried — solve-phase node calls **summed over attempts[]** per run, so the ratio is over the quantity the attempts decompose (the identity is in the attempt-summation table); pooled = Σ arm / Σ base, median = nearest-rank upper-middle of the per-seed ratios, worse = seeds on which the arm cost more.
 - **retries are a term, not a footnote**: the ratio is published *with* and *without* the retried seeds because both readings are defensible — a retry the other arm did not need is real cost the architecture avoided at that start, *and* it is a robustness event rather than a per-evaluation cost.
 - a seed counts as retried when **either** side of the pair retried: the pair is what the ratio is over.
-- the arrangement-method calls are a column of their own and are never pooled into the node calls.
+- the arrangement-method (prime) calls are two columns of their own — the per-run mean, in the unit of the node-call column beside it, and the sum over the arm's runs in the seed set — and are never pooled into the node calls; on the partitioned arm there is one such call per sweep of the dispatch body.
 - the output-time and audit sweeps are excluded from this unit symmetrically in every arm.
 - *How to read:* where *retried* is 0 the with- and without- columns are the same number, and the pair of columns is the statement that nothing in this population depended on a retry.
 
@@ -1522,7 +1524,7 @@ Every table of this appendix and of the companion file is an instance of one **c
 
 The gate table is the appendix's licence: every table below is read only if every row here is PASS with its teeth tripped. A **tooth** is a deliberate break the gate must catch, so a gate whose tooth did not trip is not accepted whatever its verdict. The row `recomputation` is the second implementation's summary — every cell of the tally's tables recomputed from the run records by code sharing no construction with the tally, compared without tolerance; its *compared* / *mismatched* pair is the whole of that check, and the recomputed tables themselves are in the companion file. The row `tally_contracts` covers the captions, denominators and record contract of every table emitted.
 
-**Table D.1.** *Every registered gate from its verdict record: the verdict on the criterion and every tooth, what it compared (the denominator) and how many differed, teeth tripped / declared. No number in this appendix is cited unless every row is PASS with its teeth tripped; the one 1-mismatched PASS is the frozen-physics gate counting the one approved model file by name. Population: 30 registered gate(s): 11 of the experiment plan's §3.9 table and 19 of the harness's own checks, promoted.*
+**Table D.1.** *Every registered gate from its verdict record: the verdict on the criterion and every tooth, what it compared (the denominator) and how many differed, teeth tripped / declared. No number in this appendix is cited unless every row is PASS with its teeth tripped; the two PASS rows with a nonzero mismatched count are the frozen-physics gate (1: the one approved model file, by name) and the copy-identity gate (7: the recorded permitted driver-edit files, by name and digest). A compared count that sums more than one kind of thing shows its parts in brackets. Population: 30 registered gate(s): 11 of the experiment plan's §3.9 table and 19 of the harness's own checks, promoted.*
 
 | gate | plan | binds | verdict | population | compared | mismatched | teeth | record |
 |---|---|---|---|---|---|---|---|---|
@@ -1547,13 +1549,13 @@ The gate table is the appendix's licence: every table below is read only if ever
 | `audit_restriction` | G4 | the similarity statistic, on every configuration | **PASS** | 13 doctored run(s) over 3 configuration(s), each against that configuration's undoctored run; namespaces derived per configuration | 12 | 0 | 6/6 | `runs/gates/audit_restriction/gate.json` |
 | `entry_and_warm` | G6 | the evaluation phase, on every configuration | **PASS** | 8 entry pair(s) at seed 1; 5 warm run(s); 16 evaluations | 6717 | 0 | 3/3 | `runs/gates/entry_and_warm/gate.json` |
 | `switch_composition` | G5 | B2, on every configuration where it is active | **PASS** | 3 configuration(s) where B2 is active; 6 optimisations; 37 switch names and 10 run values per configuration | 141 | 0 | 4/4 | `runs/gates/switch_composition/gate.json` |
-| `switch_neutrality` | G1 | each driver change, run per change and never batched | **PASS** | straddles fd480aff -> 0677a9b3: a neutrality result.  6 run pair(s) = 3 configuration(s) x 2 reference arm(s); 2825 deterministic record values and… | 54144 | 0 | 9/9 | `runs/gates/switch_neutrality/gate.json` |
+| `switch_neutrality` | G1 | each driver change, run per change and never batched | **PASS** | straddles fd480aff -> 0677a9b3: a neutrality result.  6 run pair(s) = 3 configuration(s) x 2 reference arm(s); 2825 deterministic record values and… | 54144 (2825 + 51319) | 0 | 9/9 | `runs/gates/switch_neutrality/gate.json` |
 | `reproduction` | GR | the harness rewrite and the experiment's copy of PROCESS, once, at the copy commit before  | **PASS** | 20 runs (14 optimisations + 6 evaluations) over 3 configurations; 270 values in the committed reference, 14 of them excluded by name with their rea… | 256 | 0 | 8/8 | `runs/gates/reproduction/gate.json` |
-| `output_path` | G9 | the removal of the output-time loop from the arms whose matrix cell turns it off, on every | **PASS** | 11 run(s) at seed 0 = every optimisation-phase arm on every configuration where it is active, each composed from the experiment's matrix; 3825 coup… | 3879 | 0 | 4/4 | `runs/gates/output_path/gate.json` |
+| `output_path` | G9 | the removal of the output-time loop from the arms whose matrix cell turns it off, on every | **PASS** | 11 run(s) at seed 0 = every optimisation-phase arm on every configuration where it is active, each composed from the experiment's matrix; 3825 coup… | 3879 (3825 + 54) | 0 | 4/4 | `runs/gates/output_path/gate.json` |
 | `written_file_gap` | — | the written-file gap on the one-call output path: BR, B1 and B2 at seed 0 on the pulsed co | **PASS** | 6 run(s) at seed 0, unperturbed = 3 arm(s) (BR, B1, B2) x 2 pulsed configuration(s), each composed from the experiment's matrix with no override bu… | 42 | 0 | 4/4 | `runs/gates/written_file_gap/gate.json` |
-| `predicate_mode` | G8 | the convergence predicate's second ruler, on the evaluation-phase arms of every configurat | **PASS** | 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A2) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.… | 8152 | 0 | 4/4 | `runs/gates/predicate_mode/gate.json` |
-| `tally_contracts` | — | every table the tally emits, and the cells it reproduces | **PASS** | 20 reference run(s) (14 optimisations + 6 evaluations) over 3 configurations; 256 published cells, no tolerance on any of them; and 101 table(s) em… | 559 | 0 | 11/11 | `runs/gates/tally_contracts/gate.json` |
-| `recomputation` | — | every cell the tally publishes, recomputed from the run records by a second implementation | **PASS** | 101 table(s) emitted by the two tally stages, recomputed cell by cell from 949 run record(s) under the 5 published source(s) of the campaign popula… | 14394 | 0 | 9/9 | `runs/gates/recomputation/gate.json` |
+| `predicate_mode` | G8 | the convergence predicate's second ruler, on the evaluation-phase arms of every configurat | **PASS** | 12 pair(s) = 3 configuration(s) x the evaluation-phase arms active on each (A0, A2) x 2 seed(s), each run under both rulers = 24 runs at delta = 0.… | 8152 (8068 + 84) | 0 | 4/4 | `runs/gates/predicate_mode/gate.json` |
+| `tally_contracts` | — | every table the tally emits, and the cells it reproduces | **PASS** | 20 reference run(s) (14 optimisations + 6 evaluations) over 3 configurations; 256 published cells, no tolerance on any of them; and 101 table(s) em… | 559 (303 + 256) | 0 | 11/11 | `runs/gates/tally_contracts/gate.json` |
+| `recomputation` | — | every cell the tally publishes, recomputed from the run records by a second implementation | **PASS** | 101 table(s) emitted by the two tally stages, recomputed cell by cell from 949 run record(s) under the 5 published source(s) of the campaign popula… | 14445 | 0 | 9/9 | `runs/gates/recomputation/gate.json` |
 | `run_kind_separation` | — | every record this package makes, and every population the tally and the analysis build | **PASS** | 1102 run record(s) under runs/, of which 949 are covered by the tally's 5 published source(s) (the campaign family) and 31 by its 2 unpublished; ru… | 3000 | 0 | 9/9 | `runs/gates/run_kind_separation/gate.json` |
 | `stage_provenance` | — | the harness itself, before any PROCESS run | **PASS** | a scratch records directory this check writes itself — 3 verdict record(s) and 4 stage record(s) — broken 4 ways; a scratch census record, stamped … | 17 | 0 | 5/5 | `runs/gates/stage_provenance/gate.json` |
 
@@ -1606,7 +1608,7 @@ The three tables §4 is written from, in the shapes the user asked for (`docs/pl
 
 <sub>`node calls per module — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.5.** *The optimiser's path per configuration over the seed set, the optimisations (25 starts per arm): per arm the mean iterations (summed over attempts), evaluations ε (sweeps_per_eval.n_evaluations, I-26's field), node calls per evaluation ρ and per run R; B2/B0 as the per-seed ratio's mean, median [min, max] and count above 1. R = ρ × ε per seed. n = 55 (seeds on which every arm converged, summed over the configurations).*
+**Table D.5.** *The optimiser's path per configuration over the seed set, the optimisations (25 starts per arm): per arm the mean iterations (summed over attempts), evaluations ε (sweeps_per_eval.n_evaluations), node calls per evaluation ρ and per run R; B2/B0 as the per-seed ratio's mean, median [min, max] and count above 1. R = ρ × ε per seed; n is per configuration, never summed. n = 3 (configurations stacked, each over its own seed set — the n column: large_tokamak_nof 22 / low_aspect_ratio_DEMO 11 / st_regression 22 seeds on which every arm converged; never pooled).*
 
 | quantity | configuration | arms | n | BR | B0 | B1 | B2 | B2/B0 mean | B2/B0 median | [min, max] | seeds B2/B0 > 1 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2351,64 +2353,66 @@ One full optimisation per start, 25 starts per arm per configuration (seed 0 unp
 
 <sub>`same optimum (check 1) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.70.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside. The *evaluations median* column reads n_model_calls, not ε (issue I-26); the optimiser's-path table reads the declared field. n = 22 (seeds on which every arm of large_tokamak_nof converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.44.*
+**Table D.70.** *Check 2 on large_tokamak_nof: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of large_tokamak_nof converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.44.*
 
-| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | evaluations median | constructions disagree |
-|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 0.9795 | 0 |
-| B0 → B1 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0139 | 0 |
-| B0 → B2 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 2.6524 | 0 |
+| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | constructions disagree |
+|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 22 | 0.9795 | 0 |
+| B0 → B1 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0476 | 0 | 1.0139 | 0 |
+| B0 → B2 | 22 | 1.0000 | 0.9942 | PASS | 1.0000 | 0.9942 | 1.0476 | 0 | 2.6524 | 0 |
+| B1 → B2 (beside) | 22 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 22 | 2.6158 | 0 |
 
 <sub>`iteration multiplier (check 2) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.71.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside. The *evaluations median* column reads n_model_calls, not ε (issue I-26); the optimiser's-path table reads the declared field. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.45.*
+**Table D.71.** *Check 2 on low_aspect_ratio_DEMO: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.45.*
 
-| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | evaluations median | constructions disagree |
-|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0352 | 1 |
-| B0 → B1 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8046 | 1 |
-| B0 → B2 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 2.1169 | 1 |
+| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | constructions disagree |
+|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 11 | 1.0352 | 1 |
+| B0 → B1 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8468 | 0 | 0.8046 | 1 |
+| B0 → B2 | 11 | 0.8125 | 0.7012 | PASS | 0.8333 | 1.0088 | 0.8468 | 0 | 2.1169 | 1 |
+| B1 → B2 (beside) | 11 | 1.0000 | 1.0000 | beside | 1.0000 | 1.0000 | 1.0000 | 11 | 2.6335 | 0 |
 
 <sub>`iteration multiplier (check 2) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.72.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside. The *evaluations median* column reads n_model_calls, not ε (issue I-26); the optimiser's-path table reads the declared field. n = 22 (seeds on which every arm of st_regression converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.46.*
+**Table D.72.** *Check 2 on st_regression: the optimiser's iterations against B0 over the seed set, summed over attempts (the acceptance statistic, median against 1.05) and on the final attempt, with the ratio of sums beside; ε is the evaluation-count ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the seeds on which it is exactly 1, and the sweep ratio is its own column. The B1 → B2 row is the plan's pre-declared ε = 1. n = 22 (seeds on which every arm of st_regression converged). Per-seed column(s) *attempts per seed (base/arm)*: companion Table F.46.*
 
-| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | evaluations median | constructions disagree |
-|---|---|---|---|---|---|---|---|---|
-| B0 → BR (beside) | 22 | 1.0000 | 1.2405 | beside | 1.0000 | 0.9221 | 0.9906 | 3 |
-| B0 → B2 | 22 | 1.0000 | 0.9530 | PASS | 1.0000 | 1.0019 | 2.7767 | 1 |
+| pair | n | summed median (acceptance) | summed sum ratio | verdict | final-attempt median | final-attempt sum ratio | ε median (evaluations) | ε = 1 on | sweeps median | constructions disagree |
+|---|---|---|---|---|---|---|---|---|---|---|
+| B0 → BR (beside) | 22 | 1.0000 | 1.2405 | beside | 1.0000 | 0.9221 | 1.0000 | 15 | 0.9906 | 3 |
+| B0 → B2 | 22 | 1.0000 | 0.9530 | PASS | 1.0000 | 1.0019 | 1.0000 | 14 | 2.7767 | 1 |
 
 <sub>`iteration multiplier (check 2) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
-**Table D.73.** *Check 4 on large_tokamak_nof: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are a column of their own; the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
+**Table D.73.** *Check 4 on large_tokamak_nof: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of large_tokamak_nof converged).*
 
-| arm | n | node calls / run | bracket | arrangement·method calls | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| BR | 22 | 41479.8 | [36855, 47817] | 0 | 0.9756 | 0.9794 | 0 | 0 | 0.9756 | 0.9794 | 22 |
-| B0 | 22 | 42515.5 | [37590, 50253] | 0 | 1.0000 | 1.0000 | 0 | 0 | 1.0000 | 1.0000 | 22 |
-| B1 | 22 | 42841.9 | [38220, 49980] | 0 | 1.0077 | 1.0151 | 18 | 0 | 1.0077 | 1.0151 | 22 |
-| B2 | 22 | 27187.5 | [24296, 31813] | 117281 | 0.6395 | 0.6452 | 0 | 0 | 0.6395 | 0.6452 | 22 |
+| arm | n | node calls / run | bracket | arrangement·method calls / run | arrangement·method calls, Σ over the set | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| BR | 22 | 41479.8 | [36855, 47817] | 0.0 | 0 | 0.9756 | 0.9794 | 0 | 0 | 0.9756 | 0.9794 | 22 |
+| B0 | 22 | 42515.5 | [37590, 50253] | 0.0 | 0 | 1.0000 | 1.0000 | 0 | 0 | 1.0000 | 1.0000 | 22 |
+| B1 | 22 | 42841.9 | [38220, 49980] | 0.0 | 0 | 1.0077 | 1.0151 | 18 | 0 | 1.0077 | 1.0151 | 22 |
+| B2 | 22 | 27187.5 | [24296, 31813] | 5331.0 | 117281 | 0.6395 | 0.6452 | 0 | 0 | 0.6395 | 0.6452 | 22 |
 
 <sub>`cost (check 4) — large_tokamak_nof — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.74.** *Check 4 on low_aspect_ratio_DEMO: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are a column of their own; the output path and audit are excluded in every arm. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
+**Table D.74.** *Check 4 on low_aspect_ratio_DEMO: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 11 (seeds on which every arm of low_aspect_ratio_DEMO converged).*
 
-| arm | n | node calls / run | bracket | arrangement·method calls | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| BR | 11 | 169943.5 | [60921, 669207] | 0 | 1.0300 | 1.0352 | 11 | 1 | 1.0351 | 1.0352 | 10 |
-| B0 | 11 | 164997.0 | [58947, 655473] | 0 | 1.0000 | 1.0000 | 0 | 1 | 1.0000 | 1.0000 | 10 |
-| B1 | 11 | 114154.1 | [53214, 360591] | 0 | 0.6919 | 0.8049 | 3 | 1 | 1.0129 | 0.8257 | 10 |
-| B2 | 11 | 74312.4 | [34628, 234616] | 157504 | 0.4504 | 0.5237 | 2 | 1 | 0.6594 | 0.5371 | 10 |
+| arm | n | node calls / run | bracket | arrangement·method calls / run | arrangement·method calls, Σ over the set | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| BR | 11 | 169943.5 | [60921, 669207] | 0.0 | 0 | 1.0300 | 1.0352 | 11 | 1 | 1.0351 | 1.0352 | 10 |
+| B0 | 11 | 164997.0 | [58947, 655473] | 0.0 | 0 | 1.0000 | 1.0000 | 0 | 1 | 1.0000 | 1.0000 | 10 |
+| B1 | 11 | 114154.1 | [53214, 360591] | 0.0 | 0 | 0.6919 | 0.8049 | 3 | 1 | 1.0129 | 0.8257 | 10 |
+| B2 | 11 | 74312.4 | [34628, 234616] | 14318.5 | 157504 | 0.4504 | 0.5237 | 2 | 1 | 0.6594 | 0.5371 | 10 |
 
 <sub>`cost (check 4) — low_aspect_ratio_DEMO — campaign_optimisation · BR·B0·B1·B2`</sub>
 
-**Table D.75.** *Check 4 on st_regression: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are a column of their own; the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of st_regression converged).*
+**Table D.75.** *Check 4 on st_regression: solve-phase node calls per run by arm over the seed set (mean, bracket) and the ratio against B0 pooled and as the per-seed median, with and without the seeds on which either side retried. Prime calls are columns of their own (per-run mean, and the sum over the set); the output path and audit are excluded in every arm. n = 22 (seeds on which every arm of st_regression converged).*
 
-| arm | n | node calls / run | bracket | arrangement·method calls | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| BR | 22 | 126867.7 | [39627, 838929] | 0 | 1.1968 | 0.9906 | 3 | 3 | 0.8999 | 0.9906 | 19 |
-| B0 | 22 | 106007.0 | [39732, 295701] | 0 | 1.0000 | 1.0000 | 0 | 1 | 1.0000 | 1.0000 | 21 |
-| B2 | 22 | 56507.3 | [23484, 169358] | 280776 | 0.5331 | 0.5911 | 0 | 1 | 0.5439 | 0.5911 | 21 |
+| arm | n | node calls / run | bracket | arrangement·method calls / run | arrangement·method calls, Σ over the set | with retried: pooled | with retried: median | worse | retried seeds | without retried: pooled | without retried: median | n without |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| BR | 22 | 126867.7 | [39627, 838929] | 0.0 | 0 | 1.1968 | 0.9906 | 3 | 3 | 0.8999 | 0.9906 | 19 |
+| B0 | 22 | 106007.0 | [39732, 295701] | 0.0 | 0 | 1.0000 | 1.0000 | 0 | 1 | 1.0000 | 1.0000 | 21 |
+| B2 | 22 | 56507.3 | [23484, 169358] | 12762.5 | 280776 | 0.5331 | 0.5911 | 0 | 1 | 0.5439 | 0.5911 | 21 |
 
 <sub>`cost (check 4) — st_regression — campaign_optimisation · BR·B0·B2`</sub>
 
