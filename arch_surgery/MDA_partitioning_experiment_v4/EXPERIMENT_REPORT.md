@@ -2338,7 +2338,7 @@ The gate table is the appendix's licence: every table below is read only if ever
 | `g0prime` | G0 / G0' | every V4 commit, every arm, both phases | **PASS** | 77 files under PROCESS/process/models/ compared byte for byte against c0ae5b28 (git cat-file, never a working tree), plus the file set | 77 | 1 | 4/4 | `runs/gates/g0prime/gate.json` |
 | `copy_identity` | — | every V4 commit that touches the experiment's copy of PROCESS | **PASS** | 224 files under PROCESS/process/ compared byte for byte against the source commit f2dc9243 (git cat-file, never a working tree), plus the file set;… | 224 | 7 | 4/4 | `runs/gates/copy_identity/gate.json` |
 | `edit_behaviour` | — | the one permitted edit in the copy that is not a rename or a comment | **PASS** | three arms of one probe, no PROCESS run: the copy with the per-run write-set artifact absent, the source commit f2dc9243 (git archive) with it abse… | 3 | 0 | 1/1 | `runs/gates/edit_behaviour/gate.json` |
-| `self_containment` | — | the user's requirement in the harness plan §6: nothing in this package is imported from, o | **FAIL** | 52 Python file(s): every module under harness/ and experiment_runner.py beside it; 51 line(s) naming either directory, 16 of them executable | 52 | 2 | 1/1 | `runs/gates/self_containment/gate.json` |
+| `self_containment` | — | the user's requirement in the harness plan §6: nothing in this package is imported from, o | **PASS** | 52 Python file(s): every module under harness/ and experiment_runner.py beside it; 49 line(s) naming either directory, 14 of them executable | 52 | 0 | 1/1 | `runs/gates/self_containment/gate.json` |
 | `composition` | — | the harness itself, before any PROCESS run | **PASS** | 8 arms x 3 configurations = 24 pairs | 42 | 0 | 7/7 | `runs/gates/composition/gate.json` |
 | `rungs` | — | the harness itself, before any PROCESS run | **PASS** | 11 matrix rows x 8 arms = 88 cells; 6 rung steps | 98 | 0 | 3/3 | `runs/gates/rungs/gate.json` |
 | `provenance` | — | the harness itself, before any PROCESS run | **PASS** | one scratch repository, three states | 4 | 0 | 4/4 | `runs/gates/provenance/gate.json` |
@@ -2366,7 +2366,7 @@ The gate table is the appendix's licence: every table below is read only if ever
 | `run_kind_separation` | — | every record this package makes, and every population the tally and the analysis build | **PASS** | 1102 run record(s) under runs/, of which 949 are covered by the tally's 5 published source(s) (the campaign family) and 31 by its 2 unpublished; ru… | 3000 | 0 | 9/9 | `runs/gates/run_kind_separation/gate.json` |
 | `stage_provenance` | — | the harness itself, before any PROCESS run | **PASS** | a scratch records directory this check writes itself — 3 verdict record(s) and 4 stage record(s) — broken 4 ways; a scratch census record, stamped … | 17 | 0 | 5/5 | `runs/gates/stage_provenance/gate.json` |
 
-**29 PASS, 1 FAIL, 0 not run; 168 of 168 teeth tripped.**
+**30 PASS, 0 FAIL, 0 not run; 168 of 168 teeth tripped.**
 
 <sub>`gate table`</sub>
 
