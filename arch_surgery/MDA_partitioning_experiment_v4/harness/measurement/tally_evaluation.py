@@ -1985,9 +1985,10 @@ def module_sweeps_function_weighted(
             ),
             clauses=(
                 "the function counts are per configuration, read from the "
-                "committed file the generator arch_surgery/fixedpoint/"
-                "gen_function_counts.py wrote once from the dependency "
-                "analysis's per-configuration exports at pin "
+                "committed harness/data/dsm_function_counts.json and nothing "
+                "else — a file generated once (its generated_by field and the "
+                "data provenance record name the generator) from the "
+                "dependency analysis's per-configuration exports at pin "
                 f"{(counts.get('dsm_pin') or 'PROCESS_at_36ac820e')}; they differ "
                 "per block where the exports do (the TF-coil model selected by "
                 "i_tf_turn_type; the electron-cyclotron model st_regression "

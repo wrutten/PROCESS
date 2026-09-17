@@ -951,7 +951,10 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
 #: a finding too: a declaration nothing uses is a declaration nobody checked.
 DECLARED_OUTSIDE_REFERENCES: dict[str, str] = {
     "data_provenance.py": (
-        "the declared **source** of two committed files: where each came from "
+        "the declared **source** of the committed files that came from those "
+        "directories — the input files, the predicate module and, since task "
+        "A88 (function-weighted-sweeps), the function counts' generator named "
+        "in a note: where each came from "
         "when it was copied in.  It is read by the data check, which fetches "
         "the source from the recorded commit with `git cat-file` — the "
         "repository at a commit, never the live directory (trap T9: a sibling "
