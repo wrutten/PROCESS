@@ -6,7 +6,7 @@ Task **A80 (report-accuracy-audit)**, pass 7 of its brief: *every ratio's
 population is the one its caption states*.  The report's denominators — 949 /
 921 / 28 records, 25 runs per arm per evaluation-phase source, the seed sets
 22 / 11 / 22, the crash taxonomy, the retried-seed counts, the 30 gates and
-167 teeth — are here re-derived from the records **through the harness**
+168 teeth — are here re-derived from the records **through the harness**
 (``records.read`` applies the arm-name translation of 2026-09-15, trap T16;
 ``tally.published_sources`` names the populations) and printed beside the
 number the report carries, with a ``same`` / ``DIFFERS`` mark.  Where the
@@ -28,7 +28,7 @@ Also here, because the audit needed them and no table carried them:
   on each configuration, which the report's §5.3 and §6 state as ranges;
 - the frozen-to-mixed ratio of the predicate trial's audit columns, which
   §5.6 states as "up to 8×";
-- **the per-arm success counts** of §4.3, §5.7 and Table 11 — accepted
+- **the per-arm success counts** of §4.3, §5.7 and Table 10 — accepted
   optima of the 25 starts offered, every other start by outcome class and the
   starts lost that another arm accepted — re-derived here from ``status``,
   ``mfile.ifail``, ``failure_class`` and the traceback **without the tally's
@@ -169,7 +169,7 @@ def main() -> int:
     n_stencil = len(sources["campaign_stencil_forward"]) + len(sources["campaign_stencil_backward"])
     line("stencil evaluations in all (plan §3.10 budget: 418)", n_stencil, 418)
 
-    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, Tables 11 and D.12) ==")
+    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, Tables 10 and D.12) ==")
     idx = by_config_arm_seed(sources["campaign_optimisation"])
     reported_n = {"large_tokamak_nof": 22, "low_aspect_ratio_DEMO": 11, "st_regression": 22}
     reported_invalid = {"large_tokamak_nof": 3, "low_aspect_ratio_DEMO": 13, "st_regression": 1}
@@ -211,7 +211,7 @@ def main() -> int:
                 )
             print(f"             seed {s:>2}: " + "; ".join(disp))
 
-    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, Tables 11 and D.12; companion F.6) ==")
+    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, Tables 10 and D.12; companion F.6) ==")
     for config in CONFIGS:
         by_arm = idx[config]
         crashed = {arm: sorted(s for s, r in rows.items() if r.get("failure_class") == "crashed") for arm, rows in sorted(by_arm.items())}
@@ -333,13 +333,13 @@ def main() -> int:
     else:
         print(f"  could not read the audit pair from the verdict record (keys: {sorted(verdict)[:20]}) — read companion Table F.5's exit-audit columns instead")
 
-    print("\n== 10. The gate table: 30 gates, 167 teeth (§4.1, D.1) ==")
+    print("\n== 10. The gate table: 30 gates, 168 teeth (§4.1, D.1) ==")
     gate_table = json.loads((Path(campaign.runs_dir) / "gates" / "gate_table" / "measurements.json").read_text())
     line("registered gates", gate_table["n_gates"], 30)
     line("PASS", gate_table["n_pass"], 30)
     # 161 until task A85 (v3-table-formats) gave `tally_contracts` two more.
-    line("teeth declared", gate_table["n_teeth"], 167)
-    line("teeth tripped", gate_table["n_teeth_tripped"], 167)
+    line("teeth declared", gate_table["n_teeth"], 168)
+    line("teeth tripped", gate_table["n_teeth_tripped"], 168)
     nonzero = [(r["gate"], r["n_mismatched"]) for r in gate_table["rows"] if r.get("n_mismatched")]
     line("PASS rows with a nonzero mismatched count", nonzero, [("g0prime", 1)], "§4.1 names one such row; copy_identity's 7 are its recorded permitted-edit files")
     summed = [(r["gate"], r["denominators_summed"]) for r in gate_table["rows"] if len(r.get("denominators_summed") or []) > 1]
@@ -364,7 +364,7 @@ def main() -> int:
         )
     print("           the report's §5.1 (a) said 'a slightly different optimum on 2 of 11 seeds'; §6 said 'within 2.2e-6 relative' (the p90)")
 
-    print("\n== 12. Per-arm success: the accepted optima of 25 per arm, by a second route (§4.3, §5.7, Table 11) ==")
+    print("\n== 12. Per-arm success: the accepted optima of 25 per arm, by a second route (§4.3, §5.7, Table 10) ==")
     published = {
         t["table"]: t
         for t in json.loads(
@@ -455,6 +455,124 @@ def main() -> int:
             sums,
             offered_here,
         )
+
+    print("\n== 13. The aggregate under three weightings: the cells the Appendix D.4 context paragraph quotes (Tables 8, 9, 16, 17, D.23, D.24) ==")
+    # The paragraph is generated text (plan_tables.GROUPS) and its eighteen
+    # numbers are typed there; this reads the same eighteen cells out of the
+    # stage records and looks for each, spelled as the cell spells it, in the
+    # rendered paragraph — a number that drifted from its cell is found here
+    # (trap T17's third addition: generated prose cites too).
+    report = (Path(__file__).resolve().parent / "EXPERIMENT_REPORT.md").read_text()
+    head = report.index("### D.4 The aggregate under three weightings")
+    paragraph = report[head: report.index("**Table D.", head)]
+    evaluation = {
+        t["table"]: t
+        for t in json.loads(
+            (Path(campaign.runs_dir) / "gates" / "tally_evaluation" / "measurements.json").read_text()
+        )["tables"]
+    }
+    per_call = evaluation["per-call cost by configuration — campaign_displaced"]
+    quoted: list[tuple[str, str]] = []
+    for config in CONFIGS:
+        row = next(r for r in per_call["rows"] if r["configuration"] == config)
+        rung = row.get("A1_to_A2") if row.get("A1_to_A2") is not None else row.get("A0_to_A2")
+        quoted.append((f"{config}: node calls, one evaluation (Table 8)", f"{rung:.4f}"))
+        sweeps = evaluation[f"module sweeps per run — {config} — campaign_displaced"]
+        total = next(r for r in sweeps["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: DSM rows, one evaluation (Table 9's total)", str(total["ratio"])))
+        weighted = evaluation[f"module sweeps per run, function-weighted total — {config} — campaign_displaced"]
+        total = next(r for r in weighted["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: functions, one evaluation (Table D.23's total)", str(total["ratio"])))
+        arms = "BR·B0·B1·B2" if config in PULSED else "BR·B0·B2"
+        source = f"campaign_optimisation · {arms}"
+        sweeps = published[f"module sweeps per run — {config} — {source}"]
+        total = next(r for r in sweeps["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: DSM rows, the optimisation (Table 17's total)", str(total["pooled"])))
+        weighted = published[f"module sweeps per run, function-weighted total — {config} — {source}"]
+        total = next(r for r in weighted["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: functions, the optimisation (Table D.24's total)", str(total["pooled"])))
+    sums_table = published["cost sums (check 4) — campaign_optimisation"]
+    for config in CONFIGS:
+        row = next(
+            r for r in sums_table["rows"]
+            if r.get("configuration") == config and r.get("set") == "every arm accepted"
+        )
+        quoted.append((f"{config}: node calls, the optimisation (Table 16, every arm accepted)", f"{row['ratio']:.4f}"))
+    for label, cell in quoted:
+        line(label, cell, cell if cell in paragraph else f"NOT IN THE D.4 PARAGRAPH ({cell})")
+    largest_evaluation = max(
+        float(r["ratio"])
+        for config in CONFIGS
+        for r in evaluation[f"module sweeps per run — {config} — campaign_displaced"]["rows"]
+        if r["module"] != "total calls" and r.get("ratio") is not None
+    )
+    largest_optimisation = max(
+        float(r["pooled"])
+        for config in CONFIGS
+        for name, t in published.items()
+        if name.startswith(f"module sweeps per run — {config} — campaign_optimisation")
+        for r in t["rows"]
+        if r["module"] != "total calls" and r.get("pooled") is not None
+    )
+    line("largest per-module ratio, one evaluation (Table 9)", f"{largest_evaluation:.4f}", "1.0078")
+    line("largest per-module ratio, the optimisation (Table 17)", f"{largest_optimisation:.4f}", "0.8691")
+
+    print("\n== 14. The function-weighted total under the alternative definition of a function (1 + submodels), for the A88 report; derived only, nothing in the report to compare ==")
+    # The committed function counts carry both definitions per module and per
+    # once-per-run node (functions = max(1, submodels); functions_alternative =
+    # 1 + submodels).  The tables weight by the first; this recomputes the six
+    # total ratios under the second from the same sweep cells, so the task
+    # report can say whether the definition matters.  Every number here is
+    # derived by this committed script; none is typed.
+    counts_file = json.loads((Path(campaign.data_dir) / "dsm_function_counts.json").read_text())
+    node_map = json.loads((Path(campaign.data_dir) / "dsm_node_map.json").read_text())
+    for config in CONFIGS:
+        block = counts_file["configurations"][config]
+        per_module = {m: b["functions_alternative"] for m, b in block["modules"].items()}
+        per_node = {n: spec["functions_alternative"] for n, spec in block["nodes"].items() if spec["one_row"]}
+        print(f"  {config}: per module (1 + submodels) {per_module}; once-per-run nodes "
+              f"{ {n: per_node[n] for n in sorted(per_node) if n in ('costs', 'vacuum', 'water_use', 'pulse')} }")
+        for phase, table_name, base, arm, pooled_key in (
+            ("one evaluation", f"module sweeps per run — {config} — campaign_displaced", None, "A2", "ratio"),
+            ("the optimisation", None, "B0", "B2", "pooled"),
+        ):
+            if table_name is None:
+                arms = "BR·B0·B1·B2" if config in PULSED else "BR·B0·B2"
+                table_name = f"module sweeps per run — {config} — campaign_optimisation · {arms}"
+                table = published[table_name]
+            else:
+                table = evaluation[table_name]
+            groups = [r["module"] for r in table["rows"] if r["module"] != "total calls"]
+            if base is None:
+                base = next(r["reference"] for r in table["rows"] if r["module"] != "total calls")
+            # the per-group mean sweeps per arm are the table's own cells; the
+            # pooled ratio of a weighted sum of means over paired runs equals
+            # the ratio of the weighted sums of the arm means only when both
+            # arms have the same runs, which holds on every configuration
+            # here (25 paired displaced runs; the seed set).  Re-derived from
+            # the rows' `<arm>_mean` cells under both attributions.
+            home = {}
+            own = 0
+            # v1: each once-per-run node's own functions out of its home module
+            per_run_nodes = json.loads((Path(campaign.data_dir) / f"defer_per_run_{config}.json").read_text())["post_solve_nodes"]
+            for node in per_run_nodes:
+                spec = block["nodes"][node]
+                module = node_map["nodes"][node]["module"]
+                home[module] = home.get(module, 0) + spec["functions_alternative"]
+                own += spec["functions_alternative"]
+            weights = {
+                "v1": {g: (own if g == "once per run" else per_module[g] - home.get(g, 0)) for g in groups},
+                "v0": {g: (0 if g == "once per run" else per_module[g]) for g in groups},
+            }
+            means = {r["module"]: r for r in table["rows"] if r["module"] != "total calls"}
+            both = []
+            for case in ("v1", "v0"):
+                left = sum(weights[case][g] * (means[g].get(f"{base}_mean") or 0.0) for g in groups)
+                right = sum(weights[case][g] * (means[g].get(f"{arm}_mean") or 0.0) for g in groups)
+                both.append(right / left if left else float("nan"))
+            print(f"    {phase:16} {arm}/{base} weighted 1 + submodels: [{min(both):.3f}, {max(both):.3f}]  "
+                  f"(the tables' max(1, submodels) bracket: {next(r[pooled_key] for r in table['rows'] if r['module'] == 'total calls')} in DSM rows; "
+                  f"see Tables D.23/D.24 for functions)")
 
     print(f"\n{_differs} line(s) DIFFER from the report's figure.")
     return 0 if _differs == 0 else 3

@@ -624,6 +624,21 @@
         "generated_by": "arch_surgery/fixedpoint/gen_node_map.py",
         "tree_git_head": "7d5c1c03c54cdc2f091c653450150c5053e1702c"
       }
+    },
+    "dsm_function_counts.json": {
+      "role": "function_counts",
+      "configuration": null,
+      "source": "arch_surgery/docs/data/dsm_function_counts.json",
+      "source_name": "dsm_function_counts.json",
+      "sha256": "215577fc470240bd099b8919df9c2b60ecdf1b6208b6e0537bab8d8b65d74c11",
+      "bytes": 150924,
+      "note": "read by the measurement layer, never by the driver; generated once from the dependency analysis's exports at the named pin by arch_surgery/fixedpoint/gen_function_counts.py and committed as data (trap T9); the name is unchanged",
+      "artifact_fields": {
+        "format": "dsm-function-counts-1",
+        "generated_by": "arch_surgery/fixedpoint/gen_function_counts.py"
+      },
+      "source_commit": "2d9ffe4e0081d6f760bb218a2ab177e4974a6e5f",
+      "added_by": "harness/experiment/data_provenance.py add -- one measurement artifact entered after the copy of 2026-09-14, from its own source commit"
     }
   }
 }

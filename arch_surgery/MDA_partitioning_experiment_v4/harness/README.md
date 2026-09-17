@@ -128,7 +128,16 @@ run executes (harness plan amendment 13, rule (vi)).
   success is the main text's grid in the previous revision's §5.1 form and a constituent of the
   appendix's merged reliability table; the second names the first's companion full version in
   `per_seed_columns_in` rather than rendering a copy of it. **A cell may appear in more than one
-  table; it may never be lost or changed.** Every one of them is a
+  table; it may never be lost or changed.** A `merge` may also print **blocks** — one merged
+  grid per configuration under the block heading line — which is how the two
+  **function-weighted twins** of the per-module sweep tables are made (task A88
+  (function-weighted-sweeps), the user's instruction of 2026-09-17): the sweep table is shared
+  with a construction that carries only the new cells (`functions` per group and a total row of
+  Σ sweeps × functions), the two aligned on the module column; in a merge the constituents are
+  taken in the layout's `kinds` order and the first cell wins, **except that an empty cell never
+  claims a column** — empty is a column the row does not have, `—` a value that is missing — so
+  the new construction's module rows leave every sweep cell to the table they are republished
+  from. Every one of them is a
   rendering of cells a stage record already carries, and
   `report_cells_preserved.py` puts each old row through the same declarations — the omission
   included, counted and named in its output — before looking for it, so a merge that dropped or
@@ -142,7 +151,8 @@ run executes (harness plan amendment 13, rule (vi)).
   per-seed columns it omits, `Table F.n`). The second implementation's tables are **not rendered
   anywhere**: gate `recomputation`'s row of Table D.1 is that check. Check mode diffs every block
   and both committed documents without writing, and resolves every `Table n` / `Table D.n` /
-  `Table F.n` reference in the hand-written text. §4 is hand-written conclusions beside those
+  `Table F.n` reference in the hand-written text — the change log's lines held out, since its
+  entries state the table set of their own day (trap T17). §4 is hand-written conclusions beside those
   tables (task A79 (report-captions); the layouts and the main-text tables task A83
   (headline-tables-in-text), 2026-09-15).
 
@@ -528,16 +538,21 @@ is a change to the driver, not to the harness.*
 | the same node set, stamped for a run of the **lifted** input file | `defer_per_run_lifted_{name}.json` | `postsolve_{name}.json` |
 | what each node writes, measured | `node_writesets.json` | `node_writesets.json` |
 | which block each node belongs to | `dsm_node_map.json` | `dsm_node_map.json` |
+| how many **functions** — the dependency analysis's callable submodels — sit behind each block's DSM rows, per configuration; read by the measurement layer only | `dsm_function_counts.json` | `dsm_function_counts.json` |
 
 The old spellings carry the number of the task that first produced the file, which the naming
 rule for this revision forbids, and they use words the vocabulary has since replaced. Both
 spellings resolve: `default_campaign()` uses the first column, and the second is what
 `data_provenance` names as each copied file's source, so neither name is written twice.
 
-**Those files are copies, and `data/PROVENANCE.json` says whose.** Sixteen files sit in `data/` —
-the six kinds above for three configurations, plus the three committed input files. Each was
+**Those files are copies, and `data/PROVENANCE.json` says whose.** Seventeen files sit in `data/` —
+the six kinds above for three configurations, the three committed input files, and the function
+counts. Each was
 copied out of the repository at a recorded commit, read from the commit itself rather than from
-anyone's working tree, and each is byte-identical to what it was copied from. The record names,
+anyone's working tree, and each is byte-identical to what it was copied from. The function counts
+entered after the one copy of 2026-09-14 and carry their **own** source commit on their entry
+(`data_provenance.py add <name> --source-commit <commit>`, which enters one file and re-blesses
+nothing; the check reads each file at its own commit). The record names,
 per file, the role it plays, the configuration it belongs to, the path it came from, its sha256
 and the fields the artifact carries about its own making — the script that produced it and the
 commit that script ran at. The self-check's **data** check compares both directions: the file
@@ -1209,6 +1224,7 @@ rebuilds the file's own stamps and cross-checks them against the files it must a
 | `defer_per_run_lifted_<configuration>.json` | the same, for the lifted input file | the driver | check + **derive** |
 | `node_writesets.json` | what every model node writes, measured | the driver | check + **compare** |
 | `dsm_node_map.json` | which block each node belongs to, and how each node is invoked | the driver | check |
+| `dsm_function_counts.json` | how many functions (the dependency analysis's submodels, a model with none counting as one) sit behind each block's collapsed-DSM rows, per configuration — the weight of the function-weighted twin of the per-module sweep tables; generated once from the analysis's exports at the named pin by `arch_surgery/fixedpoint/gen_function_counts.py`, committed, never read live (trap T9) | the measurement layer (`tally_*`, `analysis`) | check |
 
 ### 12.2 What is never derived, and why
 

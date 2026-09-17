@@ -337,6 +337,19 @@ DRIVER_FIXED_ARTIFACTS: dict[str, str] = {
     "node_map": "dsm_node_map.json",
 }
 
+#: Artifacts the **measurement layer** reads and the driver never does — the
+#: same T9 route as the node map (generated once from a named pin by a
+#: committed script in ``arch_surgery/fixedpoint/``, committed to the
+#: repository's shared data directory, copied here with its provenance
+#: recorded), but read only by ``harness/measurement/``.  ``function_counts``
+#: is the number of functions (the dependency analysis's submodels) behind
+#: each collapsed-DSM row of each module, per configuration: the weight of the
+#: function-weighted twin of the per-module sweep tables (task A88
+#: (function-weighted-sweeps), the user's instruction of 2026-09-17).
+MEASUREMENT_ARTIFACTS: dict[str, str] = {
+    "function_counts": "dsm_function_counts.json",
+}
+
 
 #: Arms inactive on a steady-state configuration, with the reason recorded.
 #: On k = 0 there is no burn-time coupling: the ownership rung has nothing to

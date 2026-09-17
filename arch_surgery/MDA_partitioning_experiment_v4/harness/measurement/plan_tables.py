@@ -633,25 +633,6 @@ LAYOUTS: tuple[Layout, ...] = (
         ),
     ),
     Layout(
-        name="node_calls_per_block",
-        title="node calls per block",
-        stage="tally_evaluation",
-        kinds=("node_calls_per_block",),
-        sources=("campaign_displaced",),
-        where="main",
-        mode="single",
-        caption="",
-        bold=("ratio",),
-        blank_repeats=("configuration",),
-        why=(
-            "Headline shape 3 on the acceptance regime, in §4.2 where RQ1 is "
-            "answered.  The tally emits it already stacked over the "
-            "configurations, so there is nothing to combine: the layout's "
-            "work is to place it in the main text and keep it out of the "
-            "appendix, where it would be the same grid twice."
-        ),
-    ),
-    Layout(
         name="module_sweeps_evaluation",
         title="module sweeps per run, the evaluation phase",
         stage="tally_evaluation",
@@ -660,6 +641,7 @@ LAYOUTS: tuple[Layout, ...] = (
         where="main",
         mode="stack",
         blocks=True,
+        shares_tables_with=("module_sweeps_functions_evaluation",),
         merges=(
             Merged(key="AR", heading="AR", parts=("AR_mean", "AR_bracket")),
             Merged(key="A0", heading="A0", parts=("A0_mean", "A0_bracket")),
@@ -890,7 +872,7 @@ LAYOUTS: tuple[Layout, ...] = (
             "sets per configuration: the seeds on which every arm reached an "
             "accepted optimum, and the same set less the seeds on which any "
             "arm retried. Sums, so the claim is about total work over the "
-            "set and not about every run — the per-run reading is Table 18's "
+            "set and not about every run — the per-run reading is Table 17's "
             "last columns. Prime calls are not model nodes and are in no "
             "column here (D19)."
         ),
@@ -911,6 +893,7 @@ LAYOUTS: tuple[Layout, ...] = (
         where="main",
         mode="stack",
         blocks=True,
+        shares_tables_with=("module_sweeps_functions_optimisation",),
         merges=(
             Merged(key="BR", heading="BR", parts=("BR_mean", "BR_bracket")),
             Merged(key="B0", heading="B0", parts=("B0_mean", "B0_bracket")),
@@ -981,31 +964,44 @@ LAYOUTS: tuple[Layout, ...] = (
         ),
     ),
     Layout(
-        name="node_calls_per_block_other_regimes",
-        title="node calls per block, the other three regimes",
+        name="node_calls_per_block",
+        title="node calls per block",
         stage="tally_evaluation",
         kinds=("node_calls_per_block",),
-        sources=("campaign_entry_references", *_STENCILS),
+        sources=("campaign_entry_references", *_EVALUATION_REGIMES),
         where="report",
         mode="stack",
+        bold=("ratio",),
+        blank_repeats=("configuration",),
         caption=(
             "Mean node calls per evaluation by block and arm, configurations "
-            "stacked, in the three regimes the main text's table does not "
-            "show: the entry reference, and the forward and backward stencil "
+            "stacked, in all four evaluation-phase regimes as row groups: the "
+            "entry reference, the **displaced entries** (δ = 0.10, the "
+            "acceptance regime), and the forward and backward stencil "
             "points. The ratio is `A2` pooled against the configuration's "
             "declared reference (the *reference* column: `A1` on a pulsed "
-            "configuration, `A0` on `st_regression`). The once-per-run row is "
-            "the deferred nodes; prime calls are not model nodes and are in "
-            "no row. The entry reference carries one `A0` run per "
-            "configuration and so no pair and no ratio."
+            "configuration, `A0` on `st_regression`); the configuration is "
+            "named once per group and blank on its continuation rows. The "
+            "once-per-run row is the deferred nodes; prime calls are not "
+            "model nodes and are in no row. The entry reference carries one "
+            "`A0` run per configuration and so no pair and no ratio. The "
+            "displaced regime's per-block ratios are the per-module ratios "
+            "of the main text's module sweeps table, cell for cell, and its "
+            "TOTAL row's ratio is the per-call cost table's partitioning rung."
         ),
         why=(
-            "The displaced regime is the main text's Table 7; the other three "
-            "confirm it and belong in the appendix.  Stacked by source rather "
-            "than folded into ratio columns per regime: a ratio-column "
-            "rendering would have dropped the four per-arm mean columns and "
-            "the pair count for those regimes out of the report altogether, "
-            "which is a loss of cells, not a change of layout."
+            "**One construction, one table** (harness plan amendment 29).  "
+            "Until task A88 (function-weighted-sweeps) the displaced regime "
+            "was the main text's Table 9 and the other three regimes were "
+            "this table; the user asked (2026-09-17) for the per-node tables "
+            "to leave the main text — the per-module sweep tables carry the "
+            "same ratios in a unit-free form — so the reason for two tables "
+            "went with it and the construction is rendered whole, the "
+            "acceptance regime as one row group among four.  Stacked by "
+            "source rather than folded into ratio columns per regime: a "
+            "ratio-column rendering would have dropped the four per-arm mean "
+            "columns and the pair count for those regimes out of the report "
+            "altogether, which is a loss of cells, not a change of layout."
         ),
     ),
     Layout(
@@ -1582,6 +1578,118 @@ LAYOUTS: tuple[Layout, ...] = (
         ),
         why="Two tables of two rows.",
     ),
+    # ---------------- Appendix D: the aggregate under three weightings ------
+    Layout(
+        name="module_sweeps_functions_evaluation",
+        title="module sweeps per run, function-weighted, the evaluation phase",
+        stage="tally_evaluation",
+        kinds=("module_sweeps_functions", "module_sweeps"),
+        sources=("campaign_displaced",),
+        where="report",
+        mode="merge",
+        join="module",
+        blocks=True,
+        shares_tables_with=("module_sweeps_evaluation",),
+        merges=(
+            Merged(key="AR", heading="AR", parts=("AR_mean", "AR_bracket")),
+            Merged(key="A0", heading="A0", parts=("A0_mean", "A0_bracket")),
+            Merged(key="A1", heading="A1", parts=("A1_mean", "A1_bracket")),
+            Merged(key="A2", heading="A2", parts=("A2_mean", "A2_bracket")),
+        ),
+        bold=("ratio",),
+        omit=("models",),
+        caption=(
+            "**The main text's module sweeps table, weighted per function.** "
+            "The same grid as the evaluation phase's module sweeps table — "
+            "the sweep cells and the per-module ratios are that table's own, "
+            "republished here, never recomputed — with `models` replaced by "
+            "**`functions`**: the number of individual callables in the "
+            "group, a model's callable submodels from the dependency "
+            "analysis's decomposition at pin `PROCESS_at_36ac820e` (a model "
+            "with no submodel counts as one function, its entry method). "
+            "The counts are per configuration and differ per block where the "
+            "exports do (the TF-coil model `i_tf_turn_type` selects, the "
+            "electron-cyclotron model `st_regression` alone runs; M1 is 24 "
+            "collapsed-DSM rows on the two pulsed configurations and 25 on "
+            "`st_regression`). The total row is Σ sweeps × functions per arm "
+            "and its ratio the `[v = 1, v = 0]` bracket over the once-per-run "
+            "nodes' own functions, the same attribution unknown as the "
+            "DSM-row total's (trap T9). **Reported, not accepted on.** For "
+            "each configuration the three totals side by side are: node "
+            "calls (the headline, the per-call cost table's `A1→A2` / "
+            "`A0→A2`), DSM rows (the module sweeps table's total) and "
+            "functions (this table's total) — the context paragraph above "
+            "reads them."
+        ),
+        why=(
+            "The user (2026-09-17): *\"add to the appendix table 10 and 18 "
+            "but then with a per function weight. I want to see how this "
+            "skews the headline average.\"*  The twin is a **merge** of the "
+            "sweep table with a construction that carries only the new cells "
+            "(rule xviii, `shares_tables_with`): a cell may appear in two "
+            "tables, never be lost or changed, and the per-module cells are "
+            "not computed a second time in the records.  Blocks, as the "
+            "sweep table it twins.  `models` is dropped because the twin "
+            "replaces it and the sweep table prints it; both columns side by "
+            "side is the reversal."
+        ),
+    ),
+    Layout(
+        name="module_sweeps_functions_optimisation",
+        title="module sweeps per run, function-weighted, the optimisation phase",
+        stage="tally_optimisation",
+        kinds=("module_sweeps_functions", "module_sweeps"),
+        where="report",
+        mode="merge",
+        join="module",
+        blocks=True,
+        shares_tables_with=("module_sweeps_optimisation",),
+        merges=(
+            Merged(key="BR", heading="BR", parts=("BR_mean", "BR_bracket")),
+            Merged(key="B0", heading="B0", parts=("B0_mean", "B0_bracket")),
+            Merged(key="B1", heading="B1", parts=("B1_mean", "B1_bracket")),
+            Merged(key="B2", heading="B2", parts=("B2_mean", "B2_bracket")),
+            Merged(
+                key="median",
+                heading="B2/B0 per-run median [min, max]",
+                parts=("median", "bracket"),
+            ),
+            Merged(
+                key="n_above_one",
+                heading="runs B2 > B0",
+                parts=("n_above_one", "n_pairs"),
+                join="fraction",
+            ),
+        ),
+        bold=("pooled",),
+        omit=("models",),
+        caption=(
+            "**The main text's optimisation-phase module sweeps table, "
+            "weighted per function.** The same grid — the sweep cells, the "
+            "per-module ratios and their per-run distributions are that "
+            "table's own, republished, never recomputed — with `models` "
+            "replaced by **`functions`**, the number of individual callables "
+            "in the group from the dependency analysis's decomposition at pin "
+            "`PROCESS_at_36ac820e` (a model with no submodel counts as one). "
+            "The counts are per configuration and differ per block where the "
+            "exports do. The total row is Σ sweeps × functions per arm over "
+            "the whole run, its pooled ratio the `[v = 1, v = 0]` bracket over "
+            "the once-per-run nodes' own functions (trap T9), and its per-run "
+            "median and count above 1 are the v = 1 case. Whole-run census "
+            "counts, as in the table it twins; `B1` is inactive on "
+            "`st_regression`. **Reported, not accepted on.** For each "
+            "configuration the three totals side by side are: node calls "
+            "(the headline, check 4's `B2/B0`), DSM rows (the module sweeps "
+            "table's total) and functions (this table's total) — the context "
+            "paragraph above reads them."
+        ),
+        why=(
+            "As the evaluation phase's twin, for the optimisation phase's "
+            "module sweeps table; the two sit together under one context "
+            "paragraph that states the aggregate under the three weightings "
+            "for both phases, which is what the user asked to see."
+        ),
+    ),
     # ---------------- the companion file ------------------------------------
     # ---------------- the companion file ------------------------------------
     Layout(
@@ -1841,10 +1949,12 @@ GROUPS: tuple[Group, ...] = (
             "construction into one grid, the configurations and regimes as "
             "row groups under a bold sub-heading row that names the group's "
             "configuration, its regime where a table holds more than one, "
-            "and its own n; what that n counts is in the caption. The "
-            "acceptance regime's headline table — node calls per block on "
-            "the displaced entries — is Table 9 in §4.2 and is not repeated "
-            "here. Absolute cost cells are per-run "
+            "and its own n; what that n counts is in the caption. Node calls "
+            "per block is rendered whole here — the acceptance regime (the "
+            "displaced entries) as one row group among the four regimes of "
+            "Table D.3 — since the main text carries the per-module result in "
+            "sweeps, whose ratios are the same cells (the user, 2026-09-17: "
+            "*\"move the per node tables to the appendix\"*). Absolute cost cells are per-run "
             "means with the seed bracket; a ratio against the reference is "
             "read three ways — pooled (Σ arm / Σ reference), per-run median, "
             "and the count of runs on which the arm cost more. The reference "
@@ -1859,7 +1969,7 @@ GROUPS: tuple[Group, ...] = (
         ),
         layouts=(
             "module_scope",
-            "node_calls_per_block_other_regimes",
+            "node_calls_per_block",
             "reference_entries",
             "cost_per_call",
             "matched_accuracy",
@@ -1879,7 +1989,7 @@ GROUPS: tuple[Group, ...] = (
             "δ = 0.10). Every check is over **the seed set** — the seeds on "
             "which every arm reached an accepted optimum (status ok and the "
             "output file's `ifail == 1`) — whose size the per-arm success "
-            "grid in §4.3 (Table 11) states once per configuration and every "
+            "grid in §4.3 (Table 10) states once per configuration and every "
             "other table repeats as its n; the seeds outside it are the failure table's, in the "
             "companion file, so the filter cannot flatter an arm that fails "
             "on expensive seeds. Every ratio is against the flat control "
@@ -1894,11 +2004,12 @@ GROUPS: tuple[Group, ...] = (
             "configuration and stating its own n; `B1` is inactive on "
             "`st_regression`, so its rows are absent from that group and its "
             "columns empty there. The phase's headline tables are in §4.3 "
-            "and are not repeated here — per-arm success (Table 11), whose "
+            "and are not repeated here — per-arm success (Table 10), whose "
             "merged whole with the failure taxonomy and the seed set is "
-            "Table D.12 below, the same optimum (Table 12), the optimiser's "
-            "path (Tables 13–16), check 4's cost sums (Table 17) and module "
-            "sweeps per run (Table 18)."
+            "Table D.12 below, the same optimum (Table 11), the optimiser's "
+            "path (Tables 12–15), check 4's cost sums (Table 16) and module "
+            "sweeps per run (Table 17), whose function-weighted twin is "
+            "Table D.24 in D.4."
         ),
         layouts=(
             "reliability_and_taxonomy",
@@ -1912,6 +2023,57 @@ GROUPS: tuple[Group, ...] = (
             "sweeps_and_prime_calls",
             "achieved_accuracy",
             "lift_closed",
+        ),
+    ),
+    Group(
+        number="D.4",
+        title="The aggregate under three weightings",
+        context=(
+            "**How the weight per module skews the headline average** (the "
+            "user, 2026-09-17). The per-module sweep ratios of Tables 9 and "
+            "17 are unit-free; only the aggregate depends on the weight per "
+            "module, and the two tables here weight the same sweep counts "
+            "per **function** — the dependency analysis's callable submodels "
+            "behind each module's collapsed-DSM rows, a model with none "
+            "counting as one — beside the report's two other weights. Three "
+            "weightings of one set of sweep counts, each configuration "
+            "nof / lad / st. In the **evaluation phase** (one `call_models` "
+            "evaluation from a displaced entry, `A2` against its reference) "
+            "the aggregate reads **0.5625 / 0.5772 / 0.5016** in **node "
+            "calls** (Table 8's partitioning rung — the acceptance quantity), "
+            "**[0.724, 0.767] / [0.742, 0.786] / [0.655, 0.709]** in **DSM "
+            "rows** (Table 9's total) and **[0.695, 0.794] / [0.709, 0.811] / "
+            "[0.626, 0.720]** in **functions** (Table D.23's total). In the "
+            "**optimisation phase** (`B2` against `B0` over the seed set) it "
+            "reads **0.6395 / 0.4504 / 0.5331** in node calls (Table 16, "
+            "check 4), **[0.690, 0.736] / [0.476, 0.508] / [0.599, 0.653]** in "
+            "DSM rows (Table 17's total) and **[0.650, 0.746] / [0.448, "
+            "0.514] / [0.565, 0.653]** in functions (Table D.24's total). A "
+            "bracket is the `[v = 1, v = 0]` attribution interval of the "
+            "once-per-run nodes' rows or functions (trap T9). **What does not "
+            "depend on the weighting:** under any non-negative weighting the "
+            "aggregate is a weighted mean of the per-module ratios and so lies "
+            "between the smallest and the largest of them, and every "
+            "per-module ratio in Tables 9 and 17 is at or below 1 except one "
+            "— M2 on `large_tokamak_nof` in the evaluation phase, at "
+            "**1.0078**; the largest in the optimisation phase is M2 on the "
+            "same configuration at **0.8691**. So the **direction** of the "
+            "saving is weighting-independent (only a weighting that put "
+            "essentially all its weight on that one module could read "
+            "otherwise) and its **magnitude** is not: across the three "
+            "weightings the evaluation-phase aggregate spans 0.50–0.81 and "
+            "the optimisation-phase aggregate 0.45–0.75. Node calls weight "
+            "the aggregate toward the groups with many executing nodes — M3's "
+            "twelve and the once-per-run set — where the partition saves "
+            "most; DSM rows and functions weight it toward M1 (24 of the 47 "
+            "rows the four modules hold, 178 of their 344 functions on "
+            "`large_tokamak_nof`), where it saves less. Node calls remain the "
+            "acceptance unit (D19, D29); these tables are reported, not "
+            "accepted on."
+        ),
+        layouts=(
+            "module_sweeps_functions_evaluation",
+            "module_sweeps_functions_optimisation",
         ),
     ),
 )
@@ -2678,6 +2840,70 @@ def _stack(constituents: Sequence[Placed], columns, overrides) -> list[list[str]
     return grid
 
 
+def _merge_group(
+    members: Sequence[Placed], keys: Sequence[tuple[str, str]], overrides, layout: Layout
+) -> list[list[str]]:
+    """One configuration's constituents aligned on ``layout.join``: the rows,
+    without a heading row.
+
+    The constituents are taken in the layout's ``kinds`` order and the first
+    to carry a cell for a column keeps it — **unless the cell is empty**.  An
+    empty cell is a column the row does not have (the appendix's convention;
+    ``—`` is a value that is missing), so it never claims the column and a
+    later constituent's cell fills it.  That is what lets a construction
+    carrying only the *new* cells of a grid — the function-weighted total's
+    `functions` column and total row — sit first in the order, so its total
+    row wins, while its module rows leave every other cell to the sweep table
+    they are republished from (task A88 (function-weighted-sweeps)).
+    """
+    join = layout.join or ""
+    join_key = next((key for key in keys if key[0] == join), None)
+    members = sorted(members, key=lambda p: layout.kinds.index(p.kind))
+    rows_by_member = [(p, _cells_by_key(p, overrides)) for p in members]
+    # The spine is the join values the constituents that *have* the join
+    # column carry, in the order they first appear.  A constituent
+    # without that column contributes no row of its own — it is the
+    # per-configuration fact broadcast across the ones that do.
+    order: list[str] = []
+    for _p, rows in rows_by_member:
+        for row in rows:
+            if join_key is None or join_key not in row:
+                continue
+            if row[join_key] not in order:
+                order.append(row[join_key])
+    spine: list[tuple[str, int]] = []
+    for value in order:
+        depth = max(
+            sum(1 for row in rows if row.get(join_key) == value)
+            for _p, rows in rows_by_member
+        )
+        spine.extend((value, i) for i in range(max(depth, 1)))
+    if not spine:
+        spine = [("", 0)]
+    grid: list[list[str]] = []
+    for value, index in spine:
+        out: dict[tuple[str, str], str] = {}
+        for _p, rows in rows_by_member:
+            matching = [
+                row
+                for row in rows
+                if join_key is not None and row.get(join_key) == value
+            ]
+            if not matching:
+                # no join column of its own, or nothing at this value:
+                # broadcast a single row, else leave the cells empty.
+                matching = rows if len(rows) == 1 else []
+            if not matching:
+                continue
+            chosen = matching[index] if index < len(matching) else matching[-1]
+            for key, cell in chosen.items():
+                if cell == "":
+                    continue
+                out.setdefault(key, cell)
+        grid.append([out.get(key, "") for key in keys])
+    return grid
+
+
 def _merge(
     constituents: Sequence[Placed], columns, overrides, layout: Layout
 ) -> list[list[str]]:
@@ -2689,8 +2915,6 @@ def _merge(
     — looks like in a table whose rows are arms.
     """
     keys = [(c["key"], c["heading"]) for c in columns]
-    join = layout.join or ""
-    join_key = next((key for key in keys if key[0] == join), None)
     grid: list[list[str]] = []
     groups: dict[str, list[Placed]] = {}
     for placed in constituents:
@@ -2699,27 +2923,6 @@ def _merge(
         members = sorted(
             members, key=lambda p: layout.kinds.index(p.kind)
         )
-        rows_by_member = [(p, _cells_by_key(p, overrides)) for p in members]
-        # The spine is the join values the constituents that *have* the join
-        # column carry, in the order they first appear.  A constituent
-        # without that column contributes no row of its own — it is the
-        # per-configuration fact broadcast across the ones that do.
-        order: list[str] = []
-        for _p, rows in rows_by_member:
-            for row in rows:
-                if join_key is None or join_key not in row:
-                    continue
-                if row[join_key] not in order:
-                    order.append(row[join_key])
-        spine: list[tuple[str, int]] = []
-        for value in order:
-            depth = max(
-                sum(1 for row in rows if row.get(join_key) == value)
-                for _p, rows in rows_by_member
-            )
-            spine.extend((value, i) for i in range(max(depth, 1)))
-        if not spine:
-            spine = [("", 0)]
         grid.append(
             [
                 f"**{configuration} — {len(members)} construction(s): "
@@ -2728,24 +2931,7 @@ def _merge(
             ]
             + [""] * (len(keys) - 1)
         )
-        for value, index in spine:
-            out: dict[tuple[str, str], str] = {}
-            for _p, rows in rows_by_member:
-                matching = [
-                    row
-                    for row in rows
-                    if join_key is not None and row.get(join_key) == value
-                ]
-                if not matching:
-                    # no join column of its own, or nothing at this value:
-                    # broadcast a single row, else leave the cells empty.
-                    matching = rows if len(rows) == 1 else []
-                if not matching:
-                    continue
-                chosen = matching[index] if index < len(matching) else matching[-1]
-                for key, cell in chosen.items():
-                    out.setdefault(key, cell)
-            grid.append([out.get(key, "") for key in keys])
+        grid.extend(_merge_group(members, keys, overrides, layout))
     return grid
 
 
@@ -3039,7 +3225,29 @@ def _combine(layout: Layout, constituents: Sequence[Placed]) -> Combined:
         )
     columns = _union_columns(constituents, overrides, layout)
     blocks: list[dict[str, Any]] | None = None
-    if layout.blocks:
+    if layout.blocks and layout.mode == "merge":
+        # One block per configuration, each the **merge** of that
+        # configuration's constituents on the join column — the per-module
+        # form of a grid whose cells come from two constructions (the sweep
+        # table and its function-weighted total; task A88
+        # (function-weighted-sweeps)).  The heading line is read from the
+        # constituent that declares a block denominator, else the first.
+        blocks = []
+        grid = []
+        keys = [(c["key"], c["heading"]) for c in columns]
+        by_configuration: dict[str, list[Placed]] = {}
+        for placed in constituents:
+            by_configuration.setdefault(str(placed.configuration), []).append(placed)
+        for members in by_configuration.values():
+            rows = _merge_group(members, keys, overrides, layout)
+            block_columns, rows = _transform(layout, columns, rows)
+            host = next(
+                (p for p in members if p.table.get("block_denominator")), members[0]
+            )
+            blocks.append({"label": _block_label(host, layout), "cells": rows})
+            grid.extend(rows)
+        columns = block_columns
+    elif layout.blocks:
         blocks = []
         grid = []
         for placed in constituents:
@@ -3771,6 +3979,37 @@ _MAIN_REFERENCE = re.compile(
 )
 
 
+#: The heading of the report's change log.  Its entries state the table set
+#: of their own day, so a number in one is a **record**, not a citation
+#: (trap T17's second addition, task A86 (v3-tables-remainder)): the change
+#: log is held out of the citation sweep and, since task A88
+#: (function-weighted-sweeps), out of the dangling-reference scan too — an
+#: entry written when the main text had eighteen tables still says so after a
+#: table left it, and that is what a change log is for.
+CHANGE_LOG_HEADING = "## Appendix C — Change log"
+
+
+def _outside_the_change_log(lines: Sequence[str]) -> tuple[list[str], int]:
+    """*lines* with the change log's span removed, and how many lines it held.
+
+    The span runs from the change log's heading to the next heading of its
+    level; the line numbers reported for a dangling reference are the
+    positions in *lines*, which the removal shifts, so the reference scan
+    replaces the held-out lines by blanks rather than dropping them."""
+    out = list(lines)
+    held = 0
+    inside = False
+    for i, line in enumerate(lines):
+        if line.startswith(CHANGE_LOG_HEADING):
+            inside = True
+        elif inside and line.startswith("## "):
+            inside = False
+        if inside:
+            out[i] = ""
+            held += 1
+    return out, held
+
+
 def _references(lines: Sequence[str], counts: Mapping[str, int]) -> dict[str, Any]:
     """Every ``Table n`` / ``Table D.n`` / ``Table F.n`` reference in *lines*,
     resolved against the numbers this rendering assigns.
@@ -3778,10 +4017,12 @@ def _references(lines: Sequence[str], counts: Mapping[str, int]) -> dict[str, An
     The main text's own numbers are resolved too: §3's six tables are
     hand-written and §4's headline tables are rendered, so a citation of
     ``Table 9`` after a headline table is dropped would otherwise point at
-    nothing and say nothing about it.
+    nothing and say nothing about it.  The change log's lines are held out
+    (:func:`_outside_the_change_log`): its numbers are records of their day.
     """
     found: dict[str, int] = {"D": 0, "F": 0, "": 0}
     dangling: list[str] = []
+    lines, held_out = _outside_the_change_log(lines)
     for i, line in enumerate(lines):
         for match in _REFERENCE.finditer(line):
             prefix = match.group(1)
@@ -3804,6 +4045,7 @@ def _references(lines: Sequence[str], counts: Mapping[str, int]) -> dict[str, An
         "n_references_to_the_main_text": found[""],
         "n_references_to_the_appendix": found["D"],
         "n_references_to_the_companion": found["F"],
+        "n_change_log_lines_held_out": held_out,
         "n_dangling": len(dangling),
         "dangling": dangling[:20],
     }
@@ -4107,7 +4349,9 @@ def report(result: Mapping[str, Any]) -> None:
             f"numbered tables, "
             f"{references['n_references_to_the_appendix']} to "
             f"Appendix D and {references['n_references_to_the_companion']} to "
-            f"the companion file in the hand-written text; "
+            f"the companion file in the hand-written text "
+            f"(the change log's {references.get('n_change_log_lines_held_out', 0)} "
+            f"line(s) held out: its numbers are records of their day); "
             f"{references['n_dangling']} dangling"
         )
         for line in references["dangling"]:

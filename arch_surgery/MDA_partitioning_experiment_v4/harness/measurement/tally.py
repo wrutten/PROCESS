@@ -446,6 +446,14 @@ SOURCES: tuple[Source, ...] = GATE_SOURCES + (
 COMPOSITION_REFUSALS: tuple[str, ...] = ("GateError", "ReproductionError", "ChainError")
 
 
+#: The evaluation phase's **acceptance regime** — the displaced entries — by
+#: source name.  The function-weighted twin of the per-module sweep table is
+#: computed for this regime alone, because its twin in the main text is (task
+#: A88 (function-weighted-sweeps)); the other three regimes' sweep tables are
+#: the companion's and have no function-weighted total.
+ACCEPTANCE_REGIME = "campaign_displaced"
+
+
 def source_phrase(name: str) -> str:
     """The short membership phrase of the source called *name*, for a caption."""
     for source in SOURCES:

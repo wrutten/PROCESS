@@ -102,6 +102,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
 
 from harness.core.config import (  # noqa: E402
     DRIVER_FIXED_ARTIFACTS,
+    MEASUREMENT_ARTIFACTS,
     Campaign,
     artifact_file_names,
     default_campaign,
@@ -145,6 +146,12 @@ class DataFile:
     source: str
     #: Why the name changed, or why it did not.
     note: str
+    #: The commit the copy was taken from, where it is **not** the record's
+    #: one source commit: a file added to ``harness/data/`` after the copy of
+    #: 2026-09-14 has a source that did not exist at that commit, and it
+    #: carries its own (``PROVENANCE.json``'s ``files[<name>].source_commit``).
+    #: ``None`` means the record's ``source.commit_full``.
+    source_commit: str | None = None
 
     @property
     def source_name(self) -> str:
@@ -219,6 +226,25 @@ def declared_files(campaign: Campaign) -> list[DataFile]:
                 ),
             )
         )
+    for role, fixed in MEASUREMENT_ARTIFACTS.items():
+        # Read by the measurement layer only; its source commit is its own
+        # (``files[<name>].source_commit`` in the record), because the file
+        # was generated and committed after the one copy of 2026-09-14.
+        files.append(
+            DataFile(
+                role=role,
+                configuration=None,
+                name=fixed,
+                source=f"{ARTIFACT_SOURCE_DIR}/{fixed}",
+                note=(
+                    "read by the measurement layer, never by the driver; "
+                    "generated once from the dependency analysis's exports at "
+                    "the named pin by arch_surgery/fixedpoint/gen_function_counts.py "
+                    "and committed as data (trap T9); the name is unchanged"
+                ),
+                source_commit=None,
+            )
+        )
     return files
 
 
@@ -242,6 +268,7 @@ EXPECTED_MAPPING: dict[str, str] = {
     "defer_per_run_st_regression.json": "postsolve_st_regression.json",
     "node_writesets.json": "node_writesets.json",
     "dsm_node_map.json": "dsm_node_map.json",
+    "dsm_function_counts.json": "dsm_function_counts.json",
 }
 
 
@@ -594,7 +621,9 @@ def verify(
                 f"{entry['sha256']}"
             )
             continue
-        src = source_bytes(entry["source"], commit)
+        # A file added after the one copy carries its own source commit; the
+        # rest are read at the record's.
+        src = source_bytes(entry["source"], entry.get("source_commit") or commit)
         res.read_from.add(src.read_from)
         if sha256(src.data) != entry["sha256"]:
             res.failures.append(
@@ -690,6 +719,84 @@ def verify(
 # ---------------------------------------------------------------------------
 
 
+def file_entry(item: DataFile, commit: str) -> dict:
+    """One file's record entry: its copy compared byte for byte with its
+    source at *commit*, and refused if they differ."""
+    src = source_bytes(item.source, commit)
+    copy = DATA_DIR / item.name
+    if not copy.exists():
+        raise SystemExit(f"{copy} is not present; copy the files first.")
+    data = copy.read_bytes()
+    if data != src.data:
+        raise SystemExit(
+            f"refusing to write PROVENANCE.json: {item.name} is not "
+            f"byte-identical to {item.source}.  Regenerating provenance "
+            "must never be the way a changed file becomes blessed."
+        )
+    record = json.loads(data) if item.name.endswith(".json") else {}
+    entry = {
+        "role": item.role,
+        "configuration": item.configuration,
+        "source": item.source,
+        "source_name": item.source_name,
+        "sha256": sha256(data),
+        "bytes": len(data),
+        "note": item.note,
+        "artifact_fields": {
+            key: record[key]
+            for key in ("format", "scenario", "generated_by", "tree_git_head")
+            if key in record
+        },
+    }
+    if "ystate_artifact" in record:
+        entry["artifact_fields"]["ystate_artifact"] = record["ystate_artifact"]
+    return entry
+
+
+def add_file(name: str, commit: str, campaign: Campaign) -> dict:
+    """Add **one** measurement artifact to the record, copying it from its
+    source at *commit* and recording that commit on the entry.
+
+    The record's other entries are not touched and nothing is re-blessed:
+    the one file is written into ``harness/data/`` from the commit (never from
+    a working tree), compared, and entered with ``source_commit``.  A name that
+    is not a declared measurement artifact, or that already has an entry, is
+    refused.
+    """
+    files = declared_files(campaign)
+    assert_mapping_agrees(files)
+    item = next((f for f in files if f.name == name), None)
+    if item is None or item.role not in MEASUREMENT_ARTIFACTS:
+        raise SystemExit(
+            f"{name} is not a declared measurement artifact "
+            f"({sorted(MEASUREMENT_ARTIFACTS.values())}); `add` enters those "
+            f"only -- every other file is the one copy's"
+        )
+    prov = load_provenance()
+    if name in (prov.get("files") or {}):
+        raise SystemExit(
+            f"{name} already has an entry in {PROVENANCE}; re-adding would "
+            f"re-bless whatever the source holds now"
+        )
+    full = _git("rev-parse", commit).decode().strip()
+    src = source_bytes(item.source, full)
+    if not src.read_from.startswith("commit "):
+        raise SystemExit(
+            f"{item.source} is not at commit {full}; a measurement artifact is "
+            f"copied from a commit, never from a working tree"
+        )
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / name).write_bytes(src.data)
+    entry = file_entry(item, full)
+    entry["source_commit"] = full
+    entry["added_by"] = (
+        "harness/experiment/data_provenance.py add -- one measurement artifact "
+        "entered after the copy of 2026-09-14, from its own source commit"
+    )
+    prov["files"][name] = entry
+    return prov
+
+
 def build_provenance(commit: str, campaign: Campaign) -> dict:
     """Assemble the provenance record from the commit and the files on disk."""
     full = _git("rev-parse", commit).decode().strip()
@@ -698,36 +805,21 @@ def build_provenance(commit: str, campaign: Campaign) -> dict:
 
     entries: dict[str, dict] = {}
     for item in files:
-        src = source_bytes(item.source, full)
-        copy = DATA_DIR / item.name
-        if not copy.exists():
-            raise SystemExit(f"{copy} is not present; copy the files first.")
-        data = copy.read_bytes()
-        if data != src.data:
-            raise SystemExit(
-                f"refusing to write PROVENANCE.json: {item.name} is not "
-                f"byte-identical to {item.source}.  Regenerating provenance "
-                "must never be the way a changed file becomes blessed."
-            )
-        record = json.loads(data) if item.name.endswith(".json") else {}
-        entries[item.name] = {
-            "role": item.role,
-            "configuration": item.configuration,
-            "source": item.source,
-            "source_name": item.source_name,
-            "sha256": sha256(data),
-            "bytes": len(data),
-            "note": item.note,
-            "artifact_fields": {
-                key: record[key]
-                for key in ("format", "scenario", "generated_by", "tree_git_head")
-                if key in record
-            },
-        }
-        if "ystate_artifact" in record:
-            entries[item.name]["artifact_fields"]["ystate_artifact"] = record[
-                "ystate_artifact"
-            ]
+        if item.role in MEASUREMENT_ARTIFACTS:
+            # Not blessed by a rebuild: a measurement artifact enters the
+            # record through ``add``, with its own source commit, and a rebuild
+            # keeps the entry it already has rather than re-reading it at the
+            # record's commit, where its source does not exist.
+            existing = (load_provenance().get("files") or {}).get(item.name) if PROVENANCE.exists() else None
+            if existing is None:
+                raise SystemExit(
+                    f"{item.name} is a measurement artifact with no entry in "
+                    f"{PROVENANCE}; add it with `data_provenance.py add "
+                    f"{item.name} --source-commit <commit>` first"
+                )
+            entries[item.name] = existing
+            continue
+        entries[item.name] = file_entry(item, full)
 
     ystate_src = source_bytes(YSTATE_SOURCE, full)
     ystate_copy = YSTATE.read_bytes()
@@ -845,6 +937,9 @@ def copy_files(campaign: Campaign, commit: str) -> list[tuple[str, str]]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     written = []
     for item in files:
+        if item.role in MEASUREMENT_ARTIFACTS:
+            # entered by `add` from its own source commit, never by the copy
+            continue
         src = source_bytes(item.source, commit)
         (DATA_DIR / item.name).write_bytes(src.data)
         written.append((item.name, src.read_from))
@@ -867,7 +962,13 @@ def load_provenance() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=["verify", "plan", "copy", "record"])
+    parser.add_argument("command", choices=["verify", "plan", "copy", "record", "add"])
+    parser.add_argument(
+        "name",
+        nargs="?",
+        default=None,
+        help="add: the one measurement artifact to enter (its name in harness/data/)",
+    )
     parser.add_argument("--force", action="store_true", help="copy: overwrite")
     parser.add_argument(
         "--source-commit",
@@ -909,6 +1010,18 @@ def main(argv: list[str] | None = None) -> int:
         PROVENANCE.write_text(json.dumps(prov, indent=2) + "\n")
         print(f"\nwrote {PROVENANCE}")
         print(f"  source commit {prov['source']['commit_full']}")
+        print(f"  {len(prov['files'])} files + {prov['module']['name']}")
+        return 0
+
+    if args.command == "add":
+        if not args.name or not args.source_commit:
+            raise SystemExit("add needs the file name and --source-commit <commit>")
+        prov = add_file(args.name, args.source_commit, campaign)
+        PROVENANCE.write_text(json.dumps(prov, indent=2) + "\n")
+        entry = prov["files"][args.name]
+        print(f"added {args.name} to {PROVENANCE}")
+        print(f"  source        {entry['source']} at {entry['source_commit']}")
+        print(f"  sha256        {entry['sha256']}  ({entry['bytes']} bytes)")
         print(f"  {len(prov['files'])} files + {prov['module']['name']}")
         return 0
 

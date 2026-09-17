@@ -441,6 +441,41 @@ def compare(base: str) -> dict[str, Any]:
             }
         )
 
+    # --- constructions new since the base ------------------------------------
+    # A stage table no old grid combined is **new**; its cells are counted
+    # here by construction, from the stage records themselves (the cells the
+    # tally rendered, less the join column, blanks excluded — an absent cell
+    # is not a cell).  So a task that adds a construction states how many
+    # cells it added beside how many it preserved (task A88
+    # (function-weighted-sweeps)).
+    import json  # noqa: PLC0415
+
+    old_names = {name for grid in old for name in dict.fromkeys([grid.name, *grid.combines])}
+    new_constructions: dict[str, dict[str, int]] = {}
+    for stage in ("tally_evaluation", "tally_optimisation"):
+        path = HERE / "runs" / "gates" / stage / "measurements.json"
+        if not path.exists():
+            continue
+        for table in json.loads(path.read_text()).get("tables") or []:
+            name = str(table.get("table") or "")
+            if name in old_names:
+                continue
+            headings = [str(c.get("heading")) for c in table.get("columns") or []]
+            cells = table.get("cells") or []
+            values = sum(
+                1
+                for row in cells
+                for i, cell in enumerate(row)
+                if i > 0 and str(cell).strip() and str(cell).strip() != "—"
+            )
+            entry = new_constructions.setdefault(
+                _construction_key(name), {"stage_tables": 0, "rows": 0, "cells_with_a_value": 0}
+            )
+            entry["stage_tables"] += 1
+            entry["rows"] += len(cells)
+            entry["cells_with_a_value"] += values
+            del headings
+
     where: dict[str, list[Grid]] = collections.defaultdict(list)
     for grid in new:
         # A grid is found by the construction name printed under it **and**
@@ -466,7 +501,17 @@ def compare(base: str) -> dict[str, Any]:
         recomputed = "computed a second time" in grid.section
         if recomputed:
             n_recomputed_grids += 1
-        hosts = [] if recomputed else where.get(grid.name, [])
+        # An old grid is found by its own name **and** by each stage table it
+        # combined: a layout whose title changed — node calls per block, once
+        # "the other three regimes" and now the construction whole — still
+        # hosts the same stage tables, and it is the stage table, not the
+        # title, that a cell belongs to (task A88 (function-weighted-sweeps)).
+        hosts: list[Grid] = []
+        if not recomputed:
+            for name in dict.fromkeys([grid.name, *grid.combines]):
+                for host in where.get(name, []):
+                    if host not in hosts:
+                        hosts.append(host)
         for row in grid.rows:
             if _group_row(row):
                 continue
@@ -558,6 +603,7 @@ def compare(base: str) -> dict[str, Any]:
         "differing": differing[:20],
         "cells_stated_in_the_caption": dict(sorted(into_the_caption.items())),
         "republished": republished,
+        "new_constructions": new_constructions,
         "withdrawn_by_kind": dict(sorted(withdrawn.items())),
         "constructions_rendered_fewer_times": dict(sorted(fewer.items())),
         "heading_translations": {
@@ -659,6 +705,18 @@ def main(argv: Iterable[str] | None = None) -> int:
                 f"with {entry['shares_with']}, "
                 f"{entry['n_rows']} row(s), {entry['n_cells']} cell(s) of "
                 f"which {entry['n_cells_with_a_value']} carry a value"
+            )
+    if result["new_constructions"]:
+        print(
+            "  construction(s) new since the base (stage tables no old grid "
+            "combined), their cells counted from the stage records, the join "
+            "column and blank cells excluded:"
+        )
+        for name, entry in sorted(result["new_constructions"].items()):
+            print(
+                f"    {name!r}: {entry['stage_tables']} stage table(s), "
+                f"{entry['rows']} row(s), {entry['cells_with_a_value']} cell(s) "
+                f"carrying a value"
             )
     if result["withdrawn_by_kind"]:
         print("  rendered fewer times than before, by kind (expected):")

@@ -1,33 +1,39 @@
-"""Re-point every table citation in the report at the table set A87 renders.
+"""Re-point every table citation in the report at the table set A88 renders.
 
-**A table number is a position, not a name** (trap T17).  Task **A87
-(v3-grid-polish)** took the reliability table out of the main text — the
-twenty-three-column merge of per-arm success, the failure taxonomy and the
-seed set — and put the per-arm success construction alone in its place, in the
-previous revision's §5.1 form; the merged whole went to Appendix D, first of
-the optimisation phase's group.  So **no main-text number moves** (the new
-grid takes the old one's slot, Table 11), every appendix number from D.12 on
-moves by one, and the companion's full versions re-order because the main
-text's table no longer has one of its own.
+**A table number is a position, not a name** (trap T17).  Task **A88
+(function-weighted-sweeps)** took the per-node table out of the main text at
+the user's instruction (2026-09-17: *"move the per node tables to the
+appendix. Only keep per module in the main text"*): §4.2's Table 9 — node
+calls per block on the displaced entries — is now one row group of Appendix
+D's Table D.3, the construction rendered whole over its four regimes, and
+its rendered block leaves the document.  So **every main-text number from 10
+on falls by one** (Tables 10–18 → 9–17); Appendix D.1–D.22 do not move and
+the two new function-weighted tables are D.23 and D.24 in the new group D.4;
+the companion does not move.
 
 This script is that re-pointing, committed and executed (protocol §15) rather
-than done by hand.  It works from a **map of layout → old number → new
-number** rather than from a shift, because a shift is not what a move is: the
-companion's per-arm-success full version went from F.10 to F.13 while the
-three below it each rose by one.  A citation is rewritten to a placeholder
-first and then to its new number, so a number that is both an old and a new
-one is never rewritten twice.
+than done by hand.  It (1) removes the orphaned rendered block — the renderer
+rewrites the blocks whose layouts exist and leaves one whose layout is gone
+where it stands — (2) applies the phrases below, which re-point by **meaning**
+rather than by number, and (3) applies the number map to every citation span
+outside the rendered blocks and Appendix C.  A citation is rewritten to a
+placeholder first and then to its new number, so a number that is both an old
+and a new one is never rewritten twice.
 
 **A number that still resolves can still be the wrong table** (trap T17's
-addition).  Table 11 is still called *per-arm success* and is still in §4.3,
-but it no longer carries the failure taxonomy's *ok* column, its tracebacks or
-the seed-set table's *retried seeds per arm* — three sentences cited it for
-exactly those, and each is re-pointed by a phrase below after re-reading every
-citation in the document and asking what its sentence is about.
+addition).  Two sentences cited Table 9 for what it carried — the headline
+ratio and the absolute per-evaluation totals, which are Table 8's cells too,
+and the per-module ratios, which are the module sweeps table's cells (the
+same numbers in sweeps: a ratio of sweeps is a ratio of node calls within a
+group) — and one in §5.2 cited "Table 9's TOTAL rows" for the transfer
+factors' inputs, which are Table 8's `A1→A2` / `A0→A2` cells.  Each is
+re-pointed by a phrase after re-reading every citation and asking what the
+sentence is about; the map would have sent all three to Table D.3, which
+resolves and is the wrong table for two of them.
 
 Every phrase it cannot find is reported, not skipped silently.
 
-Run from the V4 folder, after ``--plan-tables write``:
+Run from the V4 folder, before ``--plan-tables write``:
 
     python report_citations_repoint.py
 """
@@ -39,67 +45,88 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPORT = HERE / "EXPERIMENT_REPORT.md"
 
+#: Rendered main-text blocks whose layout no longer exists: removed whole,
+#: markers included, with the one blank line that followed.  The renderer
+#: never removes a block, so this is the committed record of the removal.
+REMOVED_BLOCKS: tuple[str, ...] = ("node_calls_per_block",)
+
 #: ``old citation → new citation``, by prefix.  The layout each names is in
 #: the comment, because a number is a position and the layout is the name.
 MOVES: dict[str, dict[int, str]] = {
-    # --- the main text.  Nothing moves: the per-arm success grid takes the
-    #     merged table's slot (Table 11) and §3's Tables 1-6 are hand-written.
-    "": {},
-    # --- Appendix D.  D.1-D.11 do not move; D.12 is the merged reliability
-    #     table, arriving at the head of the optimisation phase's group.
-    "D.": {
-        12: "D.13",  # the problem each configuration poses
-        13: "D.14",  # node calls per module
-        14: "D.15",  # the location diagnostic
-        15: "D.16",  # the identity B1 -> B2
-        16: "D.17",  # iteration multiplier (check 2)
-        17: "D.18",  # cost (check 4)
-        18: "D.19",  # cost against both anchors
-        19: "D.20",  # sweeps and prime calls
-        20: "D.21",  # achieved accuracy
-        21: "D.22",  # the lift closed (check 3)
+    # --- the main text.  Table 9 (node calls per block, displaced) leaves;
+    #     everything after it falls by one.  A bare "Table 9" that no phrase
+    #     below has claimed is the per-node grid and goes to D.3.
+    "": {
+        9: "D.3",   # node calls per block, displaced -> one row group of D.3
+        10: "9",    # module sweeps per run, the evaluation phase
+        11: "10",   # per-arm success
+        12: "11",   # same optimum (check 1)
+        13: "12",   # optimiser iterations per run
+        14: "13",   # evaluations of the model set per run
+        15: "14",   # model-node executions per evaluation
+        16: "15",   # model-node executions per run
+        17: "16",   # check 4 -- the cost
+        18: "17",   # module sweeps per run, the optimisation phase
     },
-    # --- the companion file.  F.1-F.9 do not move.  The full versions
-    #     re-order: the main text's per-arm success grid no longer renders
-    #     one of its own (it names the merged table's, `per_seed_columns_in`),
-    #     so the three that followed rise by one and it falls to F.13.
-    "F.": {
-        10: "F.13",  # per-arm success, full -> the merged table's full version
-        11: "F.10",  # the reference entries, full
-        12: "F.11",  # cost per call, full
-        13: "F.12",  # the ownership rung, full
-    },
+    # --- Appendix D.  Nothing moves: D.3 absorbs the displaced regime as a
+    #     row group and the two new tables are D.23 and D.24 at the end.
+    "D.": {},
+    # --- the companion file.  Nothing moves.
+    "F.": {},
 }
 
-#: Citations a number map cannot carry: a **range** that no longer spans one
-#: run of tables, and four numbers that have not existed since task A79
-#: combined the per-configuration tables and which two re-pointings left
-#: behind (the addition trap **T17** carries).  Each is replaced by a
-#: placeholder **before** the number map runs and restored after it, so the
-#: numbers inside its replacement are final and are never swept twice.
+#: Citations a number map cannot carry.  Each is replaced by a placeholder
+#: **before** the number map runs and restored after it, so the numbers
+#: inside its replacement are final and are never swept twice.
 PHRASES: list[tuple[str, str]] = [
     # --- the range of every rendered table, in §4.4 ------------------------
-    ("Tables 7–18 and Tables D.2–D.21",
-     "Tables 7–18 and Tables D.2–D.22"),
-    # --- citations that would survive the map as a **plausible wrong one**
-    #     (trap T17's addition).  Table 11 kept its number and its name and
-    #     lost three column sets to Appendix D's merged table; each sentence
-    #     below was reading one of them.
-    # The traceback text is the failure taxonomy's `detail` column.
-    ("`block FLAT did not converge in 20 sweeps` on 2 / 3 starts, Table 11)*",
-     "`block FLAT did not converge in 20 sweeps` on 2 / 3 starts, Table 11; "
-     "the message is Table D.12's)*"),
-    # The paragraph reads the per-arm grid **and** the taxonomy's tracebacks
-    # and the seed-set table's invalid and retried seeds.
-    ("**The population (Table 11).**", "**The population (Tables 11 and D.12).**"),
-    # *ok* is the failure taxonomy's column, not a column of Table 11.
-    ("counted *ok*\nin Table 11 and *failed* in companion Table F.7",
-     "counted *ok*\nin Table D.12 and *failed* in companion Table F.7"),
-    # The retried seeds per arm are the seed-set table's column.
-    ("retried seeds per arm across the 25 offered (Table 11; companion Table F.7;",
-     "retried seeds per arm across the 25 offered (Tables 11 and D.12; "
-     "companion Table F.7;"),
+    ("Tables 7–18 and Tables D.2–D.22",
+     "Tables 7–17 and Tables D.2–D.24"),
+    # --- the three citations that would survive the map as a **plausible
+    #     wrong one** (trap T17's addition): Table 9 cited for cells that
+    #     are Table 8's or the module sweeps table's.
+    # The headline ratio 0.5625 / 0.5772 / 0.5016 is Table 8's `A1->A2` /
+    # `A0->A2` cell.
+    ("(Table D.5, headline Table 9).** At matched achieved accuracy",
+     "(Table D.5, headline Table 8).** At matched achieved accuracy"),
+    # The absolute per-evaluation totals are Table 8's per-arm cells; the
+    # per-module ratios are the sweep table's own cells (identical numbers),
+    # and the node-call form with the per-block absolute counts is D.3's
+    # displaced row group.
+    ("0.4921; `A2` cost more on **0 of 25** seeds on every configuration). In absolute terms 60.5 / 59.6 /\n"
+     "61.5 node calls per evaluation against 107.5 / 103.3 / 122.6 for the reference. Where the saving\n"
+     "sits (Table 9, the pooled ratio of `A2` to its reference block by block): the once-per-run",
+     "0.4921; `A2` cost more on **0 of 25** seeds on every configuration). In absolute terms 60.5 / 59.6 /\n"
+     "61.5 node calls per evaluation against 107.5 / 103.3 / 122.6 for the reference (Table 8's per-arm\n"
+     "cells). Where the saving sits (Table 9, the pooled ratio of `A2` to its reference module by\n"
+     "module — the same ratios in node calls per block, with the per-block absolute counts, are the\n"
+     "displaced-entry row group of Table D.3): the once-per-run"),
+    # §5.2: the transfer factors' Phase A inputs are the headline ratios,
+    # which are Table 8's rung cells; "Table 9's TOTAL rows" carried the same
+    # numbers and is now a row group of D.3.
+    ("Table 9's TOTAL rows and Table D.18, not cells themselves).",
+     "Table 8's `A1→A2` / `A0→A2` cells and Table D.18, not cells themselves)."),
 ]
+
+
+def remove_blocks(text: str) -> tuple[str, list[str]]:
+    """The orphaned rendered blocks taken out whole, and which were found."""
+    removed: list[str] = []
+    for name in REMOVED_BLOCKS:
+        start = f"<!-- plan_tables: main-text table {name} -->"
+        end = f"<!-- plan_tables: end of main-text table {name} -->"
+        if start not in text or end not in text:
+            continue
+        i = text.index(start)
+        j = text.index(end) + len(end)
+        tail = text[j:]
+        # the blank line the renderer wrote after the block goes with it
+        if tail.startswith("\n\n"):
+            tail = tail[2:]
+        text = text[:i] + tail
+        removed.append(name)
+    return text, removed
+
 
 def hold_rendered(text: str) -> tuple[str, list[str]]:
     """Lift out the parts a citation sweep must not touch.
@@ -171,6 +198,7 @@ def apply_moves(text: str) -> tuple[str, list[str]]:
 
 def main() -> int:
     text = REPORT.read_text(encoding="utf-8")
+    text, removed = remove_blocks(text)
     text, held = hold_rendered(text)
     # The phrases go behind placeholders first: their replacements already
     # name the final numbers, and the map must not sweep them again.
@@ -192,6 +220,7 @@ def main() -> int:
     REPORT.write_text(text, encoding="utf-8")
 
     print(f"re-pointed {REPORT.name}")
+    print(f"  rendered blocks removed: {removed} (declared: {list(REMOVED_BLOCKS)})")
     print(f"  phrases applied  : {len(applied)}")
     for line in applied:
         print(f"    {line}")
@@ -205,6 +234,9 @@ def main() -> int:
         "  held out of the sweep: the rendered blocks and Appendix C, whose "
         "entries state the table set of their own day"
     )
+    not_removed = [n for n in REMOVED_BLOCKS if n not in removed]
+    if not_removed:
+        print(f"  blocks declared removed and not found: {not_removed}")
     return 1 if missing else 0
 
 
