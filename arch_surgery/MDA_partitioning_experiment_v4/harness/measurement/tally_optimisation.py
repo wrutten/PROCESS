@@ -2008,6 +2008,232 @@ def module_sweeps(
     )
 
 
+def module_sweeps_function_weighted(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    configuration: str,
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    source: str,
+) -> Table | None:
+    """**The function-weighted total of the module sweeps**, the optimisation
+    phase — the twin's new cells and only those.
+
+    The optimisation-phase counterpart of
+    :func:`tally_evaluation.module_sweeps_function_weighted`: a `functions`
+    cell per group and a **total** row whose per-arm cells are
+    ``Σ sweeps × functions`` over the whole run's census (the ``v = 1``
+    attribution), with the ratio read the same three ways as the sweep
+    table's total — pooled as the ``[v = 1, v = 0]`` bracket, the per-run
+    median with its bracket, and the runs on which the partitioned arm's
+    weighted total exceeded the flat arm's.  The module rows' per-arm cells
+    are absent: they are the module sweeps table's own and are republished
+    beside these by the renderer, never recomputed here.  Same seed set,
+    grouping and pairing as :func:`module_sweeps`.  Reported, not accepted on.
+    """
+    base, arm = HEADLINE_PAIR
+    if base not in by_arm or arm not in by_arm:
+        return None
+    from harness.measurement import tally_evaluation as tally_a  # noqa: PLC0415
+
+    seeds = [
+        s
+        for s in converged
+        if s in by_arm[base]
+        and s in by_arm[arm]
+        and stats_mod.finished(by_arm[base][s])
+        and stats_mod.finished(by_arm[arm][s])
+    ]
+    records = [
+        by_arm[a][s]
+        for a in _arm_order(by_arm)
+        for s in converged
+        if s in by_arm[a] and stats_mod.finished(by_arm[a][s])
+    ]
+    if not records:
+        return None
+    groups = tally_a.node_grouping(campaign, configuration, records, phase=PHASE)
+    node_map = json.loads(
+        (Path(campaign.data_dir) / "dsm_node_map.json").read_text()
+    )
+    counts = tally_a.function_counts(campaign, configuration)
+    functions = stats_mod.functions_by_group(counts, node_map, groups)
+
+    def sweeps_of(record: Mapping[str, Any]) -> dict[str, float]:
+        return stats_mod.module_sweeps(
+            stats_mod.per_node_census(record, phase=PHASE), groups
+        )
+
+    def total_of(record: Mapping[str, Any], case: str) -> float:
+        return stats_mod.weighted_total(sweeps_of(record), functions, case=case) or 0.0
+
+    rows: list[dict[str, Any]] = []
+    for group in groups:
+        name = str(group["group"])
+        row: dict[str, Any] = {"module": name, "functions": functions[name]["v1"]}
+        for a in LADDER:
+            row[f"{a}_mean"] = None
+            row[f"{a}_bracket"] = None
+        row.update({"pooled": None, "median": None, "bracket": None, "n_above_one": None, "n_pairs": None})
+        rows.append(row)
+
+    total: dict[str, Any] = {
+        "module": tally_a.TOTAL_ROW,
+        "functions": sum(functions[str(g["group"])]["v1"] for g in groups),
+    }
+    for a in LADDER:
+        arm_values = [
+            total_of(by_arm[a][s], "v1")
+            for s in converged
+            if a in by_arm and s in by_arm[a] and stats_mod.finished(by_arm[a][s])
+        ]
+        total[f"{a}_mean"] = (
+            (sum(arm_values) / len(arm_values)) if arm_values else None
+        )
+        total[f"{a}_bracket"] = "—"
+    pooled_both: list[float] = []
+    for case in ("v1", "v0"):
+        left = [total_of(by_arm[base][s], case) for s in seeds]
+        right = [total_of(by_arm[arm][s], case) for s in seeds]
+        if sum(left):
+            pooled_both.append(sum(right) / sum(left))
+    summary = stats_mod.per_seed_ratio_summary(
+        [total_of(by_arm[base][s], "v1") for s in seeds],
+        [total_of(by_arm[arm][s], "v1") for s in seeds],
+    )
+    total.update(
+        {
+            "pooled": (
+                f"[{min(pooled_both):.3f}, {max(pooled_both):.3f}]"
+                if len(pooled_both) == 2
+                else None
+            ),
+            "median": summary["median"],
+            "bracket": (
+                "—"
+                if summary["min"] is None
+                else f"[{summary['min']:.3f}, {summary['max']:.3f}]"
+            ),
+            "n_above_one": summary["n_above_one"],
+            "n_pairs": summary["n"],
+        }
+    )
+    rows.append(total)
+
+    modules_stated = {
+        m: int((counts.get("modules") or {}).get(m, {}).get("functions") or 0)
+        for m in stats_mod.NODE_GROUP_ORDER
+    }
+    absent = tally_a.absent_cell
+
+    def _absent_ratio(value: Any) -> str:
+        return "" if value is None else _fmt_ratio(value)
+
+    def _absent_int(value: Any) -> str:
+        return "" if value is None else _fmt_int(value)
+
+    return Table(
+        name=f"{tally_a.FUNCTION_WEIGHTED_NAME} — {configuration} — {source}",
+        caption=Caption(
+            units=(
+                "`functions` is a count of functions — the dependency "
+                "analysis's submodels, one callable of a model each, a model "
+                "with no submodel counting as one (its entry method) — behind "
+                "the group's collapsed-DSM rows; the total row is "
+                "Σ sweeps × functions over the whole run, a count of function "
+                "executions; ratios are dimensionless"
+            ),
+            row_is=(
+                "one node group of this configuration, carrying its function "
+                "count and nothing else (its sweep cells are the module sweeps "
+                "table's own and are republished beside it, never recomputed), "
+                "then the function-weighted total over those rows"
+            ),
+            column_is=(
+                "the group's function count, or — on the total row alone — one "
+                "arm's mean Σ sweeps × functions per run over the seed set, or "
+                "one of the three readings of B2 against B0 on that total: "
+                "pooled as the [v = 1, v = 0] interval, the per-run median with "
+                "its bracket, and the count of runs on which B2's weighted "
+                "total was the larger"
+            ),
+            population=(
+                f"{population.what}; {len(converged)} seed(s) on which every "
+                f"arm of {configuration} reached an accepted optimum"
+            ),
+            construction=(
+                "stats.functions_by_group — the functions behind each group's "
+                "rows from the committed harness/data/dsm_function_counts.json, "
+                "under the two attributions of the once-per-run nodes' own "
+                "functions; stats.weighted_total (Σ sweeps × functions) with "
+                "stats.module_sweeps for the sweeps (node_census."
+                "per_node_counted, the whole run); stats.per_seed_ratio_summary "
+                "for the three readings of the ratio"
+            ),
+            clauses=(
+                "the function counts are per configuration, read from the "
+                "committed file the generator arch_surgery/fixedpoint/"
+                "gen_function_counts.py wrote once from the dependency "
+                "analysis's per-configuration exports at pin "
+                f"{(counts.get('dsm_pin') or 'PROCESS_at_36ac820e')}; they differ "
+                "per block where the exports do, and the module-level counts "
+                "this block reads are "
+                + ", ".join(f"{m} {n}" for m, n in modules_stated.items()),
+                "the total's pooled ratio is the `[v = 1, v = 0]` interval over "
+                "the two attributions of the once-per-run nodes' own functions "
+                "(trap T9); the per-arm total cells and the per-run distribution "
+                "are the v = 1 case",
+                "whole-run census counts: the output pass adds one sweep to "
+                "every row in every arm and cancels from every ratio here",
+                "no per-module ratio reads the weight: a ratio of sweeps is "
+                "unit-free, and the weight moves the aggregate alone",
+                "reported, not accepted on: the acceptance quantity is check 4's "
+                "solve-phase cost table; this table shows how the aggregate "
+                "moves with the weight",
+            ),
+            how_to_read=(
+                "read the total row's pooled ratio against the module sweeps "
+                "table's and check 4's for the same configuration: three "
+                "weightings of one set of sweep counts"
+            ),
+            summary=(
+                f"Module sweeps per run on {configuration} over its seed set, "
+                f"weighted per **function**: the same sweep cells and "
+                f"per-module ratios as the module sweeps table, with "
+                f"`functions` — the dependency analysis's submodels behind the "
+                f"group's collapsed-DSM rows, a model with none counting as one "
+                f"— in place of `models`, so total calls = Σ sweeps × functions "
+                f"over the whole run; the total's pooled ratio is the "
+                f"`[v = 1, v = 0]` interval over the once-per-run nodes' own "
+                f"functions. Reported, not accepted on."
+            ),
+        ),
+        columns=(
+            Column("module", "module"),
+            Column("functions", "functions", fmt=_fmt_int),
+            *[
+                item
+                for a in LADDER
+                for item in (
+                    Column(f"{a}_mean", f"{a} mean", fmt=absent),
+                    Column(f"{a}_bracket", f"{a} [min, max]", fmt=absent),
+                )
+            ],
+            Column("pooled", "B2/B0 pooled", fmt=absent),
+            Column("median", "B2/B0 per-run median", fmt=_absent_ratio),
+            Column("bracket", "[min, max]", fmt=absent),
+            Column("n_above_one", "runs B2 > B0", fmt=_absent_int),
+            Column("n_pairs", "of n", fmt=_absent_int),
+        ),
+        rows=tuple(rows),
+        denominator=len(converged),
+        denominator_is=(
+            f"seed(s) on which every arm of {configuration} converged"
+        ),
+        kind="module_sweeps_functions",
+    )
+
+
 def node_calls_per_module(
     campaign: Campaign,
     population: stats_mod.Population,
@@ -3384,6 +3610,11 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 )
                 if sweeps is not None:
                     emitted.append(sweeps)
+                    weighted = module_sweeps_function_weighted(
+                        campaign, population, config.name, by_arm, converged, label
+                    )
+                    if weighted is not None:
+                        emitted.append(weighted)
         path = optimiser_path(campaign, population, source.name, path_groups)
         if path is not None:
             emitted.append(path)

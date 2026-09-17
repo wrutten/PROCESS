@@ -447,6 +447,54 @@ def _tooth_row_attribution_not_guessed() -> tuple[bool, str]:
     )
 
 
+def _tooth_function_count_not_guessed() -> tuple[bool, str]:
+    """Withhold a module's function count, then a once-per-run node's own
+    row, and require the function-weighted total to be refused both times.
+
+    ``functions`` is what makes ``Σ sweeps × functions`` a number; a committed
+    file that does not state it for a module, or that cannot give a
+    once-per-run node one DSM row of its own for the ``v = 1`` attribution,
+    would otherwise be filled in with a guess — the same reading of another
+    repository's exports trap T9 forbids, one weight over.  Task **A88
+    (function-weighted-sweeps)**.
+    """
+    node_map = {"nodes": {"vacuum": {"module": "M3"}}}
+    counts = {
+        "modules": {
+            "M1": {"functions": 178}, "M2": {"functions": 90}, "M3": {"functions": 73},
+            "PULSE": {"functions": 3}, "FF": {"functions": 51},
+        },
+        "nodes": {"vacuum": {"functions": 5, "one_row": True, "models": ["Vacuum"]}},
+    }
+    groups = [
+        {"group": "M3", "nodes": ["fw", "shield"]},
+        {"group": "once per run", "nodes": ["vacuum"]},
+    ]
+    sound = stats_mod.functions_by_group(counts, node_map, groups)
+    if sound["M3"] != {"v1": 68, "v0": 73} or sound["once per run"] != {"v1": 5, "v0": 0}:
+        return False, (
+            f"the two attributions read {sound}; M3 must read 68 functions under "
+            f"v = 1 and 73 under v = 0, and the once-per-run group 5 and 0"
+        )
+    short = copy.deepcopy(counts)
+    del short["modules"]["M3"]["functions"]
+    tripped, why = _refuses(
+        lambda: stats_mod.functions_by_group(short, node_map, groups),
+        what="a function-count file stating no count for M3",
+    )
+    if not tripped:
+        return False, why
+    no_row = copy.deepcopy(counts)
+    no_row["nodes"]["vacuum"] = {"functions": 5, "one_row": False, "models": []}
+    tripped_row, why_row = _refuses(
+        lambda: stats_mod.functions_by_group(no_row, node_map, groups),
+        what="a once-per-run node the file resolves to no single DSM row",
+    )
+    if not tripped_row:
+        return False, why_row
+    return True, f"{why}; and {why_row}"
+
+
 def _tooth_design_vector_by_position() -> tuple[bool, str]:
     """Offer a design vector with a value in a slot the name map does not name.
 
@@ -810,7 +858,7 @@ def pool_tally_jobs(campaign: Campaign) -> list[dict[str, Any]]:
 
 
 def gate(campaign: Campaign) -> Gate:
-    """The tally's gate, with its seventeen teeth."""
+    """The tally's gate, with its eighteen teeth."""
     return Gate(
         name="tally_contracts",
         binds="every table the tally emits, and the cells it reproduces",
@@ -885,6 +933,14 @@ def gate(campaign: Campaign) -> Gate:
                 "construction that weights the per-module total",
                 must="REFUSE",
                 check=_tooth_row_attribution_not_guessed,
+            ),
+            Tooth(
+                name="a function count the file does not state",
+                what="a function-count file with no count for M3, then one "
+                "giving a once-per-run node no DSM row of its own, offered to "
+                "the construction that weights the per-module total per function",
+                must="REFUSE",
+                check=_tooth_function_count_not_guessed,
             ),
             Tooth(
                 name="a design vector joined by position",

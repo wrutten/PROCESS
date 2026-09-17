@@ -3113,6 +3113,12 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                     )
                     if sweeps is not None:
                         produced[sweeps.name] = sweeps
+                        if source.name == ACCEPTANCE_REGIME:
+                            weighted = _module_sweeps_function_weighted_evaluation(
+                                campaign, population, config.name, source.name
+                            )
+                            if weighted is not None:
+                                produced[weighted.name] = weighted
                 stacked = _node_calls_per_block(campaign, population, source.name)
                 if stacked is not None:
                     produced[stacked.name] = stacked
@@ -3160,6 +3166,11 @@ def recompute(campaign: Campaign) -> dict[str, Any]:
                         )
                         if sweeps is not None:
                             produced[sweeps.name] = sweeps
+                            weighted = _module_sweeps_function_weighted_optimisation(
+                                campaign, population, config.name, index, converged, label
+                            )
+                            if weighted is not None:
+                                produced[weighted.name] = weighted
                         for success in _per_arm_success(
                             population, config.name, index, label
                         ):
@@ -3253,6 +3264,15 @@ ONCE_PER_RUN = "once per run"
 #: above it (task A85 (v3-table-formats)).
 TOTAL_CALLS_ROW = "total calls"
 MEMBERS_NAMED_UP_TO = 4
+
+#: The evaluation-phase source the function-weighted total is computed for —
+#: the acceptance regime, the displaced entries — and the committed file the
+#: weight is read from.  Re-typed here, not imported: which tables exist is
+#: part of what the gate compares (task A88 (function-weighted-sweeps)).
+ACCEPTANCE_REGIME = "campaign_displaced"
+FUNCTION_COUNTS_FILE = "dsm_function_counts.json"
+FUNCTION_COUNTS_FORMAT = "dsm-function-counts-1"
+FUNCTION_WEIGHTED_TITLE = "module sweeps per run, function-weighted total"
 
 
 def _node_map(campaign: Campaign) -> dict[str, Any]:
@@ -3436,6 +3456,74 @@ def _rows_by_group(
                 "v1": int(rows[group]) - taken.get(group, 0),
                 "v0": int(rows[group]),
             }
+    return out
+
+
+def _functions_by_group(
+    campaign: Campaign, configuration: str, groups: Sequence[tuple[str, Sequence[str]]]
+) -> dict[str, dict[str, int]]:
+    """``functions`` per group under the two attributions, re-derived.
+
+    Read from the committed ``harness/data/dsm_function_counts.json`` and from
+    nothing else: the block for this configuration, its per-module
+    ``functions`` and, for the once-per-run nodes, each node's own row's
+    ``functions`` (``nodes[<node>]``, exactly one row) taken from the module
+    the node map places the node in under ``v1`` and left there under ``v0``.
+    A module without a count, or a once-per-run node without a single row of
+    its own, is a refusal.
+    """
+    path = Path(campaign.data_dir) / FUNCTION_COUNTS_FILE
+    if not path.exists():
+        raise AnalysisError(f"{path} is not present; `functions` cannot be re-derived")
+    data = json.loads(path.read_text())
+    if data.get("format") != FUNCTION_COUNTS_FORMAT:
+        raise AnalysisError(
+            f"{path.name} is of format {data.get('format')!r}, not "
+            f"{FUNCTION_COUNTS_FORMAT!r}"
+        )
+    block = (data.get("configurations") or {}).get(configuration)
+    if block is None:
+        raise AnalysisError(f"{path.name} has no block for {configuration}")
+    per_module = block.get("modules") or {}
+    per_node = block.get("nodes") or {}
+    absent = sorted(
+        g for g in GROUP_ORDER
+        if not isinstance((per_module.get(g) or {}).get("functions"), int)
+    )
+    if absent:
+        raise AnalysisError(
+            f"{path.name}: no function count for {absent} on {configuration}; "
+            f"`functions` would be guessed and the total is refused"
+        )
+    placement = _node_map(campaign).get("nodes") or {}
+    taken: dict[str, int] = {}
+    own = 0
+    for group, nodes in groups:
+        if group != ONCE_PER_RUN:
+            continue
+        for node in nodes:
+            spec = per_node.get(str(node)) or {}
+            rows = spec.get("rows_in_this_export") or []
+            if len(rows) != 1 or not isinstance(spec.get("functions"), int):
+                raise AnalysisError(
+                    f"{configuration}: once-per-run node {node!r} has rows {rows} "
+                    f"in {path.name}; one row of its own is needed"
+                )
+            home = str((placement.get(str(node)) or {}).get("module") or "")
+            if home not in per_module:
+                raise AnalysisError(
+                    f"once-per-run node {node!r} sits in module {home!r}, which "
+                    f"{path.name} gives no function count"
+                )
+            taken[home] = taken.get(home, 0) + int(spec["functions"])
+            own += int(spec["functions"])
+    out: dict[str, dict[str, int]] = {}
+    for group, nodes in groups:
+        if group == ONCE_PER_RUN:
+            out[group] = {"v1": own, "v0": 0}
+        else:
+            whole = int(per_module[group]["functions"])
+            out[group] = {"v1": whole - taken.get(group, 0), "v0": whole}
     return out
 
 
@@ -3711,6 +3799,195 @@ def _module_sweeps_optimisation(
             "pooled",
         ),
     )
+
+def _module_sweeps_function_weighted_evaluation(
+    campaign: Campaign, population: Population, configuration: str, source: str
+) -> Recomputed | None:
+    """The function-weighted total's new cells re-derived, the evaluation
+    phase: `functions` per group and a total row of Σ sweeps × functions with
+    the [v = 1, v = 0] bracket; the module rows' per-arm cells are None (they
+    are the sweep table's, republished by the renderer, and are not here)."""
+    grouped = by_arm(population, configuration)
+    if not grouped:
+        return None
+    finished = {arm: [r for r in rs if completed(r)] for arm, rs in grouped.items()}
+    every = [r for rs in finished.values() for r in rs]
+    if not every:
+        return None
+    config = next(c for c in campaign.configurations if c.name == configuration)
+    groups = _groups(campaign, configuration, every, optimisation=False)
+    functions = _functions_by_group(campaign, configuration, groups)
+    base = evaluation_reference_arm(config.pulsed, grouped)
+    indexed = by_arm_and_seed(population, configuration)
+
+    def sweeps_of(record: Mapping[str, Any]) -> dict[str, float]:
+        return _sweeps_by_group(_census(record, optimisation=False), groups)
+
+    keys = (
+        sorted(
+            k
+            for k in set(indexed.get(base, {})) & set(indexed.get("A2", {}))
+            if completed(indexed[base][k]) and completed(indexed["A2"][k])
+        )
+        if base in indexed and "A2" in indexed
+        else []
+    )
+    columns = (
+        "module",
+        "functions",
+        *[c for arm in EVALUATION_LADDER for c in (f"{arm}_mean", f"{arm}_bracket")],
+        "reference",
+        "ratio",
+        "n_pairs",
+    )
+    rows: list[dict[str, Any]] = []
+    for group, _nodes in groups:
+        row = {column: None for column in columns}
+        row.update({"module": group, "functions": functions[group]["v1"]})
+        rows.append(row)
+    total: dict[str, Any] = {
+        "module": TOTAL_CALLS_ROW,
+        "functions": sum(functions[g]["v1"] for g, _ in groups),
+        "reference": base,
+    }
+    for arm in EVALUATION_LADDER:
+        values = [_total_calls(sweeps_of(r), functions, "v1") for r in finished.get(arm, [])]
+        total[f"{arm}_mean"] = arithmetic_mean(values) if values else None
+        total[f"{arm}_bracket"] = "—"
+    both: list[float] = []
+    for case in ("v1", "v0"):
+        left = [_total_calls(sweeps_of(indexed[base][k]), functions, case) for k in keys]
+        right = [_total_calls(sweeps_of(indexed["A2"][k]), functions, case) for k in keys]
+        if sum(left):
+            both.append(sum(right) / sum(left))
+    total["ratio"] = f"[{min(both):.3f}, {max(both):.3f}]" if len(both) == 2 else None
+    total["n_pairs"] = len(keys)
+    rows.append(total)
+    return Recomputed(
+        name=f"{FUNCTION_WEIGHTED_TITLE} — {configuration} — {source}",
+        caption=(
+            "recomputed: `functions` per group from the committed function "
+            "counts under the two attributions of the once-per-run nodes' own "
+            "functions, and Σ sweeps × functions per arm with the [v = 1, "
+            "v = 0] bracket of Σ A2 / Σ reference over the paired runs; the "
+            "module rows' per-arm cells are absent by construction"
+        ),
+        columns=columns,
+        key_columns=("module",),
+        rows=tuple(rows),
+        denominator=len(every),
+        denominator_is=(
+            f"finished evaluation-phase runs of {configuration} in this source"
+        ),
+        composite=(*[f"{arm}_bracket" for arm in EVALUATION_LADDER], "ratio"),
+    )
+
+
+def _module_sweeps_function_weighted_optimisation(
+    campaign: Campaign,
+    population: Population,
+    configuration: str,
+    index: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    label: str,
+) -> Recomputed | None:
+    """The function-weighted total's new cells re-derived, the optimisation
+    phase, with the total's ratio read three ways."""
+    base, arm = "B0", "B2"
+    if base not in index or arm not in index:
+        return None
+    records = [
+        index[a][s]
+        for a in arm_order(index)
+        for s in converged
+        if s in index[a] and completed(index[a][s])
+    ]
+    if not records:
+        return None
+    groups = _groups(campaign, configuration, records, optimisation=True)
+    functions = _functions_by_group(campaign, configuration, groups)
+
+    def total_of(record: Mapping[str, Any], case: str) -> float:
+        return _total_calls(
+            _sweeps_by_group(_census(record, optimisation=True), groups), functions, case
+        )
+
+    seeds = [
+        s
+        for s in converged
+        if s in index[base]
+        and s in index[arm]
+        and completed(index[base][s])
+        and completed(index[arm][s])
+    ]
+    columns = (
+        "module",
+        "functions",
+        *[c for a in OPTIMISATION_LADDER for c in (f"{a}_mean", f"{a}_bracket")],
+        "pooled",
+        "median",
+        "bracket",
+        "n_above_one",
+        "n_pairs",
+    )
+    rows: list[dict[str, Any]] = []
+    for group, _nodes in groups:
+        row = {column: None for column in columns}
+        row.update({"module": group, "functions": functions[group]["v1"]})
+        rows.append(row)
+    total: dict[str, Any] = {
+        "module": TOTAL_CALLS_ROW,
+        "functions": sum(functions[g]["v1"] for g, _ in groups),
+    }
+    for a in OPTIMISATION_LADDER:
+        values = [
+            total_of(index[a][s], "v1")
+            for s in converged
+            if a in index and s in index[a] and completed(index[a][s])
+        ]
+        total[f"{a}_mean"] = (sum(values) / len(values)) if values else None
+        total[f"{a}_bracket"] = "—"
+    both: list[float] = []
+    for case in ("v1", "v0"):
+        left = [total_of(index[base][s], case) for s in seeds]
+        right = [total_of(index[arm][s], case) for s in seeds]
+        if sum(left):
+            both.append(sum(right) / sum(left))
+    summary = _ratio_summary(
+        [(total_of(index[base][s], "v1"), total_of(index[arm][s], "v1")) for s in seeds]
+    )
+    total.update(
+        {
+            "pooled": f"[{min(both):.3f}, {max(both):.3f}]" if len(both) == 2 else None,
+            "median": summary["median"],
+            "bracket": (
+                "—"
+                if summary["min"] is None
+                else f"[{summary['min']:.3f}, {summary['max']:.3f}]"
+            ),
+            "n_above_one": summary["n_above_one"],
+            "n_pairs": summary["n"],
+        }
+    )
+    rows.append(total)
+    return Recomputed(
+        name=f"{FUNCTION_WEIGHTED_TITLE} — {configuration} — {label}",
+        caption=(
+            "recomputed: `functions` per group from the committed function "
+            "counts under the two attributions of the once-per-run nodes' own "
+            "functions, and Σ sweeps × functions per arm over the whole run's "
+            "census, B2/B0 pooled as the [v = 1, v = 0] bracket, as the per-run "
+            "median with its bracket and as runs above 1; the module rows' "
+            "per-arm cells are absent by construction"
+        ),
+        columns=columns,
+        key_columns=("module",),
+        rows=tuple(rows),
+        denominator=len(converged),
+        denominator_is=f"seeds on which every arm of {configuration} converged",
+        composite=(*[f"{a}_bracket" for a in OPTIMISATION_LADDER], "bracket", "pooled"),
+    )
+
 
 def _node_calls_per_block(
     campaign: Campaign, population: Population, source: str

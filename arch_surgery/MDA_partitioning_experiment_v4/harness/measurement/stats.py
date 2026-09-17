@@ -1694,12 +1694,108 @@ def dsm_rows_by_group(
     return out
 
 
+#: The format the committed function-count file declares; a file of another
+#: format is refused, never read by guessing at its keys.
+FUNCTION_COUNTS_FORMAT = "dsm-function-counts-1"
+
+
+def functions_by_group(
+    counts: Mapping[str, Any],
+    node_map: Mapping[str, Any],
+    groups: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, int]]:
+    """**`functions` per group**, under the same two attributions as `models`.
+
+    The function-weighted twin of the per-module sweep tables (the user,
+    2026-09-17: *"table 10 and 18 but then with a per function weight"*)
+    replaces ``models`` — a module's collapsed-DSM row count — with the number
+    of **functions** behind those rows: the dependency analysis's submodels,
+    one callable of a supermodel each, a supermodel with no submodel counting
+    as one function (its entry method).  The counts are read from **the
+    committed data file** ``harness/data/dsm_function_counts.json``, one block
+    per configuration (*counts* is that block), generated once from the
+    analysis's per-configuration exports at the named pin and never read live
+    (trap T9, the node map's own route); they differ per configuration where
+    the exports do (the TF-coil model `i_tf_turn_type` selects, the
+    electron-cyclotron model `st_regression` alone runs), so the column is per
+    block by construction.
+
+    The once-per-run group is assembled from nodes that live in other modules'
+    rows, so how many **functions** it owns is the same unknown as how many
+    rows: the total is again an interval over
+
+    ``v = 1``
+        each once-per-run node owns the functions of its own DSM row, taken
+        out of the module the node map assigns it — which needs the node's
+        own row, and the committed file states it (``nodes[<node>]``,
+        derived from the driver's model container, exactly one row each);
+    ``v = 0``
+        the once-per-run nodes own no function and their home modules keep
+        every one.
+
+    A module the file states no function count for, or a once-per-run node it
+    resolves to no single row, is a refusal: ``functions`` is never guessed.
+    Returns ``{group: {"v1": functions, "v0": functions}}``; no per-module
+    *ratio* reads it, exactly as none reads ``models``.
+    """
+    modules = counts.get("modules") or {}
+    nodes_here = counts.get("nodes") or {}
+    placement = node_map.get("nodes") or {}
+    missing = sorted(
+        g
+        for g in NODE_GROUP_ORDER
+        if not isinstance((modules.get(g) or {}).get("functions"), int)
+    )
+    if missing:
+        raise StatsError(
+            f"the committed function counts state no function count for "
+            f"{missing}; `functions` would be guessed, so the function-weighted "
+            f"total is refused"
+        )
+    once = next(
+        (g for g in groups if str(g["group"]) == ONCE_PER_RUN_GROUP), None
+    )
+    home: dict[str, int] = {}
+    own = 0
+    if once is not None:
+        for node in once["nodes"]:
+            spec = nodes_here.get(str(node)) or {}
+            if not spec.get("one_row") or not isinstance(spec.get("functions"), int):
+                raise StatsError(
+                    f"once-per-run node {node!r} resolves to "
+                    f"{spec.get('models', [])} in the committed function counts, "
+                    f"not to one DSM row of its own; the v = 1 attribution "
+                    f"cannot be formed and the function-weighted total is refused"
+                )
+            placed = str((placement.get(str(node)) or {}).get("module") or "")
+            if placed not in modules:
+                raise StatsError(
+                    f"once-per-run node {node!r} is placed in module {placed!r}, "
+                    f"which the committed function counts give no count; the "
+                    f"v = 1 attribution cannot be formed and the total is refused"
+                )
+            home[placed] = home.get(placed, 0) + int(spec["functions"])
+            own += int(spec["functions"])
+    out: dict[str, dict[str, int]] = {}
+    for group in groups:
+        name = str(group["group"])
+        if name == ONCE_PER_RUN_GROUP:
+            out[name] = {"v1": own, "v0": 0}
+        else:
+            whole = int(modules[name]["functions"])
+            out[name] = {"v1": whole - home.get(name, 0), "v0": whole}
+    return out
+
+
 def weighted_total(
     sweeps: Mapping[str, float], models: Mapping[str, Mapping[str, int]], *, case: str
 ) -> float | None:
-    """``Σ sweeps × models`` over the groups, under one row attribution.
+    """``Σ sweeps × weight`` over the groups, under one attribution.
 
-    ``case`` is ``"v1"`` or ``"v0"``.  A group the run has no sweep count for
+    *models* is the weight per group under both attributions — the
+    collapsed-DSM rows of :func:`dsm_rows_by_group` or the functions of
+    :func:`functions_by_group`; the construction is the same sum and is
+    written once.  ``case`` is ``"v1"`` or ``"v0"``.  A group the run has no sweep count for
     contributes nothing and the total is ``None`` if no group does, so a total
     is never a sum over a population quietly smaller than the table's rows
     (trap T11).

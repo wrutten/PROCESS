@@ -28,7 +28,7 @@ Also here, because the audit needed them and no table carried them:
   on each configuration, which the report's §5.3 and §6 state as ranges;
 - the frozen-to-mixed ratio of the predicate trial's audit columns, which
   §5.6 states as "up to 8×";
-- **the per-arm success counts** of §4.3, §5.7 and Table 11 — accepted
+- **the per-arm success counts** of §4.3, §5.7 and Table 10 — accepted
   optima of the 25 starts offered, every other start by outcome class and the
   starts lost that another arm accepted — re-derived here from ``status``,
   ``mfile.ifail``, ``failure_class`` and the traceback **without the tally's
@@ -169,7 +169,7 @@ def main() -> int:
     n_stencil = len(sources["campaign_stencil_forward"]) + len(sources["campaign_stencil_backward"])
     line("stencil evaluations in all (plan §3.10 budget: 418)", n_stencil, 418)
 
-    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, Tables 11 and D.12) ==")
+    print("\n== 3. Optimisation phase: the seed sets, configuration-invalid seeds, retries (§4.3, Tables 10 and D.12) ==")
     idx = by_config_arm_seed(sources["campaign_optimisation"])
     reported_n = {"large_tokamak_nof": 22, "low_aspect_ratio_DEMO": 11, "st_regression": 22}
     reported_invalid = {"large_tokamak_nof": 3, "low_aspect_ratio_DEMO": 13, "st_regression": 1}
@@ -211,7 +211,7 @@ def main() -> int:
                 )
             print(f"             seed {s:>2}: " + "; ".join(disp))
 
-    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, Tables 11 and D.12; companion F.6) ==")
+    print("\n== 4. The crash taxonomy: which seeds, which arms (§4.3, §5.7, Tables 10 and D.12; companion F.6) ==")
     for config in CONFIGS:
         by_arm = idx[config]
         crashed = {arm: sorted(s for s, r in rows.items() if r.get("failure_class") == "crashed") for arm, rows in sorted(by_arm.items())}
@@ -364,7 +364,7 @@ def main() -> int:
         )
     print("           the report's §5.1 (a) said 'a slightly different optimum on 2 of 11 seeds'; §6 said 'within 2.2e-6 relative' (the p90)")
 
-    print("\n== 12. Per-arm success: the accepted optima of 25 per arm, by a second route (§4.3, §5.7, Table 11) ==")
+    print("\n== 12. Per-arm success: the accepted optima of 25 per arm, by a second route (§4.3, §5.7, Table 10) ==")
     published = {
         t["table"]: t
         for t in json.loads(
@@ -455,6 +455,67 @@ def main() -> int:
             sums,
             offered_here,
         )
+
+    print("\n== 13. The aggregate under three weightings: the cells the Appendix D.4 context paragraph quotes (Tables 8, 9, 16, 17, D.23, D.24) ==")
+    # The paragraph is generated text (plan_tables.GROUPS) and its eighteen
+    # numbers are typed there; this reads the same eighteen cells out of the
+    # stage records and looks for each, spelled as the cell spells it, in the
+    # rendered paragraph — a number that drifted from its cell is found here
+    # (trap T17's third addition: generated prose cites too).
+    report = (Path(__file__).resolve().parent / "EXPERIMENT_REPORT.md").read_text()
+    head = report.index("### D.4 The aggregate under three weightings")
+    paragraph = report[head: report.index("**Table D.", head)]
+    evaluation = {
+        t["table"]: t
+        for t in json.loads(
+            (Path(campaign.runs_dir) / "gates" / "tally_evaluation" / "measurements.json").read_text()
+        )["tables"]
+    }
+    per_call = evaluation["per-call cost by configuration — campaign_displaced"]
+    quoted: list[tuple[str, str]] = []
+    for config in CONFIGS:
+        row = next(r for r in per_call["rows"] if r["configuration"] == config)
+        rung = row.get("A1_to_A2") if row.get("A1_to_A2") is not None else row.get("A0_to_A2")
+        quoted.append((f"{config}: node calls, one evaluation (Table 8)", f"{rung:.4f}"))
+        sweeps = evaluation[f"module sweeps per run — {config} — campaign_displaced"]
+        total = next(r for r in sweeps["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: DSM rows, one evaluation (Table 9's total)", str(total["ratio"])))
+        weighted = evaluation[f"module sweeps per run, function-weighted total — {config} — campaign_displaced"]
+        total = next(r for r in weighted["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: functions, one evaluation (Table D.23's total)", str(total["ratio"])))
+        arms = "BR·B0·B1·B2" if config in PULSED else "BR·B0·B2"
+        source = f"campaign_optimisation · {arms}"
+        sweeps = published[f"module sweeps per run — {config} — {source}"]
+        total = next(r for r in sweeps["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: DSM rows, the optimisation (Table 17's total)", str(total["pooled"])))
+        weighted = published[f"module sweeps per run, function-weighted total — {config} — {source}"]
+        total = next(r for r in weighted["rows"] if r["module"] == "total calls")
+        quoted.append((f"{config}: functions, the optimisation (Table D.24's total)", str(total["pooled"])))
+    sums_table = published["cost sums (check 4) — campaign_optimisation"]
+    for config in CONFIGS:
+        row = next(
+            r for r in sums_table["rows"]
+            if r.get("configuration") == config and r.get("set") == "every arm accepted"
+        )
+        quoted.append((f"{config}: node calls, the optimisation (Table 16, every arm accepted)", f"{row['ratio']:.4f}"))
+    for label, cell in quoted:
+        line(label, cell, cell if cell in paragraph else f"NOT IN THE D.4 PARAGRAPH ({cell})")
+    largest_evaluation = max(
+        float(r["ratio"])
+        for config in CONFIGS
+        for r in evaluation[f"module sweeps per run — {config} — campaign_displaced"]["rows"]
+        if r["module"] != "total calls" and r.get("ratio") is not None
+    )
+    largest_optimisation = max(
+        float(r["pooled"])
+        for config in CONFIGS
+        for name, t in published.items()
+        if name.startswith(f"module sweeps per run — {config} — campaign_optimisation")
+        for r in t["rows"]
+        if r["module"] != "total calls" and r.get("pooled") is not None
+    )
+    line("largest per-module ratio, one evaluation (Table 9)", f"{largest_evaluation:.4f}", "1.0078")
+    line("largest per-module ratio, the optimisation (Table 17)", f"{largest_optimisation:.4f}", "0.8691")
 
     print(f"\n{_differs} line(s) DIFFER from the report's figure.")
     return 0 if _differs == 0 else 3
