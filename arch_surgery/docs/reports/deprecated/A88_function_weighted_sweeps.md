@@ -1,6 +1,6 @@
 # A88 (function-weighted-sweeps) — the per-node table leaves the main text; the per-module sweep tables weighted per function
 
-> **Document status** — **OPEN.** Task **A88 (function-weighted-sweeps)**, branch
+> **Document status** — **MERGED 2026-09-17** at `1477d0b4` (`--no-ff`); archived here at merge — folder position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A88_runs/` (latest resume-compatible). Orchestrator's assessment at the end; its findings are DSM validation V17 and issue I-28. Originally: **OPEN.** Task **A88 (function-weighted-sweeps)**, branch
 > `A88-function-weighted-sweeps` (worktree `.claude/worktrees/A88-function-weighted-sweeps`, seeded
 > with A87 (v3-grid-polish)'s records tree), base **`c04c93bb`**, tip **`f8147a00`** — **the last
 > commit that touches code or a generated document, and where every gate verdict this report cites

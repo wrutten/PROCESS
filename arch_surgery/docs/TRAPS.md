@@ -124,6 +124,8 @@ pin and validated at run time. A task proposing to read their `output/` instead 
 copy is a design error, not an optimisation. If a re-derivation is genuinely needed, warn that
 session before it runs.
 
+*Addition (A88 (function-weighted-sweeps), 2026-09-17):* the sibling's `output/` is **untracked** there (gitignored), so "at their committed state" can record only the sibling's HEAD plus each export's own digest — and the tokamak export was regenerated the very day A88 read it (their M125 split D8's `Constraints` row in two: 57 rows against the node map's 56). The committed copy in `harness/data/` is what the tables read; the drift is named in its `known_drift`, in no count.
+
 ## T10 — `process.__version__` reports the wrong commit in a frozen archive
 
 `_version.py` is written when a tree is archived and then frozen with it. So a pinned reference
@@ -240,3 +242,5 @@ Since A79 (report-captions) the report's tables are numbered `Table D.n` in emis
 *Addition (A86 (v3-tables-remainder), 2026-09-15):* a re-pointing must hold the change log out of its sweep. Appendix C's entries state the table set of the day they were written, so a number in one is a record, not a citation; A85's sweep rewrote five of them and A86 restored them. A citation sweep names the parts of the document it may touch, and the historical ones are not among them.
 
 *Addition (A87 (v3-grid-polish), 2026-09-15):* the renderer's own generated context paragraphs cite table numbers too, and a citation sweep over the hand-written text never reaches them — Appendix D.2's and D.3's group contexts named Tables 7, 8 and 9 for tables that had become 9, 18 and 13, and a committed check's docstring pointed at the wrong companion table. When the table set changes, the generated text is re-read as well as the hand-written; `--plan-tables check` resolves `Table D.n` and `F.n`, and a bare `Table n` inside generated text is not checked at all.
+
+*Addition (A88 (function-weighted-sweeps), 2026-09-17), a fourth kind:* the renderer's own dangling-reference scan read the change log, so a record of a past table set ("Tables 11–18") became a dangling reference the day the set shrank. The scan now holds the change log out, as the citation sweep does (A86's addition).
