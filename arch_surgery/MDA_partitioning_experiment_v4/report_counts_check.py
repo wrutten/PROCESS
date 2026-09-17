@@ -517,6 +517,63 @@ def main() -> int:
     line("largest per-module ratio, one evaluation (Table 9)", f"{largest_evaluation:.4f}", "1.0078")
     line("largest per-module ratio, the optimisation (Table 17)", f"{largest_optimisation:.4f}", "0.8691")
 
+    print("\n== 14. The function-weighted total under the alternative definition of a function (1 + submodels), for the A88 report; derived only, nothing in the report to compare ==")
+    # The committed function counts carry both definitions per module and per
+    # once-per-run node (functions = max(1, submodels); functions_alternative =
+    # 1 + submodels).  The tables weight by the first; this recomputes the six
+    # total ratios under the second from the same sweep cells, so the task
+    # report can say whether the definition matters.  Every number here is
+    # derived by this committed script; none is typed.
+    counts_file = json.loads((Path(campaign.data_dir) / "dsm_function_counts.json").read_text())
+    node_map = json.loads((Path(campaign.data_dir) / "dsm_node_map.json").read_text())
+    for config in CONFIGS:
+        block = counts_file["configurations"][config]
+        per_module = {m: b["functions_alternative"] for m, b in block["modules"].items()}
+        per_node = {n: spec["functions_alternative"] for n, spec in block["nodes"].items() if spec["one_row"]}
+        print(f"  {config}: per module (1 + submodels) {per_module}; once-per-run nodes "
+              f"{ {n: per_node[n] for n in sorted(per_node) if n in ('costs', 'vacuum', 'water_use', 'pulse')} }")
+        for phase, table_name, base, arm, pooled_key in (
+            ("one evaluation", f"module sweeps per run — {config} — campaign_displaced", None, "A2", "ratio"),
+            ("the optimisation", None, "B0", "B2", "pooled"),
+        ):
+            if table_name is None:
+                arms = "BR·B0·B1·B2" if config in PULSED else "BR·B0·B2"
+                table_name = f"module sweeps per run — {config} — campaign_optimisation · {arms}"
+                table = published[table_name]
+            else:
+                table = evaluation[table_name]
+            groups = [r["module"] for r in table["rows"] if r["module"] != "total calls"]
+            if base is None:
+                base = next(r["reference"] for r in table["rows"] if r["module"] != "total calls")
+            # the per-group mean sweeps per arm are the table's own cells; the
+            # pooled ratio of a weighted sum of means over paired runs equals
+            # the ratio of the weighted sums of the arm means only when both
+            # arms have the same runs, which holds on every configuration
+            # here (25 paired displaced runs; the seed set).  Re-derived from
+            # the rows' `<arm>_mean` cells under both attributions.
+            home = {}
+            own = 0
+            # v1: each once-per-run node's own functions out of its home module
+            per_run_nodes = json.loads((Path(campaign.data_dir) / f"defer_per_run_{config}.json").read_text())["post_solve_nodes"]
+            for node in per_run_nodes:
+                spec = block["nodes"][node]
+                module = node_map["nodes"][node]["module"]
+                home[module] = home.get(module, 0) + spec["functions_alternative"]
+                own += spec["functions_alternative"]
+            weights = {
+                "v1": {g: (own if g == "once per run" else per_module[g] - home.get(g, 0)) for g in groups},
+                "v0": {g: (0 if g == "once per run" else per_module[g]) for g in groups},
+            }
+            means = {r["module"]: r for r in table["rows"] if r["module"] != "total calls"}
+            both = []
+            for case in ("v1", "v0"):
+                left = sum(weights[case][g] * (means[g].get(f"{base}_mean") or 0.0) for g in groups)
+                right = sum(weights[case][g] * (means[g].get(f"{arm}_mean") or 0.0) for g in groups)
+                both.append(right / left if left else float("nan"))
+            print(f"    {phase:16} {arm}/{base} weighted 1 + submodels: [{min(both):.3f}, {max(both):.3f}]  "
+                  f"(the tables' max(1, submodels) bracket: {next(r[pooled_key] for r in table['rows'] if r['module'] == 'total calls')} in DSM rows; "
+                  f"see Tables D.23/D.24 for functions)")
+
     print(f"\n{_differs} line(s) DIFFER from the report's figure.")
     return 0 if _differs == 0 else 3
 
