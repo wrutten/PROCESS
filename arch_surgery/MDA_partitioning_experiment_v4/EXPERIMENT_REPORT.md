@@ -741,8 +741,10 @@ the arm cost more.*
 
 ### 4.1 Gates
 
-Every table below is read under a passed gate table: **30 gates PASS, 0 FAIL, 167 of 167 teeth
-tripped** (Table D.1). *(A86 (v3-tables-remainder): 163 before it; `tally_contracts` gained four,
+Every table below is read under a passed gate table: **30 gates PASS, 0 FAIL, 168 of 168 teeth
+tripped** (Table D.1). *(A88 (function-weighted-sweeps), 2026-09-17: 167 before it; `tally_contracts`
+gained one — a function-count file stating no count for a module, or giving a once-per-run node no
+DSM row of its own, is refused rather than weighted by a guess. A86 (v3-tables-remainder): 163 before it; `tally_contracts` gained four,
 one per construction added — a design vector with a value in a slot the name map does not name is
 refused, a variable one side alone carries is named and never compared, an audit residual file
 with no exclusion list of its own and a ruler it does not carry are both refused, and a figure of

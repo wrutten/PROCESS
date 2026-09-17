@@ -6,7 +6,7 @@ Task **A80 (report-accuracy-audit)**, pass 7 of its brief: *every ratio's
 population is the one its caption states*.  The report's denominators — 949 /
 921 / 28 records, 25 runs per arm per evaluation-phase source, the seed sets
 22 / 11 / 22, the crash taxonomy, the retried-seed counts, the 30 gates and
-167 teeth — are here re-derived from the records **through the harness**
+168 teeth — are here re-derived from the records **through the harness**
 (``records.read`` applies the arm-name translation of 2026-09-15, trap T16;
 ``tally.published_sources`` names the populations) and printed beside the
 number the report carries, with a ``same`` / ``DIFFERS`` mark.  Where the
@@ -333,13 +333,13 @@ def main() -> int:
     else:
         print(f"  could not read the audit pair from the verdict record (keys: {sorted(verdict)[:20]}) — read companion Table F.5's exit-audit columns instead")
 
-    print("\n== 10. The gate table: 30 gates, 167 teeth (§4.1, D.1) ==")
+    print("\n== 10. The gate table: 30 gates, 168 teeth (§4.1, D.1) ==")
     gate_table = json.loads((Path(campaign.runs_dir) / "gates" / "gate_table" / "measurements.json").read_text())
     line("registered gates", gate_table["n_gates"], 30)
     line("PASS", gate_table["n_pass"], 30)
     # 161 until task A85 (v3-table-formats) gave `tally_contracts` two more.
-    line("teeth declared", gate_table["n_teeth"], 167)
-    line("teeth tripped", gate_table["n_teeth_tripped"], 167)
+    line("teeth declared", gate_table["n_teeth"], 168)
+    line("teeth tripped", gate_table["n_teeth_tripped"], 168)
     nonzero = [(r["gate"], r["n_mismatched"]) for r in gate_table["rows"] if r.get("n_mismatched")]
     line("PASS rows with a nonzero mismatched count", nonzero, [("g0prime", 1)], "§4.1 names one such row; copy_identity's 7 are its recorded permitted-edit files")
     summed = [(r["gate"], r["denominators_summed"]) for r in gate_table["rows"] if len(r.get("denominators_summed") or []) > 1]
