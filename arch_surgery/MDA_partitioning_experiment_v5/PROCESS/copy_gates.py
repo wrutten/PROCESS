@@ -579,6 +579,26 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
                 "SCHEDULE_RESOLUTION"
             ),
         ),
+        PermittedEdit(
+            kind="hook moved",
+            name="the arrangement-method (prime) hook",
+            description=(
+                "the first-wall geometry prime moves from the head of every "
+                "sweep (_call_models_once) to the head of every evaluation "
+                "(_call_models_inner), before the first block of the schedule "
+                "or the first sweep of the flat loop: pre-processing of the "
+                "sequenced schedule, once per call_models.  The same two "
+                "statements under the same guard; the output path and the "
+                "exit audit, which call _call_models_once directly, no longer "
+                "prime.  ARRANGEMENT_METHOD_CALLS becomes the evaluation "
+                "count.  With the switch unset one boolean read moves (gate "
+                "G1); with it on every exit state is bit-identical to the "
+                "per-sweep form's and no other count changes (gates G2, GC)"
+            ),
+            task="A99 (v5-schedule-and-prime)",
+            was="the prime at the head of every sweep, about 9-15 stamped calls per evaluation",
+            now="the prime once per evaluation, before M1; n_prime_calls = evaluations",
+        ),
     ],
     "process/core/solver/solver_handler.py": [
         PermittedEdit(

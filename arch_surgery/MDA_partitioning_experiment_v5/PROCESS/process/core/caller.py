@@ -87,16 +87,22 @@ ARRANGEMENT_NODE_HEAD: tuple[str, ...] = _ARRANGEMENT_NODE_ORDERS[ARRANGEMENT_NO
 # a one-pass schedule it transmits exactly the entry displacement of the
 # pair, once, with A35's measured linear coefficients.
 #
-# The prime executes that one method at the head of every sweep, so ``Build``
-# reads this pass's value.  It is a driver choice about *when* an existing
-# model method runs -- the same family as the VP1 reorder but finer-grained
-# (a method, not a node); nothing under ``process/models/`` changes, and
-# ``FirstWall``'s own execution is untouched (the prime *duplicates* a
-# run-constant of two floating-point operations, identical bits each time).
+# The prime executes that one method **once per evaluation, before the first
+# block** -- pre-processing of the sequenced schedule (DR10, V5 list item 8,
+# task A99 (v5-schedule-and-prime); the user: "it is pre-processing before the
+# partitioned MDAs can start") -- so ``Build`` reads this evaluation's value.
+# V4 executed it at the head of every sweep instead (about 9-15 stamped calls
+# per evaluation); the values are the same bits each time, so the exit states
+# are identical (gate G2) and the stamped count becomes the evaluation count
+# (gate GC).  It is a driver choice about *when* an existing model method runs
+# -- the same family as the VP1 reorder but finer-grained (a method, not a
+# node); nothing under ``process/models/`` changes, and ``FirstWall``'s own
+# execution is untouched (the prime *duplicates* a run-constant of two
+# floating-point operations, identical bits each time).
 #
 # ``off`` is the default and is upstream behaviour exactly: the guard in
-# ``_call_models_once`` is one module-level boolean read per sweep and the
-# counter never moves (gate G1: byte identity with the switch unset).
+# ``_call_models_inner`` is one module-level boolean read per evaluation and
+# the counter never moves (gate G1: byte identity with the switch unset).
 #
 # The call is deliberately NOT routed through :meth:`Caller._node`: it is
 # not a node, it must add no counted node call, and every count comparison
@@ -117,7 +123,8 @@ if ARRANGEMENT_METHOD_NAME not in _ARRANGEMENT_METHODS:
         f"{tuple(_ARRANGEMENT_METHODS)} (or unset for {'off'!r})."
     )
 
-#: True when the first-wall geometry pair is primed at the sweep head.
+#: True when the first-wall geometry pair is primed once per evaluation,
+#: before the first block.
 ARRANGEMENT_METHOD_FW_GEOMETRY: bool = _ARRANGEMENT_METHODS[ARRANGEMENT_METHOD_NAME]
 
 #: Invocation counter the runners read (the NODE_CALLS pattern: a one-cell
@@ -910,8 +917,8 @@ EMPTY_BLOCK_VISITS: dict[str, int] = {}
 #: Sweeps of the dispatch body spent inside those empty visits.  A block the
 #: schedule visits with no members costs **no** sweep; a block whose members
 #: are all skipped at the call site costs a full walk of the dispatch body --
-#: the design-vector injection at its head, the switch dispatch through every
-#: call site, and the arrangement method if it is on -- executing no model.
+#: the design-vector injection at its head and the switch dispatch through
+#: every call site -- executing no model.
 #: That is the cost the empty visit actually has, and it is the number a
 #: per-sweep-overhead table needs; the visit count alone would overstate it.
 EMPTY_BLOCK_SWEEPS: dict[str, int] = {}
@@ -1858,6 +1865,22 @@ class Caller:
         without wrapping the body in an indent-changing ``try``.  No behaviour
         of its own.
         """
+        # VP6 (D19, task A40; DR10, V5 list item 8, task A99): the
+        # arrangement's method-level move is PRE-PROCESSING of the evaluation.
+        # The first-wall geometry pair is a run-constant of two input-file
+        # values; priming it once here, before the first block of the schedule
+        # (or the first sweep of the flat loop), is what lets Build -- which
+        # the partitioned schedule runs before FirstWall -- read this
+        # evaluation's value rather than the previous one's.  V4 primed at the
+        # head of every sweep; the bits are the same each time, so the exit
+        # states are unchanged (gate G2) and the stamped count becomes the
+        # evaluation count (gate GC).  Not a node, not routed through _node,
+        # not counted in NODE_CALLS -- stamped via ARRANGEMENT_METHOD_CALLS.
+        # With the switch unset this is one boolean read (gate G1).
+        if ARRANGEMENT_METHOD_FW_GEOMETRY:
+            ARRANGEMENT_METHOD_CALLS[0] += 1
+            self.models.fw.set_fw_geometry()
+
         # VP2c: resolve (and on first use validate) the post-solve exclusion
         # set.  With the switch off ``_defer_per_run`` stays ``None`` and nothing
         # below this line differs.
@@ -2158,19 +2181,12 @@ class Caller:
             self.models.ife.run()
             return
 
-        # VP6 (D19, task A40): prime the first-wall geometry pair at the
-        # head of the sweep, so Build (which the schedule runs before
-        # FirstWall) reads this pass's value instead of the previous
-        # pass's.  Not a node, not routed through _node, not counted in
-        # NODE_CALLS -- stamped via ARRANGEMENT_METHOD_CALLS (see the module-level
-        # comment).  Because it sits here, it is on every path that walks
-        # the model sequence: the flat loop, every VP4 block sweep
-        # (Caller._sweep_block runs blocks through this method), the
-        # output phase and the exit audit (harmless, idempotent -- the
-        # write is the same run-constant every time).
-        if ARRANGEMENT_METHOD_FW_GEOMETRY:
-            ARRANGEMENT_METHOD_CALLS[0] += 1
-            self.models.fw.set_fw_geometry()
+        # VP6 (D19, task A40): the first-wall geometry prime used to sit
+        # here, at the head of every sweep; DR10 (A99) moved it to the head
+        # of ``_call_models_inner`` -- once per evaluation, before the first
+        # block.  The output path and the exit audit call this method
+        # directly and no longer prime: FirstWall has run by then and the
+        # pair holds the same bits.
 
         # Tokamak calls
         # Plasma geometry model, machine build model (radial build) and

@@ -92,6 +92,7 @@ _READS_BY_NODE = "the census instrument reports each node's read set by name, be
 _PREDICATE_RULER = "switch PROCESS_ARCH_PREDICATE: which denominator the coupling-state convergence test scales a step by -- the measured scale alone, or that scale as a floor under the current magnitude"
 _ATTEMPTS = "DR7 stamps: what each attempt of the optimiser's retry ladder cost -- node calls and sweeps read at every attempt boundary, so the run's solve-phase totals decompose per attempt"
 _LADDER = "DR7: the retry ladder's rungs named beside the branches that implement them, and each of its four calls to the optimiser bracketed by a boundary stamp"
+_PRIME_ONCE = "DR10 (A99): the arrangement-method prime executed once per evaluation, before the first block, instead of at the head of every sweep"
 _SCHEDULE_ONCE = "DR9 (A99): the block schedule and the per-call deferral sets resolved once per run, keyed on the figure of merit, and stamped once (SCHEDULE_RESOLUTION); the per-call re-derivation of issue I-30 is gone"
 
 ANNOTATIONS: list[Annotation] = [
@@ -228,6 +229,8 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/caller.py", "resolve_schedule", _SCHEDULE_ONCE),
     Annotation("process/core/caller.py", "SCHEDULE_RESOLUTION", _SCHEDULE_ONCE),
     Annotation("process/core/caller.py", "_SCHEDULE_CACHE", _SCHEDULE_ONCE),
+    # --- A99: the prime once per evaluation (DR10) -------------------------
+    Annotation("process/core/caller.py", "DR10", _PRIME_ONCE),
 ]
 
 #: One paragraph per changed driver file, for a reader who will not read the

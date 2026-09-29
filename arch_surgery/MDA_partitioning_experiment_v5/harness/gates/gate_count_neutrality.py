@@ -102,7 +102,7 @@ LABEL_VARIABLE = "HARNESS_COUNT_NEUTRALITY_LABEL"
 #: Committed with the driver change it straddles.  ``("copy", "copy")`` is the
 #: first press, at the copy commit before any change: one side, compared with
 #: itself, a determinism result.
-STRADDLE: tuple[str, str] = ("copy", "DR9")
+STRADDLE: tuple[str, str] = ("DR9", "DR10")
 
 #: What each labelled side declares about ``n_arrangement_method_calls``,
 #: keyed by the **after** label.  ``identical``: compared like every other
@@ -114,6 +114,9 @@ PRIME_CALLS_DECLARATION: dict[str, str] = {
     # DR9 (the schedule and the deferral sets resolved once per run) declares
     # no change to any count.
     "DR9": "identical",
+    # DR10 (the prime once per evaluation, before M1) declares that the prime
+    # count becomes the evaluation count; every other count is unchanged.
+    "DR10": "once_per_evaluation",
 }
 
 #: The evaluation phase's seed: the first displaced one, as gate G6 pairs the

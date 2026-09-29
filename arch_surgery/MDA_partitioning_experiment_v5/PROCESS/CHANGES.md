@@ -811,7 +811,7 @@ Relative to `c0ae5b28` this file also carries constraint 93 (§3.5, inherited).
 The docstring named a retired switch; it names the one that replaced it. Nothing the constraint
 computes changes.
 
-### 4.5 `process/core/caller.py` — 15 recorded edits
+### 4.5 `process/core/caller.py` — 16 recorded edits
 
 Relative to `c0ae5b28` this file also carries everything in §3.2 (inherited).
 
@@ -1326,6 +1326,63 @@ runs only under a block schedule, the tails only under a deferral): gate G1. On 
 matrix composes, every count is identical to the digit and every coupling-state file bit-identical
 before and after the change: gate GC (the A99 report §2). No float the run computes with is read or
 written by the resolver; the digests are of files, taken once.
+
+#### 4.5.15 The arrangement-method (prime) hook — hook moved (DR10)
+
+*Recorded edit kind: hook moved. Made by task A99 (v5-schedule-and-prime), driver change DR10
+(V5 list item 8).*
+
+The prime leaves the head of every sweep:
+
+```python
+ def _call_models_once(self, xc):
+     ...
+-        # VP6 (D19, task A40): prime the first-wall geometry pair at the
+-        # head of the sweep, ...
+-        if ARRANGEMENT_METHOD_FW_GEOMETRY:
+-            ARRANGEMENT_METHOD_CALLS[0] += 1
+-            self.models.fw.set_fw_geometry()
++        # VP6 (D19, task A40): the first-wall geometry prime used to sit
++        # here, at the head of every sweep; DR10 (A99) moved it to the head
++        # of ``_call_models_inner`` -- once per evaluation, before the first
++        # block. ...
+
+         # Tokamak calls
+```
+
+and arrives at the head of the evaluation, before the block schedule (or the flat loop) starts:
+
+```python
+ def _call_models_inner(self, xc, m):
+     """..."""
++        # VP6 (D19, task A40; DR10, V5 list item 8, task A99): the
++        # arrangement's method-level move is PRE-PROCESSING of the evaluation.
++        # ...
++        if ARRANGEMENT_METHOD_FW_GEOMETRY:
++            ARRANGEMENT_METHOD_CALLS[0] += 1
++            self.models.fw.set_fw_geometry()
++
+         # VP2c: resolve (and on first use validate) the post-solve exclusion
+```
+
+Three comments follow the move (the module-level VP6 comment, the readback's one-line comment, and
+the `EMPTY_BLOCK_SWEEPS` comment that listed the prime among an empty visit's costs).
+
+**Why.** The method depends only on user inputs — a run-constant of two input-file values
+(`fw.py:347-352` at the base commit). V4 executed it at the head of every block sweep (about 9 calls
+per evaluation in the optimisation phase, 13–15 in the evaluation phase; stamped, never counted, D19)
+because that was the simplest way to guarantee `build` reads this pass's value. The user: *"I need it
+to make sense from an architectural perspective. The prime was needed to fully decouple the first
+iteration. It is pre-processing before the partitioned MDAs can start."* Once per evaluation, before
+M1, is that pre-processing; the paper's caption ("executing the FirstWall subfunction" before the
+partitioned MDAs) then reads as written. The output path and the exit audit call `_call_models_once`
+directly and no longer prime: `FirstWall` has run by then and the pair holds the same bits.
+
+**Driver, not model.** With the switch unset one boolean read moves from the sweep head to the
+evaluation head (gate G1). With it on, the exit states of GC's job set are bit-identical to the
+per-sweep form's and every count but `n_arrangement_method_calls` is identical to the digit (gate GC,
+rule `once_per_evaluation`); the prime-on / prime-off exit states from the reference snapshot are
+bit-identical (gate G2). No model file changes.
 
 ### 4.6 `process/core/solver/solver_handler.py` — 1 recorded edit
 
