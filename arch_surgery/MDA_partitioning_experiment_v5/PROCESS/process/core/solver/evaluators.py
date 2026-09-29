@@ -1,0 +1,171 @@
+"""Module to call models to evaluate function and gradient functions"""
+
+import logging
+import math
+
+import numpy as np
+
+from process.core import _idf_probe
+from process.core.caller import Caller
+from process.core.model import DataStructure
+from process.core.solver import module_solve
+
+logger = logging.getLogger(__name__)
+
+
+class Evaluators:
+    """Calls models to evaluate function and gradient functions."""
+
+    def __init__(self, models, data: DataStructure, _x: np.ndarray):
+        """Instantiate Caller with model objects.
+
+        Parameters
+        ----------
+        models :
+            Physics and engineering model objects
+        data :
+            Data structure object for providing constraint data to the Caller
+        _x :
+            Optimisation parameters
+        """
+        self.caller = Caller(models, data)
+        self.data = data
+
+    def fcnvmc1(self, _n, m, xv, ifail):
+        """Function evaluator for VMCON.
+
+        This routine is the function evaluator for the VMCON
+        maximisation/minimisation routine.
+
+        It calculates the objective and constraint functions at the
+        n-dimensional point of interest xv.
+        Note that the equality constraints must precede the inequality
+        constraints in conf.
+
+        Parameters
+        ----------
+        _n : int
+            number of variables
+        m : int
+            number of constraints
+        xv : numpy.array
+            scaled variable values, length n
+        ifail : int
+            ifail error flag
+
+        Returns
+        -------
+        tuple
+            tuple containing: objfn objective function, conf(m) constraint
+            functions
+        """
+        if _idf_probe.ENABLED:
+            _idf_probe.set_phase("fn")
+
+        # Output array for constraint functions
+        conf = np.zeros(m, dtype=np.float64, order="F")
+
+        # Evaluate machine parameters at xv
+        if module_solve.BLOCK_TRACE_ENABLED:
+            module_solve.EVALUATION_KIND = ["function"]
+        objf, conf = self.caller.call_models(xv, m)
+
+        summ = 0.0
+        for i in range(m):
+            summ += conf[i] ** 2
+
+        sqsumconfsq = math.sqrt(summ)
+        logger.debug("Key evaluator values:")
+        logger.debug(f"{self.data.numerics.n_solver_iterations = }")
+        logger.debug(f"{(1 - (ifail % 7)) - 1 = }")
+        logger.debug(f"{(self.data.numerics.n_solver_iterations % 2) - 1 = }")
+        logger.debug(f"{self.data.physics.temp_plasma_electron_vol_avg_kev = }")
+        logger.debug(f"{self.data.costs.coe = }")
+        logger.debug(f"{self.data.physics.rmajor = }")
+        logger.debug(f"{self.data.physics.p_fusion_total_mw = }")
+        logger.debug(f"{self.data.physics.b_plasma_toroidal_on_axis = }")
+        logger.debug(f"{self.data.times.t_plant_pulse_burn = }")
+        logger.debug("%s", sqsumconfsq)
+        logger.debug("%s", xv)
+
+        return objf, conf
+
+    def fcnvmc2(self, n, m, xv, lcnorm):
+        """Gradient function evaluator for VMCON.
+
+        This routine is the gradient function evaluator for the VMCON
+        maximisation/minimisation routine. It calculates the gradients of the
+        objective and constraint functions at the n-dimensional point of interest
+        xv. Note that the equality constraints must precede the inequality
+        constraints in conf. The constraint gradients or normals are returned as the
+        columns of cnorm.
+
+        Parameters
+        ----------
+        n : int
+            number of variables
+        m : int
+            number of constraints
+        xv : numpy.array
+            scaled variable names, size n
+        lcnorm : int
+            number of columns in cnorm
+
+        Returns
+        -------
+        tuple
+            fgrdm (numpy.array (n)) gradient of the objective function
+            cnorm (numpy.array (lcnorm, m)) constraint gradients, i.e. cnorm[i, j] is
+            the derivative of constraint j w.r.t. variable i
+        """
+        if _idf_probe.ENABLED:
+            _idf_probe.set_phase("grad")
+
+        xfor = np.zeros(n, dtype=np.float64, order="F")
+        xbac = np.zeros(n, dtype=np.float64, order="F")
+        cfor = np.zeros(m, dtype=np.float64, order="F")
+        cbac = np.zeros(m, dtype=np.float64, order="F")
+        fgrd = np.zeros(n, dtype=np.float64, order="F")
+        cnorm = np.zeros((lcnorm, m), dtype=np.float64, order="F")
+
+        ffor = 0.0
+        fbac = 0.0
+
+        for i in range(n):
+            for j in range(n):
+                xfor[j] = xv[j]
+                xbac[j] = xv[j]
+                if i == j:
+                    xfor[i] = xv[j] * (1.0 + self.data.numerics.epsfcn)
+                    xbac[i] = xv[j] * (1.0 - self.data.numerics.epsfcn)
+
+            # Evaluate at (x+dx)
+            if module_solve.BLOCK_TRACE_ENABLED:
+                module_solve.EVALUATION_KIND = ["gradient", i, 1]
+            ffor, cfor = self.caller.call_models(xfor, m)
+
+            # Evaluate at (x-dx)
+            if module_solve.BLOCK_TRACE_ENABLED:
+                module_solve.EVALUATION_KIND = ["gradient", i, -1]
+            fbac, cbac = self.caller.call_models(xbac, m)
+
+            # Calculate finite difference gradients
+            fgrd[i] = (ffor - fbac) / (xfor[i] - xbac[i])
+
+            for j in range(m):
+                cnorm[i, j] = (cfor[j] - cbac[j]) / (xfor[i] - xbac[i])
+
+        # Additional evaluation call to ensure that final result is consistent
+        # with the correct iteration variable values.
+        # If this is not done, the value of the nth (i.e. final) iteration
+        # variable in the solution vector is inconsistent with its value
+        # shown elsewhere in the output file, which is a factor (1-epsfcn)
+        # smaller (i.e. its xbac value above).
+        if _idf_probe.ENABLED:
+            _idf_probe.set_phase("grad_reconcile")
+
+        if module_solve.BLOCK_TRACE_ENABLED:
+            module_solve.EVALUATION_KIND = ["reconcile"]
+        self.caller.call_models(xv, m)
+
+        return fgrd, cnorm

@@ -1,0 +1,482 @@
+"""Module for neutron shield calculations"""
+
+import logging
+
+from process.core import constants
+from process.core import process_output as po
+from process.core.model import Model
+from process.models.build import FwBlktVVShape
+from process.models.engineering.ivc_functions import (
+    dshellarea,
+    dshellvol,
+    eshellarea,
+    eshellvol,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class Shield(Model):
+    """Class containing shield calculations
+
+    This class contains routines for calculating the
+    parameters of the shield for a fusion power plant.
+    """
+
+    def __init__(self):
+        self.outfile = constants.NOUT
+
+    def output(self):
+        """Write the results to the main output file (OUT.DAT)."""
+        self.output_shld_areas_and_volumes()
+
+    def run(self):
+        """Run shield calculations."""
+        self.data.blanket.dz_shld_half = self.calculate_shield_half_height(
+            z_plasma_xpoint_lower=self.data.build.z_plasma_xpoint_lower,
+            dz_xpoint_divertor=self.data.build.dz_xpoint_divertor,
+            dz_divertor=self.data.divertor.dz_divertor,
+            n_divertors=self.data.divertor.n_divertors,
+            z_plasma_xpoint_upper=self.data.build.z_plasma_xpoint_upper,
+            dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+            dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+            dr_fw_inboard=self.data.build.dr_fw_inboard,
+            dr_fw_outboard=self.data.build.dr_fw_outboard,
+            dz_blkt_upper=self.data.build.dz_blkt_upper,
+        )
+        # D-shaped blanket and shield
+        if (
+            self.data.physics.itart == 1
+            or self.data.fwbs.i_fw_blkt_vv_shape == FwBlktVVShape.D_SHAPED
+        ):
+            (
+                self.data.build.a_shld_inboard_surface,
+                self.data.build.a_shld_outboard_surface,
+                self.data.build.a_shld_total_surface,
+            ) = self.calculate_dshaped_shield_areas(
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                dr_fw_inboard=self.data.build.dr_fw_inboard,
+                dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+                rminor=self.data.physics.rminor,
+                dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+                dr_fw_outboard=self.data.build.dr_fw_outboard,
+                dr_blkt_inboard=self.data.build.dr_blkt_inboard,
+                dr_blkt_outboard=self.data.build.dr_blkt_outboard,
+                dz_shld_half=self.data.blanket.dz_shld_half,
+            )
+
+            (
+                self.data.blanket.vol_shld_inboard,
+                self.data.blanket.vol_shld_outboard,
+                self.data.fwbs.vol_shld_total,
+            ) = self.calculate_dshaped_shield_volumes(
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                dr_fw_inboard=self.data.build.dr_fw_inboard,
+                dr_fw_plasma_gap_inboard=self.data.build.dr_fw_plasma_gap_inboard,
+                rminor=self.data.physics.rminor,
+                dr_fw_plasma_gap_outboard=self.data.build.dr_fw_plasma_gap_outboard,
+                dr_fw_outboard=self.data.build.dr_fw_outboard,
+                dr_blkt_inboard=self.data.build.dr_blkt_inboard,
+                dr_blkt_outboard=self.data.build.dr_blkt_outboard,
+                dz_shld_half=self.data.blanket.dz_shld_half,
+                dr_shld_outboard=self.data.build.dr_shld_outboard,
+                dz_shld_upper=self.data.build.dz_shld_upper,
+            )
+
+        else:
+            (
+                self.data.build.a_shld_inboard_surface,
+                self.data.build.a_shld_outboard_surface,
+                self.data.build.a_shld_total_surface,
+            ) = self.calculate_elliptical_shield_areas(
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                r_shld_outboard_outer=self.data.build.r_shld_outboard_outer,
+                rmajor=self.data.physics.rmajor,
+                triang=self.data.physics.triang,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                rminor=self.data.physics.rminor,
+                dz_shld_half=self.data.blanket.dz_shld_half,
+                dr_shld_outboard=self.data.build.dr_shld_outboard,
+            )
+
+            (
+                self.data.blanket.vol_shld_inboard,
+                self.data.blanket.vol_shld_outboard,
+                self.data.fwbs.vol_shld_total,
+            ) = self.calculate_elliptical_shield_volumes(
+                r_shld_inboard_inner=self.data.build.r_shld_inboard_inner,
+                r_shld_outboard_outer=self.data.build.r_shld_outboard_outer,
+                rmajor=self.data.physics.rmajor,
+                triang=self.data.physics.triang,
+                dr_shld_inboard=self.data.build.dr_shld_inboard,
+                rminor=self.data.physics.rminor,
+                dz_shld_half=self.data.blanket.dz_shld_half,
+                dr_shld_outboard=self.data.build.dr_shld_outboard,
+                dz_shld_upper=self.data.build.dz_shld_upper,
+            )
+
+        # Apply shield coverage factors
+        self.data.build.a_shld_inboard_surface = (
+            self.data.fwbs.fvolsi * self.data.build.a_shld_inboard_surface
+        )
+        self.data.build.a_shld_outboard_surface = (
+            self.data.fwbs.fvolso * self.data.build.a_shld_outboard_surface
+        )
+        self.data.build.a_shld_total_surface = (
+            self.data.build.a_shld_inboard_surface
+            + self.data.build.a_shld_outboard_surface
+        )
+
+        self.data.blanket.vol_shld_inboard = (
+            self.data.fwbs.fvolsi * self.data.blanket.vol_shld_inboard
+        )
+        self.data.blanket.vol_shld_outboard = (
+            self.data.fwbs.fvolso * self.data.blanket.vol_shld_outboard
+        )
+        self.data.fwbs.vol_shld_total = (
+            self.data.blanket.vol_shld_inboard + self.data.blanket.vol_shld_outboard
+        )
+
+    @staticmethod
+    def calculate_shield_half_height(
+        z_plasma_xpoint_lower: float,
+        dz_xpoint_divertor: float,
+        dz_divertor: float,
+        n_divertors: int,
+        z_plasma_xpoint_upper: float,
+        dr_fw_plasma_gap_inboard: float,
+        dr_fw_plasma_gap_outboard: float,
+        dr_fw_inboard: float,
+        dr_fw_outboard: float,
+        dz_blkt_upper: float,
+    ) -> float:
+        """Calculate shield half-height.
+
+        Parameters
+        ----------
+        z_plasma_xpoint_lower:
+
+        dz_xpoint_divertor:
+
+        dz_divertor:
+
+        n_divertors: int :
+
+        z_plasma_xpoint_upper:
+
+        dr_fw_plasma_gap_inboard:
+
+        dr_fw_plasma_gap_outboard:
+
+        dr_fw_inboard:
+
+        dr_fw_outboard:
+
+        dz_blkt_upper:
+
+        """
+        z_bottom = z_plasma_xpoint_lower + dz_xpoint_divertor + dz_divertor
+
+        # Calculate component internal upper half-height (m)
+        # If a double null machine then symmetric
+        if n_divertors == 2:
+            z_top = z_bottom
+        else:
+            z_top = z_plasma_xpoint_upper + 0.5 * (
+                dr_fw_plasma_gap_inboard
+                + dr_fw_plasma_gap_outboard
+                + dr_fw_inboard
+                + dr_fw_outboard
+            )
+
+            z_top += dz_blkt_upper
+
+        # Average of top and bottom (m)
+        return 0.5 * (z_top + z_bottom)
+
+    @staticmethod
+    def calculate_dshaped_shield_volumes(
+        r_shld_inboard_inner: float,
+        dr_shld_inboard: float,
+        dr_fw_inboard: float,
+        dr_fw_plasma_gap_inboard: float,
+        rminor: float,
+        dr_fw_plasma_gap_outboard: float,
+        dr_fw_outboard: float,
+        dr_blkt_inboard: float,
+        dr_blkt_outboard: float,
+        dz_shld_half: float,
+        dr_shld_outboard: float,
+        dz_shld_upper: float,
+    ) -> tuple[float, float, float]:
+        """Calculate volumes of D-shaped shield segments.
+
+        Parameters
+        ----------
+        r_shld_inboard_inner:
+
+        dr_shld_inboard:
+
+        dr_fw_inboard:
+
+        dr_fw_plasma_gap_inboard:
+
+        rminor:
+
+        dr_fw_plasma_gap_outboard:
+
+        dr_fw_outboard:
+
+        dr_blkt_inboard:
+
+        dr_blkt_outboard:
+
+        dz_shld_half:
+
+        dr_shld_outboard:
+
+        dz_shld_upper:
+
+        """
+        r_1 = r_shld_inboard_inner + dr_shld_inboard
+        r_2 = (
+            dr_fw_inboard
+            + dr_fw_plasma_gap_inboard
+            + 2.0 * rminor
+            + dr_fw_plasma_gap_outboard
+            + dr_fw_outboard
+        )
+
+        r_2 = dr_blkt_inboard + r_2 + dr_blkt_outboard
+
+        (
+            vol_shld_inboard,
+            vol_shld_outboard,
+            vol_shld_total,
+        ) = dshellvol(
+            rmajor=r_1,
+            rminor=r_2,
+            zminor=dz_shld_half,
+            drin=dr_shld_inboard,
+            drout=dr_shld_outboard,
+            dz=dz_shld_upper,
+        )
+
+        return vol_shld_inboard, vol_shld_outboard, vol_shld_total
+
+    @staticmethod
+    def calculate_dshaped_shield_areas(
+        r_shld_inboard_inner: float,
+        dr_shld_inboard: float,
+        dr_fw_inboard: float,
+        dr_fw_plasma_gap_inboard: float,
+        rminor: float,
+        dr_fw_plasma_gap_outboard: float,
+        dr_fw_outboard: float,
+        dr_blkt_inboard: float,
+        dr_blkt_outboard: float,
+        dz_shld_half: float,
+    ) -> tuple[float, float, float]:
+        """Calculate areas of D-shaped shield segments.
+
+        Parameters
+        ----------
+        r_shld_inboard_inner:
+
+        dr_shld_inboard:
+
+        dr_fw_inboard:
+
+        dr_fw_plasma_gap_inboard:
+
+        rminor:
+
+        dr_fw_plasma_gap_outboard:
+
+        dr_fw_outboard:
+
+        dr_blkt_inboard:
+
+        dr_blkt_outboard:
+
+        dz_shld_half:
+
+        """
+        r_1 = r_shld_inboard_inner + dr_shld_inboard
+        r_2 = (
+            dr_fw_inboard
+            + dr_fw_plasma_gap_inboard
+            + 2.0 * rminor
+            + dr_fw_plasma_gap_outboard
+            + dr_fw_outboard
+        )
+
+        r_2 = dr_blkt_inboard + r_2 + dr_blkt_outboard
+
+        (
+            a_shld_inboard_surface,
+            a_shld_outboard_surface,
+            a_shld_total_surface,
+        ) = dshellarea(rmajor=r_1, rminor=r_2, zminor=dz_shld_half)
+
+        return a_shld_inboard_surface, a_shld_outboard_surface, a_shld_total_surface
+
+    @staticmethod
+    def calculate_elliptical_shield_volumes(
+        r_shld_inboard_inner: float,
+        r_shld_outboard_outer: float,
+        rmajor: float,
+        triang: float,
+        dr_shld_inboard: float,
+        rminor: float,
+        dz_shld_half: float,
+        dr_shld_outboard: float,
+        dz_shld_upper: float,
+    ) -> tuple[float, float, float]:
+        """Calculate volumes of elliptical shield segments.
+
+        Parameters
+        ----------
+        r_shld_inboard_inner:
+
+        r_shld_outboard_outer:
+
+        rmajor:
+
+        triang:
+
+        dr_shld_inboard:
+
+        rminor:
+
+        dz_shld_half:
+
+        dr_shld_outboard:
+
+        dz_shld_upper:
+
+        """
+        # Major radius to centre of inboard and outboard ellipses (m)
+        # (coincident in radius with top of plasma)
+        r_1 = rmajor - rminor * triang
+        r_2 = r_1 - r_shld_inboard_inner
+
+        r_2 -= dr_shld_inboard
+
+        r_3 = r_shld_outboard_outer - r_1
+        r_3 -= dr_shld_outboard
+
+        (
+            vol_shld_inboard,
+            vol_shld_outboard,
+            vol_shld_total,
+        ) = eshellvol(
+            rshell=r_1,
+            rmini=r_2,
+            rmino=r_3,
+            zminor=dz_shld_half,
+            drin=dr_shld_inboard,
+            drout=dr_shld_outboard,
+            dz=dz_shld_upper,
+        )
+
+        return vol_shld_inboard, vol_shld_outboard, vol_shld_total
+
+    @staticmethod
+    def calculate_elliptical_shield_areas(
+        r_shld_inboard_inner: float,
+        r_shld_outboard_outer: float,
+        rmajor: float,
+        triang: float,
+        dr_shld_inboard: float,
+        rminor: float,
+        dz_shld_half: float,
+        dr_shld_outboard: float,
+    ) -> tuple[float, float, float]:
+        """Calculate areas of elliptical shield segments.
+
+        Parameters
+        ----------
+        r_shld_inboard_inner:
+
+        r_shld_outboard_outer:
+
+        rmajor:
+
+        triang:
+
+        dr_shld_inboard:
+
+        rminor:
+
+        dz_shld_half:
+
+        dr_shld_outboard:
+
+        """
+        # Major radius to centre of inboard and outboard ellipses (m)
+        # (coincident in radius with top of plasma)
+        r_1 = rmajor - rminor * triang
+        r_2 = r_1 - r_shld_inboard_inner
+
+        r_2 -= dr_shld_inboard
+
+        r_3 = r_shld_outboard_outer - r_1
+        r_3 -= dr_shld_outboard
+
+        (
+            a_shld_inboard_surface,
+            a_shld_outboard_surface,
+            a_shld_total_surface,
+        ) = eshellarea(rshell=r_1, rmini=r_2, rmino=r_3, zminor=dz_shld_half)
+
+        return a_shld_inboard_surface, a_shld_outboard_surface, a_shld_total_surface
+
+    def output_shld_areas_and_volumes(self):
+        """Output shield areas and volumes to log."""
+        po.oheadr(self.outfile, "Shield Areas and Volumes")
+
+        po.ovarre(
+            self.outfile,
+            "Area of inboard shield surface (m^2)",
+            "(a_shld_inboard_surface)",
+            self.data.build.a_shld_inboard_surface,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Area of outboard shield surface (m^2)",
+            "(a_shld_outboard_surface)",
+            self.data.build.a_shld_outboard_surface,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Total area of shield surface (m^2)",
+            "(a_shld_total_surface)",
+            self.data.build.a_shld_total_surface,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Volume of inboard shield (m^3)",
+            "(vol_shld_inboard)",
+            self.data.blanket.vol_shld_inboard,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Volume of outboard shield (m^3)",
+            "(vol_shld_outboard)",
+            self.data.blanket.vol_shld_outboard,
+            "OP ",
+        )
+        po.ovarre(
+            self.outfile,
+            "Total volume of shield (m^3)",
+            "(vol_shld_total)",
+            self.data.fwbs.vol_shld_total,
+            "OP ",
+        )
