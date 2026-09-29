@@ -236,7 +236,7 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
     Each literal lives in the module that implements the gate, as that
     module's ``gate(campaign)``; this function only collects them.
     """
-    from . import gate_audit, gate_composition, gate_count_neutrality, gate_entry, gate_prime, gate_records, gate_test_set
+    from . import gate_composition, gate_count_neutrality, gate_entry, gate_prime, gate_records, gate_test_set
 
     return {
         "reproduction": _run_once("reproduction", gates_mod.reproduction_gate(campaign), campaign),
@@ -244,7 +244,12 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
         "switch_neutrality": gate_neutrality.gate(campaign),
         "prime_map": gate_prime.prime_map_gate(campaign),
         "count_neutrality": gate_count_neutrality.gate(campaign),
-        "audit_restriction": gate_audit.audit_restriction_gate(campaign),
+        # G4 (audit_restriction) retired under decision D36 by A101
+        # (v5-timers-and-once): with the deferred set executed after
+        # convergence (item 5) the whole-state and restricted statistics
+        # agree on the gate job set (18 of 18 records, three configurations)
+        # and the restriction has nothing left to be blind to; its last
+        # verdict is kept under runs/gates/audit_restriction/.
         "switch_composition": gate_composition.switch_composition_gate(campaign),
         "entry_and_warm": gate_entry.entry_and_warm_gate(campaign),
         "record_completeness": gate_records.record_completeness_gate(campaign),
@@ -733,7 +738,6 @@ GATE_ORDER: tuple[str, ...] = (
     "record_completeness",
     "count_neutrality",
     "prime_map",
-    "audit_restriction",
     "entry_and_warm",
     # GT shares G6's pairing runs and makes its own drops; after G6.
     "test_set",

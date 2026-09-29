@@ -93,7 +93,7 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
     read from a record: the identity is over the path, so no run is needed.
     """
     from . import gate_composition, gate_entry, gate_prime
-    from . import gate_audit, gate_output_path, gate_records, gate_written_file
+    from . import gate_output_path, gate_records, gate_test_set, gate_written_file
     from . import reproduction as reproduction_mod
     from .gate_neutrality import NEUTRAL_AUDIT_POSITION, NEUTRAL_GATE_NAME, neutrality_run_dir
 
@@ -115,32 +115,39 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
         "b": reproduction_mod.entry_reference_job(gate_records.fewest_variables_configuration(campaign)),
         "must": "differ",
     })
-    # G7: the forced-unconverged optimisation against G4's optimisation of the same arm.
+    # G7: the forced-unconverged optimisation against G5's matrix-composed
+    # optimisation of the same arm (gate G4, whose optimisation this pair
+    # used to read, retired under decision D36 by A101 (v5-timers-and-once)).
     forced = gate_records.forced_job(campaign)
-    g4_same = next(
-        (j for j in gate_audit.optimisation_jobs(campaign) if j.config.name == forced.config.name),
-        None,
-    )
-    if g4_same is not None and forced.arm == g4_same.arm:
-        pairs.append({"class": "G7 forced-unconverged optimisation vs G4's optimisation (force_maxcal, run kind)", "a": forced, "b": g4_same, "must": "differ"})
+    g5_from_matrix, _by_switch = gate_composition.composition_jobs(campaign, forced.config)
+    if forced.arm == g5_from_matrix.arm:
+        pairs.append({"class": "G7 forced-unconverged optimisation vs G5's optimisation (force_maxcal, run kind)", "a": forced, "b": g5_from_matrix, "must": "differ"})
 
-    # G4: two doctored entries are two jobs (the entry state path).
-    entries = pool_mod.pool_root(campaign).parent / "audit_restriction" / config.name / "_entries"
-    doctored_a = gate_audit._job(campaign, config, "in_loop", entries / "in_loop.json", None)
-    doctored_b = gate_audit._job(campaign, config, "per_run_x", entries / "per_run_x.json", None)
-    baseline = gate_audit._job(campaign, config, "baseline", Path(reference["snapshot"]), None)
-    pairs.append({"class": "G4 two doctored entries (entry state)", "a": doctored_a, "b": doctored_b, "must": "differ"})
-    pairs.append({"class": "G4 doctored entry vs the undoctored baseline (entry state)", "a": doctored_a, "b": baseline, "must": "differ"})
+    # Two entries are two jobs (the entry state path): the class gate G4's
+    # doctored entries used to show, kept on two named entry files so the
+    # identity field is still checked after G4's retirement.
+    entries = pool_mod.pool_root(campaign).parent / "resume_identity" / config.name / "_entries"
 
-    # G4 baseline vs G6 warm of the same arm, both entered from the reference snapshot
-    # with the same pin: the SAME job, so the pool shares it (the saving).
-    g6_pairing, g6_warm = gate_entry.entry_and_warm_jobs(campaign, references)
-    warm_same = next((j for _c, a, j in g6_warm if _c == config.name and a == baseline.arm), None)
-    if warm_same is not None:
-        baseline_pinned = gate_audit._job(
-            campaign, config, "baseline", Path(reference["snapshot"]), gate_audit._pin(config, reference)
+    def _entered_from(label: str, entry: Path) -> pool_mod.Job:
+        return pool_mod.Job(
+            phase="A", arm="A2", config=config, seed=0, regime="unperturbed",
+            delta=None, pin_hex=None, entry_state=entry, run_kind="gate",
         )
-        pairs.append({"class": "G4 baseline vs G6 warm of the same arm from the same snapshot (shared)", "a": baseline_pinned, "b": warm_same, "must": "agree"})
+
+    doctored_a = _entered_from("in_loop", entries / "in_loop.json")
+    doctored_b = _entered_from("per_run_x", entries / "per_run_x.json")
+    baseline = _entered_from("baseline", Path(reference["snapshot"]))
+    pairs.append({"class": "two doctored entries (entry state)", "a": doctored_a, "b": doctored_b, "must": "differ"})
+    pairs.append({"class": "a doctored entry vs the undoctored reference entry (entry state)", "a": doctored_a, "b": baseline, "must": "differ"})
+
+    # GT's full-set run of an arm vs G6's pairing run of the same arm from the
+    # same displaced entry: the SAME job, so the pool shares it (the saving).
+    g6_pairing, _g6_warm = gate_entry.entry_and_warm_jobs(campaign, references)
+    gt_full = gate_test_set.full_jobs(campaign, references)
+    pairing_same = next((j for _c, a, j in g6_pairing if _c == config.name and a == "A2"), None)
+    full_same = next((j for _c, a, j in gt_full if _c == config.name and a == "A2"), None)
+    if pairing_same is not None and full_same is not None:
+        pairs.append({"class": "GT full-set run vs G6 pairing run of the same arm from the same entry (shared)", "a": full_same, "b": pairing_same, "must": "agree"})
 
     # G1: before and after are one identity; the layout keeps them apart.
     g1 = pool_mod.Job(
