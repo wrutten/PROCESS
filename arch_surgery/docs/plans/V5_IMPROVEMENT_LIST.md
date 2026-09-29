@@ -184,7 +184,11 @@ entries; report `reports/deprecated/A89_coupling_subset_trial.md` §3 and §7):
   construction and a cheaper check. The coupling-state check is 38–39 % of an evaluation's wall
   clock in V4's control and 7–8 % with the census set (context, not evidence).
 
-**The change: both options, both at the derived tolerance.** A V5 plan carries two candidate
+**Ruled — D32 (the user, 2026-09-29): V5 converges on the census-measured feedback variables.**
+*"The motivation is that the DSMs are not accurate enough to make this judgement, and suffer from
+the models not being strictly functional"* (V18, V19). Option 2 below is the test; option 1 stays
+as a cross-check the plan reports beside it, never as a stopping rule. **The text of the two
+options as first written, for the record:** a V5 plan carries two candidate
 definitions of the control's (and, per block, the partitioned arm's) convergence test:
 
 1. the **DSM feedback set** (static, from the dependency analysis, in the DSM's order);
@@ -264,8 +268,7 @@ every evaluation. Requirements: no count changes (node calls, sweeps, predicate 
 components compared identical to the digit on a gate job set, both phases); the switch-neutrality
 gate G1 byte-identical with every switch unset; the resolution's provenance stamped once per run
 as it is stamped now per call. A driver change: the user has said it should be fixed in V5, and
-the ruling is recorded here as the user's instruction; a decision row (D31) is proposed for the
-register in the same words. Any other per-evaluation cost the instrument adds unequally to the
+the ruling is recorded here as the user's instruction; the decision row D31 is ruled (the user, 2026-09-29: *"D31 also stands"*). Any other per-evaluation cost the instrument adds unequally to the
 arms — A91 measured the block-sweep dispatch (0.08–0.09 ms) and found it negligible, and A89 the
 whole-state read per sweep (small) — is checked the same way before V5's wall-clock table exists.
 
