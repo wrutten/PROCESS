@@ -17,8 +17,8 @@ reproducible.
 Everything else is here too, each as a stage of this one script: the gates
 (``--gate``), the measurement stages (``--measure``), the artifact stages
 (``--artifacts``), the reproduction reference (``--reference``), one run
-(``--run``), the harness's own checks (``--selfcheck``), the plan's results
-section rendered from the stage records (``--plan-tables``), and **the chain**
+(``--run``), the harness's own checks (``--selfcheck``), the paper's one
+generated document (``--paper-tables``), and **the chain**
 — ``--smoke`` runs it once on one seed and the cheapest configuration with every
 record stamped ``smoke``; the campaign runs the same stages over every
 configuration and the plan's seed count, and is refused until the user approves
@@ -50,7 +50,6 @@ from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.child import postsolve as postsolve_mod  # noqa: E402
 from harness.core import provenance as prov  # noqa: E402
 from harness.measurement import paper_tables as paper_tables_mod  # noqa: E402
-from harness.measurement import plan_tables as plan_tables_mod  # noqa: E402
 from harness.core import framework as framework_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
@@ -291,25 +290,10 @@ def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
         reasons.append(str(exc))
         registry_check = {"missing": str(exc)}
     budget = plan.budget(campaign)
-    # The plan's own declared count, kept beside the derived one: the plan says
-    # 2 (nvar + 1) stencil evaluations per arm, which is an upper bound that
-    # covers the lifted column, and the chain derives the columns per arm from
-    # the input file that arm actually reads.  Both are printed rather than one
-    # silently replacing the other.
-    budget["stencil_upper_bound_from_the_plan"] = sum(
-        len(arms_mod.active_arms(c, "A")) * campaign.stencil_runs(c)
-        for c in campaign.configurations
-    )
     print(
         f"\n  would run: {budget['entry_references']} entry reference(s) + "
         f"{budget['evaluation_displaced']} displaced-entry evaluations + "
-        f"{budget['evaluation_stencil']} stencil evaluations + "
         f"{budget['optimisation']} optimisations = {budget['total']} runs"
-    )
-    print(
-        f"             the plan's own stencil upper bound, 2 (nvar + 1) per "
-        f"arm, is {budget['stencil_upper_bound_from_the_plan']}; the chain "
-        f"derives the columns from the input file each arm reads"
     )
     smoke = chain_mod.smoke_plan(campaign)
     smoke_budget = smoke.budget(campaign)
@@ -317,7 +301,7 @@ def stage_campaign(campaign: Campaign) -> tuple[int, dict[str, Any]]:
         f"\n  the smoke is the same chain, available now: "
         f"--smoke runs {smoke_budget['total']} run(s) on "
         f"{smoke.configurations[0].name}, records stamped "
-        f"{smoke.run_kind!r}, then the tally, the analysis and its --verify"
+        f"{smoke.run_kind!r}, then the tally and its contract gate"
     )
     return 3, {
         "refused": reasons,
@@ -336,10 +320,9 @@ def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
     """The one-seed pass: the whole chain, from this entry point, once.
 
     It runs the **campaign's** stages — the same functions, with one seed, one
-    configuration and records stamped ``smoke`` — then the two tally stages,
-    the tally's contract gate, the analysis's own tables and the analysis's
-    ``--verify``.  Nothing here is a measurement: the tally and the analysis
-    refuse to summarise a smoke record, and gate ``run_kind_separation`` has a
+    configuration and records stamped ``smoke`` — then the two tally stages
+    and the tally's contract gate.  Nothing here is a measurement: the tally
+    refuses to summarise a smoke record, and gate ``run_kind_separation`` has a
     tooth for each direction of that refusal.
     """
     _rule("smoke — the campaign's chain, one seed")
@@ -414,7 +397,6 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
     print(
         f"  will run: {budget['entry_references']} entry reference(s) + "
         f"{budget['evaluation_displaced']} displaced-entry evaluations + "
-        f"{budget['evaluation_stencil']} stencil evaluations + "
         f"{budget['optimisation']} optimisations = {budget['total']} runs, "
         f"records stamped {plan.run_kind!r}, {campaign.workers} worker(s)"
     )
@@ -655,56 +637,17 @@ def stage_measure(args: argparse.Namespace, campaign: Campaign) -> int:
     return status
 
 
-def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
-    """The report's results tables, rendered from the measurement stages' own records.
-
-    ``show`` prints Appendix D, ``write`` puts it into ``EXPERIMENT_REPORT.md``
-    in place of the block it replaces and writes the companion file
-    ``RESULTS_TABLES_FULL.md`` whole, ``check`` compares both without
-    writing.  None computes a number: every table, caption and denominator
-    here is a stage's, read from ``runs/gates/<stage>/measurements.json``, so
-    the documents and the records on disk cannot drift apart (protocol §15).
-    """
-    _rule("the report's results tables")
-    try:
-        if args.plan_tables == "write":
-            result = plan_tables_mod.write(
-                campaign, _gate_records_dir(args, campaign)
-            )
-        elif args.plan_tables == "check":
-            result = plan_tables_mod.check(
-                campaign, _gate_records_dir(args, campaign)
-            )
-        else:
-            result = plan_tables_mod.render(
-                campaign, _gate_records_dir(args, campaign)
-            )
-    except plan_tables_mod.PlanTablesError as exc:
-        print(f"  REFUSED — {exc}")
-        return 3
-    plan_tables_mod.report(result)
-    if args.plan_tables == "show":
-        print()
-        print(result["markdown"])
-    if args.plan_tables == "check" and not result["identical"]:
-        # A difference — in either document, or a table reference in the
-        # hand-written text that points past the end — is reported, not
-        # repaired: the report is a shared document and this mode exists so
-        # that a task can say what the records now produce without editing it.
-        return 3
-    return 0
-
-
 def stage_paper_tables(args: argparse.Namespace, campaign: Campaign) -> int:
-    """The paper's three results tables, computed from the campaign's run records.
+    """The paper's one document, computed from the campaign's run records.
 
     ``show`` prints ``paper_tables.md``, ``write`` writes it, ``check``
-    compares it without writing.  Unlike ``--plan-tables`` the numbers are
-    computed — with the tally's own constructions over the tally's own
-    population — because the paper's shapes are not stage tables; every cell
-    the stage records also hold is compared with them exactly first, and a
+    compares it without writing and refuses when the rendered file and the
+    records disagree (V5 list item 10).  The numbers are computed with the
+    tally's own constructions over the tally's own population; every cell the
+    stage records also hold is compared with them exactly first, and a
     mismatch refuses the write.  ``--paper-tables-runs`` reads the records
-    from a retired worktree's relocated runs (``idf_probe/runs/A<n>_runs``).
+    from another runs root — a relocated tree's, for a check against test
+    data — and writes nothing there.
     """
     _rule("the paper's results tables")
     campaign = paper_tables_mod.with_runs(campaign, args.paper_tables_runs)
@@ -713,11 +656,22 @@ def stage_paper_tables(args: argparse.Namespace, campaign: Campaign) -> int:
         if args.outdir
         else Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH
     )
+    # A render from another runs root — test data — must not become the
+    # committed document: ``--paper-tables-out`` names the file instead.
+    out = Path(args.paper_tables_out) if args.paper_tables_out else None
+    if args.paper_tables_runs is not None and out is None and args.paper_tables != "show":
+        print(
+            "  REFUSED — --paper-tables-runs reads another tree's records; a "
+            "write or check against them needs --paper-tables-out so that the "
+            "rendering lands beside those records and not as this folder's "
+            "paper_tables.md"
+        )
+        return 3
     try:
         if args.paper_tables == "write":
-            result = paper_tables_mod.write(campaign, records_dir)
+            result = paper_tables_mod.write(campaign, records_dir, path=out)
         elif args.paper_tables == "check":
-            result = paper_tables_mod.check(campaign, records_dir)
+            result = paper_tables_mod.check(campaign, records_dir, path=out)
         else:
             result = paper_tables_mod.render(campaign, records_dir)
     except paper_tables_mod.PaperTablesError as exc:
@@ -727,8 +681,7 @@ def stage_paper_tables(args: argparse.Namespace, campaign: Campaign) -> int:
     if args.paper_tables == "show":
         print()
         print(result["markdown"])
-    failed = result["cross_check"]["mismatched"] or not result["tooth"]
-    if args.paper_tables == "check" and (failed or not result["identical"]):
+    if result["cross_check"]["mismatched"] or not result["tooth"]:
         return 3
     return 0
 
@@ -1003,26 +956,17 @@ def main(argv: list[str] | None = None) -> int:
         help="run the campaign's own chain once, end to end, on one seed and "
         "the cheapest configuration, with every record stamped 'smoke': both "
         "phases, every arm of the matrix active on it, then the two tally "
-        "stages, the tally's contract gate, the analysis's tables and the "
-        "analysis's --verify.  Needs no approval and makes no campaign record",
-    )
-    parser.add_argument(
-        "--plan-tables",
-        choices=("show", "check", "write"),
-        help="render the experiment plan's section 4 from the measurement "
-        "stages' own records — the gate table, the two tally stages and the "
-        "recomputed tables — and print it ('show'), compare it line for line "
-        "with the section EXPERIMENT_REPORT.md already carries without writing "
-        "anything ('check', which exits 3 on a difference), or write it into "
-        "the document ('write').  No cell is typed by hand",
+        "stages and the tally's contract gate.  Needs no approval and makes "
+        "no campaign record",
     )
     parser.add_argument(
         "--paper-tables",
         choices=("show", "check", "write"),
-        help="compute the paper's three results tables (Structuring-fusion-"
-        "MDAO-with-DSMs, section 3, Case 2) from the campaign's run records "
-        "and print them ('show'), compare them with paper_tables.md ('check', "
-        "exits 3 on a difference) or write that file ('write'); every cell the "
+        help="compute the paper's one document (Structuring-fusion-MDAO-with-"
+        "DSMs, section 3, Case 2: the main-text tables and the appendix "
+        "tables) from the campaign's run records and print it ('show'), "
+        "compare it with paper_tables.md ('check', exits 3 on a difference or "
+        "a cross-check mismatch) or write that file ('write'); every cell the "
         "stage records also hold is compared with them exactly first",
     )
     parser.add_argument(
@@ -1030,8 +974,17 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="for --paper-tables: the runs root to read (campaign/ and gates/ "
-        "under it), e.g. a retired worktree's idf_probe/runs/A<n>_runs; "
-        "default the experiment's own runs/",
+        "under it) in place of the experiment's own runs/ — a relocated "
+        "records tree, read only; nothing is written there",
+    )
+    parser.add_argument(
+        "--paper-tables-out",
+        type=Path,
+        default=None,
+        help="for --paper-tables write/check: the file to write or compare "
+        "instead of this folder's paper_tables.md; required with "
+        "--paper-tables-runs, so a rendering from test data never becomes "
+        "the committed document",
     )
     parser.add_argument(
         "--selfcheck",
@@ -1176,9 +1129,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.campaign:
         return stage_campaign_press(args, campaign)
-
-    if args.plan_tables:
-        return stage_plan_tables(args, campaign)
 
     if args.paper_tables:
         return stage_paper_tables(args, campaign)

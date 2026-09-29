@@ -782,8 +782,8 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "wrong tree is refused, not made"
         ),
         "stage_provenance": (
-            "a stage record names the records it read, and the renderer of "
-            "the plan's results section refuses one whose verdicts have since "
+            "a stage record names the records it read, and the paper's "
+            "document generator refuses one whose verdicts have since "
             "been re-made, removed or added to — so a section can no longer "
             "reproduce an older verdict without saying so; and every census "
             "record on disk is placed by its own commit or named as one a "
@@ -974,10 +974,8 @@ def _artifact_gates(campaign: Campaign) -> dict[str, Gate]:
 DECLARED_OUTSIDE_REFERENCES: dict[str, str] = {
     "data_provenance.py": (
         "the declared **source** of the committed files that came from those "
-        "directories — the input files, the predicate module and, since task "
-        "A88 (function-weighted-sweeps), the function counts' generator named "
-        "in a note: where each came from "
-        "when it was copied in.  It is read by the data check, which fetches "
+        "directories — the input files and the predicate module: where each "
+        "came from when it was copied in.  It is read by the data check, which fetches "
         "the source from the recorded commit with `git cat-file` — the "
         "repository at a commit, never the live directory (trap T9: a sibling "
         "study's generated output read live catches a half-written state).  A "

@@ -128,16 +128,17 @@ PLAN_COLUMN: tuple[tuple[str, Any], ...] = (
     ),
     # "output-time loop | none".
     ("output_loop", lambda config, campaign: "none"),
-    # The convergence ruler.  The plan's row for this arm is the campaign's
-    # **default**, and a default is composed by leaving the switch unset: the
-    # driver resolves an absent `PROCESS_ARCH_PREDICATE` to the frozen ruler.
-    # That is not taken on trust here — the run comparison below includes what
-    # the driver *resolved*, read back from the imported modules, so "unset"
-    # and "frozen" have to reach the same place or the gate fails.  (Found by
-    # this gate failing: the hand-written column set the value explicitly and
-    # the matrix left it unset, which is the same arm and a different
-    # environment.)
-    ("predicate_mode", lambda config, campaign: None),
+    # The convergence ruler has no row here since V5 (task A98
+    # (v5-reporting-trim), list item 10): the ``predicate_mode`` switch is
+    # retired — no arm composes it and the driver resolves the absent
+    # ``PROCESS_ARCH_PREDICATE`` to the frozen ruler — so the plan's matrix
+    # (V5 plan §2 Table 1, "predicate mode: frozen") is composed by leaving it
+    # cleared, which ``switch_by_switch`` does for every retired name before
+    # the rows are applied.  V4's row set it to None for the same reason and
+    # needed the switch to carry a driver name; a retired switch carries none.
+    # The run comparison below still includes what the driver *resolved*
+    # (``resolved_switches``), so a tree that resolved the cleared name to
+    # anything but the frozen ruler would fail the gate.
 )
 
 #: What the two runs must agree on, and the path each is read from.  Every one

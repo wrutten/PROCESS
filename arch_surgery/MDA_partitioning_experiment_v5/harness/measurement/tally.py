@@ -289,17 +289,14 @@ def _paired_entries(campaign: Campaign) -> list[Any]:
     return gate_entry_mod.pairing_jobs(campaign)
 
 
-def _campaign_stage(stage: str, *, stencil_sign: int | None = None):
+def _campaign_stage(stage: str):
     """The campaign plan's job set for one run stage, by the chain's own
-    composition (``chain.campaign_jobs``); a stencil source takes one sign."""
+    composition (``chain.campaign_jobs``)."""
 
     def jobs(campaign: Campaign) -> list[Any]:
         from harness import chain as chain_mod  # noqa: PLC0415
 
-        composed = chain_mod.campaign_jobs(campaign, stage)
-        if stencil_sign is not None:
-            composed = [j for j in composed if j.stencil_sign == stencil_sign]
-        return composed
+        return chain_mod.campaign_jobs(campaign, stage)
 
     return jobs
 
@@ -343,11 +340,9 @@ GATE_SOURCES: tuple[Source, ...] = (
     ),
 )
 
-#: The **campaign** sources: one per run stage of ``chain.campaign_plan`` —
-#: the stencil stage split into its forward and backward point sets, which
-#: the experiment plan publishes as the bracket (§3.4, §3.5's transfer) and
-#: which pair by design-vector column within a set, never across.  Each is
-#: the chain's own job set for that stage (rule (xi): a plan's job set is a
+#: The **campaign** sources: one per run stage of ``chain.campaign_plan``
+#: (the stencil regime's two sources are gone with the regime, V5 list item
+#: 10).  Each is the chain's own job set for that stage (rule (xi): a plan's job set is a
 #: tally population), every job stamped ``campaign``, resolved to
 #: ``runs/campaign/…`` by the pool.  Present only while ``EXECUTION_APPROVED``
 #: is True — with it False no campaign record may exist and a source over
@@ -362,7 +357,7 @@ CAMPAIGN_SOURCES: tuple[Source, ...] = (
             "the campaign population: the entry references — one flat A0 "
             "evaluation per configuration from the input file's own design "
             "point, the once-per-run cold-start term (plan §3.4), reported "
-            "beside and never pooled with the displaced or stencil entries"
+            "beside and never pooled with the displaced entries"
         ),
         family="campaign",
         run_kind="campaign",
@@ -383,37 +378,6 @@ CAMPAIGN_SOURCES: tuple[Source, ...] = (
         family="campaign",
         run_kind="campaign",
         short="the displaced entries (δ = 0.10)",
-    ),
-    Source(
-        name="campaign_stencil_forward",
-        owner="campaign plan, stage evaluation_stencil",
-        jobs=_campaign_stage("evaluation_stencil", stencil_sign=1),
-        phases="A",
-        what=(
-            "the campaign population: the evaluation phase's stencil regime, "
-            "the **forward** points x_i (1 + epsfcn) entered from the "
-            "reference fixed point, one per design-vector column per arm "
-            "(plan §3.4); paired across arms by column, not seed"
-        ),
-        family="campaign",
-        run_kind="campaign",
-        short="the forward stencil points",
-    ),
-    Source(
-        name="campaign_stencil_backward",
-        owner="campaign plan, stage evaluation_stencil",
-        jobs=_campaign_stage("evaluation_stencil", stencil_sign=-1),
-        phases="A",
-        what=(
-            "the campaign population: the evaluation phase's stencil regime, "
-            "the **backward** points x_i (1 − epsfcn) each entered from its "
-            "own forward point's exit — the sequence the optimiser's "
-            "evaluator executes — one per design-vector column per arm (plan "
-            "§3.4); paired across arms by column, not seed"
-        ),
-        family="campaign",
-        run_kind="campaign",
-        short="the backward stencil points",
     ),
     Source(
         name="campaign_optimisation",

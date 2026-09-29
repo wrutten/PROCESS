@@ -92,7 +92,7 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
     arms are active, with stand-in entry states where a real one would be
     read from a record: the identity is over the path, so no run is needed.
     """
-    from . import gate_composition, gate_entry, gate_predicate_mode, gate_prime
+    from . import gate_composition, gate_entry, gate_prime
     from . import gate_audit, gate_output_path, gate_records, gate_written_file
     from . import reproduction as reproduction_mod
     from .gate_neutrality import NEUTRAL_AUDIT_POSITION, NEUTRAL_GATE_NAME, neutrality_run_dir
@@ -163,17 +163,8 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
             gr_same = next(i.job for i in planned if i.run.arm == "B2" and i.run.seed == 0 and i.run.configuration == tooth_job.config.name)
             pairs.append({"class": "GR composition tooth vs GR's planned B2 (override_env)", "a": tooth_job, "b": gr_same, "must": "differ"})
 
-    # G8: the two rulers; and the frozen trial run against G6's pairing run of the same arm and seed.
-    entries8 = {c.name: _synthetic_reference(campaign, c) for c in configs}
-    pair8 = gate_predicate_mode.predicate_mode_pairs(campaign)
-    if pair8 and len(campaign.predicate_modes) > 1:
-        p8 = pair8[0]
-        frozen = gate_predicate_mode.predicate_mode_job(campaign, entries8, p8["config"], p8["arm"], p8["seed"], campaign.predicate_modes[0])
-        mixed = gate_predicate_mode.predicate_mode_job(campaign, entries8, p8["config"], p8["arm"], p8["seed"], campaign.predicate_modes[1])
-        pairs.append({"class": "G8 the two rulers (predicate mode)", "a": frozen, "b": mixed, "must": "differ"})
-        g6_same = next((j for c, a, j in g6_pairing if c == p8["config"].name and a == p8["arm"] and j.seed == p8["seed"]), None)
-        if g6_same is not None:
-            pairs.append({"class": "G8 frozen trial run vs G6 pairing run of the same arm and seed (observer variable)", "a": frozen, "b": g6_same, "must": "differ"})
+    # (G8's two pairs — the two rulers, and the frozen trial run against G6's
+    # pairing run — went with the gate, V5 list item 10.)
 
     # G2: the prime on and off.
     g2 = gate_prime.prime_map_jobs(campaign, references)
@@ -187,11 +178,13 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
     g9 = gate_output_path.output_path_job(campaign, config, "BR")
     pairs.append({"class": "written_file_gap's BR vs G9's BR (audit position, caller)", "a": wf, "b": g9, "must": "differ"})
 
-    # The one construction three gates share: the entry reference.
+    # The one construction the warm gates share: the entry reference.
+    from . import gates as gates_mod  # noqa: PLC0415
+
     pairs.append({
-        "class": "entry reference: gates.entry_reference_jobs vs GR's prerequisite vs G8's reference (shared)",
+        "class": "entry reference: gates.entry_reference_jobs vs GR's prerequisite (shared)",
         "a": reproduction_mod.entry_reference_job(config),
-        "b": gate_predicate_mode.predicate_mode_reference_jobs(campaign)[configs.index(config)],
+        "b": gates_mod.entry_reference_jobs(campaign)[configs.index(config)],
         "must": "agree",
     })
     return pairs

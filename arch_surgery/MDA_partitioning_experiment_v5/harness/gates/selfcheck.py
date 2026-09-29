@@ -857,6 +857,14 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
 
         in_driver = probe.value(sw.SOLVER, "RETIRED_SWITCHES")
         in_registry = sorted(sw.retired_names())
+        # The one licensed difference between the two lists: names the
+        # harness has retired ahead of the driver change that retires them
+        # there (switches.RETIRED_PENDING_IN_DRIVER).  The driver's list must
+        # equal the registry's **minus** those, and every pending name must be
+        # **absent** from the driver's list -- so the table is emptied the day
+        # the driver change lands, or this check fails.
+        pending = sorted(sw.RETIRED_PENDING_IN_DRIVER)
+        expected_in_driver = sorted(set(in_registry) - set(pending))
         check.n_compared += 1
         if not isinstance(in_driver, dict):
             check.fail(
@@ -864,19 +872,37 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
                 f"refuses no stale switch name and the harness's list is a "
                 f"claim about a tree that cannot keep it"
             )
-        elif sorted(in_driver) != in_registry:
+        elif sorted(in_driver) != expected_in_driver:
             check.fail(
                 f"the driver retires {sorted(in_driver)} but the registry "
-                f"retires {in_registry}; a name on one list and not the other "
+                f"retires {in_registry}"
+                + (f" of which {pending} are declared pending in the driver" if pending else "")
+                + f"; a name on one list and not the other "
                 f"is either a switch the harness clears while the driver still "
                 f"honours it, or one the harness refuses that the driver has "
                 f"never heard of"
             )
+        elif any(name in in_driver for name in pending):
+            landed = [name for name in pending if name in in_driver]
+            check.fail(
+                f"{landed} are declared pending in the driver "
+                f"(switches.RETIRED_PENDING_IN_DRIVER) but the driver's "
+                f"RETIRED_SWITCHES already carries them: the driver change has "
+                f"landed and the interim table must be emptied in the same "
+                f"commit"
+            )
         else:
             check.note(
-                f"{len(in_registry)} retired switch name(s), identical in the "
+                f"{len(expected_in_driver)} retired switch name(s), identical in the "
                 f"registry and in the driver's own list: "
-                f"{', '.join(in_registry)}"
+                f"{', '.join(expected_in_driver) or '(none)'}"
+                + (
+                    f"; {len(pending)} retired by the harness ahead of the driver, "
+                    f"declared pending and absent from the driver's list: "
+                    + ", ".join(f"{n} ({sw.RETIRED_PENDING_IN_DRIVER[n][:40]}…)" for n in pending)
+                    if pending
+                    else ""
+                )
             )
 
         # --- the counters the harness is about to record ------------------
@@ -1220,9 +1246,7 @@ def _scratch_records(destination: Path) -> tuple[int, int]:
     # renderer's layouts declare: a tally table whose kind no layout places is
     # refused, by design, and the name is where the renderer reads the
     # configuration and the source from (a table per construction, per
-    # configuration, per source, combined into one).  The recomputed stage's
-    # carries no kind, as the analysis's tables do not, and is rendered
-    # nowhere.
+    # configuration, per source, combined into one).
     # The scratch tables carry the **columns their layout declares** — the
     # merge parts and the bolded result column — so the fixture goes through
     # the renderer's real path rather than round a stub it cannot render.  A
@@ -1242,14 +1266,8 @@ def _scratch_records(destination: Path) -> tuple[int, int]:
             ("arm", "node_calls_mean", "bracket", "with_pooled"),
             ("B0", "1", "[1, 1]", "1.0000"),
         ),
-        "recomputed_tables": (
-            "",
-            "a_scratch_table_of_recomputed_tables",
-            ("a",),
-            ("1",),
-        ),
     }
-    for stage in ("tally_evaluation", "tally_optimisation", "recomputed_tables"):
+    for stage in ("tally_evaluation", "tally_optimisation"):
         kind, name, keys, cells = scratch_table[stage]
         stage_records[stage] = {
             "population": "a scratch population of 1",
@@ -1305,7 +1323,7 @@ def check_stage_provenance(campaign: Campaign) -> Check:
     a stamp survey cannot place is never merely absent from the survey.
     """
     from harness.child import census as census_mod  # noqa: PLC0415 - one direction
-    from harness.measurement import plan_tables as plan_tables_mod  # noqa: PLC0415
+    from harness.measurement import paper_tables as paper_tables_mod  # noqa: PLC0415
 
     check = Check(
         name="stage provenance",
@@ -1315,7 +1333,7 @@ def check_stage_provenance(campaign: Campaign) -> Check:
             "which tree took it"
         ),
     )
-    section = plan_tables_mod.SECTIONS[0]
+    section = paper_tables_mod.GATE_TABLE_SECTION
     with tempfile.TemporaryDirectory(prefix="stage_provenance_") as scratch:
         root = Path(scratch)
         n_verdicts, n_stages = _scratch_records(root)
@@ -1336,16 +1354,22 @@ def check_stage_provenance(campaign: Campaign) -> Check:
         )
 
         def renders() -> tuple[bool, str]:
-            """Whether the renderer accepts the scratch records, and why not."""
+            """Whether the generator accepts the scratch records, and why not.
+
+            The consumer is the paper's document generator: its verification
+            table is built from the ``gate_table`` stage record, and this is
+            the check it makes before reading one (``paper_tables.check`` and
+            ``write`` refuse through the same call).
+            """
             try:
-                plan_tables_mod.render(campaign, root)
-            except plan_tables_mod.PlanTablesError as exc:
+                paper_tables_mod.assert_gate_table_current(root)
+            except paper_tables_mod.PaperTablesError as exc:
                 # Two lines, not one: the first says a stage record is stale
                 # and the second is the row that names the gate, both commits
                 # and both times — which is the half a reader acts on.
                 said = " | ".join(str(exc).splitlines()[:2])
-                return False, f"PlanTablesError: {said[:320]}"
-            return True, "it rendered"
+                return False, f"PaperTablesError: {said[:320]}"
+            return True, "it accepted them"
 
         agreed, why_agreed = renders()
         if not agreed:
@@ -1508,15 +1532,15 @@ def check_stage_provenance(campaign: Campaign) -> Check:
         try:
             check.note(
                 "the records on disk now: "
-                + plan_tables_mod.assert_stage_read_what_is_there(
+                + paper_tables_mod.assert_stage_read_what_is_there(
                     json.loads(live_record.read_text()),
                     live.parent,
                     section,
                 )
             )
-        except plan_tables_mod.PlanTablesError as exc:
+        except paper_tables_mod.PaperTablesError as exc:
             check.note(
-                "the records on disk now: the renderer would REFUSE — "
+                "the records on disk now: the generator would REFUSE — "
                 + " | ".join(str(exc).splitlines()[:2])[:320]
                 + f".  That is the order rule working ({section.stage} is "
                 f"pressed after the gates, not before), not a failure of this "
@@ -1971,73 +1995,56 @@ def check_run_path(campaign: Campaign) -> Check:
 
     # The unimplemented-switch refusal's tooth, on a **doctored registry**
     # (re-pointed by task A59 (driver-predicate-mode); the allowance half
-    # retired by task A72 (resume-identity-and-shared-pool), survey item B4).
+    # retired by task A72 (resume-identity-and-shared-pool), survey item B4;
+    # re-pointed again by task A98 (v5-reporting-trim) when the predicate-mode
+    # switch it doctored was itself retired under V5 list item 10).
     #
     # A switch term the tree does not implement is refused by
     # ``pool.environment_for``, never dropped: running without it would be a
-    # successful run of a different arm under the right name.  Until DR5
-    # landed the tooth could bite on a real pending switch -- the predicate
-    # trial composed one whose driver change had not been made -- and A57's
-    # report predicted it would go quiet the moment it did.  It has: every
-    # switch this harness can compose is now implemented, and
-    # `switches.REGISTRY` has no entry left with no driver name.
-    #
-    # Going quiet is the wrong answer.  A refusal that is never exercised is
-    # an assertion, not a measurement (protocol section 12), and the refusal
-    # is still live -- the next driver change to be approved and not yet made
-    # will meet it.  So the tooth is pointed at a doctored registry: for the
-    # duration of the check, the predicate-mode switch is put back the way it
-    # stood before DR5 landed (its driver name removed).  The doctoring is the
-    # perturbation, it is stated in the tooth's evidence, it is confined to
-    # this check, and it is undone in a finally.  Nothing outside it sees it:
-    # `environment_for` refuses before any subprocess starts.
-    #
-    # What was retired: the *allowance* -- a job field naming the pending
-    # terms a run was permitted to omit, its record field, its flag and its
-    # second tooth ("an allowance naming a switch the tree does implement").
-    # It existed for the interval when an arm declared a switch no tree
-    # implemented yet; the last such switch landed with A59.  A future driver
-    # switch cannot be composed before the tree implements it, which is
-    # exactly what the refusal kept here says.
-    pending_mode = next(
-        (m for m in campaign.predicate_modes if m != campaign.predicate_mode_default),
-        "mixed",
-    )
-    real_switch = sw.REGISTRY["predicate_mode"]
+    # successful run of a different arm under the right name.  Every switch
+    # this harness can compose is implemented by the tree under test, so the
+    # refusal has no live gap to bite on -- and a refusal that is never
+    # exercised is an assertion, not a measurement (protocol section 12).
+    # So the tooth is pointed at a doctored registry: for the duration of the
+    # check, the output-loop switch (composed by B1 and B2 as 'none') is put
+    # back to the state before its driver change landed (its driver name
+    # removed).  The doctoring is the perturbation, it is stated in the
+    # tooth's evidence, it is confined to this check, and it is undone in a
+    # finally.  Nothing outside it sees it: `environment_for` refuses before
+    # any subprocess starts.
+    doctored_term = "output_loop"
+    real_switch = sw.REGISTRY[doctored_term]
+    n_unimplemented = sum(1 for entry in sw.REGISTRY.values() if entry.composed and not entry.implemented)
     check.note(
-        f"every switch this harness can compose — the matrix's and the "
-        f"predicate trial's alike — is implemented by the tree under test "
-        f"(0 registry entries with no driver name), so the unimplemented-"
-        f"switch tooth bites on a registry doctored back to the state before "
-        f"{real_switch.driver_name} landed rather than on a live gap"
+        f"every switch this harness can compose is implemented by the tree "
+        f"under test ({n_unimplemented} composed registry entries with no "
+        f"driver name), so the unimplemented-switch tooth bites on a registry "
+        f"doctored back to the state before {real_switch.driver_name} landed "
+        f"rather than on a live gap"
     )
-    sw.REGISTRY["predicate_mode"] = dataclasses.replace(
+    sw.REGISTRY[doctored_term] = dataclasses.replace(
         real_switch,
         driver_name=None,
         pending_change="a driver change that has not been made (doctored here)",
     )
     try:
         pending_terms = sw.unimplemented(
-            arms_mod.ARMS["B0"].terms(
-                config, pin_hex=_PIN_HEX, campaign=campaign,
-                predicate_mode=pending_mode,
-            )
+            arms_mod.ARMS["B2"].terms(config, pin_hex=_PIN_HEX, campaign=campaign)
         )
         if not pending_terms:
             check.fail(
-                "the doctored registry did not make the predicate mode look "
+                f"the doctored registry did not make {doctored_term} look "
                 "unimplemented, so the tooth would pass over an empty "
                 "perturbation"
             )
         unimplemented_job = pool_mod.Job(
             phase="B",
-            arm="B0",
+            arm="B2",
             config=config,
             seed=0,
             outdir=Path(campaign.runs_dir) / "_never",
             pin_hex=_PIN_HEX,
             run_kind="smoke",
-            predicate_mode=pending_mode,
         )
         caught, message = _must_refuse_here(
             lambda: pool_mod.environment_for(unimplemented_job, campaign)
@@ -2046,47 +2053,48 @@ def check_run_path(campaign: Campaign) -> Check:
             "a run asking for a switch the tree does not implement",
             caught,
             f"with the registry doctored back to before "
-            f"{real_switch.driver_name} landed, B0 under predicate mode "
-            f"{pending_mode!r} declares {list(pending_terms)}, which that "
-            f"registry says no tree implements; composing without it would be "
-            f"a successful run of a different arm under this arm's name "
-            f"({message})",
+            f"{real_switch.driver_name} landed, B2 declares "
+            f"{list(pending_terms)}, which that registry says no tree "
+            f"implements; composing without it would be a successful run of a "
+            f"different arm under this arm's name ({message})",
         )
     finally:
-        sw.REGISTRY["predicate_mode"] = real_switch
+        sw.REGISTRY[doctored_term] = real_switch
 
     # And the live state, checked rather than assumed: with the real registry
-    # back, the arm that asks for the trial's ruler composes it and needs no
-    # doctoring.  This is the half the doctored tooth cannot say.
+    # back, B2 composes the switch and needs no doctoring -- and the retired
+    # predicate-mode name is absent from what it composes.  This is the half
+    # the doctored tooth cannot say.
     live = pool_mod.Job(
         phase="B",
-        arm="B0",
+        arm="B2",
         config=config,
         seed=0,
         outdir=Path(campaign.runs_dir) / "_never",
         pin_hex=_PIN_HEX,
         run_kind="smoke",
-        predicate_mode=pending_mode,
     )
     try:
         live_env, _asked = pool_mod.environment_for(live, campaign)
     except Exception as exc:  # noqa: BLE001 - reported as a failure
-        check.fail(
-            f"B0 under predicate mode {pending_mode!r} no longer composes: "
-            f"{type(exc).__name__}: {exc}"
-        )
+        check.fail(f"B2 no longer composes: {type(exc).__name__}: {exc}")
     else:
         got = live_env.get(real_switch.driver_name)
-        if got != pending_mode:
+        retired_present = sorted(n for n in sw.retired_names() if n in live_env)
+        if got != "none":
             check.fail(
-                f"B0 under predicate mode {pending_mode!r} composed "
-                f"{real_switch.driver_name}={got!r}"
+                f"B2 composed {real_switch.driver_name}={got!r}, not 'none'"
+            )
+        elif retired_present:
+            check.fail(
+                f"B2's composed environment carries retired name(s) "
+                f"{retired_present}"
             )
         else:
             check.note(
-                f"B0 under predicate mode {pending_mode!r} composes "
-                f"{real_switch.driver_name}={pending_mode} and needs no "
-                f"doctoring — the capability probe resolves it"
+                f"B2 composes {real_switch.driver_name}=none and needs no "
+                f"doctoring — the capability probe resolves it; none of the "
+                f"{len(sw.retired_names())} retired name(s) is in its environment"
             )
 
     # --- the reproduction gate's overrides, and what refuses one ----------

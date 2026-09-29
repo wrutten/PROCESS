@@ -1,5 +1,17 @@
 # MDA Partitioning Experiment V4 — Experiment Report
 
+> **Document status (V5 copy)** — **V4's TEXT, PENDING V5's REWRITE.** This file is the V4 report
+> copied whole into `MDA_partitioning_experiment_v5/` by task A94 (v5-copy) and is **not** V5's
+> report: every number, table and conclusion below is V4's, measured on V4's records at V4's commits,
+> and nothing in it has been re-rendered or re-run in this folder. V5's report is the four-part
+> document of the V5 plan §8 (method; the paper tables included verbatim from the one generator,
+> `harness/measurement/paper_tables.py`; one short findings section per rung; the change log — under
+> 600 lines), to be written when V5's campaign has run. The machinery this text cites as rendering it
+> — `harness/measurement/plan_tables.py`, the companion file `RESULTS_TABLES_FULL.md`,
+> `--plan-tables`, the second implementation and gate `recomputation` — was removed from this copy
+> under V5 list item 10 by task A98 (v5-reporting-trim), 2026-09-29; the citations below are history.
+> Read V4's own header, which follows, as V4's.
+
 > **Document status** — **EXECUTED AND REPORTED, 2026-09-14.** One document carries the whole
 > experiment: §1–§3 are the **plan as approved** — hypothesis, background and pre-registered method,
 > written 2026-09-10 and changed only by the dated amendments the text and Appendix C record
