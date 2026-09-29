@@ -385,10 +385,13 @@ def stage_summarise_census(campaign_records):
                 distinct: dict = {}
                 run_count: dict = {}
                 run_last: dict = {}
+                size_by_sweeps: dict = {}
                 for e in ev:
                     for label, idx in e["rbw"].items():
                         names = [keys[i] for i in idx]
                         run_sizes.setdefault(label, []).append(len(names))
+                        size_by_sweeps.setdefault(label, {}).setdefault(
+                            str(e["sweeps"].get(label)), []).append(len(names))
                         distinct.setdefault(label, set()).add(tuple(sorted(idx)))
                         for k in names:
                             run_union.setdefault(label, set()).add(k)
@@ -416,7 +419,14 @@ def stage_summarise_census(campaign_records):
                         "histogram": dict(sorted(Counter(s).items())),
                         "n_distinct_sets": len(distinct[label]),
                         "n_evaluations_equal_to_run_union": sum(
-                            1 for t in s if t == len(run_union[label]))}
+                            1 for t in s if t == len(run_union[label])),
+                        "n_carried_in_every_evaluation": sum(
+                            1 for k, n in run_count[label].items() if n == len(s)),
+                        "size_by_sweeps_in_evaluation": {
+                            sw: {"n_evaluations": len(v), "min": min(v),
+                                 "median": statistics.median(v), "max": max(v)}
+                            for sw, v in sorted(size_by_sweeps[label].items(),
+                                                key=lambda kv: int(kv[0]))}}
                     sizes_by_block.setdefault(label, []).extend(s)
                 for label, u in run_union.items():
                     union_by_block.setdefault(label, set()).update(u)
