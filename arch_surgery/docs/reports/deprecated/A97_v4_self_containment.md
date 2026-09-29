@@ -1,6 +1,9 @@
 # A97 (v4-self-containment) — V4's `self_containment` gate: the stale PASS replaced, the one finding removed
 
-> **Document status** — **OPEN.** Task **A97 (v4-self-containment)**, branch `A97-v4-self-containment`
+> **Document status** — **MERGED 2026-09-29 at `566e554e` (`--no-ff`); archived.** I-32 closed; records relocated to
+> `arch_surgery/idf_probe/runs/A97_runs/` (the latest relocated V4 records tree); the orchestrator's assessment is §10
+> (joined to this report at the merge after a working-directory reset had committed it to the trunk first).
+> Was: **OPEN.** Task **A97 (v4-self-containment)**, branch `A97-v4-self-containment`
 > (worktree `.claude/worktrees/A97-v4-self-containment`), base **`74a59dfb`** (= `architecture_surgery` at
 > dispatch), the fix at **`4b0673fd`** — the commit every verdict below was pressed at. Resolves issue **I-32**
 > (V4's `self_containment` gate FAILs at the tip while its published gate table says PASS), filed at A94

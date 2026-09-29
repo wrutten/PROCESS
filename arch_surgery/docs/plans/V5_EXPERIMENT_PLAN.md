@@ -235,9 +235,14 @@ accumulated per run and stamped into the record:
 | excluded | **harness-only costs, excluded from every total and named in the caption**: the exit-audit sweep, the state snapshots, the census hooks, the record assembly |
 | the instrument's own cost | one run per configuration with timers off, reported beside |
 
-**Run discipline**: the whole campaign at **W = 1**, so timings and counts come from the same runs; load
-average recorded per run; a **repeatability check** of one seed per configuration, three repetitions, in
-A91's form (median and range; a case whose repetitions differ in counts is refused).
+**Run discipline** *(amended by D38, the user, 2026-09-29: "you can parallelise the experiment campaign
+itself")*: the campaign at **W = 4** on the 16-core machine, every child pinned to one thread
+(`NUMBA_NUM_THREADS=1`, `OMP_NUM_THREADS=1`), load average recorded per run; the **repeatability check** of one
+seed per configuration, three repetitions, at **W = 1** in A91's form (median and range; a case whose
+repetitions differ in counts is refused) — and the **validity check for the campaign's timings**: the
+campaign's timing of those same seeds must lie within the repetitions' range; if it does not, the appendix
+timings come from a one-worker timing pass over the seed set and the report says so. Counts are unaffected by
+W in either case.
 
 **The three appendix tables** (per configuration; arms as columns; ratio of means and per-run median with
 `[min, max]`, as the count tables):
@@ -348,7 +353,7 @@ except by dated amendment; a value marked [A92]/[A93] is filled from that task's
 | median | nearest-rank, upper-middle | every phase B statistic | V3 |
 | inner cap | 20 sweeps per block; a cap hit is a refusal, not a budget | every block loop, the flat one included | V4 |
 | upstream cap | 10 passes → `unconverged-at-cap` | `AR`/`BR` | upstream |
-| **W** | **1** for the campaign and the repeatability check | worker pool | **D33**, item 9 |
+| **W** | **4** for the campaign (children single-threaded), **1** for the repeatability check and the timers-off runs; gates at 3 | worker pool | **D38** amending D33; item 9 |
 | iteration bound | **none** (`iteration_ratio_max` retired) | — | item 1 |
 | timers | on for the campaign; off for one run per configuration | the instrument's own cost | item 9 |
 
