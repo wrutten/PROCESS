@@ -660,7 +660,49 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"the pair check reports holds={rows[0]['holds']}"
         )
 
+    def a_record_composed_with_one_term_fewer() -> tuple[bool, str]:
+        """A kept record must have been composed from the terms the arm sets today.
+
+        The identity names the arm and not its switches, so a driver change
+        that makes an arm compose one more switch (V5 list item 5) leaves an
+        earlier record of that arm with the same digest.  The pool compares
+        the record's ``switches_asked`` with the arm's terms by name and
+        re-makes on a difference; a record with one term dropped, and one
+        with a term the arm never sets, must both be refused by name, and the
+        undoctored record must be kept.
+        """
+        job = _job()
+        _env, terms = pool_mod.environment_for(job, campaign)
+        record = _complete_record_of(job, campaign)
+        record["switches_asked"] = dict(terms)
+        clean = pool_mod.why_not_composed_as_today(record, terms)
+        if clean is not None:
+            return False, f"the undoctored record is itself refused: {clean}"
+        dropped = dict(terms)
+        dropped.pop("mda")
+        record["switches_asked"] = dropped
+        fewer = pool_mod.why_not_composed_as_today(record, terms)
+        record["switches_asked"] = {**terms, "a_term_nobody_composes": "x"}
+        more = pool_mod.why_not_composed_as_today(record, terms)
+        caught = (
+            fewer is not None and "'mda'" in fewer
+            and more is not None and "a_term_nobody_composes" in more
+        )
+        return caught, (
+            f"the same record with 'mda' dropped from switches_asked: {fewer!r}; "
+            f"with a term the arm never sets added: {more!r}; undoctored: kept"
+        )
+
     return (
+        Tooth(
+            name="a record composed with one term fewer, or one more",
+            what=(
+                "a complete record whose switches_asked lacks a term the arm "
+                "composes today, and one that carries a term it never sets"
+            ),
+            must="be refused by name, while the undoctored record is kept",
+            check=a_record_composed_with_one_term_fewer,
+        ),
         Tooth(
             name="a matching digest with a different stamped delta",
             what="the child-stamped campaign_delta doubled in a record whose job_digest equals the job's",

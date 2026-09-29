@@ -942,13 +942,67 @@ def _lock_for(directory: Path) -> threading.Lock:
         return _LOCKS.setdefault(str(directory), threading.Lock())
 
 
-def _kept(job: Job, identity: Mapping[str, Any], digest: str, outdir: Path) -> dict[str, Any] | None:
+def why_not_composed_as_today(
+    record: Mapping[str, Any], terms: Mapping[str, str]
+) -> str | None:
+    """Why *record* was not composed from the switch **terms** the arm sets today, or None.
+
+    The job identity names the arm, never the switches the arm composes, so a
+    driver change that makes an arm compose one more switch (V5 list item 5:
+    the partitioned evaluation arm's once-after-convergence execution of the
+    per-run deferred set) leaves every earlier record of that arm with the
+    same digest — and ``--resume`` would keep a record of a run the arm no
+    longer makes.  The child stamps what it was asked for (``switches_asked``,
+    the composed terms), so the comparison is by **term name**: a record
+    composed with a term the arm no longer sets, or without one it now sets,
+    is not a record of this job.  Values are not compared here — a path term
+    differs between two trees by construction (trap T20) and the identity's
+    own fields cover the values that matter — and a record made before the
+    stamp existed is left to the completeness contract.
+    """
+    asked = record.get("switches_asked")
+    if not isinstance(asked, Mapping):
+        return None
+    now = set(terms)
+    then = set(asked)
+    if now == then:
+        return None
+    gained = sorted(now - then)
+    lost = sorted(then - now)
+    return (
+        "the arm composes "
+        + (f"term(s) {gained} the record was made without" if gained else "")
+        + (" and " if gained and lost else "")
+        + (f"no term {lost}, which the record was made with" if lost else "")
+        + ": a driver change made the arm compose differently, so the record is "
+        "of a run the arm no longer makes"
+    )
+
+
+def _kept(
+    job: Job,
+    identity: Mapping[str, Any],
+    digest: str,
+    outdir: Path,
+    *,
+    campaign: "Campaign | None" = None,
+) -> dict[str, Any] | None:
     """The outcome of a kept run, or None where the record is not this job's."""
     if not (outdir / "metrics.json").exists():
         return None
     previous = records_mod.read(outdir)
     if not records_mod.is_complete_for(previous, identity=identity, digest=digest):
         return None
+    if campaign is not None:
+        _env, terms = environment_for(job, campaign)
+        why = why_not_composed_as_today(previous, terms)
+        if why is not None:
+            print(
+                f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
+                f"re-made: {why}",
+                flush=True,
+            )
+            return None
     print(
         f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
         f"resumed (complete record of this job kept; digest {digest[:12]})",
@@ -1071,7 +1125,7 @@ def run(
     digest = records_mod.job_digest(identity)
     with _lock_for(outdir):
         if resume or (digest in _MADE_THIS_INVOCATION and not fresh):
-            kept = _kept(job, identity, digest, outdir)
+            kept = _kept(job, identity, digest, outdir, campaign=campaign)
             if kept is not None:
                 _MADE_THIS_INVOCATION[digest] = str(outdir)
                 return kept
