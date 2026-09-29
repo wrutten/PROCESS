@@ -286,8 +286,29 @@ def _tally_measurements(campaign: Campaign) -> dict[str, Measurement]:
     """The two tally stages: one per phase, each with nothing to pass."""
     from harness.measurement import tally_evaluation as tally_a_mod  # noqa: PLC0415
     from harness.measurement import tally_optimisation as tally_b_mod  # noqa: PLC0415
+    from harness.measurement import tally_supplementary as tally_s_mod  # noqa: PLC0415
 
     return {
+        # A102 (v5-campaign): the declared supplementary stages' tables (V5
+        # plan §3; A96), over their own records alone, beside the campaign.
+        tally_s_mod.STAGE_NAME: Measurement(
+            name=tally_s_mod.STAGE_NAME,
+            reports=(
+                "the declared supplementary stages' tables (st_regression B0 and "
+                "B2 under the census set at 1e-12): the seed set, per-arm success, "
+                "the same-optimum statistic, R = rho x epsilon, the cost, the "
+                "module sweeps, the achieved accuracy -- labelled supplementary, "
+                "never pooled with the campaign -- and one table per "
+                "configuration placing the campaign's and the supplementary "
+                "runs side by side per seed"
+            ),
+            guarded_by=(
+                "run_kind_separation (the population is declared over the "
+                "supplementary kind alone); reported beside, never a verdict"
+            ),
+            body=lambda *, resume=False: tally_s_mod.tally(campaign, resume=resume),
+            printer=tally_s_mod.print_tally,
+        ),
         "tally_evaluation": Measurement(
             name="tally_evaluation",
             reports=(

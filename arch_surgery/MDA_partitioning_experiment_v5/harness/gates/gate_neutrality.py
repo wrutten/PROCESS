@@ -324,6 +324,22 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "checked before the comparison runs and is what makes exit_audit "
         "comparable"
     ),
+    # A102 (v5-campaign; V5 plan §6): the warmed evaluation child's block --
+    # a harness change to the child, not a driver change, but the same shape
+    # as the timer fields above: absent on a side captured before the child
+    # warmed, a block after; its counts and exit-state digests are compared
+    # wherever both sides carry it (its wall-clock leaves are excluded by
+    # name, ALWAYS_EXCLUDED).  First placed in the instrument-change table,
+    # which applies only where the audit instrument's stamp differs; the
+    # after capture re-made by the warmed child at d08e8ab4 then read every
+    # leaf of the block as present on one side only (933 values, 0 output-file
+    # lines) -- moved here at that press.
+    "evaluation_warmup": (
+        "the warmed evaluation's own account of itself (A102 (v5-campaign)): "
+        "the discarded warm-up's counts and digest, the entry's restore, the "
+        "measured evaluation's counts and digest.  Absent on a side captured "
+        "by the cold child, a block after; compared wherever both sides carry it"
+    ),
     "reproduction_overrides": (
         "a field the record gains so that a run made under the reproduction "
         "gate's overrides says so; null on both sides here, absent on the "
@@ -662,15 +678,6 @@ FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE: dict[str, str] = {
         "positions the hook reached, their component counts and their digests "
         "sit beside this flag in the same block and are compared"
     ),
-    # A102 (v5-campaign; V5 plan §6): the warmed evaluation child's block --
-    # absent on a side captured before the child warmed, a block after.  Its
-    # counts and exit-state digests are compared wherever both sides carry
-    # it; its wall-clock leaves are excluded by name (ALWAYS_EXCLUDED).
-    "evaluation_warmup": (
-        "the warmed evaluation's own account of itself: the discarded warm-up's "
-        "counts and digest, the entry's restore, the measured evaluation's "
-        "counts and digest.  Absent before the child warmed, a block after"
-    ),
 }
 
 #: What kind of thing each instrument-change name is, on the same rule as
@@ -684,7 +691,6 @@ INSTRUMENT_CHANGE_KIND: dict[str, str] = {
     },
     "exit_audit.instrument": "the instrument's own description of itself",
     "audit_snapshot.installed": "whether the instrument was installed at all",
-    "evaluation_warmup": "the instrument's own description of itself",
 }
 
 
