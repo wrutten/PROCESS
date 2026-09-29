@@ -1732,3 +1732,140 @@ population** — one or two seeds per arm — with the commit(s) those records w
 position, the convergence ruler and the exit-audit instrument version, all read back from the
 records themselves rather than written down. The campaign fills the tables again, over its own
 seeds, after the user approves execution; the campaign of 2026-09-14 is what the report carries.
+
+---
+
+## 17. The test set — what a block loop stops on, its census, its gate, and the fallback (DR11)
+
+*Added 2026-09-29 by task A100 (v5-test-set), driver change DR11 (V5 plan §3, §7, §11; decisions
+D32 and D39; §12 Q5). The rewrite of this README to V5's text is still pending (plan §8); this
+section is the part DR11 owns.*
+
+**What changed.** V4 stopped every block loop on the block's **whole write set** — every field an
+in-loop model writes (840 / 846 / 827 components; `harness/data/write_sets_<configuration>.json`) —
+at τ = 1e-6. V5 stops each loop on its **test set**, and which set is a campaign-level switch,
+`PROCESS_ARCH_TEST_SET`, composed into every arm the loop runs in (never a matrix cell) and refused
+by the driver when unset while the loop is on, so no run relies on a default:
+
+| value | what the loop tests | τ (from `config.TAU_BY_TEST_SET`, unless `--tau`) | provenance |
+|---|---|---|---|
+| `census` (the default) | the **census test set**: per loop and per block, the components a sweep of the block reads before it first writes them and writes later in the same sweep — measured at run time in the arm's own order, over whole optimisations (§17.1) | 1e-8, the rule ε ≤ `epsfcn`³ (A89, A93) | D32; `harness/data/test_sets_<configuration>.json`, `PROCESS_ARCH_TEST_SETS` |
+| `write_set` (the fallback) | the block's **whole write set** — exactly V4's predicate; nothing on this path differs from the copy before DR11 (gate GC, straddle DR10 → DR11) | 1e-6, V4's | D39, the user: *"the option to run the convergence on the state with the 10e-6 tolerance, like v4 — as a fallback"* |
+
+The write sets stay loaded under both values (the block trace splits a residual by them, the exit
+audit's restricted statistic reads the per-node census); only the loop's *stopping subset* changes.
+What the loops bound — the set, the loop key it was selected by, the artifact's digests and the
+width per block — is stamped once per run by the driver (`module_solve.LOOP_TEST_SETS`) and lands in
+the record as `loop_test_sets`; `campaign_test_set` and `campaign_tau` stamp the campaign's setting
+beside it. **Both are job-identity fields**, rendered only where they differ from V4's values (the
+fallback at 1e-6): a fallback job carries V4's identity — which is what makes every record made
+before DR11 a record of the fallback, and the seeded reproduction records exactly what GR is — and a
+census job, or any job at another tolerance, has a digest no earlier record has
+(`records.IDENTITY_DEFAULTS_WHEN_ABSENT`, `pool.resolve_settings`). The pool refuses a job whose
+test set or tolerance is not the campaign's unless a **declared supplementary stage** admits it
+(§17.4). The `mixed` convergence ruler (DR5, V4's gate G8) went with the same change: there is one
+ruler, `frozen`, the switch that selected the other is retired in the driver and the registry
+alike, and the record's exit audit carries one block (`records.AUDIT_RULERS`).
+
+**How the driver selects a loop's sets.** The driver never knows an arm's name. The artifact is
+keyed by **loop**, `<mda>/<burn-time owner>` as the driver resolves them — `flat/loop` (A0, B0),
+`flat/constant` (A1), `flat/optimiser` (B1), `partitioned/constant` (A2), `partitioned/optimiser`
+(B2), and on a steady-state configuration `flat/loop` and `partitioned/loop` — and each entry says
+which optimisation arm's census it was measured on and which arms it applies to
+(`arms.Arm.loop_key`). A loop the artifact does not know is refused, never given another loop's
+sets. **A block the census never saw sweep has no list and tests nothing**: under `census` such a
+block converges at its first pass (`load_loop_tests` gives it an empty set, because the predicate
+scores an unwritten component `inf` and "everything" would hold the loop open for ever). The
+artifact names those blocks per loop (`blocks_never_censused` in the stamp); the census stage's
+record counts them.
+
+### 17.1 The census stage — `--census take | write`
+
+`harness/experiment/test_sets.py`, with the instrument in
+`harness/child/read_before_write_census.py` (ported from A89's `rbw_census.py` and A92's
+`optimisation_path_census.py`: `__getattribute__` / `__setattr__` hooks on the data-structure
+namespaces restricted to `y`, plus a value snapshot of every component **around every node call**,
+whatever its type at install — trap T18 — so an in-place array write and a type change are writes;
+one window per block sweep; one record per `call_models`).
+
+1. **The job set**: seeds 0 and 1, every configuration, every iterating optimisation arm active on
+   it (`B0`, `B1`, `B2`; `B1` where pulsed) — 16 censused optimisations, each with an uncensused
+   **twin** (the same job without the instrument; the instrument's variable
+   `HARNESS_READ_BEFORE_WRITE_CENSUS` is a harness name the driver never reads, digested by the pool
+   into the identity). **Under the fallback**, by construction: the census observes runs that stop on
+   V4's predicate, so the twin is what V4 would have run.
+2. **Observation-only, checked**: each censused run against its twin on status, exit code,
+   iterations, evaluations, solve-phase node calls and `norm_objf` to the bit. A difference fails the
+   stage.
+3. **The population**: the union over the two seeds per configuration, arm and block, **unioned with
+   the prior optimisation-path set of the twin arm** where one exists — A92's sets, which contain
+   A89's eight-entry sets and the four cold-start components — and compared with both priors by name
+   (`harness/data/test_set_prior_optimisation_path.json`, `test_set_prior_eight_entry.json`, entered
+   from their own source commits and checked by the `data` gate). `B1` has no prior: its set is
+   measured here for the first time, as the plan asks (*"measured, not assumed"*).
+4. **The artifact**, one per configuration, with the provenance of every record it was derived from
+   (`census_runs`: seed, `tree_git_head`, `job_digest`, `norm_objf`, path) and `sets_sha256`. `take`
+   writes it under `runs/census_test_sets/`; `write` also copies it into `harness/data/`, where it is
+   committed and then entered in `harness/data/PROVENANCE.json` with `data_provenance.py add <name>
+   --source-commit <that commit>` (a generated artifact's source is itself at the commit it was
+   committed).
+
+`--artifacts check` validates the committed artifact (`artifacts._check_test_sets`): format, the
+configuration stamp, the coupling-state digest bound, every key a coupling component, `sets_sha256`
+rebuilt, a loop entry for every active block arm, every census run stamped, and — where a named
+record is on this tree — its `job_digest` and `tree_git_head` agreeing with the artifact's. The
+stage's own teeth (`--artifacts teeth`, "census test sets"): one ulp on a twin's `norm_objf` is
+reported as not reproducing; a key `y` lacks is refused; a corrupted `sets_sha256` does not rebuild.
+
+### 17.2 Gate GT — `test_set`
+
+Per configuration and block arm of the evaluation phase (`A0`, `A1`, `A2`), from gate G6's pairing
+entry (seed 1, δ = 0.10; the full-set run is G6's own job, shared through the pool), under the
+census set at the campaign's τ, on the form A92 declared from its measurement: **(i)** the carried
+component with the largest whole-`y` exit residual under the full set (ties, including a whole set
+at 0.0, to the alphabetically last key) is removed from every block of the arm's loop that carries
+it — a throwaway copy of the artifact handed to the driver through `PROCESS_ARCH_TEST_SETS` — and
+the run must **stop earlier and leave a different exit state** (bit comparison over the whole of
+`y`), or is reported *not individually binding on that entry*; **(ii)** a non-carried control
+dropped the same way must be **bit-identical** on every count and every component; **(iii)** the
+whole-`y` exit audit of every run is reported beside — it is not the tooth (A92: a one-sweep-early
+stop stays below τ on the audit). Every row also checks the driver **bound the narrowed width**
+(`loop_test_sets` one component narrower in exactly the blocks the key was removed from). PASS
+needs every control clean, every drop biting or not binding, and at least one bite over the job
+set. Under the fallback the gate refuses: there is no census set to drop a component from. Teeth:
+a biting drop's exit state replaced by the full run's reads as not binding; one ulp on a control's
+exit state fails it; an artifact that still lists the key it claims to drop is refused; a width
+stamp doctored to the full width fails the binding check.
+
+### 17.3 Which gates read what, after DR11
+
+| gate | under | what DR11 adds to it |
+|---|---|---|
+| G1 `switch_neutrality` | every switch unset | nothing is reached; `loop_test_sets` reads null and `campaign_test_set` is a harness stamp, both declared in `FIELDS_ADDED_BY_A_DRIVER_CHANGE` |
+| GC `count_neutrality` | **`write_set`**, by declaration (`STRADDLE_TEST_SET`) | straddle DR10 → DR11: every count and exit state identical to the digit — the proof that the fallback is V4's predicate; refused under `census` |
+| G5 `switch_composition` | the campaign's | the plan column gains `test_set` and, under `census`, `test_sets` |
+| G6 `entry_and_warm` | the campaign's | the warm criterion at V5's τ on the census set, as the plan asks |
+| G7 `record_completeness` | the campaign's | `campaign_test_set` and `loop_test_sets` in the contract; one ruler |
+| GT `test_set` | `census` | §17.2 |
+| GR `reproduction` | read-once | the recorded verdict at the copy commit is read under `--resume`; never re-made |
+
+### 17.4 The supplementary stage — `--supplementary <name>`
+
+`config.SUPPLEMENTARY_STAGES` declares stages reported **beside** the campaign under their own test
+set and tolerance — today one, `st_census_exact`: `B0` and `B2` on `st_regression` under the census
+set at τ = 1e-12 (V5 plan §3 after A96 (st-trajectory-ladder): the rung where the census loops read
+exact and the optimiser's path returns). The pool admits a job at those settings only when a
+declared stage matches its phase, configuration and arm (`pool.resolve_settings`); its records are
+stamped `run_kind == "supplementary"` with `campaign_tau = 1e-12`, the tolerance is in the job
+identity, and they live under `runs/supplementary/<name>/`. `chain.supplementary_jobs` composes the
+job set; `--arm`, `--seed` and `--configuration` narrow it; `--run-kind smoke` makes a smoke record
+instead. The campaign task presses the whole stage; this task pressed one smoke record from it.
+
+### 17.5 The smoke pairs — `--smoke-test-set`
+
+`harness/measurement/test_set_smoke.py`: `B0` and `B2` on the cheapest pulsed configuration at seed 0
+under the census set and under the fallback, plus the supplementary stage's `B2` on `st_regression`,
+all smoke records under `runs/single/test_set_smoke/`. The fallback pair must reproduce the seeded
+reproduction records of the same arm and seed to the `norm_objf` bit (the fallback is V4 on this
+tree); the per-evaluation node-call ratio `B2/B0` is printed beside each pair as context, never a
+verdict; a ladder record handed in with `--ladder-record` is compared with the supplementary smoke.

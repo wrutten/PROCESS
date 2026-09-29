@@ -117,6 +117,12 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "env_architecture": "the switch vocabulary the change renames",
     "resolved_switches": "the switch vocabulary the change renames",
     "audit_position_note": "prose quoted from a harness constant",
+    # A100 (v5-test-set), DR11: the harness's stamps of itself and of the
+    # campaign it was pressed from (see gate_neutrality.ALWAYS_EXCLUDED).
+    "harness_version": "the harness's own version stamp",
+    "campaign_tau": "the campaign's declared setting, a harness stamp",
+    "campaign_test_set": "the campaign's declared setting, a harness stamp",
+    "exit_audit.rulers_note": "prose quoted from a harness constant",
 }
 
 def _assert_every_name_is_classified() -> None:

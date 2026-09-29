@@ -133,6 +133,34 @@ ALWAYS_EXCLUDED: dict[str, str] = {
     "tree": "an absolute path; the tree is the same tree",
     "repository": "an absolute path",
     "process_file": "an absolute path; equality of the tree is asserted per run",
+    # --- the harness's own stamps of itself and of the campaign (A100 (v5-test-set)) --
+    #
+    # Found by the first press of the DR11 straddle (b1bb1594 -> 60434c52):
+    # 27 differing leaves, every one a harness stamp and none a driver value,
+    # with every output-file line identical.  Each is a thing the harness
+    # writes about itself or about the campaign it was pressed from, not a
+    # thing the driver did; the driver's own resolved values are compared in
+    # full through resolved_switches.
+    "harness_version": (
+        "which harness wrote the record: a version stamp, bumped when the "
+        "record schema changes (0.2.0 -> 0.3.0 at DR11), not a behaviour"
+    ),
+    "campaign_tau": (
+        "the campaign's declared tolerance, a harness stamp: DR11 made it "
+        "follow the test set (1e-6 under the fallback, 1e-8 under the census "
+        "set), and the reference arms compose no tolerance at all.  The "
+        "tolerance the driver resolved is compared through "
+        "resolved_switches (process.core.solver.module_solve.TAU)"
+    ),
+    "campaign_test_set": (
+        "the campaign's declared test set, a harness stamp (DR11); the "
+        "reference arms compose no test set and the driver's resolved value "
+        "is compared through resolved_switches (…module_solve.TEST_SET)"
+    ),
+    "exit_audit.rulers_note": (
+        "a sentence of prose the exit audit writes beside its blocks, reworded "
+        "by DR11 when the second ruler went; not a value"
+    ),
     # when it happened, and how long it took
     "wall_s": "wall clock is context, never evidence (I-10)",
     "cpu_user_s": "cpu time is a contention diagnostic",
@@ -265,11 +293,10 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "before it, null after with every switch unset (no block loop runs, "
         "so the stamp is never filled); compared wherever both sides carry it"
     ),
-    "campaign_test_set": (
-        "the harness's stamp of the campaign-level test set (DR11): absent on "
-        "a side captured before the field existed, a value after.  The "
-        "reference arms never compose the switch it names; the driver's own "
-        "resolved value (resolved_switches) is compared in full"
+    "coupling_state_provenance.test_set": (
+        "the loaded spec's stamp of the test set (DR11), beside the tolerance "
+        "and the ruler it already carried: absent on the earlier side, null "
+        "on the reference arms after (they compose no test set)"
     ),
     "audit_snapshot": (
         "the snapshot block the audit-position change adds; absent on the "
@@ -471,6 +498,17 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
 #: default condition would compare 0 against 122 and fail -- reporting the
 #: absence of a computation as a difference in behaviour.
 CONDITIONAL_WITNESS: dict[str, str] = {
+    # The digest is a function of the identity's fields.  DR11 (A100
+    # (v5-test-set)) added two identity fields, the test set and the
+    # tolerance, rendered where they differ from V4's values -- so across the
+    # DR11 commit the same job's digest moves although every field both
+    # sides carry agrees (the identity's leaves are compared one by one under
+    # the conditional name above).  Witnessed by one of the added fields:
+    # where it is present on exactly one side the digest was computed over
+    # two field sets and is excluded; where it is present on both, or on
+    # neither (two fallback captures, or two captures before DR11), the
+    # digests were computed over the same fields and are compared.
+    "job_digest": "job_identity.test_set",
     "exit_audit.frozen.n_excluded_from_the_restricted_statistic": (
         "exit_audit.frozen.restricted"
     ),
@@ -1027,11 +1065,16 @@ def compare_records(
             instrument_compared.append(path)
         if conditional is not None and is_volatile(path, conditional) is not None:
             witness = _conditional_witness(path, conditional)
-            if witness is not None:
+            if witness is not None and (
+                _block_present(before, witness) or _block_present(after, witness)
+            ):
                 one_sided = _block_present(before, witness) != _block_present(
                     after, witness
                 )
             else:
+                # No witness declared, or the witness absent on both sides
+                # (two captures made before the witnessed field existed):
+                # the name's own leaf decides.
                 va, vb = a.get(path, missing), b.get(path, missing)
                 one_sided = ((va is missing) != (vb is missing)) or (
                     (va is None) != (vb is None)

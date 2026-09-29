@@ -310,8 +310,28 @@ def _subtree(record: Mapping[str, Any], path: str) -> Any:
 _MISSING = object()
 
 
+#: Leaves under the declared paths that are **paths on disk**, not counts,
+#: each with its reason: excluded by name, never compared.  Found by the
+#: first press of the DR10 -> DR11 straddle (A100 (v5-test-set)): the before
+#: side had been made in A99's worktree and the after side in A100's, and the
+#: one differing leaf of 3 963 on every deferring arm was this absolute path
+#: — the first GC straddle whose two sides were made in two working trees
+#: (A99's three presses were all one tree, where the path agrees by accident
+#: of location; the same class as gate G1's cross-tree paths).  What still
+#: carries the artifact's identity is compared beside it: ``nodes_sha256``,
+#: ``nodes``, ``executed_once`` and the per-node suppression counts.
+PATH_LEAVES_NOT_COMPARED: dict[str, str] = {
+    "defer_per_run_totals.artifact": (
+        "an absolute path to the per-run deferral artifact, different between "
+        "two working trees by construction; its content is compared through "
+        "defer_per_run_totals.nodes_sha256 and the node lists beside it"
+    ),
+}
+
+
 def count_leaves(record: Mapping[str, Any], paths: Mapping[str, str] | tuple[str, ...]) -> dict[str, Any]:
-    """Every leaf under every declared path, keyed by its full dotted path."""
+    """Every leaf under every declared path, keyed by its full dotted path,
+    less the path leaves :data:`PATH_LEAVES_NOT_COMPARED` names."""
     out: dict[str, Any] = {}
     for path in paths:
         value = _subtree(record, path)
@@ -319,6 +339,8 @@ def count_leaves(record: Mapping[str, Any], paths: Mapping[str, str] | tuple[str
             continue
         if isinstance(value, (dict, list)):
             for leaf, leaf_value in neutrality_mod.leaves(value, prefix=path).items():
+                if leaf in PATH_LEAVES_NOT_COMPARED:
+                    continue
                 out[leaf] = leaf_value
         else:
             out[path] = value
@@ -720,6 +742,7 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         "n_components_compared": n_components,
         "n_components_differing": n_components_differing,
         "count_paths": dict(COUNT_PATHS),
+        "path_leaves_not_compared": dict(PATH_LEAVES_NOT_COMPARED),
         "prime_paths": list(PRIME_PATHS),
         "state_files": list(STATE_FILES),
         "label_variable": LABEL_VARIABLE,
