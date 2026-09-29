@@ -87,7 +87,7 @@ from harness.child import predicate as predicate_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
 from harness.experiment import switches as switches_mod  # noqa: E402
 from harness.gates import reference as reference_mod  # noqa: E402
-from harness.core.config import Campaign, Config, default_campaign  # noqa: E402
+from harness.core.config import TAU_BY_TEST_SET, V4_TEST_SET, Campaign, Config, default_campaign  # noqa: E402
 from harness.gates.selfcheck import Check  # noqa: E402
 
 #: Where the gate's runs and its verdict go.  Untracked bulk; the verdict is
@@ -216,8 +216,9 @@ def entry_reference_job(config: Config) -> pool_mod.Job:
 
 
 def phase_a_reference_directory(campaign: Campaign, config: Config) -> Path:
-    """Where the configuration's reference record is: the pool's directory."""
-    return pool_mod.directory_for(entry_reference_job(config), campaign)
+    """Where the configuration's reference record is under V4's criterion: the
+    pool's directory of the reproduction gate's own prerequisite."""
+    return pool_mod.directory_for(v4_criterion(entry_reference_job(config)), campaign)
 
 
 def plan(campaign: Campaign, root: Path) -> tuple[list[PlannedRun], list[pool_mod.Job]]:
@@ -228,7 +229,7 @@ def plan(campaign: Campaign, root: Path) -> tuple[list[PlannedRun], list[pool_mo
     their exit state.  Every job runs in the shared pool (``outdir`` None);
     *root* is where the verdict and the teeth's scratch files go.
     """
-    prerequisites = [entry_reference_job(config) for config in campaign.configurations]
+    prerequisites = [v4_criterion(entry_reference_job(config)) for config in campaign.configurations]
     planned: list[PlannedRun] = []
     for run in reference_mod.reference_set(campaign):
         config = campaign.configuration(run.configuration)
@@ -236,12 +237,28 @@ def plan(campaign: Campaign, root: Path) -> tuple[list[PlannedRun], list[pool_mo
     return planned, prerequisites
 
 
+def v4_criterion(job: pool_mod.Job) -> pool_mod.Job:
+    """*job* with the reproduction gate's criterion set explicitly: V4's.
+
+    The gate reproduces the previous revision's numbers on the copy, so its
+    loops stop on the block's whole write set at 1e-6 whatever campaign the
+    button was pressed from (D39; driver change DR11 made the criterion a
+    switch).  Set on every job the gate composes, so that a census campaign
+    reading GR's records resolves GR's own directories and not a census
+    record of the same arm; the pool admits V4's criterion for any job that
+    is not a campaign record (``pool.resolve_settings``).
+    """
+    job.test_set = V4_TEST_SET
+    job.tau = float(TAU_BY_TEST_SET[V4_TEST_SET])
+    return job
+
+
 def _job_for(
     run: reference_mod.ReferenceRun, config: Config, campaign: Campaign, root: Path
 ) -> pool_mod.Job:
     displaced = run.seed != 0
     if run.phase == "B":
-        return pool_mod.Job(
+        return v4_criterion(pool_mod.Job(
             phase="B",
             arm=run.arm,
             config=config,
@@ -252,8 +269,8 @@ def _job_for(
             reproduction_overrides=reproduction_overrides(run.arm),
             audit_position=REPRODUCTION_AUDIT_POSITION,
             audit_position_caller=GATE_NAME,
-        )
-    return pool_mod.Job(
+        ))
+    return v4_criterion(pool_mod.Job(
         phase="A",
         arm=run.arm,
         config=config,
@@ -261,7 +278,7 @@ def _job_for(
         regime="perturbed" if displaced else "unperturbed",
         delta=campaign.delta,
         run_kind="gate",
-    )
+    ))
 
 
 def pin_for(reference_burn_hex: str, seed: int, delta: float) -> str:
@@ -367,7 +384,7 @@ def substitute_a0p_jobs(
         jobs.append(
             (
                 config,
-                pool_mod.Job(
+                v4_criterion(pool_mod.Job(
                     phase="A",
                     arm="A1",
                     config=config,
@@ -377,7 +394,7 @@ def substitute_a0p_jobs(
                     pin_hex=entry["t_plant_pulse_burn_hex"],
                     entry_state=Path(entry["snapshot"]),
                     run_kind="gate",
-                ),
+                )),
             )
         )
     return jobs
@@ -386,7 +403,7 @@ def substitute_a0p_jobs(
 def substitute_ar_jobs(campaign: Campaign) -> list[pool_mod.Job]:
     """The §7.5 substitute for ``AR``: one cold evaluation per configuration."""
     return [
-        pool_mod.Job(
+        v4_criterion(pool_mod.Job(
             phase="A",
             arm="AR",
             config=config,
@@ -394,7 +411,7 @@ def substitute_ar_jobs(campaign: Campaign) -> list[pool_mod.Job]:
             regime="unperturbed",
             delta=None,
             run_kind="gate",
-        )
+        ))
         for config in campaign.configurations
     ]
 
@@ -427,7 +444,7 @@ def composition_tooth_job(
         return None, None
     config = campaign.configuration(chosen.run.configuration)
     switch = switches_mod.REGISTRY["mda"].driver_name
-    return chosen, pool_mod.Job(
+    return chosen, v4_criterion(pool_mod.Job(
         phase="B",
         arm="B2",
         config=config,
@@ -439,7 +456,7 @@ def composition_tooth_job(
         audit_position=REPRODUCTION_AUDIT_POSITION,
         audit_position_caller=GATE_NAME,
         override_env={switch: COMPOSITION_TOOTH_WRONG_VALUE},
-    )
+    ))
 
 
 def planned_jobs(campaign: Campaign) -> list[pool_mod.Job]:

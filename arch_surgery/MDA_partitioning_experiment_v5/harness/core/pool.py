@@ -432,7 +432,18 @@ def resolve_settings(job: Job, campaign: Campaign) -> Job:
             test_set=test_set,
             tau=float(tau),
         )
-        if stage is None:
+        # The reproduction gate's criterion -- V4's fallback -- is admitted
+        # for any job that is not a campaign record: GR's records are V4's
+        # own numbers on the copy (D39: GR must PASS under the fallback) and
+        # every gate that reads them composes GR's jobs under whatever
+        # campaign the button was pressed from.  A campaign record is never
+        # admitted at another setting than the campaign's.
+        is_v4 = (
+            test_set == records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT["test_set"]
+            and float(tau) == float(records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT["tau"])
+            and job.run_kind != "campaign"
+        )
+        if stage is None and not is_v4:
             raise PoolError(
                 f"{job.arm}/{job.config.name}/seed{job.seed} asks for test set "
                 f"{test_set!r} at tau={tau!r} while the campaign composes "
