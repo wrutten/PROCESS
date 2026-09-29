@@ -1,0 +1,2600 @@
+"""Module containing stellarator routines"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+import process.models.physics.fusion_reactions as reactions
+import process.models.physics.radiation_power as physics_funcs
+from process.core import constants
+from process.core import process_output as po
+from process.core.coolprop_interface import FluidProperties
+from process.core.exceptions import ProcessValueError
+from process.core.model import Model
+from process.data_structure.physics_variables import PlasmaIgnitionModel
+from process.models.engineering.pumping import CoolantType
+from process.models.physics.physics import Physics, rether
+from process.models.power import PumpingPowerModelTypes
+from process.models.stellarator.build import st_build
+from process.models.stellarator.coils.calculate import st_coil
+from process.models.stellarator.density_limits import (
+    power_at_ignition_point,
+    st_density_limits,
+)
+from process.models.stellarator.divertor import st_div
+from process.models.stellarator.heating import st_heat
+from process.models.stellarator.preset_config import load_stellarator_config
+from process.models.tfcoil.base import TFConductorModel
+
+if TYPE_CHECKING:
+    from process.models.availability import Availability
+    from process.models.blankets.hcpb import CCFE_HCPB
+    from process.models.buildings import Buildings
+    from process.models.physics.current_drive import CurrentDrive
+    from process.models.physics.plasma_profiles import PlasmaProfile
+    from process.models.stellarator.neoclassics import Neoclassics
+    from process.models.vacuum import Vacuum
+
+logger = logging.getLogger(__name__)
+
+# NOTE: a different value of electron_charge was used in the original implementation
+# making the post-Python results slightly different. As a result, there is a
+# relative tolerance on the neoclassics tests of 1e-3
+KEV = 1e3 * constants.ELECTRON_CHARGE  # Kiloelectron-volt (keV)
+
+
+class Stellarator(Model):
+    """Module containing stellarator routines
+
+    This module contains routines for calculating the
+    parameters of the first wall, blanket and shield components
+    of a fusion power plant.
+
+    Parameters
+    ----------
+    availability:
+        The availability model
+    buildings:
+        The buildings model
+    vacuum:
+        The vacuum model
+    costs:
+        The costs model
+    plasma_profile:
+        The plasma_profile model
+    hcpb:
+        The ccfe_hcpb model
+    current_drive:
+        The CurrentDrive model
+    physics:
+        The Physics model
+    neoclassics:
+        The Neoclassics model
+    """
+
+    def __init__(
+        self,
+        availability: Availability,
+        vacuum: Vacuum,
+        buildings: Buildings,
+        costs: Model,
+        power,
+        plasma_profile: PlasmaProfile,
+        hcpb: CCFE_HCPB,
+        current_drive: CurrentDrive,
+        physics: Physics,
+        neoclassics: Neoclassics,
+        plasma_beta,
+        plasma_bootstrap,
+    ) -> None:
+        self.outfile: int = constants.NOUT
+        self.first_call_stfwbs = True
+
+        self.availability = availability
+        self.buildings = buildings
+        self.vacuum = vacuum
+        self.costs = costs
+        self.power = power
+        self.plasma_profile = plasma_profile
+        self.hcpb = hcpb
+        self.current_drive = current_drive
+        self.physics = physics
+        self.neoclassics = neoclassics
+        self.beta = plasma_beta
+        self.bootstrap = plasma_bootstrap
+
+    def output(self):
+        """Routine to output stellarator parameters"""
+        self.run(output=True)
+
+    def run(self, output: bool = False):
+        """Routine to call the physics and engineering modules
+        relevant to stellarators
+
+        This routine is the caller for the stellarator models.
+
+        Parameters
+        ----------
+        output :
+            indicate whether output should be written to the output file, or not
+        """
+        if output:
+            self.costs.run()
+            self.costs.output()
+            self.availability.run(output=True)
+            self.physics.calculate_effective_charge_ionisation_profiles()
+            self.physics.outplas()
+            st_heat(self, True, self.data)
+            self.st_phys(True)
+            st_density_limits(self, True, self.data)
+
+            # Change in density limit can result in changed dene?
+            # A second call of st_phys is used to make sure it is consistent.
+            # st_phys and density limits should be integrated to avoid this double call.
+            # Problem was probably bigger in the older version
+
+            self.st_phys(False)
+
+            st_div(self, True, self.data)
+            st_build(self, True, self.data)
+            st_coil(self, True, self.data)
+            self.st_strc(True)
+            self.st_fwbs(True)
+
+            self.power.tfpwr(output=True)
+            self.buildings.run(output=True)
+            self.vacuum.run(output=True)
+            self.power.acpow(output=True)
+            self.power.output_plant_electric_powers()
+
+            return
+
+        self.st_new_config()
+        self.st_geom()
+        self.st_phys(False)
+        st_density_limits(self, False, self.data)
+        st_coil(self, False, self.data)
+        st_build(self, False, self.data)
+        self.st_strc(False)
+        self.st_fwbs(False)
+        st_div(self, False, self.data)
+
+        self.power.tfpwr(output=False)
+        self.power.component_thermal_powers()
+        self.power.calculate_cryo_loads()
+        self.buildings.run(output=False)
+        self.vacuum.run(output=False)
+        self.power.acpow(output=False)
+        self.power.plant_electric_production()
+        # TODO: should availability.run be called
+        # rather than availability.avail?
+        self.availability.avail(output=False)
+        self.costs.run()
+
+        # This call is comparably time consuming..
+        # If the respective constraint equation is not called, do not set the values
+        (
+            self.data.stellarator.powerht_constraint,
+            self.data.stellarator.powerscaling_constraint,
+        ) = power_at_ignition_point(
+            self,
+            self.data.stellarator.max_gyrotron_frequency,
+            self.data.stellarator.te0_ecrh_achievable,
+        )
+
+        self.data.stellarator.first_call = False
+
+    def st_new_config(self):
+        """
+        Routine to initialise the stellarator configuration
+
+        Routine to initialise the stellarator configuration.
+        This routine is called right before the calculation and could
+        in principle overwrite variables from the input file.
+        It overwrites rminor with rmajor and aspect ratio e.g.
+
+        To clarify the coils scaling factor:
+        Coil aspect ratio factor can be described with the reversed equation
+        (so if we would know r_coil_minor)
+        f_coil_aspect = (
+            (self.data.physics.rmajor / self.data.stellarator.r_coil_minor) /
+            (self.data.stellarator_config.stella_config_rmajor_ref /
+             self.data.stellarator_config.stella_config_coil_rminor)
+        )
+
+        """
+        load_stellarator_config(
+            self.data.stellarator.istell,
+            Path(f"{self.data.globals.output_prefix}stella_conf.json"),
+            self.data,
+        )
+
+        # If self.data.physics.aspect ratio is not in self.data.numerics.ixc
+        # set it to default value
+        # Or when you call it the first time
+        if 1 not in self.data.numerics.ixc:
+            self.data.physics.aspect = (
+                self.data.stellarator_config.stella_config_aspect_ref
+            )
+
+        # Set the self.data.physics.rminor radius as result here.
+        self.data.physics.rminor = self.data.physics.rmajor / self.data.physics.aspect
+        self.data.physics.eps = 1.0e0 / self.data.physics.aspect
+
+        self.data.tfcoil.n_tf_coils = (
+            self.data.stellarator_config.stella_config_coilspermodule
+            * self.data.stellarator_config.stella_config_symmetry
+        )  # This overwrites self.data.tfcoil.n_tf_coils in input file.
+
+        self.data.stellarator.f_st_rmajor = (
+            self.data.physics.rmajor
+            / self.data.stellarator_config.stella_config_rmajor_ref
+        )  # Size scaling factor with respect to the reference calculation
+        self.data.stellarator.f_st_rminor = (
+            self.data.physics.rminor
+            / self.data.stellarator_config.stella_config_rminor_ref
+        )  # Size scaling factor with respect to the reference calculation
+
+        self.data.stellarator.f_st_aspect = (
+            self.data.physics.aspect
+            / self.data.stellarator_config.stella_config_aspect_ref
+        )
+        self.data.stellarator.f_st_n_coils = self.data.tfcoil.n_tf_coils / (
+            self.data.stellarator_config.stella_config_coilspermodule
+            * self.data.stellarator_config.stella_config_symmetry
+        )  # Coil number factor
+        self.data.stellarator.f_st_b = (
+            self.data.physics.b_plasma_toroidal_on_axis
+            / self.data.stellarator_config.stella_config_bt_ref
+        )  # B-field scaling factor
+
+        # Coil aspect ratio factor to the reference calculation
+        # (we use it to scale the coil minor radius)
+        f_coil_aspect = self.data.stellarator.f_st_coil_aspect
+
+        # Coil major radius, scaled with respect to the reference calculation
+        self.data.stellarator.r_coil_major = (
+            self.data.stellarator_config.stella_config_coil_rmajor
+            * self.data.stellarator.f_st_rmajor
+        )
+        # Coil minor radius, scaled with respect to the reference calculation
+        self.data.stellarator.r_coil_minor = (
+            self.data.stellarator_config.stella_config_coil_rminor
+            * self.data.stellarator.f_st_rmajor
+            / f_coil_aspect
+        )
+
+        self.data.stellarator.f_coil_shape = (
+            self.data.stellarator_config.stella_config_min_plasma_coil_distance
+            + self.data.stellarator_config.stella_config_rminor_ref
+        ) / self.data.stellarator_config.stella_config_coil_rminor
+
+    def st_geom(self):
+        """
+        Routine to calculate the plasma volume and surface area for
+        a stellarator using precalculated effective values
+
+        This routine calculates the plasma volume and surface area for
+        a stellarator configuration.
+        It is simple scaling based on a Fourier representation based on
+        that described in Geiger documentation.
+
+        References
+        ----------
+        J. Geiger, IPP Greifswald internal document:  'Darstellung von
+        ineinandergeschachtelten toroidal geschlossenen Flaechen mit
+        Fourierkoeffizienten' ('Representation of nested, closed
+        surfaces with Fourier coefficients')
+
+        """
+        self.data.physics.vol_plasma = (
+            self.data.stellarator.f_st_rmajor
+            * self.data.stellarator.f_st_rminor**2
+            * self.data.stellarator_config.stella_config_vol_plasma
+        )
+
+        # Plasma surface scaled from effective parameter:
+        self.data.physics.a_plasma_surface = (
+            self.data.stellarator.f_st_rmajor
+            * self.data.stellarator.f_st_rminor
+            * self.data.stellarator_config.stella_config_plasma_surface
+        )
+
+        # Plasma cross section area. Approximated
+        self.data.physics.a_plasma_poloidal = (
+            np.pi * self.data.physics.rminor * self.data.physics.rminor
+        )  # average, could be calculated for every toroidal angle if desired
+
+        # self.data.physics.a_plasma_surface_outboard is retained
+        # only for obsolescent fispact calculation...
+
+        # Cross-sectional area, averaged over toroidal angle
+        self.data.physics.a_plasma_surface_outboard = (
+            0.5e0 * self.data.physics.a_plasma_surface
+        )  # Used only in the divertor model; approximate as for tokamaks
+
+    def st_strc(self, output):
+        """Routine to calculate the structural masses for a stellarator
+
+        This routine calculates the structural masses for a stellarator.
+        This is the stellarator version of routine
+        <A HREF="struct.html">STRUCT</A>. In practice, many of the masses
+        are simply set to zero to avoid double-counting of structural
+        components that are specified differently for tokamaks.
+
+        Parameters
+        ----------
+        output :
+
+        """
+        self.data.structure.fncmass = 0.0e0
+
+        # Reactor core gravity support mass
+        self.data.structure.gsmass = 0.0e0  # ? Not sure about this.
+
+        # This is the previous scaling law for intercoil structure
+        # We keep is here as a reference to the new model, which
+        # we do not really trust yet.
+        # Mass of support structure (includes casing) (tonnes)
+        # Scaling for required structure mass (Steel) from:
+        # F.C. Moon, J. Appl. Phys. 53(12) (1982) 9112
+        #
+        # Values based on regression analysis by Greifswald, March 2014
+        m_struc = (
+            1.3483e0
+            * (1000.0e0 * self.data.tfcoil.e_tf_magnetic_stored_total_gj) ** 0.7821e0
+        )
+        msupstr = 1000.0e0 * m_struc  # kg
+
+        ################################################################
+        # Intercoil support structure calculation:
+        # Calculate the intercoil bolted plates structure from the coil surface
+
+        intercoil_surface = (
+            self.data.stellarator_config.stella_config_coilsurface
+            * self.data.stellarator.f_st_rmajor
+            * (
+                self.data.stellarator.r_coil_minor
+                / self.data.stellarator_config.stella_config_coil_rminor
+            )
+            - self.data.tfcoil.dx_tf_inboard_out_toroidal
+            * self.data.tfcoil.len_tf_coil
+            * self.data.tfcoil.n_tf_coils
+        )
+
+        # This 0.18 m is an effective thickness which is scaled with empirial 1.5 law.
+        # 5.6 T is reference point of Helias
+        # The thickness 0.18m was obtained as a measured value from Schauer,
+        # F. and Bykov, V. design of Helias 5-B. (Nucl Fus. 2013)
+        self.data.structure.aintmass = (
+            0.18e0
+            * (self.data.physics.b_plasma_toroidal_on_axis / 5.6) ** 2
+            * intercoil_surface
+            * self.data.fwbs.den_steel
+        )
+
+        self.data.structure.clgsmass = (
+            0.2e0 * self.data.structure.aintmass
+        )  # Very simple approximation for the gravity support.
+        # This fits for the Helias 5b reactor design point
+        # (F. and Bykov, V. design of Helias 5-B. (nucl Fus. 2013)).
+
+        # Total mass of cooled components
+        self.data.structure.coldmass = (
+            self.data.tfcoil.m_tf_coils_total
+            + self.data.structure.aintmass
+            + self.data.fwbs.dewmkg
+        )
+
+        # Output section
+
+        if output:
+            po.oheadr(self.outfile, "Support Structure")
+            po.ovarre(
+                self.outfile,
+                "Intercoil support structure mass (from intercoil calculation) (kg)",
+                "(aintmass)",
+                self.data.structure.aintmass,
+            )
+            po.ovarre(
+                self.outfile,
+                "Intercoil support structure mass (scaling, for comparison) (kg)",
+                "(empiricalmass)",
+                msupstr,
+            )
+            po.ovarre(
+                self.outfile,
+                "Gravity support structure mass (kg)",
+                "(clgsmass)",
+                self.data.structure.clgsmass,
+            )
+            po.ovarre(
+                self.outfile,
+                "Mass of cooled components (kg)",
+                "(coldmass)",
+                self.data.structure.coldmass,
+            )
+
+    def blanket_neutronics(self):
+        """Routine to calculate neutronic properties for a stellarator"""
+        # heating of the blanket
+        if self.data.fwbs.breedmat == 1:
+            self.data.fwbs.breeder = "Orthosilicate"
+            self.data.fwbs.densbreed = 1.50e3
+        elif self.data.fwbs.breedmat == 2:
+            self.data.fwbs.breeder = "Metatitanate"
+            self.data.fwbs.densbreed = 1.78e3
+        else:
+            self.data.fwbs.breeder = (
+                "Zirconate"  # (In reality, rarely used - activation problems)
+            )
+            self.data.fwbs.densbreed = 2.12e3
+
+        self.data.fwbs.m_blkt_total = (
+            self.data.fwbs.vol_blkt_total * self.data.fwbs.densbreed
+        )
+        self.hcpb.nuclear_heating_blanket()
+
+        # Heating of the magnets
+        self.hcpb.nuclear_heating_magnets(False)
+
+        # Rough estimate of TF coil volume used, assuming 25% of the total
+        # TF coil perimeter is inboard, 75% outboard
+        tf_volume = (
+            0.25 * self.data.tfcoil.len_tf_coil * self.data.tfcoil.a_tf_inboard_total
+            + 0.75
+            * self.data.tfcoil.len_tf_coil
+            * self.data.tfcoil.a_tf_leg_outboard
+            * self.data.tfcoil.n_tf_coils
+        )
+
+        self.data.fwbs.ptfnucpm3 = self.data.fwbs.p_tf_nuclear_heat_mw / tf_volume
+
+        # heating of the shield
+        self.hcpb.nuclear_heating_shield()
+
+        # Energy multiplication factor
+        self.data.fwbs.f_p_blkt_multiplication = 1.269
+
+        # Use older model to calculate neutron fluence since it
+        # is not calculated in the CCFE blanket model
+        (
+            _,
+            _,
+            _,
+            self.data.fwbs.flu_tf_neutron_fast_peak,
+            _,
+            _,
+            _,
+            _,
+            _,
+            _,
+        ) = self.sc_tf_coil_nuclear_heating_iter90()
+
+        # blktlife calculation left entirely to availability
+        # Cannot find calculation for vvhemax in CCFE blanket
+
+    def st_fwbs(self, output: bool):
+        """Routine to calculate first wall, blanket and shield properties
+        for a stellarator
+
+
+        This routine calculates a stellarator's first wall, blanket and
+        shield properties.
+        It calculates the nuclear heating in the blanket / shield, and
+        estimates the volume and masses of the first wall,
+        blanket, shield and vacuum vessel.
+        <P>The arrays <CODE>coef(i,j)</CODE> and <CODE>decay(i,j)</CODE>
+        are used for exponential decay approximations of the
+        (superconducting) TF coil nuclear parameters.
+        <UL><P><LI><CODE>j = 1</CODE> : stainless steel shield (assumed)
+        <P><LI><CODE>j = 2</CODE> : tungsten shield (not used)</UL>
+        Note: Costing and mass calculations elsewhere assume
+        stainless steel only.
+        <P>The method is the same as for tokamaks (as performed via
+        <A HREF="fwbs.html">fwbs</A>), except for the volume calculations,
+        which scale the surface area of the components from that
+        of the plasma.
+
+        Parameters
+        ----------
+        output:
+
+        Raises
+        ------
+        ProcessValueError
+            If i_p_coolant_pumping not 0 or 1
+            (can only use i_p_coolant_pumping = 0 or 1 for stellarator)
+
+
+        """
+        self.data.fwbs.life_fw_fpy = min(
+            self.data.costs.abktflnc / self.data.physics.pflux_fw_neutron_mw,
+            self.data.costs.life_plant,
+        )
+
+        # First wall inboard, outboard areas (assume 50% of total each)
+        self.data.first_wall.a_fw_inboard = 0.5e0 * self.data.first_wall.a_fw_total
+        self.data.first_wall.a_fw_outboard = 0.5e0 * self.data.first_wall.a_fw_total
+
+        # Blanket volume; assume that its surface area is scaled directly from the
+        # plasma surface area.
+        # Uses self.data.fwbs.fhole etc. to take account of gaps due to ports etc.
+
+        r1 = self.data.physics.rminor + 0.5e0 * (
+            self.data.build.dr_fw_plasma_gap_inboard
+            + self.data.build.dr_fw_inboard
+            + self.data.build.dr_fw_plasma_gap_outboard
+            + self.data.build.dr_fw_outboard
+        )
+        if self.data.heat_transport.ipowerflow == 0:
+            self.data.build.a_blkt_total_surface = (
+                self.data.physics.a_plasma_surface
+                * r1
+                / self.data.physics.rminor
+                * (1.0e0 - self.data.fwbs.fhole)
+            )
+        else:
+            self.data.build.a_blkt_total_surface = (
+                self.data.physics.a_plasma_surface
+                * r1
+                / self.data.physics.rminor
+                * (
+                    1.0e0
+                    - self.data.fwbs.fhole
+                    - self.data.fwbs.f_ster_div_single
+                    - self.data.fwbs.f_a_fw_outboard_hcd
+                )
+            )
+
+        self.data.build.a_blkt_inboard_surface = (
+            0.5e0 * self.data.build.a_blkt_total_surface
+        )
+        self.data.build.a_blkt_outboard_surface = (
+            0.5e0 * self.data.build.a_blkt_total_surface
+        )
+
+        self.data.fwbs.vol_blkt_inboard = (
+            self.data.build.a_blkt_inboard_surface * self.data.build.dr_blkt_inboard
+        )
+        self.data.fwbs.vol_blkt_outboard = (
+            self.data.build.a_blkt_outboard_surface * self.data.build.dr_blkt_outboard
+        )
+        self.data.fwbs.vol_blkt_total = (
+            self.data.fwbs.vol_blkt_inboard + self.data.fwbs.vol_blkt_outboard
+        )
+
+        # Shield volume
+        # Uses fvolsi, self.data.fwbs.fvolso as area coverage factors
+
+        r1 += 0.5e0 * (
+            self.data.build.dr_blkt_inboard + self.data.build.dr_blkt_outboard
+        )
+        self.data.build.a_shld_total_surface = (
+            self.data.physics.a_plasma_surface * r1 / self.data.physics.rminor
+        )
+        self.data.build.a_shld_inboard_surface = (
+            0.5e0 * self.data.build.a_shld_total_surface * self.data.fwbs.fvolsi
+        )
+        self.data.build.a_shld_outboard_surface = (
+            0.5e0 * self.data.build.a_shld_total_surface * self.data.fwbs.fvolso
+        )
+
+        vol_shld_inboard = (
+            self.data.build.a_shld_inboard_surface * self.data.build.dr_shld_inboard
+        )
+        vol_shld_outboard = (
+            self.data.build.a_shld_outboard_surface * self.data.build.dr_shld_outboard
+        )
+        self.data.fwbs.vol_shld_total = vol_shld_inboard + vol_shld_outboard
+
+        # Neutron power lost through holes in first wall (eventually absorbed by
+        # shield)
+
+        self.data.fwbs.pnucloss = (
+            self.data.physics.p_neutron_total_mw * self.data.fwbs.fhole
+        )
+
+        # The peaking factor, obtained as precalculated parameter
+        self.data.fwbs.wallpf = (
+            self.data.stellarator_config.stella_config_neutron_peakfactor
+        )
+
+        # Blanket neutronics calculations
+        if self.data.fwbs.blktmodel == 1:
+            self.blanket_neutronics()
+
+            if self.data.heat_transport.ipowerflow == 1:
+                self.data.fwbs.p_div_nuclear_heat_total_mw = (
+                    self.data.physics.p_neutron_total_mw
+                    * self.data.fwbs.f_ster_div_single
+                )
+                self.data.fwbs.p_fw_hcd_nuclear_heat_mw = (
+                    self.data.physics.p_neutron_total_mw
+                    * self.data.fwbs.f_a_fw_outboard_hcd
+                )
+                self.data.fwbs.p_fw_nuclear_heat_total_mw = (
+                    self.data.physics.p_neutron_total_mw
+                    - self.data.fwbs.p_div_nuclear_heat_total_mw
+                    - self.data.fwbs.pnucloss
+                    - self.data.fwbs.p_fw_hcd_nuclear_heat_mw
+                )
+
+                self.data.fwbs.pradloss = (
+                    self.data.physics.p_plasma_rad_mw * self.data.fwbs.fhole
+                )
+                self.data.fwbs.p_div_rad_total_mw = (
+                    self.data.physics.p_plasma_rad_mw * self.data.fwbs.f_ster_div_single
+                )
+                self.data.fwbs.p_fw_hcd_rad_total_mw = (
+                    self.data.physics.p_plasma_rad_mw
+                    * self.data.fwbs.f_a_fw_outboard_hcd
+                )
+                self.data.fwbs.p_fw_rad_total_mw = (
+                    self.data.physics.p_plasma_rad_mw
+                    - self.data.fwbs.p_div_rad_total_mw
+                    - self.data.fwbs.pradloss
+                    - self.data.fwbs.p_fw_hcd_rad_total_mw
+                )
+
+                self.data.heat_transport.p_fw_coolant_pump_mw = (
+                    self.data.heat_transport.f_p_fw_coolant_pump_total_heat
+                    * (
+                        self.data.fwbs.p_fw_nuclear_heat_total_mw
+                        + self.data.fwbs.p_fw_rad_total_mw
+                        + self.data.current_drive.p_beam_orbit_loss_mw
+                    )
+                )
+                self.data.heat_transport.p_blkt_coolant_pump_mw = (
+                    self.data.heat_transport.f_p_blkt_coolant_pump_total_heat
+                    * self.data.fwbs.p_blkt_nuclear_heat_total_mw
+                )
+                self.data.heat_transport.p_shld_coolant_pump_mw = (
+                    self.data.heat_transport.f_p_shld_coolant_pump_total_heat
+                    * self.data.fwbs.p_shld_nuclear_heat_mw
+                )
+                self.data.heat_transport.p_div_coolant_pump_mw = (
+                    self.data.heat_transport.f_p_div_coolant_pump_total_heat
+                    * (
+                        self.data.physics.p_plasma_separatrix_mw
+                        + self.data.fwbs.p_div_nuclear_heat_total_mw
+                        + self.data.fwbs.p_div_rad_total_mw
+                    )
+                )
+
+                # Void fraction in first wall / breeding zone,
+                # for use in self.data.fwbs.m_fw_total and coolvol calculation below
+
+                f_a_fw_coolant_inboard = (
+                    1.0e0
+                    - self.data.fwbs.fblbe
+                    - self.data.fwbs.fblbreed
+                    - self.data.fwbs.fblss
+                )
+                f_a_fw_coolant_outboard = f_a_fw_coolant_inboard
+
+        else:
+            self.data.fwbs.pnuc_cp = 0.0e0
+
+            if self.data.heat_transport.ipowerflow == 0:
+                # Energy-multiplied neutron power
+
+                pneut2 = (
+                    self.data.physics.p_neutron_total_mw
+                    - self.data.fwbs.pnucloss
+                    - self.data.fwbs.pnuc_cp
+                ) * self.data.fwbs.f_p_blkt_multiplication
+
+                self.data.fwbs.p_blkt_multiplication_mw = pneut2 - (
+                    self.data.physics.p_neutron_total_mw
+                    - self.data.fwbs.pnucloss
+                    - self.data.fwbs.pnuc_cp
+                )
+
+                # Nuclear heating in the blanket
+
+                decaybl = 0.075e0 / (
+                    1.0e0
+                    - self.data.fwbs.f_a_blkt_cooling_channels
+                    - self.data.fwbs.fblli2o
+                    - self.data.fwbs.fblbe
+                )
+
+                self.data.fwbs.p_blkt_nuclear_heat_total_mw = pneut2 * (
+                    1.0e0 - np.exp(-self.data.build.dr_blkt_outboard / decaybl)
+                )
+
+                # Nuclear heating in the shield
+                self.data.fwbs.p_shld_nuclear_heat_mw = (
+                    pneut2 - self.data.fwbs.p_blkt_nuclear_heat_total_mw
+                )
+
+                # Superconducting coil shielding calculations
+                (
+                    coilhtmx,
+                    dpacop,
+                    htheci,
+                    self.data.fwbs.flu_tf_neutron_fast_peak,
+                    pheci,
+                    pheco,
+                    ptfiwp,
+                    ptfowp,
+                    raddose,
+                    self.data.fwbs.p_tf_nuclear_heat_mw,
+                ) = self.sc_tf_coil_nuclear_heating_iter90()
+
+            else:  # self.data.heat_transport.ipowerflow == 1
+                # Neutron power incident on divertor (MW)
+
+                self.data.fwbs.p_div_nuclear_heat_total_mw = (
+                    self.data.physics.p_neutron_total_mw
+                    * self.data.fwbs.f_ster_div_single
+                )
+
+                # Neutron power incident on HCD apparatus (MW)
+
+                self.data.fwbs.p_fw_hcd_nuclear_heat_mw = (
+                    self.data.physics.p_neutron_total_mw
+                    * self.data.fwbs.f_a_fw_outboard_hcd
+                )
+
+                # Neutron power deposited in first wall, blanket and shield (MW)
+
+                pnucfwbs = (
+                    self.data.physics.p_neutron_total_mw
+                    - self.data.fwbs.p_div_nuclear_heat_total_mw
+                    - self.data.fwbs.pnucloss
+                    - self.data.fwbs.pnuc_cp
+                    - self.data.fwbs.p_fw_hcd_nuclear_heat_mw
+                )
+
+                # Split between inboard and outboard by first wall area fractions
+
+                pnucfwbsi = (
+                    pnucfwbs
+                    * self.data.first_wall.a_fw_inboard
+                    / self.data.first_wall.a_fw_total
+                )
+                pnucfwbso = (
+                    pnucfwbs
+                    * self.data.first_wall.a_fw_outboard
+                    / self.data.first_wall.a_fw_total
+                )
+
+                # Radiation power incident on divertor (MW)
+
+                self.data.fwbs.p_fw_hcd_rad_total_mw = (
+                    self.data.physics.p_plasma_rad_mw
+                    * self.data.fwbs.f_a_fw_outboard_hcd
+                )
+
+                # Radiation power incident on HCD apparatus (MW)
+
+                self.data.fwbs.p_fw_hcd_rad_total_mw = (
+                    self.data.physics.p_plasma_rad_mw
+                    * self.data.fwbs.f_a_fw_outboard_hcd
+                )
+
+                # Radiation power lost through holes (eventually hits shield) (MW)
+
+                self.data.fwbs.pradloss = (
+                    self.data.physics.p_plasma_rad_mw * self.data.fwbs.fhole
+                )
+
+                # Radiation power incident on first wall (MW)
+
+                self.data.fwbs.p_fw_rad_total_mw = (
+                    self.data.physics.p_plasma_rad_mw
+                    - self.data.fwbs.p_div_rad_total_mw
+                    - self.data.fwbs.pradloss
+                    - self.data.fwbs.p_fw_hcd_rad_total_mw
+                )
+
+                # Calculate the power deposited in the first wall, blanket and shield,
+                # and the required coolant pumping power
+
+                # If we have chosen pressurised water as the coolant, set the
+                # coolant outlet temperature as 20 deg C below the boiling point
+
+                if self.data.fwbs.i_blkt_coolant_type == CoolantType.WATER:
+                    if self.data.fwbs.irefprop:
+                        self.data.fwbs.temp_blkt_coolant_out = (
+                            FluidProperties.of(
+                                "Water",
+                                pressure=self.data.fwbs.coolp,
+                                vapor_quality=0,
+                            )
+                            - 20
+                        )
+                    else:
+                        self.data.fwbs.temp_blkt_coolant_out = (
+                            273.15
+                            + 168.396
+                            + 0.314653 / self.data.fwbs.coolp
+                            + -0.000728 / self.data.fwbs.coolp**2
+                            + 31.588979 * np.log(self.data.fwbs.coolp)
+                            + 11.473141 * self.data.fwbs.coolp
+                            + -0.575335 * self.data.fwbs.coolp**2
+                            + 0.013165 * self.data.fwbs.coolp**3
+                        ) - 20
+
+                bfwi = 0.5e0 * self.data.build.dr_fw_inboard
+                bfwo = 0.5e0 * self.data.build.dr_fw_outboard
+
+                f_a_fw_coolant_inboard = (
+                    self.data.fwbs.radius_fw_channel
+                    * self.data.fwbs.radius_fw_channel
+                    / (bfwi * bfwi)
+                )  # inboard FW coolant void fraction
+                f_a_fw_coolant_outboard = (
+                    self.data.fwbs.radius_fw_channel
+                    * self.data.fwbs.radius_fw_channel
+                    / (bfwo * bfwo)
+                )  # outboard FW coolant void fraction
+
+                # First wall decay length (m) - improved calculation required
+
+                decayfwi = self.data.fwbs.declfw
+                decayfwo = self.data.fwbs.declfw
+
+                # Surface heat flux on first wall (MW)
+                # (sum = self.data.fwbs.p_fw_rad_total_mw)
+
+                psurffwi = (
+                    self.data.fwbs.p_fw_rad_total_mw
+                    * self.data.first_wall.a_fw_inboard
+                    / self.data.first_wall.a_fw_total
+                )
+                psurffwo = (
+                    self.data.fwbs.p_fw_rad_total_mw
+                    * self.data.first_wall.a_fw_outboard
+                    / self.data.first_wall.a_fw_total
+                )
+
+                # Simple blanket model (self.data.fwbs.i_p_coolant_pumping = 0 or 1) is
+                # assumed for stellarators
+
+                # The power deposited in the first wall, breeder zone and shield is
+                # calculated according to their dimensions and materials assuming
+                # an exponential attenuation of nuclear heating with increasing
+                # radial distance.  The pumping power for the coolant is calculated
+                # as a fraction of the total thermal power deposited in the
+                # coolant.
+
+                p_fw_inboard_nuclear_heat_mw = pnucfwbsi * (
+                    1.0e0 - np.exp(-2.0e0 * bfwi / decayfwi)
+                )
+                p_fw_outboard_nuclear_heat_mw = pnucfwbso * (
+                    1.0e0 - np.exp(-2.0e0 * bfwo / decayfwo)
+                )
+
+                # Neutron power reaching blanket and shield (MW)
+
+                pnucbsi = pnucfwbsi - p_fw_inboard_nuclear_heat_mw
+                pnucbso = pnucfwbso - p_fw_outboard_nuclear_heat_mw
+
+                # Blanket decay length (m) - improved calculation required
+
+                decaybzi = self.data.fwbs.declblkt
+                decaybzo = self.data.fwbs.declblkt
+
+                # Neutron power deposited in breeder zone (MW)
+
+                pnucbzi = pnucbsi * (
+                    1.0e0 - np.exp(-self.data.build.dr_blkt_inboard / decaybzi)
+                )
+                pnucbzo = pnucbso * (
+                    1.0e0 - np.exp(-self.data.build.dr_blkt_outboard / decaybzo)
+                )
+
+                # Calculate coolant pumping powers from input fraction.
+                # The pumping power is assumed to be a fraction, fpump, of the
+                # incident thermal power to each component so that
+                # htpmw_i = fpump_i*C, where C is the non-pumping thermal power
+                # deposited in the coolant
+
+                # First wall and Blanket pumping power (MW)
+                i_p_coolant_pumping = PumpingPowerModelTypes(
+                    self.data.fwbs.i_p_coolant_pumping
+                )
+                if i_p_coolant_pumping == PumpingPowerModelTypes.USER_INPUT:
+                    #   Use input
+                    pass
+                elif i_p_coolant_pumping == PumpingPowerModelTypes.FRACTION_OF_HEAT:
+                    self.data.heat_transport.p_fw_coolant_pump_mw = (
+                        self.data.heat_transport.f_p_fw_coolant_pump_total_heat
+                        * (
+                            p_fw_inboard_nuclear_heat_mw
+                            + p_fw_outboard_nuclear_heat_mw
+                            + psurffwi
+                            + psurffwo
+                            + self.data.current_drive.p_beam_orbit_loss_mw
+                        )
+                    )
+                    self.data.heat_transport.p_blkt_coolant_pump_mw = (
+                        self.data.heat_transport.f_p_blkt_coolant_pump_total_heat
+                        * (
+                            pnucbzi * self.data.fwbs.f_p_blkt_multiplication
+                            + pnucbzo * self.data.fwbs.f_p_blkt_multiplication
+                        )
+                    )
+                else:
+                    raise ProcessValueError(
+                        "i_p_coolant_pumping = 0 or 1 only for stellarator"
+                    )
+
+                self.data.fwbs.p_blkt_multiplication_mw = (
+                    self.data.heat_transport.f_p_blkt_coolant_pump_total_heat
+                    * (pnucbzi * self.data.fwbs.f_p_blkt_multiplication + pnucbzo)
+                    * (self.data.fwbs.f_p_blkt_multiplication - 1.0e0)
+                )
+
+                # Total nuclear heating of first wall (MW)
+
+                self.data.fwbs.p_fw_nuclear_heat_total_mw = (
+                    p_fw_inboard_nuclear_heat_mw + p_fw_outboard_nuclear_heat_mw
+                )
+
+                # Total nuclear heating of blanket (MW)
+
+                self.data.fwbs.p_blkt_nuclear_heat_total_mw = (
+                    pnucbzi + pnucbzo
+                ) * self.data.fwbs.f_p_blkt_multiplication
+
+                self.data.fwbs.p_blkt_multiplication_mw += (pnucbzi + pnucbzo) * (
+                    self.data.fwbs.f_p_blkt_multiplication - 1.0e0
+                )
+
+                # Calculation of shield and divertor powers
+                # Shield and divertor powers and pumping powers are calculated using
+                # the same simplified method as the first wall and breeder zone when
+                # self.data.fwbs.i_p_coolant_pumping = 1.
+                # i.e. the pumping power is a fraction of the total thermal power
+                # deposited in the coolant.
+
+                # Neutron power reaching the shield (MW)
+                # The power lost from the self.data.fwbs.fhole area fraction is assumed
+                # to be incident upon the shield
+
+                pnucsi = (
+                    pnucbsi
+                    - pnucbzi
+                    + (self.data.fwbs.pnucloss + self.data.fwbs.pradloss)
+                    * self.data.first_wall.a_fw_inboard
+                    / self.data.first_wall.a_fw_total
+                )
+                pnucso = (
+                    pnucbso
+                    - pnucbzo
+                    + (self.data.fwbs.pnucloss + self.data.fwbs.pradloss)
+                    * self.data.first_wall.a_fw_outboard
+                    / self.data.first_wall.a_fw_total
+                )
+
+                # Improved calculation of shield power decay lengths required
+
+                decayshldi = self.data.fwbs.declshld
+                decayshldo = self.data.fwbs.declshld
+
+                # Neutron power deposited in the shield (MW)
+
+                pnucshldi = pnucsi * (
+                    1.0e0 - np.exp(-self.data.build.dr_shld_inboard / decayshldi)
+                )
+                pnucshldo = pnucso * (
+                    1.0e0 - np.exp(-self.data.build.dr_shld_outboard / decayshldo)
+                )
+
+                self.data.fwbs.p_shld_nuclear_heat_mw = pnucshldi + pnucshldo
+
+                # Calculate coolant pumping powers from input fraction.
+                # The pumping power is assumed to be a fraction, fpump, of the incident
+                # thermal power to each component so that,
+                #    htpmw_i = fpump_i*C
+                # where C is the non-pumping thermal power deposited in the coolant
+
+                if i_p_coolant_pumping == PumpingPowerModelTypes.FRACTION_OF_HEAT:
+                    # Shield pumping power (MW)
+                    self.data.heat_transport.p_shld_coolant_pump_mw = (
+                        self.data.heat_transport.f_p_shld_coolant_pump_total_heat
+                        * (pnucshldi + pnucshldo)
+                    )
+
+                    # Divertor pumping power (MW)
+                    self.data.heat_transport.p_div_coolant_pump_mw = (
+                        self.data.heat_transport.f_p_div_coolant_pump_total_heat
+                        * (
+                            self.data.physics.p_plasma_separatrix_mw
+                            + self.data.fwbs.p_div_nuclear_heat_total_mw
+                            + self.data.fwbs.p_div_rad_total_mw
+                        )
+                    )
+
+                # Remaining neutron power to coils and else:where. This is assumed
+                # (for superconducting coils at least) to be absorbed by the
+                # coils, and so contributes to the cryogenic load
+
+                if (
+                    self.data.tfcoil.i_tf_sup == TFConductorModel.SUPERCONDUCTING
+                ):  # superconducting coils
+                    self.data.fwbs.p_tf_nuclear_heat_mw = (
+                        pnucsi + pnucso - pnucshldi - pnucshldo
+                    )
+                else:  # resistive coils
+                    self.data.fwbs.p_tf_nuclear_heat_mw = 0.0e0
+
+        # Divertor mass
+        # N.B. self.data.divertor.a_div_surface_total is calculated in stdiv after this
+        # point, so will be zero on first lap, hence the initial approximation
+
+        if self.first_call_stfwbs:
+            self.data.divertor.a_div_surface_total = 50.0e0
+            self.first_call_stfwbs = False
+
+        self.data.divertor.m_div_plate = (
+            self.data.divertor.a_div_surface_total
+            * self.data.divertor.den_div_structure
+            * (1.0e0 - self.data.divertor.f_vol_div_coolant)
+            * self.data.divertor.dx_div_plate
+        )
+
+        # Start adding components of the coolant mass:
+        # Divertor coolant volume (m3)
+
+        coolvol = (
+            self.data.divertor.a_div_surface_total
+            * self.data.divertor.f_vol_div_coolant
+            * self.data.divertor.dx_div_plate
+        )
+
+        # Blanket mass, excluding coolant
+
+        if self.data.fwbs.blktmodel == 0:
+            if self.data.fwbs.blkttype in {1, 2}:  # liquid breeder (WCLL or HCLL)
+                self.data.fwbs.wtbllipb = (
+                    self.data.fwbs.vol_blkt_total * self.data.fwbs.fbllipb * 9400.0e0
+                )
+                self.data.fwbs.m_blkt_lithium = (
+                    self.data.fwbs.vol_blkt_total * self.data.fwbs.fblli * 534.0e0
+                )
+                self.data.fwbs.m_blkt_total = (
+                    self.data.fwbs.wtbllipb + self.data.fwbs.m_blkt_lithium
+                )
+            else:  # solid breeder (HCPB); always for ipowerflow=0
+                self.data.fwbs.m_blkt_li2o = (
+                    self.data.fwbs.vol_blkt_total * self.data.fwbs.fblli2o * 2010.0e0
+                )
+                self.data.fwbs.m_blkt_beryllium = (
+                    self.data.fwbs.vol_blkt_total * self.data.fwbs.fblbe * 1850.0e0
+                )
+                self.data.fwbs.m_blkt_total = (
+                    self.data.fwbs.m_blkt_li2o + self.data.fwbs.m_blkt_beryllium
+                )
+
+            self.data.fwbs.m_blkt_steel_total = (
+                self.data.fwbs.vol_blkt_total
+                * self.data.fwbs.den_steel
+                * self.data.fwbs.fblss
+            )
+            self.data.fwbs.m_blkt_vanadium = (
+                self.data.fwbs.vol_blkt_total * 5870.0e0 * self.data.fwbs.fblvd
+            )
+
+            self.data.fwbs.m_blkt_total = (
+                self.data.fwbs.m_blkt_total
+                + self.data.fwbs.m_blkt_steel_total
+                + self.data.fwbs.m_blkt_vanadium
+            )
+
+        else:  # volume fractions proportional to sub-assembly thicknesses
+            self.data.fwbs.m_blkt_steel_total = self.data.fwbs.den_steel * (
+                self.data.fwbs.vol_blkt_inboard
+                / self.data.build.dr_blkt_inboard
+                * (
+                    self.data.build.blbuith * self.data.fwbs.fblss
+                    + self.data.build.blbmith * (1.0e0 - self.data.fwbs.fblhebmi)
+                    + self.data.build.blbpith * (1.0e0 - self.data.fwbs.fblhebpi)
+                )
+                + self.data.fwbs.vol_blkt_outboard
+                / self.data.build.dr_blkt_outboard
+                * (
+                    self.data.build.blbuoth * self.data.fwbs.fblss
+                    + self.data.build.blbmoth * (1.0e0 - self.data.fwbs.fblhebmo)
+                    + self.data.build.blbpoth * (1.0e0 - self.data.fwbs.fblhebpo)
+                )
+            )
+            self.data.fwbs.m_blkt_beryllium = (
+                1850.0e0
+                * self.data.fwbs.fblbe
+                * (
+                    (
+                        self.data.fwbs.vol_blkt_inboard
+                        * self.data.build.blbuith
+                        / self.data.build.dr_blkt_inboard
+                    )
+                    + (
+                        self.data.fwbs.vol_blkt_outboard
+                        * self.data.build.blbuoth
+                        / self.data.build.dr_blkt_outboard
+                    )
+                )
+            )
+            self.data.fwbs.whtblbreed = (
+                self.data.fwbs.densbreed
+                * self.data.fwbs.fblbreed
+                * (
+                    (
+                        self.data.fwbs.vol_blkt_inboard
+                        * self.data.build.blbuith
+                        / self.data.build.dr_blkt_inboard
+                    )
+                    + (
+                        self.data.fwbs.vol_blkt_outboard
+                        * self.data.build.blbuoth
+                        / self.data.build.dr_blkt_outboard
+                    )
+                )
+            )
+            self.data.fwbs.m_blkt_total = (
+                self.data.fwbs.m_blkt_steel_total
+                + self.data.fwbs.m_blkt_beryllium
+                + self.data.fwbs.whtblbreed
+            )
+
+            self.data.fwbs.f_a_blkt_cooling_channels = (
+                self.data.fwbs.vol_blkt_inboard
+                / self.data.fwbs.vol_blkt_total
+                * (  # inboard portion
+                    (self.data.build.blbuith / self.data.build.dr_blkt_inboard)
+                    * (
+                        1.0e0
+                        - self.data.fwbs.fblbe
+                        - self.data.fwbs.fblbreed
+                        - self.data.fwbs.fblss
+                    )
+                    + (self.data.build.blbmith / self.data.build.dr_blkt_inboard)
+                    * self.data.fwbs.fblhebmi
+                    + (self.data.build.blbpith / self.data.build.dr_blkt_inboard)
+                    * self.data.fwbs.fblhebpi
+                )
+            )
+            self.data.fwbs.f_a_blkt_cooling_channels += (
+                self.data.fwbs.vol_blkt_outboard
+                / self.data.fwbs.vol_blkt_total
+                * (  # outboard portion
+                    (self.data.build.blbuoth / self.data.build.dr_blkt_outboard)
+                    * (
+                        1.0e0
+                        - self.data.fwbs.fblbe
+                        - self.data.fwbs.fblbreed
+                        - self.data.fwbs.fblss
+                    )
+                    + (self.data.build.blbmoth / self.data.build.dr_blkt_outboard)
+                    * self.data.fwbs.fblhebmo
+                    + (self.data.build.blbpoth / self.data.build.dr_blkt_outboard)
+                    * self.data.fwbs.fblhebpo
+                )
+            )
+
+        # When self.data.fwbs.blktmodel > 0, although the blanket is by definition
+        # helium-cooled in this case, the shield etc. are assumed to be water-cooled,
+        # and since water is heavier the calculation for
+        # self.data.fwbs.m_fw_blkt_div_coolant_total is better done with
+        # i_blkt_coolant_type=2 if self.data.fwbs.blktmodel > 0;
+        # thus we can ignore the helium coolant mass in the blanket.
+
+        if self.data.fwbs.blktmodel == 0:
+            coolvol += (
+                self.data.fwbs.vol_blkt_total * self.data.fwbs.f_a_blkt_cooling_channels
+            )
+
+        # Shield mass
+        self.data.fwbs.whtshld = (
+            self.data.fwbs.vol_shld_total
+            * self.data.fwbs.den_steel
+            * (1.0e0 - self.data.fwbs.vfshld)
+        )
+
+        coolvol += self.data.fwbs.vol_shld_total * self.data.fwbs.vfshld
+
+        # Penetration shield (set = internal shield)
+
+        self.data.fwbs.wpenshld = self.data.fwbs.whtshld
+
+        if self.data.heat_transport.ipowerflow == 0:
+            # First wall mass
+            # (first wall area is calculated else:where)
+
+            self.data.fwbs.m_fw_total = (
+                self.data.first_wall.a_fw_total
+                * (self.data.build.dr_fw_inboard + self.data.build.dr_fw_outboard)
+                / 2.0e0
+                * self.data.fwbs.den_steel
+                * (1.0e0 - self.data.fwbs.fwclfr)
+            )
+
+            # Surface areas adjacent to plasma
+
+            coolvol += (
+                self.data.first_wall.a_fw_total
+                * (self.data.build.dr_fw_inboard + self.data.build.dr_fw_outboard)
+                / 2.0e0
+                * self.data.fwbs.fwclfr
+            )
+
+        else:
+            self.data.fwbs.m_fw_total = self.data.fwbs.den_steel * (
+                self.data.first_wall.a_fw_inboard
+                * self.data.build.dr_fw_inboard
+                * (1.0e0 - f_a_fw_coolant_inboard)
+                + self.data.first_wall.a_fw_outboard
+                * self.data.build.dr_fw_outboard
+                * (1.0e0 - f_a_fw_coolant_outboard)
+            )
+            coolvol = (
+                coolvol
+                + self.data.first_wall.a_fw_inboard
+                * self.data.build.dr_fw_inboard
+                * f_a_fw_coolant_inboard
+                + self.data.first_wall.a_fw_outboard
+                * self.data.build.dr_fw_outboard
+                * f_a_fw_coolant_outboard
+            )
+
+            # Average first wall coolant fraction, only used by old routines
+            # in fispact.f90, safety.f90
+
+            self.data.fwbs.fwclfr = (
+                self.data.first_wall.a_fw_inboard
+                * self.data.build.dr_fw_inboard
+                * f_a_fw_coolant_inboard
+                + self.data.first_wall.a_fw_outboard
+                * self.data.build.dr_fw_outboard
+                * f_a_fw_coolant_outboard
+            ) / (
+                self.data.first_wall.a_fw_total
+                * 0.5e0
+                * (self.data.build.dr_fw_inboard + self.data.build.dr_fw_outboard)
+            )
+
+        # Mass of coolant = volume * density at typical coolant
+        # temperatures and pressures
+        # N.B. for self.data.fwbs.blktmodel > 0, mass of *water* coolant in the
+        # non-blanket structures is used (see comment above)
+
+        if (self.data.fwbs.blktmodel > 0) or (
+            self.data.fwbs.i_blkt_coolant_type == CoolantType.WATER
+        ):  # pressurised water coolant
+            self.data.fwbs.m_fw_blkt_div_coolant_total = coolvol * 806.719e0
+        else:  # gaseous helium coolant
+            self.data.fwbs.m_fw_blkt_div_coolant_total = coolvol * 1.517e0
+
+        # Assume external cryostat is a torus with circular cross-section,
+        # centred on plasma major radius.
+        # N.B. No check made to see if coils etc. lie wholly within cryostat...
+
+        # External cryostat outboard major radius (m)
+
+        self.data.fwbs.r_cryostat_inboard = (
+            self.data.build.r_tf_outboard_mid
+            + 0.5e0 * self.data.build.dr_tf_outboard
+            + self.data.fwbs.dr_pf_cryostat
+        )
+        adewex = self.data.fwbs.r_cryostat_inboard - self.data.physics.rmajor
+
+        # External cryostat volume
+
+        self.data.fwbs.vol_cryostat = (
+            4.0e0
+            * (np.pi**2)
+            * self.data.physics.rmajor
+            * adewex
+            * self.data.build.dr_cryostat
+        )
+
+        # Internal vacuum vessel volume
+        # self.data.fwbs.fvoldw accounts for ports, support, etc. additions
+
+        r1 = self.data.physics.rminor + 0.5e0 * (
+            self.data.build.dr_fw_plasma_gap_inboard
+            + self.data.build.dr_fw_inboard
+            + self.data.build.dr_blkt_inboard
+            + self.data.build.dr_shld_inboard
+            + self.data.build.dr_fw_plasma_gap_outboard
+            + self.data.build.dr_fw_outboard
+            + self.data.build.dr_blkt_outboard
+            + self.data.build.dr_shld_outboard
+        )
+        self.data.fwbs.vol_vv = (
+            (self.data.build.dr_vv_inboard + self.data.build.dr_vv_outboard)
+            / 2.0e0
+            * self.data.physics.a_plasma_surface
+            * r1
+            / self.data.physics.rminor
+            * self.data.fwbs.fvoldw
+        )
+
+        # Vacuum vessel mass
+
+        self.data.fwbs.m_vv = self.data.fwbs.vol_vv * self.data.fwbs.den_steel
+
+        # Sum of internal vacuum vessel and external cryostat masses
+
+        self.data.fwbs.dewmkg = (
+            self.data.fwbs.vol_vv + self.data.fwbs.vol_cryostat
+        ) * self.data.fwbs.den_steel
+
+        if output:
+            # Output section
+
+            po.oheadr(self.outfile, "First Wall / Blanket / Shield")
+            po.ovarre(
+                self.outfile,
+                "Average neutron wall load (MW/m2)",
+                "(pflux_fw_neutron_mw)",
+                self.data.physics.pflux_fw_neutron_mw,
+            )
+            if self.data.fwbs.blktmodel > 0:
+                po.ovarre(
+                    self.outfile,
+                    "Neutron wall load peaking factor",
+                    "(wallpf)",
+                    self.data.fwbs.wallpf,
+                )
+
+            po.ovarre(
+                self.outfile,
+                "First wall full-power lifetime (years)",
+                "(life_fw_fpy)",
+                self.data.fwbs.life_fw_fpy,
+            )
+
+            po.ovarre(
+                self.outfile,
+                "Inboard shield thickness (m)",
+                "(dr_shld_inboard)",
+                self.data.build.dr_shld_inboard,
+            )
+            po.ovarre(
+                self.outfile,
+                "Outboard shield thickness (m)",
+                "(dr_shld_outboard)",
+                self.data.build.dr_shld_outboard,
+            )
+            po.ovarre(
+                self.outfile,
+                "Top shield thickness (m)",
+                "(dz_shld_upper)",
+                self.data.build.dz_shld_upper,
+            )
+
+            if self.data.fwbs.blktmodel > 0:
+                po.ovarre(
+                    self.outfile,
+                    "Inboard breeding zone thickness (m)",
+                    "(blbuith)",
+                    self.data.build.blbuith,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Inboard box manifold thickness (m)",
+                    "(blbmith)",
+                    self.data.build.blbmith,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Inboard back plate thickness (m)",
+                    "(blbpith)",
+                    self.data.build.blbpith,
+                )
+
+            po.ovarre(
+                self.outfile,
+                "Inboard blanket thickness (m)",
+                "(dr_blkt_inboard)",
+                self.data.build.dr_blkt_inboard,
+            )
+            if self.data.fwbs.blktmodel > 0:
+                po.ovarre(
+                    self.outfile,
+                    "Outboard breeding zone thickness (m)",
+                    "(blbuoth)",
+                    self.data.build.blbuoth,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Outboard box manifold thickness (m)",
+                    "(blbmoth)",
+                    self.data.build.blbmoth,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Outboard back plate thickness (m)",
+                    "(blbpoth)",
+                    self.data.build.blbpoth,
+                )
+
+            po.ovarre(
+                self.outfile,
+                "Outboard blanket thickness (m)",
+                "(dr_blkt_outboard)",
+                self.data.build.dr_blkt_outboard,
+            )
+            po.ovarre(
+                self.outfile,
+                "Top blanket thickness (m)",
+                "(dz_blkt_upper)",
+                self.data.build.dz_blkt_upper,
+            )
+
+            if (self.data.heat_transport.ipowerflow == 0) and (
+                self.data.fwbs.blktmodel == 0
+            ):
+                po.osubhd(self.outfile, "Coil nuclear parameters :")
+                po.ovarre(
+                    self.outfile, "Peak magnet heating (MW/m3)", "(coilhtmx)", coilhtmx
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Inboard coil winding pack heating (MW)",
+                    "(ptfiwp)",
+                    ptfiwp,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Outboard coil winding pack heating (MW)",
+                    "(ptfowp)",
+                    ptfowp,
+                )
+                po.ovarre(
+                    self.outfile, "Peak coil case heating (MW/m3)", "(htheci)", htheci
+                )
+                po.ovarre(
+                    self.outfile, "Inboard coil case heating (MW)", "(pheci)", pheci
+                )
+                po.ovarre(
+                    self.outfile, "Outboard coil case heating (MW)", "(pheco)", pheco
+                )
+                po.ovarre(self.outfile, "Insulator dose (rad)", "(raddose)", raddose)
+                po.ovarre(
+                    self.outfile,
+                    "Maximum neutron fluence (n/m2)",
+                    "(flu_tf_neutron_fast_peak)",
+                    self.data.fwbs.flu_tf_neutron_fast_peak,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Copper stabiliser displacements/atom",
+                    "(dpacop)",
+                    dpacop,
+                )
+
+            if self.data.fwbs.blktmodel == 0:
+                po.osubhd(self.outfile, "Nuclear heating :")
+                po.ovarre(
+                    self.outfile,
+                    "Blanket heating (including energy multiplication) (MW)",
+                    "(p_blkt_nuclear_heat_total_mw)",
+                    self.data.fwbs.p_blkt_nuclear_heat_total_mw,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Shield nuclear heating (MW)",
+                    "(p_shld_nuclear_heat_mw)",
+                    self.data.fwbs.p_shld_nuclear_heat_mw,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Coil nuclear heating (MW)",
+                    "(p_tf_nuclear_heat_mw)",
+                    self.data.fwbs.p_tf_nuclear_heat_mw,
+                )
+            else:
+                po.osubhd(self.outfile, "Blanket neutronics :")
+                po.ovarre(
+                    self.outfile,
+                    "Blanket heating (including energy multiplication) (MW)",
+                    "(p_blkt_nuclear_heat_total_mw)",
+                    self.data.fwbs.p_blkt_nuclear_heat_total_mw,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Shield heating (MW)",
+                    "(p_shld_nuclear_heat_mw)",
+                    self.data.fwbs.p_shld_nuclear_heat_mw,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Energy multiplication in blanket",
+                    "(f_p_blkt_multiplication)",
+                    self.data.fwbs.f_p_blkt_multiplication,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Number of divertor ports assumed",
+                    "(npdiv)",
+                    self.data.fwbs.npdiv,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Number of inboard H/CD ports assumed",
+                    "(nphcdin)",
+                    self.data.fwbs.nphcdin,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Number of outboard H/CD ports assumed",
+                    "(nphcdout)",
+                    self.data.fwbs.nphcdout,
+                )
+                if self.data.fwbs.hcdportsize == 1:
+                    po.ocmmnt(
+                        self.outfile, "     (small heating/current drive ports assumed)"
+                    )
+                else:
+                    po.ocmmnt(
+                        self.outfile, "     (large heating/current drive ports assumed)"
+                    )
+
+                if self.data.fwbs.breedmat == 1:
+                    po.ocmmnt(
+                        self.outfile,
+                        "Breeder material: Lithium orthosilicate (Li4Si04)",
+                    )
+                elif self.data.fwbs.breedmat == 2:
+                    po.ocmmnt(
+                        self.outfile,
+                        "Breeder material: Lithium methatitanate (Li2TiO3)",
+                    )
+                elif self.data.fwbs.breedmat == 3:
+                    po.ocmmnt(
+                        self.outfile, "Breeder material: Lithium zirconate (Li2ZrO3)"
+                    )
+                else:  # shouldn't get here...
+                    po.ocmmnt(self.outfile, "Unknown breeder material...")
+
+                po.ovarre(
+                    self.outfile,
+                    "Lithium-6 enrichment (%)",
+                    "(f_blkt_li6_enrichment)",
+                    self.data.fwbs.f_blkt_li6_enrichment,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Tritium production rate (g/day)",
+                    "(tritprate)",
+                    self.data.fwbs.tritprate,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Total nuclear heating on coil (MW)",
+                    "(p_tf_nuclear_heat_mw)",
+                    self.data.fwbs.p_tf_nuclear_heat_mw,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Blanket lifetime (full power years)",
+                    "(life_blkt_fpy)",
+                    self.data.fwbs.life_blkt_fpy,
+                )
+                po.ovarre(
+                    self.outfile,
+                    "Blanket lifetime (calendar years)",
+                    "(life_blkt)",
+                    self.data.fwbs.life_blkt,
+                )
+
+            if (self.data.heat_transport.ipowerflow == 1) and (
+                self.data.fwbs.blktmodel == 0
+            ):
+                po.oblnkl(self.outfile)
+                po.ovarre(
+                    self.outfile,
+                    "First wall / blanket thermodynamic model",
+                    "(i_thermal_electric_conversion)",
+                    self.data.fwbs.i_thermal_electric_conversion,
+                )
+                if self.data.fwbs.i_thermal_electric_conversion == 0:
+                    po.ocmmnt(self.outfile, "   (Simple calculation)")
+
+            po.osubhd(self.outfile, "Blanket / shield volumes and weights :")
+
+            po.osubhd(self.outfile, "Other volumes, masses and areas :")
+            po.ovarre(
+                self.outfile,
+                "First wall area (m2)",
+                "(a_fw_total)",
+                self.data.first_wall.a_fw_total,
+            )
+            po.ovarre(
+                self.outfile,
+                "First wall mass (kg)",
+                "(m_fw_total)",
+                self.data.fwbs.m_fw_total,
+            )
+            po.ovarre(
+                self.outfile,
+                "External cryostat inner radius (m)",
+                "",
+                self.data.fwbs.r_cryostat_inboard - 2.0e0 * adewex,
+            )
+            po.ovarre(
+                self.outfile,
+                "External cryostat outer radius (m)",
+                "(r_cryostat_inboard)",
+                self.data.fwbs.r_cryostat_inboard,
+            )
+            po.ovarre(
+                self.outfile, "External cryostat minor radius (m)", "(adewex)", adewex
+            )
+            po.ovarre(
+                self.outfile,
+                "External cryostat shell volume (m^3)",
+                "(vol_cryostat)",
+                self.data.fwbs.vol_cryostat,
+            )
+            po.ovarre(
+                self.outfile,
+                "Internal volume of the cryostat structure (m^3)",
+                "(vol_cryostat_internal)",
+                self.data.fwbs.vol_cryostat_internal,
+            )
+            po.ovarre(
+                self.outfile,
+                "External cryostat mass (kg)",
+                "",
+                self.data.fwbs.dewmkg - self.data.fwbs.m_vv,
+            )
+            po.ovarre(
+                self.outfile,
+                "Internal vacuum vessel shell volume (m3)",
+                "(vol_vv)",
+                self.data.fwbs.vol_vv,
+            )
+            po.ovarre(
+                self.outfile,
+                "Vacuum vessel mass (kg)",
+                "(m_vv)",
+                self.data.fwbs.m_vv,
+            )
+            po.ovarre(
+                self.outfile,
+                "Total cryostat + vacuum vessel mass (kg)",
+                "(dewmkg)",
+                self.data.fwbs.dewmkg,
+            )
+            po.ovarre(
+                self.outfile,
+                "Divertor area (m2)",
+                "(a_div_surface_total)",
+                self.data.divertor.a_div_surface_total,
+            )
+            po.ovarre(
+                self.outfile,
+                "Divertor mass (kg)",
+                "(m_div_plate)",
+                self.data.divertor.m_div_plate,
+            )
+
+    def sc_tf_coil_nuclear_heating_iter90(self):
+        """Superconducting TF coil nuclear heating estimate
+
+        This subroutine calculates the nuclear heating in the
+        superconducting TF coils, assuming an exponential neutron
+        attenuation through the blanket and shield materials.
+        The estimates are based on 1990 ITER data.
+        <P>The arrays <CODE>coef(i,j)</CODE> and <CODE>decay(i,j)</CODE>
+        are used for exponential decay approximations of the
+        (superconducting) TF coil nuclear parameters.
+        <UL><P><LI><CODE>j = 1</CODE> : stainless steel shield (assumed)
+        <P><LI><CODE>j = 2</CODE> : tungsten shield (not used)</UL>
+        Note: Costing and mass calculations elsewhere assume
+        stainless steel only.
+
+        Returns
+        -------
+        coilhtmx :
+             peak magnet heating (MW/m3)
+        dpacop :
+             copper stabiliser displacements/atom
+        htheci :
+             peak TF coil case heating (MW/m3)
+        flu_tf_neutron_fast_peak :
+             maximum neutron fluence (n/m2)
+        pheci :
+             inboard coil case heating (MW)
+        pheco :
+             outboard coil case heating (MW)
+        ptfiwp :
+             inboard TF coil winding pack heating (MW)
+        ptfowp :
+             outboard TF coil winding pack heating (MW)
+        raddose :
+             insulator dose (rad)
+        p_tf_nuclear_heat_mw :
+             TF coil nuclear heating (MW)
+        """
+        ishmat = 0  # stainless steel coil casing is assumed
+
+        if (
+            self.data.tfcoil.i_tf_sup != TFConductorModel.SUPERCONDUCTING
+        ):  # Resistive coils
+            coilhtmx = 0.0
+            ptfiwp = 0.0
+            ptfowp = 0.0
+            htheci = 0.0
+            pheci = 0.0
+            pheco = 0.0
+            raddose = 0.0
+            flu_tf_neutron_fast_peak = 0.0
+            dpacop = 0.0
+            p_tf_nuclear_heat_mw = 0.0
+
+        else:
+            # TF coil nuclear heating coefficients in region i (first element),
+            # assuming shield material j (second element where present)
+
+            fact = np.array([8.0, 8.0, 6.0, 4.0, 4.0])
+            coef = np.array([
+                [10.3, 11.6, 7.08e5, 2.19e18, 3.33e-7],
+                [8.32, 10.6, 7.16e5, 2.39e18, 3.84e-7],
+            ]).T
+
+            decay = np.array([
+                [10.05, 17.61, 13.82, 13.24, 14.31, 13.26, 13.25],
+                [10.02, 3.33, 15.45, 14.47, 15.87, 15.25, 17.25],
+            ]).T
+
+            # N.B. The vacuum vessel appears to be ignored
+
+            dshieq = (
+                self.data.build.dr_shld_inboard
+                + self.data.build.dr_fw_inboard
+                + self.data.build.dr_blkt_inboard
+            )
+            dshoeq = (
+                self.data.build.dr_shld_outboard
+                + self.data.build.dr_fw_outboard
+                + self.data.build.dr_blkt_outboard
+            )
+
+            # Winding pack radial thickness, including groundwall insulation
+
+            wpthk = (
+                self.data.tfcoil.dr_tf_wp_with_insulation
+                + 2.0 * self.data.tfcoil.dx_tf_wp_insulation
+            )
+
+            # Nuclear heating rate in inboard TF coil (MW/m**3)
+
+            coilhtmx = (
+                fact[0]
+                * self.data.physics.pflux_fw_neutron_mw
+                * coef[0, ishmat]
+                * np.exp(
+                    -decay[5, ishmat] * (dshieq + self.data.tfcoil.dr_tf_plasma_case)
+                )
+            )
+
+            # Total nuclear heating (MW)
+
+            ptfiwp = (
+                coilhtmx
+                * self.data.tfcoil.tfsai
+                * (1.0 - np.exp(-decay[0, ishmat] * wpthk))
+                / decay[0, ishmat]
+            )
+            ptfowp = (
+                fact[0]
+                * self.data.physics.pflux_fw_neutron_mw
+                * coef[0, ishmat]
+                * np.exp(
+                    -decay[5, ishmat] * (dshoeq + self.data.tfcoil.dr_tf_plasma_case)
+                )
+                * self.data.tfcoil.tfsao
+                * (1.0 - np.exp(-decay[0, ishmat] * wpthk))
+                / decay[0, ishmat]
+            )
+
+            # Nuclear heating in plasma-side TF coil case (MW)
+
+            htheci = (
+                fact[1]
+                * self.data.physics.pflux_fw_neutron_mw
+                * coef[1, ishmat]
+                * np.exp(-decay[6, ishmat] * dshieq)
+            )
+            pheci = (
+                htheci
+                * self.data.tfcoil.tfsai
+                * (1.0 - np.exp(-decay[1, ishmat] * self.data.tfcoil.dr_tf_plasma_case))
+                / decay[1, ishmat]
+            )
+            pheco = (
+                fact[1]
+                * self.data.physics.pflux_fw_neutron_mw
+                * coef[1, ishmat]
+                * np.exp(-decay[6, ishmat] * dshoeq)
+                * self.data.tfcoil.tfsao
+                * (1.0 - np.exp(-decay[1, ishmat] * self.data.tfcoil.dr_tf_plasma_case))
+                / decay[1, ishmat]
+            )
+            ptfi = ptfiwp + pheci
+            ptfo = ptfowp + pheco
+
+            p_tf_nuclear_heat_mw = ptfi + ptfo
+
+            # Full power DT operation years for replacement of TF Coil
+            # (or plant life)
+
+            fpydt = self.data.costs.f_t_plant_available * self.data.costs.life_plant
+            fpsdt = fpydt * 3.154e7  # seconds
+
+            # Insulator dose (rad)
+
+            raddose = (
+                coef[2, ishmat]
+                * fpsdt
+                * fact[2]
+                * self.data.physics.pflux_fw_neutron_mw
+                * np.exp(
+                    -decay[2, ishmat] * (dshieq + self.data.tfcoil.dr_tf_plasma_case)
+                )
+            )
+
+            # Maximum neutron fluence in superconductor (n/m**2)
+
+            flu_tf_neutron_fast_peak = (
+                fpsdt
+                * fact[3]
+                * self.data.physics.pflux_fw_neutron_mw
+                * coef[3, ishmat]
+                * np.exp(
+                    -decay[3, ishmat] * (dshieq + self.data.tfcoil.dr_tf_plasma_case)
+                )
+            )
+
+            # Atomic displacement in copper stabilizer
+
+            dpacop = (
+                fpsdt
+                * fact[4]
+                * self.data.physics.pflux_fw_neutron_mw
+                * coef[4, ishmat]
+                * np.exp(
+                    -decay[4, ishmat] * (dshieq + self.data.tfcoil.dr_tf_plasma_case)
+                )
+            )
+
+        return (
+            coilhtmx,
+            dpacop,
+            htheci,
+            flu_tf_neutron_fast_peak,
+            pheci,
+            pheco,
+            ptfiwp,
+            ptfowp,
+            raddose,
+            p_tf_nuclear_heat_mw,
+        )
+
+    def st_phys(self, output):
+        """Routine to calculate stellarator plasma physics information
+
+        This routine calculates the physics quantities relevant to
+        a stellarator device.
+
+        Parameters
+        ----------
+        output :
+
+        Raises
+        ------
+        ProcessValueError
+            If beta is in ixc and istell>0
+
+        References
+        ----------
+        AEA FUS 172: Physics Assessment for the European Reactor Study
+
+        """
+        # ###############################################
+        # Calculate plasma composition
+        # Issue #261 Remove old radiation model
+
+        self.physics.plasma_composition()
+
+        # Calculate density and temperature profile quantities
+        self.plasma_profile.run()
+
+        # Total field
+        self.data.physics.b_plasma_total = np.sqrt(
+            self.data.physics.b_plasma_toroidal_on_axis**2
+            + self.data.physics.b_plasma_surface_poloidal_average**2
+        )
+
+        # Check if self.data.physics.beta (iteration variable 5) is an iteration variable
+        if 5 in self.data.numerics.ixc:
+            raise ProcessValueError(
+                "Beta should not be in ixc if istell>0. "
+                "Use Constraints 24 and 84 instead"
+            )
+
+        # Set self.data.physics.beta as a consequence:
+        # This replaces constraint equation 1 as it is just an equality.
+        self.data.physics.beta_total_vol_avg = (
+            self.data.physics.beta_fast_alpha
+            + self.data.physics.beta_beam
+            + 2.0e3
+            * constants.RMU0
+            * constants.ELECTRON_CHARGE
+            * (
+                self.data.physics.nd_plasma_electrons_vol_avg
+                * self.data.physics.temp_plasma_electron_density_weighted_kev
+                + self.data.physics.nd_plasma_ions_total_vol_avg
+                * self.data.physics.temp_plasma_ion_density_weighted_kev
+            )
+            / self.data.physics.b_plasma_total**2
+        )
+        self.data.physics.e_plasma_beta = (
+            1.5e0
+            * self.data.physics.beta_total_vol_avg
+            * self.data.physics.b_plasma_total
+            * self.data.physics.b_plasma_total
+            / (2.0e0 * constants.RMU0)
+            * self.data.physics.vol_plasma
+        )
+
+        self.data.physics.rho_star = np.sqrt(
+            2.0e0
+            * constants.PROTON_MASS
+            * self.data.physics.m_ions_total_amu
+            * self.data.physics.e_plasma_beta
+            / (
+                3.0e0
+                * self.data.physics.vol_plasma
+                * self.data.physics.nd_plasma_electron_line
+            )
+        ) / (
+            constants.ELECTRON_CHARGE
+            * self.data.physics.b_plasma_toroidal_on_axis
+            * self.data.physics.eps
+            * self.data.physics.rmajor
+        )
+
+        # Calculate poloidal field using rotation transform
+        self.data.physics.b_plasma_surface_poloidal_average = (
+            self.data.physics.rminor
+            * self.data.physics.b_plasma_toroidal_on_axis
+            / self.data.physics.rmajor
+            * self.data.stellarator.iotabar
+        )
+
+        # Perform auxiliary power calculations
+
+        st_heat(self, False, self.data)
+
+        # Calculate fusion power
+
+        fusion_reactions = reactions.FusionReactionRate(self.plasma_profile, self.data)
+        fusion_reactions.deuterium_branching(
+            self.data.physics.temp_plasma_ion_vol_avg_kev
+        )
+        fusion_reactions.calculate_fusion_rates()
+        fusion_reactions.set_physics_variables()
+
+        # D-T power density is named differently to differentiate it from the beam given
+        # component
+        self.data.physics.p_plasma_dt_mw = (
+            self.data.physics.dt_power_density_plasma * self.data.physics.vol_plasma
+        )
+        self.data.physics.p_dhe3_total_mw = (
+            self.data.physics.dhe3_power_density * self.data.physics.vol_plasma
+        )
+        self.data.physics.p_dd_total_mw = (
+            self.data.physics.dd_power_density * self.data.physics.vol_plasma
+        )
+
+        # Calculate neutral beam slowing down effects
+        # If ignited, then ignore beam fusion effects
+
+        if (self.data.current_drive.p_hcd_beam_injected_total_mw != 0.0e0) and (  # noqa: RUF069
+            PlasmaIgnitionModel(self.data.physics.i_plasma_ignited)
+            == PlasmaIgnitionModel.NON_IGNITED
+        ):
+            (
+                self.data.physics.beta_beam,
+                self.data.physics.nd_beam_ions_out,
+                self.data.physics.p_beam_alpha_mw,
+            ) = reactions.beam_fusion(
+                self.data.physics.beamfus0,
+                self.data.physics.betbm0,
+                self.data.physics.b_plasma_total,
+                self.data.current_drive.c_beam_total,
+                self.data.physics.nd_plasma_electrons_vol_avg,
+                self.data.physics.nd_plasma_fuel_ions_vol_avg,
+                self.data.physics.dlamie,
+                self.data.current_drive.e_beam_kev,
+                self.data.physics.f_plasma_fuel_deuterium,
+                self.data.physics.f_plasma_fuel_tritium,
+                self.data.current_drive.f_beam_tritium,
+                self.data.physics.temp_plasma_electron_density_weighted_kev,
+                self.data.physics.vol_plasma,
+                self.data.physics.n_charge_plasma_effective_mass_weighted_vol_avg,
+            )
+            self.data.physics.fusden_total = (
+                self.data.physics.fusden_plasma
+                + 1.0e6
+                * self.data.physics.p_beam_alpha_mw
+                / (constants.DT_ALPHA_ENERGY)
+                / self.data.physics.vol_plasma
+            )
+            self.data.physics.fusden_alpha_total = (
+                self.data.physics.fusden_plasma_alpha
+                + 1.0e6
+                * self.data.physics.p_beam_alpha_mw
+                / (constants.DT_ALPHA_ENERGY)
+                / self.data.physics.vol_plasma
+            )
+            self.data.physics.p_dt_total_mw = (
+                self.data.physics.p_plasma_dt_mw
+                + 5.0e0 * self.data.physics.p_beam_alpha_mw
+            )
+        else:
+            # If no beams present then the total alpha rates and power are the same as
+            # the plasma values
+            self.data.physics.fusden_total = self.data.physics.fusden_plasma
+            self.data.physics.fusden_alpha_total = self.data.physics.fusden_plasma_alpha
+            self.data.physics.p_dt_total_mw = self.data.physics.p_plasma_dt_mw
+
+        # Create some derived values and add beam contribution to fusion power
+        (
+            self.data.physics.pden_neutron_total_mw,
+            self.data.physics.p_plasma_alpha_mw,
+            self.data.physics.p_alpha_total_mw,
+            self.data.physics.p_plasma_neutron_mw,
+            self.data.physics.p_neutron_total_mw,
+            self.data.physics.p_non_alpha_charged_mw,
+            self.data.physics.pden_alpha_total_mw,
+            self.data.physics.f_pden_alpha_electron_mw,
+            self.data.physics.f_pden_alpha_ions_mw,
+            self.data.physics.p_charged_particle_mw,
+            self.data.physics.p_fusion_total_mw,
+        ) = reactions.set_fusion_powers(
+            self.data.physics.f_alpha_electron,
+            self.data.physics.f_alpha_ion,
+            self.data.physics.p_beam_alpha_mw,
+            self.data.physics.pden_non_alpha_charged_mw,
+            self.data.physics.pden_plasma_neutron_mw,
+            self.data.physics.vol_plasma,
+            self.data.physics.pden_plasma_alpha_mw,
+            self.data.physics.f_p_alpha_plasma_deposited,
+        )
+
+        self.data.physics.beta_fast_alpha = self.beta.fast_alpha_beta(
+            self.data.physics.b_plasma_surface_poloidal_average,
+            self.data.physics.b_plasma_toroidal_on_axis,
+            self.data.physics.nd_plasma_electrons_vol_avg,
+            self.data.physics.nd_plasma_fuel_ions_vol_avg,
+            self.data.physics.nd_plasma_ions_total_vol_avg,
+            self.data.physics.temp_plasma_electron_density_weighted_kev,
+            self.data.physics.temp_plasma_ion_density_weighted_kev,
+            self.data.physics.pden_alpha_total_mw,
+            self.data.physics.pden_plasma_alpha_mw,
+            self.data.physics.i_beta_fast_alpha,
+            self.data.physics.f_plasma_fuel_deuterium,
+        )
+
+        # Neutron wall load
+
+        if self.data.physics.i_pflux_fw_neutron == 1:
+            self.data.physics.pflux_fw_neutron_mw = (
+                self.data.physics.ffwal
+                * self.data.physics.p_neutron_total_mw
+                / self.data.physics.a_plasma_surface
+            )
+        elif self.data.heat_transport.ipowerflow == 0:
+            self.data.physics.pflux_fw_neutron_mw = (
+                (1.0e0 - self.data.fwbs.fhole)
+                * self.data.physics.p_neutron_total_mw
+                / self.data.first_wall.a_fw_total
+            )
+        else:
+            self.data.physics.pflux_fw_neutron_mw = (
+                (
+                    1.0e0
+                    - self.data.fwbs.fhole
+                    - self.data.fwbs.f_a_fw_outboard_hcd
+                    - self.data.fwbs.f_ster_div_single
+                )
+                * self.data.physics.p_neutron_total_mw
+                / self.data.first_wall.a_fw_total
+            )
+
+        # Calculate ion/electron equilibration power
+
+        self.data.physics.pden_ion_electron_equilibration_mw = rether(
+            self.data.physics.alphan,
+            self.data.physics.alphat,
+            self.data.physics.nd_plasma_electrons_vol_avg,
+            self.data.physics.dlamie,
+            self.data.physics.temp_plasma_electron_vol_avg_kev,
+            self.data.physics.temp_plasma_ion_vol_avg_kev,
+            self.data.physics.n_charge_plasma_effective_mass_weighted_vol_avg,
+        )
+
+        # Calculate radiation power
+        radpwr_data = physics_funcs.calculate_radiation_powers(
+            self.plasma_profile,
+            self.data.physics.nd_plasma_electron_on_axis,
+            self.data.physics.rminor,
+            self.data.physics.b_plasma_toroidal_on_axis,
+            self.data.physics.aspect,
+            self.data.physics.alphan,
+            self.data.physics.alphat,
+            self.data.physics.tbeta,
+            self.data.physics.temp_plasma_electron_on_axis_kev,
+            self.data.physics.f_sync_reflect,
+            self.data.physics.rmajor,
+            self.data.physics.kappa,
+            self.data.physics.vol_plasma,
+            self.data,
+        )
+        self.data.physics.pden_plasma_sync_mw = radpwr_data.pden_plasma_sync_mw
+        self.data.physics.pden_plasma_core_rad_mw = radpwr_data.pden_plasma_core_rad_mw
+        self.data.physics.pden_plasma_outer_rad_mw = radpwr_data.pden_plasma_outer_rad_mw
+        self.data.physics.pden_plasma_rad_mw = radpwr_data.pden_plasma_rad_mw
+
+        self.data.physics.pden_plasma_core_rad_mw = max(
+            self.data.physics.pden_plasma_core_rad_mw, 0.0e0
+        )
+        self.data.physics.pden_plasma_outer_rad_mw = max(
+            self.data.physics.pden_plasma_outer_rad_mw, 0.0e0
+        )
+
+        self.data.physics.p_plasma_inner_rad_mw = (
+            self.data.physics.pden_plasma_core_rad_mw * self.data.physics.vol_plasma
+        )  # Should probably be vol_core
+        self.data.physics.p_plasma_outer_rad_mw = (
+            self.data.physics.pden_plasma_outer_rad_mw * self.data.physics.vol_plasma
+        )
+
+        self.data.physics.p_plasma_rad_mw = (
+            self.data.physics.pden_plasma_rad_mw * self.data.physics.vol_plasma
+        )
+
+        # Heating power to plasma (= Psol in divertor model)
+        # Ohmic power is zero in a stellarator
+        # self.data.physics.p_plasma_rad_mw here is core + edge (no SOL)
+
+        powht = (
+            self.data.physics.f_p_alpha_plasma_deposited
+            * self.data.physics.p_alpha_total_mw
+            + self.data.physics.p_non_alpha_charged_mw
+            + self.data.physics.p_plasma_ohmic_mw
+            - self.data.physics.pden_plasma_rad_mw * self.data.physics.vol_plasma
+        )
+        powht = max(
+            0.00001e0, powht
+        )  # To avoid negative heating power. This line is VERY important
+
+        if (
+            PlasmaIgnitionModel(self.data.physics.i_plasma_ignited)
+            == PlasmaIgnitionModel.NON_IGNITED
+        ):
+            # if not ignited add the auxiliary power
+            powht += self.data.current_drive.p_hcd_injected_total_mw
+
+        # Here the implementation sometimes leaves the accessible regime
+        # when p_plasma_rad_mw> powht which is unphysical and
+        # is not taken care of by the rad module.
+        # We restrict the radiation power here by the heating power:
+        self.data.physics.p_plasma_rad_mw = max(0.0e0, self.data.physics.p_plasma_rad_mw)
+
+        # Power to divertor, = (1-self.data.stellarator.f_rad)*Psol
+
+        # The SOL radiation needs to be smaller than the
+        # self.data.physics.p_plasma_rad_mw
+        self.data.physics.psolradmw = self.data.stellarator.f_rad * powht
+        self.data.physics.p_plasma_separatrix_mw = powht - self.data.physics.psolradmw
+
+        # Add SOL Radiation to total
+        self.data.physics.p_plasma_rad_mw += self.data.physics.psolradmw
+
+        # The following line is unphysical, but prevents -ve sqrt argument
+        # Should be obsolete if constraint eqn 17 is turned on (but beware -
+        # this may not be quite correct for stellarators)
+        self.data.physics.p_plasma_separatrix_mw = max(
+            0.001e0, self.data.physics.p_plasma_separatrix_mw
+        )
+
+        # Power transported to the first wall by escaped alpha particles
+
+        self.data.physics.p_fw_alpha_mw = self.data.physics.p_alpha_total_mw * (
+            1.0e0 - self.data.physics.f_p_alpha_plasma_deposited
+        )
+
+        # Nominal mean photon wall load
+        if self.data.physics.i_pflux_fw_neutron == 1:
+            self.data.physics.pflux_fw_rad_mw = (
+                self.data.physics.ffwal
+                * self.data.physics.p_plasma_rad_mw
+                / self.data.physics.a_plasma_surface
+            )
+        elif self.data.heat_transport.ipowerflow == 0:
+            self.data.physics.pflux_fw_rad_mw = (
+                (1.0e0 - self.data.fwbs.fhole)
+                * self.data.physics.p_plasma_rad_mw
+                / self.data.first_wall.a_fw_total
+            )
+        else:
+            self.data.physics.pflux_fw_rad_mw = (
+                (
+                    1.0e0
+                    - self.data.fwbs.fhole
+                    - self.data.fwbs.f_a_fw_outboard_hcd
+                    - self.data.fwbs.f_ster_div_single
+                )
+                * self.data.physics.p_plasma_rad_mw
+                / self.data.first_wall.a_fw_total
+            )
+
+        self.data.constraints.pflux_fw_rad_max_mw = (
+            self.data.physics.pflux_fw_rad_mw * self.data.constraints.f_fw_rad_max
+        )
+
+        self.data.physics.rad_fraction_total = self.data.physics.p_plasma_rad_mw / (
+            self.data.physics.f_p_alpha_plasma_deposited
+            * self.data.physics.p_alpha_total_mw
+            + self.data.physics.p_non_alpha_charged_mw
+            + self.data.physics.p_plasma_ohmic_mw
+            + self.data.current_drive.p_hcd_injected_total_mw
+        )
+
+        # Calculate transport losses and energy confinement time using the
+        # chosen scaling law
+        # N.B. self.data.stellarator.iotabar replaces tokamak self.data.physics.q95
+        # in argument list
+
+        (
+            self.data.physics.eden_plasma_electrons_thermal_vol_avg,
+            self.data.physics.e_plasma_electrons_thermal,
+        ) = self.physics.calaculate_stored_thermal_energy(
+            vol_plasma=self.data.physics.vol_plasma,
+            nd_plasma_vol_avg=self.data.physics.nd_plasma_electrons_vol_avg,
+            temp_plasma_density_weighted_vol_avg_kev=self.data.physics.temp_plasma_electron_density_weighted_kev,
+        )
+
+        (
+            self.data.physics.eden_plasma_ions_thermal_vol_avg,
+            self.data.physics.e_plasma_ions_thermal,
+        ) = self.physics.calaculate_stored_thermal_energy(
+            vol_plasma=self.data.physics.vol_plasma,
+            nd_plasma_vol_avg=self.data.physics.nd_plasma_ions_total_vol_avg,
+            temp_plasma_density_weighted_vol_avg_kev=self.data.physics.temp_plasma_ion_density_weighted_kev,
+        )
+
+        self.data.physics.eden_plasma_thermal_vol_avg = (
+            self.data.physics.eden_plasma_electrons_thermal_vol_avg
+            + self.data.physics.eden_plasma_ions_thermal_vol_avg
+        )
+
+        self.data.physics.e_plasma_thermal_total = (
+            self.data.physics.e_plasma_electrons_thermal
+            + self.data.physics.e_plasma_ions_thermal
+        )
+
+        confinement_time_data = self.physics.confinement.calculate_confinement_time(
+            self.data.physics.m_fuel_amu,
+            self.data.physics.p_alpha_total_mw,
+            self.data.physics.aspect,
+            self.data.physics.b_plasma_toroidal_on_axis,
+            self.data.physics.nd_plasma_electrons_vol_avg,
+            self.data.physics.nd_plasma_electron_line,
+            self.data.physics.eps,
+            self.data.physics.hfact,
+            self.data.physics.i_confinement_time,
+            self.data.physics.i_plasma_ignited,
+            self.data.physics.kappa,
+            self.data.physics.kappa95,
+            self.data.physics.p_non_alpha_charged_mw,
+            self.data.current_drive.p_hcd_injected_total_mw,
+            self.data.physics.plasma_current,
+            self.data.physics.pden_plasma_core_rad_mw,
+            self.data.physics.rmajor,
+            self.data.physics.rminor,
+            self.data.physics.temp_plasma_electron_density_weighted_kev,
+            self.data.stellarator.iotabar,
+            self.data.physics.qstar,
+            self.data.physics.vol_plasma,
+            self.data.physics.n_charge_plasma_effective_vol_avg,
+            eden_plasma_electrons_thermal_vol_avg=self.data.physics.eden_plasma_electrons_thermal_vol_avg,
+            eden_plasma_ions_thermal_vol_avg=self.data.physics.eden_plasma_ions_thermal_vol_avg,
+        )
+
+        self.data.physics.pden_electron_transport_loss_mw = (
+            confinement_time_data.pden_electron_transport_loss_mw
+        )
+        self.data.physics.pden_ion_transport_loss_mw = (
+            confinement_time_data.pden_ion_transport_loss_mw
+        )
+        self.data.physics.t_electron_energy_confinement = (
+            confinement_time_data.t_electron_energy_confinement
+        )
+        self.data.physics.t_energy_confinement = (
+            confinement_time_data.t_plasma_energy_confinement
+        )
+        self.data.physics.t_ion_energy_confinement = (
+            confinement_time_data.t_ion_energy_confinement
+        )
+        self.data.physics.p_plasma_loss_mw = confinement_time_data.p_plasma_loss_mw
+        self.data.physics.hstar = confinement_time_data.hstar
+
+        self.data.physics.ntau, self.data.physics.nTtau = (
+            self.physics.confinement.calculate_double_and_triple_product(
+                nd_plasma_electrons_vol_avg=self.data.physics.nd_plasma_electrons_vol_avg,
+                t_energy_confinement=self.data.physics.t_energy_confinement,
+                temp_plasma_electrons_vol_avg_kev=self.data.physics.temp_plasma_electron_vol_avg_kev,
+            )
+        )
+
+        self.data.physics.p_electron_transport_loss_mw = (
+            self.data.physics.pden_electron_transport_loss_mw
+            * self.data.physics.vol_plasma
+        )
+        self.data.physics.p_ion_transport_loss_mw = (
+            self.data.physics.pden_ion_transport_loss_mw * self.data.physics.vol_plasma
+        )
+
+        self.data.physics.pscalingmw = (
+            self.data.physics.p_electron_transport_loss_mw
+            + self.data.physics.p_ion_transport_loss_mw
+        )
+
+        # Calculate some derived quantities that may not have been defined earlier
+        self.data.physics.p_plasma_heating_total_mw = (
+            self.physics.calculate_total_plasma_heating_power(
+                f_p_alpha_plasma_deposited=self.data.physics.f_p_alpha_plasma_deposited,
+                p_alpha_total_mw=self.data.physics.p_alpha_total_mw,
+                p_non_alpha_charged_mw=self.data.physics.p_non_alpha_charged_mw,
+                p_plasma_ohmic_mw=self.data.physics.p_plasma_ohmic_mw,
+                p_hcd_injected_total_mw=self.data.current_drive.p_hcd_injected_total_mw,
+            )
+        )
+        self.data.physics.f_p_plasma_separatrix_rad = (
+            self.physics.exhaust.calculate_radiation_fraction(
+                p_plasma_rad_mw=self.data.physics.p_plasma_rad_mw,
+                p_plasma_heating_mw=self.data.physics.p_plasma_heating_total_mw,
+            )
+        )
+
+        # Calculate auxiliary physics related information
+        # for the rest of the code
+
+        sbar = 1.0e0
+        (
+            self.data.physics.burnup,
+            self.data.physics.figmer,
+            _fusrat,
+            self.data.physics.molflow_plasma_fuelling_required,
+            self.data.physics.rndfuel,
+            self.data.physics.t_alpha_confinement,
+            self.data.physics.f_t_alpha_energy_confinement,
+        ) = self.physics.phyaux(
+            self.data.physics.aspect,
+            self.data.physics.nd_plasma_fuel_ions_vol_avg,
+            self.data.physics.fusden_total,
+            self.data.physics.fusden_alpha_total,
+            self.data.physics.plasma_current,
+            sbar,
+            self.data.physics.nd_plasma_alphas_thermal_vol_avg,
+            self.data.physics.t_energy_confinement,
+            self.data.physics.vol_plasma,
+            self.data.physics.burnup_in,
+            self.data.physics.tauratio,
+        )
+
+        # Calculate the neoclassical sanity check with PROCESS parameters
+        (
+            q_PROCESS,
+            q_PROCESS_r1,
+            _q_neo,
+            _gamma_neo,
+            _total_q_neo,
+            total_q_neo_e,
+            q_neo_e,
+            _q_neo_D,
+            _q_neo_a,
+            _q_neo_T,
+            g_neo_e,
+            _g_neo_D,
+            _g_neo_a,
+            _g_neo_T,
+            dndt_neo_e,
+            _dndt_neo_D,
+            _dndt_neo_a,
+            _dndt_neo_T,
+            _dndt_neo_fuel,
+            _dmdt_neo_fuel,
+            dmdt_neo_fuel_from_e,
+            chi_neo_e,
+            chi_PROCESS_e,
+            nu_star_e,
+            nu_star_d,
+            nu_star_T,
+            nu_star_He,
+        ) = self.neoclassics.calc_neoclassics()
+
+        if output:
+            self.st_phys_output(
+                q_PROCESS,
+                total_q_neo_e,
+                dmdt_neo_fuel_from_e,
+                q_PROCESS_r1,
+                chi_PROCESS_e,
+                chi_neo_e,
+                q_neo_e,
+                g_neo_e,
+                dndt_neo_e,
+                self.data.physics.rho_ne_max,
+                self.data.physics.rho_te_max,
+                self.data.physics.gradient_length_ne,
+                self.data.physics.gradient_length_te,
+                self.data.physics.rho_star,
+                nu_star_e,
+                nu_star_d,
+                nu_star_T,
+                nu_star_He,
+                self.data.physics.nd_plasma_electron_line,
+                self.data.physics.nd_plasma_electrons_max,
+            )
+
+    def st_phys_output(
+        self,
+        q_PROCESS,
+        total_q_neo_e,
+        dmdt_neo_fuel_from_e,
+        q_PROCESS_r1,
+        chi_PROCESS_e,
+        chi_neo_e,
+        q_neo_e,
+        g_neo_e,
+        dndt_neo_e,
+        rho_ne_max,
+        rho_te_max,
+        gradient_length_ne,
+        gradient_length_te,
+        rho_star,
+        nu_star_e,
+        nu_star_D,
+        nu_star_T,
+        nu_star_He,
+        nd_plasma_electron_line,
+        nd_plasma_electrons_max,
+    ):
+        """Routine to output stellarator physics paramaters"""
+        po.oheadr(self.outfile, "Stellarator Specific Physics:")
+
+        po.ovarre(
+            self.outfile,
+            "Total 0D heat flux (r=rhocore) (MW/m2)",
+            "(q_PROCESS)",
+            q_PROCESS,
+        )
+        po.ovarre(
+            self.outfile,
+            "Total neoclassical flux from 4*q_e (r=rhocore) (MW/m2)",
+            "(total_q_neo_e)",
+            total_q_neo_e,
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Total fuel (DT) mass flux by using 4 * neoclassical e transport (mg/s): ",
+            "(dmdt_neo_fuel_from_e)",
+            dmdt_neo_fuel_from_e,
+        )
+        po.ovarre(
+            self.outfile,
+            "Considered Heatflux by LCFS heat flux ratio (1)",
+            "(q_PROCESS/q_PROCESS_r1)",
+            q_PROCESS / q_PROCESS_r1,
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Resulting electron effective chi (0D) (r=rhocore): ",
+            "(chi_PROCESS_e)",
+            chi_PROCESS_e,
+        )
+        po.ovarre(
+            self.outfile,
+            "Neoclassical electron effective chi (r=rhocore): ",
+            "(chi_neo_e)",
+            chi_neo_e,
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Heat flux due to neoclassical energy transport (e) (MW/m2): ",
+            "(q_neo_e)",
+            q_neo_e,
+        )
+        po.ovarre(
+            self.outfile,
+            "Heat flux due to neoclassical particle transport (e) (MW/m2): ",
+            "(g_neo_e)",
+            g_neo_e,
+        )
+        po.ovarre(
+            self.outfile,
+            "Particle flux due to neoclassical particle transport (e) (1/m2/s): ",
+            "(dndt_neo_e)",
+            dndt_neo_e,
+        )
+
+        po.ovarre(
+            self.outfile, "r/a of maximum ne gradient (m)", "(rho_ne_max)", rho_ne_max
+        )
+        po.ovarre(
+            self.outfile, "r/a of maximum te gradient (m)", "(rho_te_max)", rho_te_max
+        )
+        po.ovarre(
+            self.outfile,
+            "Maxium ne gradient length (1)",
+            "(gradient_length_ne)",
+            gradient_length_ne,
+        )
+        po.ovarre(
+            self.outfile,
+            "Maxium te gradient length (1)",
+            "(gradient_length_te)",
+            gradient_length_te,
+        )
+        po.ovarre(
+            self.outfile,
+            "Gradient Length Ratio (T/n) (1)",
+            "(gradient_length_ratio)",
+            gradient_length_te / gradient_length_ne,
+        )
+
+        po.ovarre(self.outfile, "Normalized ion Larmor radius", "(rho_star)", rho_star)
+        po.ovarre(
+            self.outfile,
+            "Normalized collisionality (electrons)",
+            "(nu_star_e)",
+            nu_star_e,
+        )
+        po.ovarre(
+            self.outfile, "Normalized collisionality (D)", "(nu_star_D)", nu_star_D
+        )
+        po.ovarre(
+            self.outfile, "Normalized collisionality (T)", "(nu_star_T)", nu_star_T
+        )
+        po.ovarre(
+            self.outfile, "Normalized collisionality (He)", "(nu_star_He)", nu_star_He
+        )
+
+        po.ovarre(
+            self.outfile,
+            "Obtained line averaged density at op. point (/m3)",
+            "(nd_plasma_electron_line)",
+            nd_plasma_electron_line,
+        )
+        po.ovarre(
+            self.outfile,
+            "Sudo density limit (/m3)",
+            "(nd_plasma_electrons_max)",
+            nd_plasma_electrons_max,
+        )
+        po.ovarre(
+            self.outfile,
+            "Ratio density to sudo limit (1)",
+            "(nd_plasma_electron_line/nd_plasma_electrons_max)",
+            nd_plasma_electron_line / nd_plasma_electrons_max,
+        )

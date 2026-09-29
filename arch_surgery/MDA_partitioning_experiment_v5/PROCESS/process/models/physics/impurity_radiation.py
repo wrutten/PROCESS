@@ -1,0 +1,755 @@
+"""Module for impurity radiation calculations and data handling."""
+
+from __future__ import annotations
+
+import dataclasses
+import logging
+import re
+from importlib import resources
+from typing import TYPE_CHECKING
+
+import numpy as np
+from numba import njit
+from scipy import integrate
+
+from process.core import constants
+from process.core.exceptions import ProcessError, ProcessValueError
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from process.core.model import DataStructure
+    from process.models.physics.plasma_profiles import PlasmaProfile
+
+logger = logging.getLogger(__name__)
+
+
+def initialise_imprad(data: DataStructure):
+    """Initialises the impurity radiation data structure
+
+    This routine initialises the impurity radiation data.
+    """
+    errorflag = 0
+
+    table_length = 200  # Number of temperature and Lz values in data file
+
+    f_nd_species_electron = 1.0e0
+
+    #  Hydrogen
+
+    init_imp_element(
+        n_species_index=1,
+        name_label=data.impurity_radiation.imp_label[0],
+        z=1,
+        m_species_amu=constants.M_PROTIUM_AMU,  # 1.00782503223 1H
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    f_nd_species_electron = 0.0e0
+
+    #  Helium
+    init_imp_element(
+        n_species_index=2,
+        name_label=data.impurity_radiation.imp_label[1],
+        z=2,
+        m_species_amu=constants.M_HELIUM_AMU,  # 4.002602 (3He,4He) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Beryllium
+    init_imp_element(
+        n_species_index=3,
+        name_label=data.impurity_radiation.imp_label[2],
+        z=4,
+        m_species_amu=constants.M_BERYLLIUM_AMU,  # 9.0121831 9Be
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Carbon
+    init_imp_element(
+        n_species_index=4,
+        name_label=data.impurity_radiation.imp_label[3],
+        z=6,
+        m_species_amu=constants.M_CARBON_AMU,  # 12.0096, (12C,13C,14C) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Nitrogen
+    init_imp_element(
+        n_species_index=5,
+        name_label=data.impurity_radiation.imp_label[4],
+        z=7,
+        m_species_amu=constants.M_NITROGEN_AMU,  # 14.00643, (14N,15N) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Oxygen
+    init_imp_element(
+        n_species_index=6,
+        name_label=data.impurity_radiation.imp_label[5],
+        z=8,
+        m_species_amu=constants.M_OXYGEN_AMU,  # 15.99903, (16O,17O,18O) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Neon
+    init_imp_element(
+        n_species_index=7,
+        name_label=data.impurity_radiation.imp_label[6],
+        z=10,
+        m_species_amu=constants.M_NEON_AMU,  # 20.1797 (20Ne,21Ne,22Ne) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Silicon
+    init_imp_element(
+        n_species_index=8,
+        name_label=data.impurity_radiation.imp_label[7],
+        z=14,
+        m_species_amu=constants.M_SILICON_AMU,  # 28.084 (28Si,29Si,30Si) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Argon
+    init_imp_element(
+        n_species_index=9,
+        name_label=data.impurity_radiation.imp_label[8],
+        z=18,
+        m_species_amu=constants.M_ARGON_AMU,  # 39.948 (40Ar,36Ar,38Ar) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Iron
+    init_imp_element(
+        n_species_index=10,
+        name_label=data.impurity_radiation.imp_label[9],
+        z=26,
+        m_species_amu=constants.M_IRON_AMU,  # 55.845 (56Fe,54Fe,57Fe,58Fe) Average mass
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Nickel
+    init_imp_element(
+        n_species_index=11,
+        name_label=data.impurity_radiation.imp_label[10],
+        z=28,
+        # 58.6934 (58Ni,60Ni,61Ni,62Ni,64Ni) Average mass
+        m_species_amu=constants.M_NICKEL_AMU,
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Krypton
+    init_imp_element(
+        n_species_index=12,
+        name_label=data.impurity_radiation.imp_label[11],
+        z=36,
+        # 83.798 (84Kr,86Kr,82Kr,80Kr,78Kr) Average mass
+        m_species_amu=constants.M_KRYPTON_AMU,
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Xenon
+    init_imp_element(
+        n_species_index=13,
+        name_label=data.impurity_radiation.imp_label[12],
+        z=54,
+        # 131.293 (132Xe,129Xe,131Xe,134Xe,136Xe) Average mass
+        m_species_amu=constants.M_XENON_AMU,
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+    #  Tungsten
+    init_imp_element(
+        n_species_index=14,
+        name_label=data.impurity_radiation.imp_label[13],
+        z=74,
+        # 183.84 (184W,186W,182W,183W,180W) Average mass
+        m_species_amu=constants.M_TUNGSTEN_AMU,
+        f_nd_species_electron=f_nd_species_electron,
+        len_tab=table_length,
+        error=errorflag,
+        data=data,
+    )
+
+
+@dataclasses.dataclass
+class ImpurityDataHeader:
+    """Represents a header or metadata section of an impurity data
+    file.
+
+    If this is a header for some section of data then the data section
+    will be populated with the array of data for which this is a
+    header of.
+    """
+
+    content: str
+    data: list[float] | None = None
+
+
+def read_impurity_file(impurity_file: Path):
+    """Reads an impurity data file and returns a list of ImpurityDataHeader
+    objects representing the headers and associated data in the file.
+
+    Parameters
+    ----------
+    impurity_file : Path
+        Path to the impurity data file to read.
+
+    Returns
+    -------
+    list[ImpurityDataHeader]
+        A list of ImpurityDataHeader objects representing the headers and
+        associated data in the impurity data file.
+    """
+    with open(impurity_file) as f:
+        data = f.readlines()
+
+    file_contents: list[ImpurityDataHeader] = []
+
+    for line in data:
+        # do not parse comments
+        clean_line = line.strip().replace("\n", "")
+        if clean_line[0:3].upper() in {"C  ", "C ", "C", "C--"}:
+            continue
+
+        if re.fullmatch(r"[0-9\.e+\- ]+", clean_line) is not None:
+            header = file_contents[-1]
+
+            new_data = clean_line.split(" ")
+            if header.data is None:
+                header.data = new_data
+            else:
+                header.data += new_data
+        else:
+            file_contents.append(ImpurityDataHeader(clean_line))
+
+    return file_contents
+
+
+def init_imp_element(
+    n_species_index: int,
+    name_label: str,
+    z: int,
+    m_species_amu: float,
+    f_nd_species_electron: float,
+    len_tab: int,
+    error: int,
+    data: DataStructure,
+):
+    """Initialise the impurity radiation data for a species.
+
+    This routine initialises the impurity radiation data structure
+    for a given impurity species. The Lz versus temperature data are
+    read in from file.
+
+    Parameters
+    ----------
+    n_species_index : int
+        Position of species in impurity array
+    name_label : str
+        Species name
+    z : int
+        Species charge number
+    m_species_amu : float
+        Species atomic mass (amu)
+    f_nd_species_electron : float
+        Number density / electron density
+    len_tab : int
+        Length of temperature and Lz tables
+    error : int
+        Error flag; 0 = okay, 1 = missing impurity data
+
+    Raises
+    ------
+    ProcessValueError
+        If illegal impurity number is provided
+    FileNotFoundError
+        If impurity data files are missing
+    ProcessError
+        If required data cannot be located in files
+    """
+    if error == 1:
+        return
+
+    if n_species_index > len(data.impurity_radiation.impurity_arr_label):
+        raise ProcessValueError(
+            "Illegal impurity number",
+            number=n_species_index,
+            max=len(data.impurity_radiation.impurity_arr_label),
+        )
+
+    data.impurity_radiation.impurity_arr_label[n_species_index - 1] = name_label
+    data.impurity_radiation.impurity_arr_z[n_species_index - 1] = z
+    data.impurity_radiation.m_impurity_amu_array[n_species_index - 1] = m_species_amu
+    data.impurity_radiation.f_nd_impurity_electron_array[n_species_index - 1] = (
+        f_nd_species_electron
+    )
+    data.impurity_radiation.impurity_arr_len_tab[n_species_index - 1] = len_tab
+
+    if len_tab > 200:
+        print(
+            f"ERROR: len_tab is {len_tab} but has a maximum value of "
+            f"{data.impurity_radiation.all_array_hotfix_len}"
+        )
+
+    impurity_dir = resources.files("process") / "data/lz_non_corona_14_elements/"
+
+    lz_file = impurity_dir / f"{name_label}_lz_tau.dat"
+    z_file = impurity_dir / f"{name_label}_z_tau.dat"
+
+    if not lz_file.exists() or not z_file.exists():
+        raise FileNotFoundError(
+            f"Cannot find one or both of the impurity datafiles: {lz_file}, {z_file}"
+        )
+
+    lz_data = read_impurity_file(lz_file)
+    z_data = read_impurity_file(z_file)
+
+    Te = None
+    lz = None
+
+    for header in lz_data:
+        if "Te[eV]" in header.content:
+            Te = np.asarray(header.data, dtype=float)
+
+        if "infinite confinement" in header.content:
+            lz = np.asarray(header.data, dtype=float)
+
+    if Te is None:
+        raise ProcessError(f"Cannot locate Te data in {lz_file}")
+    if lz is None:
+        raise ProcessError(
+            f"Cannot locate Lz for infinite confinement data in {lz_file}"
+        )
+
+    zav = None
+    for header in z_data:
+        if "infinite confinement" in header.content:
+            zav = np.asarray(header.data, dtype=float)
+
+    if zav is None:
+        raise ProcessError(
+            f"Cannot locate Zav for infinite confinement data in {z_file}"
+        )
+
+    data.impurity_radiation.temp_impurity_keV_array[n_species_index - 1, :] = Te * 1e-3
+    data.impurity_radiation.pden_impurity_lz_nd_temp_array[n_species_index - 1, :] = lz
+    data.impurity_radiation.impurity_arr_zav[n_species_index - 1, :] = zav
+
+
+def create_f_rad_core_profile(
+    rho: np.array, radius_plasma_core_norm: float, f_p_plasma_core_rad_reduction: float
+) -> np.array:
+    """
+    Creates an array of the same length as `rho` filled with the value of
+    `f_p_plasma_core_rad_reduction` for values of `rho` less than
+    `radius_plasma_core_norm` and 0 for values of `rho` greater than or equal to
+    `radius_plasma_core_norm`.
+
+    Parameters
+    ----------
+    rho: np.array
+        normalised minor radius
+    radius_plasma_core_norm: float
+        normalised radius defining the 'core' region
+    f_p_plasma_core_rad_reduction: float
+        fraction of radiation from the core region
+
+    Returns
+    -------
+        f_rad_core_profile - array filled with the f_p_plasma_core_rad_reduction
+    """
+    f_rad_core_profile = np.zeros(len(rho))
+    rho_mask = rho < radius_plasma_core_norm
+    f_rad_core_profile[rho_mask] = f_p_plasma_core_rad_reduction
+
+    return f_rad_core_profile
+
+
+def calculate_average_charge_at_temp(
+    imp_element_index: int, temp_electron_kev: np.array | float, data: DataStructure
+) -> np.array | float:
+    """Calculates electron temperature dependent average atomic charge (Z) for a given
+    impurity element.
+
+    Parameters
+    ----------
+    imp_element_index:
+        Impurity element index
+    temp_electron_kev:
+        electron temperature in keV
+    data:
+        DataStructure containing impurity radiation data
+
+    Returns
+    -------
+    numpy.array
+        zav_of_te - electron temperature dependent average atomic charge
+    """
+    return _calculate_average_charge_at_temp_compiled(
+        imp_element_index=imp_element_index,
+        temp_electron_kev=temp_electron_kev,
+        temp_impurity_keV_array=data.impurity_radiation.temp_impurity_keV_array,
+        impurity_arr_zav=data.impurity_radiation.impurity_arr_zav,
+        impurity_arr_len_tab=data.impurity_radiation.impurity_arr_len_tab,
+    )
+
+
+@njit(cache=True)
+def _calculate_average_charge_at_temp_compiled(
+    imp_element_index: int,
+    temp_electron_kev: np.array,
+    temp_impurity_keV_array: np.array,
+    impurity_arr_zav: np.array,
+    impurity_arr_len_tab: np.array,
+) -> np.array:
+    """Calculates electron temperature dependent average atomic charge (Z) for a given
+    impurity element.
+
+    Parameters
+    ----------
+    imp_element_index:
+        Impurity element index
+    temp_electron_kev:
+        electron temperature in keV
+    temp_impurity_keV_array:
+        2D array of impurity temperatures in keV for each impurity element
+    impurity_arr_zav:
+        2D array of average charge values for each impurity element at the corresponding
+        temperatures in temp_impurity_keV_array
+    impurity_arr_len_tab:
+        1D array of the length of the temperature and average charge tables for each
+        impurity element
+
+    Returns
+    -------
+    n_charge_impurity_average:
+        electron temperature dependent average atomic charge of impurity element at the
+        given temperature(s)
+
+    """
+    bins = temp_impurity_keV_array[imp_element_index]
+    indices = np.digitize(temp_electron_kev, bins)
+    indices[indices >= bins.shape[0]] = bins.shape[0] - 1
+    indices[indices < 0] = 0
+    # Use numpy.interp for linear interpolation in log space
+    n_charge_impurity_average = np.interp(
+        np.log(temp_electron_kev),
+        np.log(temp_impurity_keV_array[imp_element_index, :]),
+        impurity_arr_zav[imp_element_index, :],
+    )
+
+    # less_than_imp_temp_mask = temp_electron_profile_kev values less than impurity
+    # temperature
+    less_than_imp_temp_mask = (
+        temp_electron_kev <= temp_impurity_keV_array[imp_element_index, 0]
+    )
+
+    # Sets n_charge_impurity_average to the value at the lowest temperature in the table
+    # for temperatures below the lowest temperature in the table.
+    n_charge_impurity_average[less_than_imp_temp_mask] = impurity_arr_zav[
+        imp_element_index, 0
+    ]
+
+    # greater_than_imp_temp_mask = temp_electron_profile_kev values higher than impurity
+    # temperature.
+    greater_than_imp_temp_mask = (
+        temp_electron_kev
+        >= temp_impurity_keV_array[
+            imp_element_index,
+            (impurity_arr_len_tab[imp_element_index]) - 1,
+        ]
+    )
+
+    # Sets n_charge_impurity_average to the value at the highest temperature in the
+    # table for temperatures above the highest temperature in the table.
+    n_charge_impurity_average[greater_than_imp_temp_mask] = impurity_arr_zav[
+        imp_element_index,
+        impurity_arr_len_tab[imp_element_index] - 1,
+    ]
+
+    return n_charge_impurity_average
+
+
+def calculate_impurity_radiation_power_density(
+    imp_element_index: int,
+    nd_electron_profile: np.array,
+    temp_electron_profile_kev: np.array,
+    data: DataStructure,
+) -> np.array:
+    """
+    Calculates the impurity radiation density [W/m³] based on the electron density and
+    temperature profiles.
+
+    Parameters
+    ----------
+    imp_element_index:
+        Impurity element index
+    nd_electron_profile:
+        electron density profile [m⁻³]
+    temp_electron_profile_kev:
+        electron temperature profile [keV]
+
+    Returns
+    -------
+    pden_impurity_profile - total impurity radiation density [W/m³]
+
+    Notes
+    -----
+    -Temperatures outside the range of the L(Z,Tₑ) table are handled by using the
+    L(Z,Tₑ) value at the closest temperature in the table,
+    """
+    bins = data.impurity_radiation.temp_impurity_keV_array[imp_element_index]
+    indices = np.digitize(temp_electron_profile_kev, bins)
+    indices[indices >= bins.shape[0]] = bins.shape[0] - 1
+    indices[indices < 0] = 0
+
+    # Use numpy.interp for linear interpolation in log-log space to find the
+    # loss function values for the given temperature profile L(Z, Tₑ).
+    power_loss_function = np.exp(
+        np.interp(
+            np.log(temp_electron_profile_kev),
+            np.log(
+                data.impurity_radiation.temp_impurity_keV_array[imp_element_index, :]
+            ),
+            np.log(
+                data.impurity_radiation.pden_impurity_lz_nd_temp_array[
+                    imp_element_index, :
+                ]
+            ),
+        )
+    )
+
+    # W/m³ = nᵢ * nₑ * L(Z, Tₑ)
+    # nᵢ = f_nd_species_electron * nₑ
+    pden_impurity_profile = (
+        data.impurity_radiation.f_nd_impurity_electron_array[imp_element_index]
+        * nd_electron_profile
+        * nd_electron_profile
+        * power_loss_function
+    )
+
+    # less_than_imp_temp_mask = temp_electron_profile_kev values less than impurity
+    # temperature.
+
+    less_than_imp_temp_mask = (
+        temp_electron_profile_kev
+        <= data.impurity_radiation.temp_impurity_keV_array[imp_element_index, 0]
+    )
+    # This is okay because line radiation will dominate at lower temp, and the L(Z,Tₑ)
+    # value at the lowest temperature in the table is likely to be an overestimate of the
+    # radiation loss at lower temperatures, so this is a conservative approach.
+    pden_impurity_profile[less_than_imp_temp_mask] = (
+        data.impurity_radiation.pden_impurity_lz_nd_temp_array[imp_element_index, 0]
+    )
+
+    # greater_than_imp_temp_mask = temp_electron_profile_kev values higher than
+    # impurity temperature.
+    greater_than_imp_temp_mask = (
+        temp_electron_profile_kev
+        >= data.impurity_radiation.temp_impurity_keV_array[
+            imp_element_index,
+            data.impurity_radiation.impurity_arr_len_tab[imp_element_index] - 1,
+        ]
+    )
+    #  This is okay because Bremsstrahlung will dominate at higher temp.
+    pden_impurity_profile[greater_than_imp_temp_mask] = (
+        data.impurity_radiation.pden_impurity_lz_nd_temp_array[
+            imp_element_index,
+            data.impurity_radiation.impurity_arr_len_tab[imp_element_index] - 1,
+        ]
+    )
+
+    return pden_impurity_profile
+
+
+def element2index(element: str, data: DataStructure):
+    """Returns the index of the `element` in the impurity array with
+    a given name
+
+    Parameters
+    ----------
+    element: str :
+
+    Raises
+    ------
+    ProcessValueError
+        If the element is not found in impurity_arr_label
+
+    """
+    try:
+        return (
+            data.impurity_radiation.impurity_arr_label
+            .astype(str)
+            .tolist()
+            .index(element)
+        )
+    except ValueError as e:
+        raise ProcessValueError(
+            f"Element {element} is not found in impurity_arr_label"
+        ) from e
+
+
+class ImpurityRadiation:
+    """Calculates the impurity radiation losses for given temperature and
+    density profiles. The considers the  total impurity radiation from the core
+    (pden_impurity_core_rad_total_mw) and total impurity radiation
+    (pden_impurity_rad_total_mw) [MW/(m³)]. The class is used to sum the impurity
+    radiation loss from each impurity element to find the total impurity radiation loss.
+    """
+
+    def __init__(self, plasma_profile: PlasmaProfile, data_structure: DataStructure):
+        """Initialize the ImpurityRadiation class.
+
+        Parameters
+        ----------
+        plasma_profile :
+            Parameterises the density and temperature profiles.
+        """
+        self.data = data_structure
+        self.plasma_profile = plasma_profile
+        self.imp = np.nonzero(
+            self.data.impurity_radiation.f_nd_impurity_electron_array > 1.0e-30
+        )[0]
+
+        self.pden_impurity_radiation_profile = np.zeros(
+            self.data.physics.n_plasma_profile_elements
+        )
+        self.pden_impurity_rad_profile = np.zeros(
+            self.data.physics.n_plasma_profile_elements
+        )
+        self.pden_impurity_core_rad_profile = np.zeros(
+            self.data.physics.n_plasma_profile_elements
+        )
+        self.pden_impurity_rad_edge_profile = np.zeros(
+            self.data.physics.n_plasma_profile_elements
+        )
+
+        self.pden_impurity_rad_total_mw = 0.0
+        self.pden_impurity_core_rad_total_mw = 0.0
+        self.pden_impurity_rad_edge_total_mw = 0.0
+
+    def run(self):
+        """ImpurityRadiation model isn't run"""
+
+    def output(self):
+        """ImpurityRadiation model has no output"""
+
+    def map_imprad_profile(self):
+        """Map imprad_profile() over each impurity element index."""
+        list(map(self.imprad_profile, self.imp))
+
+    def imprad_profile(self, imp_element_index: int) -> None:
+        """Calculates the impurity radiation losses for given temperature
+        and density profiles.
+
+        Parameters
+        ----------
+        imp_element_index:
+            Index used to access different impurity radiation elements
+
+        """
+        pden_impurity_radiation_profile = calculate_impurity_radiation_power_density(
+            imp_element_index=imp_element_index,
+            nd_electron_profile=self.plasma_profile.neprofile.profile_y,
+            temp_electron_profile_kev=self.plasma_profile.teprofile.profile_y,
+            data=self.data,
+        )
+
+        self.pden_impurity_radiation_profile = np.add(
+            self.pden_impurity_radiation_profile, pden_impurity_radiation_profile
+        )
+
+    def calculate_radiation_loss_profiles(self):
+        """Calculate the Bremsstrahlung (radb), line radiation (radl), total impurity
+        radiation from the core (pden_impurity_core_rad_total_mw) and total impurity
+        radiation  (pden_impurity_rad_total_mw). Update the stored arrays with the
+        values.
+        """
+        pden_impurity_rad_total = (
+            self.pden_impurity_radiation_profile
+            * self.plasma_profile.neprofile.profile_x
+        )
+        pden_impurity_core_rad_total = self.pden_impurity_radiation_profile * (
+            self.plasma_profile.neprofile.profile_x
+            * create_f_rad_core_profile(
+                rho=self.plasma_profile.neprofile.profile_x,
+                radius_plasma_core_norm=self.data.impurity_radiation.radius_plasma_core_norm,
+                f_p_plasma_core_rad_reduction=self.data.impurity_radiation.f_p_plasma_core_rad_reduction,
+            )
+        )
+
+        self.pden_impurity_rad_profile = np.add(
+            self.pden_impurity_rad_profile, pden_impurity_rad_total
+        )
+        self.pden_impurity_core_rad_profile = np.add(
+            self.pden_impurity_core_rad_profile, pden_impurity_core_rad_total
+        )
+
+    def integrate_radiation_loss_profiles(self):
+        """Integrate the radiation loss profiles using the Simpson rule.
+        Store the total values for each aspect of impurity radiation loss.
+        """
+        # 1e-6 converts from W/m^3 to MW/m^3
+        # The factor 2 below and and normalised radius profile_x above may be unexpected,
+        # but are correct:
+        # see github.com/ukaea/PROCESS/issues/3968#issuecomment-3491154712
+        # and github.com/ukaea/PROCESS/issues/3968#issuecomment-4935567006
+        self.pden_impurity_rad_total_mw = 2.0e-6 * integrate.simpson(
+            self.pden_impurity_rad_profile,
+            x=self.plasma_profile.neprofile.profile_x,
+            dx=self.plasma_profile.neprofile.profile_dx,
+        )
+        self.pden_impurity_core_rad_total_mw = 2.0e-6 * integrate.simpson(
+            self.pden_impurity_core_rad_profile,
+            x=self.plasma_profile.neprofile.profile_x,
+            dx=self.plasma_profile.neprofile.profile_dx,
+        )
+
+    def calculate_imprad(self):
+        """Call the map function to calculate impurity radiation parameters for each
+        impurity element. Calculate the radiation loss profiles, and integrate them to
+        find the total values for radiation loss.
+        """
+        self.map_imprad_profile()
+        self.calculate_radiation_loss_profiles()
+        self.integrate_radiation_loss_profiles()

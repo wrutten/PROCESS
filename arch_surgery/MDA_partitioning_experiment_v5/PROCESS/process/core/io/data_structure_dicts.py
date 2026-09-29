@@ -1,0 +1,278 @@
+"""Access the dictionaries for variable information.
+
+This ultimately provides access to variable information that is included in
+the python source (e.g. docstrings) or that cannot be dynamically accessed
+(e.g. variable initial values).
+"""
+
+import ast
+import inspect
+import logging
+from functools import cache
+from importlib import import_module
+from itertools import pairwise
+
+import numpy as np
+
+from process.core.input import INPUT_VARIABLES
+from process.core.log import logging_model_handler
+from process.core.solver.iteration_variables import ITERATION_VARIABLES
+
+INPUT_TYPE_MAP = {int: "int", float: "real", str: "string"}
+
+logger = logging.getLogger(__name__)
+
+output_dict = {}
+# Dict of nested dicts e.g. output_dict['DICT_DESCRIPTIONS'] =
+# {descriptions_dict}
+# Dicts stored in output_dict are used to create other derivative dicts
+
+
+# Classes for the various dictionary types
+class Dictionary:
+    """Base Dictionary class for all dicts"""
+
+    def __init__(self, name):
+        self.name = name  # Dict name
+        self.dict = {}  # Contains the dict
+        self.dict[self.name] = {}  # Structures this dict: key = dict name,
+        # value = nested dict of variable info
+
+    def make_dict(self):
+        """Make the dictionary"""
+
+    def post_process(self):
+        """Perform any processing after making the dict"""
+
+    def publish(self):
+        """Add the finished dictionary to the output dict"""
+        output_dict.update(self.dict)
+
+
+class SourceDictionary(Dictionary):
+    """Dictionary created from Fortran source"""
+
+    def __init__(self, name, dict_creator_func):
+        Dictionary.__init__(self, name)
+        # Function that creates the dict
+        self.dict_creator_func = dict_creator_func
+
+    def make_dict(self):
+        """Make entire nested dict from function"""
+        self.dict[self.name] = self.dict_creator_func()
+
+
+class HardcodedDictionary(Dictionary):
+    """Dictionary created from a hardcoded dict in this file"""
+
+    def __init__(self, name, hardcoded_dict):
+        Dictionary.__init__(self, name)
+        self.dict[self.name] = None
+        # Hardcoded value isn't always a dict; override to None to allow the
+        # value to be set to any type
+        self.hardcoded_dict = hardcoded_dict
+
+    def make_dict(self):
+        """Set the nested value to a hardcoded int, list or dict"""
+        self.dict[self.name] = self.hardcoded_dict
+
+
+def dict_var_type():
+    """Function to return a dictionary mapping variable name to variable type
+    eg. 'real_variable' or 'int_array'. Looks in input.f90 at the process
+    functions that read in variables from IN.DAT.
+
+    Example of line we are looking for:
+        call parse_real_variable('BETA', beta, 0.0D0, 1.0D0, &
+
+    Example dictionary entry:
+        DICT_VAR_TYPE['beta'] = 'real_variable'
+    """
+    di = {}
+
+    for var_name, config in INPUT_VARIABLES.items():
+        var_type = (
+            f"{INPUT_TYPE_MAP[config.type]}_{'array' if config.array else 'variable'}"
+        )
+
+        di[var_name] = var_type
+
+    return di
+
+
+def dict_ixc_full():
+    """Function to return a dictionary matching str(ixc_no) to a dictionary
+    containing the name, lower and upper bounds of that variable.
+
+    Example dictionary entry:
+        DICT_IXC_FULL['5'] = {'name' : 'beta', 'lb' : 0.001, 'ub' : 1.0}
+    """
+    return {
+        str(k): {"name": v.name, "lb": v.lower_bound, "ub": v.upper_bound}
+        for k, v in ITERATION_VARIABLES.items()
+    }
+
+
+def dict_ixc_bounds():
+    """Return dictionary mapping iteration variable name to bounds"""
+    ixc_full = output_dict["DICT_IXC_FULL"]
+    ixc_bounds = {}
+    for value in ixc_full.values():
+        lb = value["lb"]
+        ub = value["ub"]
+        temp = {"lb": lb, "ub": ub}
+        ixc_bounds[value["name"]] = temp
+
+    return ixc_bounds
+
+
+# cache the output of get_dicts so that it is never re-calculated in a given
+# process run.
+@cache
+def get_dicts():
+    """Constructs the dictionaries which contain information about every
+    PROCESS variable.
+
+    WARNING: this function must be used carefully because it
+    re-initialises the PROCESS state
+
+    Raises
+    ------
+    TypeError
+        Type annotation not recognised
+    """
+    dict_objects = []
+    # Different dict objects, e.g. variable descriptions
+
+    logging_model_handler.clear_logs()
+    # Make dict objects
+    # Some dicts depend on other dicts already existing in output_dicts, so
+    # be careful if changing the order!
+    dict_objects.extend([
+        HardcodedDictionary("DICT_DEFAULT", {}),
+        HardcodedDictionary("DICT_MODULE", {}),
+        HardcodedDictionary("DICT_DESCRIPTIONS", {}),
+        SourceDictionary("DICT_VAR_TYPE", dict_var_type),
+        SourceDictionary("DICT_IXC_FULL", dict_ixc_full),
+        SourceDictionary("DICT_IXC_BOUNDS", dict_ixc_bounds),
+    ])
+
+    # Make individual dicts within dict objects, process, then add to output_dict
+    for dict_object in dict_objects:
+        dict_object.make_dict()
+        dict_object.post_process()
+        dict_object.publish()
+
+    for module_name in import_module("process.data_structure").__all__:
+        if module_name == "__init__.py":
+            continue
+        module = import_module(f"process.data_structure.{module_name.split('.', 1)[0]}")
+
+        module_tree = ast.parse(inspect.getsource(module))
+        initial_values_dict = {}
+        variable_names = []
+        var_names_and_descriptions = {}
+        dict_module_entry = {}
+        variable_types = {}
+
+        # Check whether to get the initial value from the global data structure
+        # or some dataclass
+        object_containing_initial_values = (
+            module
+            if not hasattr(module, "CREATE_DICTS_FROM_DATACLASS")
+            else module.CREATE_DICTS_FROM_DATACLASS()
+        )
+
+        # get the variable names and initial values
+        for node in ast.walk(module_tree):
+            if isinstance(node, ast.AnnAssign):
+                # for each variable in the file, get the initial value
+                # (either is None, or value initialised in init_variables fn)
+                # set default to be None if variable is not being initialised eg if you
+                # just have `example_double: float`
+                # instead of `example_double: float = None`
+                initial_value = getattr(object_containing_initial_values, node.target.id)
+                # JSON doesn't like np arrays
+                if type(initial_value) is np.ndarray:
+                    initial_value = initial_value.tolist()
+                initial_values_dict[node.target.id] = initial_value
+                # get the variable name and add to variable_names list
+                var_name = node.target.id
+                variable_names.append(var_name)
+                # Now want to get the types of these variables
+                if isinstance(node.annotation, ast.Subscript):
+                    if node.annotation.value.id == "list":
+                        if node.annotation.slice.id == "str":
+                            var_type = "string_array"
+                        elif node.annotation.slice.id == "float":
+                            var_type = "real_array"
+                        elif node.annotation.slice.id == "int":
+                            var_type = "int_array"
+                        elif node.annotation.slice.id == "bool":
+                            var_type = "bool_array"
+                        else:
+                            raise TypeError(
+                                f"The type annotation of variable {node.target.id} is "
+                                f"{node.annotation.value.id}[{node.annotation.slice.id}],"
+                                " and this is not recognised. "
+                                "Please change your type annotation for this variable. "
+                                "PROCESS recognises the following type annotations: "
+                                "list[float], list[int], list[str], list[bool]."
+                            )
+                elif node.annotation.id == "float":
+                    var_type = "real_variable"
+                elif node.annotation.id == "int":
+                    var_type = "int_variable"
+                elif node.annotation.id == "str":
+                    var_type = "str_variable"
+                elif node.annotation.id == "bool":
+                    var_type = "bool_variable"
+                else:
+                    raise TypeError(
+                        f"The type annotation of variable {node.target.id} is "
+                        f"{node.annotation.id}, and this is not recognised. "
+                        "Please change your type annotation for this variable. "
+                        "PROCESS recognises the following "
+                        "type annotations: float, int, str, bool."
+                    )
+
+                variable_types[node.target.id] = var_type
+
+        # Variable descriptions are found under the ast.ClassDef node
+        # within ast.ClassDef - need to check for pairs of ast.AnnAssign followed by an
+        # ast.Expr - this is the form of a variable being declared followed by a
+        # docstring expression. can get these var descriptions from here, and if there
+        # is no ast.Expr immediately after an ast.AnnAssign then this var does not
+        # have a docstring and so set the description to be ""
+        for node in module_tree.body:
+            if isinstance(node, ast.ClassDef):
+                for node1, node2 in pairwise(node.body):
+                    if isinstance(node1, ast.AnnAssign) and isinstance(node2, ast.Expr):
+                        # if docstring immediately follows the variable declaration,
+                        # add docstring to descriptions dict
+                        var_names_and_descriptions[node1.target.id] = node2.value.value
+                    if isinstance(node1, ast.AnnAssign) and not isinstance(
+                        node2, ast.Expr
+                    ):
+                        # if no docstring for variable, have a blank description
+                        var_names_and_descriptions[node1.target.id] = ""
+
+                # check if last entry of ast.body is declaring a var. if it is then this
+                # var has no description and will be missing from
+                # var_names_and_descriptions.
+                # need to add to var_names_and_descriptions dict
+                last_var = node.body[-1]
+                if (
+                    isinstance(last_var, ast.AnnAssign)
+                    and last_var not in var_names_and_descriptions
+                ):
+                    var_names_and_descriptions[last_var.target.id] = ""
+
+        dict_module_entry[module_name] = variable_names
+
+        output_dict["DICT_MODULE"].update(dict_module_entry)
+        output_dict["DICT_DEFAULT"].update(initial_values_dict)
+        output_dict["DICT_DESCRIPTIONS"].update(var_names_and_descriptions)
+        output_dict["DICT_VAR_TYPE"].update(variable_types)
+
+    return output_dict

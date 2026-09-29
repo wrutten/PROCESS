@@ -1,0 +1,225 @@
+"""Handles writing output to PROCESS MFile/OUTFile."""
+
+from contextlib import suppress
+from pathlib import Path
+
+import numpy as np
+
+from process.core import constants
+from process.core.exceptions import ProcessValueError
+
+
+class OutputFileManager:
+    """Manages the opening of regular/idempotence output files."""
+
+    @classmethod
+    def open_files(cls, output_prefix: str, *, mode="w"):
+        """Setup the handlers for MFile and OUTFile for writing."""
+        cls._outfile = open(  # noqa: SIM115
+            Path(output_prefix + "OUT.DAT"), mode
+        )
+        cls._mfile = open(  # noqa: SIM115
+            Path(output_prefix + "MFILE.DAT"), mode
+        )
+
+    @classmethod
+    def open_idempotence_files(cls, output_prefix: str):
+        """Setup the handlers for idempotence MFile and OUTFile for writing."""
+        cls._outfile.close()
+        cls._mfile.close()
+
+        cls._outfile = open(  # noqa: SIM115
+            Path(output_prefix + "IDEM_OUT.DAT"), "w"
+        )
+        cls._mfile = open(  # noqa: SIM115
+            Path(output_prefix + "IDEM_MFILE.DAT"), "w"
+        )
+
+    @classmethod
+    def close_idempotence_files(cls, output_prefix: str):
+        """Removes idempotence output files, closes the handler,
+        and opens the main output files.
+        """
+        Path(cls._outfile.name).unlink()
+        Path(cls._mfile.name).unlink()
+        cls._outfile.close()
+        cls._mfile.close()
+        cls.open_files(mode="a", output_prefix=output_prefix)
+
+    @classmethod
+    def finish(cls):
+        """Closes the file handlers."""
+        cls._outfile.close()
+        cls._mfile.close()
+
+
+def write(file, string: str):
+    """Writes a string to the given file identifier.
+
+    Raises
+    ------
+    ProcessValueError
+        The file is not recognised as an MFile, OUTFile, or terminal.
+    """
+    if file == constants.MFILE:
+        OutputFileManager._mfile.write(f"{string}\n")
+    elif file == constants.NOUT:
+        OutputFileManager._outfile.write(f"{string}\n")
+    elif file == constants.IOTTY:
+        print(string)
+    else:
+        error_msg = (
+            f"Unknown file identifier {file}, "
+            "it is not recognised as either an MFile, OUTFile, or terminal."
+        )
+        raise ProcessValueError(error_msg)
+
+
+def ocentr(file, string: str, width: int, *, character="*"):
+    """Write a centred header within a line of characters to a file
+
+    Parameters
+    ----------
+    file :
+        the integer unit of the file
+    string :
+        the heading text
+    width :
+        the desired with of the header
+    character :
+        the character to pad the heading with (*) (Default value = "*")
+
+    """
+    write(file, f"{f' {string} ':{character}^{width}}")
+    write(constants.MFILE, f"# {string} #")
+
+
+def ostars(file, width: int, *, character="*"):
+    """Write a line of characters to a file
+
+    Parameters
+    ----------
+    file :
+        the integer unit of the file
+    width :
+        the desired with of the line
+    character :
+        the character to fill the line with (*) (Default value = "*")
+
+    """
+    write(file, character * width)
+
+
+def oheadr(file, string: str, *, width: int = 110, character="*"):
+    """Write a centred header within a line of characters between two blank lines
+
+    Parameters
+    ----------
+    file :
+        the integer unit of the file
+    string :
+        the heading text
+    width :
+        the desired with of the header
+    character :
+        the character to pad the heading with (*) (Default value = "*")
+    """
+    oblnkl(file)
+    ocentr(file, string, width, character=character)
+    oblnkl(file)
+
+
+def oshead(file, string: str, *, width: int = 80, character="*"):
+    """Write a short centred header within a line of characters between two blank lines
+
+    Parameters
+    ----------
+    file :
+        the integer unit of the file
+    string :
+        the heading text
+    width :
+        the desired with of the header
+    character :
+        the character to pad the heading with (*) (Default value = "*")
+    """
+    oheadr(file, string, width=width, character=character)
+
+
+def oblnkl(file):
+    """Write a blank line to a file
+
+    Parameters
+    ----------
+    file :
+        the integer unit of the file
+    """
+    write(file, " ")
+
+
+def osubhd(file, string):
+    """Write a subheading between two blank lines
+
+    Parameters
+    ----------
+    file :
+        the integer unit of the file
+    string :
+        the heading text
+    """
+    oblnkl(file)
+    write(file, string)
+    oblnkl(file)
+
+
+def ocmmnt(file, string: str):
+    """Write a comment to a file
+
+    Parameters
+    ----------
+    file :
+        the integer unit of the file
+    string :
+        the comment text
+    """
+    write(file, string)
+
+
+def ovarre(file, descr: str, varnam: str, value, output_flag: str = ""):
+    """Write out a variable to a file via its identifier."""
+    replacement_character = "_"
+    if file != constants.MFILE:
+        replacement_character = " "
+
+    description = f"{descr:<72}".replace(" ", replacement_character)
+    varname = f"{varnam:<30}".replace(" ", replacement_character)
+
+    if isinstance(value, np.ndarray):
+        value = value.item()
+    if isinstance(value, str):
+        # try and convert the value to a float
+        # if it fails, leave as a string
+        with suppress(ValueError):
+            value = float(value)
+
+    format_value = f"{value:.17e}" if isinstance(value, float) else f"{value: >12}"
+
+    # TODO need to find a way to identify iteration variables at a higher level
+    # in the data structure
+    # if varnam.strip("()") in numerics.name_xc:
+    #     # MDK add ITV label if it is an iteration variable
+    #     # The ITV flag overwrites the output_flag
+    #     output_flag = "ITV"
+
+    line = (
+        f"{description}{replacement_character} {varname}{replacement_character} "
+        f"{format_value} {output_flag}"
+    )
+    write(file, line)
+    if file != constants.MFILE:
+        ovarre(constants.MFILE, descr, varnam, value, output_flag)
+
+
+def obuild(file, descr: str, thick: float, total: float, variable_name: str = ""):
+    """Write build variables to the output file via its identifier."""
+    write(file, f"{descr:<50}{thick:.3e}{' ':<10}{total:.3e}  {variable_name}")
