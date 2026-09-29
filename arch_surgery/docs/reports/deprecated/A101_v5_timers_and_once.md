@@ -1,6 +1,6 @@
 # A101 (v5-timers-and-once) — item 5 (the deferred set executed once at the evaluation's exit) and DR12 (observation-only timers)
 
-> **Document status** — **OPEN** task report, branch `A101-v5-timers-and-once` from `architecture_surgery`
+> **Document status** — **MERGED 2026-09-29 at `451d7389` (`--no-ff`, under D37: item 5 and DR12 on the orchestrator's assessment, §15, the driver diffs in §3 and §7 for the user's review on return); archived.** Records relocated to `arch_surgery/idf_probe/runs/A101_runs/v5_timers_and_once/` (one tree, 509 records). Was: **OPEN** task report, branch `A101-v5-timers-and-once` from `architecture_surgery`
 > at `ca7200ff`. Two driver changes to the V5 copy, each straddled by G1 and GC in its own commit, under
 > autonomous mode (D37): the diffs of every file under `PROCESS/` are in §3 and §7 for the user's review
 > on return. Records under `arch_surgery/idf_probe/runs/v5_timers_and_once/` (the worktree's
