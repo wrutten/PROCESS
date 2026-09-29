@@ -280,7 +280,7 @@ criterion, the tooth. Kept, new and dropped are by list item 10 unless another i
 | **G9** | `output_path` | `MDA_Output` removal | on `B1`/`B2` the state the one-call path writes is bit-identical to the state at the entry to `write_output_files` | a 1-ULP perturbation before `finalise` | kept |
 | **GT** *(new)* | — | the test set (§3) | the census set minus one declared component is caught by the whole-`y` audit, or reported not individually binding; a dropped non-census control changes nothing — **form [to be declared from A92]** | the dropped component itself | new (item 6) |
 | **GC** *(new)* | — | items 7 and 8 (DR9, DR10) | on a job set (both phases, every arm, one seed per configuration) node calls, sweeps, predicate evaluations, components compared and every exit state **identical to the digit** before and after the change | a doctored count on one record | new — the count-neutrality gate |
-| **GR** *(once)* | `reproduction` | the V5 copy **at its copy commit, before any change** (A94) | reproduces V4's twenty reference records bit for bit on every count field and hex float | +1 on a count, 1 ULP on a hex, a missing reference | run **once**; no GR beyond the copy |
+| **GR** *(once)* | `reproduction` | the V5 copy **at its copy commit, before any change** (A94) | reproduces V4's twenty reference records bit for bit on every count field and hex float | +1 on a count, 1 ULP on a hex, a missing reference | **run and PASSed** at `d6c246a1` (A94 (v5-copy), merged `b0e91eed`): 20/20 records, 256 values compared, 0 mismatched, 8/8 teeth; `g0prime` 4/4 and `copy_identity` 12/12 PASS beside it; records at `idf_probe/runs/A94_runs/v5_copy_gates/`. No GR beyond the copy |
 | ~~G3 / G3c~~ | `cold_chain` | the prime's cold chain | reproduce A35's counts | — | **dropped** (the user, 2026-09-29, §12 Q3): its construction (a prime at every sweep head) no longer exists once item 8 moves the prime; G2 re-formed plus GC cover it |
 | ~~G8~~ | `predicate_mode` | the `mixed` ruler | — | — | **dropped** (item 10; D30) |
 
@@ -406,6 +406,14 @@ that entails each is named; the merge approval is per change.
 | **DR12** | **observation-only timers** (the block trace's form, DR8): per node, per block loop (test, dispatch), per evaluation (objective and constraints), per run; unset ⇒ `None`, no branch | item 9, **D33** | record fields; the appendix tables; the timers-off runs | no wall-clock appendix; D29 (2)'s scope statement stands for V5 as for V4 |
 | ~~DR13~~ | *(was: the flat arms' deferral, conditional on Q1)* — **not needed: Q1 ruled (c), D35**; the deferral stays on the intervention rung as the paper's matrix has it | — | — | — |
 | **DR11** *(addition)* | the `mixed` predicate ruler **removed** from the copy in the same change, the switch retired through the registry (`retired_names` / `RETIRED_SWITCHES`) | §12 Q5 (the user, 2026-09-29) | one fewer switch; the self-check compares the two retired lists | the mode stays in the copy uncomposed |
+
+**Where V5's records live.** Under `MDA_partitioning_experiment_v5/runs/` (untracked, as V4's), seeded for
+each modify task from the latest relocated tree — first `idf_probe/runs/A94_runs/v5_copy_gates/`, the copy's
+own gate records at `d6c246a1`. The retire script relocates every directory named `runs` under `arch_surgery/`
+(I-16), so a task's V5 records are safe at retirement; a task copies them into `idf_probe/runs/<name>/` first
+only to land them as one tree under one name (A94's assessment). **The copy inherits V4's `self_containment`
+finding** (I-32: a help-string example in `experiment_runner.py` names `idf_probe/`); the modify task under
+item 10 removes it, and the V5 gate table carries no resumed V4 record for that gate.
 
 **Data artifacts.** Regenerated: the entry references (§4). Added: **the census test sets per configuration,
 arm and block** (`test_set_<configuration>.json`, with the DSM feedback set beside as the cross-check, by the

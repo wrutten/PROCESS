@@ -1,6 +1,9 @@
 # A94 (v5-copy) — `MDA_partitioning_experiment_v5/` as an exact copy of V4, with proof
 
-> **Document status** — **OPEN.** Task **A94 (v5-copy)**, branch `A94-v5-copy` (worktree
+> **Document status** — **MERGED 2026-09-29 at `b0e91eed` (`--no-ff`); archived.** The living artifact is
+> `arch_surgery/MDA_partitioning_experiment_v5/` (V4 at `7986d408`, copied whole; one re-pointed line); records
+> relocated to `arch_surgery/idf_probe/runs/A94_runs/v5_copy_gates/`; the orchestrator's assessment is §9.
+> Was: **OPEN.** Task **A94 (v5-copy)**, branch `A94-v5-copy` (worktree
 > `.claude/worktrees/A94-v5-copy`, no records seeded — every gate below pressed from scratch), base
 > **`7986d408`** (= `architecture_surgery` at dispatch), copy commit **`d6c246a1`** — the commit that
 > holds the copy, the manifest and the one re-pointed line, and where every gate below ran. Records:
