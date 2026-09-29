@@ -925,6 +925,12 @@ def print_trace(result: dict[str, Any]) -> None:
               f"k = 1 + max L violated on {e['binding_inconsistent']}")
     print()
 
+    n_flat = sum(t["n_evaluations"] for b in result["optimisation"] for t in b["flat_tables"].values())
+    bad = sum(t["binding_inconsistent"] for b in result["optimisation"] for t in b["flat_tables"].values())
+    n_eval = sum(e["n"] for e in result["evaluation"])
+    bad_eval = sum(e["binding_inconsistent"] for e in result["evaluation"])
+    print(f"  k = 1 + max L held on {n_flat - bad}/{n_flat} flat optimisation-phase evaluations and "
+          f"{n_eval - bad_eval}/{n_eval} flat evaluation-phase runs\n")
     print("## (a) Optimisation phase: which module binds the flat loop\n")
     for b in result["optimisation"]:
         for arm, t in b["flat_tables"].items():
@@ -962,6 +968,10 @@ def print_trace(result: dict[str, Any]) -> None:
         print(f"    traced ratio B2 M2 / {b['flat_reference']} sweeps over the used pairs: "
               f"{_f(b['traced_ratio'])} ({b['traced_totals']}); campaign records, same seeds: "
               f"{_f(b['campaign_ratio_same_seeds'])} ({b['campaign_totals_same_seeds']})")
+        vs = b["by_variable_paired"].values()
+        pure = sum(1 for v in vs if v["M2_binds"] in (0, v["n"]))
+        print(f"    (variable, probe sign) pairs whose paired probes M2 binds on none or on all: "
+              f"{pure}/{len(b['by_variable_paired'])}")
         print("    by design variable and probe sign (gradient probes; share where M2 binds, B2 M2 / flat sweeps):")
         for var, v in sorted(b["by_variable_paired"].items(), key=lambda kv: kv[1]["M2"] / kv[1]["flat"]):
             print(f"      {var:<40} n {v['n']:>5}  M2 binds {v['M2_binds'] / v['n']:.3f}  "
