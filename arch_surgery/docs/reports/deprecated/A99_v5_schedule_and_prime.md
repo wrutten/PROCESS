@@ -1,6 +1,9 @@
 # A99 (v5-schedule-and-prime) — DR9 (the schedule and the deferral sets resolved once per run), DR10 (the prime once per evaluation, before M1), and the count-neutrality gate GC
 
-> **Document status** — **OPEN.** Task **A99 (v5-schedule-and-prime)**, branch `A99-v5-schedule-and-prime`
+> **Document status** — **MERGED 2026-09-29 at `f6e90f61` (`--no-ff`, under D37: the two driver changes on the
+> orchestrator's assessment, §11, for the user's review on return); archived.** I-29 and I-30 closed; records relocated to
+> `arch_surgery/idf_probe/runs/A99_runs/v5_schedule_and_prime/` (one tree, 132 run records). Conflicts over A98 resolved as §11
+> states. Was: **OPEN.** Task **A99 (v5-schedule-and-prime)**, branch `A99-v5-schedule-and-prime`
 > (worktree `.claude/worktrees/A99-v5-schedule-and-prime`, seeded with A94 (v5-copy)'s relocated records
 > `idf_probe/runs/A94_runs/v5_copy_gates/`), base **`43d31a04`** (= `architecture_surgery` at dispatch; the V5
 > driver copy there is byte-identical to the copy commit `d6c246a1` — `git diff --stat d6c246a1 43d31a04 --
