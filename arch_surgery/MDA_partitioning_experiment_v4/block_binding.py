@@ -743,7 +743,11 @@ def controls(campaign) -> list[dict[str, Any]]:
     is not part of its identity), so the pool resolves it by digest to that
     record under ``runs/gates/_runs/`` and makes it there -- which is what
     happened at A90's first press of the controls (reported in the task's
-    report).  Read through the same resolution, never by the named directory.
+    report, issue I-29).  The four records made then were moved to the
+    controls' named directories and the pool's originals restored from
+    A88's records tree, so the pool now resolves each control to its named
+    directory (its first rule) and each gate job to its own record.  Read
+    through the pool's resolution, never by path alone.
     """
     from harness.core import pool as pool_mod  # noqa: PLC0415
     from harness.core import records as records_mod  # noqa: PLC0415
