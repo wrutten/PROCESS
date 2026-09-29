@@ -147,6 +147,67 @@ reconsidered: with the nodes executed, their components can be audited like the 
 phase B's whole-run census (`B2` reads 2 per run: the output pass and the exit audit) as the
 measurement showing that the deferred pass is a single execution.
 
+### 6. The control's MDA: stop on the coupling variables, at a tolerance derived from the optimiser *(user, 2026-09-29, from A89 (coupling-subset-trial))*
+
+**The concern.** V4 stops every loop on the whole measured state `y`: every field an in-loop model
+writes (840 / 846 / 827 components). The textbook MDA converges only the variables that carry
+information from one sweep to the next, and evaluates everything downstream once they are fixed.
+V4's tolerance τ = 1e-6 was also never derived from the optimiser it serves. The user wants a
+proper MDA for the control, without acceleration or Newton, so that the paper isolates the
+architecture change.
+
+**What A89 measured** (evaluation phase, three configurations, `A0` and `A2`, displaced and cold
+entries; report `reports/A89_coupling_subset_trial.md` §3 and §7):
+
+- **Two candidate test sets.**
+  - (a) **DSM feedback set**: a component of `y` read by a DSM model that runs before its writer
+    in the DSM's execution order (75 / 73 / 53 components).
+  - (b) **census-measured set**: a component read before its first write within a sweep of the
+    arm's own execution order, per block, measured at run time (73–75 in the flat loop; 16 / 46–47
+    / 10 in M1 / M2 / M3).
+  - Under half of (b) is in (a). (b) contains 26–28 components that a model reads from its own
+    previous sweep, which the DSM cannot classify. 30–41 of (a) are never read before written at
+    run time.
+- **A tolerance derived from the optimiser.**
+  - VMCON's central-difference step h = `epsfcn` = 1e-3 balances against function noise ε ≈ h³ =
+    1e-9 (Gill, Murray & Wright).
+  - Measured on the optimiser's own stencil, the census-set control first meets that bound at
+    **τ = 1e-8** in every configuration. At 1e-6 the error reaches 2.8e-8.
+  - V4's whole-`y` test meets it at 1e-6 only because it stops one sweep late.
+- **At τ = 1e-8** (54 runs):
+  - Set (b) ends every run with 0 whole-`y` components above τ.
+  - Set (a) fails once: `large_tokamak_nof` cold `A0`, where `costs.coecap` is 1.47e-8 at exit.
+    The loop stopped a sweep early while carried `pf_coil.*` components outside (a) were still
+    moving.
+- **Cost.** At matched accuracy, the census set costs about what V4's lagging whole-`y` test at
+  1e-6 costs: −1 % / −5 % / −2 % node calls over the stencil. Its gain is correctness by
+  construction and a cheaper check. The coupling-state check is 38–39 % of an evaluation's wall
+  clock in V4's control and 7–8 % with the census set (context, not evidence).
+
+**The change: both options, both at the derived tolerance.** A V5 plan carries two candidate
+definitions of the control's (and, per block, the partitioned arm's) convergence test:
+
+1. the **DSM feedback set** (static, from the dependency analysis, in the DSM's order);
+2. the **census-measured read-before-write set** (runtime, in each arm's own order and blocks).
+
+Both use **τ from the declared rule ε ≤ `epsfcn`³**, re-measured on V5's configurations before the
+campaign (1e-8 on V4's), and both keep the whole-`y` exit audit as the accuracy instrument. The plan
+declares which option is the control, or runs both as rungs, before any number exists.
+
+**What each option still needs before it can carry a verdict:**
+
+- (1) a gate with teeth showing that the missing-variable failure A89 found is caught. It failed
+  once in 12 A89 runs at 1e-8.
+- (2) a census over an optimisation run's evaluations, not only 8 displaced entries per
+  configuration and arm, since branches taken only on the optimiser's path go unobserved. Plus a
+  gate with teeth: drop one carried component and the audit must fail.
+- Both: the feed-forward and once-per-run nodes executed once after convergence in every
+  evaluation-phase arm (item 5, extended by the user on 2026-09-29 to all A arms).
+- Both: the per-sweep dispatch overhead of the partitioned path named beside any node-call ratio.
+  In A89, `A2`'s wall-clock ratio against `A0` is 0.77–1.01 where its node-call ratio is 0.43–0.60
+  (context).
+- Both: the optimisation-phase effect of the tighter tolerance, which A89 did not measure.
+
 *Candidates proposed elsewhere and not yet listed here:* A76 (fixed-point-distance)'s report §7 (d)
 notes that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
 carry a pre-declared acceptance rule in a V5 plan (a natural form: headline median and p90 below τ,

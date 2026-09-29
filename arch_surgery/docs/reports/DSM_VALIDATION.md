@@ -659,3 +659,21 @@ the liveness verdict, not to raise a question.
 ## V17 — `st_regression`'s collapsed DSM has 25 M1 rows, not 24; the node map's row counts are the tokamak deck's on every configuration
 
 *(A88 (function-weighted-sweeps), 2026-09-17; entered by the orchestrator at merge.)* On the sibling's `st_regression` export the collapsed DSM has **25 M1 rows**: `ElectronCyclotron` is a supermodel row at 21 (V6's "boundary-respecting substitution" is an addition to M1 at row granularity, though not a node at node granularity) and `CsFatigue` is absent, so every row from 21 is shifted by one against D8's tokamak numbering, and `harness/data/dsm_node_map.json`'s `units.dsm_rows` (24 / 10 / 12 / 1 / 5) is the tokamak deck's on every configuration. **Consequence:** the `models` column of the V4 report's per-module sweep tables (Tables 9 and 17) reads 24 for M1 on st where the export has 25; the DSM-row total bracket on st would move by one row in 47. No existing cell was changed; the `functions` column of Tables D.23/D.24 is per configuration and carries st's 25th row (one function). **Also, a live demonstration of trap T9:** the sibling's tokamak export regenerated on 2026-09-17 (their M125) splits D8's row 55 `Constraints` into `ConsistencyConstraints` (55) and `EngineeringConstraints` (56) — a feed-forward row, in no module's count. Both are named in `harness/data/dsm_function_counts.json` (`row_order`, `unassigned_rows`, `known_drift`). What would close V17: per-configuration DSM-row counts in the node map (a change to a driver-read artifact and to existing cells — issue I-28).
+
+## V18 — The DSM's feedback edges are not the loop's carried state: under half match, and the missing half is self-read
+
+*(A89 (coupling-subset-trial), 2026-09-29.)* **The claim tested.** A component of `y` is "feedback" if a DSM model reads it and runs before its writer in the DSM's execution order. The sibling's export annotates this set as "the 75/55 MDA coupling variables"; A89's derivation gives 75 / 73 / 53 on the three configurations (`coupling_subset_trial/test_sets.json`, exports read once with digests).
+
+**The measurement.** A runtime read-before-write census (`coupling_subset_trial/rbw_census.py`) took the components that some sweep of the flat loop reads before that sweep first writes them. Those are the only components through which one sweep depends on the previous one. Measured on `A0`, seeds 2–5 (`rbw_sets.json`):
+
+| configuration | carried (census) | also DSM feedback | DSM interface only | DSM self-read only | DSM feedback never carried |
+|---|---|---|---|---|---|
+| large_tokamak_nof | 75 | 34 | 14 | 27 | 41 |
+| low_aspect_ratio_DEMO | 74 | 33 | 15 | 26 | 40 |
+| st_regression | 73 | 23 | 22 | 28 | 30 |
+
+**Verdict.**
+- **DSM correct at its own granularity, insufficient as a convergence set.** The DSM works model by model. It cannot tell a model reading its own previous sweep's value from a model reading what it wrote earlier in the same sweep. 26–28 carried components are of the first kind, e.g. `fwbs.breeder_f`, `pf_coil.ccls`, M2's `pf_coil.*` arrays.
+- 30–41 DSM feedback components are never read before written at run time: branches not taken on these configurations, or the DSM's order is not the runtime order (compare V6).
+
+**Consequence, measured.** At τ = 1e-8, stopping the flat loop on the DSM feedback set left `costs.coecap` 1.47e-8 above τ at exit on `large_tokamak_nof`, cold entry. The census set held every run. A89 report §7.4 has the argument that the early stop is a carried component outside the DSM set. **For a convergence test, the census is the instrument and the DSM a cross-check**, the reverse of their roles for partitioning. What would close V18: a census over an optimisation run's evaluations (V5 list item 6).
