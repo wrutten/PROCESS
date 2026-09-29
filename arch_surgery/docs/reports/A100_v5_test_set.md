@@ -1348,3 +1348,57 @@ Under `PROCESS/`: `process/core/caller.py`, `process/core/solver/__init__.py`,
 - 2026-09-29 — `ba440ecd`: GR's jobs under V4's criterion; the final gate table (§8.2), records and
   survey (§9), verdict (§1), decisions 22–23; report committed; runs moved to
   `idf_probe/runs/v5_test_set/`.
+
+---
+
+## 14. Orchestrator's critical assessment (protocol §5) — verdict: merge (DR11, under D37)
+
+*Written 2026-09-29 by the orchestrating session under D37: the driver change merges on this assessment,
+its diff in §4 for the user's review on return. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --name-only 66bfa240..4b4353af`: 46 files; under `PROCESS/` only `caller.py`,
+`solver/__init__.py`, `solver/module_solve.py`, `copy_gates.py`, `PROVENANCE.json`, `CHANGES.md`;
+**0 paths under `process/models/`, 0 under `_v4/`**; worktree clean; `merge-tree` against the trunk: no
+conflict. (2) `compileall` clean and `--gates` constructs the registry (30 entries printed) at the tip, run
+by the orchestrator. (3) The gate-table record on disk: 28 PASS, 1 FAIL (`tally_contracts`), 0 NOT RUN —
+the report's figures; verdict records read: `switch_neutrality` PASS straddling `b1bb1594 → 60434c52`
+(6 pairs), `count_neutrality` PASS straddling `DR10 → DR11` (22 pairs, 3 957 / 0), `test_set` PASS
+(13 424 compared, 735 differing = the three biting drops), `entry_and_warm` PASS (6 717 / 0),
+`reproduction` PASS as a read (256 / 0), `tally_contracts` FAIL (339 / 40; reference cells 236 / 0),
+`self_containment` PASS (55 / 0). (4) The smoke records recounted by the orchestrator: the `write_set`
+pair on `large_tokamak_nof` reads `0x1.99999999b822ap+0` / `0x1.9999999a4496cp+0` (630 / 660 evaluations)
+— V4's numbers; the supplementary `st_regression` `B2` census/1e-12 record reads `-0x1.096acf3342df8p+4`,
+570 evaluations, **identical to A96's record** (recounted from `A96_runs`), so DR9–DR11 are count-neutral
+on that st run beyond GC's job set. (5) The census Table 5.1 rows for `B0`/`B2` equal A92's Table 1 as
+the report says (spot-checked against A92's committed `optimisation_path_sets.json` totals).
+
+**One protocol slip, recorded, not blocking.** The four re-presses the report cites "at `ba440ecd`"
+(`tally_contracts`, `resume_identity`, `output_path`, `count_neutrality`; logs `A100_press34`–`37`, 20:56)
+were made **before** that commit existed (20:58): their records are stamped `c4aa37b6` and the tree carried
+`ba440ecd`'s two files uncommitted. The committed content is the same, and the claim "236/236, 20 of 20"
+rests on those records — so the orchestrator **re-presses the four gates and the gate table at the merged
+tip** (in the next task's seeded worktree) before anything cites them; the result goes in the queue's log.
+Protocol §15's letter (the script committed before the number) was missed by two minutes.
+
+**Read against the rulings.** D32 (census set, the default), D39 (V4's predicate selectable as the
+fallback — proven: the fallback pair reproduces A94's GR records to the bit and GC's DR10 → DR11 straddle
+under the fallback is 0 differing), D30/Q5 (the `mixed` ruler gone in the driver and the pending table
+emptied in the same commit), D23 (one τ per campaign, following the set; `--tau` an override in the
+identity), D38 (children single-threaded by default). The two census findings — `M3` carrying the inert
+first-wall pair since DR10, and `B1`'s set measured as `B0`'s minus the burn time — are results and the
+new sets stand (the brief said so). GT's `at_least_one_drop_bit` requirement (decision 7) is protocol
+§12 applied: a gate whose tooth never bit has not been shown able to fail; it bites on nof (3 of 8).
+Decision 1 (the test set and τ rendered into the identity only off V4's values) is the one that keeps the
+seeded records and GC's DR10 side findable, and its cost is a convention a reader must know; the child's
+stamps say it explicitly. Decision 23 (GR's jobs carry V4's criterion; the pool admits it for non-campaign
+jobs) is right: GR *is* V4 on the copy.
+
+**Not this task's, filed.** `tally_contracts` FAIL on (2) the population check over GR's read-only
+records lacking later schema fields and (3) a tooth that cannot trip on the gate population → issue
+(the campaign's arrival moots (2); (3) is a tooth-design limit); `--jobs reproduction` refusing on a tree
+holding G1's captures (I-29's edge on an unnamed job) → issue; the absolute-path leaf class → trap.
+
+**Queue consequences at merge.** DR11 merged (V5 plan §11 row); §7 Table 2's GT row cites this report;
+§9's test-set row names the artifacts and widths; §3's population paragraph gains the two findings;
+issues I-35 (tally population on read-only GR records) and I-36 (`--jobs reproduction` on an unnamed
+job) filed; trap T20 (a path leaf in a compared record); the README rewrite stays with the report task.
