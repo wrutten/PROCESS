@@ -241,6 +241,34 @@ DSM-based option in this item is therefore the model-level feedback set as defin
 set is not a candidate unless a runtime read census is folded into it, at which point it is option
 2.
 
+### 7. The deferral sets are derived once per run, not on every evaluation *(the user, 2026-09-29, from A91 (block-sweep-timing), issue I-30)*
+
+**The concern, in the user's words:** *"is this actually an architectural change? We run the same
+models still right, only the experiment execution is more accurate in wall clock time because we
+remove unnecessary overhead introduced by the experiment harness that wouldn't be there if you
+actually implemented the order manually. If that is the case, this should be fixed in v5."*
+
+**What it is.** The driver copy re-derives which nodes are deferred on every `call_models` —
+`_predicate_read_fields` walks the objective and constraint sources with `ast`, `_node_write_sets`
+re-reads `node_writesets.json`, and `Caller._resolve_defer_per_call_tails` calls both each time
+(its comment: "re-resolved on every call rather than memoised") — 8–11 ms per evaluation in every
+deferring arm (`A0` with deferrals, `A2`, `B1`, `B2`), 0 in the arms without deferral (A91 §5;
+I-30). It is not the architecture: the models, their order and every count are identical with or
+without it; a driver written for the partitioned order would resolve the schedule once at start-up.
+It is an implementation cost that falls on the intervention arms only, so it biases every
+wall-clock comparison against them.
+
+**The change.** In V5's driver copy the deferral sets (and the block schedule) are resolved **once
+per run** — at `Caller` construction or on first use, keyed on the figure of merit — and reused for
+every evaluation. Requirements: no count changes (node calls, sweeps, predicate evaluations,
+components compared identical to the digit on a gate job set, both phases); the switch-neutrality
+gate G1 byte-identical with every switch unset; the resolution's provenance stamped once per run
+as it is stamped now per call. A driver change: the user has said it should be fixed in V5, and
+the ruling is recorded here as the user's instruction; a decision row (D31) is proposed for the
+register in the same words. Any other per-evaluation cost the instrument adds unequally to the
+arms — A91 measured the block-sweep dispatch (0.08–0.09 ms) and found it negligible, and A89 the
+whole-state read per sweep (small) — is checked the same way before V5's wall-clock table exists.
+
 *Candidates proposed elsewhere and not yet listed here:* A76 (fixed-point-distance)'s report §7 (d)
 notes that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
 carry a pre-declared acceptance rule in a V5 plan (a natural form: headline median and p90 below τ,
