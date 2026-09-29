@@ -397,6 +397,27 @@ REGISTRY: dict[str, Switch] = {
         readbacks=((MODULE_SOLVE, "TRACE_FULL_FROM"),),
         note="Companion of the trace above; same treatment.",
     ),
+    "block_trace": Switch(
+        term="block_trace",
+        driver_name="PROCESS_ARCH_BLOCK_TRACE",
+        intended_name="PROCESS_ARCH_BLOCK_TRACE",
+        value_kind="path",
+        values=(),
+        composed=False,
+        readbacks=(
+            (MODULE_SOLVE, "BLOCK_TRACE_PATH"),
+            (MODULE_SOLVE, "BLOCK_TRACE_ENABLED"),
+        ),
+        note=(
+            "A per-evaluation block trace (task A90 (m2-phasea-vs-phaseb)): per "
+            "call_models, the evaluation kind the optimiser asked for, the "
+            "design vector, and each block's sweeps with every sweep's "
+            "residual split by module.  Observation only: cleared before "
+            "every arm, never composed; a run that wants it passes it as a "
+            "job's override_env, which makes it a different job identity "
+            "from any campaign run."
+        ),
+    ),
 }
 
 

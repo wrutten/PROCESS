@@ -8,6 +8,7 @@ import numpy as np
 from process.core import _idf_probe
 from process.core.caller import Caller
 from process.core.model import DataStructure
+from process.core.solver import module_solve
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,8 @@ class Evaluators:
         conf = np.zeros(m, dtype=np.float64, order="F")
 
         # Evaluate machine parameters at xv
+        if module_solve.BLOCK_TRACE_ENABLED:
+            module_solve.EVALUATION_KIND = ["function"]
         objf, conf = self.caller.call_models(xv, m)
 
         summ = 0.0
@@ -137,9 +140,13 @@ class Evaluators:
                     xbac[i] = xv[j] * (1.0 - self.data.numerics.epsfcn)
 
             # Evaluate at (x+dx)
+            if module_solve.BLOCK_TRACE_ENABLED:
+                module_solve.EVALUATION_KIND = ["gradient", i, 1]
             ffor, cfor = self.caller.call_models(xfor, m)
 
             # Evaluate at (x-dx)
+            if module_solve.BLOCK_TRACE_ENABLED:
+                module_solve.EVALUATION_KIND = ["gradient", i, -1]
             fbac, cbac = self.caller.call_models(xbac, m)
 
             # Calculate finite difference gradients
@@ -157,6 +164,8 @@ class Evaluators:
         if _idf_probe.ENABLED:
             _idf_probe.set_phase("grad_reconcile")
 
+        if module_solve.BLOCK_TRACE_ENABLED:
+            module_solve.EVALUATION_KIND = ["reconcile"]
         self.caller.call_models(xv, m)
 
         return fgrd, cnorm

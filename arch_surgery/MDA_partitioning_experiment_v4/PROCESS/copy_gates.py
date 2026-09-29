@@ -257,6 +257,23 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             was="one ruler, not selectable and not named in any record",
             now="PROCESS_ARCH_PREDICATE=frozen | mixed (unset for frozen)",
         ),
+        PermittedEdit(
+            kind="switch added",
+            name="PROCESS_ARCH_BLOCK_TRACE",
+            description=(
+                "an observation-only per-evaluation block trace: the switch, "
+                "resolved once at import and refused with the analysis loop "
+                "unset; the evaluation kind the optimiser's evaluator sets "
+                "before each call; a helper that splits one sweep's residual "
+                "by module (its maximum scaled step and whether the module's "
+                "own components would still fail the test); and the JSONL "
+                "writer.  Unset, nothing here runs and no float the run "
+                "computes with is read or written"
+            ),
+            task="A90 (m2-phasea-vs-phaseb)",
+            was="no per-evaluation, per-block record",
+            now="PROCESS_ARCH_BLOCK_TRACE=<file> (unset for no trace)",
+        ),
     ],
     "process/core/solver/subsolve.py": [
         PermittedEdit(
@@ -516,6 +533,22 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
                 "solve-phase totals"
             ),
         ),
+        PermittedEdit(
+            kind="instrument hook",
+            name="the block trace in the block schedule's call_models",
+            description=(
+                "with PROCESS_ARCH_BLOCK_TRACE set, each block loop's sweep "
+                "residual is split by module and kept, and one line per "
+                "evaluation is written at both of the schedule's exits (the "
+                "converged return and the block-cap refusal) by a new method, "
+                "_block_trace_line.  Every statement is guarded by the switch; "
+                "the residual it reads is the one the loop already computed, "
+                "and no branch a result depends on changes"
+            ),
+            task="A90 (m2-phasea-vs-phaseb)",
+            was="per-evaluation block counts rolled into run totals only",
+            now="the same totals, plus a per-evaluation trace when asked for",
+        ),
     ],
     "process/core/solver/solver_handler.py": [
         PermittedEdit(
@@ -536,6 +569,24 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A60 (driver-attempts)",
             was="four bare calls to the solver, indistinguishable in the counters",
             now="the same four calls, each bracketed by a boundary stamp",
+        ),
+    ],
+    "process/core/solver/evaluators.py": [
+        PermittedEdit(
+            kind="instrument hook",
+            name="EVALUATION_KIND before each call_models",
+            description=(
+                "with PROCESS_ARCH_BLOCK_TRACE set, the evaluator labels each "
+                "of its calls to call_models for the block trace -- the "
+                "function evaluation, the gradient column and sign, the "
+                "reconcile call -- so the kind of an evaluation is read from "
+                "the optimiser's own call site rather than inferred from its "
+                "position in the sequence.  Guarded by the switch; the calls "
+                "themselves are unchanged"
+            ),
+            task="A90 (m2-phasea-vs-phaseb)",
+            was="unlabelled calls",
+            now="the same calls, labelled when the block trace is on",
         ),
     ],
     "process/core/_idf_probe_modules.py": [

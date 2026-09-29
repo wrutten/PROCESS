@@ -1513,6 +1513,15 @@ class Caller:
         block_sweeps = 0
         inner_counts: dict[str, list[int]] = {lab: [] for lab, _n, _i in schedule}
         moved_constants: set = set()
+        # A90 (m2-phasea-vs-phaseb): per block, each sweep's residual split by
+        # module.  ``None`` with PROCESS_ARCH_BLOCK_TRACE unset, and then no
+        # hook below runs.
+        block_trace = {} if module_solve.BLOCK_TRACE_ENABLED else None
+        trace_modules = (
+            module_solve.block_trace_modules(spec, subsets)
+            if block_trace is not None
+            else None
+        )
 
         def charge() -> None:
             nonlocal block_sweeps
@@ -1614,6 +1623,10 @@ class Caller:
                         "flat_inner", trace_call, s, spec, y_prev, y,
                         res, tau,
                     )
+                if block_trace is not None:
+                    block_trace.setdefault(label, []).append(
+                        module_solve.block_trace_sweep(res, trace_modules, tau)
+                    )
                 y_prev = y
                 if res.converged(tau):
                     inner_ok = True
@@ -1627,6 +1640,8 @@ class Caller:
                     tail=tail, single_block=single_block,
                 )
                 _roll_up(self.module_solve_stats)
+                if block_trace is not None:
+                    self._block_trace_line(xc, inner_counts, block_trace, False)
                 raise module_solve.ModuleSolveFailure(
                     f"block {label} did not converge in "
                     f"{module_solve.INNER_CAP} sweeps at tau={tau:g}; max "
@@ -1655,7 +1670,27 @@ class Caller:
             single_block=single_block,
         )
         _roll_up(self.module_solve_stats)
+        if block_trace is not None:
+            self._block_trace_line(xc, inner_counts, block_trace, True)
         return objf, conf
+
+    def _block_trace_line(self, xc, inner_counts, block_trace, converged) -> None:
+        """A90 (m2-phasea-vs-phaseb): one evaluation's line of the block trace.
+
+        Called only with PROCESS_ARCH_BLOCK_TRACE set.  Reads and consumes the
+        evaluation kind the optimiser's evaluator set; writes nothing the run
+        computes with.
+        """
+        module_solve.block_trace_write({
+            "call": MDA_TOTALS["n_call_models"],
+            "evaluation": module_solve.EVALUATION_KIND,
+            "iteration": int(self.data.numerics.n_solver_iterations),
+            "x": [float(v).hex() for v in xc],
+            "converged": converged,
+            "sweeps": {k: sum(v) for k, v in inner_counts.items()},
+            "per_sweep": block_trace,
+        })
+        module_solve.EVALUATION_KIND = None
 
     @staticmethod
     def _module_stats(

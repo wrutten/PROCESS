@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Which block binds an evaluation, and why M2 stops binding in the optimisation phase.
 
-Task A90 (m2-probe-binding).  In the evaluation phase the partitioned arm's
+Task A90 (m2-phasea-vs-phaseb).  In the evaluation phase the partitioned arm's
 second block, M2, sweeps as often as the flat loop does (it *binds*); in the
 optimisation phase it sweeps ~15-30 % less per evaluation.  This script
 produces every number the task's report cites, in two subcommands:
