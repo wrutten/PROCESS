@@ -350,6 +350,14 @@ TRACED_ARMS = {
     },
 }
 
+#: How many seeds the first press takes (the orchestrator's ruling on A90's
+#: population, 2026-09-29: the user asked for "a few seeds each", and step 1
+#: shows the per-seed ratio is tight, so a subset decides the predictions; a
+#: larger set needs the user's approval).  The optimisation phase takes the
+#: first N of the paper's seed set; the evaluation phase the first N displaced
+#: seeds.
+N_SEEDS = 3
+
 #: The untraced controls: the same job with the switch unset, at this tree,
 #: to show the hooks change nothing on the block-schedule path with the
 #: switch off (gate G1 runs only the arms with every switch unset, which never
@@ -372,8 +380,9 @@ def trace_jobs(campaign) -> dict[str, list]:
     three fields changed: its directory, its run kind (``gate``) and, for a
     traced job, ``override_env`` naming the trace file -- which also makes its
     identity differ from every campaign job's.  The optimisation phase takes
-    the paper's seed set (every arm reached an accepted optimum); the
-    evaluation phase takes every displaced seed.
+    first :data:`N_SEEDS` of the paper's seed set (every arm reached an
+    accepted optimum); the evaluation phase the first ``N_SEEDS`` displaced
+    seeds.
     """
     import dataclasses  # noqa: PLC0415
 
@@ -381,7 +390,12 @@ def trace_jobs(campaign) -> dict[str, list]:
     from harness.core import pool as pool_mod  # noqa: PLC0415
 
     root = Path(campaign.runs_dir) / TRACE_ROOT
-    b_seeds = _phase_b_seed_sets(campaign)
+    b_all = _phase_b_seed_sets(campaign)
+    b_seeds = {c: seeds[:N_SEEDS] for c, seeds in b_all.items()}
+    a_seeds = sorted({
+        job.seed for job in chain_mod.campaign_jobs(campaign, "evaluation_displaced")
+        if job.seed != 0
+    })[:N_SEEDS]
 
     def traced(job, sub: str):
         outdir = root / sub / job.config.name / job.arm / pool_mod.seed_directory(job.seed)
@@ -402,7 +416,7 @@ def trace_jobs(campaign) -> dict[str, list]:
         if job.arm in CONTROL_ARMS.get(c, ()) and b_seeds.get(c) and job.seed == b_seeds[c][0]:
             out["controls"].append(untraced(job))
     for job in chain_mod.campaign_jobs(campaign, "evaluation_displaced"):
-        if job.arm in TRACED_ARMS["A"].get(job.config.name, ()):
+        if job.arm in TRACED_ARMS["A"].get(job.config.name, ()) and job.seed in a_seeds:
             out["evaluation"].append(traced(job, "evaluation"))
     return out
 
