@@ -674,6 +674,34 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             was="subset = subsets.get(label): the block's whole write set",
             now="subset = tests.get(label): the block's test set (the write set under the fallback, the census set under census)",
         ),
+        PermittedEdit(
+            kind="switch",
+            name="PROCESS_ARCH_DEFER_PER_RUN_EXECUTION / _execute_deferred_per_run_set_once",
+            description=(
+                "WHERE the per-run deferred set is executed once (V5 list "
+                "item 5; decision D35): 'output_path' (unset) leaves it at the "
+                "entry to write_output_files, the optimisation phase's place; "
+                "'evaluation_exit' executes it at the exit of every "
+                "call_models on the converged state, after the objective and "
+                "constraints -- the evaluation phase's one call_models is the "
+                "whole run and never reaches the output path, so an "
+                "evaluation is the MDA converged and then every deferred "
+                "node once, and its exit state carries what a flat "
+                "evaluation's carries.  The mechanism is the output path's: "
+                "one sweep of the dispatch body over the set with the "
+                "exclusion lifted, counted like any other node call and "
+                "sweep (measured, not charged).  DEFER_PER_RUN_TOTALS gains "
+                "'execution' and 'n_executions' (one per run in both phases).  "
+                "The switch is refused without PROCESS_ARCH_DEFER_PER_RUN and "
+                "refused on an unknown value; with it unset the evaluation's "
+                "exit is one boolean read (gate G1); gate GC declares the "
+                "counts it moves in the evaluation phase and requires every "
+                "other count and the optimisation phase identical"
+            ),
+            task="A101 (v5-timers-and-once)",
+            was="the set executed once at the output path only; an evaluation-phase run left its outputs uncomputed",
+            now="the set executed once at the evaluation's exit where the harness composes evaluation_exit; the output path unchanged",
+        ),
     ],
     "process/core/solver/solver_handler.py": [
         PermittedEdit(

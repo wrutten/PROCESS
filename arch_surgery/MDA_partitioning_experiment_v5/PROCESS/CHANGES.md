@@ -909,7 +909,7 @@ Relative to `c0ae5b28` this file also carries constraint 93 (§3.5, inherited).
 The docstring named a retired switch; it names the one that replaced it. Nothing the constraint
 computes changes.
 
-### 4.5 `process/core/caller.py` — 17 recorded edits
+### 4.5 `process/core/caller.py` — 18 recorded edits
 
 Relative to `c0ae5b28` this file also carries everything in §3.2 (inherited).
 
@@ -1512,6 +1512,61 @@ The write sets stay loaded and are still what the block trace splits a residual 
 stopping subset is the test set. Under the fallback `tests` is `subsets` — the same object — and
 nothing differs from the copy before the change (gate GC); with every switch unset the branch is
 never reached (gate G1).
+
+#### 4.5.17 `PROCESS_ARCH_DEFER_PER_RUN_EXECUTION` and `_execute_deferred_per_run_set_once` — where the per-run set is executed once (V5 list item 5)
+
+*Recorded edit kind: switch. Made by task A101 (v5-timers-and-once), V5 list item 5, decision D35.*
+
+```python
++_DEFER_PER_RUN_EXECUTIONS: tuple[str, ...] = ("output_path", "evaluation_exit")
++DEFER_PER_RUN_EXECUTION: str = (
++    os.environ.get("PROCESS_ARCH_DEFER_PER_RUN_EXECUTION", "").strip()
++    or "output_path"
++)
++# ... refused on an unknown value, and refused without PROCESS_ARCH_DEFER_PER_RUN
++DEFER_PER_RUN_AT_EVALUATION_EXIT: bool = DEFER_PER_RUN_EXECUTION == "evaluation_exit"
+```
+
+`DEFER_PER_RUN_TOTALS` gains `"execution": DEFER_PER_RUN_EXECUTION` and `"n_executions": 0`;
+`write_output_files` increments `n_executions` where it executes the set. In `call_models`:
+
+```python
+-            return self._call_models_inner(xc, m)
++            objf, conf = self._call_models_inner(xc, m)
++            if DEFER_PER_RUN_AT_EVALUATION_EXIT:
++                self._execute_deferred_per_run_set_once(xc)
++            return objf, conf
+```
+
+and the method:
+
+```python
++    def _execute_deferred_per_run_set_once(self, xc: np.ndarray) -> None:
++        ps = _defer_per_run_nodes(self.data)
++        DEFER_PER_RUN_TOTALS["executed_once"] = sorted(ps)
++        DEFER_PER_RUN_TOTALS["executed_once_at_node_calls"] = NODE_CALLS[0]
++        DEFER_PER_RUN_TOTALS["n_executions"] += 1
++        if not ps:
++            return
++        self._defer_per_run = None
++        self._sweep_block(xc, ps)
+```
+
+**What it is.** An evaluation-phase run is one `call_models` and never reaches the output path,
+so under the per-run deferral its record left the deferred nodes' outputs uncomputed (V4's
+Table 9 printed the 0). With `evaluation_exit` composed — by the harness, in the evaluation
+phase's deferring arm only — the set is executed once at the exit of every `call_models`, on the
+converged state, after the objective and constraints (which read nothing the set writes): the
+MDA converged, then every deferred node once, so the exit state carries what a flat evaluation's
+carries (the user, 2026-09-29: *"it should mimic a full model evaluation yielding the same output
+as the reference case"*). The mechanism is the output path's own: one sweep of the dispatch
+body over the set with the exclusion lifted for it, counted like any other node call and any
+other sweep — *measured, not charged*. The optimisation phase leaves the switch unset and is
+unchanged. With the switch unset the evaluation's exit is one boolean read (gate G1); gate GC
+declares the counts the evaluation phase gains (the per-run nodes' census 0 → 1 each, the node
+totals by their number, one dispatch sweep) and requires every other count and the whole
+optimisation phase identical to the digit, with the per-run nodes' own components the only ones
+of the exit state that may differ. No model file changes.
 
 ### 4.6 `process/core/solver/solver_handler.py` — 1 recorded edit
 

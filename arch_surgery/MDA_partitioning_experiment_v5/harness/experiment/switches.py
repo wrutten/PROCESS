@@ -329,6 +329,34 @@ REGISTRY: dict[str, Switch] = {
             "rather than quietly run all of them."
         ),
     ),
+    "defer_per_run_execution": Switch(
+        term="defer_per_run_execution",
+        driver_name="PROCESS_ARCH_DEFER_PER_RUN_EXECUTION",
+        intended_name="PROCESS_ARCH_DEFER_PER_RUN_EXECUTION",
+        value_kind="enum",
+        values=("output_path", "evaluation_exit"),
+        composed=True,
+        readbacks=(
+            (CALLER, "DEFER_PER_RUN_EXECUTION"),
+            (CALLER, "DEFER_PER_RUN_AT_EVALUATION_EXIT"),
+        ),
+        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "DEFER_PER_RUN_EXECUTION") == v,
+        note=(
+            "WHERE the per-run deferred set is executed once (V5 list item 5, "
+            "task A101 (v5-timers-and-once); decision D35): 'output_path' "
+            "(unset), at the entry to write_output_files after the optimiser "
+            "has accepted -- the optimisation phase's place, unchanged -- or "
+            "'evaluation_exit', at the exit of every call_models on the "
+            "converged state, so that an evaluation-phase run (one "
+            "call_models, no output path) executes the set exactly once and "
+            "its exit state carries what a flat evaluation's carries.  "
+            "Composed by the evaluation phase's deferring arm only; the "
+            "execution is one sweep of the dispatch body, counted like any "
+            "other node call and sweep (measured, not charged; gate GC "
+            "declares the counts it moves).  Not a matrix row: it follows "
+            "from the phase and the per-run deferral."
+        ),
+    ),
     "burn_time_owner": Switch(
         term="burn_time_owner",
         driver_name="PROCESS_ARCH_BURN_TIME_OWNER",

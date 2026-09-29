@@ -180,6 +180,16 @@ class Arm:
                     lifted_input_file=self.input_file == "lifted"
                 )
             )
+            if self.phase == "A":
+                # V5 list item 5 (A101 (v5-timers-and-once); decision D35):
+                # an evaluation-phase run is one call_models and never
+                # reaches the output path, so the deferred set is executed
+                # once at the evaluation's exit instead -- the MDA converged,
+                # then every deferred node once.  Not a matrix row: it
+                # follows from the phase and the deferral.  The optimisation
+                # phase leaves the switch unset and executes the set at the
+                # output path as before.
+                terms["defer_per_run_execution"] = "evaluation_exit"
         if lifted_here:
             # One switch says who owns the burn time.  The two settings this
             # replaces could disagree with each other -- a constant owning a

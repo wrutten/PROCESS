@@ -521,13 +521,60 @@ if DEFER_PER_RUN_ENABLED and not Path(DEFER_PER_RUN_PATH).exists():
         f"refuse rather than silently run everything."
     )
 
+# V5 list item 5 (task A101 (v5-timers-and-once); decision D35): WHERE the
+# per-run deferred set is executed once.  Switch:
+# ``PROCESS_ARCH_DEFER_PER_RUN_EXECUTION``.
+#
+# ``output_path`` (the variable unset, the default): the set runs once at the
+# entry to :func:`write_output_files`, after the optimiser has accepted --
+# the optimisation phase's place for it, unchanged.  ``evaluation_exit``: the
+# set runs once at the exit of **every** :meth:`Caller.call_models`, on the
+# converged state, after the objective and constraints are computed (they
+# read nothing the set writes -- that is the set's defining property).  It
+# exists for the evaluation phase, whose one ``call_models`` is the whole run
+# and never reaches the output path: an evaluation is the MDA converged and
+# then every deferred node executed once, so that its exit state carries the
+# same information as a flat evaluation's (the user, 2026-09-29: "it should
+# mimic a full model evaluation yielding the same output as the reference
+# case").  The execution is one sweep of the dispatch body over the set --
+# the same route the output path takes -- counted like any other node call
+# (measured, not charged) and one dispatch sweep.  Composed by the harness
+# in the evaluation phase only; an optimisation composing it would execute
+# the set once per evaluation, which no arm of the experiment does.
+_DEFER_PER_RUN_EXECUTIONS: tuple[str, ...] = ("output_path", "evaluation_exit")
+
+DEFER_PER_RUN_EXECUTION: str = (
+    os.environ.get("PROCESS_ARCH_DEFER_PER_RUN_EXECUTION", "").strip()
+    or "output_path"
+)
+if DEFER_PER_RUN_EXECUTION not in _DEFER_PER_RUN_EXECUTIONS:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_DEFER_PER_RUN_EXECUTION={DEFER_PER_RUN_EXECUTION!r} is "
+        f"not a known execution point; expected one of "
+        f"{_DEFER_PER_RUN_EXECUTIONS} (or unset for 'output_path')."
+    )
+if DEFER_PER_RUN_EXECUTION != "output_path" and not DEFER_PER_RUN_ENABLED:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_DEFER_PER_RUN_EXECUTION={DEFER_PER_RUN_EXECUTION!r} "
+        f"with PROCESS_ARCH_DEFER_PER_RUN unset: there is no deferred set to "
+        f"execute.  Refused rather than silently a no-op."
+    )
+#: True when the set is executed at the exit of every ``call_models``.  One
+#: boolean read per evaluation on the default path (gate G1).
+DEFER_PER_RUN_AT_EVALUATION_EXIT: bool = DEFER_PER_RUN_EXECUTION == "evaluation_exit"
+
 #: Diagnostics for the run record.  Integer counts and names only.
 DEFER_PER_RUN_TOTALS: dict = {
     "artifact": DEFER_PER_RUN_PATH,
     "nodes": None,                      # filled after validation
     "n_call_sites_suppressed": 0,       # solve-phase _node sites skipped
     "suppressed_by_node": {},
-    "executed_once": None,              # set by write_output_files
+    "executed_once": None,              # set where the set is executed
+    # V5 list item 5: where the set was executed and how many times -- one
+    # execution per run in both phases (the output path's, or the evaluation
+    # phase's one call_models); gate GC compares the count.
+    "execution": DEFER_PER_RUN_EXECUTION,
+    "n_executions": 0,
     "validated": False,
 }
 
@@ -1509,6 +1556,28 @@ class Caller:
         for _name, run in pending:
             run()
 
+    def _execute_deferred_per_run_set_once(self, xc: np.ndarray) -> None:
+        """Execute the per-run deferred set once, on the state as it stands.
+
+        V5 list item 5 (A101 (v5-timers-and-once); decision D35).  The same
+        mechanism as the output path's execution of the set
+        (:func:`write_output_files`): one sweep of the dispatch body -- the
+        same ``_call_models_once`` walks the same switch dispatch in sequence
+        order and ``_node`` drops everything outside the set -- with the
+        exclusion lifted for it, so the set's nodes run and are counted like
+        any other node call, and the sweep is counted like any other sweep.
+        The exclusion is set again at the next ``call_models`` entry.
+        Reached only with PROCESS_ARCH_DEFER_PER_RUN_EXECUTION=evaluation_exit.
+        """
+        ps = _defer_per_run_nodes(self.data)
+        DEFER_PER_RUN_TOTALS["executed_once"] = sorted(ps)
+        DEFER_PER_RUN_TOTALS["executed_once_at_node_calls"] = NODE_CALLS[0]
+        DEFER_PER_RUN_TOTALS["n_executions"] += 1
+        if not ps:
+            return
+        self._defer_per_run = None
+        self._sweep_block(xc, ps)
+
     @staticmethod
     def check_agreement(
         previous: float | np.ndarray, current: float | np.ndarray
@@ -1868,7 +1937,14 @@ class Caller:
         # every path (normal return, the VP4 early return, or a raise).
         _sweeps_at_entry = DISPATCH_SWEEPS[0]
         try:
-            return self._call_models_inner(xc, m)
+            objf, conf = self._call_models_inner(xc, m)
+            # V5 list item 5 (A101; D35): with the execution point at the
+            # evaluation's exit, the per-run deferred set runs once here, on
+            # the converged state, inside this evaluation's sweep count.
+            # One boolean read with the switch unset (gate G1).
+            if DEFER_PER_RUN_AT_EVALUATION_EXIT:
+                self._execute_deferred_per_run_set_once(xc)
+            return objf, conf
         finally:
             _n = DISPATCH_SWEEPS[0] - _sweeps_at_entry
             _k = str(_n)
@@ -2490,6 +2566,9 @@ def write_output_files(
         ps = _defer_per_run_nodes(data)
         DEFER_PER_RUN_TOTALS["executed_once"] = sorted(ps)
         DEFER_PER_RUN_TOTALS["executed_once_at_node_calls"] = NODE_CALLS[0]
+        # V5 list item 5 (A101): the execution counted, so that a record says
+        # how many times the set ran -- one, here, in the optimisation phase.
+        DEFER_PER_RUN_TOTALS["n_executions"] += 1
         if ps:
             caller._sweep_block(x, ps)
     if runtime is not None:

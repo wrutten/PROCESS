@@ -96,6 +96,7 @@ _PRIME_ONCE = "DR10 (A99): the arrangement-method prime executed once per evalua
 _SCHEDULE_ONCE = "DR9 (A99): the block schedule and the per-call deferral sets resolved once per run, keyed on the figure of merit, and stamped once (SCHEDULE_RESOLUTION); the per-call re-derivation of issue I-30 is gone"
 _TEST_SET = "DR11 (A100): switches PROCESS_ARCH_TEST_SET / PROCESS_ARCH_TEST_SETS -- which components each block loop tests: the block's whole write set (V4's predicate, the fallback of D39) or the committed census test sets (D32), selected by loop; what the loops bound is stamped once (LOOP_TEST_SETS)"
 _PREDICATE_RETIRED = "DR11 (A100): the 'mixed' ruler removed and PROCESS_ARCH_PREDICATE retired -- the frozen ruler is the only ruler (D30; V5 plan section 12 Q5)"
+_ONCE_AT_EXIT = "V5 list item 5 (A101): switch PROCESS_ARCH_DEFER_PER_RUN_EXECUTION -- where the per-run deferred set is executed once: at the output path (unset) or at the exit of every call_models (evaluation_exit, the evaluation phase's), counted like any other node call and sweep (D35)"
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
@@ -248,6 +249,13 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/solver/module_solve.py", "PREDICATE_MODES = (\"frozen\",)", _PREDICATE_RETIRED),
     Annotation("process/core/solver/module_solve.py", "the only ruler", _PREDICATE_RETIRED),
     Annotation("process/core/solver/__init__.py", "PROCESS_ARCH_PREDICATE", _PREDICATE_RETIRED),
+    # --- A101: the per-run set executed once at the evaluation's exit (item 5)
+    Annotation("process/core/caller.py", "DEFER_PER_RUN_EXECUTION", _ONCE_AT_EXIT),
+    Annotation("process/core/caller.py", "_DEFER_PER_RUN_EXECUTIONS", _ONCE_AT_EXIT),
+    Annotation("process/core/caller.py", "DEFER_PER_RUN_AT_EVALUATION_EXIT", _ONCE_AT_EXIT),
+    Annotation("process/core/caller.py", "_execute_deferred_per_run_set_once", _ONCE_AT_EXIT),
+    Annotation("process/core/caller.py", "n_executions", _ONCE_AT_EXIT),
+    Annotation("process/core/caller.py", "item 5", _ONCE_AT_EXIT),
 ]
 
 #: What driver change DR11 (task A100 (v5-test-set)) adds to three of the
@@ -286,6 +294,26 @@ _DR11_ADDENDA: dict[str, str] = {
         "PROCESS_ARCH_PREDICATE: the 'mixed' ruler it selected is removed from "
         "the coupling-state module, so a run naming it raises at import like "
         "every other retired name."
+    ),
+}
+
+#: What V5 list item 5 (task A101 (v5-timers-and-once)) adds to the caller's
+#: paragraph, after DR11's addendum.
+_ITEM5_ADDENDA: dict[str, str] = {
+    "process/core/caller.py": (
+        "  V5 list item 5 (A101 (v5-timers-and-once); decision D35) adds "
+        "PROCESS_ARCH_DEFER_PER_RUN_EXECUTION: where the per-run deferred "
+        "set is executed once -- at the output path (unset, the optimisation "
+        "phase's place, unchanged) or at the exit of every call_models on the "
+        "converged state (evaluation_exit, composed by the evaluation phase's "
+        "deferring arm), so that an evaluation is the MDA converged and then "
+        "every deferred node once and its exit state carries what a flat "
+        "evaluation's carries.  The mechanism is the output path's own sweep "
+        "over the set (_execute_deferred_per_run_set_once), counted like any "
+        "other node call and sweep; DEFER_PER_RUN_TOTALS gains 'execution' "
+        "and 'n_executions'.  With the switch unset the evaluation's exit is "
+        "one boolean read (gate G1); gate GC declares the counts the "
+        "evaluation phase gains and requires everything else identical."
     ),
 }
 
@@ -533,6 +561,8 @@ SUMMARIES: dict[str, str] = {
 }
 
 for _path, _addendum in _DR11_ADDENDA.items():
+    SUMMARIES[_path] = SUMMARIES[_path] + _addendum
+for _path, _addendum in _ITEM5_ADDENDA.items():
     SUMMARIES[_path] = SUMMARIES[_path] + _addendum
 
 
