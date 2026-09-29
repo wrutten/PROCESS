@@ -357,6 +357,7 @@ harness and in the driver both.*
 | predicate mode | `PROCESS_ARCH_PREDICATE` | `frozen` (the default), `mixed` | only for the trial | — |
 | pass trace | `PROCESS_ARCH_PASS_TRACE` | a file | never; cleared | — |
 | pass trace detail | `PROCESS_ARCH_PASS_TRACE_FULL_FROM` | a number | never; cleared | — |
+| block trace | `PROCESS_ARCH_BLOCK_TRACE` | a file | never; cleared (a job's `override_env` sets it) | — |
 
 **Five of those rows are worth a sentence: a switch disappeared behind three of them, one is where
 the experiment's own intervention shows up in the driver, and one is a deliberate trial.**

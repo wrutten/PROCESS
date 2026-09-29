@@ -128,6 +128,16 @@ Selection
     saying nothing the diagnostic asks.  Unset — the default — every hook is
     a no-op and behaviour is byte-identical (gated, not asserted: protocol
     §12).  The trace observes; it never touches a float the run computes.
+``PROCESS_ARCH_BLOCK_TRACE``
+    **A90 (m2-phasea-vs-phaseb), observation only.**  Path of a JSONL file with
+    one line per ``call_models`` under a block schedule: what the optimiser's
+    evaluator asked for (a function evaluation, a gradient column and sign, or
+    the reconcile call), the design vector as exact hex floats, and for every
+    block its sweep count and, per sweep, each module's maximum scaled step
+    and whether that module's own components would still fail the test.  In
+    the flat arrangement that says which module held the one loop open last;
+    in the partitioned one, how much each block was disturbed.  Unset — the
+    default — every hook is a no-op (gate G1).
 """
 
 from __future__ import annotations
@@ -141,6 +151,8 @@ from process.core.solver import ArchitectureRefusal
 
 __all__ = [
     "BLOCK_ORDER",
+    "BLOCK_TRACE_ENABLED",
+    "BLOCK_TRACE_PATH",
     "COUPLING_STATE_PATH",
     "ENABLED",
     "FLAT",
@@ -430,6 +442,106 @@ def trace_pass(kind, call_idx, pass_idx, spec, y_prev, y_cur, res, tau):
         rec["above_elided"] = True
     fh.write(json.dumps(rec) + "\n")
     fh.flush()
+
+# --------------------------------------------------------------------------
+# A90 (m2-phasea-vs-phaseb): the per-evaluation block trace.  Observation only.
+# --------------------------------------------------------------------------
+
+#: Where the block trace lands, or ``None`` (the default) for no trace.
+BLOCK_TRACE_PATH: str | None = os.environ.get("PROCESS_ARCH_BLOCK_TRACE") or None
+
+#: True when a block-trace file is named.  Every call site guards on it, so
+#: with the variable unset the hooks cost one module-attribute read per
+#: evaluation and touch nothing else; switch neutrality is gated (G1).
+BLOCK_TRACE_ENABLED: bool = BLOCK_TRACE_PATH is not None
+
+if BLOCK_TRACE_ENABLED and not ENABLED:
+    raise ArchitectureRefusal(
+        "PROCESS_ARCH_BLOCK_TRACE is set with PROCESS_ARCH_MDA unset, so the "
+        "run uses upstream's own loop and has no block to trace.  A trace "
+        "that silently records nothing is how a diagnostic reports an "
+        "absence it never measured."
+    )
+
+#: What the optimiser's evaluator asked for, set immediately before each
+#: ``call_models`` and consumed (reset to ``None``) by the trace line that
+#: evaluation writes: ``["function"]``, ``["gradient", column, sign]`` or
+#: ``["reconcile"]``.  ``None`` at a call no evaluator labelled.
+EVALUATION_KIND: list | None = None
+
+_BLOCK_TRACE_FILE = None
+
+
+_BLOCK_TRACE_MODULES: dict = {}
+
+
+def block_trace_modules(spec, subsets) -> tuple:
+    """``(module names, component -> module index)`` from the committed write sets.
+
+    Built once per write-set object and cached: the lookup array is what makes
+    splitting a sweep's residual by module one vectorised pass instead of a
+    membership test per component.  Components no module writes read -1
+    (``load_subsets`` refuses a write set that leaves any, so none exist).
+    """
+    import numpy as np  # noqa: PLC0415 - trace path only
+
+    cached = _BLOCK_TRACE_MODULES.get(id(subsets))
+    if cached is not None:
+        return cached
+    names = sorted(subsets)
+    lookup = np.full(len(spec.keys), -1, dtype=int)
+    for k, mod in enumerate(names):
+        members = sorted(subsets[mod])
+        if members:
+            lookup[members] = k
+    _BLOCK_TRACE_MODULES[id(subsets)] = (names, lookup)
+    return names, lookup
+
+
+def block_trace_sweep(res, modules, tau) -> dict:
+    """One sweep's residual, split by module: its max and whether it is open.
+
+    A module is *open* after a sweep when its own components would fail the
+    convergence test at ``tau``: a scaled step at or above ``tau``, or a
+    discrete mismatch, a moved constant or a new NaN among them.  Only the
+    modules the residual scored appear.
+    """
+    import numpy as np  # noqa: PLC0415 - trace path only
+
+    names, lookup = modules
+    idx_c = np.asarray(res.idx_c, dtype=int)
+    labels = lookup[idx_c] if idx_c.size else np.zeros(0, dtype=int)
+    flagged_mods = {
+        int(lookup[i])
+        for i in (*res.mismatch_discrete, *res.moved_constant, *res.nan_new)
+    }
+    out_max: dict = {}
+    open_: list = []
+    for k, mod in enumerate(names):
+        mask = labels == k
+        has = bool(mask.any())
+        if not has and k not in flagged_mods:
+            continue
+        m = float(np.max(res.scaled[mask])) if has else 0.0
+        out_max[mod] = m
+        if m >= tau or k in flagged_mods:
+            open_.append(mod)
+    return {"max": out_max, "open": open_}
+
+
+def block_trace_write(record: dict) -> None:
+    """Append one evaluation's line to the block trace."""
+    global _BLOCK_TRACE_FILE
+    if _BLOCK_TRACE_FILE is None:
+        _BLOCK_TRACE_FILE = open(BLOCK_TRACE_PATH, "a")  # noqa: SIM115 - held open
+        _BLOCK_TRACE_FILE.write(json.dumps({
+            "kind": "header",
+            "mda": MDA_MODE,
+            "tau": TAU,
+            "predicate_mode": PREDICATE_MODE,
+        }) + "\n")
+    _BLOCK_TRACE_FILE.write(json.dumps(record) + "\n")
+    _BLOCK_TRACE_FILE.flush()
 
 # --------------------------------------------------------------------------
 # The block schedule

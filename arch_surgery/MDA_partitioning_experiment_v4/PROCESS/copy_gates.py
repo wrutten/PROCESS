@@ -70,6 +70,7 @@ Exit status: 0 every gate passed, 1 a gate or a tooth failed, 2 setup error.
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as _dt
 import difflib
 import hashlib
@@ -256,6 +257,23 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A59 (driver-predicate-mode)",
             was="one ruler, not selectable and not named in any record",
             now="PROCESS_ARCH_PREDICATE=frozen | mixed (unset for frozen)",
+        ),
+        PermittedEdit(
+            kind="switch added",
+            name="PROCESS_ARCH_BLOCK_TRACE",
+            description=(
+                "an observation-only per-evaluation block trace: the switch, "
+                "resolved once at import and refused with the analysis loop "
+                "unset; the evaluation kind the optimiser's evaluator sets "
+                "before each call; a helper that splits one sweep's residual "
+                "by module (its maximum scaled step and whether the module's "
+                "own components would still fail the test); and the JSONL "
+                "writer.  Unset, nothing here runs and no float the run "
+                "computes with is read or written"
+            ),
+            task="A90 (m2-phasea-vs-phaseb)",
+            was="no per-evaluation, per-block record",
+            now="PROCESS_ARCH_BLOCK_TRACE=<file> (unset for no trace)",
         ),
     ],
     "process/core/solver/subsolve.py": [
@@ -516,6 +534,22 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
                 "solve-phase totals"
             ),
         ),
+        PermittedEdit(
+            kind="instrument hook",
+            name="the block trace in the block schedule's call_models",
+            description=(
+                "with PROCESS_ARCH_BLOCK_TRACE set, each block loop's sweep "
+                "residual is split by module and kept, and one line per "
+                "evaluation is written at both of the schedule's exits (the "
+                "converged return and the block-cap refusal) by a new method, "
+                "_block_trace_line.  Every statement is guarded by the switch; "
+                "the residual it reads is the one the loop already computed, "
+                "and no branch a result depends on changes"
+            ),
+            task="A90 (m2-phasea-vs-phaseb)",
+            was="per-evaluation block counts rolled into run totals only",
+            now="the same totals, plus a per-evaluation trace when asked for",
+        ),
     ],
     "process/core/solver/solver_handler.py": [
         PermittedEdit(
@@ -536,6 +570,24 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A60 (driver-attempts)",
             was="four bare calls to the solver, indistinguishable in the counters",
             now="the same four calls, each bracketed by a boundary stamp",
+        ),
+    ],
+    "process/core/solver/evaluators.py": [
+        PermittedEdit(
+            kind="instrument hook",
+            name="EVALUATION_KIND before each call_models",
+            description=(
+                "with PROCESS_ARCH_BLOCK_TRACE set, the evaluator labels each "
+                "of its calls to call_models for the block trace -- the "
+                "function evaluation, the gradient column and sign, the "
+                "reconcile call -- so the kind of an evaluation is read from "
+                "the optimiser's own call site rather than inferred from its "
+                "position in the sequence.  Guarded by the switch; the calls "
+                "themselves are unchanged"
+            ),
+            task="A90 (m2-phasea-vs-phaseb)",
+            was="unlabelled calls",
+            now="the same calls, labelled when the block trace is on",
         ),
     ],
     "process/core/_idf_probe_modules.py": [
@@ -708,6 +760,17 @@ def check_copy_identity(prov: dict, root: Path) -> GateResult:
     copy = on_disk(root, SOURCE_PREFIX)
     permitted = prov["permitted_edits"]["files"]
 
+    # A90 (m2-phasea-vs-phaseb): the recorded list must be the committed one.
+    # Without this, an edit blessed in PROVENANCE.json alone -- a file entry
+    # added there with its post-edit digest and hunks, and no row in
+    # PERMITTED_EDIT_FILES -- would pass every comparison below.
+    if sorted(permitted) != sorted(PERMITTED_EDIT_FILES):
+        res.fail(
+            "the permitted-edit files recorded in PROVENANCE.json "
+            f"({sorted(permitted)}) are not the committed PERMITTED_EDIT_FILES "
+            f"({sorted(PERMITTED_EDIT_FILES)})"
+        )
+
     missing = sorted(set(source) - set(copy))
     extra = sorted(set(copy) - set(source))
     for p in missing:
@@ -861,8 +924,13 @@ def run_teeth(prov: dict, root: Path, gate: str) -> list[dict]:
     # A fourth tooth per gate: a change to a file that IS allowed to differ,
     # made somewhere other than the approved place.  Without it, "the permitted
     # edit list" would be a blanket pardon for those files.
+    # A90 (m2-phasea-vs-phaseb): one such tooth per permitted file, derived
+    # from the committed list, so a file added to it is covered the moment it
+    # is added; and a tooth that blesses an edit in PROVENANCE.json alone.
     if gate == "copy-identity":
-        teeth.append(("permitted_file_changed_elsewhere", "process/core/caller.py"))
+        for path in sorted(PERMITTED_EDIT_FILES):
+            teeth.append(("permitted_file_changed_elsewhere", path))
+        teeth.append(("edit_blessed_in_provenance_only", victim))
     else:
         teeth.append(("approved_file_changed_further", "process/models/pulse.py"))
 
@@ -877,12 +945,36 @@ def run_teeth(prov: dict, root: Path, gate: str) -> list[dict]:
             elif kind == "file_added":
                 p.write_text("# a file the source commit does not have\n")
                 what = f"added {target}"
+            elif kind == "edit_blessed_in_provenance_only":
+                before = p.read_bytes()
+                flipped = _flip_one_byte(p)
+                doctored = copy.deepcopy(prov)
+                doctored["permitted_edits"]["files"][target] = {
+                    "edits": [],
+                    "sha256_at_source_commit": sha256(before),
+                    "sha256_expected_in_copy": sha256(p.read_bytes()),
+                    "expected_hunks": expected_hunks(before, p.read_bytes(), target),
+                }
+                what = f"{flipped}, and {target} recorded as permitted in PROVENANCE.json only"
+                res = check(doctored, staged)
+                results.append(
+                    {
+                        "tooth": kind,
+                        "target": target,
+                        "perturbation": what,
+                        "gate_verdict": "PASS" if res.passed else "FAIL",
+                        "tooth_result": "TRIPPED" if not res.passed else "DID NOT TRIP",
+                        "first_failure": res.failures[0] if res.failures else None,
+                    }
+                )
+                continue
             else:
                 what = _flip_one_byte(p)
             res = check(prov, staged)
             results.append(
                 {
                     "tooth": kind,
+                    "target": target,
                     "perturbation": what,
                     "gate_verdict": "PASS" if res.passed else "FAIL",
                     "tooth_result": "TRIPPED" if not res.passed else "DID NOT TRIP",
@@ -1393,6 +1485,46 @@ def report(res: GateResult, teeth: list[dict] | None) -> None:
             )
 
 
+def carry_history(old: dict, new: dict, task: str, copy_date: str | None) -> dict:
+    """Keep the copy's date and the regeneration history across a regeneration.
+
+    ``copy_date`` is the day the copy was extracted, and a regeneration does
+    not change it.  Until A90 (m2-phasea-vs-phaseb) the generator stamped
+    today's date there, so each regeneration moved it (2026-09-10 at A46,
+    2026-09-11 at A60, 2026-09-14 at A73, 2026-09-29 at A90's first
+    regeneration).  Now the old value is kept, ``--copy-date`` restores it
+    with the correction recorded, and every regeneration that changes the
+    permitted edits appends one entry to ``permitted_edits_updated``: the
+    date, the task, and which permitted-edit files were added, removed or
+    changed in digest.
+    """
+    old_files = (old.get("permitted_edits") or {}).get("files") or {}
+    new_files = new["permitted_edits"]["files"]
+    history = list(old.get("permitted_edits_updated") or [])
+    entry = {
+        "date": _dt.date.today().isoformat(),
+        "task": task,
+        "files_added": sorted(set(new_files) - set(old_files)),
+        "files_removed": sorted(set(old_files) - set(new_files)),
+        "files_changed": sorted(
+            p for p in set(new_files) & set(old_files)
+            if new_files[p]["sha256_expected_in_copy"]
+            != old_files[p]["sha256_expected_in_copy"]
+        ),
+    }
+    kept = old.get("copy_date", new["copy_date"])
+    if copy_date and copy_date != kept:
+        entry["copy_date_corrected"] = {"from": kept, "to": copy_date}
+        kept = copy_date
+    if entry["files_added"] or entry["files_removed"] or entry["files_changed"] \
+            or "copy_date_corrected" in entry:
+        history.append(entry)
+    out = dict(new)
+    out["copy_date"] = kept
+    out["permitted_edits_updated"] = history
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
@@ -1415,6 +1547,19 @@ def main(argv: list[str] | None = None) -> int:
         "one already recorded, which never changes for a given copy)",
     )
     ap.add_argument("--base-commit", default="c0ae5b28", help="provenance: base")
+    ap.add_argument(
+        "--task",
+        default=None,
+        help="provenance: the task regenerating it, recorded in "
+        "permitted_edits_updated (required when PROVENANCE.json exists)",
+    )
+    ap.add_argument(
+        "--copy-date",
+        default=None,
+        help="provenance: correct copy_date to this date (the copy's own date "
+        "never changes on a regeneration; this is for restoring it, and the "
+        "correction is recorded)",
+    )
     args = ap.parse_args(argv)
 
     if args.command == "provenance":
@@ -1433,6 +1578,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
             source = json.loads(PROVENANCE.read_text())["source"]["commit_full"]
         prov = build_provenance(source, args.base_commit, COPY_ROOT)
+        if PROVENANCE.exists():
+            if not args.task:
+                raise SystemExit(
+                    "regenerating an existing PROVENANCE.json needs --task: "
+                    "every regeneration is recorded by who made it"
+                )
+            prov = carry_history(json.loads(PROVENANCE.read_text()), prov, args.task, args.copy_date)
         PROVENANCE.write_text(json.dumps(prov, indent=2) + "\n")
         print(f"wrote {PROVENANCE}")
         print(f"  source commit {prov['source']['commit_full']}")
