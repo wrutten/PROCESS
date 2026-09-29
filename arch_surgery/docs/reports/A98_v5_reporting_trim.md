@@ -436,3 +436,43 @@ two commands and are not cited as results).
 | 2026-09-29 | `0d1db315` — G5's plan column drops the retired predicate-mode row (the one refusal met on the seeded records, §6.2). |
 | 2026-09-29 | Presses: 16 run-free gates PASS on the seeded records (`self_containment` and `data` from scratch), `--selfcheck` 7 pass, `compileall` clean, the placeholders and GR-without-resume refused, `gate_table` rendered (16 PASS / 0 FAIL / 13 NOT RUN), stamp survey 30/30 at `d6c246a1`; the generator and the recount smoked on A90's records as test data (178/0, 44/0, both teeth bite). This report written. |
 | 2026-09-29 | Records relocated as one tree to `arch_surgery/idf_probe/runs/v5_reporting_trim/` (byte-identical copy, original removed). Observed there: a `_numba_cache` directory created **empty** by the capability probe's children — the I-31 default reached them, and an import-only probe compiles nothing — and no numba cache file under the copy's `PROCESS/` (its three `__pycache__` directories hold bytecode only). Consistent with §2's "in place, not measured here". |
+
+---
+
+## 11. Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-09-29 by the orchestrating session under D37 (autonomous); checked differently from
+the agent, not by repeating its presses.*
+
+**Checked.** (1) `git diff --stat 43d31a04..444ca05b`: 34 files, +1 877 / −23 836; **no path under
+`MDA_partitioning_experiment_v5/PROCESS/` or `MDA_partitioning_experiment_v4/`** (the scope boundary
+with A99 and the published folder holds). (2) `compileall` over the harness and the five top-level
+scripts at the tip: clean, run by the orchestrator. (3) The gate-table record read from disk
+(`v5_reporting_trim/gates/gate_table/measurements.json`): 29 rows, **16 PASS, 13 NOT RUN, 0 FAIL** —
+the report's figures. (4) The records tree is one tree of 125 MB at
+`idf_probe/runs/v5_reporting_trim/`, the folder's `runs/` removed, as briefed. (5) `merge-tree` against
+the trunk: no conflict (the trunk moved only in `docs/` since `43d31a04`). (6) The worktree is clean.
+
+**Read against the rulings.** Item 10's list is applied as ruled (the user: "this v5 reporting approach
+is approved"); D34's pair is the generator's phase A reference on all three configurations; the
+`mixed` retirement is the harness half of Q5 with the driver half left to DR11 by a *declared* interim
+(`RETIRED_PENDING_IN_DRIVER`) whose self-check fails the day the driver lands without the table being
+emptied — the right shape for a two-task removal. The typed number
+`CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP = 1` (decision 3) is the one number in the document not read from a
+record; it is declared with its provenance and named in the caption, which satisfies protocol §15's
+letter; **whether the paper's "Models" count is 51 or 52 is a question for the user** (return update).
+
+**Two corrections for the follow-on tasks, not for this merge.** (a) `RETIRED_PENDING_IN_DRIVER`'s note
+says "DR11 (task A99)": DR11 is the test-set task (A100), A99 carries DR9/DR10 — the note is text only
+and DR11's task rewrites it when it empties the table. (b) The GC placeholder will collide with A99's
+real `count_neutrality` gate at the registry; resolved at A99's merge in favour of the real gate.
+
+**Not verified here.** No V5 run was made by the task and none by this assessment; the I-31 default is
+observed reaching the probe's children (an empty `_numba_cache`) but not yet a PROCESS child — the
+first V5 run under DR11's task will show it. The generator's smoke on A90's records is test data and
+is cited as such.
+
+**Queue consequences applied at merge.** I-31 closed (fixed in V5; V4 left as published); I-32 noted
+fixed in the copy (V4's fix is A97, merged); proposals 2–3 applied to the V5 plan (§7 Table 2 names the
+registry entries and "declared, refuses"; §11 row 10 lists the two extra modules); proposal 4 filed
+for the user's return; the README rewrite folded into the V5 report task.
