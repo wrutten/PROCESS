@@ -157,7 +157,7 @@ proper MDA for the control, without acceleration or Newton, so that the paper is
 architecture change.
 
 **What A89 measured** (evaluation phase, three configurations, `A0` and `A2`, displaced and cold
-entries; report `reports/A89_coupling_subset_trial.md` §3 and §7):
+entries; report `reports/deprecated/A89_coupling_subset_trial.md` §3 and §7):
 
 - **Two candidate test sets.**
   - (a) **DSM feedback set**: a component of `y` read by a DSM model that runs before its writer

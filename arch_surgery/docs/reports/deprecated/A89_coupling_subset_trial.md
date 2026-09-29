@@ -1,11 +1,17 @@
 # A89 (coupling-subset-trial) — stopping V4's loops on the DSM's coupling variables
 
-> **Document status** — **CURRENT · TASK REPORT, OPEN.** Task A89 (coupling-subset-trial),
-> 2026-09-29, two passes (§1–6 the first, §7 the second), on branch `A89-coupling-subset-trial`. The A89 label was taken by this session at
-> the user's direct request; it has no queue row yet (provisional, protocol §8). Exploratory trial
-> for the V5 improvement list. **Not** a V4 result: V4's campaign, harness and report are untouched,
-> and nothing was written to the V4 folder. Scripts at `9d80c84b` (runs) and `80693be8` (table
-> rendering); records at `arch_surgery/idf_probe/runs/coupling_subset_trial/` (untracked).
+> **Document status** — **MERGED 2026-09-29** at `d7d07598` (`--no-ff`); archived here at merge — folder
+> position records lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A89_runs/coupling_subset_trial/`
+> (the worktree's `arch_surgery/idf_probe/runs/`, relocated whole by the retire script: `A89_runs/coupling_subset_trial/{<configuration>/…}`
+> is the first pass, `A89_runs/coupling_subset_trial/rerun/` the second; every path below that reads
+> `arch_surgery/idf_probe/runs/coupling_subset_trial/` means this location). Orchestrator's assessment in §8; its
+> outputs are V5 list item 6, DSM validation V18 and the queue row. Originally: **OPEN.** Task A89 (coupling-subset-trial),
+> 2026-09-29, two passes (§1–6 the first, §7 the second), on branch `A89-coupling-subset-trial`, worktree
+> `.claude/worktrees/A89-coupling-subset-trial`, base `38d2f21f`, tip `379d1b06` (the assessment; the last commit that touches
+> code or a generated document is `fea99a9f`). The A89 label was taken by the executing session at the user's direct
+> request; the queue row was added afterwards at the user's instruction. Exploratory trial for the V5 improvement list.
+> **Not** a V4 result: V4's campaign, harness and report are untouched, and nothing was written to the V4 folder.
+> Scripts at `9d80c84b` (first pass), `27dc1008`/`2b6aaca4`/`33ca7b52` (second pass); records as above (untracked).
 
 ## 1. Question
 
