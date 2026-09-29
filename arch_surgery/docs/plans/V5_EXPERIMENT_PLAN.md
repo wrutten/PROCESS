@@ -142,6 +142,16 @@ on st; its result amends this paragraph before approval. One τ for every conver
 tolerance). Note: the retry ladder's `epsfcn × 10` attempt would license h³ = 1e-6; τ stays at the first
 attempt's value, which is tighter, and no attempt-dependent tolerance exists.
 
+**The fallback criterion (D39, the user, 2026-09-29:** *"please ensure the v5 harness has the option to run the
+convergence on the state with the 10e-6 tolerance, like v4 — as a fallback"*). The V5 harness keeps V4's
+criterion selectable: the loop's test set is a switch with two values — the **census set at τ = 1e-8** (the V5
+default, above) and the block's **whole write set at τ = 1e-6, exactly V4's predicate**. The choice is a
+campaign-level setting, one value for every arm and both phases (D23: one tolerance per campaign), stamped in
+every record, never mixed within a campaign. GT and the census stage bind the census value only; the
+reproduction gate GR is V4's own criterion on the copy and must PASS under the fallback. If the census campaign
+leaves too few converged starts to serve the paper, the fallback campaign is the paper's V5 — the user's
+decision on return; under D37 the census campaign runs first.
+
 **The accuracy instrument** is unchanged: the **whole-`y` exit audit** — one further full sweep of the whole
 model set from the state the solve handed over, restored bit-exact (D25), on the same `frozen` ruler in every
 arm, uncharged — with the count of components above τ per run. A narrow test set is licensed only because
@@ -343,7 +353,7 @@ except by dated amendment; a value marked [A92]/[A93] is filled from that task's
 | N | 25 per configuration per arm, both phases | sample size | V4 Table 6 (V3 (O2)) |
 | δ (phase A) | 0.10, displaced entries; **no stencil regime** | entry displacement | the user, list header, 2026-09-29; item 10 |
 | δ (phase B) | 0.10 | start displacement | D15; V4 |
-| test set | the census-measured read-before-write set, per arm and block; DSM feedback set as cross-check | what the loops stop on | **D32**, item 6; population **[A92]** |
+| test set | the census-measured read-before-write set, per arm and block; DSM feedback set as cross-check. **Fallback (D39):** the block's whole write set at τ = 1e-6, V4's predicate, selectable per campaign, never mixed | what the loops stop on | **D32**, item 6; population **[A92]**; **D39** (the user, 2026-09-29) |
 | τ | **1e-8** by the rule ε ≤ `epsfcn`³ (A89; confirmed at optimisation scale by A93 on the pulsed configurations; st's trajectory term pre-declared non-neutral, §3) — one value, every converger, every arm, both phases; re-measured on the V5 copy before the campaign as a check | convergence and handover accuracy | item 6; D23 (one tolerance); the user, 2026-09-29 (Q6) |
 | `epsfcn` | 1e-3 (PROCESS's default; no input file sets it) | the tolerance rule's step | A89 §7.3 |
 | predicate mode | `frozen`; `mixed` never composed | the scale `s_i` of the scaled step | D30 ("or drop it"), item 10 |
@@ -411,7 +421,7 @@ that entails each is named; the merge approval is per change.
 |---|---|---|---|---|
 | **DR9** | the deferral sets and the block schedule resolved **once per run**, keyed on the figure of merit, reused for every evaluation; provenance stamped once per run | item 7, **D31** (the user: *"this should be fixed in v5"*) | one stamp field; gate GC; the fixed per-run term of §6 | I-30's 8–11 ms per evaluation stays in every deferring arm and biases every wall-clock table against the intervention; no count changes either way |
 | **DR10** | the prime executed **once per `call_models`, before M1**, as a pre-processing step of the sequenced schedule | item 8 (the user: *"pre-processing before the partitioned MDAs can start"*) | G2 re-formed; `n_prime_calls` = evaluations; G3/G3c reconsidered (Q3) | the paper's caption ("executing the FirstWall subfunction before every MDA sweep") must stay as V4 built it, ~9–15 stamped calls per evaluation |
-| **DR11** | the loop's predicate binds a **declared test set per block** (the census set) instead of the block's whole write set; the DSM feedback set selectable for the cross-check only, never composed into an arm | item 6, **D32** | the test-set artifacts and their stage; GT; τ from the rule | V4's whole-`y` test at 1e-6 stands: correct only because it stops one sweep late (A89 §7.3) and the test is 30–39 % of an evaluation's wall (A89 §7.5) |
+| **DR11** | the loop's predicate binds a **declared test set per block** (the census set) instead of the block's whole write set; the DSM feedback set selectable for the cross-check only, never composed into an arm. **D39 (the user):** V4's whole-write-set test at τ = 1e-6 stays selectable as a campaign-level **fallback** — the same switch, the other value; τ follows the test set's declared value; GR runs under it | item 6, **D32**, **D39** | the test-set artifacts and their stage; GT; τ from the rule; the fallback value stamped per record | V4's whole-`y` test at 1e-6 stands: correct only because it stops one sweep late (A89 §7.3) and the test is 30–39 % of an evaluation's wall (A89 §7.5) |
 | **DR12** | **observation-only timers** (the block trace's form, DR8): per node, per block loop (test, dispatch), per evaluation (objective and constraints), per run; unset ⇒ `None`, no branch | item 9, **D33** | record fields; the appendix tables; the timers-off runs | no wall-clock appendix; D29 (2)'s scope statement stands for V5 as for V4 |
 | ~~DR13~~ | *(was: the flat arms' deferral, conditional on Q1)* — **not needed: Q1 ruled (c), D35**; the deferral stays on the intervention rung as the paper's matrix has it | — | — | — |
 | **DR11** *(addition)* | the `mixed` predicate ruler **removed** from the copy in the same change, the switch retired through the registry (`retired_names` / `RETIRED_SWITCHES`) | §12 Q5 (the user, 2026-09-29) | one fewer switch; the self-check compares the two retired lists | the mode stays in the copy uncomposed |
@@ -507,3 +517,4 @@ of 1 component). Nothing here may be applied to V4.
 | 2026-09-29 | Written by A95 (v5-plan) at `7986d408` from the V5 improvement list (items 1, 3–10 and their rulings D29–D33), V4's report §1–§3 and §6, the harness plan and README, A89 §7, A90 §0–§2, A91 §0 and §5, and the paper's results section. Status DRAFT · NOT APPROVED. Eight questions in §12; τ, the census population and GT's form await A92 and A93. |
 | 2026-09-29 | **D34** (the user, relayed by the orchestrator while the draft was open): the paper's phase A table prints `A2/A1` on the pulsed configurations and `A2/A0` on `st_regression`; phase B keeps `B2/B0`. Applied in §1 (RQ1), §2 (the published pairs), §5 (A1, new A3) and §8 (the main-text tables); §12 Q4 closed by it — seven questions remain open. |
 | 2026-09-29 | Merged at `5e4fd4e7`. The user rules on §12 (entered by the orchestrator): Q1 (c) — **D35**; Q2 yes with the audit sweep excluded from counts and timings — **D36**; Q3 G3/G3c dropped; Q5 the `mixed` ruler removed with DR11; Q6 the rule stands whatever A93 finds. Applied in §5 (A1 on the whole state), §7 (G3 dropped, G4 retiring), §11 (DR13 struck, DR11 extended). Still awaiting A92 (census population, GT's form) and A93 (τ). Status stays DRAFT · NOT APPROVED until those are filled and the user approves the whole. |
+| 2026-09-29 | **D39** (the user, during the autonomous run): V4's criterion — the block's whole write set at τ = 1e-6 — stays selectable in V5 as a campaign-level fallback beside the census set; §3 (fallback paragraph), §9 (test-set row) and §11 (DR11 row) updated; the DR11 task builds it. |

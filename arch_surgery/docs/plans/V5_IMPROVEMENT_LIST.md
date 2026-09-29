@@ -179,6 +179,8 @@ measurement showing that the deferred pass is a single execution.
 
 ### 6. The control's MDA: stop on the coupling variables, at a tolerance derived from the optimiser *(user, 2026-09-29, from A89 (coupling-subset-trial))*
 
+> **D39 (the user, 2026-09-29):** V4's criterion (whole write set, τ = 1e-6) stays **selectable as a fallback** in V5 — the same switch, the other value, campaign-level, never mixed. See the V5 plan §3.
+
 **The concern.** V4 stops every loop on the whole measured state `y`: every field an in-loop model
 writes (840 / 846 / 827 components). The textbook MDA converges only the variables that carry
 information from one sweep to the next, and evaluates everything downstream once they are fixed.
