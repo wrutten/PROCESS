@@ -590,6 +590,17 @@ def harvest_counters(caller, *, module_solve=None) -> dict[str, Any]:
         if (per_run is not None and getattr(caller, "DEFER_PER_RUN_ENABLED", False))
         else None
     )
+    # DR9 (A99 (v5-schedule-and-prime)): the block schedule and the deferral
+    # sets, resolved once per run and stamped once -- what was resolved, the
+    # digests of what the resolution read, and how many times the resolver
+    # ran.  Rendered through JSON so the record holds a copy, never the
+    # driver's live dictionary.
+    resolution = getattr(caller, "SCHEDULE_RESOLUTION", None)
+    out["schedule_resolution"] = (
+        json.loads(json.dumps(resolution, default=str))
+        if resolution is not None
+        else None
+    )
     _ = module_solve
     return out
 

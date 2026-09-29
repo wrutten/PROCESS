@@ -550,6 +550,35 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             was="per-evaluation block counts rolled into run totals only",
             now="the same totals, plus a per-evaluation trace when asked for",
         ),
+        PermittedEdit(
+            kind="memoisation",
+            name="resolve_schedule / SCHEDULE_RESOLUTION",
+            description=(
+                "the block schedule and the per-call deferral sets are "
+                "resolved once per run instead of on every call_models: one "
+                "resolver, keyed on the figure of merit, does the ast walk of "
+                "the predicate sources, the read of the write census and the "
+                "block membership on its first call and hands the same "
+                "objects back on every later one; module_schedule and "
+                "resolved_defer_per_call_tails delegate to it and keep their "
+                "signatures.  A stamp records what was resolved, the digests "
+                "of what it read and how many times it ran; the per-call "
+                "deferred_tail entry of the block stats goes.  With every "
+                "switch unset the resolver is never reached (gate G1); no "
+                "count changes and every exit state is bit-identical (gate "
+                "GC); no float the run computes with is touched"
+            ),
+            task="A99 (v5-schedule-and-prime)",
+            was=(
+                "the deferral sets and the schedule re-derived on every "
+                "evaluation (issue I-30: 8-11 ms per evaluation of a "
+                "deferring arm)"
+            ),
+            now=(
+                "resolved once per run, keyed on i_figure_merit, stamped in "
+                "SCHEDULE_RESOLUTION"
+            ),
+        ),
     ],
     "process/core/solver/solver_handler.py": [
         PermittedEdit(

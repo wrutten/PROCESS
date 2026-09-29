@@ -450,14 +450,8 @@ def resolved_defer_per_call_tails(i_figure_merit: int) -> tuple[tuple[str, ...],
     Public so that a measurement harness can record the tails a run resolved
     without reconstructing the rule.
     """
-    if not DEFER_PER_CALL_NODES:
-        return (), ()
-    reads = _predicate_read_fields(i_figure_merit)
-    writes = _node_write_sets()
-    pre, post = [], []
-    for n in DEFER_PER_CALL_NODES:
-        (pre if (writes.get(n, frozenset()) & reads) else post).append(n)
-    return tuple(pre), tuple(post)
+    pre, post, _schedule, _tail = resolve_schedule(i_figure_merit)
+    return pre, post
 
 
 def resolved_defer_per_call_tail(i_figure_merit: int) -> tuple[str, ...]:
@@ -1157,29 +1151,8 @@ def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
         ``(schedule, tail)`` -- the blocks of the schedule pass, and the nodes
         deferred to after it (empty when the per-call deferral is off).
     """
-    tail = (
-        frozenset(resolved_defer_per_call_tail(i_figure_merit))
-        if DEFER_PER_CALL_ENABLED
-        else frozenset()
-    )
-    # ``flat`` (decision D18's control arm A0') is one block over every
-    # in-loop node: the same predicate, the same caps, the same failure policy,
-    # a different schedule.  It is written as a branch here rather than as a
-    # second solver because A26 §10 measured that it is the degenerate case of
-    # the block schedule, and two implementations of one loop is how they
-    # drift.
-    if module_solve.FLAT:
-        return (
-            (module_solve.FLAT_BLOCK_LABEL, _loop_node_set(tail), True),
-        ), tail
-    by_module: dict[str, set[str]] = {}
-    for node, mod in NODE_MODULE.items():
-        by_module.setdefault(mod, set()).add(node)
-    schedule = []
-    for label in module_solve.BLOCK_ORDER:
-        nodes = frozenset(by_module.get(label, set()) - tail)
-        schedule.append((label, nodes, label in module_solve.ITERATED))
-    return tuple(schedule), tail
+    _pre, _post, schedule, tail = resolve_schedule(i_figure_merit)
+    return schedule, tail
 
 
 def _loop_node_set(tail=()) -> frozenset[str]:
@@ -1220,6 +1193,131 @@ def _single_block_covers_loop(schedule, tail) -> bool:
         return False
     _lab, nodes, iterate = live[0]
     return bool(iterate) and nodes == _loop_node_set(tail)
+
+
+# --------------------------------------------------------------------------
+# DR9 (V5 list item 7, decision D31; task A99 (v5-schedule-and-prime)) -- the
+# block schedule and the deferral sets are resolved ONCE PER RUN.
+#
+# Until this change every ``call_models`` re-derived which nodes it defers:
+# ``_predicate_read_fields`` walked the objective and constraint sources with
+# ``ast`` and ``_node_write_sets`` re-read the committed write census, on
+# every evaluation of every deferring arm -- 8-11 ms before any model ran, 0
+# in the arms that defer nothing (issue I-30, measured by A91).  Not the
+# architecture: the models, their order and every count are identical with or
+# without it, and a driver written for the partitioned order would resolve
+# its schedule once at start-up.  The user ruled it fixed in V5 (D31).
+#
+# The resolution depends on exactly one run-time input, the figure of merit
+# (``_predicate_read_fields`` narrows the objective side to its branch), and
+# on things fixed for the process: the two predicate sources, the write
+# census, the node map, and the switches resolved at import.  So it is keyed
+# on the figure of merit alone and memoised in :data:`_SCHEDULE_CACHE`; a scan
+# that changed the figure of merit between calls would resolve a second entry
+# rather than reuse a wrong one.  :data:`SCHEDULE_RESOLUTION` is the stamp the
+# harness records once per run: what was resolved, from what (the digests of
+# the files read), and how many times the resolver ran -- 1 in every run of
+# this experiment, which gate GC checks beside every other count.
+#
+# With every switch unset nothing here executes: ``module_schedule`` is only
+# reached under a block schedule and the deferral tails only under a per-call
+# deferral, so the default path never touches the cache (gate G1).
+
+#: The once-per-run resolution, by figure of merit.
+_SCHEDULE_CACHE: dict[int, tuple] = {}
+
+#: The stamp: integer counts, names and digests only.  ``resolutions`` holds
+#: one entry per figure of merit the run resolved -- one, in this experiment.
+SCHEDULE_RESOLUTION: dict = {
+    "n_resolutions": 0,
+    "resolutions": [],
+}
+
+
+def _sha256_of(path: Path) -> str:
+    import hashlib  # noqa: PLC0415 - the resolution path only, once per run
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def resolve_schedule(
+    i_figure_merit: int,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple, ...], frozenset[str]]:
+    """``(pre_predicate, post_predicate, schedule, tail)`` for *i_figure_merit*, once.
+
+    The one place the routing rule (which slot a deferred node runs in) and
+    the block membership are computed.  Memoised on the figure of merit: the
+    first call for a value does the work and stamps the resolution, every
+    later call returns the same objects.  ``schedule`` is empty when no block
+    schedule is on; the tails are empty when nothing is deferred.
+    """
+    key = int(i_figure_merit)
+    hit = _SCHEDULE_CACHE.get(key)
+    if hit is not None:
+        return hit
+    pre: list[str] = []
+    post: list[str] = []
+    inputs: dict = {}
+    if DEFER_PER_CALL_NODES:
+        reads = _predicate_read_fields(key)
+        writes = _node_write_sets()
+        for n in DEFER_PER_CALL_NODES:
+            (pre if (writes.get(n, frozenset()) & reads) else post).append(n)
+        inputs["predicate_sources"] = {
+            p.name: _sha256_of(p) for p in _PREDICATE_SOURCES
+        }
+        inputs["node_write_sets"] = {
+            NODE_WRITESET_PATH.name: _sha256_of(NODE_WRITESET_PATH)
+        }
+        inputs["n_predicate_read_fields"] = len(reads)
+    tail = frozenset(pre) | frozenset(post)
+    schedule: tuple[tuple, ...] = ()
+    if MDA_ENABLED:
+        # ``flat`` (decision D18's control arm A0') is one block over every
+        # in-loop node: the same predicate, the same caps, the same failure
+        # policy, a different schedule.  It is written as a branch here rather
+        # than as a second solver because A26 §10 measured that it is the
+        # degenerate case of the block schedule, and two implementations of
+        # one loop is how they drift.
+        if module_solve.FLAT:
+            schedule = (
+                (module_solve.FLAT_BLOCK_LABEL, _loop_node_set(tail), True),
+            )
+        else:
+            by_module: dict[str, set[str]] = {}
+            for node, mod in NODE_MODULE.items():
+                by_module.setdefault(mod, set()).add(node)
+            schedule = tuple(
+                (
+                    label,
+                    frozenset(by_module.get(label, set()) - tail),
+                    label in module_solve.ITERATED,
+                )
+                for label in module_solve.BLOCK_ORDER
+            )
+        inputs["node_map"] = {NODE_MAP_PATH.name: _sha256_of(NODE_MAP_PATH)}
+    resolved = (tuple(pre), tuple(post), schedule, tail)
+    _SCHEDULE_CACHE[key] = resolved
+    SCHEDULE_RESOLUTION["n_resolutions"] += 1
+    SCHEDULE_RESOLUTION["resolutions"].append(
+        {
+            "i_figure_merit": key,
+            "figure_of_merit": FiguresOfMerit(abs(key)).name,
+            "defer_per_call": DEFER_PER_CALL_NAME,
+            "mda": MDA_MODE,
+            "pre_predicate": list(pre),
+            "post_predicate": list(post),
+            "schedule": [
+                [label, sorted(nodes), bool(iterate)]
+                for label, nodes, iterate in schedule
+            ],
+            "single_block_covers_loop": (
+                _single_block_covers_loop(schedule, tail) if schedule else None
+            ),
+            "inputs": inputs,
+        }
+    )
+    return resolved
 
 
 def _roll_up(stats: dict) -> None:
@@ -1269,9 +1367,10 @@ class Caller:
         # nothing is deferred.  ``None`` is the default and the only value the
         # deferral-off path ever sees.
         self._pending: list | None = None
-        # VP2: the tail resolved for the current ``call_models``.  Re-resolved
-        # on every call rather than memoised: it depends on the configuration's
-        # figure of merit, and a scan may change that between calls.
+        # VP2: the tail resolved for the current ``call_models``.  Resolved
+        # once per run (DR9, :func:`resolve_schedule`) and looked up per call;
+        # keyed on the configuration's figure of merit, so a scan that changed
+        # it between calls would resolve a second entry, never reuse a wrong one.
         self._deferred_tail: frozenset[str] = frozenset()
         # VP2 / plan §4.1d: the deferred nodes split into a group that runs
         # before ``objf``/``conf`` and one that runs after.  Both empty on the
@@ -1637,7 +1736,7 @@ class Caller:
                 self.module_solve_stats = self._module_stats(
                     block_sweeps, schedule_passes, inner_counts,
                     moved_constants, converged=False, cap_hit="block",
-                    tail=tail, single_block=single_block,
+                    single_block=single_block,
                 )
                 _roll_up(self.module_solve_stats)
                 if block_trace is not None:
@@ -1666,8 +1765,7 @@ class Caller:
 
         self.module_solve_stats = self._module_stats(
             block_sweeps, schedule_passes, inner_counts, moved_constants,
-            converged=True, cap_hit=None, tail=tail,
-            single_block=single_block,
+            converged=True, cap_hit=None, single_block=single_block,
         )
         _roll_up(self.module_solve_stats)
         if block_trace is not None:
@@ -1695,14 +1793,16 @@ class Caller:
     @staticmethod
     def _module_stats(
         block_sweeps, schedule_passes, inner_counts, moved_constants,
-        *, converged, cap_hit, tail, single_block=False,
+        *, converged, cap_hit, single_block=False,
     ) -> dict:
         """The block schedule's own counts, for the run record.
 
         ``outer_passes`` keeps its name: it is the key the committed
         reproduction reference and every earlier record use for the number of
         schedule passes, and renaming a recorded field is a change to the
-        record schema rather than to the driver.  It is 1 in every arm.
+        record schema rather than to the driver.  It is 1 in every arm.  The
+        deferred tail is no longer stamped here per call: it is resolved once
+        per run and stamped once, in :data:`SCHEDULE_RESOLUTION` (DR9).
         """
         return {
             "converged": converged,
@@ -1713,7 +1813,6 @@ class Caller:
             "inner_counts": {k: list(v) for k, v in inner_counts.items()},
             "inner_totals": {k: sum(v) for k, v in inner_counts.items()},
             "moved_constants": sorted(moved_constants),
-            "deferred_tail": sorted(tail),
         }
 
     def call_models(self, xc: np.ndarray, m: int) -> tuple[float, np.ndarray]:

@@ -102,7 +102,7 @@ LABEL_VARIABLE = "HARNESS_COUNT_NEUTRALITY_LABEL"
 #: Committed with the driver change it straddles.  ``("copy", "copy")`` is the
 #: first press, at the copy commit before any change: one side, compared with
 #: itself, a determinism result.
-STRADDLE: tuple[str, str] = ("copy", "copy")
+STRADDLE: tuple[str, str] = ("copy", "DR9")
 
 #: What each labelled side declares about ``n_arrangement_method_calls``,
 #: keyed by the **after** label.  ``identical``: compared like every other
@@ -111,6 +111,9 @@ STRADDLE: tuple[str, str] = ("copy", "copy")
 #: driver change DR10's declaration (V5 list item 8).
 PRIME_CALLS_DECLARATION: dict[str, str] = {
     "copy": "identical",
+    # DR9 (the schedule and the deferral sets resolved once per run) declares
+    # no change to any count.
+    "DR9": "identical",
 }
 
 #: The evaluation phase's seed: the first displaced one, as gate G6 pairs the
