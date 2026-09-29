@@ -2,7 +2,7 @@
  "format": "census-test-sets-1",
  "scenario": "large_tokamak_nof",
  "generated_by": "harness/experiment/test_sets.py (experiment_runner.py --census)",
- "generated_at_tree_git_head": "60434c52999592d1920a9c9893c18d3edd63711a",
+ "generated_at_tree_git_head": "7aa3c0b408d3b3e477c23410abe65fbddcf3d044",
  "rule": "a component of y that, in some observed sweep of the block, is read before it is first written in that sweep and written later in it; observed over every evaluation of whole optimisation runs (seeds 0 and 1) of each iterating optimisation arm, unioned, and unioned with the prior optimisation-path set of the twin arm where one exists",
  "selection": "the driver selects the entry whose key is '<mda>/<burn-time owner>' as it resolved them (module_solve.MDA_MODE, subsolve.BURN_TIME_OWNER); a block with no entry under that key tests nothing and converges at its first pass",
  "census_seeds": [
@@ -1858,6 +1858,107 @@
     "FLAT": 4202
    }
   },
+  "flat/constant": {
+   "blocks": {
+    "FLAT": [
+     "blanket.deg_blkt_inboard_poloidal_plasma",
+     "build.dr_fw_inboard",
+     "build.dr_fw_outboard",
+     "build.dz_fw_plasma_gap",
+     "build.dz_xpoint_divertor",
+     "current_drive.f_c_plasma_bootstrap",
+     "divertor.a_div_surface_total",
+     "fwbs.breeder_f",
+     "fwbs.f_a_fw_coolant_inboard",
+     "fwbs.f_a_fw_coolant_outboard",
+     "heat_transport.eta_turbine",
+     "heat_transport.etath_liq",
+     "heat_transport.p_plant_electric_base_total_mw",
+     "impurity_radiation.f_nd_impurity_electron_array",
+     "pf_coil.a_cs_poloidal",
+     "pf_coil.b_pf_coil_peak",
+     "pf_coil.bpf2",
+     "pf_coil.c_pf_coil_turn",
+     "pf_coil.c_pf_cs_coil_flat_top_ma",
+     "pf_coil.c_pf_cs_coil_pulse_end_ma",
+     "pf_coil.c_pf_cs_coil_pulse_start_ma",
+     "pf_coil.c_pf_cs_coils_peak_ma",
+     "pf_coil.ccl0_ma",
+     "pf_coil.ccls",
+     "pf_coil.ccls_ma",
+     "pf_coil.f_c_pf_cs_peak_time_array",
+     "pf_coil.first_call",
+     "pf_coil.ind_pf_cs_plasma_mutual",
+     "pf_coil.j_cs_pulse_start",
+     "pf_coil.j_pf_wp_critical",
+     "pf_coil.m_pf_coil_conductor",
+     "pf_coil.m_pf_coil_structure",
+     "pf_coil.n_pf_coil_turns",
+     "pf_coil.n_pf_coils_in_group",
+     "pf_coil.pfcaseth",
+     "pf_coil.r_pf_coil_inner",
+     "pf_coil.r_pf_coil_middle",
+     "pf_coil.r_pf_coil_middle_group_array",
+     "pf_coil.r_pf_coil_outer",
+     "pf_coil.stress_z_cs_self_midplane_profile",
+     "pf_coil.stress_z_cs_self_profile",
+     "pf_coil.vsdum",
+     "pf_coil.xind",
+     "pf_coil.z_pf_coil_lower",
+     "pf_coil.z_pf_coil_middle",
+     "pf_coil.z_pf_coil_middle_group_array",
+     "pf_coil.z_pf_coil_upper",
+     "pf_power.poloidalpower",
+     "pf_power.vpfskv",
+     "physics.alphaj",
+     "physics.alphap",
+     "physics.b_plasma_inboard_toroidal",
+     "physics.b_plasma_outboard_toroidal",
+     "physics.beta_fast_alpha",
+     "physics.beta_norm_max",
+     "physics.f_temp_plasma_electron_density_vol_avg",
+     "physics.first_call",
+     "physics.fusden_alpha_total",
+     "physics.ind_plasma_internal_norm",
+     "physics.nd_plasma_electron_max_array",
+     "physics.p_fusion_total_mw",
+     "physics.p_plasma_ohmic_mw",
+     "physics.pres_plasma_thermal_on_axis",
+     "physics.proton_rate_density",
+     "superconducting_tfcoil.r_tf_wp_inboard_centre",
+     "superconducting_tfcoil.r_tf_wp_inboard_inner",
+     "superconducting_tfcoil.r_tf_wp_inboard_outer",
+     "tfcoil.casestr",
+     "tfcoil.dr_tf_plasma_case",
+     "tfcoil.dx_tf_inboard_out_toroidal",
+     "tfcoil.dx_tf_side_case_min",
+     "tfcoil.dx_tf_turn_general",
+     "tfcoil.dx_tf_wp_primary_toroidal",
+     "tfcoil.f_vforce_inboard",
+     "tfcoil.insstrain",
+     "tfcoil.sig_tf_case",
+     "tfcoil.sig_tf_cs_bucked",
+     "tfcoil.str_wp"
+    ]
+   },
+   "census_arm": "B1",
+   "applies_to_arms": [
+    "A1",
+    "B1"
+   ],
+   "n_by_block": {
+    "FLAT": 78
+   },
+   "n_by_block_census_only": {
+    "FLAT": 78
+   },
+   "added_from_prior_optimisation_path": {},
+   "sweeps_observed_by_block": {
+    "FLAT": 4202
+   },
+   "twin_of": "flat/optimiser",
+   "bound_for_arm": "A1"
+  },
   "partitioned/optimiser": {
    "blocks": {
     "M1": [
@@ -1968,7 +2069,120 @@
     "M2": 3632,
     "M3": 3179
    }
+  },
+  "partitioned/constant": {
+   "blocks": {
+    "M1": [
+     "current_drive.f_c_plasma_bootstrap",
+     "impurity_radiation.f_nd_impurity_electron_array",
+     "physics.alphaj",
+     "physics.alphap",
+     "physics.b_plasma_inboard_toroidal",
+     "physics.b_plasma_outboard_toroidal",
+     "physics.beta_fast_alpha",
+     "physics.beta_norm_max",
+     "physics.f_temp_plasma_electron_density_vol_avg",
+     "physics.first_call",
+     "physics.fusden_alpha_total",
+     "physics.ind_plasma_internal_norm",
+     "physics.nd_plasma_electron_max_array",
+     "physics.p_fusion_total_mw",
+     "physics.p_plasma_ohmic_mw",
+     "physics.pres_plasma_thermal_on_axis",
+     "physics.proton_rate_density"
+    ],
+    "M2": [
+     "build.dz_fw_plasma_gap",
+     "build.dz_xpoint_divertor",
+     "impurity_radiation.f_nd_impurity_electron_array",
+     "pf_coil.a_cs_poloidal",
+     "pf_coil.b_pf_coil_peak",
+     "pf_coil.bpf2",
+     "pf_coil.c_pf_coil_turn",
+     "pf_coil.c_pf_cs_coil_flat_top_ma",
+     "pf_coil.c_pf_cs_coil_pulse_end_ma",
+     "pf_coil.c_pf_cs_coil_pulse_start_ma",
+     "pf_coil.c_pf_cs_coils_peak_ma",
+     "pf_coil.ccl0_ma",
+     "pf_coil.ccls",
+     "pf_coil.ccls_ma",
+     "pf_coil.f_c_pf_cs_peak_time_array",
+     "pf_coil.first_call",
+     "pf_coil.ind_pf_cs_plasma_mutual",
+     "pf_coil.j_cs_pulse_start",
+     "pf_coil.j_pf_wp_critical",
+     "pf_coil.m_pf_coil_conductor",
+     "pf_coil.m_pf_coil_structure",
+     "pf_coil.n_pf_coil_turns",
+     "pf_coil.n_pf_coils_in_group",
+     "pf_coil.pfcaseth",
+     "pf_coil.r_pf_coil_inner",
+     "pf_coil.r_pf_coil_middle",
+     "pf_coil.r_pf_coil_middle_group_array",
+     "pf_coil.r_pf_coil_outer",
+     "pf_coil.stress_z_cs_self_midplane_profile",
+     "pf_coil.stress_z_cs_self_profile",
+     "pf_coil.vsdum",
+     "pf_coil.xind",
+     "pf_coil.z_pf_coil_lower",
+     "pf_coil.z_pf_coil_middle",
+     "pf_coil.z_pf_coil_middle_group_array",
+     "pf_coil.z_pf_coil_upper",
+     "superconducting_tfcoil.r_tf_wp_inboard_centre",
+     "superconducting_tfcoil.r_tf_wp_inboard_inner",
+     "superconducting_tfcoil.r_tf_wp_inboard_outer",
+     "tfcoil.casestr",
+     "tfcoil.dr_tf_plasma_case",
+     "tfcoil.dx_tf_inboard_out_toroidal",
+     "tfcoil.dx_tf_side_case_min",
+     "tfcoil.dx_tf_turn_general",
+     "tfcoil.dx_tf_wp_primary_toroidal",
+     "tfcoil.f_vforce_inboard",
+     "tfcoil.insstrain",
+     "tfcoil.sig_tf_case",
+     "tfcoil.sig_tf_cs_bucked",
+     "tfcoil.str_wp"
+    ],
+    "M3": [
+     "blanket.deg_blkt_inboard_poloidal_plasma",
+     "build.dr_fw_inboard",
+     "build.dr_fw_outboard",
+     "divertor.a_div_surface_total",
+     "fwbs.breeder_f",
+     "fwbs.f_a_fw_coolant_inboard",
+     "fwbs.f_a_fw_coolant_outboard",
+     "heat_transport.eta_turbine",
+     "heat_transport.etath_liq",
+     "heat_transport.p_plant_electric_base_total_mw",
+     "impurity_radiation.f_nd_impurity_electron_array",
+     "pf_power.poloidalpower"
+    ]
+   },
+   "census_arm": "B2",
+   "applies_to_arms": [
+    "A2",
+    "B2"
+   ],
+   "n_by_block": {
+    "M1": 17,
+    "M2": 50,
+    "M3": 12
+   },
+   "n_by_block_census_only": {
+    "M1": 17,
+    "M2": 50,
+    "M3": 12
+   },
+   "added_from_prior_optimisation_path": {},
+   "sweeps_observed_by_block": {
+    "?": 1322,
+    "M1": 2864,
+    "M2": 3632,
+    "M3": 3179
+   },
+   "twin_of": "partitioned/optimiser",
+   "bound_for_arm": "A2"
   }
  },
- "sets_sha256": "61be31eb9770c323bd127396ccab437332bfa9ca2ab30c0b3f976daad60c9196"
+ "sets_sha256": "8f98cd631afa2a361afbd4f61a59b57227db4ac7b038cbe53629e5246e30e160"
 }

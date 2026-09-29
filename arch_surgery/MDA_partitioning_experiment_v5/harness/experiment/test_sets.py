@@ -416,7 +416,7 @@ def artifact_for(campaign: Campaign, config: Config, derived: Mapping[str, Any],
     coupling = json.loads(Path(config.coupling_state_path).read_text())
     sets: dict[str, Any] = {}
     for arm, arm_entry in derived["arms"].items():
-        sets[arm_entry["loop_key"]] = {
+        entry = {
             "blocks": arm_entry["binding"],
             "census_arm": arm,
             "applies_to_arms": arm_entry["applies_to"],
@@ -425,6 +425,19 @@ def artifact_for(campaign: Campaign, config: Config, derived: Mapping[str, Any],
             "added_from_prior_optimisation_path": arm_entry["added_from_prior_optimisation_path"],
             "sweeps_observed_by_block": arm_entry["sweeps_observed_by_block"],
         }
+        sets[arm_entry["loop_key"]] = entry
+        # The twin rule, made explicit in the artifact: an evaluation-phase
+        # arm whose loop key differs from its census arm's (the burn time
+        # owned by a constant, A1 and A2 on a pulsed configuration, where
+        # the optimisation arms B1 and B2 hand it to the optimiser) binds
+        # the same sets under its own key.  No loop node writes the burn
+        # time under either owner, so the carried set is the same; the
+        # entry says whose census it is.  Found by the first press of gate
+        # GT, which refused A1's loop 'flat/constant' as unknown.
+        for applies in arm_entry["applies_to"]:
+            key = arms_mod.ARMS[applies].loop_key(config)
+            if key not in sets:
+                sets[key] = {**entry, "twin_of": arm_entry["loop_key"], "bound_for_arm": applies}
     record = {
         "format": FORMAT,
         "scenario": config.name,

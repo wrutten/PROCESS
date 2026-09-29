@@ -213,7 +213,7 @@ def check_pairs(pairs: list[dict[str, Any]], campaign: Campaign) -> list[dict[st
         differing = [
             name
             for name in pool_mod.JOB_IDENTITY_FIELDS
-            if a.identity(Path(campaign.runs_dir)).get(name) != b.identity(Path(campaign.runs_dir)).get(name)
+            if a.identity(Path(campaign.runs_dir), campaign=campaign).get(name) != b.identity(Path(campaign.runs_dir), campaign=campaign).get(name)
         ]
         holds = (da != db) if pair["must"] == "differ" else (da == db)
         if pair.get("directories_must") == "differ":
@@ -371,7 +371,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
 def _complete_record_of(job: pool_mod.Job, campaign: Campaign) -> dict[str, Any]:
     """A record that ``is_complete_for`` accepts for *job*: every declared
     field present (null where the value does not matter), stamps consistent."""
-    identity = job.identity(Path(campaign.runs_dir))
+    identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
     record: dict[str, Any] = {name: None for name in records_mod.declared_field_names(job.phase)}
     for path in records_mod.CONTRACT[job.phase]:
         cursor = record
@@ -404,7 +404,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         )
 
     def _why(record: dict[str, Any], job: pool_mod.Job) -> str | None:
-        identity = job.identity(Path(campaign.runs_dir))
+        identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
         return records_mod.why_not_complete_for(
             record, identity=identity, digest=records_mod.job_digest(identity)
         )
@@ -499,7 +499,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         old_digest = record["job_digest"]
         read = _read_from_disk(record)
         why = _why(read, job)
-        identity = job.identity(Path(campaign.runs_dir))
+        identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
         trace = read.get(records_mod.ARM_NAME_TRANSLATION_FIELD) or {}
         return (
             why is None
@@ -588,7 +588,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         )
         record = _complete_record_of(other, campaign)
         record[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
-        identity = job.identity(Path(campaign.runs_dir))
+        identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
         with tempfile.TemporaryDirectory(prefix="arm_names_tooth_") as td:
             (Path(td) / "metrics.json").write_text(json.dumps(record))
             try:
@@ -599,7 +599,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
                 refused, said = False, "ACCEPTED"
             try:
                 pool_mod.assert_not_another_jobs_record(
-                    other, other.identity(Path(campaign.runs_dir)), Path(td)
+                    other, other.identity(Path(campaign.runs_dir), campaign=campaign), Path(td)
                 )
             except pool_mod.PoolError as exc:
                 own_refused, own_said = True, str(exc)

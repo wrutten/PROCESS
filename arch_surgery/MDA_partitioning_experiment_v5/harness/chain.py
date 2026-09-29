@@ -1164,9 +1164,9 @@ def _tooth_resume_does_not_cross_run_kinds() -> tuple[bool, str]:
     )
     record = dict(_doctored("campaign"))
     record["regime"] = "unperturbed"
-    record["job_identity"] = forged.identity(Path(campaign.runs_dir))
+    record["job_identity"] = forged.identity(Path(campaign.runs_dir), campaign=campaign)
     record["job_digest"] = records_mod.job_digest(record["job_identity"])
-    identity = smoke.identity(Path(campaign.runs_dir))
+    identity = smoke.identity(Path(campaign.runs_dir), campaign=campaign)
     why = records_mod.why_not_complete_for(
         record, identity=identity, digest=records_mod.job_digest(identity)
     )

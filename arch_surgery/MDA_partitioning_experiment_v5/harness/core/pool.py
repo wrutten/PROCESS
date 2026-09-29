@@ -184,8 +184,15 @@ class Job:
     #: declared position.
     audit_position_caller: str | None = None
 
-    def identity(self, runs_dir: Path | None = None) -> dict[str, Any]:
+    def identity(
+        self, runs_dir: Path | None = None, *, campaign: "Campaign | None" = None
+    ) -> dict[str, Any]:
         """Every identity field, rendered as JSON-safe values, in declared order.
+
+        ``campaign`` resolves an unresolved test set and tolerance first
+        (:func:`resolve_settings`); a caller outside the pool that renders a
+        job it built itself passes it.  Without it an unresolved job is
+        refused rather than rendered as V4's.
 
         The one construction of "the same job": :attr:`key`, the digest and the
         shared pool's directory are all derived from this dictionary.  Paths
@@ -194,6 +201,8 @@ class Job:
         and is still the same job — and as given otherwise.  Mappings are
         rendered with sorted keys and string values, ``None`` kept as null.
         """
+        if campaign is not None and (self.test_set is None or self.tau is None):
+            resolve_settings(self, campaign)
         rendered: dict[str, Any] = {}
         for name in JOB_IDENTITY_FIELDS:
             if name == "configuration":
