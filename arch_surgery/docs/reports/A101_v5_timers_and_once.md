@@ -1227,3 +1227,58 @@ Under `PROCESS/`: `process/core/caller.py` (§3, §7), `process/core/solver/solv
   stages run on the gate job set, 66 + 22 runs at W = 1); `d8873d49` the three fixes (GC, G7 re-pressed
   PASS; G5 re-made PASS; self-check PASS; `--gate all` stopped at `resume_identity`); `b9b134d9` the
   `resume_identity` fix (PASS). Every record's `tree_git_head` surveyed (§11).
+
+---
+
+## 15. Orchestrator's critical assessment (protocol §5) — verdict: merge (item 5 and DR12, under D37)
+
+*Written 2026-09-29 by the orchestrating session under D37: both driver changes merge on this assessment,
+their diffs in §3 and §7 for the user's review on return. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --name-only ca7200ff..fd1ba0ff`: 32 files; under `PROCESS/` only `caller.py`,
+`solver/solver_handler.py`, `copy_gates.py`, `PROVENANCE.json`, `CHANGES.md`; **0 paths under
+`process/models/`, 0 under `_v4/`**; worktree clean; `merge-tree` against the trunk: no conflict; the report
+commit `fd1ba0ff` changes no code beyond `b9b134d9`. (2) `compileall` clean and `--gates` constructs the
+registry (28 gates) at the tip, run by the orchestrator. (3) The gate-table record on disk: **27 PASS, 1 FAIL**
+(`tally_contracts`, I-35), 28 rows; every verdict record read: GC PASS 3 989 / 0 (the `item5 → DR12`
+straddle), G1 PASS, G2 5 026 / 0, G6 6 717 / 0, GT 13 424 / 794 (the biting drops), G7 183 / 0, G5 156 / 0, GR
+read 256 / 0; the two GC straddle files `DR11__item5` and `item5__DR12` each 22 pairs, 3 989 leaves and 46 125
+components, 0 differing from the rule; G4's last verdict FAIL at `0353c524` kept on disk, the module gone.
+(4) The stamp survey recounted from every `metrics.json`: 509 records; the commits are this task's and the
+seeded tree's, none foreign.
+
+**One disclosure the report does not make.** The **28 records at `cfa0d3ff` — GC's item-5 side and G1's
+after capture — read `tree_git_dirty = true`** (the report discloses the DR12 chain's README-only dirt, §8.1,
+and calls G1's after side at `cfa0d3ff` clean at §4.1 line 216; the records say otherwise, and which files
+were dirty is not recorded). What bounds it: the `item5 → DR12` straddle's after side was made at `24b78e2d`
+with the README alone dirty and reads **0 differing** against those 28 on every count leaf and every exit-state
+component, so the counts and states of the item-5 side are exactly those of a committed driver — the
+count-neutrality claim of item 5 (`DR11 → item5` under the declared rule) stands transitively through a
+committed tree. Recorded as a protocol note; the campaign's own records at a clean tip are the product.
+
+**Read against the rulings.** Item 5 is D35 (the flat arms do not defer; `A2`'s evaluation now yields the
+reference's information) and the user's words ("it should actually run once … in the measurement"): the
+once-execution is measured, counted, and — the unforeseen part — is one dispatch sweep, declared and predicted
+leaf by leaf (decision 3 is right: a second code path for one sweep is how two implementations start). G4's
+retirement is D36's condition met with the FAIL as its evidence (18 of 18 records agreeing on the whole state).
+DR12 is D33's instrument as §6 specifies it — `None` when unset, G1 byte-identical, GC 0 differing *with the
+timers on* — and D38's run discipline is in the stages (W = 1 repeatability; the validity check wired).
+Decision 9 (timers off for gates, on for the campaign, in the identity only when on) is the choice that kept
+every seeded record; its cost is that G7 times only its own smoke jobs, which is what G7 needs.
+
+**The phase A timing limit is real and is acted on.** A phase A record is one evaluation in a fresh process,
+so its module rows carry numba's cache load (259–351 ms against 21–32 ms warmed); the appendix's phase A
+table would then be a table of first evaluations. The plan's §6 asks for the evaluation's cost. **Ruled
+(autonomous): the campaign task adds A91's warmed form to the evaluation child** — a discarded warm-up
+evaluation on the same entry, the entry snapshot re-entered bit-exact (D25's mechanism), a fresh `Caller`,
+counters reset, then the measured evaluation; the child stamps both evaluations' counts and the exit-state
+digest of each and refuses if they differ (the warm-up is then a per-record determinism check for free).
+It is a harness change to the child, not a driver change: no G1; its neutrality is shown as GC shows it — the
+gate job set's evaluation records before and after, every count and every exit-state component identical.
+The fixed per-run term is unaffected (it is timed from process start to the *first* evaluation, which stays
+the warm-up's; the table names which).
+
+**Queue consequences at merge.** Item 5 and DR12 merged (V5 plan §11 rows; §5 A1 on the whole state, G4 gone
+from §7 Table 2; §6's tables wired; §10's repeatability line corrected to GC's job set, 66 runs); the dirty
+disclosure and the warm-up ruling logged; the campaign task (A102) briefed with the warm-up as its first
+stage; I-35 unchanged.
