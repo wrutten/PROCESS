@@ -1,0 +1,3838 @@
+{
+ "format": "rbw-sets-1",
+ "generated_by": "arch_surgery/coupling_subset_trial/run_trial.py --derive-rbw",
+ "rule": "a component of y that, in some observed sweep of the block, is read before it is first written in that sweep and written later in it",
+ "census_seeds": [
+  2,
+  3,
+  4,
+  5
+ ],
+ "census_test_set": "full",
+ "census_tau": 1e-06,
+ "configurations": {
+  "large_tokamak_nof": {
+   "A0": {
+    "census_runs": [
+     {
+      "seed": 2,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 3,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 4,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 5,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     }
+    ],
+    "sweeps_observed_by_block": {
+     "FLAT": 21,
+     "?": 4
+    },
+    "sets": {
+     "FLAT": [
+      "blanket.deg_blkt_inboard_poloidal_plasma",
+      "build.dr_fw_inboard",
+      "build.dr_fw_outboard",
+      "build.dz_fw_plasma_gap",
+      "current_drive.f_c_plasma_bootstrap",
+      "divertor.a_div_surface_total",
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.eta_turbine",
+      "heat_transport.etath_liq",
+      "heat_transport.p_plant_electric_base_total_mw",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_coil.a_cs_poloidal",
+      "pf_coil.b_pf_coil_peak",
+      "pf_coil.bpf2",
+      "pf_coil.c_pf_coil_turn",
+      "pf_coil.c_pf_cs_coil_flat_top_ma",
+      "pf_coil.c_pf_cs_coil_pulse_end_ma",
+      "pf_coil.c_pf_cs_coil_pulse_start_ma",
+      "pf_coil.c_pf_cs_coils_peak_ma",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.f_c_pf_cs_peak_time_array",
+      "pf_coil.ind_pf_cs_plasma_mutual",
+      "pf_coil.j_cs_pulse_start",
+      "pf_coil.j_pf_wp_critical",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.n_pf_coil_turns",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_inner",
+      "pf_coil.r_pf_coil_middle",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.r_pf_coil_outer",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_lower",
+      "pf_coil.z_pf_coil_middle",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_coil.z_pf_coil_upper",
+      "pf_power.poloidalpower",
+      "pf_power.vpfskv",
+      "physics.alphaj",
+      "physics.alphap",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.f_temp_plasma_electron_density_vol_avg",
+      "physics.fusden_alpha_total",
+      "physics.ind_plasma_internal_norm",
+      "physics.nd_plasma_electron_max_array",
+      "physics.p_fusion_total_mw",
+      "physics.p_plasma_ohmic_mw",
+      "physics.pres_plasma_thermal_on_axis",
+      "physics.proton_rate_density",
+      "superconducting_tfcoil.r_tf_wp_inboard_centre",
+      "superconducting_tfcoil.r_tf_wp_inboard_inner",
+      "superconducting_tfcoil.r_tf_wp_inboard_outer",
+      "tfcoil.casestr",
+      "tfcoil.dr_tf_plasma_case",
+      "tfcoil.dx_tf_inboard_out_toroidal",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.dx_tf_wp_primary_toroidal",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp",
+      "times.t_plant_pulse_burn"
+     ]
+    },
+    "n_by_block": {
+     "FLAT": 75
+    },
+    "against_dsm": {
+     "n_union": 75,
+     "in_dsm_feedback": 34,
+     "in_dsm_interface_not_feedback": 14,
+     "dsm_self_read_only": [
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.etath_liq",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_power.poloidalpower",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.fusden_alpha_total",
+      "tfcoil.casestr",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "in_no_dsm_set_not_self_read": [],
+     "dsm_feedback_not_rbw": [
+      "buildings.a_plant_floor_effective",
+      "current_drive.c_beam_total",
+      "current_drive.f_c_plasma_bootstrap_sauter",
+      "current_drive.p_hcd_injected_total_mw",
+      "divertor.pflux_div_heat_load_mw",
+      "divertor.prn1",
+      "pf_coil.a_cs_cable_space",
+      "pf_coil.b_cs_peak_flat_top_end",
+      "pf_coil.b_cs_peak_pulse_start",
+      "pf_coil.c_pf_cs_current_filaments",
+      "pf_coil.dz_cs_full",
+      "pf_coil.n_pf_coils_in_group",
+      "pf_coil.r_cs_middle",
+      "pf_coil.r_pf_cs_current_filaments",
+      "pf_coil.stress_hoop_cs_inner",
+      "pf_coil.stress_radial_cs_peak",
+      "pf_coil.stress_z_cs_self_peak_midplane",
+      "pf_coil.z_pf_cs_current_filaments",
+      "physics.dd_power_density",
+      "physics.dhe3_power_density",
+      "physics.dt_power_density_plasma",
+      "physics.f_p_plasma_separatrix_rad",
+      "physics.fusden_plasma",
+      "physics.fusden_plasma_alpha",
+      "physics.ind_plasma",
+      "physics.len_sol_outboard_power_decay",
+      "physics.nd_plasma_electron_line",
+      "physics.p_alpha_total_mw",
+      "physics.p_l_h_threshold_mw",
+      "physics.p_neutron_total_mw",
+      "physics.p_non_alpha_charged_mw",
+      "physics.p_plasma_separatrix_mw",
+      "physics.pden_alpha_total_mw",
+      "physics.pden_plasma_alpha_mw",
+      "physics.plasma_current",
+      "physics.qstar",
+      "physics.temp_plasma_electron_density_weighted_kev",
+      "physics.temp_plasma_electron_on_axis_kev",
+      "physics.temp_plasma_ion_density_weighted_kev",
+      "physics.temp_plasma_ion_on_axis_kev",
+      "physics.temp_plasma_ion_vol_avg_kev"
+     ]
+    },
+    "detail": {
+     "FLAT": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "build.dz_fw_plasma_gap": {
+       "reader": "build",
+       "writer": "build",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.alphaj": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.ind_plasma_internal_norm": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.f_temp_plasma_electron_density_vol_avg": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.pres_plasma_thermal_on_axis": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.alphap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.b_plasma_inboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.b_plasma_outboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.beta_norm_max": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "current_drive.f_c_plasma_bootstrap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.proton_rate_density": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.fusden_alpha_total": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.p_fusion_total_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.beta_fast_alpha": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.p_plasma_ohmic_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "physics.nd_plasma_electron_max_array": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_inboard_out_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dr_tf_plasma_case": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_side_case_min": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_inner": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_outer": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_centre": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_wp_primary_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.f_vforce_inboard": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_turn_general": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_case": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_cs_bucked": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.str_wp": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.casestr": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.insstrain": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_coil.j_cs_pulse_start": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_coil.a_cs_poloidal": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_coil.b_pf_coil_peak": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.bpf2": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_coil_turn": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_flat_top_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_end_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_start_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coils_peak_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.ccl0_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ccls": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ccls_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.f_c_pf_cs_peak_time_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.ind_pf_cs_plasma_mutual": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.j_pf_wp_critical": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_conductor": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_structure": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.n_pf_coil_turns": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.pfcaseth": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_inner": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_outer": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_midplane_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 18,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.vsdum": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.xind": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_lower": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_upper": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "times.t_plant_pulse_burn": {
+       "reader": "physics",
+       "writer": "pulse",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "build.dr_fw_inboard": {
+       "reader": "build",
+       "writer": "fw",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "build.dr_fw_outboard": {
+       "reader": "build",
+       "writer": "fw",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "blanket.deg_blkt_inboard_poloidal_plasma": {
+       "reader": "divertor",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "divertor.a_div_surface_total": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "fwbs.breeder_f": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_inboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_outboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_power.vpfskv": {
+       "reader": "pulse",
+       "writer": "power",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "heat_transport.eta_turbine": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "heat_transport.etath_liq": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_power.poloidalpower": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "heat_transport.p_plant_electric_base_total_mw": {
+       "reader": "power.acpow",
+       "writer": "power.plant_electric_production",
+       "n_sweeps": 21,
+       "n_runs": 4
+      }
+     }
+    }
+   },
+   "A2": {
+    "census_runs": [
+     {
+      "seed": 2,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 3,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 4,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 5,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     }
+    ],
+    "sweeps_observed_by_block": {
+     "M1": 16,
+     "M2": 21,
+     "M3": 12,
+     "?": 4
+    },
+    "sets": {
+     "M1": [
+      "current_drive.f_c_plasma_bootstrap",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "physics.alphaj",
+      "physics.alphap",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.f_temp_plasma_electron_density_vol_avg",
+      "physics.fusden_alpha_total",
+      "physics.ind_plasma_internal_norm",
+      "physics.nd_plasma_electron_max_array",
+      "physics.p_fusion_total_mw",
+      "physics.p_plasma_ohmic_mw",
+      "physics.pres_plasma_thermal_on_axis",
+      "physics.proton_rate_density"
+     ],
+     "M2": [
+      "build.dz_fw_plasma_gap",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_coil.a_cs_poloidal",
+      "pf_coil.b_pf_coil_peak",
+      "pf_coil.bpf2",
+      "pf_coil.c_pf_coil_turn",
+      "pf_coil.c_pf_cs_coil_flat_top_ma",
+      "pf_coil.c_pf_cs_coil_pulse_end_ma",
+      "pf_coil.c_pf_cs_coil_pulse_start_ma",
+      "pf_coil.c_pf_cs_coils_peak_ma",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.f_c_pf_cs_peak_time_array",
+      "pf_coil.ind_pf_cs_plasma_mutual",
+      "pf_coil.j_cs_pulse_start",
+      "pf_coil.j_pf_wp_critical",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.n_pf_coil_turns",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_inner",
+      "pf_coil.r_pf_coil_middle",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.r_pf_coil_outer",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_lower",
+      "pf_coil.z_pf_coil_middle",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_coil.z_pf_coil_upper",
+      "superconducting_tfcoil.r_tf_wp_inboard_centre",
+      "superconducting_tfcoil.r_tf_wp_inboard_inner",
+      "superconducting_tfcoil.r_tf_wp_inboard_outer",
+      "tfcoil.casestr",
+      "tfcoil.dr_tf_plasma_case",
+      "tfcoil.dx_tf_inboard_out_toroidal",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.dx_tf_wp_primary_toroidal",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "M3": [
+      "blanket.deg_blkt_inboard_poloidal_plasma",
+      "divertor.a_div_surface_total",
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.eta_turbine",
+      "heat_transport.etath_liq",
+      "heat_transport.p_plant_electric_base_total_mw",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_power.poloidalpower"
+     ]
+    },
+    "n_by_block": {
+     "M1": 16,
+     "M2": 47,
+     "M3": 10
+    },
+    "against_dsm": {
+     "n_union": 71,
+     "in_dsm_feedback": 30,
+     "in_dsm_interface_not_feedback": 14,
+     "dsm_self_read_only": [
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.etath_liq",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_power.poloidalpower",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.fusden_alpha_total",
+      "tfcoil.casestr",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "in_no_dsm_set_not_self_read": [],
+     "dsm_feedback_not_rbw": [
+      "build.dr_fw_inboard",
+      "build.dr_fw_outboard",
+      "buildings.a_plant_floor_effective",
+      "current_drive.c_beam_total",
+      "current_drive.f_c_plasma_bootstrap_sauter",
+      "current_drive.p_hcd_injected_total_mw",
+      "divertor.pflux_div_heat_load_mw",
+      "divertor.prn1",
+      "pf_coil.a_cs_cable_space",
+      "pf_coil.b_cs_peak_flat_top_end",
+      "pf_coil.b_cs_peak_pulse_start",
+      "pf_coil.c_pf_cs_current_filaments",
+      "pf_coil.dz_cs_full",
+      "pf_coil.n_pf_coils_in_group",
+      "pf_coil.r_cs_middle",
+      "pf_coil.r_pf_cs_current_filaments",
+      "pf_coil.stress_hoop_cs_inner",
+      "pf_coil.stress_radial_cs_peak",
+      "pf_coil.stress_z_cs_self_peak_midplane",
+      "pf_coil.z_pf_cs_current_filaments",
+      "pf_power.vpfskv",
+      "physics.dd_power_density",
+      "physics.dhe3_power_density",
+      "physics.dt_power_density_plasma",
+      "physics.f_p_plasma_separatrix_rad",
+      "physics.fusden_plasma",
+      "physics.fusden_plasma_alpha",
+      "physics.ind_plasma",
+      "physics.len_sol_outboard_power_decay",
+      "physics.nd_plasma_electron_line",
+      "physics.p_alpha_total_mw",
+      "physics.p_l_h_threshold_mw",
+      "physics.p_neutron_total_mw",
+      "physics.p_non_alpha_charged_mw",
+      "physics.p_plasma_separatrix_mw",
+      "physics.pden_alpha_total_mw",
+      "physics.pden_plasma_alpha_mw",
+      "physics.plasma_current",
+      "physics.qstar",
+      "physics.temp_plasma_electron_density_weighted_kev",
+      "physics.temp_plasma_electron_on_axis_kev",
+      "physics.temp_plasma_ion_density_weighted_kev",
+      "physics.temp_plasma_ion_on_axis_kev",
+      "physics.temp_plasma_ion_vol_avg_kev",
+      "times.t_plant_pulse_burn"
+     ]
+    },
+    "detail": {
+     "M1": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.alphaj": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.ind_plasma_internal_norm": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.f_temp_plasma_electron_density_vol_avg": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.pres_plasma_thermal_on_axis": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.alphap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.b_plasma_inboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.b_plasma_outboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.beta_norm_max": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "current_drive.f_c_plasma_bootstrap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.proton_rate_density": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.fusden_alpha_total": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.p_fusion_total_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.beta_fast_alpha": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.p_plasma_ohmic_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.nd_plasma_electron_max_array": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      }
+     },
+     "M2": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "build.dz_fw_plasma_gap": {
+       "reader": "build",
+       "writer": "build",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_inboard_out_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dr_tf_plasma_case": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_side_case_min": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_inner": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_outer": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_centre": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_wp_primary_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.f_vforce_inboard": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_turn_general": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_case": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_cs_bucked": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.str_wp": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.casestr": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "tfcoil.insstrain": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_coil.j_cs_pulse_start": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_coil.a_cs_poloidal": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 21,
+       "n_runs": 4
+      },
+      "pf_coil.b_pf_coil_peak": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.bpf2": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_coil_turn": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_flat_top_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_end_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_start_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coils_peak_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.ccl0_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ccls": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ccls_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.f_c_pf_cs_peak_time_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.ind_pf_cs_plasma_mutual": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.j_pf_wp_critical": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_conductor": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_structure": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.n_pf_coil_turns": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.pfcaseth": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_inner": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_outer": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_midplane_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 18,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.vsdum": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.xind": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_lower": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 9,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 9,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_upper": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 15,
+       "n_runs": 4
+      }
+     },
+     "M3": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "blanket.deg_blkt_inboard_poloidal_plasma": {
+       "reader": "divertor",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "divertor.a_div_surface_total": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.breeder_f": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_inboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_outboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "heat_transport.eta_turbine": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "heat_transport.etath_liq": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_power.poloidalpower": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "heat_transport.p_plant_electric_base_total_mw": {
+       "reader": "power.acpow",
+       "writer": "power.plant_electric_production",
+       "n_sweeps": 12,
+       "n_runs": 4
+      }
+     }
+    }
+   }
+  },
+  "low_aspect_ratio_DEMO": {
+   "A0": {
+    "census_runs": [
+     {
+      "seed": 2,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 3,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 4,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 5,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     }
+    ],
+    "sweeps_observed_by_block": {
+     "FLAT": 20,
+     "?": 4
+    },
+    "sets": {
+     "FLAT": [
+      "blanket.deg_blkt_inboard_poloidal_plasma",
+      "build.dr_fw_inboard",
+      "build.dr_fw_outboard",
+      "build.dz_fw_plasma_gap",
+      "current_drive.f_c_plasma_bootstrap",
+      "divertor.a_div_surface_total",
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.eta_turbine",
+      "heat_transport.etath_liq",
+      "heat_transport.p_plant_electric_base_total_mw",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_coil.a_cs_poloidal",
+      "pf_coil.b_pf_coil_peak",
+      "pf_coil.bpf2",
+      "pf_coil.c_pf_coil_turn",
+      "pf_coil.c_pf_cs_coil_flat_top_ma",
+      "pf_coil.c_pf_cs_coil_pulse_end_ma",
+      "pf_coil.c_pf_cs_coil_pulse_start_ma",
+      "pf_coil.c_pf_cs_coils_peak_ma",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.f_c_pf_cs_peak_time_array",
+      "pf_coil.ind_pf_cs_plasma_mutual",
+      "pf_coil.j_cs_pulse_start",
+      "pf_coil.j_pf_wp_critical",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.n_pf_coil_turns",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_inner",
+      "pf_coil.r_pf_coil_middle",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.r_pf_coil_outer",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_lower",
+      "pf_coil.z_pf_coil_middle",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_coil.z_pf_coil_upper",
+      "pf_power.poloidalpower",
+      "pf_power.vpfskv",
+      "physics.alphaj",
+      "physics.alphap",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.f_temp_plasma_electron_density_vol_avg",
+      "physics.fusden_alpha_total",
+      "physics.ind_plasma_internal_norm",
+      "physics.nd_plasma_electron_max_array",
+      "physics.p_fusion_total_mw",
+      "physics.p_plasma_ohmic_mw",
+      "physics.pres_plasma_thermal_on_axis",
+      "physics.proton_rate_density",
+      "superconducting_tfcoil.r_tf_wp_inboard_centre",
+      "superconducting_tfcoil.r_tf_wp_inboard_inner",
+      "superconducting_tfcoil.r_tf_wp_inboard_outer",
+      "tfcoil.casestr",
+      "tfcoil.dr_tf_plasma_case",
+      "tfcoil.dx_tf_inboard_out_toroidal",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.dx_tf_wp_primary_toroidal",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp",
+      "times.t_plant_pulse_burn"
+     ]
+    },
+    "n_by_block": {
+     "FLAT": 74
+    },
+    "against_dsm": {
+     "n_union": 74,
+     "in_dsm_feedback": 33,
+     "in_dsm_interface_not_feedback": 15,
+     "dsm_self_read_only": [
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.etath_liq",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_power.poloidalpower",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.fusden_alpha_total",
+      "tfcoil.casestr",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "in_no_dsm_set_not_self_read": [],
+     "dsm_feedback_not_rbw": [
+      "buildings.a_plant_floor_effective",
+      "current_drive.c_beam_total",
+      "current_drive.f_c_plasma_bootstrap_sauter",
+      "current_drive.p_hcd_injected_total_mw",
+      "divertor.pflux_div_heat_load_mw",
+      "divertor.prn1",
+      "pf_coil.a_cs_cable_space",
+      "pf_coil.b_cs_peak_flat_top_end",
+      "pf_coil.b_cs_peak_pulse_start",
+      "pf_coil.c_pf_cs_current_filaments",
+      "pf_coil.dz_cs_full",
+      "pf_coil.n_pf_coils_in_group",
+      "pf_coil.r_cs_middle",
+      "pf_coil.r_pf_cs_current_filaments",
+      "pf_coil.stress_hoop_cs_inner",
+      "pf_coil.stress_radial_cs_peak",
+      "pf_coil.stress_z_cs_self_peak_midplane",
+      "pf_coil.z_pf_cs_current_filaments",
+      "physics.dd_power_density",
+      "physics.dhe3_power_density",
+      "physics.dt_power_density_plasma",
+      "physics.f_p_plasma_separatrix_rad",
+      "physics.fusden_plasma",
+      "physics.fusden_plasma_alpha",
+      "physics.ind_plasma",
+      "physics.len_sol_outboard_power_decay",
+      "physics.nd_plasma_electron_line",
+      "physics.p_alpha_total_mw",
+      "physics.p_neutron_total_mw",
+      "physics.p_non_alpha_charged_mw",
+      "physics.p_plasma_separatrix_mw",
+      "physics.pden_alpha_total_mw",
+      "physics.pden_plasma_alpha_mw",
+      "physics.plasma_current",
+      "physics.qstar",
+      "physics.temp_plasma_electron_density_weighted_kev",
+      "physics.temp_plasma_electron_on_axis_kev",
+      "physics.temp_plasma_ion_density_weighted_kev",
+      "physics.temp_plasma_ion_on_axis_kev",
+      "physics.temp_plasma_ion_vol_avg_kev"
+     ]
+    },
+    "detail": {
+     "FLAT": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "build.dz_fw_plasma_gap": {
+       "reader": "build",
+       "writer": "build",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.alphaj": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.ind_plasma_internal_norm": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.f_temp_plasma_electron_density_vol_avg": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.pres_plasma_thermal_on_axis": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.alphap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.b_plasma_inboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.b_plasma_outboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.beta_norm_max": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "current_drive.f_c_plasma_bootstrap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.proton_rate_density": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.fusden_alpha_total": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.p_fusion_total_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.beta_fast_alpha": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.p_plasma_ohmic_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "physics.nd_plasma_electron_max_array": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_inboard_out_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dr_tf_plasma_case": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_side_case_min": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_inner": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_outer": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_centre": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_wp_primary_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.f_vforce_inboard": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_case": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_cs_bucked": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.str_wp": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.casestr": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.insstrain": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_coil.j_cs_pulse_start": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_coil.a_cs_poloidal": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_coil.b_pf_coil_peak": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.bpf2": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_coil_turn": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_flat_top_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_end_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_start_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coils_peak_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ccl0_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.ccls": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.ccls_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.f_c_pf_cs_peak_time_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ind_pf_cs_plasma_mutual": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.j_pf_wp_critical": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_conductor": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_structure": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.n_pf_coil_turns": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.pfcaseth": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_inner": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_outer": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_midplane_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.vsdum": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.xind": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_lower": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_upper": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "times.t_plant_pulse_burn": {
+       "reader": "physics",
+       "writer": "pulse",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "build.dr_fw_inboard": {
+       "reader": "build",
+       "writer": "fw",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "build.dr_fw_outboard": {
+       "reader": "build",
+       "writer": "fw",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "blanket.deg_blkt_inboard_poloidal_plasma": {
+       "reader": "divertor",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "divertor.a_div_surface_total": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "fwbs.breeder_f": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_inboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_outboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_power.vpfskv": {
+       "reader": "pulse",
+       "writer": "power",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "heat_transport.eta_turbine": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "heat_transport.etath_liq": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_power.poloidalpower": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "heat_transport.p_plant_electric_base_total_mw": {
+       "reader": "power.acpow",
+       "writer": "power.plant_electric_production",
+       "n_sweeps": 20,
+       "n_runs": 4
+      }
+     }
+    }
+   },
+   "A2": {
+    "census_runs": [
+     {
+      "seed": 2,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 3,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 4,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 5,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     }
+    ],
+    "sweeps_observed_by_block": {
+     "M1": 16,
+     "M2": 20,
+     "M3": 12,
+     "?": 4
+    },
+    "sets": {
+     "M1": [
+      "current_drive.f_c_plasma_bootstrap",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "physics.alphaj",
+      "physics.alphap",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.f_temp_plasma_electron_density_vol_avg",
+      "physics.fusden_alpha_total",
+      "physics.ind_plasma_internal_norm",
+      "physics.nd_plasma_electron_max_array",
+      "physics.p_fusion_total_mw",
+      "physics.p_plasma_ohmic_mw",
+      "physics.pres_plasma_thermal_on_axis",
+      "physics.proton_rate_density"
+     ],
+     "M2": [
+      "build.dz_fw_plasma_gap",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_coil.a_cs_poloidal",
+      "pf_coil.b_pf_coil_peak",
+      "pf_coil.bpf2",
+      "pf_coil.c_pf_coil_turn",
+      "pf_coil.c_pf_cs_coil_flat_top_ma",
+      "pf_coil.c_pf_cs_coil_pulse_end_ma",
+      "pf_coil.c_pf_cs_coil_pulse_start_ma",
+      "pf_coil.c_pf_cs_coils_peak_ma",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.f_c_pf_cs_peak_time_array",
+      "pf_coil.ind_pf_cs_plasma_mutual",
+      "pf_coil.j_cs_pulse_start",
+      "pf_coil.j_pf_wp_critical",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.n_pf_coil_turns",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_inner",
+      "pf_coil.r_pf_coil_middle",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.r_pf_coil_outer",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_lower",
+      "pf_coil.z_pf_coil_middle",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_coil.z_pf_coil_upper",
+      "superconducting_tfcoil.r_tf_wp_inboard_centre",
+      "superconducting_tfcoil.r_tf_wp_inboard_inner",
+      "superconducting_tfcoil.r_tf_wp_inboard_outer",
+      "tfcoil.casestr",
+      "tfcoil.dr_tf_plasma_case",
+      "tfcoil.dx_tf_inboard_out_toroidal",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.dx_tf_wp_primary_toroidal",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "M3": [
+      "blanket.deg_blkt_inboard_poloidal_plasma",
+      "divertor.a_div_surface_total",
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.eta_turbine",
+      "heat_transport.etath_liq",
+      "heat_transport.p_plant_electric_base_total_mw",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_power.poloidalpower"
+     ]
+    },
+    "n_by_block": {
+     "M1": 16,
+     "M2": 46,
+     "M3": 10
+    },
+    "against_dsm": {
+     "n_union": 70,
+     "in_dsm_feedback": 29,
+     "in_dsm_interface_not_feedback": 15,
+     "dsm_self_read_only": [
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.etath_liq",
+      "pf_coil.ccl0_ma",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.stress_z_cs_self_midplane_profile",
+      "pf_coil.stress_z_cs_self_profile",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_power.poloidalpower",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.fusden_alpha_total",
+      "tfcoil.casestr",
+      "tfcoil.dx_tf_side_case_min",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "in_no_dsm_set_not_self_read": [],
+     "dsm_feedback_not_rbw": [
+      "build.dr_fw_inboard",
+      "build.dr_fw_outboard",
+      "buildings.a_plant_floor_effective",
+      "current_drive.c_beam_total",
+      "current_drive.f_c_plasma_bootstrap_sauter",
+      "current_drive.p_hcd_injected_total_mw",
+      "divertor.pflux_div_heat_load_mw",
+      "divertor.prn1",
+      "pf_coil.a_cs_cable_space",
+      "pf_coil.b_cs_peak_flat_top_end",
+      "pf_coil.b_cs_peak_pulse_start",
+      "pf_coil.c_pf_cs_current_filaments",
+      "pf_coil.dz_cs_full",
+      "pf_coil.n_pf_coils_in_group",
+      "pf_coil.r_cs_middle",
+      "pf_coil.r_pf_cs_current_filaments",
+      "pf_coil.stress_hoop_cs_inner",
+      "pf_coil.stress_radial_cs_peak",
+      "pf_coil.stress_z_cs_self_peak_midplane",
+      "pf_coil.z_pf_cs_current_filaments",
+      "pf_power.vpfskv",
+      "physics.dd_power_density",
+      "physics.dhe3_power_density",
+      "physics.dt_power_density_plasma",
+      "physics.f_p_plasma_separatrix_rad",
+      "physics.fusden_plasma",
+      "physics.fusden_plasma_alpha",
+      "physics.ind_plasma",
+      "physics.len_sol_outboard_power_decay",
+      "physics.nd_plasma_electron_line",
+      "physics.p_alpha_total_mw",
+      "physics.p_neutron_total_mw",
+      "physics.p_non_alpha_charged_mw",
+      "physics.p_plasma_separatrix_mw",
+      "physics.pden_alpha_total_mw",
+      "physics.pden_plasma_alpha_mw",
+      "physics.plasma_current",
+      "physics.qstar",
+      "physics.temp_plasma_electron_density_weighted_kev",
+      "physics.temp_plasma_electron_on_axis_kev",
+      "physics.temp_plasma_ion_density_weighted_kev",
+      "physics.temp_plasma_ion_on_axis_kev",
+      "physics.temp_plasma_ion_vol_avg_kev",
+      "times.t_plant_pulse_burn"
+     ]
+    },
+    "detail": {
+     "M1": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.alphaj": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.ind_plasma_internal_norm": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.f_temp_plasma_electron_density_vol_avg": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.pres_plasma_thermal_on_axis": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.alphap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.b_plasma_inboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.b_plasma_outboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.beta_norm_max": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "current_drive.f_c_plasma_bootstrap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.proton_rate_density": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.fusden_alpha_total": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.p_fusion_total_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.beta_fast_alpha": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.p_plasma_ohmic_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.nd_plasma_electron_max_array": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      }
+     },
+     "M2": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "build.dz_fw_plasma_gap": {
+       "reader": "build",
+       "writer": "build",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_inboard_out_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dr_tf_plasma_case": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_side_case_min": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_inner": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_outer": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_centre": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_wp_primary_toroidal": {
+       "reader": "build",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.f_vforce_inboard": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_case": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_cs_bucked": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.str_wp": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.casestr": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "tfcoil.insstrain": {
+       "reader": "cicc_sctfcoil",
+       "writer": "cicc_sctfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_coil.j_cs_pulse_start": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_coil.a_cs_poloidal": {
+       "reader": "cicc_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 20,
+       "n_runs": 4
+      },
+      "pf_coil.b_pf_coil_peak": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.bpf2": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_coil_turn": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_flat_top_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_end_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_start_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coils_peak_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ccl0_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.ccls": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.ccls_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.f_c_pf_cs_peak_time_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.ind_pf_cs_plasma_mutual": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.j_pf_wp_critical": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_conductor": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_structure": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.n_pf_coil_turns": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.pfcaseth": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_inner": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_outer": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_midplane_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "pf_coil.stress_z_cs_self_profile": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.vsdum": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.xind": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 8,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_lower": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_upper": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 12,
+       "n_runs": 4
+      }
+     },
+     "M3": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "blanket.deg_blkt_inboard_poloidal_plasma": {
+       "reader": "divertor",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "divertor.a_div_surface_total": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.breeder_f": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_inboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_outboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "heat_transport.eta_turbine": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "heat_transport.etath_liq": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_power.poloidalpower": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "heat_transport.p_plant_electric_base_total_mw": {
+       "reader": "power.acpow",
+       "writer": "power.plant_electric_production",
+       "n_sweeps": 12,
+       "n_runs": 4
+      }
+     }
+    }
+   }
+  },
+  "st_regression": {
+   "A0": {
+    "census_runs": [
+     {
+      "seed": 2,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 3,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 4,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 5,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     }
+    ],
+    "sweeps_observed_by_block": {
+     "FLAT": 23,
+     "?": 4
+    },
+    "sets": {
+     "FLAT": [
+      "blanket.deg_blkt_inboard_poloidal_plasma",
+      "build.dr_fw_inboard",
+      "build.dr_fw_outboard",
+      "current_drive.f_c_plasma_bootstrap",
+      "divertor.a_div_surface_total",
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.eta_turbine",
+      "heat_transport.etath_liq",
+      "heat_transport.p_plant_electric_base_total_mw",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_coil.a_cs_poloidal",
+      "pf_coil.b_pf_coil_peak",
+      "pf_coil.bpf2",
+      "pf_coil.c_pf_coil_turn",
+      "pf_coil.c_pf_cs_coil_flat_top_ma",
+      "pf_coil.c_pf_cs_coil_pulse_end_ma",
+      "pf_coil.c_pf_cs_coils_peak_ma",
+      "pf_coil.c_pf_cs_current_filaments",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.f_c_pf_cs_peak_time_array",
+      "pf_coil.ind_pf_cs_plasma_mutual",
+      "pf_coil.j_cs_pulse_start",
+      "pf_coil.j_pf_wp_critical",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.n_pf_coil_turns",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_inner",
+      "pf_coil.r_pf_coil_middle",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.r_pf_coil_outer",
+      "pf_coil.r_pf_cs_current_filaments",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_lower",
+      "pf_coil.z_pf_coil_middle",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_coil.z_pf_coil_upper",
+      "pf_coil.z_pf_cs_current_filaments",
+      "pf_power.poloidalpower",
+      "physics.alphaj",
+      "physics.alphap",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.f_temp_plasma_electron_density_vol_avg",
+      "physics.fusden_alpha_total",
+      "physics.ind_plasma_internal_norm",
+      "physics.nd_plasma_electron_max_array",
+      "physics.p_fusion_total_mw",
+      "physics.p_plasma_ohmic_mw",
+      "physics.pres_plasma_thermal_on_axis",
+      "physics.proton_rate_density",
+      "superconducting_tfcoil.r_tf_wp_inboard_centre",
+      "superconducting_tfcoil.r_tf_wp_inboard_inner",
+      "superconducting_tfcoil.r_tf_wp_inboard_outer",
+      "tfcoil.a_tf_turn",
+      "tfcoil.a_tf_turn_cable_space_no_void",
+      "tfcoil.c_tf_turn",
+      "tfcoil.casestr",
+      "tfcoil.dr_tf_plasma_case",
+      "tfcoil.dx_tf_inboard_out_toroidal",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.dx_tf_wp_primary_toroidal",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ]
+    },
+    "n_by_block": {
+     "FLAT": 73
+    },
+    "against_dsm": {
+     "n_union": 73,
+     "in_dsm_feedback": 23,
+     "in_dsm_interface_not_feedback": 22,
+     "dsm_self_read_only": [
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.etath_liq",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_power.poloidalpower",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.fusden_alpha_total",
+      "tfcoil.a_tf_turn",
+      "tfcoil.a_tf_turn_cable_space_no_void",
+      "tfcoil.casestr",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "in_no_dsm_set_not_self_read": [],
+     "dsm_feedback_not_rbw": [
+      "buildings.a_plant_floor_effective",
+      "current_drive.c_beam_total",
+      "current_drive.f_c_plasma_bootstrap_sauter",
+      "current_drive.f_c_plasma_diamagnetic",
+      "current_drive.f_c_plasma_pfirsch_schluter_scene",
+      "current_drive.p_hcd_injected_total_mw",
+      "divertor.pflux_div_heat_load_mw",
+      "divertor.prn1",
+      "physics.dd_power_density",
+      "physics.dhe3_power_density",
+      "physics.dt_power_density_plasma",
+      "physics.f_p_plasma_separatrix_rad",
+      "physics.fusden_plasma",
+      "physics.fusden_plasma_alpha",
+      "physics.ind_plasma",
+      "physics.len_sol_outboard_power_decay",
+      "physics.nd_plasma_electron_line",
+      "physics.p_alpha_total_mw",
+      "physics.p_neutron_total_mw",
+      "physics.p_non_alpha_charged_mw",
+      "physics.p_plasma_separatrix_mw",
+      "physics.pden_alpha_total_mw",
+      "physics.pden_plasma_alpha_mw",
+      "physics.plasma_current",
+      "physics.qstar",
+      "physics.temp_plasma_electron_density_weighted_kev",
+      "physics.temp_plasma_electron_on_axis_kev",
+      "physics.temp_plasma_ion_density_weighted_kev",
+      "physics.temp_plasma_ion_on_axis_kev",
+      "physics.temp_plasma_ion_vol_avg_kev"
+     ]
+    },
+    "detail": {
+     "FLAT": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.alphaj": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.ind_plasma_internal_norm": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.f_temp_plasma_electron_density_vol_avg": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.pres_plasma_thermal_on_axis": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.alphap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.b_plasma_inboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.b_plasma_outboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.beta_norm_max": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "current_drive.f_c_plasma_bootstrap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.proton_rate_density": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.fusden_alpha_total": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.p_fusion_total_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.beta_fast_alpha": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.p_plasma_ohmic_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "physics.nd_plasma_electron_max_array": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_inboard_out_toroidal": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dr_tf_plasma_case": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_inner": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_outer": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_centre": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_wp_primary_toroidal": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.f_vforce_inboard": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.a_tf_turn_cable_space_no_void": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_turn_general": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.c_tf_turn": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.a_tf_turn": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_case": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_cs_bucked": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.str_wp": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.casestr": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.insstrain": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.j_cs_pulse_start": {
+       "reader": "croco_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.a_cs_poloidal": {
+       "reader": "croco_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.b_pf_coil_peak": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.bpf2": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_coil_turn": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_flat_top_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_end_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coils_peak_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_current_filaments": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.ccls": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.ccls_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.f_c_pf_cs_peak_time_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.ind_pf_cs_plasma_mutual": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.j_pf_wp_critical": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_conductor": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_structure": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.n_pf_coil_turns": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.pfcaseth": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_inner": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_outer": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_cs_current_filaments": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.vsdum": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.xind": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_lower": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_upper": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_cs_current_filaments": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "build.dr_fw_inboard": {
+       "reader": "build",
+       "writer": "fw",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "build.dr_fw_outboard": {
+       "reader": "build",
+       "writer": "fw",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "blanket.deg_blkt_inboard_poloidal_plasma": {
+       "reader": "divertor",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "divertor.a_div_surface_total": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "fwbs.breeder_f": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_inboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_outboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "heat_transport.eta_turbine": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "heat_transport.etath_liq": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_power.poloidalpower": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "heat_transport.p_plant_electric_base_total_mw": {
+       "reader": "power.acpow",
+       "writer": "power.plant_electric_production",
+       "n_sweeps": 23,
+       "n_runs": 4
+      }
+     }
+    }
+   },
+   "A2": {
+    "census_runs": [
+     {
+      "seed": 2,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 3,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 4,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     },
+     {
+      "seed": 5,
+      "status": "ok",
+      "tree_git_head": "27dc100815d544e770bbbde0687befc6f778fc72"
+     }
+    ],
+    "sweeps_observed_by_block": {
+     "M1": 16,
+     "M2": 23,
+     "PULSE": 4,
+     "M3": 12,
+     "?": 4
+    },
+    "sets": {
+     "M1": [
+      "current_drive.f_c_plasma_bootstrap",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "physics.alphaj",
+      "physics.alphap",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.f_temp_plasma_electron_density_vol_avg",
+      "physics.fusden_alpha_total",
+      "physics.ind_plasma_internal_norm",
+      "physics.nd_plasma_electron_max_array",
+      "physics.p_fusion_total_mw",
+      "physics.p_plasma_ohmic_mw",
+      "physics.pres_plasma_thermal_on_axis",
+      "physics.proton_rate_density"
+     ],
+     "M2": [
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_coil.a_cs_poloidal",
+      "pf_coil.b_pf_coil_peak",
+      "pf_coil.bpf2",
+      "pf_coil.c_pf_coil_turn",
+      "pf_coil.c_pf_cs_coil_flat_top_ma",
+      "pf_coil.c_pf_cs_coil_pulse_end_ma",
+      "pf_coil.c_pf_cs_coils_peak_ma",
+      "pf_coil.c_pf_cs_current_filaments",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.f_c_pf_cs_peak_time_array",
+      "pf_coil.ind_pf_cs_plasma_mutual",
+      "pf_coil.j_cs_pulse_start",
+      "pf_coil.j_pf_wp_critical",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.n_pf_coil_turns",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_inner",
+      "pf_coil.r_pf_coil_middle",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.r_pf_coil_outer",
+      "pf_coil.r_pf_cs_current_filaments",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_lower",
+      "pf_coil.z_pf_coil_middle",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_coil.z_pf_coil_upper",
+      "pf_coil.z_pf_cs_current_filaments",
+      "superconducting_tfcoil.r_tf_wp_inboard_centre",
+      "superconducting_tfcoil.r_tf_wp_inboard_inner",
+      "superconducting_tfcoil.r_tf_wp_inboard_outer",
+      "tfcoil.a_tf_turn",
+      "tfcoil.a_tf_turn_cable_space_no_void",
+      "tfcoil.c_tf_turn",
+      "tfcoil.casestr",
+      "tfcoil.dr_tf_plasma_case",
+      "tfcoil.dx_tf_inboard_out_toroidal",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.dx_tf_wp_primary_toroidal",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "M3": [
+      "blanket.deg_blkt_inboard_poloidal_plasma",
+      "divertor.a_div_surface_total",
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.eta_turbine",
+      "heat_transport.etath_liq",
+      "heat_transport.p_plant_electric_base_total_mw",
+      "impurity_radiation.f_nd_impurity_electron_array",
+      "pf_power.poloidalpower"
+     ],
+     "PULSE": [
+      "impurity_radiation.f_nd_impurity_electron_array"
+     ]
+    },
+    "n_by_block": {
+     "M1": 16,
+     "M2": 47,
+     "M3": 10,
+     "PULSE": 1
+    },
+    "against_dsm": {
+     "n_union": 71,
+     "in_dsm_feedback": 21,
+     "in_dsm_interface_not_feedback": 22,
+     "dsm_self_read_only": [
+      "fwbs.breeder_f",
+      "fwbs.f_a_fw_coolant_inboard",
+      "fwbs.f_a_fw_coolant_outboard",
+      "heat_transport.etath_liq",
+      "pf_coil.ccls",
+      "pf_coil.ccls_ma",
+      "pf_coil.m_pf_coil_conductor",
+      "pf_coil.m_pf_coil_structure",
+      "pf_coil.pfcaseth",
+      "pf_coil.r_pf_coil_middle_group_array",
+      "pf_coil.vsdum",
+      "pf_coil.xind",
+      "pf_coil.z_pf_coil_middle_group_array",
+      "pf_power.poloidalpower",
+      "physics.b_plasma_inboard_toroidal",
+      "physics.b_plasma_outboard_toroidal",
+      "physics.beta_fast_alpha",
+      "physics.beta_norm_max",
+      "physics.fusden_alpha_total",
+      "tfcoil.a_tf_turn",
+      "tfcoil.a_tf_turn_cable_space_no_void",
+      "tfcoil.casestr",
+      "tfcoil.dx_tf_turn_general",
+      "tfcoil.f_vforce_inboard",
+      "tfcoil.insstrain",
+      "tfcoil.sig_tf_case",
+      "tfcoil.sig_tf_cs_bucked",
+      "tfcoil.str_wp"
+     ],
+     "in_no_dsm_set_not_self_read": [],
+     "dsm_feedback_not_rbw": [
+      "build.dr_fw_inboard",
+      "build.dr_fw_outboard",
+      "buildings.a_plant_floor_effective",
+      "current_drive.c_beam_total",
+      "current_drive.f_c_plasma_bootstrap_sauter",
+      "current_drive.f_c_plasma_diamagnetic",
+      "current_drive.f_c_plasma_pfirsch_schluter_scene",
+      "current_drive.p_hcd_injected_total_mw",
+      "divertor.pflux_div_heat_load_mw",
+      "divertor.prn1",
+      "physics.dd_power_density",
+      "physics.dhe3_power_density",
+      "physics.dt_power_density_plasma",
+      "physics.f_p_plasma_separatrix_rad",
+      "physics.fusden_plasma",
+      "physics.fusden_plasma_alpha",
+      "physics.ind_plasma",
+      "physics.len_sol_outboard_power_decay",
+      "physics.nd_plasma_electron_line",
+      "physics.p_alpha_total_mw",
+      "physics.p_neutron_total_mw",
+      "physics.p_non_alpha_charged_mw",
+      "physics.p_plasma_separatrix_mw",
+      "physics.pden_alpha_total_mw",
+      "physics.pden_plasma_alpha_mw",
+      "physics.plasma_current",
+      "physics.qstar",
+      "physics.temp_plasma_electron_density_weighted_kev",
+      "physics.temp_plasma_electron_on_axis_kev",
+      "physics.temp_plasma_ion_density_weighted_kev",
+      "physics.temp_plasma_ion_on_axis_kev",
+      "physics.temp_plasma_ion_vol_avg_kev"
+     ]
+    },
+    "detail": {
+     "M1": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.alphaj": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.ind_plasma_internal_norm": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.f_temp_plasma_electron_density_vol_avg": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.pres_plasma_thermal_on_axis": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.alphap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.b_plasma_inboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.b_plasma_outboard_toroidal": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.beta_norm_max": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "current_drive.f_c_plasma_bootstrap": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.proton_rate_density": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.fusden_alpha_total": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.p_fusion_total_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.beta_fast_alpha": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.p_plasma_ohmic_mw": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      },
+      "physics.nd_plasma_electron_max_array": {
+       "reader": "physics",
+       "writer": "physics",
+       "n_sweeps": 16,
+       "n_runs": 4
+      }
+     },
+     "M2": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_inboard_out_toroidal": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dr_tf_plasma_case": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_inner": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_outer": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "superconducting_tfcoil.r_tf_wp_inboard_centre": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_wp_primary_toroidal": {
+       "reader": "build",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.f_vforce_inboard": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.a_tf_turn_cable_space_no_void": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.dx_tf_turn_general": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.c_tf_turn": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.a_tf_turn": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_case": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.sig_tf_cs_bucked": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.str_wp": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.casestr": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "tfcoil.insstrain": {
+       "reader": "croco_sctfcoil",
+       "writer": "croco_sctfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.j_cs_pulse_start": {
+       "reader": "croco_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.a_cs_poloidal": {
+       "reader": "croco_sctfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.b_pf_coil_peak": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.bpf2": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_coil_turn": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_flat_top_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coil_pulse_end_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_coils_peak_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.c_pf_cs_current_filaments": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.ccls": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.ccls_ma": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.f_c_pf_cs_peak_time_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "pf_coil.ind_pf_cs_plasma_mutual": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.j_pf_wp_critical": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_conductor": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.m_pf_coil_structure": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.n_pf_coil_turns": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.pfcaseth": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_inner": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_coil_outer": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.r_pf_cs_current_filaments": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.vsdum": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.xind": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_lower": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_middle_group_array": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_coil_upper": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      },
+      "pf_coil.z_pf_cs_current_filaments": {
+       "reader": "pfcoil",
+       "writer": "pfcoil",
+       "n_sweeps": 23,
+       "n_runs": 4
+      }
+     },
+     "PULSE": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 4,
+       "n_runs": 4
+      }
+     },
+     "M3": {
+      "impurity_radiation.f_nd_impurity_electron_array": {
+       "reader": "<sweep>",
+       "writer": "<sweep>",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "blanket.deg_blkt_inboard_poloidal_plasma": {
+       "reader": "divertor",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "divertor.a_div_surface_total": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.breeder_f": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_inboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "fwbs.f_a_fw_coolant_outboard": {
+       "reader": "ccfe_hcpb",
+       "writer": "ccfe_hcpb",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "heat_transport.eta_turbine": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "heat_transport.etath_liq": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 12,
+       "n_runs": 4
+      },
+      "pf_power.poloidalpower": {
+       "reader": "power",
+       "writer": "power",
+       "n_sweeps": 4,
+       "n_runs": 4
+      },
+      "heat_transport.p_plant_electric_base_total_mw": {
+       "reader": "power.acpow",
+       "writer": "power.plant_electric_production",
+       "n_sweeps": 12,
+       "n_runs": 4
+      }
+     }
+    }
+   }
+  }
+ }
+}
