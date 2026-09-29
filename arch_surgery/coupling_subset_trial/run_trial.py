@@ -277,7 +277,32 @@ def summarise():
     path = RUNS / "trial_summary.json"
     path.write_text(json.dumps(out, indent=1))
     print(f"wrote {path}")
+    print(render_table(out))
     return out
+
+
+def render_table(out) -> str:
+    """The comparison as a markdown table, one row per run, from the summary."""
+    lines = [
+        "| configuration | entry | arm | test set | components tested | node calls | "
+        "sweeps per block | exit audit max (restricted) | above τ at exit | "
+        "distance from `full` exit |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in out["runs"]:
+        blocks = {k: v for k, v in (r.get("inner_sweeps_by_block") or {}).items()
+                  if any(v)}
+        dist = r.get("distance_from_full_exit")
+        lines.append(
+            f"| {r['configuration']} | {r['entry']} | {r['arm']} | {r['test_set']} | "
+            f"{r['n_test']} | {r['node_calls']} | "
+            + ", ".join(f"{k} {'/'.join(map(str, v))}" for k, v in blocks.items())
+            + f" | {r.get('audit_restricted_max', float('nan')):.1e} | "
+            f"{len(r.get('above_tau_restricted') or [])} | "
+            + ("—" if dist is None else f"{dist['restricted_max']:.1e}")
+            + " |"
+        )
+    return "\n".join(lines)
 
 
 def main():
