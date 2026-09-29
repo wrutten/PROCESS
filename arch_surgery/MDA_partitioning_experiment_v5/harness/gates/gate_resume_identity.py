@@ -606,6 +606,38 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"{'REFUSED' if own_refused else 'allowed'} ({own_said[:60]})"
         )
 
+    def a_named_directory_is_the_jobs_whatever_holds_its_digest() -> tuple[bool, str]:
+        """Issue I-29 in the form A99 (v5-schedule-and-prime) met it on gate G1."""
+        config = campaign.configurations[0]
+        with tempfile.TemporaryDirectory(prefix="named_directory_tooth_") as td:
+            runs = Path(td) / "runs"
+            local = dataclasses.replace(campaign, runs_dir=runs)
+            unnamed = pool_mod.Job(
+                phase="A", arm="AR", config=config, seed=0, run_kind="gate",
+            )
+            elsewhere = runs / "elsewhere"
+            elsewhere.mkdir(parents=True)
+            (elsewhere / "metrics.json").write_text(
+                json.dumps(_complete_record_of(unnamed, local))
+            )
+            named = dataclasses.replace(unnamed, outdir=runs / "gates" / "named" / "AR")
+            pool_mod.forget_record_index()
+            try:
+                resolved_named = pool_mod.directory_for(named, local)
+                resolved_unnamed = pool_mod.directory_for(unnamed, local)
+            finally:
+                pool_mod.forget_record_index()
+        named_ok = resolved_named.resolve() == Path(named.outdir).resolve()
+        unnamed_ok = resolved_unnamed.resolve() == elsewhere.resolve()
+        return (named_ok and unnamed_ok), (
+            f"a record of {unnamed.key}'s digest under runs/elsewhere: the job "
+            f"naming runs/gates/named/AR resolves to "
+            f"{'its own directory' if named_ok else str(resolved_named)}; the same "
+            f"job with no directory named resolves to "
+            f"{'the record by digest' if unnamed_ok else str(resolved_unnamed)} "
+            f"(the named one must never be re-made into another caller's record)"
+        )
+
     def a_by_design_pair_made_to_collide() -> tuple[bool, str]:
         from . import gate_composition
 
@@ -692,6 +724,20 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             ),
             must="refuse removal (PoolError), and allow it for the record's own job",
             check=a_canonical_directory_taken_by_another_jobs_record,
+        ),
+        Tooth(
+            name="a named directory is the job's whatever holds its digest",
+            what=(
+                "a job naming its own directory while another directory under "
+                "runs/ holds a complete record of its digest"
+            ),
+            must=(
+                "resolve to the named directory (and the unnamed job to the "
+                "record by digest): gate G1's two captures are one identity in "
+                "two named directories, and a press once wrote the second into "
+                "the first (issue I-29)"
+            ),
+            check=a_named_directory_is_the_jobs_whatever_holds_its_digest,
         ),
     )
 
