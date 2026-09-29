@@ -121,7 +121,7 @@ In `B1` these are bound by M1: `hfact` by M1 alone on 88 of 90 probes and by FF 
 
 `lad` shows the same partition of variables.
 
-**Several variables split by sign.** `nd_plasma_electrons_vol_avg`, `temp_plasma_electron_vol_avg_kev`, `f_c_plasma_non_inductive`, `f_a_cs_turn_steel`, `t_tf_superconductor_quench` and `t_plant_pulse_burn` each bind M2 on one sign and not the other, on every probe. The trace does not say why: it records which module is open, not which model branch a probe crosses.
+**Several variables split by sign** (on `tok`; on `lad`, `t_plant_pulse_burn` binds M2 on neither sign). `nd_plasma_electrons_vol_avg`, `temp_plasma_electron_vol_avg_kev`, `f_c_plasma_non_inductive`, `f_a_cs_turn_steel`, `t_tf_superconductor_quench` and `t_plant_pulse_burn` each bind M2 on one sign and not the other, on every probe. The trace does not say why: it records which module is open, not which model branch a probe crosses.
 
 **The four `lad` groups where M2 binds on some probes but not all** are findings about those probes, not noise:
 
