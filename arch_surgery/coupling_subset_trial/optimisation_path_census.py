@@ -208,6 +208,12 @@ def matrix(camp, names, only):
 
 def stage_lifted_inputs(names):
     camp = campaign()
+    # The derivation's baseline evaluation goes through V4's own pool, whose
+    # environment is a copy of this process's: without this, numba writes its
+    # cache into the V4 copy's ``__pycache__`` directories (it did, at the
+    # first press of this stage — gitignored files, reported in the task report).
+    os.environ["NUMBA_CACHE_DIR"] = str(RUNS / "numba_cache")
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     out = []
     for c in configs(camp, names):
         row = input_files_mod.derive_one(c, camp, runs_dir=RUNS / "lifted_inputs")
