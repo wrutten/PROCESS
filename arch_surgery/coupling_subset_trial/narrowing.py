@@ -75,15 +75,24 @@ def _chosen_sets(test_set, configuration, arm):
 
 
 def install(ms, caller_mod, *, test_set, configuration, arm, outdir=None,
-            pass_log=False):
-    """Install the substitutions once in this process.  See the module docstring."""
+            pass_log=False, once_per_run=True):
+    """Install the substitutions once in this process.  See the module docstring.
+
+    ``once_per_run=False`` installs substitution 1 (the test set) only and
+    leaves ``call_models`` untouched: an **optimisation** run executes the
+    per-run deferred nodes once at the output path already (V4's
+    ``caller.write_output_files``), so running them after every evaluation
+    would add node calls no arm of the campaign makes.  Task A93
+    (tolerance-phase-b) uses it; the default keeps A89's evaluation-phase
+    behaviour exactly.
+    """
     if STATE["installed"]:
         return STATE["narrowing"]
     STATE["installed"] = True
     perf = time.perf_counter
     chosen = _chosen_sets(test_set, configuration, arm)
     narrowing = {"test_set": test_set, "configuration": configuration, "arm": arm,
-                 "flat_block_label": ms.FLAT_BLOCK_LABEL}
+                 "flat_block_label": ms.FLAT_BLOCK_LABEL, "once_per_run": once_per_run}
     STATE["narrowing"] = narrowing
     log = open(Path(outdir) / "pass_log.jsonl", "w") if (pass_log and outdir) else None  # noqa: SIM115
     original = ms.load_subsets
@@ -164,6 +173,9 @@ def install(ms, caller_mod, *, test_set, configuration, arm, outdir=None,
         return new, provenance
 
     ms.load_subsets = narrowed
+
+    if not once_per_run:
+        return narrowing
 
     orig_cm = caller_mod.Caller.call_models
 
