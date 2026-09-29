@@ -691,7 +691,12 @@ WALL_CLOCK_CONTEXT = (
     "measured separately: the exit-audit sweep, the state snapshots, the record assembly and the "
     "harness's set-up before the run. The rows are `harness/measurement/timing.py`'s; the "
     "repeatability stage (three repetitions at W = 1) and D38's validity check are that module's "
-    "stages and their records say whether the campaign's timings may be printed here."
+    "stages and their records say whether the campaign's timings may be printed here. "
+    "The phase A rows are **warmed** (A102 (v5-campaign), plan §6): the evaluation child runs a "
+    "discarded warm-up evaluation on the same entry, re-enters the entry bit-exact, resets the "
+    "counters and times the measured evaluation, so the module rows carry no numba cache load; "
+    "the fixed per-run term (process start to the warm-up's first evaluation) is stamped in every "
+    "record and is not a row of the phase A table."
 )
 
 

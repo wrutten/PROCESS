@@ -15,7 +15,7 @@ from __future__ import annotations
 
 #: Harness version.  Bumped when the public surface or the record schema
 #: changes; stamped into every record so a record says which harness wrote it.
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from .experiment.arms import (  # noqa: F401
     ARMS,

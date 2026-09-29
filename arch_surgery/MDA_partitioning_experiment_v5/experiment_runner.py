@@ -1314,8 +1314,22 @@ def main(argv: list[str] | None = None) -> int:
         "--seed and --configuration narrow it, --run-kind smoke makes a smoke "
         "record)",
     )
+    parser.add_argument(
+        "--evaluation-warmup",
+        choices=("check",),
+        default=None,
+        help="the warmed evaluation child's neutrality check, and stop (V5 plan "
+        "§6; A102 (v5-campaign)): gate 'evaluation_warmup' -- A101's cold-child "
+        "records of the gate job set's evaluation half (archived on the first "
+        "press) against the same jobs made by the warmed child, every count and "
+        "every exit-state component identical, each warmed record's own "
+        "determinism check re-derived; two teeth.  The same as --gate "
+        "evaluation_warmup",
+    )
     parser.add_argument("--json", type=Path, help="write the preflight record here")
     args = parser.parse_args(argv)
+    if args.evaluation_warmup:
+        args.gate = "evaluation_warmup"
     args.seed_given = any(a == "--seed" or a.startswith("--seed=") for a in (argv if argv is not None else sys.argv[1:]))
 
     # The experiment's own copy of PROCESS is the only tree a record is ever

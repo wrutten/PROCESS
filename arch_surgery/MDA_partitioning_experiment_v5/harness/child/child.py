@@ -1873,12 +1873,19 @@ def stamp_timers(
     driver_after_audit: dict[str, Any] | None,
     epochs: Mapping[str, Any],
     excluded: Mapping[str, Any],
+    warmup: Mapping[str, Any] | None = None,
 ) -> None:
     """The record's ``timers`` block: the driver's accumulators as they stood
     before the audit, the harness-only costs measured apart (the audit's own
     wall and its share of the driver's timers, the snapshots, the record
     assembly, the set-up before the run), and the epochs.  Null when the
-    timers were off.  Context, never evidence (D33)."""
+    timers were off.  Context, never evidence (D33).
+
+    ``warmup`` is the evaluation phase's discarded warm-up evaluation's own
+    accumulators (A102 (v5-campaign); V5 plan §6): kept apart under
+    ``warmup_driver`` so that ``driver`` is the measured evaluation's alone,
+    and so that the fixed per-run term can be read to the warm-up's first
+    evaluation, where the numba cache load lands."""
     if driver_before_audit is None:
         record["timers"] = None
         return
@@ -1899,6 +1906,7 @@ def stamp_timers(
             "exit_audit_driver_n_sweeps": audit_driver.get("n_sweeps"),
         },
         "epochs": dict(epochs),
+        "warmup_driver": (dict(warmup) if warmup is not None else None),
         "what": (
             "DR12 (A101): 'driver' is process.core.caller.TIMERS as it stood "
             "when the counters were harvested, before the audit; 'excluded' "
@@ -1907,6 +1915,9 @@ def stamp_timers(
             "snapshots, the record assembly, the harness's set-up before the "
             "run; the census hooks are not timed and read null); 'epochs' are "
             "time.time() stamps the launcher's spawn time is compared with.  "
+            "'warmup_driver' (evaluation phase, A102): the discarded warm-up "
+            "evaluation's own accumulators, kept apart; the fixed per-run "
+            "term runs to epochs.warmup_first_call_models_at.  "
             "Context, never evidence (D33)"
         ),
     }

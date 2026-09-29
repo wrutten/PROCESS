@@ -322,11 +322,25 @@ def rows_of(
     rows["dispatch"] = dispatch
     rows["objective and constraints"] = objective
     if phase == "A":
-        # per evaluation: the one call_models is the whole evaluation
+        # per evaluation: the one MEASURED call_models is the whole evaluation
+        # (the warmed form, A102: the discarded warm-up's timers are kept
+        # apart under timers.warmup_driver and are in no row)
         total = call_models_s
         attributed = sum(modules.values()) + ungrouped_s + test + dispatch + objective + run_setup
         rows["unattributed residual"] = total - attributed
         rows["Total"] = total
+        # The fixed per-run term of an evaluation record: process start to
+        # the WARM-UP's first evaluation (where the numba cache load lands)
+        # less the harness's set-up, plus the once-per-run set-up inside it.
+        # Not a row of the phase A table (plan §6); stamped beside for the
+        # report.  None on a record made by the cold child.
+        warmup_driver = timers.get("warmup_driver") or {}
+        warmup_first = epochs.get("warmup_first_call_models_at")
+        if spawned is not None and warmup_first is not None:
+            fixed = (
+                float(warmup_first) - float(spawned) - harness_before
+                + float(warmup_driver.get("run_setup_s") or 0.0)
+            )
     else:
         total = (float(launcher_wall) - excluded_total) if launcher_wall is not None else None
         rows["optimiser own time"] = optimiser_own
@@ -347,6 +361,7 @@ def rows_of(
         "n_sweeps": int(driver.get("n_sweeps") or 0),
         "n_iterations": _at(record, "exit_forensics.n_solver_iterations_summed_over_attempts") or record.get("n_solver_iterations"),
         "call_models_s": call_models_s,
+        "fixed_per_run_s": fixed,
         "run_setup_s": run_setup,
         "post_solve_attributed_s": post_solve_attributed,
         "launcher_wall_s": launcher_wall,

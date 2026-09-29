@@ -356,6 +356,15 @@ def _identity_gates(campaign: Campaign) -> dict[str, Gate]:
     return {gate_resume_identity.GATE_NAME: gate_resume_identity.gate(campaign)}
 
 
+def _instrument_gates(campaign: Campaign) -> dict[str, Gate]:
+    """The warmed evaluation child's neutrality gate (A102 (v5-campaign); V5
+    plan §6): a harness instrument change shown count-neutral the way gate GC
+    shows a driver change.  Not one of the plan's §7 gates: no ``plan_name``."""
+    from . import gate_evaluation_warmup
+
+    return {gate_evaluation_warmup.GATE_NAME: gate_evaluation_warmup.gate(campaign)}
+
+
 def _chain_gates(campaign: Campaign) -> dict[str, Gate]:
     """The run-kind separation gate, with its six teeth."""
     from harness import chain as chain_mod  # noqa: PLC0415
@@ -488,6 +497,7 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(_tally_gates(campaign))
     entries.update(_written_file_gates(campaign))
     entries.update(_identity_gates(campaign))
+    entries.update(_instrument_gates(campaign))
     entries.update(_chain_gates(campaign))
     entries.update(measurements(campaign))
     assert_declared_dependencies(entries)
@@ -735,6 +745,9 @@ GATE_ORDER: tuple[str, ...] = (
     "artifacts_derive_inputs",
     "artifacts_census",
     "artifacts_per_run",
+    # The warmed evaluation child against A101's cold-child records: eleven
+    # evaluations; before the gates whose evaluation records it vouches for.
+    "evaluation_warmup",
     "record_completeness",
     "count_neutrality",
     "prime_map",

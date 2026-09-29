@@ -163,6 +163,14 @@ ALWAYS_EXCLUDED: dict[str, str] = {
     ),
     # when it happened, and how long it took
     "launcher": "the pool's wall of the subprocess and the load average (DR12): context, never evidence",
+    # A102 (v5-campaign): the warmed evaluation child's own timings.  The
+    # block's counts and digests stay compared (FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE
+    # names the block); these leaves are wall clock.
+    "evaluation_warmup.warmup.wall_s": "the discarded warm-up evaluation's wall: context, never evidence",
+    "evaluation_warmup.measured.wall_s": "the measured evaluation's wall: context, never evidence",
+    "evaluation_warmup.warmup.timers_driver": "the warm-up's own timer accumulators (DR12): context, never evidence",
+    "evaluation_warmup.restore_wall_s": "the whole-structure restore's wall: context, never evidence",
+    "evaluation_warmup.warmup_wall_s": "the warm-up's wall: context, never evidence",
     "wall_s": "wall clock is context, never evidence (I-10)",
     "cpu_user_s": "cpu time is a contention diagnostic",
     "cpu_sys_s": "cpu time is a contention diagnostic",
@@ -654,6 +662,15 @@ FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE: dict[str, str] = {
         "positions the hook reached, their component counts and their digests "
         "sit beside this flag in the same block and are compared"
     ),
+    # A102 (v5-campaign; V5 plan §6): the warmed evaluation child's block --
+    # absent on a side captured before the child warmed, a block after.  Its
+    # counts and exit-state digests are compared wherever both sides carry
+    # it; its wall-clock leaves are excluded by name (ALWAYS_EXCLUDED).
+    "evaluation_warmup": (
+        "the warmed evaluation's own account of itself: the discarded warm-up's "
+        "counts and digest, the entry's restore, the measured evaluation's "
+        "counts and digest.  Absent before the child warmed, a block after"
+    ),
 }
 
 #: What kind of thing each instrument-change name is, on the same rule as
@@ -667,6 +684,7 @@ INSTRUMENT_CHANGE_KIND: dict[str, str] = {
     },
     "exit_audit.instrument": "the instrument's own description of itself",
     "audit_snapshot.installed": "whether the instrument was installed at all",
+    "evaluation_warmup": "the instrument's own description of itself",
 }
 
 
