@@ -255,3 +255,44 @@ ran). The 15 not run are the PROCESS-running gates outside this brief and the th
 | 2026-09-29 | *(records, untracked)* | Thirteen run-free gates pressed at `7986d408` (V5 untracked) and again from scratch at `d6c246a1`: 12 PASS, `self_containment` FAIL (1 finding, V4's) |
 | 2026-09-29 | *(records, untracked)* | `--gate reproduction` refused (no lifted input file); `--gate artifacts_derive_inputs` then `--gate reproduction` pressed at one worker — §4.2 |
 | 2026-09-29 | the commit that adds this file (the branch tip at hand-back) | This report, with the gate verdicts of §4 read from the records |
+
+## 9. Orchestrator's critical assessment (protocol §5) — 2026-09-29
+
+**Verdict: merge.** The V5 directory is V4 at `7986d408`, proven two ways the task did not use:
+
+- **Tree against tree in git.** `git diff --stat 7986d408:arch_surgery/MDA_partitioning_experiment_v4
+  A94-v5-copy:arch_surgery/MDA_partitioning_experiment_v5` lists exactly three paths: `copy_manifest.py` (new),
+  `COPY_MANIFEST.json` (new) and `report_cells_preserved.py` (one line, the `git show` path literal `_v4` → `_v5`).
+  The V5 tree holds 312 entries = 310 copied + 2 new. `git diff --stat 7986d408 A94-v5-copy --
+  arch_surgery/MDA_partitioning_experiment_v4` is empty: V4 untouched.
+- **The gate records read from disk**, not from the report: `reproduction` PASS, 8/8 teeth; `g0prime` PASS 4/4;
+  `copy_identity` PASS 12/12; `artifacts_derive_inputs` PASS 4/4; `self_containment` **FAIL** with one finding
+  (`experiment_runner.py:1033`, the help-string example naming `idf_probe/`, classified as an executable line);
+  all 30 run records stamped `d6c246a1`, none dirty.
+
+**The FAIL is V4's, and V4's published gate table hides it.** The line entered at `38d2f21f` ("paper result
+tables", 2026-09-29, the orchestrator's own commit of the paper-tables module); V4's latest `self_containment`
+record (`A90_runs/gates/self_containment/gate.json`) is a PASS stamped `f8147a00` (2026-09-17) and was carried
+into A90's re-rendered gate table by `--resume`. So the gate table at V4's tip states a PASS that the tree no
+longer earns — a stale record of the kind the reuse rule (amendment 15) says must be re-made when a change
+alters what the gate reads. Filed as **I-32**; the fix is V4's (declare the runner's help string, or move the
+example out of it) plus one press of the gate and a re-render, a small task for the user to dispatch since V4
+is published. The V5 copy inherits the line and the modify task removes it under item 10.
+
+**Records.** The task wrote its records under `MDA_partitioning_experiment_v5/runs/` (124 MB) and believed the
+retire script would not relocate them (§6 (3), §7 (2)). It would: since I-16 the script relocates every
+directory named `runs` anywhere under `arch_surgery/`, entry by entry, namespaced with the task label — but as
+three entries (`A94_gates`, `A94_input_files`, `A94__mplconfig`) rather than one tree. So before retirement
+the orchestrator copied the whole tree into the worktree's `arch_surgery/idf_probe/runs/v5_copy_gates/`
+(verified byte-identical with `diff -r`), removed the duplicate, and let the script relocate the one tree: it
+lands at `idf_probe/runs/A94_v5_copy_gates/` and seeds the V5 folder's `runs/` for the modify tasks (the copy's
+gate records at `d6c246a1`). Proposal §7 (2) needs no script change; the plan's §11 says where V5 records go.
+
+**Accepted as decided.** Keeping `harness/data/PROVENANCE.json` with V4's `copy_date` rather than regenerating
+a file that would differ only in the date (§6 (1)) is right: the date is V4's provenance, the copy's is the
+manifest. The eight self-references left in place (README, `PROCESS_diff.py` strings, docstrings) are the
+modify task's, as the report says. `copy_manifest.py check` is not registered as a gate: the manifest is a
+one-time proof and the copy commit is its record.
+
+**Not done here.** The task's report states GR's 256 compared / 0 mismatched; I read the verdict and the teeth
+count from the record and did not recount the 256 values.
