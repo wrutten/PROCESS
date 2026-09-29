@@ -334,6 +334,38 @@ per-run `wall_s` is contended and unfit), the decomposition and the tables are t
 discussion (2026-09-29, the user's fourth item); the ruling is D33 when entered. Timings remain context beside the
 counts and never an acceptance quantity (CLAUDE.md; I-10). Items 5 and 7 are prerequisites of any wall-clock table.
 
+### 10. Reporting: one generated document for the paper, a report under 600 lines *(the user, 2026-09-29: "this v5 reporting approach is approved")*
+
+**The gap.** V4's report is 3 100 lines with 83 appendix tables, a 162-table companion file, 30 gates and a
+6 500-line second implementation recomputing every cell; the paper prints three result tables.
+
+**What V5 delivers, and nothing more.**
+- *Main text:* the switch matrix, the configurations table, phase A module sweeps, phase B optimiser
+  iterations, phase B module sweeps (all in today's `paper_tables.md`).
+- *Appendix:* the two module tables in wall clock with a totals row (item 9), the cost breakdown (item 9), the
+  per-arm success table (item 3), and **one verification table**, one row per check: physics frozen; switch
+  neutrality; matched accuracy (whole-state exit audit at 0 components above τ on every accepted run, and the
+  between-arm fixed-point distance); same optimum (median and p90 against the floor, attributed where it
+  fails); entry pairing; arm composition; output-path equivalence; the test set's teeth (A92).
+
+**Dropped from V5:** the stencil entry regime and RQ3 (the transfer); the predicate trial G8 (D30); RQ5 (the
+trust step, A43); the three weightings (A88); the companion file and every per-seed table; the
+iteration-multiplier rule (item 1); the `AR → A0` stopping-rule prose (the columns stay, one sentence of context).
+
+**Kept, not reported:** the harness self-checks (composition, rungs, provenance, data, resume identity, run-kind
+separation, artifacts, …) — run, stated as "N self-checks pass" in one line; and a **one-time reproduction gate**:
+the V5 copy at its copy commit, before any change, reproduces V4's twenty reference records bit for bit.
+
+**Replaced:** the second implementation — a short independent recount of exactly the paper's cells from the raw
+records, not a second rendering of every table.
+
+**How.** One generator (the existing paper-tables module extended, not the plan-tables renderer) writes one
+document — the paper tables, main text and appendix, as Markdown and LaTeX rows — with a `check` mode that
+refuses when the rendered file and the records disagree. The V5 report has four parts: method (matrix,
+criterion, settings, gate list with teeth), the paper tables included verbatim, one short findings section per
+rung, the change log; target under 600 lines. V4's rules stand: every number from a committed script (protocol
+§15), cells preserved between renders, captions of a few lines, teeth for every gate.
+
 *A candidate assessed and dropped (the user, 2026-09-29):* A76 (fixed-point-distance)'s report §7 (d)
 proposed that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
 carry a pre-declared acceptance rule in a V5 plan (a natural form: headline median and p90 below τ,
