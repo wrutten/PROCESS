@@ -383,6 +383,8 @@ def stage_summarise_census(campaign_records):
                 run_first: dict = {}
                 run_sizes: dict = {}
                 distinct: dict = {}
+                run_count: dict = {}
+                run_last: dict = {}
                 for e in ev:
                     for label, idx in e["rbw"].items():
                         names = [keys[i] for i in idx]
@@ -390,6 +392,9 @@ def stage_summarise_census(campaign_records):
                         distinct.setdefault(label, set()).add(tuple(sorted(idx)))
                         for k in names:
                             run_union.setdefault(label, set()).add(k)
+                            cnt = run_count.setdefault(label, {})
+                            cnt[k] = cnt.get(k, 0) + 1
+                            run_last.setdefault(label, {})[k] = e["i"]
                             if k not in run_first.setdefault(label, {}):
                                 run_first[label][k] = {
                                     "evaluation": e["i"], "n_x_changed": e["n_x_changed"],
@@ -418,7 +423,12 @@ def stage_summarise_census(campaign_records):
                     for k, f in run_first[label].items():
                         cur = first_by_block.setdefault(label, {}).get(k)
                         if cur is None or f["evaluation"] < cur["evaluation"]:
-                            first_by_block[label][k] = dict(f, seed=seed)
+                            first_by_block[label][k] = dict(
+                                f, seed=seed,
+                                carried_in_evaluations={}, last_evaluation={})
+                        ent = first_by_block[label][k]
+                        ent["carried_in_evaluations"][str(seed)] = run_count[label][k]
+                        ent["last_evaluation"][str(seed)] = run_last[label][k]
                 per_run[seed] = {
                     "status": "ok", "n_evaluations": len(ev),
                     "n_evaluations_record": (rec.get("sweeps_per_eval") or {}).get("n_evaluations"),
@@ -507,11 +517,15 @@ def stage_summarise_census(campaign_records):
         for arm, d in arms.items():
             for lab, cmp_ in d["comparison_with_eight_entry"].items():
                 for e in cmp_["on_path_not_in_eight_entry"]:
+                    f = e["first"]
                     print(f"  on path, not 8-entry: {cname} {arm} {lab} {e['key']} "
                           f"(reader {e['reader']} [{e['reader_module']}], writer {e['writer']} "
-                          f"[{e['writer_module']}], first at evaluation {e['first']['evaluation']} "
-                          f"seed {e['first']['seed']}, n_x_changed {e['first']['n_x_changed']}, "
-                          f"probe of {e['first']['x_changed_name']}; in 8-entry blocks "
+                          f"[{e['writer_module']}], first at evaluation {f['evaluation']} "
+                          f"seed {f['seed']}, n_x_changed {f['n_x_changed']}, "
+                          f"probe of {f['x_changed_name']}; carried in evaluations "
+                          f"{f['carried_in_evaluations']} of "
+                          f"{ {s: d['runs'][int(s)].get('n_evaluations') for s in f['carried_in_evaluations']} }, "
+                          f"last at {f['last_evaluation']}; in 8-entry blocks "
                           f"{e['in_eight_entry_other_block']})")
                 for e in cmp_["in_eight_entry_not_on_path"]:
                     print(f"  8-entry, not on path: {cname} {arm} {lab} {e['key']} "
