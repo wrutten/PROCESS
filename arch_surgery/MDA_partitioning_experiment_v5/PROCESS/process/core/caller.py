@@ -1396,11 +1396,14 @@ class Caller:
         # whole sequence runs.  ``None`` is the default and the only value the
         # flat-loop path ever sees.
         self._active_nodes: frozenset[str] | None = None
-        # VP4: the coupling-state spec, the per-module subsets its inner
-        # solves test, and their provenance.  Loaded once.
+        # VP4: the coupling-state spec, the per-module write sets, and the
+        # subsets its inner solves test (DR11: the write sets themselves
+        # under PROCESS_ARCH_TEST_SET=write_set, the census test sets under
+        # =census), with their provenance.  Loaded once.
         self._yspec = None
         self._yprov = None
         self._ysubsets: dict | None = None
+        self._ytests: dict | None = None
         #: VP4 diagnostics for the last ``call_models`` -- block sweeps,
         #: schedule passes and per-block sweep counts.  Reported, never gated
         #: on.
@@ -1585,8 +1588,20 @@ class Caller:
         if self._yspec is None:
             self._yspec, self._yprov = module_solve.load_spec()
             self._ysubsets, _ = module_solve.load_subsets(self._yspec)
+            # DR11 (A100 (v5-test-set)): what each block loop TESTS.  The
+            # write sets above stay loaded for the block trace and the
+            # harness's audit; the loop's stopping subset is the test set the
+            # run asked for -- the write sets themselves (V4's predicate, the
+            # fallback of D39) or the census set (D32), selected by the loop
+            # this driver runs: its arrangement and who owns the burn time.
+            self._ytests, _ = module_solve.load_loop_tests(
+                self._yspec,
+                self._ysubsets,
+                loop_key=f"{module_solve.MDA_MODE}/{subsolve.BURN_TIME_OWNER}",
+            )
         spec = self._yspec
         subsets = self._ysubsets
+        tests = self._ytests
         # One tolerance, for every block loop of every arm (D23).  The switch
         # that used to set a second, "inner" one is retired: comparisons are
         # made at matched *achieved* accuracy, which the exit audit records per
@@ -1674,14 +1689,15 @@ class Caller:
                 inner_counts[label].append(1)
                 close_visit(label, visit_nodes, visit_sweeps)
                 continue
-            # A block loop's test is restricted to that block's own write set,
-            # as the evaluation phase's block arm restricts it.  Not an
-            # optimisation: the coupling-state predicate scores any component
-            # that is not float-viewable in *either* snapshot as ``inf``, and
-            # in a fresh process that is every field no model has written yet
-            # -- so an unrestricted test is held open for ever by a field the
-            # running block cannot touch.
-            subset = subsets.get(label)
+            # A block loop's test is restricted to that block's own test set
+            # (DR11): its whole write set under the fallback, as the
+            # evaluation phase's block arm restricts it, or its census set.
+            # Not an optimisation: the coupling-state predicate scores any
+            # component that is not float-viewable in *either* snapshot as
+            # ``inf``, and in a fresh process that is every field no model
+            # has written yet -- so an unrestricted test is held open for
+            # ever by a field the running block cannot touch.
+            subset = tests.get(label)
             # DR4 (A58): how wide this block's convergence test is.  The
             # predicate walks exactly the indices the subset names, and the
             # whole component list when there is no subset -- which is the flat

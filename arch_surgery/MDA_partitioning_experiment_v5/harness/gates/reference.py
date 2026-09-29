@@ -343,8 +343,30 @@ FIELDS_BEYOND_THE_PLAN: dict[str, dict[str, str]] = {
 #: instruments produce the same number.  Its six residuals reproduce bit for
 #: bit after the change.  Dropping them too would remove a comparison that
 #: works, on the strength of a reason that does not apply to them.
+#: The second entry is driver change **DR10** (A99 (v5-schedule-and-prime),
+#: V5 list item 8; the exclusion entered by A100 (v5-test-set) at the
+#: orchestrator's ruling of 2026-09-29).  The reference's ``n_prime_calls``
+#: is V4's per-sweep count — the first-wall geometry prime executed at the
+#: head of every block sweep, 13 / 13 / 15 on the evaluation-phase A2 runs —
+#: and since DR10 the prime executes once per evaluation, so the V5 value is
+#: the evaluation count (1 in the evaluation phase).  The change is declared
+#: and checked by gate GC's ``once_per_evaluation`` rule; here the cell is
+#: named out with its reason, the same mechanism as gate G1's
+#: ``FIELDS_ADDED_BY_A_DRIVER_CHANGE``.  Found by the merged-harness press of
+#: ``tally_contracts`` at ``66bfa240``: 253 of 256 reference cells, the three
+#: A2 seed-001 prime counts "expected 13/13/15, found 1".
+_PRIME_COUNT_AFTER_DR10 = (
+    "the prime count moved by driver change DR10 (the arrangement-method "
+    "prime once per evaluation, before the first block; A99 "
+    "(v5-schedule-and-prime)): the reference holds V4's per-sweep count and "
+    "the copy stamps the evaluation count.  The change is declared and "
+    "checked by gate GC (rule once_per_evaluation); it is not a reproduction "
+    "failure and is named out here with its reason"
+)
+
 FIELDS_NOT_COMPARED: dict[str, dict[str, str]] = {
     "B": {
+        "n_prime_calls": _PRIME_COUNT_AFTER_DR10,
         "exit_audit.residual_max_hex": (
             "an instrument value, not a measurement this experiment compares "
             "on.  The previous revision's optimisation-phase audit swept from "
@@ -357,7 +379,7 @@ FIELDS_NOT_COMPARED: dict[str, dict[str, str]] = {
             "instruments"
         ),
     },
-    "A": {},
+    "A": {"n_prime_calls": _PRIME_COUNT_AFTER_DR10},
 }
 
 

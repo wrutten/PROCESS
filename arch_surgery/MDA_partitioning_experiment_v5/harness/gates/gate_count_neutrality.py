@@ -102,7 +102,16 @@ LABEL_VARIABLE = "HARNESS_COUNT_NEUTRALITY_LABEL"
 #: Committed with the driver change it straddles.  ``("copy", "copy")`` is the
 #: first press, at the copy commit before any change: one side, compared with
 #: itself, a determinism result.
-STRADDLE: tuple[str, str] = ("DR9", "DR10")
+STRADDLE: tuple[str, str] = ("DR10", "DR11")
+
+#: The test set a labelled side is made under, where a change declares one.
+#: DR11 (A100 (v5-test-set)) made the test set a switch and V4's whole write
+#: set its fallback value (decision D39): the DR11 side of GC is made under
+#: ``write_set`` **by declaration**, so that every count and every exit state
+#: must be identical to the digit to the DR10 side's -- which is the proof
+#: that the fallback is V4's predicate exactly.  The census value is another
+#: campaign and is not GC's business; a press under it is refused.
+STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set"}
 
 #: What each labelled side declares about ``n_arrangement_method_calls``,
 #: keyed by the **after** label.  ``identical``: compared like every other
@@ -117,6 +126,10 @@ PRIME_CALLS_DECLARATION: dict[str, str] = {
     # DR10 (the prime once per evaluation, before M1) declares that the prime
     # count becomes the evaluation count; every other count is unchanged.
     "DR10": "once_per_evaluation",
+    # DR11 (the loop's test set a switch; the mixed ruler removed) declares
+    # no change to any count under the fallback: the prime count is compared
+    # like every other count, and must be identical.
+    "DR11": "identical",
 }
 
 #: The evaluation phase's seed: the first displaced one, as gate G6 pairs the
@@ -166,8 +179,7 @@ COUNT_PATHS: dict[str, str] = {
     "first_call_models.conf_l2_hex": "the first evaluation's constraint norm, as a hex float",
     "mfile.ifail": "the exit code PROCESS wrote to its own output file",
     "exact": "the optimum (or the evaluation's objective) as hex floats: what a bit-comparison compares",
-    "exit_audit.frozen.residual_max_hex": "the audit's maximum scaled residual on the measured-scale ruler",
-    "exit_audit.mixed.residual_max_hex": "the same on the second ruler",
+    "exit_audit.frozen.residual_max_hex": "the audit's maximum scaled residual on the measured-scale ruler (the second ruler's leaf went with the mixed ruler, DR11)",
     "exit_audit.audit_node_calls": "the audit sweep's own node calls (never charged; the same instrument both sides)",
     "t_plant_pulse_burn_hex": "the burn time at exit, as a hex float",
     "lift_residual": "the lifted component's inconsistency at exit",
@@ -298,8 +310,28 @@ def _subtree(record: Mapping[str, Any], path: str) -> Any:
 _MISSING = object()
 
 
+#: Leaves under the declared paths that are **paths on disk**, not counts,
+#: each with its reason: excluded by name, never compared.  Found by the
+#: first press of the DR10 -> DR11 straddle (A100 (v5-test-set)): the before
+#: side had been made in A99's worktree and the after side in A100's, and the
+#: one differing leaf of 3 963 on every deferring arm was this absolute path
+#: — the first GC straddle whose two sides were made in two working trees
+#: (A99's three presses were all one tree, where the path agrees by accident
+#: of location; the same class as gate G1's cross-tree paths).  What still
+#: carries the artifact's identity is compared beside it: ``nodes_sha256``,
+#: ``nodes``, ``executed_once`` and the per-node suppression counts.
+PATH_LEAVES_NOT_COMPARED: dict[str, str] = {
+    "defer_per_run_totals.artifact": (
+        "an absolute path to the per-run deferral artifact, different between "
+        "two working trees by construction; its content is compared through "
+        "defer_per_run_totals.nodes_sha256 and the node lists beside it"
+    ),
+}
+
+
 def count_leaves(record: Mapping[str, Any], paths: Mapping[str, str] | tuple[str, ...]) -> dict[str, Any]:
-    """Every leaf under every declared path, keyed by its full dotted path."""
+    """Every leaf under every declared path, keyed by its full dotted path,
+    less the path leaves :data:`PATH_LEAVES_NOT_COMPARED` names."""
     out: dict[str, Any] = {}
     for path in paths:
         value = _subtree(record, path)
@@ -307,6 +339,8 @@ def count_leaves(record: Mapping[str, Any], paths: Mapping[str, str] | tuple[str
             continue
         if isinstance(value, (dict, list)):
             for leaf, leaf_value in neutrality_mod.leaves(value, prefix=path).items():
+                if leaf in PATH_LEAVES_NOT_COMPARED:
+                    continue
                 out[leaf] = leaf_value
         else:
             out[path] = value
@@ -561,6 +595,16 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
             f"{after_label!r}; a change that does not say what it does to the "
             f"prime count is not declared, and an undeclared change cannot pass"
         )
+    declared_set = STRADDLE_TEST_SET.get(after_label)
+    if declared_set is not None and campaign.test_set != declared_set:
+        # The after side is made under the declared test set **whatever the
+        # button composed**: the count-neutrality claim of DR11 is that the
+        # fallback is V4's predicate exactly, and a side made under another
+        # test set would be another campaign, not a straddle.  The campaign
+        # the gate runs under is therefore the declared one, built here (as
+        # the census stage builds its fallback campaign), so that --gate all
+        # under the census default still presses this straddle.
+        campaign = dataclasses.replace(campaign, test_set=declared_set, tau=None)
     references = gates_mod.entry_references(campaign, resume=resume)
     before_plan = count_neutrality_jobs(campaign, references, before_label)
     after_plan = count_neutrality_jobs(campaign, references, after_label)
@@ -676,6 +720,9 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         "straddle": straddle,
         "prime_calls_rule": rule,
         "prime_calls_declaration": dict(PRIME_CALLS_DECLARATION),
+        "test_set": campaign.test_set,
+        "tau": campaign.tau,
+        "straddle_test_set_declaration": dict(STRADDLE_TEST_SET),
         "population": (
             f"{straddle['says']}  {len(rows)} run pair(s) = "
             f"{sum(1 for r in rows if r['phase'] == 'A')} evaluation(s) + "
@@ -695,6 +742,7 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         "n_components_compared": n_components,
         "n_components_differing": n_components_differing,
         "count_paths": dict(COUNT_PATHS),
+        "path_leaves_not_compared": dict(PATH_LEAVES_NOT_COMPARED),
         "prime_paths": list(PRIME_PATHS),
         "state_files": list(STATE_FILES),
         "label_variable": LABEL_VARIABLE,

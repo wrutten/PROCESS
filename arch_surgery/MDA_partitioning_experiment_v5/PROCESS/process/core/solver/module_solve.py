@@ -95,16 +95,48 @@ Selection
     *achieved* accuracy, which the exit audit records per run, rather than at
     matched settings.
 ``PROCESS_ARCH_PREDICATE``
-    ``frozen`` or ``mixed``; unset is ``frozen``.  Which denominator the
-    coupling-state predicate scales a step by -- the measured scale alone, or
-    the measured scale kept as a floor under the current magnitude
-    (``max|dy_i| / max(|y_i|, s_i)``).  The two are bit-identical wherever the
-    current magnitude is at or below the scale, and ``mixed`` is never tighter,
-    so no count can go up.  The choice is passed to every predicate evaluation
-    this arrangement makes -- the flat loop's single block and each block loop
-    alike -- and read back as :data:`PREDICATE_MODE`; the test itself lives in
-    the harness's coupling-state module and is not reimplemented here.  Driver
-    change DR5, improvement item 5a's pre-declared trial.
+    **Retired** (driver change DR11, task A100 (v5-test-set); decision D30
+    and the V5 plan's §12 Q5).  There is one ruler, ``frozen`` --
+    ``max|dy_i| / s_i`` with the measured scale alone -- and it is not a
+    setting: :data:`PREDICATE_MODE` names it for the record and the second
+    ruler of driver change DR5 (``mixed``, the scale kept as a floor under
+    the current magnitude) is removed from the coupling-state module.  The
+    name raises at import if set (``process.core.solver.RETIRED_SWITCHES``).
+``PROCESS_ARCH_TEST_SET``
+    ``census`` or ``write_set``; **required** when this arrangement is on
+    and refused when it is off.  Which components of ``y`` each block loop
+    **tests** for convergence (driver change DR11, V5 list item 6):
+
+    * ``write_set`` -- the block's whole write set from the committed write
+      sets, at whatever ``PROCESS_ARCH_TAU`` says.  This is **exactly V4's
+      predicate**, kept selectable as the fallback (decision D39, the user:
+      "the option to run the convergence on the state with the 10e-6
+      tolerance, like v4 -- as a fallback").  Nothing on this path differs
+      from the copy before DR11.
+    * ``census`` -- the block's **census test set**: the components a sweep
+      of the block reads before it first writes them and writes later in the
+      same sweep, measured at run time over whole optimisations in the arm's
+      own execution order (decision D32; the harness's
+      ``experiment/test_sets.py`` measures and commits them).  The loop stops
+      on those components alone; the write sets are still loaded, because
+      the block trace and the harness's exit audit read them, but the loop's
+      stopping subset is the test set.  A block the census never saw sweep
+      has no set and tests nothing: it converges at its first pass.
+
+    There is no default: a run that relied on one could not be told apart
+    afterwards from a run that asked for the other.  Which set the loop bound,
+    its width per block and the artifact's digests are stamped once per run
+    in :data:`LOOP_TEST_SETS` for the record.
+``PROCESS_ARCH_TEST_SETS``
+    Path to the committed census test-set artifact for the configuration
+    being run (``harness/data/test_sets_<configuration>.json``).  Required
+    when ``PROCESS_ARCH_TEST_SET=census`` and refused otherwise, for the same
+    reason the write sets have no default; cross-checked against the
+    coupling-state artifact's ``components_sha256`` so the two cannot be from
+    different generations of the same configuration.  The artifact is keyed
+    by **loop** -- ``<mda>/<burn-time owner>`` as this driver resolved them --
+    because the driver never knows an arm's name and that pair is what
+    distinguishes the loops the census measured.
 ``PROCESS_ARCH_COUPLING_STATE``
     Path to the committed coupling-state artifact for the configuration being
     run.  **Required** when this arrangement is on: there is no default, because
@@ -162,19 +194,25 @@ __all__ = [
     "GLOBAL_BLOCK_SWEEP_CAP",
     "INNER_CAP",
     "ITERATED",
+    "LOOP_TEST_SETS",
     "MDA_MODE",
     "MDA_MODES",
     "PASS_TRACE_PATH",
     "PREDICATE_MODE",
     "PREDICATE_MODES",
     "TAU",
+    "TEST_SET",
+    "TEST_SETS",
+    "TEST_SETS_PATH",
     "TRACE_ENABLED",
     "WRITE_SETS_PATH",
     "ModuleSolveFailure",
     "block_order",
     "iterated",
+    "load_loop_tests",
     "load_spec",
     "load_subsets",
+    "load_test_sets",
     "trace_pass",
 ]
 
@@ -218,37 +256,24 @@ FLAT: bool = MDA_MODE == "flat"
 #: rung (decision D15).
 TAU: float = float(os.environ.get("PROCESS_ARCH_TAU", "1e-6"))
 
-#: The two rulers the coupling-state predicate can scale a step by.  The names
-#: are the harness module's own (``ystate.RULERS``); they are repeated here as
-#: a literal rather than imported because this guard runs at *import*, before
-#: any coupling state has been loaded, and a driver that could only refuse a
-#: misspelt setting after it had found a file would refuse it too late.  That
-#: the two lists agree is checked where the predicate is first used, below.
-PREDICATE_MODES = ("frozen", "mixed")
+#: The rulers the coupling-state predicate can scale a step by: **one**.  The
+#: name is the harness module's own (``ystate.RULERS``); it is repeated here
+#: as a literal rather than imported because the check that the two lists
+#: agree runs where the predicate is first used, below, and a driver whose
+#: guard disagreed with the module implementing the ruler would be accepting
+#: a setting the predicate ignores.  DR11 (A100 (v5-test-set)) removed the
+#: second ruler of driver change DR5 (``mixed``: the measured scale kept as a
+#: floor under the current magnitude) under decision D30 and the V5 plan's
+#: §12 Q5, and retired the switch that selected it
+#: (``process.core.solver.RETIRED_SWITCHES``).
+PREDICATE_MODES = ("frozen",)
 
-#: Which denominator the coupling-state predicate scales a step by: ``frozen``
-#: -- the measured scale alone, every earlier revision's ruler and the default
-#: here -- or ``mixed``, the conventional scaled step with that scale kept as a
-#: floor under the current magnitude.  Driver change DR5.
-#:
-#: It selects a denominator and nothing else.  The number of components each
-#: evaluation compares is fixed by the block's write set, so
-#: ``COMPONENTS_COMPARED`` is the same under both rulers for the same schedule
-#: -- which is the free consistency check between them: a ``mixed`` run that
-#: never crossed the tolerance differently must reproduce the ``frozen`` run's
-#: counter exactly.
-PREDICATE_MODE: str = (
-    os.environ.get("PROCESS_ARCH_PREDICATE", "").strip() or "frozen"
-)
-
-if PREDICATE_MODE not in PREDICATE_MODES:
-    raise ArchitectureRefusal(
-        f"PROCESS_ARCH_PREDICATE={PREDICATE_MODE!r} is not a recognised "
-        f"convergence ruler; expected one of {PREDICATE_MODES} (or unset for "
-        f"{'frozen'!r}).  Refused rather than defaulted: a run of one "
-        f"predicate recorded under the other's name cannot be told apart "
-        f"afterwards."
-    )
+#: The one denominator the coupling-state predicate scales a step by: the
+#: measured scale alone, ``max|dy_i| / s_i`` -- every revision's ruler.  Not
+#: a setting since DR11: named here so the record can say which ruler its
+#: loops stopped on, and passed to every predicate evaluation this
+#: arrangement makes (the flat loop's single block and each block loop alike).
+PREDICATE_MODE: str = "frozen"
 
 #: The configuration's committed coupling-state artifact.  No default: see the
 #: module docstring.
@@ -276,6 +301,72 @@ if ENABLED and not COUPLING_STATE_PATH:
         f"per-configuration, and silently taking another one's scales would "
         f"change what 'converged' means with no symptom."
     )
+
+# --------------------------------------------------------------------------
+# DR11 (A100 (v5-test-set)): which components each block loop tests
+# --------------------------------------------------------------------------
+
+#: The two things a block loop can stop on.  ``write_set`` is V4's predicate
+#: exactly -- the block's whole write set -- kept as the fallback (decision
+#: D39); ``census`` is the measured test set (decision D32).
+TEST_SETS = ("census", "write_set")
+
+#: Which of the two this run's loops test, or ``None`` with the variable
+#: unset -- which is a refusal when the arrangement is on and the only legal
+#: state when it is off.
+TEST_SET: str | None = os.environ.get("PROCESS_ARCH_TEST_SET", "").strip() or None
+
+if TEST_SET is not None and TEST_SET not in TEST_SETS:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_TEST_SET={TEST_SET!r} is not a recognised test set; "
+        f"expected one of {TEST_SETS}.  Refused rather than defaulted: a run "
+        f"that tested one set under the other's name could not be told apart "
+        f"afterwards."
+    )
+
+if ENABLED and TEST_SET is None:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_MDA={MDA_MODE!r} needs PROCESS_ARCH_TEST_SET to say "
+        f"which components each block loop tests: 'census' (the measured "
+        f"test set, decision D32) or 'write_set' (the block's whole write "
+        f"set, V4's predicate, the fallback of decision D39).  There is no "
+        f"default, so that no run relies on one."
+    )
+
+if TEST_SET is not None and not ENABLED:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_TEST_SET={TEST_SET!r} is set with PROCESS_ARCH_MDA "
+        f"unset, so the run uses upstream's own loop and has no block loop "
+        f"to hand a test set to.  A setting that changes nothing under the "
+        f"right name is refused."
+    )
+
+#: The configuration's committed census test-set artifact.  Required with
+#: ``census``, refused with ``write_set``; no default, as the write sets.
+TEST_SETS_PATH: str | None = os.environ.get("PROCESS_ARCH_TEST_SETS") or None
+
+if TEST_SET == "census" and not TEST_SETS_PATH:
+    raise ArchitectureRefusal(
+        "PROCESS_ARCH_TEST_SET='census' needs PROCESS_ARCH_TEST_SETS to name "
+        "the committed census test-set artifact for the configuration being "
+        "run.  There is no default: another configuration's sets would "
+        "silently test the wrong components."
+    )
+
+if TEST_SETS_PATH and TEST_SET != "census":
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_TEST_SETS is set with PROCESS_ARCH_TEST_SET="
+        f"{TEST_SET!r}: a census artifact named for a loop that tests the "
+        f"write set (or for no loop at all) would be a setting that changes "
+        f"nothing under the right name.  Refused."
+    )
+
+#: What the loops bound, stamped once per run when the sets are first loaded
+#: (``load_loop_tests``): the test set, its source artifact and digests, the
+#: loop key the artifact was selected by, and the width per block.  Read by
+#: the harness into the run record as ``loop_test_sets``; null there with
+#: the arrangement off, when this is never filled.
+LOOP_TEST_SETS: dict = {"test_set": TEST_SET, "loaded": False}
 
 # --------------------------------------------------------------------------
 # A31 (drift-diagnostic): the per-pass joint-test trace.  Observation only.
@@ -637,11 +728,11 @@ def _ystate_module():
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    # DR5.  The ruler names are guarded at import from a literal (the refusal
-    # has to happen before any file is read), so the literal is checked against
-    # the module that actually implements them the first time that module is
-    # loaded.  A driver that accepted a setting the predicate does not know
-    # would refuse nothing and run the default under the other's name.
+    # DR5, kept under DR11 with one ruler: the ruler list is a literal here
+    # (there is nothing to read a file for before the predicate is loaded), so
+    # the literal is checked against the module that actually implements it
+    # the first time that module is loaded.  A driver whose list disagreed
+    # with the predicate's would be naming a ruler the predicate ignores.
     rulers = getattr(mod, "RULERS", None)
     if rulers is None or tuple(rulers) != tuple(PREDICATE_MODES):
         raise ArchitectureRefusal(
@@ -715,8 +806,9 @@ def load_spec(path: str | Path | None = None):
         # DR5.  The tolerance and the ruler together are what "converged"
         # means; a block that carried one and not the other would leave a
         # record naming half of its own stopping rule (improvement item 5a's
-        # trap (i)).
+        # trap (i)).  DR11 adds the third part: which set the loops test.
         "predicate_mode": PREDICATE_MODE,
+        "test_set": TEST_SET,
     }
     _SPEC_CACHE[str(p)] = (spec, provenance)
     return spec, provenance
@@ -791,3 +883,132 @@ def load_subsets(spec, path: str | Path | None = None):
     }
     _SUBSET_CACHE[str(p)] = (subsets, provenance)
     return subsets, provenance
+
+
+_TEST_SET_CACHE: dict = {}
+
+
+def load_test_sets(spec, path: str | Path | None = None, *, loop_key: str):
+    """``{block: frozenset(y indices)}`` from the committed census test sets.
+
+    DR11 (A100 (v5-test-set)).  The artifact holds one entry per **loop** --
+    keyed ``<mda>/<burn-time owner>`` -- and each entry one key list per
+    block.  The same two things are checked as for the write sets, and for
+    the same reason (a set that silently misses components is a convergence
+    test that silently passes early):
+
+    * the artifact's ``ystate_components_sha256`` must equal the spec's own
+      ``components_sha256`` -- one configuration, one generation;
+    * every key named in a block's set must resolve to a component of the
+      spec.
+
+    Coverage is **not** required, and that is the point: a test set is a
+    subset of the block's write set, and a block the census never saw sweep
+    has no list at all and tests nothing (V5 plan §3).  The entry for
+    *loop_key* must exist; a loop the artifact does not know is refused, not
+    given another loop's sets.
+    """
+    p = Path(path or TEST_SETS_PATH)
+    cache_key = (str(p), loop_key)
+    cached = _TEST_SET_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    record = json.loads(p.read_text())
+
+    spec_sha = spec.components_sha256()
+    art_sha = record.get("ystate_components_sha256")
+    if art_sha != spec_sha:
+        raise ArchitectureRefusal(
+            f"census test sets {p} were built against ystate components "
+            f"{art_sha} but the loaded spec is {spec_sha}: the two artifacts "
+            f"are not from the same configuration and generation."
+        )
+    entry = (record.get("sets") or {}).get(loop_key)
+    if entry is None:
+        raise ArchitectureRefusal(
+            f"census test sets {p} carry no entry for loop {loop_key!r}; the "
+            f"loops it knows are {sorted(record.get('sets') or {})}.  Another "
+            f"loop's sets would silently test the wrong components, so the "
+            f"run is refused."
+        )
+
+    index = {f"{ns}.{fld}": i for i, (ns, fld) in enumerate(spec.keys)}
+    tests: dict[str, frozenset] = {}
+    unknown: list[str] = []
+    for block, keys in entry["blocks"].items():
+        idx = set()
+        for k in keys:
+            i = index.get(k)
+            if i is None:
+                unknown.append(k)
+            else:
+                idx.add(i)
+        tests[block] = frozenset(idx)
+    if unknown:
+        raise ArchitectureRefusal(
+            f"census test sets {p} name {len(unknown)} keys the coupling-state "
+            f"spec does not have, e.g. {sorted(unknown)[:5]}"
+        )
+
+    provenance = {
+        "path": str(p),
+        "scenario": record.get("scenario"),
+        "format": record.get("format"),
+        "loop_key": loop_key,
+        "census_arm": entry.get("census_arm"),
+        "sets_sha256": record.get("sets_sha256"),
+        "ystate_components_sha256": art_sha,
+        "n_by_block": {b: len(v) for b, v in sorted(tests.items())},
+        "n_components": len(spec.keys),
+    }
+    _TEST_SET_CACHE[cache_key] = (tests, provenance)
+    return tests, provenance
+
+
+def load_loop_tests(spec, write_sets: dict, *, loop_key: str):
+    """The subsets each block loop **tests**, under the test set the run asked for.
+
+    DR11.  Under ``write_set`` this is *write_sets* itself -- V4's predicate,
+    the block's whole write set, the fallback of decision D39 -- and nothing
+    is read.  Under ``census`` it is :func:`load_test_sets` for *loop_key*,
+    with every block of the schedule that the artifact does not list given
+    an **empty** set, so that such a block tests nothing rather than
+    everything (the predicate scores an unwritten component ``inf``, so
+    "everything" would hold a loop open for ever; see ``load_subsets``).
+
+    Either way the choice is stamped once, in :data:`LOOP_TEST_SETS`, so the
+    record says what the loops bound.
+    """
+    if TEST_SET == "write_set":
+        tests = write_sets
+        provenance = {
+            "test_set": TEST_SET,
+            "loop_key": loop_key,
+            "source": "the committed write sets (V4's predicate, decision D39)",
+            "path": WRITE_SETS_PATH,
+            "n_by_block": {b: len(v) for b, v in sorted(write_sets.items())},
+        }
+    elif TEST_SET == "census":
+        loaded, loaded_prov = load_test_sets(spec, loop_key=loop_key)
+        tests = dict(loaded)
+        for block in write_sets:
+            tests.setdefault(block, frozenset())
+        provenance = {
+            "test_set": TEST_SET,
+            **loaded_prov,
+            "n_by_block": {b: len(v) for b, v in sorted(tests.items())},
+            "blocks_never_censused": sorted(
+                b for b in write_sets if b not in loaded
+            ),
+        }
+    else:  # pragma: no cover - the import-time guard refuses this
+        raise ArchitectureRefusal(
+            f"PROCESS_ARCH_TEST_SET={TEST_SET!r}: no test set to bind"
+        )
+    if not LOOP_TEST_SETS.get("loaded"):
+        LOOP_TEST_SETS.clear()
+        LOOP_TEST_SETS.update(provenance)
+        LOOP_TEST_SETS["tau"] = TAU
+        LOOP_TEST_SETS["predicate_mode"] = PREDICATE_MODE
+        LOOP_TEST_SETS["loaded"] = True
+    return tests, provenance

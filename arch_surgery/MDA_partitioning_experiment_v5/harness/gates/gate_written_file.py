@@ -107,8 +107,11 @@ STEADY_STATE_EXCLUSION_REASON = (
     "own recorded reason"
 )
 
-#: The rulers the audit publishes, both, always.
-RULERS: tuple[str, ...] = ("frozen", "mixed")
+#: The rulers the audit publishes: the record contract's (one since DR11,
+#: A100 (v5-test-set); this gate carried its own two-element literal and
+#: FAILed on every run after the mixed ruler went, "an argmax or a count is
+#: missing" -- the one place the pair was written out rather than read).
+RULERS: tuple[str, ...] = records_mod.AUDIT_RULERS
 
 
 def root(campaign: Campaign) -> Path:
@@ -239,7 +242,7 @@ def _read(directory: Path, name: str, *, key: str) -> dict[str, Any]:
 
 
 def residual_summary(exit_audit: Mapping[str, Any]) -> dict[str, Any]:
-    """The audit's residual on both rulers, whole-state and restricted.
+    """The audit's residual on every declared ruler, whole-state and restricted.
 
     Read from the record's own summary blocks, which the child derived from the
     residual vector it wrote beside the record; nothing is recomputed here.
@@ -397,7 +400,7 @@ def evaluate_run(
     checks.append(
         {
             "check": (
-                "(3) the residual is reported on both rulers, whole-state and "
+                "(3) the residual is reported on every declared ruler, whole-state and "
                 "restricted, each with its maximum in hex, its argmax named and "
                 "its count above tau -- its size is published, not gated"
             ),
@@ -596,7 +599,7 @@ def body(campaign: Campaign) -> dict[str, Any]:
             f"composed from the experiment's matrix with no override but the "
             f"audit position, each audited at {AUDIT_POSITION}; {n_checks} "
             f"composition-and-position checks, {n_failed} failed.  The residual "
-            f"is published on both rulers, whole-state and restricted, and is "
+            f"is published on every declared ruler, whole-state and restricted, and is "
             f"NOT a criterion: this gate does not pass or fail on the size of the "
             f"gap.  {len(excluded)} configuration(s) excluded with the reason "
             f"stated: {sorted(excluded)}"

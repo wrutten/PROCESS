@@ -110,6 +110,18 @@ class Arm:
         """PROCESS as shipped: every architecture switch unset."""
         return self.mda == "upstream"
 
+    def loop_key(self, config: Config) -> str:
+        """The key the driver selects this arm's census test sets by.
+
+        ``<mda>/<burn-time owner>`` as the driver resolves them
+        (``module_solve.MDA_MODE`` and ``subsolve.BURN_TIME_OWNER``): the
+        driver never knows an arm's name, and that pair is what tells the
+        loops the census measured apart.  On a steady-state configuration no
+        owner is composed and the driver resolves ``loop``.
+        """
+        owner = self.burn_time_owner if (config.pulsed and self.burn_time_out_of_loop) else "loop"
+        return f"{self.mda}/{owner}"
+
     # --- composition ------------------------------------------------------
 
     def terms(
@@ -120,24 +132,37 @@ class Arm:
         predicate_mode: str = "frozen",
         campaign: Campaign | None = None,
         seed: int | None = None,
+        test_set: str | None = None,
+        tau: float | None = None,
     ) -> dict[str, str]:
         """The switch terms this arm sets on *config*, term -> value.
 
         The single place an arm becomes switch settings.  Terms are V4's
         words; ``switches.REGISTRY`` turns each into the variable name the
         tree implements, so a rename touches one file.
+
+        ``test_set`` and ``tau`` default to the campaign's (DR11: one test set
+        and one tolerance per campaign, D39 and D23); the pool passes a job's
+        own where a declared supplementary stage admits other values.
         """
         campaign = campaign or default_campaign()
         if self.is_reference:
             return {}
 
+        test_set = campaign.test_set if test_set is None else test_set
+        tau = campaign.tau if tau is None else tau
         lifted_here = config.pulsed and self.burn_time_out_of_loop
         terms: dict[str, str] = {
             "mda": self.mda,
-            "tolerance": repr(campaign.tau),
+            "tolerance": repr(float(tau)),
             "coupling_state": str(config.coupling_state_path),
             "write_sets": str(config.write_sets_path),
+            # DR11: which components every block loop tests, and — under the
+            # census set — the artifact naming them for this configuration.
+            "test_set": test_set,
         }
+        if test_set == "census":
+            terms["test_sets"] = str(config.test_sets_path)
         if self.arrangement_node:
             terms["arrangement_node"] = "build_after_physics"
         if self.arrangement_method:
@@ -521,6 +546,8 @@ def env_for(
     predicate_mode: str = "frozen",
     campaign: Campaign | None = None,
     pending_ok: bool = False,
+    test_set: str | None = None,
+    tau: float | None = None,
 ) -> dict[str, str]:
     """The environment one arm runs under on one configuration, from nothing.
 
@@ -548,6 +575,8 @@ def env_for(
         predicate_mode=predicate_mode,
         campaign=campaign,
         seed=seed,
+        test_set=test_set,
+        tau=tau,
     )
     pending = switches.unimplemented(terms)
     if pending and not pending_ok:

@@ -80,7 +80,7 @@ from ..experiment import arms as arms_mod
 from ..experiment import input_files as input_files_mod
 from . import records as records_mod
 from ..experiment import switches as switches_mod
-from .config import Campaign, Config
+from .config import TEST_SETS, Campaign, Config
 
 #: Default per-run wall-clock limit.  Not a budget: reaching it is a
 #: ``timeout`` taxonomy row, recorded and never re-run at a longer limit.
@@ -141,6 +141,18 @@ class Job:
     stencil_sign: int = 1
     run_kind: str = "campaign"
     predicate_mode: str = "frozen"
+    #: Which components the block loops test, and at which tolerance (driver
+    #: change DR11).  ``None`` — the default at every construction site —
+    #: means *the campaign's*, resolved by :func:`resolve_settings` at the
+    #: first pool call and written back here; a value differing from the
+    #: campaign's is admitted only for a declared supplementary stage
+    #: (``config.SupplementaryStage``) and refused otherwise, so a campaign
+    #: never mixes test sets (D39).  Both are identity fields: rendered only
+    #: where they differ from V4's (the fallback at 1e-6), so that a fallback
+    #: job carries V4's identity and every record made before DR11 is the
+    #: fallback's (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``).
+    test_set: str | None = None
+    tau: float | None = None
     node_census: bool = True
     #: For a ``census`` job only: which entry the census is taken at, and
     #: whether the read half of the instrument is on.
@@ -172,8 +184,15 @@ class Job:
     #: declared position.
     audit_position_caller: str | None = None
 
-    def identity(self, runs_dir: Path | None = None) -> dict[str, Any]:
+    def identity(
+        self, runs_dir: Path | None = None, *, campaign: "Campaign | None" = None
+    ) -> dict[str, Any]:
         """Every identity field, rendered as JSON-safe values, in declared order.
+
+        ``campaign`` resolves an unresolved test set and tolerance first
+        (:func:`resolve_settings`); a caller outside the pool that renders a
+        job it built itself passes it.  Without it an unresolved job is
+        refused rather than rendered as V4's.
 
         The one construction of "the same job": :attr:`key`, the digest and the
         shared pool's directory are all derived from this dictionary.  Paths
@@ -182,12 +201,33 @@ class Job:
         and is still the same job — and as given otherwise.  Mappings are
         rendered with sorted keys and string values, ``None`` kept as null.
         """
+        if campaign is not None and (self.test_set is None or self.tau is None):
+            resolve_settings(self, campaign)
         rendered: dict[str, Any] = {}
         for name in JOB_IDENTITY_FIELDS:
             if name == "configuration":
                 rendered[name] = self.config.name
                 continue
             value = getattr(self, name)
+            if name in records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT:
+                # DR11: the test set and the tolerance are identity fields
+                # rendered only where they differ from V4's, so a fallback
+                # job carries V4's identity (see the field's comment).  An
+                # unresolved value is refused: a job rendered before the pool
+                # resolved it against the campaign would render as V4's.
+                if value is None:
+                    raise PoolError(
+                        f"the job's {name} is unresolved: identity was asked "
+                        f"for before pool.resolve_settings ran against a "
+                        f"campaign, and an unresolved {name} would render as "
+                        f"V4's"
+                    )
+                if name == "tau":
+                    value = float(value)
+                if value == records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT[name]:
+                    continue
+                rendered[name] = value
+                continue
             if name == "audit_position":
                 # What the run will stamp, not the field's default: the pool
                 # composes a position for an optimisation only, and an
@@ -213,7 +253,16 @@ class Job:
         distinguish most jobs, in the order a reader wants them, with the ones
         that are usually at their default appended only when they are not.
         Paths and mappings are not rendered here — the digest carries them.
+        An unresolved test set or tolerance reads as ``unresolved`` here
+        rather than refusing: the key is for messages, the digest is not.
         """
+        if self.test_set is None or self.tau is None:
+            resolved = dataclasses.replace(
+                self,
+                test_set=self.test_set or "unresolved",
+                tau=self.tau if self.tau is not None else float("nan"),
+            )
+            return readable_key(resolved.identity())
         return readable_key(self.identity())
 
 
@@ -278,6 +327,8 @@ JOB_IDENTITY_FIELDS: tuple[str, ...] = (
     "stencil_column",
     "stencil_sign",
     "predicate_mode",
+    "test_set",
+    "tau",
     "node_census",
     "census_entry",
     "census_read",
@@ -327,6 +378,10 @@ def readable_key(identity: Mapping[str, Any]) -> str:
         parts.append(f"delta={identity['delta']}")
     if identity.get("predicate_mode") not in (None, "frozen"):
         parts.append(f"mode={identity['predicate_mode']}")
+    if identity.get("test_set") is not None:
+        parts.append(f"set={identity['test_set']}")
+    if identity.get("tau") is not None:
+        parts.append(f"tau={identity['tau']!r}")
     usual_position = records_mod.effective_audit_position(
         str(identity.get("phase")), records_mod.AUDIT_POSITION_DECLARED
     )
@@ -348,8 +403,64 @@ def readable_key(identity: Mapping[str, Any]) -> str:
     return "/".join(parts)
 
 
+def resolve_settings(job: Job, campaign: Campaign) -> Job:
+    """Fill the job's test set and tolerance from the campaign, or refuse.
+
+    Driver change DR11, decision D39: the test set is a **campaign-level**
+    setting, one value for every arm and both phases, never mixed within a
+    campaign; the tolerance follows it (D23).  A job that names neither takes
+    the campaign's.  A job that names other values is admitted **only** when
+    a declared supplementary stage (``config.SupplementaryStage``) admits its
+    phase, configuration and arm at exactly those values — the V5 plan's
+    supplementary ``st_regression`` stage at the census set and 1e-12 — and
+    is refused otherwise, naming what it asked for and what the campaign
+    composes.  Resolved once, written back onto the job, and consulted by
+    every pool entry so that a job's identity is never rendered unresolved.
+    """
+    test_set = campaign.test_set if job.test_set is None else job.test_set
+    tau = campaign.tau if job.tau is None else float(job.tau)
+    if test_set not in TEST_SETS:
+        raise PoolError(
+            f"{job.arm}/{job.config.name}/seed{job.seed}: test set "
+            f"{test_set!r} is not one this harness composes {TEST_SETS}"
+        )
+    if test_set != campaign.test_set or float(tau) != float(campaign.tau):
+        stage = campaign.supplementary_stage_for(
+            phase=job.phase,
+            configuration=job.config.name,
+            arm=job.arm,
+            test_set=test_set,
+            tau=float(tau),
+        )
+        # The reproduction gate's criterion -- V4's fallback -- is admitted
+        # for any job that is not a campaign record: GR's records are V4's
+        # own numbers on the copy (D39: GR must PASS under the fallback) and
+        # every gate that reads them composes GR's jobs under whatever
+        # campaign the button was pressed from.  A campaign record is never
+        # admitted at another setting than the campaign's.
+        is_v4 = (
+            test_set == records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT["test_set"]
+            and float(tau) == float(records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT["tau"])
+            and job.run_kind != "campaign"
+        )
+        if stage is None and not is_v4:
+            raise PoolError(
+                f"{job.arm}/{job.config.name}/seed{job.seed} asks for test set "
+                f"{test_set!r} at tau={tau!r} while the campaign composes "
+                f"{campaign.test_set!r} at tau={campaign.tau!r}, and no declared "
+                f"supplementary stage admits those values for this phase, "
+                f"configuration and arm.  A campaign never mixes test sets "
+                f"(decision D39); refused rather than run under a setting the "
+                f"campaign did not declare."
+            )
+    job.test_set = test_set
+    job.tau = float(tau)
+    return job
+
+
 def digest_for(job: Job, campaign: Campaign) -> str:
     """The job digest: sha256 over the canonical JSON of :meth:`Job.identity`."""
+    resolve_settings(job, campaign)
     return records_mod.job_digest(job.identity(Path(campaign.runs_dir)))
 
 
@@ -373,6 +484,7 @@ def canonical_directory_for(job: Job, campaign: Campaign) -> Path:
     """
     if job.outdir is not None:
         return Path(job.outdir)
+    resolve_settings(job, campaign)
     identity = job.identity(Path(campaign.runs_dir))
     digest = records_mod.job_digest(identity)
     name = (
@@ -470,6 +582,7 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
     business writing into it.  :func:`run` still refuses to remove a named
     directory that holds another job's record.
     """
+    resolve_settings(job, campaign)
     canonical = canonical_directory_for(job, campaign)
     if job.outdir is not None:
         return canonical
@@ -521,6 +634,7 @@ def job_listing(jobs: Sequence[Job], campaign: Campaign) -> list[dict[str, Any]]
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     for job in jobs:
+        resolve_settings(job, campaign)
         identity = job.identity(runs_dir)
         digest = records_mod.job_digest(identity)
         if digest in seen:
@@ -575,6 +689,7 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
     one; a campaign run carrying one is the first of them.
     """
     _assert_audit_position_declared(job)
+    resolve_settings(job, campaign)
     arm = arms_mod.ARMS[job.arm]
     terms = arm.terms(
         job.config,
@@ -582,6 +697,8 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         predicate_mode=job.predicate_mode,
         campaign=campaign,
         seed=job.seed,
+        test_set=job.test_set,
+        tau=job.tau,
     )
     pending = sorted(switches_mod.unimplemented(terms))
     if pending:
@@ -603,6 +720,8 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         pin_hex=job.pin_hex,
         predicate_mode=job.predicate_mode,
         campaign=campaign,
+        test_set=job.test_set,
+        tau=job.tau,
     )
     for term, value in (job.reproduction_overrides or {}).items():
         name = switches_mod.REGISTRY[term].driver_name
@@ -760,7 +879,8 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--input-kind", input_kind,
         "--coupling-state", str(job.config.coupling_state_path),
         "--seed", str(job.seed),
-        "--tau", repr(campaign.tau),
+        "--tau", repr(float(job.tau if job.tau is not None else campaign.tau)),
+        "--test-set", str(job.test_set or campaign.test_set),
         "--run-kind", job.run_kind,
         "--regime", job.regime,
         "--predicate-mode", job.predicate_mode,

@@ -207,7 +207,48 @@ REGISTRY: dict[str, Switch] = {
         retired_names={"PROCESS_ARCH_WRITESET": "renamed to PROCESS_ARCH_WRITE_SETS"},
         note=(
             "The committed artifact naming which coupling-state components "
-            "each block writes, so a block loop tests its own subset."
+            "each block writes.  Since DR11 a block loop tests this subset "
+            "under the fallback test set only; the block trace and the exit "
+            "audit read it under both."
+        ),
+    ),
+    "test_set": Switch(
+        term="test_set",
+        driver_name="PROCESS_ARCH_TEST_SET",
+        intended_name="PROCESS_ARCH_TEST_SET",
+        value_kind="enum",
+        values=("census", "write_set"),
+        composed=True,
+        readbacks=((MODULE_SOLVE, "TEST_SET"),),
+        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "TEST_SET") == v,
+        note=(
+            "Which components every block loop tests (driver change DR11, "
+            "task A100 (v5-test-set)): 'census', the read-before-write set "
+            "measured at run time per loop and block (decision D32, the V5 "
+            "default), or 'write_set', the block's whole write set -- exactly "
+            "V4's predicate, kept as the fallback (decision D39).  A "
+            "campaign-level value composed into every arm the loop runs in; "
+            "never a matrix cell, never mixed within a campaign; the "
+            "tolerance follows it (config.TAU_BY_TEST_SET) unless overridden.  "
+            "Required by the driver whenever the loop is on, so no run relies "
+            "on a default."
+        ),
+    ),
+    "test_sets": Switch(
+        term="test_sets",
+        driver_name="PROCESS_ARCH_TEST_SETS",
+        intended_name="PROCESS_ARCH_TEST_SETS",
+        value_kind="path",
+        values=(),
+        composed=True,
+        readbacks=((MODULE_SOLVE, "TEST_SETS_PATH"),),
+        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "TEST_SETS_PATH") == v,
+        note=(
+            "The committed census test-set artifact of the configuration "
+            "(harness/data/test_sets_<configuration>.json), keyed by loop "
+            "('<mda>/<burn-time owner>').  Composed with test_set=census only; "
+            "the driver refuses it with the fallback and refuses the census "
+            "value without it."
         ),
     ),
     "arrangement_node": Switch(
@@ -458,6 +499,14 @@ DIAGNOSTIC_READBACKS: tuple[tuple[str, str], ...] = (
     (CALLER, "NODE_CALLS"),
     (CALLER, "NODE_CALLS_AT_OUTPUT"),
     (CALLER, "ARRANGEMENT_METHOD_CALLS"),
+    # DR9 (A99 (v5-schedule-and-prime)): the once-per-run schedule stamp the
+    # record carries as ``schedule_resolution``; probed so a tree lacking it
+    # is reported before a record is found with a null in it (A99's proposal
+    # 3, applied by A100 (v5-test-set)).
+    (CALLER, "SCHEDULE_RESOLUTION"),
+    # DR11 (A100 (v5-test-set)): the once-per-run stamp of what the block
+    # loops tested, carried into the record as ``loop_test_sets``.
+    (MODULE_SOLVE, "LOOP_TEST_SETS"),
     (CALLER, "DISPATCH_SWEEPS"),
     (CALLER, "SWEEPS_PER_EVAL_HIST"),
     (CALLER, "OUTPUT_LOOP_SWEEPS"),
@@ -572,13 +621,13 @@ def retired_names() -> dict[str, str]:
 #: driver still honours it; the harness clears it before every arm
 #: (``all_names``) and refuses it if present (``assert_no_retired``), so no run
 #: made through the harness can carry it.
-RETIRED_PENDING_IN_DRIVER: dict[str, str] = {
-    "PROCESS_ARCH_PREDICATE": (
-        "DR11 (task A99): the 'mixed' ruler is removed from the copied driver "
-        "and the name enters process.core.solver.RETIRED_SWITCHES in the same "
-        "change (V5 plan §11, the DR11 addition; §12 Q5)"
-    ),
-}
+#:
+#: **Empty since DR11** (task A100 (v5-test-set)): ``PROCESS_ARCH_PREDICATE``
+#: was the one entry (retired on the harness side by A98 (v5-reporting-trim))
+#: and the driver retired it in the same commit that removed the ``mixed``
+#: ruler (V5 plan §11, the DR11 addition; §12 Q5).  The mechanism stays for
+#: the next two-task retirement.
+RETIRED_PENDING_IN_DRIVER: dict[str, str] = {}
 
 
 #: How the previous revision spelled each switch: its variable name -> V4's
@@ -955,5 +1004,11 @@ def base_environment(tree: Path, *, runs_dir: Path | None = None) -> dict[str, s
         # that only *read* the copy.  A harness **default**, beside the
         # matplotlib one: a caller that sets its own keeps it.
         env.setdefault("NUMBA_CACHE_DIR", str(Path(runs_dir) / "_numba_cache"))
+    # Decision D38: every child is pinned to one thread, so a parallel pool
+    # never oversubscribes the machine and no run's floating point depends on
+    # how many threads numba or a BLAS happened to take.  Defaults beside the
+    # cache directory: a caller that sets its own keeps it.
+    env.setdefault("NUMBA_NUM_THREADS", "1")
+    env.setdefault("OMP_NUM_THREADS", "1")
     clear_all(env)
     return env

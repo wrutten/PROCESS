@@ -90,11 +90,23 @@ PLAN_COLUMN: tuple[tuple[str, Any], ...] = (
     # "MDA solve | partitioned"; the block schedule runs one pass, which is
     # what this value means since the repeated schedule was removed.
     ("mda", lambda config, campaign: "partitioned"),
-    # "stopping rule | y @ tau" -- the one tolerance of every converger (D23).
-    ("tolerance", lambda config, campaign: repr(campaign.tau)),
+    # "stopping rule | y @ tau" -- the one tolerance of every converger (D23),
+    # the test set's declared value unless overridden (DR11).
+    ("tolerance", lambda config, campaign: repr(float(campaign.tau))),
     # The two committed artifacts that define y and the per-block write sets.
     ("coupling_state", lambda config, campaign: str(config.coupling_state_path)),
     ("write_sets", lambda config, campaign: str(config.write_sets_path)),
+    # DR11 (A100 (v5-test-set)): which components every block loop tests --
+    # the campaign-level value, one for every arm -- and, under the census
+    # set, the committed artifact naming them; left unset under the fallback,
+    # which the driver refuses otherwise.
+    ("test_set", lambda config, campaign: campaign.test_set),
+    (
+        "test_sets",
+        lambda config, campaign: (
+            str(config.test_sets_path) if campaign.test_set == "census" else None
+        ),
+    ),
     # "arrangement . node (build after physics) | checked".
     ("arrangement_node", lambda config, campaign: "build_after_physics"),
     # "arrangement . method (prime) | checked".

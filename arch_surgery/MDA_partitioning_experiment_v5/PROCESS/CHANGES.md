@@ -27,7 +27,7 @@ an install (trap T6), and every measurement subprocess asserts `process.__file__
    all of them under `process/core/`, plus `process/data_structure/numerics.py` (decision D14(a))
    and `process/models/pulse.py` (decision D14(b)). §3 documents that layer.
 2. **The copy's own edits**, made after extraction and recorded one by one in
-   `copy_gates.PERMITTED_EDIT_FILES`: seven files, twenty-seven recorded edits. §4 documents that
+   `copy_gates.PERMITTED_EDIT_FILES`: seven files, thirty-one recorded edits. §4 documents that
    layer, one subsection per recorded edit.
 
 Relative to the frozen base, then, the copy differs in **fourteen files**: six that do not exist
@@ -486,7 +486,7 @@ post-edit sha256 is pinned, so a further edit fails the gate too.
 Each subsection is one entry of `copy_gates.PERMITTED_EDIT_FILES`, in the order recorded there.
 Snippets are from `git diff f2dc9243:process/<path> -- PROCESS/process/<path>`.
 
-### 4.1 `process/core/solver/__init__.py` — 2 recorded edits
+### 4.1 `process/core/solver/__init__.py` — 3 recorded edits
 
 At `f2dc9243` this file is one line, `"""Module containing solver routines"""` — the same as at
 `c0ae5b28`. The copy adds 111 lines below it.
@@ -544,7 +544,32 @@ harness's self-check compares this list with its own registry rather than assumi
 
 **Driver, not model.** Eleven dictionary lookups at import; nothing allocated when none is set.
 
-### 4.2 `process/core/solver/module_solve.py` — 8 recorded edits
+#### 4.1.3 `PROCESS_ARCH_PREDICATE` — switch retired (DR11)
+
+*Recorded edit kind: switch retired. Made by task A100 (v5-test-set), driver change DR11 (V5
+plan §11, the DR11 addition; §12 Q5; decision D30).*
+
+The twelfth retired name:
+
+```python
+     "PROCESS_ARCH_YSTATE": "PROCESS_ARCH_COUPLING_STATE",
+     "PROCESS_ARCH_WRITESET": "PROCESS_ARCH_WRITE_SETS",
++    # DR11 (A100 (v5-test-set)): removed -- the frozen ruler is the only
++    # ruler (decision D30; V5 plan §12 Q5).  ...
++    "PROCESS_ARCH_PREDICATE": (
++        "nothing: the frozen ruler (max|dy_i| / s_i, the measured scale "
++        "alone) is the only ruler; the 'mixed' ruler is removed (D30, DR11)"
++    ),
+ }
+```
+
+**Why.** The `mixed` ruler (§4.2.8, DR5) was a pre-declared trial; its adoption rule was met and
+not applied in V4 (D30) and the user saw no value in keeping it in the V5 copy (§12 Q5). A run
+naming the switch would be asking for a denominator the coupling-state module no longer has, so
+the name raises at import like every other retired name; the harness's registry lists it as
+retired too and the `capability` self-check compares the two lists.
+
+### 4.2 `process/core/solver/module_solve.py` — 10 recorded edits
 
 The file does not exist at `c0ae5b28` (§3.3); the diff here is against `f2dc9243`.
 
@@ -732,6 +757,79 @@ coupling-state module (§5), and this file only passes the name through. Unset i
 upstream of this change line for line. Gate G8 (12/12 pairs bit-identical with an independent
 detector of the decisive pass) proved the identity.
 
+#### 4.2.9 `PROCESS_ARCH_TEST_SET` / `PROCESS_ARCH_TEST_SETS`, `load_test_sets`, `load_loop_tests`, `LOOP_TEST_SETS` — switch added (DR11)
+
+*Recorded edit kind: switch added. Made by task A100 (v5-test-set), driver change DR11 (V5 list
+item 6; decisions D32 and D39).*
+
+**What.** Which components each block loop **tests** becomes a driver choice, with V4's test as
+one of the two values:
+
+```python
++TEST_SETS = ("census", "write_set")
++
++TEST_SET: str | None = os.environ.get("PROCESS_ARCH_TEST_SET", "").strip() or None
++
++if TEST_SET is not None and TEST_SET not in TEST_SETS:
++    raise ArchitectureRefusal(...)
++
++if ENABLED and TEST_SET is None:
++    raise ArchitectureRefusal(...)          # required whenever the loop is on
++
++if TEST_SET is not None and not ENABLED:
++    raise ArchitectureRefusal(...)          # refused when it is off
++
++TEST_SETS_PATH: str | None = os.environ.get("PROCESS_ARCH_TEST_SETS") or None
++                                           # required with census, refused with write_set
++LOOP_TEST_SETS: dict = {"test_set": TEST_SET, "loaded": False}
+```
+
+`load_test_sets(spec, path, loop_key=...)` reads the committed census artifact with the same two
+checks as `load_subsets` (the coupling-state digest bound; every key resolves) and selects the
+entry for the loop the driver runs, keyed `<mda>/<burn-time owner>`; coverage is not required — a
+block the census never saw sweep has no list and tests nothing. `load_loop_tests(spec, write_sets,
+loop_key=...)` returns the write sets themselves under `write_set` and the census sets (every
+unlisted block given an empty set) under `census`, and stamps what was bound once in
+`LOOP_TEST_SETS`, which the harness records as `loop_test_sets`. The loaded spec's provenance
+gains `"test_set": TEST_SET` beside the tolerance and the ruler.
+
+**Why.** V4 stopped every loop on the block's whole write set at τ = 1e-6, which is correct only
+because it stops one sweep late (A89 §7.3); the test costs 30–39 % of an evaluation's wall clock
+(A89 §7.5). V5 converges on the census-measured carried set (D32) at the tolerance derived from the
+optimiser (1e-8; A89, A93), and keeps V4's criterion selectable as the fallback (D39: *"the option to
+run the convergence on the state with the 10e-6 tolerance, like v4 — as a fallback"*). There is no
+default, so no run relies on one.
+
+**Driver, not model.** With every switch unset none of this is reached (gate G1); under the
+fallback every count and exit state is identical to the digit to the copy before the change (gate
+GC, straddle DR10 → DR11); the census value is a different campaign and is gated by GT.
+
+#### 4.2.10 `PREDICATE_MODES` / `PREDICATE_MODE` — the second ruler removed (DR11)
+
+*Recorded edit kind: switch retired. Made by task A100 (v5-test-set), driver change DR11 (D30;
+V5 plan §12 Q5).*
+
+```python
+-PREDICATE_MODES = ("frozen", "mixed")
+-
+-PREDICATE_MODE: str = (
+-    os.environ.get("PROCESS_ARCH_PREDICATE", "").strip() or "frozen"
+-)
+-
+-if PREDICATE_MODE not in PREDICATE_MODES:
+-    raise ArchitectureRefusal(...)
++PREDICATE_MODES = ("frozen",)
++
++PREDICATE_MODE: str = "frozen"
+```
+
+The literal is still checked against the coupling-state module's `RULERS` the first time that
+module is loaded (now a one-element list), and `PREDICATE_MODE` is still passed to every predicate
+evaluation and stamped in the spec's provenance — it names the one ruler for the record. The
+`mixed` branches of the residual are removed from the coupling-state module (`harness/child/ystate.py`,
+recorded in `harness/data/PROVENANCE.json`). **Driver, not model:** the frozen path's arithmetic is
+untouched (gates G1 and GC).
+
 ### 4.3 `process/core/solver/subsolve.py` — 1 recorded edit
 
 The file does not exist at `c0ae5b28` (§3.4).
@@ -811,7 +909,7 @@ Relative to `c0ae5b28` this file also carries constraint 93 (§3.5, inherited).
 The docstring named a retired switch; it names the one that replaced it. Nothing the constraint
 computes changes.
 
-### 4.5 `process/core/caller.py` — 16 recorded edits
+### 4.5 `process/core/caller.py` — 17 recorded edits
 
 Relative to `c0ae5b28` this file also carries everything in §3.2 (inherited).
 
@@ -1383,6 +1481,37 @@ evaluation head (gate G1). With it on, the exit states of GC's job set are bit-i
 per-sweep form's and every count but `n_arrangement_method_calls` is identical to the digit (gate GC,
 rule `once_per_evaluation`); the prime-on / prime-off exit states from the reference snapshot are
 bit-identical (gate G2). No model file changes.
+
+#### 4.5.16 `_ytests` and `load_loop_tests` in `_call_models_partitioned` — test set bound (DR11)
+
+*Recorded edit kind: test set bound. Made by task A100 (v5-test-set), driver change DR11.*
+
+```python
+         if self._yspec is None:
+             self._yspec, self._yprov = module_solve.load_spec()
+             self._ysubsets, _ = module_solve.load_subsets(self._yspec)
++            # DR11 (A100 (v5-test-set)): what each block loop TESTS.  ...
++            self._ytests, _ = module_solve.load_loop_tests(
++                self._yspec,
++                self._ysubsets,
++                loop_key=f"{module_solve.MDA_MODE}/{subsolve.BURN_TIME_OWNER}",
++            )
+         spec = self._yspec
+         subsets = self._ysubsets
++        tests = self._ytests
+```
+
+and, in the inner loop:
+
+```python
+-            subset = subsets.get(label)
++            subset = tests.get(label)
+```
+
+The write sets stay loaded and are still what the block trace splits a residual by; the loop's
+stopping subset is the test set. Under the fallback `tests` is `subsets` — the same object — and
+nothing differs from the copy before the change (gate GC); with every switch unset the branch is
+never reached (gate G1).
 
 ### 4.6 `process/core/solver/solver_handler.py` — 1 recorded edit
 

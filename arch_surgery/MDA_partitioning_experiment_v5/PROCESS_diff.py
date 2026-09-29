@@ -94,6 +94,8 @@ _ATTEMPTS = "DR7 stamps: what each attempt of the optimiser's retry ladder cost 
 _LADDER = "DR7: the retry ladder's rungs named beside the branches that implement them, and each of its four calls to the optimiser bracketed by a boundary stamp"
 _PRIME_ONCE = "DR10 (A99): the arrangement-method prime executed once per evaluation, before the first block, instead of at the head of every sweep"
 _SCHEDULE_ONCE = "DR9 (A99): the block schedule and the per-call deferral sets resolved once per run, keyed on the figure of merit, and stamped once (SCHEDULE_RESOLUTION); the per-call re-derivation of issue I-30 is gone"
+_TEST_SET = "DR11 (A100): switches PROCESS_ARCH_TEST_SET / PROCESS_ARCH_TEST_SETS -- which components each block loop tests: the block's whole write set (V4's predicate, the fallback of D39) or the committed census test sets (D32), selected by loop; what the loops bound is stamped once (LOOP_TEST_SETS)"
+_PREDICATE_RETIRED = "DR11 (A100): the 'mixed' ruler removed and PROCESS_ARCH_PREDICATE retired -- the frozen ruler is the only ruler (D30; V5 plan section 12 Q5)"
 
 ANNOTATIONS: list[Annotation] = [
     # --- the copy's harness paths (A46, A48) -----------------------------
@@ -231,7 +233,61 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/caller.py", "_SCHEDULE_CACHE", _SCHEDULE_ONCE),
     # --- A99: the prime once per evaluation (DR10) -------------------------
     Annotation("process/core/caller.py", "DR10", _PRIME_ONCE),
+    # --- A100: the loop's test set a switch (DR11) -------------------------
+    Annotation("process/core/solver/module_solve.py", "TEST_SET", _TEST_SET),
+    Annotation("process/core/solver/module_solve.py", "test set", _TEST_SET),
+    Annotation("process/core/solver/module_solve.py", "load_test_sets", _TEST_SET),
+    Annotation("process/core/solver/module_solve.py", "load_loop_tests", _TEST_SET),
+    Annotation("process/core/solver/module_solve.py", "LOOP_TEST_SETS", _TEST_SET),
+    Annotation("process/core/solver/module_solve.py", "DR11", _TEST_SET),
+    Annotation("process/core/caller.py", "DR11", _TEST_SET),
+    Annotation("process/core/caller.py", "_ytests", _TEST_SET),
+    Annotation("process/core/caller.py", "load_loop_tests", _TEST_SET),
+    Annotation("process/core/caller.py", "tests.get", _TEST_SET),
+    # --- A100: the mixed ruler removed, PROCESS_ARCH_PREDICATE retired (DR11)
+    Annotation("process/core/solver/module_solve.py", "PREDICATE_MODES = (\"frozen\",)", _PREDICATE_RETIRED),
+    Annotation("process/core/solver/module_solve.py", "the only ruler", _PREDICATE_RETIRED),
+    Annotation("process/core/solver/__init__.py", "PROCESS_ARCH_PREDICATE", _PREDICATE_RETIRED),
 ]
+
+#: What driver change DR11 (task A100 (v5-test-set)) adds to three of the
+#: paragraphs below; appended after the dictionary so the heritage of each
+#: paragraph stays readable in order.
+_DR11_ADDENDA: dict[str, str] = {
+    "process/core/solver/module_solve.py": (
+        "  Driver change DR11 (A100 (v5-test-set)) adds the loop's TEST SET "
+        "as a switch: PROCESS_ARCH_TEST_SET=write_set binds the block's whole "
+        "write set -- exactly V4's predicate, kept as the fallback of decision "
+        "D39 -- and =census binds the committed census test sets of the "
+        "configuration (decision D32), loaded by load_test_sets with the same "
+        "two checks as the write sets and selected by the loop the driver runs "
+        "('<mda>/<burn-time owner>'); load_loop_tests hands the loop the "
+        "subsets it tests and stamps once, in LOOP_TEST_SETS, what was bound.  "
+        "The switch is required whenever the loop is on and refused when it "
+        "is off, so no run relies on a default.  The same change removes the "
+        "'mixed' ruler of DR5: PREDICATE_MODES is the one-element list the "
+        "coupling-state module's RULERS must equal, PREDICATE_MODE is the "
+        "constant 'frozen', and the environment read is gone (D30; V5 plan "
+        "section 12 Q5).  With every switch unset none of it is reached (gate "
+        "G1); under the fallback every count and exit state is identical to "
+        "the digit to the copy before the change (gate GC)."
+    ),
+    "process/core/caller.py": (
+        "  Driver change DR11 (A100 (v5-test-set)): beside the write sets, "
+        "still loaded once and read by the block trace, the Caller loads the "
+        "subsets the block loops TEST for the loop it runs, and the inner "
+        "loop's 'subset = tests.get(label)' replaces 'subsets.get(label)'.  "
+        "Under the fallback the two are the same object and nothing differs "
+        "from the copy before the change (gate GC); with every switch unset "
+        "the branch is never reached (gate G1)."
+    ),
+    "process/core/solver/__init__.py": (
+        "  Driver change DR11 (A100 (v5-test-set)) retires the twelfth name, "
+        "PROCESS_ARCH_PREDICATE: the 'mixed' ruler it selected is removed from "
+        "the coupling-state module, so a run naming it raises at import like "
+        "every other retired name."
+    ),
+}
 
 #: One paragraph per changed driver file, for a reader who will not read the
 #: diff.  Keyed by path; a file with no entry is reported as undocumented.
@@ -475,6 +531,9 @@ SUMMARIES: dict[str, str] = {
         "path."
     ),
 }
+
+for _path, _addendum in _DR11_ADDENDA.items():
+    SUMMARIES[_path] = SUMMARIES[_path] + _addendum
 
 
 @dataclass

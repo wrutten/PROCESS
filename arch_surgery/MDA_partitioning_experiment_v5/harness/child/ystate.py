@@ -74,58 +74,31 @@ easier, and A26's report measures what a decade in each direction does.
 The two rulers: what the scaled step is divided by
 --------------------------------------------------
 
-The test above is a **max-norm on the scaled step**, and everything about it is
-settled except one thing: what the step is divided by.  There are two answers,
-both implemented here, chosen by the ``ruler`` argument of
-:meth:`YSpec.residual` and named in every artifact a run writes:
+The test above is a **max-norm on the scaled step**, and there is **one
+ruler** --- what the step is divided by:
 
 ============  ===============================  ============================
 ruler         a continuous component passes    denominator
 ============  ===============================  ============================
 ``frozen``    ``max|dy_i| / s_i < tau``        the measured scale alone
-``mixed``     ``max|dy_i| / max(|y_i|, s_i)``  the measured scale as a
-                                               *floor*, under the current
-                                               magnitude
 ============  ===============================  ============================
 
-``frozen`` is what every earlier revision of this experiment measured under, and
-it is the default here so that those records keep reproducing bit for bit.
-``mixed`` is the conventional form --- Dennis & Schnabel's scaled step test,
-which MINPACK's ``diag``, KINSOL's scaling vectors and OpenMDAO's output ``ref``
-all reduce to.  ``|y_i|`` is read from the **current** value, the post-sweep
-iterate ``cur``, not from the previous one: the test asks how large the step is
-*relative to where the state now is*, which is what a reader means by "converged
-to six digits", and taking it from the previous iterate would scale a step by a
-magnitude the state has already left.  For an array component it is
-``max|elements|`` over the finite entries --- exactly what :func:`_char_mag`
-measures the scale by, so only the denominator differs and not the way a
-magnitude is taken.
+``frozen`` is what every revision of this experiment measured under.  The
+``ruler`` argument of :meth:`YSpec.residual` remains, names it, and is
+refused for anything else; every artifact a run writes names it in its
+preamble.  A second ruler (``mixed``: the measured scale kept as a floor
+under the current magnitude, driver change DR5, task A59
+(driver-predicate-mode), V4's gate G8) was implemented here for a
+pre-declared trial and **removed** by driver change DR11 (task A100
+(v5-test-set)) under decision D30 ("apply the adoption rule before the
+campaign or drop it") and the V5 plan's §12 Q5 (the user: no value in leaving
+it in).  The measured case that motivated it stands in the record (issue
+I-12: ``costs.coe`` at 6.6e21 against a harvested scale of 1 251) and is
+handled by the per-run deferral of ``costs``, not by the ruler.
 
-Three properties hold **by construction**, and they are what make the pair cheap
-to interpret rather than a second predicate to validate:
-
-* wherever ``|y_i| <= s_i`` the two are **bit-identical**: the denominator is
-  the same float and the division is the same division;
-* ``mixed`` is **never tighter** than ``frozen``, because its denominator is
-  never smaller, so no count of components above ``tau`` can go up;
-* discrete components, moved constants, a new NaN, a changed non-finite pattern
-  and a component no model has written yet (scored ``inf``) behave
-  **identically** under both --- the ruler touches the continuous scaling and
-  nothing else.
-
-Why the second ruler exists at all is a measured case, not a preference.  Issue
-**I-12**: ``costs.coe`` reaches 6.6e21 at a design point with negative net
-electric power, against a harvested scale of 1 251, which makes the ``frozen``
-test there roughly 1e18 times tighter than intended and iterates the point to
-bit-identity.  Upstream PROCESS's own test, being relative to the current value,
-is *looser* than ours at that point by 5.3e18.  ``mixed`` is the smallest change
-that removes the mechanism while keeping the measured scale as a floor, so a
-quantity that is genuinely small is still tested absolutely rather than
-relatively to its own noise.
-
-:class:`Residual` reports, per component, which term bound the denominator and
-what ``|y_i| / s_i`` was there, so the set of components on which the two rulers
-can differ is readable from the residual itself rather than inferred.
+:class:`Residual` still reports, per component, the denominator each scaled
+step was divided by (the scale, always) and carries the magnitude field as
+``nan`` --- the shape every record and every gate compares is unchanged.
 
 Heritage
 --------
@@ -135,11 +108,13 @@ Moved whole into the experiment's own harness from
 (harness-data), which recorded the one paragraph it added as an expected hunk in
 ``harness/data/PROVENANCE.json``.
 
-Task **A59 (driver-predicate-mode)** added the ``mixed`` ruler above --- driver
+Task **A59 (driver-predicate-mode)** added the ``mixed`` ruler --- driver
 change DR5 of the harness implementation plan, and the trial improvement item 5a
-pre-declared.  This file is therefore no longer byte-identical to its source
-with one paragraph removed, and the identity criterion is **re-based** rather
-than dropped: ``harness/data/PROVENANCE.json`` now records **every** hunk of the
+pre-declared --- and task **A100 (v5-test-set)** removed it again (driver
+change DR11; D30; V5 plan §12 Q5), keeping the ``ruler`` argument, the
+per-component reporting and the refusal of an unknown ruler.  This file is
+therefore not byte-identical to its source with one paragraph removed, and the
+identity criterion is **re-based** rather than dropped: ``harness/data/PROVENANCE.json`` now records **every** hunk of the
 diff against the source commit, the way ``PROCESS/PROVENANCE.json`` records the
 copied driver's permitted edits, and the self-check's data check still refuses
 an edit that is not among them.  What changed is the baseline the check compares
@@ -182,14 +157,11 @@ EXCLUDED_ACCUMULATOR = "excluded_accumulator"
 #: revision of this experiment measured under it, and it is the default here so
 #: that their records keep reproducing bit for bit.
 RULER_FROZEN = "frozen"
-#: The predicate's **mixed** ruler: ``max|dy_i| / max(|y_i|, s_i)``, the
-#: conventional scaled step with the measured scale kept as a floor.  Never
-#: tighter than :data:`RULER_FROZEN`, and bit-identical to it wherever
-#: ``|y_i| <= s_i``.  DR5 / improvement item 5a; task A59
-#: (driver-predicate-mode).
-RULER_MIXED = "mixed"
-#: The two rulers, in the order the experiment plan lists them.
-RULERS = (RULER_FROZEN, RULER_MIXED)
+#: The rulers: one.  The second (``mixed``, DR5, task A59) was removed by DR11
+#: (task A100 (v5-test-set); D30, V5 plan §12 Q5).  Kept as a tuple because
+#: the copied driver checks its own literal against this list, and the exit
+#: audit and the cross-arm comparisons iterate it.
+RULERS = (RULER_FROZEN,)
 #: What a caller that says nothing gets.  ``frozen``, so every existing caller
 #: -- and every record made before DR5 -- reproduces unchanged.
 RULER_DEFAULT = RULER_FROZEN
@@ -820,9 +792,9 @@ class YSpec:
         reading only the subset gives it --- :meth:`residual_over` is the
         entry point that does not need the full lists at all.
 
-        ``ruler`` selects the denominator: :data:`RULER_FROZEN` (the default,
-        and every earlier revision's) or :data:`RULER_MIXED`.  See the module
-        docstring; a value that is neither is refused, never defaulted around.
+        ``ruler`` names the denominator: :data:`RULER_FROZEN`, the one ruler
+        (the ``mixed`` ruler is removed, DR11).  See the module docstring; a
+        value that is not a ruler is refused, never defaulted around.
         """
         sel = self.subset_indices(subset)
         if subset is None:
@@ -856,23 +828,14 @@ class YSpec:
         three-loop form produced and what ``argmax`` tie-breaking depends on.
 
         **The ruler enters in exactly one place**: the denominator of a
-        continuous or non-finite component's scaled step.  Under
-        :data:`RULER_FROZEN` it is ``s_i``; under :data:`RULER_MIXED` it is
-        ``max(|y_i|, s_i)`` with ``|y_i|`` the current value's characteristic
-        magnitude --- :func:`_char_mag` of ``cur``, over the finite entries,
-        which is the same measurement the scale itself was taken by.  Every
-        other branch below is reached identically under both, which is what
-        makes "a run with no decisive pass is bit-identical" a property of the
-        code rather than a hope about it.
-
-        ``denom`` and ``mag`` are recorded per component, so the
-        :class:`Residual` can say which term bound each denominator and what
-        ``|y_i| / s_i`` was there.  Under ``frozen`` the magnitude is **not
-        computed**: the frozen path costs exactly what it cost before, which
-        gate G1 is what proves.
+        continuous or non-finite component's scaled step, ``s_i`` under
+        :data:`RULER_FROZEN` --- the one ruler since DR11 (the ``mixed``
+        branch that took ``max(|y_i|, s_i)`` here is removed).  ``denom`` and
+        ``mag`` are still recorded per component, so the :class:`Residual`
+        keeps the shape every record compares: the denominator is the scale
+        and the magnitude is ``nan``, never computed.
         """
         assert_ruler(ruler)
-        mixed = ruler == RULER_MIXED
         idx_c: list[int] = []
         scaled_l: list[float] = []
         denom_l: list[float] = []
@@ -901,14 +864,9 @@ class YSpec:
                     mag_l.append(np.nan)
                     continue
                 den = scale[i]
-                mag = np.nan
-                if mixed:
-                    mag = _char_mag(fb)
-                    if mag > den:
-                        den = mag
                 scaled_l.append(float(np.max(d)) / den)
                 denom_l.append(den)
-                mag_l.append(mag)
+                mag_l.append(np.nan)
             elif c == NONFINITE:
                 # A26.  Tested rather than excluded: the non-finite pattern
                 # must be unchanged, and the finite entries must satisfy the
@@ -931,22 +889,13 @@ class YSpec:
                 if not ma.any():
                     scaled_l.append(0.0)
                     denom_l.append(scale[i])
-                    mag_l.append(0.0 if mixed else np.nan)
+                    mag_l.append(np.nan)
                     continue
                 d = np.abs(fb[mb] - fa[ma])
                 den = scale[i]
-                mag = np.nan
-                if mixed:
-                    # The magnitude is taken over the finite entries, the same
-                    # entries the step is taken over: a non-finite element must
-                    # not be able to set the denominator of a test it is
-                    # excluded from.
-                    mag = _char_mag(fb[mb])
-                    if mag > den:
-                        den = mag
                 scaled_l.append(float(np.max(d)) / den)
                 denom_l.append(den)
-                mag_l.append(mag)
+                mag_l.append(np.nan)
             elif c == DISCRETE:
                 if not _same(a, b):
                     mismatch_d.append(i)

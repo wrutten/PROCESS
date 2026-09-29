@@ -57,14 +57,14 @@ Six refusals live here, and none of them is a warning:
     and a name nobody declared is refused there rather than kept under a
     guess or dropped from a population without a word.
 
-``assert_both_rulers``
-    a finished record whose exit audit names one convergence ruler and not
-    both.  The audit is the same sweep measured with two denominators and the
-    ``mixed`` one reads lower wherever its denominator binds --- by
-    construction, not by being more accurate --- so a residual table assembled
-    from records where the pair is sometimes complete would show an accuracy
-    gain on some rows that is only a change of ruler.  Both or neither; task
-    **A59 (driver-predicate-mode)**, driver change DR5.
+``assert_audit_ruler``
+    a finished record whose exit audit names no convergence ruler, or not
+    every declared one.  While the audit was taken on two rulers (V4, driver
+    change DR5, task A59 (driver-predicate-mode)) the pair was all-or-nothing,
+    because the ``mixed`` one reads lower wherever its denominator binds and a
+    table built from half-present pairs would show a change of ruler as a
+    change of accuracy; since driver change DR11 (A100 (v5-test-set)) there
+    is one ruler and the check keeps its shape.
 
 Vocabulary, once: a **configuration** is one optimisation problem; an **arm** is
 one setting of the driver's switches; a **seed** selects which displaced
@@ -78,8 +78,13 @@ own test on the objective and the constraint vector.  A record counts both,
 separately, because an arm runs exactly one of them.  A **ruler** is what the
 coupling-state predicate divides a step by before comparing it with the
 tolerance: ``frozen``, a scale measured once over a harvest of design points, or
-``mixed``, that scale kept as a floor under the state's current magnitude.  A
-record says which ruler its run stopped on and reports the exit audit on both.
+``mixed``, that scale kept as a floor under the state's current magnitude ---
+removed by DR11, so that since then there is one ruler.  A record says which
+ruler its run stopped on and reports the exit audit on every declared one.
+A **test set** is which components of the coupling state a block loop tests
+(DR11): the block's whole write set (V4's predicate, the fallback of D39) or
+the census set measured at run time (D32); a record says which, and stamps
+the width the loops bound.
 """
 
 from __future__ import annotations
@@ -94,9 +99,13 @@ from typing import Any, Mapping, Sequence
 #: that expected the old shape says so instead of finding ``None``.
 FORMAT = "run-record-1"
 
-#: What kind of run made this record.  ``campaign`` is a measurement; the other
-#: three are not, and nothing may pool them with one.
-RUN_KINDS: tuple[str, ...] = ("campaign", "gate", "smoke", "reference")
+#: What kind of run made this record.  ``campaign`` is a measurement; the
+#: others are not, and nothing may pool them with one.  ``supplementary`` is
+#: the kind of a declared supplementary stage (``config.SupplementaryStage``;
+#: V5 plan §3, A96 (st-trajectory-ladder)): a measurement reported **beside**
+#: the campaign's cell under its own test set and tolerance, never pooled
+#: with it and never a campaign record.
+RUN_KINDS: tuple[str, ...] = ("campaign", "gate", "smoke", "reference", "supplementary")
 
 #: How a run ended.  ``unconverged-at-cap`` is separate from ``unconverged``
 #: on purpose: upstream's own analysis loop raises after ten passes, and a
@@ -397,9 +406,10 @@ SCHEMA: tuple[Field, ...] = (
     _f("campaign_configuration", "AB", "always", "the optimisation problem"),
     _f("campaign_seed", "AB", "always", "which displaced start; 0 is undisplaced"),
     _f("campaign_delta", "AB", "always", "displacement size, null at a stencil point"),
-    _f("campaign_tau", "AB", "always", "the one tolerance every converger uses"),
-    _f("campaign_run_kind", "AB", "always", "campaign | gate | smoke | reference"),
-    _f("campaign_predicate_mode", "AB", "always", "which denominator the test scales by"),
+    _f("campaign_tau", "AB", "always", "the one tolerance every converger uses; follows the test set's declared value (config.TAU_BY_TEST_SET) unless overridden"),
+    _f("campaign_test_set", "AB", "always", "which components every block loop tests: 'census' (the measured test set, D32) or 'write_set' (the block's whole write set, V4's predicate, the fallback of D39); one value per campaign, DR11"),
+    _f("campaign_run_kind", "AB", "always", "campaign | gate | smoke | reference | supplementary"),
+    _f("campaign_predicate_mode", "AB", "always", "which denominator the test scales by: 'frozen', the one ruler since DR11"),
     _f("campaign_input_file", "AB", "always", "the input file actually read"),
     _f("campaign_input_file_kind", "AB", "always", "committed or lifted"),
     _f("campaign_pin_hex", "AB", "always", "the constant that owns the burn time, or null"),
@@ -444,15 +454,15 @@ SCHEMA: tuple[Field, ...] = (
     _f("exit_audit.instrument.restores", "AB", "finished", "the instrument's own version: which mechanism made this residual"),
     _f("exit_audit.instrument.n_restored", "AB", "finished", "fields put back and read back equal before the sweep"),
     _f("exit_audit.instrument.n_not_restorable", "AB", "finished", "fields the restore asked for and could not put back; their names are beside the count"),
-    _f("exit_audit.predicate_mode", "AB", "finished", "which ruler the run's own loops stopped on"),
-    _f("exit_audit.frozen", "AB", "finished", "the audit on the measured-scale ruler"),
-    _f("exit_audit.mixed", "AB", "finished", "the audit on the scale-as-a-floor ruler; published beside the other, never alone"),
+    _f("exit_audit.predicate_mode", "AB", "finished", "which ruler the run's own loops stopped on: 'frozen', the one ruler"),
+    _f("exit_audit.frozen", "AB", "finished", "the audit on the measured-scale ruler (the second ruler's block, exit_audit.mixed, went with the mixed ruler: DR11, D30)"),
     # --- counters common to both phases -----------------------------------
     _f("node_calls_total", "AB", "always", "model executions, the whole run"),
     _f("n_arrangement_method_calls", "AB", "always", "executions of the run-constant geometry method; stamped, never pooled"),
     _f("block_loop_totals", "AB", "finished", "the block solver's own totals"),
     _f("defer_per_run_totals", "AB", "always", "the per-run deferral's own counts, or null when it is off"),
     _f("schedule_resolution", "AB", "always", "the block schedule and the deferral sets resolved once per run (DR9): what was resolved, keyed on the figure of merit, the digests of the files the resolution read, and how many times the resolver ran — 1 in every run of this experiment that composes a block schedule or a deferral, 0 with every switch unset"),
+    _f("loop_test_sets", "AB", "always", "what the block loops tested (DR11): the test set, the loop key it was selected by, the artifact and its digests, the width per block; null with every switch unset, when no block loop runs"),
     _f("node_census", "AB", "always", "model executions per node name"),
     _f("exit_forensics", "AB", "always", "the five fields recorded at every exit"),
     _f("attempts", "AB", "always", "one entry per optimiser attempt, in order"),
@@ -509,15 +519,15 @@ SCHEMA: tuple[Field, ...] = (
 #: finished record missing any of these makes a summary refuse.  They are named
 #: separately from the schema because they are the ones whose absence made a
 #: whole class of failed runs vanish from a tally silently.
-#: The exit audit's two rulers.  Both are in the contract, so a finished record
-#: carrying one and not the other is **refused** rather than tallied: the mixed
-#: ruler reads lower wherever its denominator binds, by construction, and a
-#: residual table built from records where the pair is sometimes complete and
-#: sometimes not would report a change of ruler as a change of accuracy for
-#: some rows and not others (improvement item 5a's trap (ii)).  Named here
-#: rather than left to the schema because that is the trap's exact shape: not a
-#: missing field, but a *half*-present pair.
-AUDIT_RULERS: tuple[str, ...] = ("frozen", "mixed")
+#: The exit audit's rulers: **one** since driver change DR11 (A100
+#: (v5-test-set); decision D30, V5 plan §12 Q5).  V4 audited on two —
+#: ``frozen`` and ``mixed`` — and the contract required both or neither,
+#: because the mixed ruler reads lower wherever its denominator binds and a
+#: table built from half-present pairs would report a change of ruler as a
+#: change of accuracy (improvement item 5a's trap (ii)).  With one ruler the
+#: contract is that a finished record names it; the tuple stays so that every
+#: consumer that iterates the rulers reads one and not a literal.
+AUDIT_RULERS: tuple[str, ...] = ("frozen",)
 
 CONTRACT: dict[str, tuple[str, ...]] = {
     "B": (
@@ -599,7 +609,7 @@ def assert_complete(record: Mapping[str, Any], *, where: str = "") -> None:
     there" is not.
     """
     assert_run_kind(record)
-    assert_both_rulers(record, where=where)
+    assert_audit_ruler(record, where=where)
     absent = missing_fields(record)
     if absent:
         raise RecordError(
@@ -610,17 +620,18 @@ def assert_complete(record: Mapping[str, Any], *, where: str = "") -> None:
         )
 
 
-def assert_both_rulers(record: Mapping[str, Any], *, where: str = "") -> None:
-    """Refuse a finished record whose exit audit names one ruler and not both.
+def assert_audit_ruler(record: Mapping[str, Any], *, where: str = "") -> None:
+    """Refuse a finished record whose exit audit names no ruler, or not every one.
 
-    The two rulers are the same sweep measured with two denominators, and the
-    mixed one reads **lower** wherever its denominator binds --- by
-    construction, not by being more accurate.  A residual table assembled from
-    records where the pair is sometimes complete and sometimes not would
-    therefore show an accuracy gain on some rows that is a change of ruler
-    (improvement item 5a's trap (ii)).  So the pair is all-or-nothing on every
-    finished record, and half of it is a refusal with its own sentence rather
-    than one missing name in a list of forty.
+    *Was ``assert_both_rulers``* while the audit was taken on two rulers (V4,
+    driver change DR5): the pair was all-or-nothing because the mixed ruler
+    reads lower wherever its denominator binds and a table built from
+    half-present pairs would report a change of ruler as a change of accuracy
+    (improvement item 5a's trap (ii)).  Since DR11 there is one ruler
+    (:data:`AUDIT_RULERS`); the check keeps its shape — every ruler the
+    contract names must be present as a block, and a finished run's audit
+    that names none is refused — so that a second ruler, should one ever be
+    added again, is all-or-nothing from the day it is declared.
 
     A record that did not finish carries no audit at all, and that is not this
     check's business: :func:`assert_complete` says which fields a finished
@@ -635,10 +646,9 @@ def assert_both_rulers(record: Mapping[str, Any], *, where: str = "") -> None:
     if present and len(present) != len(AUDIT_RULERS):
         raise RecordError(
             f"the exit audit{' of ' + where if where else ''} carries "
-            f"{present} and not {list(AUDIT_RULERS)}.  Both rulers or neither: "
-            f"the mixed ruler reads lower wherever its denominator binds, so a "
-            f"table built from records with one column here and two there "
-            f"reports a change of ruler as a change of accuracy."
+            f"{present} and not {list(AUDIT_RULERS)}.  Every declared ruler or "
+            f"none: a table built from records with one column here and two "
+            f"there reports a change of ruler as a change of accuracy."
         )
     if not present:
         raise RecordError(
@@ -1282,6 +1292,26 @@ IDENTITY_FIELDS_STAMPED_BY_THE_CHILD: dict[str, str] = {
     "pin_hex": "campaign_pin_hex",
     "predicate_mode": "campaign_predicate_mode",
     "audit_position": "audit_position",
+    "test_set": "campaign_test_set",
+    "tau": "campaign_tau",
+}
+
+#: The value an identity field **means when it is absent** from the rendered
+#: identity: V4's.  Driver change DR11 (A100 (v5-test-set)) made the test set
+#: and the tolerance job-identity fields; the fallback of decision D39 — the
+#: block's whole write set at 1e-6 — is **exactly V4's predicate**, and every
+#: record made before DR11 was made under it, so a job under the fallback
+#: carries V4's identity (and V4's digest) and the seeded records are the
+#: fallback's records.  A job under the census set, or at any other
+#: tolerance, renders both fields and has a digest no earlier record has.
+#: ``why_not_complete_for`` compares the child's stamp against the identity's
+#: value **or this default**, so a V4 record at ``campaign_tau = 1e-6`` is
+#: the same job as a fallback job that renders no ``tau``.  The values are
+#: ``config.V4_TEST_SET`` and ``config.TAU_BY_TEST_SET[V4_TEST_SET]``,
+#: repeated here as literals because this module never imports the config.
+IDENTITY_DEFAULTS_WHEN_ABSENT: dict[str, Any] = {
+    "test_set": "write_set",
+    "tau": 1e-6,
 }
 
 #: The six fields the comparison consisted of before task A72
@@ -1327,10 +1357,11 @@ def why_not_complete_for(
                 f"the job's {name} is {identity.get(name)!r}"
             )
     for name, child_name in IDENTITY_FIELDS_STAMPED_BY_THE_CHILD.items():
-        if record.get(child_name) != identity.get(name):
+        wanted = identity.get(name, IDENTITY_DEFAULTS_WHEN_ABSENT.get(name))
+        if record.get(child_name) != wanted:
             return (
                 f"the child stamped {child_name}={record.get(child_name)!r} "
-                f"and the job's {name} is {identity.get(name)!r}"
+                f"and the job's {name} is {wanted!r}"
             )
     stamped_identity = record.get("job_identity")
     if not isinstance(stamped_identity, Mapping):

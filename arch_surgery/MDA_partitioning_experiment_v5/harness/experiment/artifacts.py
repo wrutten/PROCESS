@@ -107,6 +107,7 @@ def report(check_record: Mapping[str, Any], *, indent: str = "  ") -> list[str]:
 ARTIFACT_FORMAT = {
     "coupling_state": "a26-ystate-1",
     "write_sets": "a25-writeset-1",
+    "test_sets": "census-test-sets-1",
     "defer_per_run": "a33-postsolve-1",
     "defer_per_run_lifted": "a33-postsolve-1",
     "node_write_sets": "a26-node-writesets-1",
@@ -678,6 +679,128 @@ def _check_write_sets(
     )
 
 
+def _check_test_sets(
+    row: Row,
+    record: Mapping[str, Any],
+    config: Config,
+    coupling: Mapping[str, Any] | None,
+    campaign: Campaign,
+) -> None:
+    """The census test sets (DR11): format, pairing, keys, digest, provenance,
+    the loops of every active arm, and the records it was derived from."""
+    from . import arms as arms_mod  # noqa: PLC0415
+    from . import test_sets as test_sets_mod  # noqa: PLC0415
+    from ..core import records as records_mod  # noqa: PLC0415
+
+    row.add(
+        "format",
+        record.get("format") == ARTIFACT_FORMAT["test_sets"],
+        f"{ARTIFACT_FORMAT['test_sets']!r}",
+        f"found {record.get('format')!r}",
+    )
+    row.add(
+        "configuration stamp",
+        record.get("scenario") == config.name,
+        "the configuration this artifact is resolved for",
+        f"stamped {record.get('scenario')!r}",
+    )
+    if coupling is None:
+        row.add(
+            "paired with the coupling state",
+            False,
+            "the coupling-state artifact's own components_sha256",
+            "the coupling-state artifact could not be read, so the pairing "
+            "cannot be checked",
+        )
+        return
+    rebuilt = rebuild_components_sha256(coupling)
+    stamped = record.get("ystate_components_sha256")
+    row.add(
+        "paired with the coupling state",
+        stamped == rebuilt,
+        "the coupling-state spec rebuilt from its own components — by "
+        "content, the way the driver pairs them",
+        f"stamped {str(stamped)[:12]}…, rebuilt {rebuilt[:12]}…",
+    )
+    keys = {component["key"] for component in coupling["components"]}
+    sets = record.get("sets") or {}
+    unknown: list[str] = []
+    n_keys = 0
+    for entry in sets.values():
+        for block_keys in (entry.get("blocks") or {}).values():
+            for key in block_keys:
+                n_keys += 1
+                if key not in keys:
+                    unknown.append(key)
+    row.add(
+        "every test-set key is a coupling component",
+        not unknown,
+        "the coupling-state artifact's component list",
+        f"{n_keys} key(s) over {len(sets)} loop(s); {len(unknown)} unknown"
+        + (f", e.g. {sorted(unknown)[:3]}" if unknown else ""),
+    )
+    try:
+        rebuilt_sets = test_sets_mod.sets_sha256(record)
+    except Exception as exc:  # noqa: BLE001 - reported as a failed check
+        rebuilt_sets = f"<not rebuildable: {type(exc).__name__}>"
+    row.add(
+        "sets_sha256 rebuilt",
+        rebuilt_sets == record.get("sets_sha256"),
+        "the value recomputed from the sets the file lists",
+        f"rebuilt {str(rebuilt_sets)[:12]}…, recorded {str(record.get('sets_sha256'))[:12]}…",
+    )
+    wanted = {
+        arms_mod.ARMS[arm].loop_key(config)
+        for arm in arms_mod.active_arms(config)
+        if not arms_mod.ARMS[arm].is_reference
+    }
+    row.add(
+        "a loop entry for every active block arm",
+        wanted <= set(sets),
+        "the loop keys of the arms active on this configuration",
+        f"wanted {sorted(wanted)}, carried {sorted(sets)}",
+    )
+    runs = record.get("census_runs") or {}
+    n_runs = sum(len(v) for v in runs.values())
+    stamped_ok = all(
+        r.get("tree_git_head") and r.get("job_digest") and r.get("path")
+        for v in runs.values()
+        for r in v
+    )
+    row.add(
+        "provenance: every census run stamped",
+        n_runs > 0 and stamped_ok,
+        "tree_git_head, job_digest and path on every record the sets were derived from",
+        f"{n_runs} census run(s) over arms {sorted(runs)}",
+    )
+    # Where a named record is on this tree, its stamps must agree with the
+    # artifact's; where it is not, that is stated, not counted as agreement.
+    on_tree = agree = 0
+    disagree: list[str] = []
+    for arm, v in runs.items():
+        for r in v:
+            directory = Path(campaign.runs_dir) / str(r.get("path"))
+            if not (directory / "metrics.json").exists():
+                continue
+            on_tree += 1
+            found = records_mod.read(directory)
+            same = (
+                found.get("job_digest") == r.get("job_digest")
+                and found.get("tree_git_head") == r.get("tree_git_head")
+            )
+            agree += 1 if same else 0
+            if not same:
+                disagree.append(f"{arm}/seed{r.get('seed')}")
+    row.add(
+        "derived from the records it names",
+        not disagree,
+        "the job_digest and tree_git_head of every named record found on this tree",
+        f"{on_tree} of {n_runs} named record(s) on this tree, {agree} agreeing"
+        + (f", disagreeing: {disagree}" if disagree else "")
+        + ("" if on_tree else " (none on this tree: stated, not counted)"),
+    )
+
+
 def _rebuild_subsets_sha256(record: Mapping[str, Any]) -> str:
     digest = hashlib.sha256()
     for module in sorted(record["subsets"]):
@@ -1013,6 +1136,8 @@ def check(campaign: Campaign) -> tuple[int, dict[str, Any]]:
                 _check_coupling_state(row, record, config)
             elif role == "write_sets":
                 _check_write_sets(row, record, config, coupling)
+            elif role == "test_sets":
+                _check_test_sets(row, record, config, coupling, campaign)
             else:
                 _check_defer_per_run(
                     row,
@@ -1118,6 +1243,7 @@ def stage_teeth(campaign: Campaign) -> tuple[int, dict[str, Any]]:
                     c,
                     coupling_state_path=data_dir / Path(c.coupling_state_path).name,
                     write_sets_path=data_dir / Path(c.write_sets_path).name,
+                    test_sets_path=data_dir / Path(c.test_sets_path).name,
                     defer_per_run_path=data_dir / Path(c.defer_per_run_path).name,
                     defer_per_run_lifted_path=data_dir
                     / Path(c.defer_per_run_lifted_path).name,

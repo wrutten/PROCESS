@@ -152,6 +152,19 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
     g1_after = dataclasses.replace(g1, outdir=neutrality_run_dir(campaign, "after", config.name, "BR"))
     pairs.append({"class": "G1 before vs after capture (same identity; explicit directories)", "a": g1, "b": g1_after, "must": "agree", "directories_must": "differ"})
 
+    # GC: one side's labelled job against the unlabelled job of the same arm
+    # (the label rides in override_env, an identity field; A99's proposal 4,
+    # applied by A100 (v5-test-set)).
+    from . import gate_count_neutrality  # noqa: PLC0415
+
+    gc_plan = gate_count_neutrality.count_neutrality_jobs(
+        campaign, references, gate_count_neutrality.STRADDLE[1]
+    )
+    gc_b = next((j for p, c, a, j in gc_plan if p == "B" and c == config.name and a == "B2"), None)
+    if gc_b is not None:
+        unlabelled = dataclasses.replace(gc_b, override_env={})
+        pairs.append({"class": "GC labelled side vs the unlabelled job of the same arm (override_env)", "a": gc_b, "b": unlabelled, "must": "differ"})
+
     # GR: its B2 at seed 0 against G5's B2 at seed 0 (audit position, overrides, δ).
     root = Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH
     planned, _prereq = reproduction_mod.plan(campaign, root)
@@ -200,7 +213,7 @@ def check_pairs(pairs: list[dict[str, Any]], campaign: Campaign) -> list[dict[st
         differing = [
             name
             for name in pool_mod.JOB_IDENTITY_FIELDS
-            if a.identity(Path(campaign.runs_dir)).get(name) != b.identity(Path(campaign.runs_dir)).get(name)
+            if a.identity(Path(campaign.runs_dir), campaign=campaign).get(name) != b.identity(Path(campaign.runs_dir), campaign=campaign).get(name)
         ]
         holds = (da != db) if pair["must"] == "differ" else (da == db)
         if pair.get("directories_must") == "differ":
@@ -358,7 +371,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
 def _complete_record_of(job: pool_mod.Job, campaign: Campaign) -> dict[str, Any]:
     """A record that ``is_complete_for`` accepts for *job*: every declared
     field present (null where the value does not matter), stamps consistent."""
-    identity = job.identity(Path(campaign.runs_dir))
+    identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
     record: dict[str, Any] = {name: None for name in records_mod.declared_field_names(job.phase)}
     for path in records_mod.CONTRACT[job.phase]:
         cursor = record
@@ -391,7 +404,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         )
 
     def _why(record: dict[str, Any], job: pool_mod.Job) -> str | None:
-        identity = job.identity(Path(campaign.runs_dir))
+        identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
         return records_mod.why_not_complete_for(
             record, identity=identity, digest=records_mod.job_digest(identity)
         )
@@ -486,7 +499,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         old_digest = record["job_digest"]
         read = _read_from_disk(record)
         why = _why(read, job)
-        identity = job.identity(Path(campaign.runs_dir))
+        identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
         trace = read.get(records_mod.ARM_NAME_TRANSLATION_FIELD) or {}
         return (
             why is None
@@ -575,7 +588,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         )
         record = _complete_record_of(other, campaign)
         record[records_mod.ARM_NAMING_FIELD] = records_mod.ARM_NAMING
-        identity = job.identity(Path(campaign.runs_dir))
+        identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
         with tempfile.TemporaryDirectory(prefix="arm_names_tooth_") as td:
             (Path(td) / "metrics.json").write_text(json.dumps(record))
             try:
@@ -586,7 +599,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
                 refused, said = False, "ACCEPTED"
             try:
                 pool_mod.assert_not_another_jobs_record(
-                    other, other.identity(Path(campaign.runs_dir)), Path(td)
+                    other, other.identity(Path(campaign.runs_dir), campaign=campaign), Path(td)
                 )
             except pool_mod.PoolError as exc:
                 own_refused, own_said = True, str(exc)
