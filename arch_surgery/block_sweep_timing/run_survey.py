@@ -472,6 +472,22 @@ def render(out):
                     cells.append(_ms(b["wall_per_sweep"]) if b else "—")
                 L.append(f"| {k['configuration']} | {k['arm']} | {label} | " + " | ".join(cells)
                          + f" | {same} |")
+        L += ["", "**Repeatability across presses, per evaluation** (ms, median [min, max]: "
+              "`call_models` wall clock, and the `module_schedule` share of it).", "",
+              "| configuration | arm | " + " | ".join(f"call_models press {p}" for p in presses)
+              + " | " + " | ".join(f"module_schedule press {p}" for p in presses) + " |",
+              "|---|---|" + "---|" * (2 * len(presses))]
+        for k in out["cases"]:
+            if k.get("status") != "ok" or k.get("refused"):
+                continue
+            others = [next((q for q in out["presses"][p] if q["configuration"] == k["configuration"]
+                            and q["arm"] == k["arm"]), None) for p in presses[1:]]
+            ok = [k] + [q if (q and q.get("status") == "ok" and not q.get("refused")) else None
+                        for q in others]
+            cm = [(_ms(q["evaluation"]["call_models_s"], 1) if q else "—") for q in ok]
+            sc = [(_ms(q["evaluation"]["module_schedule_s"], 2) if q else "—") for q in ok]
+            L.append(f"| {k['configuration']} | {k['arm']} | " + " | ".join(cm) + " | "
+                     + " | ".join(sc) + " |")
     # --- per node
     L += ["", "**Per node** (ms per call, median [min, max] over repetitions of the "
           "per-repetition mean; calls per evaluation).", ""]
