@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -592,6 +593,8 @@ def _defer_per_run_nodes(data) -> frozenset[str]:
     cached = _DEFER_PER_RUN_CACHE.get("nodes")
     if cached is not None:
         return cached
+    # DR12 (A101): the artifact's validation is once-per-run set-up.
+    _setup_t0 = time.perf_counter() if TIMERS is not None else None
 
     import hashlib  # noqa: PLC0415 - validation path only
 
@@ -702,6 +705,8 @@ def _defer_per_run_nodes(data) -> frozenset[str]:
             )
 
     resolved = frozenset(nodes)
+    if _setup_t0 is not None:
+        TIMERS["run_setup_s"] += time.perf_counter() - _setup_t0
     _DEFER_PER_RUN_CACHE["nodes"] = resolved
     DEFER_PER_RUN_TOTALS["nodes"] = sorted(resolved)
     DEFER_PER_RUN_TOTALS["validated"] = True
@@ -744,6 +749,125 @@ MDA_ENABLED: bool = module_solve.ENABLED
 #: integer increment per node call, on both arms, touching no float and
 #: changing no branch a result depends on.
 NODE_CALLS: list[int] = [0]
+
+# --------------------------------------------------------------------------
+# DR12 (task A101 (v5-timers-and-once); V5 list item 9; decision D33):
+# observation-only wall-clock timers.  Switch: ``PROCESS_ARCH_TIMERS``.
+#
+# ``on`` accumulates, per run, the wall clock (``time.perf_counter``) of:
+# every node call (per node, ``_node``; the flat per-call tail's direct
+# calls separately, ``_run_deferred_tail``), every sweep of the dispatch body
+# (``_call_models_once``), the block loops' convergence test (the
+# coupling-state bind, read and residual), upstream's own idempotence
+# comparison in the reference arms, the objective-and-constraints layer,
+# every ``call_models`` evaluation, the once-per-run resolution inside the
+# first evaluation (DR9's schedule, the artifacts' first load and the
+# per-run set's validation), the solve phase (``solver_handler``) and the
+# output path; plus the epochs (``time.time``) of the first evaluation, the
+# solve's boundaries and the last evaluation's end, so a launcher that
+# stamps its own spawn time can attribute the fixed per-run term.  The
+# harness reads the dictionary after the run, before its own audit sweep.
+#
+# Unset (the default): :data:`TIMERS` is ``None`` and every hook is one
+# ``is None`` test that takes no branch -- the block trace's precedent
+# (DR8); gate G1 compares the outputs byte for byte.  On, the timers touch no
+# float a result depends on and change no branch: gate GC compares every
+# count and every exit state with the timers on against the side without.
+# Wall clock is context, never evidence (D33; CLAUDE.md; I-10; trap T5).
+_TIMERS_VALUES: tuple[str, ...] = ("on",)
+TIMERS_NAME: str | None = os.environ.get("PROCESS_ARCH_TIMERS", "").strip() or None
+if TIMERS_NAME is not None and TIMERS_NAME not in _TIMERS_VALUES:
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_TIMERS={TIMERS_NAME!r} is not a known value; expected "
+        f"one of {_TIMERS_VALUES} (or unset for no timers)."
+    )
+TIMERS_ENABLED: bool = TIMERS_NAME is not None
+
+
+def _new_timers() -> dict:
+    return {
+        "node_s": {},                 # per node: wall inside its run(), through _node
+        "node_n": {},                 # per node: calls timed
+        "tail_node_s": {},            # per node: the flat per-call tail's direct calls
+        "tail_node_n": {},
+        "sweep_s": 0.0,               # every _call_models_once body (the tokamak path)
+        "n_sweeps": 0,
+        "test_bind_s": 0.0,           # the coupling-state bind, once per call_models
+        "n_test_binds": 0,
+        "test_read_s": 0.0,           # the coupling-state reads of the block loops
+        "n_test_reads": 0,
+        "test_residual_s": 0.0,       # the block loops' residuals
+        "n_test_residuals": 0,
+        "upstream_test_s": 0.0,       # upstream's objf/conf comparison (reference arms)
+        "n_upstream_tests": 0,
+        "objective_s": 0.0,           # objective_function + constraint_eqns
+        "n_objective": 0,
+        "call_models_s": 0.0,         # every call_models, entry to exit
+        "n_call_models": 0,
+        "run_setup_s": 0.0,           # once-per-run resolution inside the first evaluation
+        "first_call_models_at": None, # epochs (time.time)
+        "last_call_models_ended_at": None,
+        "solve_started_at": None,
+        "solve_ended_at": None,
+        "solve_s": None,              # solver_handler.run: the ladder, entry to exit
+        "at_solve_end": None,         # the accumulators frozen at the solve's exit
+        "output_path_s": None,        # write_output_files, entry to exit
+    }
+
+
+#: The accumulators, or ``None`` with the switch unset.
+TIMERS: dict | None = _new_timers() if TIMERS_ENABLED else None
+
+
+def timers_solve_started() -> None:
+    """Stamp the solve phase's entry (called by ``solver_handler.run``)."""
+    if TIMERS is None:
+        return
+    TIMERS["solve_started_at"] = time.time()
+    TIMERS["_solve_t0"] = time.perf_counter()
+
+
+def timers_solve_ended() -> None:
+    """Stamp the solve phase's exit and freeze the accumulators there, so the
+    run's tail (output writing, the once-per-run set at the output path) can
+    be told apart from the solve (called by ``solver_handler.run``)."""
+    if TIMERS is None:
+        return
+    TIMERS["solve_ended_at"] = time.time()
+    TIMERS["solve_s"] = time.perf_counter() - TIMERS.pop("_solve_t0")
+    TIMERS["at_solve_end"] = {
+        "call_models_s": TIMERS["call_models_s"],
+        "n_call_models": TIMERS["n_call_models"],
+        "sweep_s": TIMERS["sweep_s"],
+        "n_sweeps": TIMERS["n_sweeps"],
+        "node_s": sum(TIMERS["node_s"].values()),
+        "tail_s": sum(TIMERS["tail_node_s"].values()),
+        "objective_s": TIMERS["objective_s"],
+        "test_s": (
+            TIMERS["test_bind_s"] + TIMERS["test_read_s"]
+            + TIMERS["test_residual_s"] + TIMERS["upstream_test_s"]
+        ),
+    }
+
+
+def _timed_objective(i_figure_merit: int, m: int, data) -> tuple[float, np.ndarray]:
+    """The objective and the constraint vector, timed when the timers are on.
+
+    One call site for the layer upstream's idempotence predicate compares,
+    so the timer is one function and not four copies of a stopwatch.  With
+    the timers off this is the two calls it always was.
+    """
+    if TIMERS is None:
+        objf = objective_function(i_figure_merit, data)
+        conf, _, _, _, _ = constraints.constraint_eqns(m, -1, data)
+        return objf, conf
+    t0 = time.perf_counter()
+    objf = objective_function(i_figure_merit, data)
+    conf, _, _, _, _ = constraints.constraint_eqns(m, -1, data)
+    TIMERS["objective_s"] += time.perf_counter() - t0
+    TIMERS["n_objective"] += 1
+    return objf, conf
+
 
 #: Sweeps of ``_call_models_once`` executed inside ONE ``call_models`` — that
 #: is, per optimiser-driven evaluation — binned over the run.
@@ -1309,6 +1433,9 @@ def resolve_schedule(
     hit = _SCHEDULE_CACHE.get(key)
     if hit is not None:
         return hit
+    # DR12 (A101): the once-per-run resolution is set-up, folded into the
+    # fixed per-run term (V5 plan section 6) and not into the evaluation.
+    _setup_t0 = time.perf_counter() if TIMERS is not None else None
     pre: list[str] = []
     post: list[str] = []
     inputs: dict = {}
@@ -1351,6 +1478,8 @@ def resolve_schedule(
             )
         inputs["node_map"] = {NODE_MAP_PATH.name: _sha256_of(NODE_MAP_PATH)}
     resolved = (tuple(pre), tuple(post), schedule, tail)
+    if _setup_t0 is not None:
+        TIMERS["run_setup_s"] += time.perf_counter() - _setup_t0
     _SCHEDULE_CACHE[key] = resolved
     SCHEDULE_RESOLUTION["n_resolutions"] += 1
     SCHEDULE_RESOLUTION["resolutions"].append(
@@ -1549,12 +1678,32 @@ class Caller:
             self._pending.append((name, run))
             return
         NODE_CALLS[0] += 1
+        # DR12 (A101): the node's own wall, per node, timers on only.
+        if TIMERS is None:
+            run()
+            return
+        t0 = time.perf_counter()
         run()
+        dt = time.perf_counter() - t0
+        node_s = TIMERS["node_s"]
+        node_s[name] = node_s.get(name, 0.0) + dt
+        node_n = TIMERS["node_n"]
+        node_n[name] = node_n.get(name, 0) + 1
 
     def _run_deferred_tail(self, pending: list) -> None:
         """Run the deferred feed-forward nodes, once, in sequence order."""
-        for _name, run in pending:
+        if TIMERS is None:
+            for _name, run in pending:
+                run()
+            return
+        # DR12 (A101): these calls are outside every sweep and outside
+        # NODE_CALLS (the harness's census counts them apart); timed apart.
+        for name, run in pending:
+            t0 = time.perf_counter()
             run()
+            dt = time.perf_counter() - t0
+            TIMERS["tail_node_s"][name] = TIMERS["tail_node_s"].get(name, 0.0) + dt
+            TIMERS["tail_node_n"][name] = TIMERS["tail_node_n"].get(name, 0) + 1
 
     def _execute_deferred_per_run_set_once(self, xc: np.ndarray) -> None:
         """Execute the per-run deferred set once, on the state as it stands.
@@ -1655,6 +1804,9 @@ class Caller:
             )
 
         if self._yspec is None:
+            # DR12 (A101): the artifacts' first load is once-per-run set-up,
+            # folded into the fixed per-run term and not into the evaluation.
+            _setup_t0 = time.perf_counter() if TIMERS is not None else None
             self._yspec, self._yprov = module_solve.load_spec()
             self._ysubsets, _ = module_solve.load_subsets(self._yspec)
             # DR11 (A100 (v5-test-set)): what each block loop TESTS.  The
@@ -1668,6 +1820,8 @@ class Caller:
                 self._ysubsets,
                 loop_key=f"{module_solve.MDA_MODE}/{subsolve.BURN_TIME_OWNER}",
             )
+            if _setup_t0 is not None:
+                TIMERS["run_setup_s"] += time.perf_counter() - _setup_t0
         spec = self._yspec
         subsets = self._ysubsets
         tests = self._ytests
@@ -1682,8 +1836,34 @@ class Caller:
         # Evaluated from the schedule that was actually built rather than from
         # the arm's name, so a run record says what the schedule was.
         single_block = _single_block_covers_loop(schedule, tail)
-        bound = spec.bind(self.data)
-        read = spec.read
+        # DR12 (A101): the convergence test's three pieces -- bind, read and
+        # residual -- timed apart; ``read`` and ``residual`` are the timed
+        # wrappers below when the timers are on, the bare methods otherwise.
+        if TIMERS is None:
+            bound = spec.bind(self.data)
+            read = spec.read
+            residual = spec.residual
+        else:
+            _t0 = time.perf_counter()
+            bound = spec.bind(self.data)
+            TIMERS["test_bind_s"] += time.perf_counter() - _t0
+            TIMERS["n_test_binds"] += 1
+            _read = spec.read
+            _residual = spec.residual
+
+            def read(b):
+                t0 = time.perf_counter()
+                out = _read(b)
+                TIMERS["test_read_s"] += time.perf_counter() - t0
+                TIMERS["n_test_reads"] += 1
+                return out
+
+            def residual(prev, cur, **kw):
+                t0 = time.perf_counter()
+                out = _residual(prev, cur, **kw)
+                TIMERS["test_residual_s"] += time.perf_counter() - t0
+                TIMERS["n_test_residuals"] += 1
+                return out
 
         # The block schedule never uses the per-call deferral's pending list:
         # under a block schedule the deferred tail is a block, run once at the
@@ -1789,7 +1969,7 @@ class Caller:
                 # picks the denominator; it does not change which components
                 # are compared, which is why COMPONENTS_COMPARED below is the
                 # free consistency check between the two.
-                res = spec.residual(
+                res = residual(
                     y_prev, y, subset=subset,
                     ruler=module_solve.PREDICATE_MODE,
                 )
@@ -1850,8 +2030,7 @@ class Caller:
 
         if _idf_probe.ENABLED:
             _idf_probe.objective_begin()
-        objf = objective_function(self.data.numerics.i_figure_merit, self.data)
-        conf, _, _, _, _ = constraints.constraint_eqns(m, -1, self.data)
+        objf, conf = _timed_objective(self.data.numerics.i_figure_merit, m, self.data)
         if _idf_probe.ENABLED:
             _idf_probe.objective_end()
 
@@ -1936,6 +2115,12 @@ class Caller:
         # I-17 instrument: sweeps taken by THIS evaluation, binned on exit by
         # every path (normal return, the VP4 early return, or a raise).
         _sweeps_at_entry = DISPATCH_SWEEPS[0]
+        # DR12 (A101): the evaluation's wall and the epochs of the first and
+        # the last, timers on only.
+        if TIMERS is not None:
+            if TIMERS["first_call_models_at"] is None:
+                TIMERS["first_call_models_at"] = time.time()
+            _eval_t0 = time.perf_counter()
         try:
             objf, conf = self._call_models_inner(xc, m)
             # V5 list item 5 (A101; D35): with the execution point at the
@@ -1949,6 +2134,10 @@ class Caller:
             _n = DISPATCH_SWEEPS[0] - _sweeps_at_entry
             _k = str(_n)
             SWEEPS_PER_EVAL_HIST[_k] = SWEEPS_PER_EVAL_HIST.get(_k, 0) + 1
+            if TIMERS is not None:
+                TIMERS["call_models_s"] += time.perf_counter() - _eval_t0
+                TIMERS["n_call_models"] += 1
+                TIMERS["last_call_models_ended_at"] = time.time()
 
     def _call_models_inner(self, xc: np.ndarray, m: int) -> tuple[float, np.ndarray]:
         """The body of :meth:`call_models`; see it for the contract.
@@ -2016,8 +2205,7 @@ class Caller:
             # Evaluate objective function and constraints
             if _idf_probe.ENABLED:
                 _idf_probe.objective_begin()
-            objf = objective_function(self.data.numerics.i_figure_merit, self.data)
-            conf, _, _, _, _ = constraints.constraint_eqns(m, -1, self.data)
+            objf, conf = _timed_objective(self.data.numerics.i_figure_merit, m, self.data)
             if _idf_probe.ENABLED:
                 _idf_probe.objective_end()
 
@@ -2037,10 +2225,17 @@ class Caller:
             # evaluation in the same order; what it buys is an exact width,
             # since the pair short-circuits and the constraint vector is not
             # compared when the objective has moved.
+            _test_t0 = time.perf_counter() if TIMERS is not None else None
             _objf_agrees = self.check_agreement(objf_prev, objf)
             UPSTREAM_PREDICATE_EVALUATIONS[0] += 1
             UPSTREAM_COMPONENTS_COMPARED[0] += 1 + (len(conf) if _objf_agrees else 0)
-            if _objf_agrees and self.check_agreement(conf_prev, conf):
+            _agrees = _objf_agrees and self.check_agreement(conf_prev, conf)
+            if _test_t0 is not None:
+                # DR12 (A101): upstream's own stopping test, the reference
+                # arms' convergence test, timed as the block loops' is.
+                TIMERS["upstream_test_s"] += time.perf_counter() - _test_t0
+                TIMERS["n_upstream_tests"] += 1
+            if _agrees:
                 # Idempotent: no longer changing, so return
                 logger.debug(
                     "Model evaluations idempotent, returning objective "
@@ -2064,11 +2259,8 @@ class Caller:
                         self._run_deferred_tail(pre)
                         if _idf_probe.ENABLED:
                             _idf_probe.objective_begin()
-                        objf = objective_function(
-                            self.data.numerics.i_figure_merit, self.data
-                        )
-                        conf, _, _, _, _ = constraints.constraint_eqns(
-                            m, -1, self.data
+                        objf, conf = _timed_objective(
+                            self.data.numerics.i_figure_merit, m, self.data
                         )
                         if _idf_probe.ENABLED:
                             _idf_probe.objective_end()
@@ -2248,6 +2440,10 @@ class Caller:
         """
         # I-17 instrument: one sweep of the dispatch body.  Integer only.
         DISPATCH_SWEEPS[0] += 1
+        # DR12 (A101): the sweep's wall, from here to the end of the tokamak
+        # path (the stellarator and IFE returns below are not timed: no
+        # configuration of this experiment takes them).
+        _sweep_t0 = time.perf_counter() if TIMERS is not None else None
 
         if _idf_probe.ENABLED:
             _idf_probe.sweep(self.models, self.data)
@@ -2412,6 +2608,10 @@ class Caller:
         if _idf_probe.ENABLED:
             _idf_probe.sweep_end()
 
+        if _sweep_t0 is not None:
+            TIMERS["sweep_s"] += time.perf_counter() - _sweep_t0
+            TIMERS["n_sweeps"] += 1
+
 
 def finalise(models, data, ifail: int, non_idempotent_msg: str | None = None):
     """Routine to print out the final point in the scan.
@@ -2537,6 +2737,8 @@ def write_output_files(
     if NODE_CALLS_AT_OUTPUT[0] is None:
         NODE_CALLS_AT_OUTPUT[0] = NODE_CALLS[0]
         DISPATCH_SWEEPS_AT_OUTPUT[0] = DISPATCH_SWEEPS[0]
+    # DR12 (A101): the output path's wall, entry to exit.
+    _output_t0 = time.perf_counter() if TIMERS is not None else None
     # A57: the exit audit's declared position (experiment plan section 3.3).
     # HERE -- at the entry, before the per-run deferred nodes below and before
     # any output-time sweep -- is the state the solve handed over, and it is
@@ -2582,3 +2784,5 @@ def write_output_files(
         xc=x,
         ifail=ifail,
     )
+    if _output_t0 is not None:
+        TIMERS["output_path_s"] = time.perf_counter() - _output_t0

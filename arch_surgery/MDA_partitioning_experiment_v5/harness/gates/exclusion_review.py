@@ -99,6 +99,7 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "tree": "a path",
     "repository": "a path",
     "process_file": "a path",
+    "launcher": "a timing or the machine's state",
     "wall_s": "a timing or the machine's state",
     "cpu_user_s": "a timing or the machine's state",
     "cpu_sys_s": "a timing or the machine's state",

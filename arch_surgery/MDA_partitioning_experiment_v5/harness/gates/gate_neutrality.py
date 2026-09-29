@@ -162,6 +162,7 @@ ALWAYS_EXCLUDED: dict[str, str] = {
         "by DR11 when the second ruler went; not a value"
     ),
     # when it happened, and how long it took
+    "launcher": "the pool's wall of the subprocess and the load average (DR12): context, never evidence",
     "wall_s": "wall clock is context, never evidence (I-10)",
     "cpu_user_s": "cpu time is a contention diagnostic",
     "cpu_sys_s": "cpu time is a contention diagnostic",
@@ -292,6 +293,17 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "change DR11 adds (A100 (v5-test-set)): absent on a side captured "
         "before it, null after with every switch unset (no block loop runs, "
         "so the stamp is never filled); compared wherever both sides carry it"
+    ),
+    "campaign_timers": (
+        "the harness's stamp of whether the wall-clock timers were composed "
+        "(driver change DR12, A101 (v5-timers-and-once)): absent on a side "
+        "captured before it, False after with every switch unset; compared "
+        "wherever both sides carry it"
+    ),
+    "timers": (
+        "the timers block DR12 adds: absent on a side captured before it, "
+        "null after with every switch unset (the driver's TIMERS is None and "
+        "the harness stamps null); compared wherever both sides carry it"
     ),
     "coupling_state_provenance.test_set": (
         "the loaded spec's stamp of the test set (DR11), beside the tolerance "

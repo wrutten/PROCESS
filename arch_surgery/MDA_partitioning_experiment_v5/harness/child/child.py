@@ -969,6 +969,13 @@ def install_exit_snapshot(caller, module_solve, *, coupling_state_path: Path):
     holder: dict[str, Any] = {}
 
     def hook(models, data, where):  # noqa: ARG001 - the driver's signature
+        t0 = time.perf_counter()
+        try:
+            return _hook(models, data, where)
+        finally:
+            state["wall_s"] = state.get("wall_s", 0.0) + (time.perf_counter() - t0)
+
+    def _hook(models, data, where):  # noqa: ARG001 - the driver's signature
         if "spec" not in holder:
             spec, provenance = module_solve.load_spec(str(coupling_state_path))
             holder["spec"] = spec
@@ -1776,6 +1783,7 @@ def open_record(
     pin_hex: str | None,
     switches_asked: Mapping[str, str],
     test_set: str,
+    timers: bool = False,
 ) -> dict[str, Any]:
     """The identity half of a record, filled before anything runs.
 
@@ -1797,6 +1805,7 @@ def open_record(
         "campaign_delta": delta,
         "campaign_tau": tau,
         "campaign_test_set": test_set,
+        "campaign_timers": bool(timers),
         "campaign_run_kind": run_kind,
         "campaign_predicate_mode": predicate_mode,
         "campaign_input_file": str(input_file),
@@ -1840,6 +1849,67 @@ def stamp_resources(record: dict[str, Any], usage_before, started: float) -> Non
     except OSError:
         record["loadavg"] = None
     record["timing_is_context_not_evidence"] = True
+
+
+def harvest_timers(caller) -> dict[str, Any] | None:
+    """The driver's wall-clock accumulators (DR12), copied, or None when off.
+
+    Read **before** the exit audit runs, as the counters are: the audit's
+    sweep goes through the same timed path, and its share is measured
+    afterwards as an excluded cost (:func:`stamp_timers`), never charged.
+    """
+    timers = getattr(caller, "TIMERS", None)
+    if not isinstance(timers, dict):
+        return None
+    copy = json.loads(json.dumps(timers, default=str))
+    copy.pop("_solve_t0", None)
+    return copy
+
+
+def stamp_timers(
+    record: dict[str, Any],
+    *,
+    driver_before_audit: dict[str, Any] | None,
+    driver_after_audit: dict[str, Any] | None,
+    epochs: Mapping[str, Any],
+    excluded: Mapping[str, Any],
+) -> None:
+    """The record's ``timers`` block: the driver's accumulators as they stood
+    before the audit, the harness-only costs measured apart (the audit's own
+    wall and its share of the driver's timers, the snapshots, the record
+    assembly, the set-up before the run), and the epochs.  Null when the
+    timers were off.  Context, never evidence (D33)."""
+    if driver_before_audit is None:
+        record["timers"] = None
+        return
+    audit_driver = {}
+    if driver_after_audit is not None:
+        for key in ("sweep_s", "n_sweeps"):
+            audit_driver[key] = driver_after_audit.get(key, 0) - driver_before_audit.get(key, 0)
+        audit_driver["node_s"] = sum(driver_after_audit.get("node_s", {}).values()) - sum(
+            driver_before_audit.get("node_s", {}).values()
+        )
+    record["timers"] = {
+        "enabled": True,
+        "driver": driver_before_audit,
+        "excluded": {
+            **dict(excluded),
+            "exit_audit_driver_sweep_s": audit_driver.get("sweep_s"),
+            "exit_audit_driver_node_s": audit_driver.get("node_s"),
+            "exit_audit_driver_n_sweeps": audit_driver.get("n_sweeps"),
+        },
+        "epochs": dict(epochs),
+        "what": (
+            "DR12 (A101): 'driver' is process.core.caller.TIMERS as it stood "
+            "when the counters were harvested, before the audit; 'excluded' "
+            "names the harness-only costs measured apart (the exit-audit "
+            "sweep's wall and its share of the driver's timers, the state "
+            "snapshots, the record assembly, the harness's set-up before the "
+            "run; the census hooks are not timed and read null); 'epochs' are "
+            "time.time() stamps the launcher's spawn time is compared with.  "
+            "Context, never evidence (D33)"
+        ),
+    }
 
 
 def stamp_driver_counters_null(record: dict[str, Any], *, phase: str) -> None:

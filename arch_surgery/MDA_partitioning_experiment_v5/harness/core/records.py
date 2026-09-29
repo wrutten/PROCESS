@@ -105,7 +105,7 @@ FORMAT = "run-record-1"
 #: V5 plan §3, A96 (st-trajectory-ladder)): a measurement reported **beside**
 #: the campaign's cell under its own test set and tolerance, never pooled
 #: with it and never a campaign record.
-RUN_KINDS: tuple[str, ...] = ("campaign", "gate", "smoke", "reference", "supplementary")
+RUN_KINDS: tuple[str, ...] = ("campaign", "gate", "smoke", "reference", "supplementary", "timing")
 
 #: How a run ended.  ``unconverged-at-cap`` is separate from ``unconverged``
 #: on purpose: upstream's own analysis loop raises after ten passes, and a
@@ -408,7 +408,14 @@ SCHEMA: tuple[Field, ...] = (
     _f("campaign_delta", "AB", "always", "displacement size, null at a stencil point"),
     _f("campaign_tau", "AB", "always", "the one tolerance every converger uses; follows the test set's declared value (config.TAU_BY_TEST_SET) unless overridden"),
     _f("campaign_test_set", "AB", "always", "which components every block loop tests: 'census' (the measured test set, D32) or 'write_set' (the block's whole write set, V4's predicate, the fallback of D39); one value per campaign, DR11"),
-    _f("campaign_run_kind", "AB", "always", "campaign | gate | smoke | reference | supplementary"),
+    _f("campaign_run_kind", "AB", "always", "campaign | gate | smoke | reference | supplementary | timing"),
+    # DR12 (A101 (v5-timers-and-once)): the three timing fields are required
+    # only on a record made with the timers on (``when == "timers"``): a
+    # record made before the instrument existed, or with it off, is complete
+    # without them, so no seeded record is re-made by the contract alone.
+    _f("campaign_timers", "AB", "timers", "whether the wall-clock timers were composed (PROCESS_ARCH_TIMERS=on); context, never evidence"),
+    _f("timers", "AB", "timers", "the driver's wall-clock accumulators harvested before the audit, the harness's excluded costs and the epochs (DR12); context, never evidence"),
+    _f("launcher", "AB", "timers", "the pool's independent wall of the subprocess, its spawn and return epochs and the load average at both (DR12); context, never evidence"),
     _f("campaign_predicate_mode", "AB", "always", "which denominator the test scales by: 'frozen', the one ruler since DR11"),
     _f("campaign_input_file", "AB", "always", "the input file actually read"),
     _f("campaign_input_file_kind", "AB", "always", "committed or lifted"),
@@ -548,12 +555,21 @@ CONTRACT: dict[str, tuple[str, ...]] = {
 }
 
 
-def fields_for(phase: str, *, finished: bool) -> tuple[Field, ...]:
-    """The fields a record of this phase must carry."""
+def fields_for(phase: str, *, finished: bool, timers_on: bool = False) -> tuple[Field, ...]:
+    """The fields a record of this phase must carry.
+
+    ``when == "timers"`` fields are owed only by a record made with the
+    wall-clock timers on (DR12); the other two values are as before.
+    """
     return tuple(
         field
         for field in SCHEMA
-        if phase in field.phases and (finished or field.when == "always")
+        if phase in field.phases
+        and (
+            field.when == "always"
+            or (field.when == "finished" and finished)
+            or (field.when == "timers" and timers_on)
+        )
     )
 
 
@@ -587,9 +603,10 @@ def missing_fields(record: Mapping[str, Any]) -> list[str]:
             f"it belongs to, so there is no field list to check it against"
         )
     finished = record.get("status") == "ok"
+    timers_on = bool(record.get("campaign_timers"))
     absent = [
         field.name
-        for field in fields_for(phase, finished=finished)
+        for field in fields_for(phase, finished=finished, timers_on=timers_on)
         if not has_path(record, field.name)
     ]
     if finished:
@@ -1294,6 +1311,7 @@ IDENTITY_FIELDS_STAMPED_BY_THE_CHILD: dict[str, str] = {
     "audit_position": "audit_position",
     "test_set": "campaign_test_set",
     "tau": "campaign_tau",
+    "timers": "campaign_timers",
 }
 
 #: The value an identity field **means when it is absent** from the rendered
@@ -1312,6 +1330,9 @@ IDENTITY_FIELDS_STAMPED_BY_THE_CHILD: dict[str, str] = {
 IDENTITY_DEFAULTS_WHEN_ABSENT: dict[str, Any] = {
     "test_set": "write_set",
     "tau": 1e-6,
+    # DR12: the timers off -- every record made before the instrument, and
+    # every gate record since, is a record made without it.
+    "timers": False,
 }
 
 #: The six fields the comparison consisted of before task A72
@@ -1358,7 +1379,15 @@ def why_not_complete_for(
             )
     for name, child_name in IDENTITY_FIELDS_STAMPED_BY_THE_CHILD.items():
         wanted = identity.get(name, IDENTITY_DEFAULTS_WHEN_ABSENT.get(name))
-        if record.get(child_name) != wanted:
+        # A child stamp that is absent from the record means the default
+        # (the record was made before the stamp existed): the same rule as
+        # the identity's own absence, applied to the child's half.
+        stamped = (
+            record.get(child_name)
+            if child_name in record
+            else IDENTITY_DEFAULTS_WHEN_ABSENT.get(name)
+        )
+        if stamped != wanted:
             return (
                 f"the child stamped {child_name}={record.get(child_name)!r} "
                 f"and the job's {name} is {wanted!r}"

@@ -467,6 +467,30 @@ REGISTRY: dict[str, Switch] = {
         readbacks=((MODULE_SOLVE, "TRACE_FULL_FROM"),),
         note="Companion of the trace above; same treatment.",
     ),
+    "timers": Switch(
+        term="timers",
+        driver_name="PROCESS_ARCH_TIMERS",
+        intended_name="PROCESS_ARCH_TIMERS",
+        value_kind="enum",
+        values=("on",),
+        composed=True,
+        readbacks=((CALLER, "TIMERS_ENABLED"), (CALLER, "TIMERS_NAME")),
+        resolved_as_asked=lambda r, v: _resolved(r, CALLER, "TIMERS_NAME") == v,
+        note=(
+            "The observation-only wall-clock timers (driver change DR12, task "
+            "A101 (v5-timers-and-once); V5 list item 9; decisions D33, D38): "
+            "with 'on' the driver accumulates per run the wall of every node "
+            "call, every sweep, the convergence tests, the objective layer, "
+            "every evaluation, the once-per-run set-up, the solve phase and "
+            "the output path, with the epochs a launcher needs; the harness "
+            "harvests them into the record's 'timers' block before its own "
+            "audit sweep.  An INSTRUMENT, not an architecture switch: composed "
+            "into every arm of a campaign that asks for it, the reference arms "
+            "included (INSTRUMENT_SWITCHES); unset, every hook is one 'is None' "
+            "test (gate G1); on, no count and no exit state moves (gate GC).  "
+            "Context, never evidence."
+        ),
+    ),
     "block_trace": Switch(
         term="block_trace",
         driver_name="PROCESS_ARCH_BLOCK_TRACE",
@@ -508,6 +532,13 @@ def _owner_resolved_as_asked(resolved: Mapping[str, object], value: str) -> bool
     return owner == value
 
 
+#: Switches that are **instruments, not architecture**: composed into an arm
+#: without making it a different arrangement, the reference arms included,
+#: and left out of every check that reads "which architecture switches are
+#: set" (the reference arm composes to every architecture switch cleared).
+INSTRUMENT_SWITCHES: tuple[str, ...] = ("timers",)
+
+
 #: Module-level names the driver exposes that are **counters, not switches**:
 #: nothing sets them, an arm never composes them, and they carry no environment
 #: variable.  They are listed here, beside the switch registry, for one reason:
@@ -535,6 +566,10 @@ DIAGNOSTIC_READBACKS: tuple[tuple[str, str], ...] = (
     # DR11 (A100 (v5-test-set)): the once-per-run stamp of what the block
     # loops tested, carried into the record as ``loop_test_sets``.
     (MODULE_SOLVE, "LOOP_TEST_SETS"),
+    # DR12 (A101 (v5-timers-and-once)): the timers' accumulators, None with
+    # the switch unset; probed so a tree lacking the instrument is reported
+    # before a record is found with the block missing.
+    (CALLER, "TIMERS"),
     (CALLER, "DISPATCH_SWEEPS"),
     (CALLER, "SWEEPS_PER_EVAL_HIST"),
     (CALLER, "OUTPUT_LOOP_SWEEPS"),

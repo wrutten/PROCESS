@@ -102,7 +102,7 @@ LABEL_VARIABLE = "HARNESS_COUNT_NEUTRALITY_LABEL"
 #: Committed with the driver change it straddles.  ``("copy", "copy")`` is the
 #: first press, at the copy commit before any change: one side, compared with
 #: itself, a determinism result.
-STRADDLE: tuple[str, str] = ("DR11", "item5")
+STRADDLE: tuple[str, str] = ("item5", "DR12")
 
 #: The test set a labelled side is made under, where a change declares one.
 #: DR11 (A100 (v5-test-set)) made the test set a switch and V4's whole write
@@ -113,7 +113,25 @@ STRADDLE: tuple[str, str] = ("DR11", "item5")
 #: campaign and is not GC's business; a press under it is refused.  Every
 #: later side straddles DR11's and is made under the same value, so that the
 #: two sides of each straddle are one campaign.
-STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set", "item5": "write_set"}
+STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set", "item5": "write_set", "DR12": "write_set"}
+
+#: The sides made **with the wall-clock timers on** (driver change DR12, A101
+#: (v5-timers-and-once)): the DR12 side of GC is made under
+#: ``PROCESS_ARCH_TIMERS=on`` by declaration, so that every count and every
+#: exit state must be identical to the digit to the item-5 side's, made
+#: without the instrument -- the proof that the timers are observation-only.
+#: The other sides are made with the timers unset, as the gates are.
+STRADDLE_TIMERS: dict[str, bool] = {"DR12": True}
+
+#: Record blocks that are **not counts by kind** and are never under a
+#: declared count path: the timers' accumulators and the launcher's wall
+#: (DR12).  Checked at import: a count path under one of these would compare
+#: a wall clock, which is context and never evidence.
+NOT_COUNTS_BY_KIND: dict[str, str] = {
+    "timers": "the wall-clock accumulators (DR12): context, never evidence",
+    "launcher": "the pool's wall of the subprocess (DR12): context, never evidence",
+    "campaign_timers": "whether the timers were composed: a harness stamp of the instrument",
+}
 
 #: What each labelled side declares about **every declared count** other
 #: than the prime count, keyed by the after label.  ``identical``: compared
@@ -144,6 +162,8 @@ COUNT_RULE_DECLARATION: dict[str, str] = {
     "DR10": "identical",
     "DR11": "identical",
     "item5": "deferred_set_executed_once_at_evaluation_exit",
+    # DR12 (the observation-only timers) moves no count and no exit state.
+    "DR12": "identical",
 }
 
 #: The driver read-back that says whether a run executes the per-run set at
@@ -179,6 +199,8 @@ PRIME_CALLS_DECLARATION: dict[str, str] = {
     # item 5 (the per-run set executed once at the evaluation's exit) moves
     # no prime count: the execution is one sweep and the prime is not in it.
     "item5": "identical",
+    # DR12 (the timers): no count moves.
+    "DR12": "identical",
 }
 
 #: The evaluation phase's seed: the first displaced one, as gate G6 pairs the
@@ -234,6 +256,13 @@ COUNT_PATHS: dict[str, str] = {
     "lift_residual": "the lifted component's inconsistency at exit",
 }
 
+for _path in COUNT_PATHS:
+    if _path.split(".")[0] in NOT_COUNTS_BY_KIND:
+        raise TypeError(
+            f"COUNT_PATHS names {_path!r}, which is under a block that is not "
+            f"a count by kind ({NOT_COUNTS_BY_KIND[_path.split('.')[0]]})"
+        )
+
 #: The one count the change may move, and its companion on the first
 #: evaluation of an optimisation.  Compared under :data:`PRIME_CALLS_DECLARATION`.
 PRIME_PATHS: tuple[str, ...] = (
@@ -274,9 +303,14 @@ def labelled(label: str) -> dict[str, str]:
 def count_neutrality_jobs(
     campaign: Campaign, references: Mapping[str, Any], label: str
 ) -> list[tuple[str, str, str, pool_mod.Job]]:
-    """One side's job set: ``(phase, configuration, arm, job)`` per active arm."""
+    """One side's job set: ``(phase, configuration, arm, job)`` per active arm.
+
+    A side :data:`STRADDLE_TIMERS` names is composed with the wall-clock
+    timers on (DR12); every other side with them unset.
+    """
     from . import reproduction as reproduction_mod
 
+    timers = STRADDLE_TIMERS.get(label, False)
     plan: list[tuple[str, str, str, pool_mod.Job]] = []
     for config in campaign.configurations:
         reference = references[config.name]
@@ -305,6 +339,7 @@ def count_neutrality_jobs(
                         ),
                         entry_state=snapshot,
                         run_kind="gate",
+                        timers=timers,
                         override_env=labelled(label),
                     ),
                 )
@@ -325,6 +360,7 @@ def count_neutrality_jobs(
                         regime="unperturbed",
                         delta=None,
                         run_kind="gate",
+                        timers=timers,
                         override_env=labelled(label),
                     ),
                 )
@@ -931,6 +967,9 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         "test_set": campaign.test_set,
         "tau": campaign.tau,
         "straddle_test_set_declaration": dict(STRADDLE_TEST_SET),
+        "straddle_timers_declaration": dict(STRADDLE_TIMERS),
+        "after_side_timers": bool(STRADDLE_TIMERS.get(after_label, False)),
+        "not_counts_by_kind": dict(NOT_COUNTS_BY_KIND),
         "population": (
             f"{straddle['says']}  {len(rows)} run pair(s) = "
             f"{sum(1 for r in rows if r['phase'] == 'A')} evaluation(s) + "

@@ -909,7 +909,7 @@ Relative to `c0ae5b28` this file also carries constraint 93 (§3.5, inherited).
 The docstring named a retired switch; it names the one that replaced it. Nothing the constraint
 computes changes.
 
-### 4.5 `process/core/caller.py` — 18 recorded edits
+### 4.5 `process/core/caller.py` — 19 recorded edits
 
 Relative to `c0ae5b28` this file also carries everything in §3.2 (inherited).
 
@@ -1568,7 +1568,47 @@ totals by their number, one dispatch sweep) and requires every other count and t
 optimisation phase identical to the digit, with the per-run nodes' own components the only ones
 of the exit state that may differ. No model file changes.
 
-### 4.6 `process/core/solver/solver_handler.py` — 1 recorded edit
+#### 4.5.18 `PROCESS_ARCH_TIMERS` and `TIMERS` — observation-only wall-clock timers (DR12)
+
+*Recorded edit kind: instrument. Made by task A101 (v5-timers-and-once), driver change DR12, V5 list
+item 9, decisions D33 and D38.*
+
+```python
++_TIMERS_VALUES: tuple[str, ...] = ("on",)
++TIMERS_NAME: str | None = os.environ.get("PROCESS_ARCH_TIMERS", "").strip() or None
++# ... refused on an unknown value
++TIMERS_ENABLED: bool = TIMERS_NAME is not None
++TIMERS: dict | None = _new_timers() if TIMERS_ENABLED else None
++def timers_solve_started() -> None: ...
++def timers_solve_ended() -> None: ...
++def _timed_objective(i_figure_merit, m, data): ...
+```
+
+**The hooks, each one `is None` test with the switch unset.** In `_node`, around the node's own
+`run()` (per node: `node_s`, `node_n`); in `_run_deferred_tail`, the flat per-call tail's direct calls
+apart (`tail_node_s`); in `_call_models_once`, the sweep's wall from the counter increment to the end
+of the tokamak path (`sweep_s`, `n_sweeps`; the stellarator and IFE returns are not timed); in
+`_call_models_partitioned`, the artifacts' first load (`run_setup_s`), the coupling-state bind
+(`test_bind_s`) and, through two wrappers that replace `spec.read` / `spec.residual` for the loop,
+the reads and residuals (`test_read_s`, `test_residual_s`); in the flat loop, upstream's own
+`check_agreement` pair (`upstream_test_s`); at the four objective-and-constraints sites, the one
+helper `_timed_objective` (`objective_s`) — the same two calls in the same order, so the default
+path's floats are unchanged; in `call_models`, the evaluation's wall and the epochs of the first
+and the last (`call_models_s`, `first_call_models_at`, `last_call_models_ended_at`); in
+`resolve_schedule`'s cache-miss path and `_defer_per_run_nodes`'s validation, the once-per-run
+set-up (`run_setup_s`, folded into the fixed per-run term and out of the evaluation, plan §6); in
+`write_output_files`, the output path's wall (`output_path_s`); `timers_solve_started` /
+`timers_solve_ended`, called by `solver_handler.run`, stamp the solve phase's wall and epochs and
+freeze the accumulators at its exit (`at_solve_end`) so the run's tail can be told from the solve.
+
+**What it is not.** Nothing here touches a float a result depends on or changes a branch: unset,
+`TIMERS` is `None` and gate G1 compares the outputs byte for byte; on, gate GC compares every count
+and every exit state of a side made with the timers on against the side made without. The harness
+reads the dictionary after the run and *before* its own audit sweep, and measures the audit's share
+apart as an excluded cost. Wall clock is context, never evidence (D33; CLAUDE.md; I-10; trap T5).
+No model file changes.
+
+### 4.6 `process/core/solver/solver_handler.py` — 2 recorded edits
 
 Relative to `c0ae5b28` this file also carries the three probe `record_retry` hooks (§3.8).
 
@@ -1610,6 +1650,29 @@ positional guess.
 
 **Driver, not model.** Which attempts run, in which order, under which settings, is exactly what
 it was; the only new statements are the stamps.
+
+#### 4.6.2 `caller.timers_solve_started()` / `caller.timers_solve_ended()` around the ladder — instrument (DR12)
+
+*Recorded edit kind: instrument. Made by task A101 (v5-timers-and-once), driver change DR12.*
+
+```python
+         caller.open_ladder()
++        # DR12 (A101): the solve phase's boundaries, timers on only.
++        caller.timers_solve_started()
+         with caller.attempt(LADDER_STAGES[0]):
+             ifail = self.solver.solve()
+ ...
++        caller.timers_solve_ended()
+         self.output()
+         return ifail
+```
+
+Two calls bracketing the whole retry ladder, each a no-op with `PROCESS_ARCH_TIMERS` unset (gate
+G1); with it on they stamp the solve phase's wall and epochs and freeze the accumulators at its
+exit, so the optimiser's own time (the solve's wall less every evaluation) and the fixed per-run
+term (what lies before the first evaluation and after the solve) can be derived by the harness.
+The ladder itself — which attempts run, in which order, under which settings — is exactly what it
+was.
 
 ### 4.7 `process/core/_idf_probe_modules.py` — 1 recorded edit
 
