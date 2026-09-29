@@ -275,6 +275,8 @@ def compare_row(
     }
     bound_as_expected = widths_other == expected_widths and bool(widths_full)
     audit = other.get("exit_audit") or {}
+    restricted = audit.get("restricted") or {}
+    restricted_full = (full.get("exit_audit") or {}).get("restricted") or {}
     out = {
         "role": role,
         "status": other.get("status"),
@@ -294,10 +296,17 @@ def compare_row(
             "n_differing": states["n_differing"],
             "differing_first": states["differing"][:10],
         },
+        # The whole-y audit (every component, the per-run deferred nodes'
+        # outputs included -- large on A2 until V5 list item 5 executes them
+        # once in phase A) and the restricted one beside it (the statistic V4
+        # published), both reported, neither the tooth.
         "exit_audit_max": audit.get("residual_max"),
         "exit_audit_max_hex": audit.get("residual_max_hex"),
         "exit_audit_n_above_tau": (audit.get("brief") or {}).get("n_above"),
         "exit_audit_full_max": (full.get("exit_audit") or {}).get("residual_max"),
+        "exit_audit_restricted_max": restricted.get("max"),
+        "exit_audit_restricted_n_above_tau": restricted.get("n_above"),
+        "exit_audit_restricted_full_max": restricted_full.get("max"),
     }
     identical = states["n_differing"] == 0
     counts_identical = (
@@ -521,7 +530,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             shutil.copytree(other_dir, copy)
             state = json.loads((copy / "y_exit.json").read_text())
             moved = None
-            for name, entry in state["components"].items():
+            for name, entry in state["state"].items():
                 value = entry.get("hex") if isinstance(entry, dict) else None
                 if isinstance(value, str) and value.startswith(("0x", "-0x")):
                     f = float.fromhex(value)
