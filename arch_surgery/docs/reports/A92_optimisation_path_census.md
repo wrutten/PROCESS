@@ -534,3 +534,55 @@ instrument's factor (2.3–4.7) is a property of the hooks, not of any arm.
   gives as 12 200 and 313) — the totals moved into `--summarise-census` (`f7f9b136`), the file
   regenerated (identical but for the `totals` block), the report corrected before its first
   commit.
+
+## 9. Orchestrator's critical assessment (protocol §5) — 2026-09-29
+
+**Verdict: merge.** Both halves of V5 list item 6's prerequisite (2) are answered — the first with a
+finding that nothing need be added for the optimiser's path, the second with a finding that the declared
+tooth does not bite and a better one identified. Verified by different roads, not by repeating the press:
+
+- **The set comparison (§4.2), recounted from the committed JSON.** From `optimisation_path_sets.json`
+  and `rbw_sets.json` alone, per configuration, arm and block: path-only components are exactly
+  `build.dz_xpoint_divertor`, `pf_coil.first_call`, `pf_coil.n_pf_coils_in_group`, `physics.first_call`
+  (the last two only on `st_regression`), split over `M1`/`M2` as the report says; the 8-entry sets have
+  0 components absent from the path in all 12 cases; sizes 79 / 78 / 75 flat, 17 / 50–48 / 10 per block.
+  Matches the report's Table 2 and verdict 1.
+- **Observation-only (§4.1), read against the campaign records.** All 12 censused `metrics.json` read
+  against the relocated campaign records (`A90_runs/campaign/optimisation`, arm `B3` for today's `B2`):
+  status, solver iterations, solve-phase node calls, evaluations (630/660/1240/9240/1050/1218/570/3150/
+  570/3510 as pairs) and the `norm_objf` hex identical on every run; `ifail` 1 on all. Stamps: one at
+  `9f3d4148`, one at `5a0b419a`, ten at `84dde2f7`, none dirty — the straddle the report's §6.1 records,
+  over commits that touched only the summary code and docstrings.
+- **The teeth (§5), recounted from the records by digest.** On `large_tokamak_nof`, sha256 of `y_exit.json`:
+  the full-set run and the three non-binding drops and the control share one digest in `A0` and one in
+  `A2`; the `pf_coil.stress_z_cs_self_midplane_profile` drop has a different digest in each arm, with node
+  calls 129 → 111 and 55 → 52 and one dispatch sweep fewer. Bit-identical means bit-identical here; the
+  binding component is real.
+- **The V4 folder.** No tracked change on the branch under `MDA_partitioning_experiment_v4/` (diff empty).
+  The 122 numba cache files are gitignored `__pycache__` contents of the *worktree's* copy; the main
+  tree's V4 copy gained none (checked by mtime). They vanish with the worktree at retirement; nothing to
+  clean. The mechanism is filed as **I-31** (V4's `pool.run` composes the child environment without a
+  `NUMBA_CACHE_DIR`), a harness default for V5.
+
+**Reading the teeth result, which the report states more strongly than it should.** The report says the
+whole-`y` audit "cannot catch a one-sweep-early stop" and calls the two drops ESCAPES. The other reading
+is the one that matters for V5: after the early stop the whole state is *within τ* on the audit (2.6e-09
+and 2.7e-10 against 1e-08), so by the plan's own accuracy definition the truncated run is acceptable —
+on this entry the full census set stops one sweep *conservatively*, exactly as A89 found V4's whole-`y`
+test doing at 1e-06. The audit did its job: it reports the achieved accuracy, and the achieved accuracy
+is fine. What the exit-state comparison shows is that the component *decides the stop*, not that
+dropping it breaks accuracy. So the tooth for the gate that asserts a test set is the comparison the
+report proposes (§8.2), read as: the component rule 1 finds binding changes the sweep count and the exit
+state; every non-binding drop and control is bit-identical; the whole-`y` audit is reported beside as the
+accuracy it left. That is GT's declared form for the V5 plan (§3, §7). The audit-as-threshold criterion
+was the brief's, declared before the run; its failure is a result and the brief's fault, not the task's.
+
+**For the V5 plan (filled at this merge).** The test set per block is the union over the optimisation-run
+census (`optimisation_path_sets.json`; the report's §8.1 convention, the larger set measured where the
+loops run): flat 79 / 78 / 75, `M1` 17, `M2` 50 / 49 / 48, `M3` 10, `PULSE` 1 on st. The four cold-start
+components are carried; they are inert after evaluation 0 and cost 5 µs each per test.
+
+**Trap T18** filed from §7 decision 2: a snapshot typed once at install is wrong on a cold start.
+
+**Not done here.** The report's claim that the census cannot see reads through model-held references
+(§6.2) is accepted as a stated limit, not verified; it is the same limit A89 declared.
