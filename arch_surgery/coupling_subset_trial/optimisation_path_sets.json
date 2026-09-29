@@ -10079,5 +10079,12 @@
     }
    }
   }
+ },
+ "totals": {
+  "n_runs_ok": 12,
+  "n_evaluations": 23128,
+  "n_fd_probes": 12200,
+  "n_line_search_points": 313,
+  "n_repeated_points": 311
  }
 }
