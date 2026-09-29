@@ -497,7 +497,7 @@ def print_tables(out):
             for m in ("B0_full", "B0_rbw", "B2_rbw"):
                 e = q[m]
                 pr = e.get("pairing") or {}
-                rows.append([name, s, m, e.get("status"), f(e.get("ifail")), e.get("n_attempts"),
+                rows.append([name, s, m, e.get("status"), f(e.get("ifail")), f(e.get("n_attempts")),
                              f"{pr.get('n_identical')}/{pr.get('n_variables')}" if pr.get("n_variables") else
                              ("n/a (seed 0)" if s == "0" else "—"),
                              f(pr.get("identical")), (e.get("tree_git_head") or "")[:8],
@@ -513,10 +513,10 @@ def print_tables(out):
             for m in MEMBERS:
                 e = q[m]
                 ag = e.get("against_campaign") or {}
-                rows.append([name, s, m, f(e.get("ifail")), e.get("n_attempts"),
-                             "/".join(map(str, e.get("iterations_per_attempt") or [])),
-                             e.get("n_solver_iterations_summed"), e.get("n_evaluations"),
-                             e.get("node_calls_solve_phase"),
+                rows.append([name, s, m, f(e.get("ifail")), f(e.get("n_attempts")),
+                             "/".join(map(str, e.get("iterations_per_attempt") or [])) or "—",
+                             f(e.get("n_solver_iterations_summed")), f(e.get("n_evaluations")),
+                             f(e.get("node_calls_solve_phase")),
                              f(e.get("node_calls_per_evaluation"), "{:.1f}"),
                              f(e.get("sweeps_per_eval_mean"), "{:.2f}"),
                              f(e.get("norm_objf"), "{:.12g}"),
