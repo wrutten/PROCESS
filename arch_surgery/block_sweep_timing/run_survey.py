@@ -102,16 +102,17 @@ def stage_entries(names):
             trial.run_evaluate(j, camp, arm, "full", pass_log=False)
 
 
-def timing_dir(c, arm):
-    return RUNS / c.name / "timing" / arm
+def timing_dir(c, arm, press=1):
+    """Press 1 is the survey; a later press is a repeat of identical code, kept apart."""
+    return RUNS / c.name / ("timing" if press == 1 else f"timing_press{press}") / arm
 
 
-def stage_timing(names):
+def stage_timing(names, press=1):
     camp = campaign()
     for c in configs(camp, names):
         ref = trial.reference_of(c)
         for arm in ARMS:
-            outdir = timing_dir(c, arm)
+            outdir = timing_dir(c, arm, press)
             if (outdir / "sweep_timing.json").exists():
                 continue
             j = trial.job(c, camp, arm, "displaced", SEED, ref, outdir)
@@ -125,7 +126,8 @@ def stage_timing(names):
                        "--outdir", str(outdir), "--reps", str(REPS)]
             t0 = time.perf_counter()
             rc = trial.launch(command, env, outdir, {"arm": arm, "tau": camp.tau,
-                                                     "seed": SEED, "entry": "displaced"}, 3600)
+                                                     "seed": SEED, "entry": "displaced",
+                                                     "press": press}, 3600)
             status = (json.loads((outdir / "sweep_timing.json").read_text()).get("status")
                       if (outdir / "sweep_timing.json").exists() else "no_record")
             print(f"  timing {c.name:22s} {arm:4s} tau={camp.tau:.0e} rc={rc} "
@@ -156,8 +158,8 @@ def node_modules():
             if e.get("in_call_models_once")}
 
 
-def summarise_case(c, arm, node_module):
-    p = timing_dir(c, arm) / "sweep_timing.json"
+def summarise_case(c, arm, node_module, press=1):
+    p = timing_dir(c, arm, press) / "sweep_timing.json"
     if not p.exists():
         return {"configuration": c.name, "arm": arm, "status": "absent"}
     r = json.loads(p.read_text())
@@ -291,6 +293,14 @@ def summarise():
         out["entries"].append(entry)
         for arm in ARMS:
             out["cases"].append(summarise_case(c, arm, node_module))
+    # later presses of identical code, for the repeatability table only
+    out["presses"] = {}
+    press = 2
+    while any((timing_dir(c, arm, press) / "sweep_timing.json").exists()
+              for c in camp.configurations for arm in ARMS):
+        out["presses"][str(press)] = [summarise_case(c, arm, node_module, press)
+                                      for c in camp.configurations for arm in ARMS]
+        press += 1
     (RUNS / "survey_summary.json").write_text(json.dumps(out, indent=1))
     text = render(out)
     (RUNS / "survey_tables.md").write_text(text)
@@ -438,6 +448,30 @@ def render(out):
             for mod in BLOCK_ORDER[:5]:
                 cells.append(f"{_ms(bm[mod])} ({cm[mod]:g})" if mod in bm else "—")
             L.append(f"| {k['configuration']} | {k['arm']} | {label} | " + " | ".join(cells) + " |")
+    # --- repeatability across presses
+    if out.get("presses"):
+        presses = ["1", *sorted(out["presses"])]
+        L += ["", "**Repeatability across presses** (ms per block sweep, sweep wall median "
+              "[min, max]; each press is a separate serial run of identical code, 7 timed "
+              "repetitions after 1 warm-up; counts identical across presses is checked).", "",
+              "| configuration | arm | block | " + " | ".join(f"press {p}" for p in presses)
+              + " | counts identical across presses |",
+              "|---|---|---|" + "---|" * (len(presses) + 1)]
+        for k in out["cases"]:
+            if k.get("status") != "ok" or k.get("refused"):
+                continue
+            others = [next((q for q in out["presses"][p] if q["configuration"] == k["configuration"]
+                            and q["arm"] == k["arm"]), None) for p in presses[1:]]
+            same = all(q is not None and q.get("status") == "ok" and not q.get("refused")
+                       and q["block_counts"] == k["block_counts"]
+                       and q["node_counts"] == k["node_counts"] for q in others)
+            for label in _labels(k):
+                cells = [_ms(k["blocks"][label]["wall_per_sweep"])]
+                for q in others:
+                    b = (q or {}).get("blocks", {}).get(label)
+                    cells.append(_ms(b["wall_per_sweep"]) if b else "—")
+                L.append(f"| {k['configuration']} | {k['arm']} | {label} | " + " | ".join(cells)
+                         + f" | {same} |")
     # --- per node
     L += ["", "**Per node** (ms per call, median [min, max] over repetitions of the "
           "per-repetition mean; calls per evaluation).", ""]
@@ -461,6 +495,8 @@ def main():
     for s in ("references", "entries", "timing", "summarise"):
         p.add_argument(f"--{s}", action="store_true")
     p.add_argument("--configuration", action="append")
+    p.add_argument("--press", type=int, default=1,
+                   help="timing press number; 1 is the survey, a later one a repeat")
     a = p.parse_args()
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     if a.references:
@@ -468,7 +504,7 @@ def main():
     if a.entries:
         stage_entries(a.configuration)
     if a.timing:
-        stage_timing(a.configuration)
+        stage_timing(a.configuration, a.press)
     if a.summarise:
         summarise()
 
