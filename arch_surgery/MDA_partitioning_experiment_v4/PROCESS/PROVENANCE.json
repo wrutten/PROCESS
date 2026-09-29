@@ -3,7 +3,7 @@
   "task": "A46 (process-copy)",
   "decision": "D20, 2026-09-10 -- V4 runs its own copy of PROCESS and owes V3 no backward compatibility",
   "generated_by": "PROCESS/copy_gates.py provenance",
-  "copy_date": "2026-09-29",
+  "copy_date": "2026-09-10",
   "source": {
     "repository": "PROCESS_surgery (this repository), branch architecture_surgery",
     "path": "process/  -- the PROCESS package at the repository root",
@@ -3306,5 +3306,23 @@
       "process/models/vacuum.py": "c6ebad18f5087c142f49476040b73d6c4055fbe41167e8da273a0673857db049",
       "process/models/water_use.py": "fae28ffb15c09a806f7bbf21236744a7fea8bf4f2a2ad2656d8dc31374458c94"
     }
-  }
+  },
+  "permitted_edits_updated": [
+    {
+      "date": "2026-09-29",
+      "task": "A90 (m2-phasea-vs-phaseb)",
+      "files_added": [
+        "process/core/solver/evaluators.py"
+      ],
+      "files_removed": [],
+      "files_changed": [
+        "process/core/caller.py",
+        "process/core/solver/module_solve.py"
+      ],
+      "copy_date_corrected": {
+        "from": "2026-09-14",
+        "to": "2026-09-10"
+      }
+    }
+  ]
 }
