@@ -660,3 +660,37 @@ with the second copy's one child.*
   after 18:03:00 discarded by rule, one further `nohup` relaunch died the same way, the 14 re-made
   by one background-mode run (18:33–18:54). All 25 at `6a51108b`, clean.
 - 2026-09-29 — `--summarise --ladder` at `6a51108b`; results, verdict and proposals written.
+
+## 9. Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-09-29 by the orchestrating session under D37; checked differently from the agent.*
+
+**Checked.** (1) All 25 records recounted by the orchestrator from `metrics.json` against the campaign's
+records (`A90_runs/campaign/optimisation/st_regression/`, `B3` = today's `B2`), by iterations per attempt,
+evaluations and paired relative `norm_objf`: every cell of the hand-back's per-rung table reproduces —
+`B2` whole-`y` 1e-8 path = campaign on seeds 0, 3, 4 (seed 1 58/3 450 vs 59/3 510, seed 2 40/2 370 vs
+39/2 310; optimum within 1.1e-10 on all five); `B2` census 1e-9 2/5, 1e-10 3/5, 1e-12 3/5; `B0` census
+1e-10 3/5; seed 1's `B2` census optimum 1.3e-2 off at 1e-9 (100 + 61 iterations) and 1.3e-3 off at 1e-10
+(100 + 64 + 62), and 3.5e-11 at 1e-12 (55 iterations, one attempt). (2) Every record stamped `6a51108b`,
+the script's commit; the worktree is clean; nothing under the V4 or V5 folders. (3) The double launch
+(the orchestrator's mistake, T19) is stated in §3 and decision 8 with the discard rule; the discarded
+population and the re-made one agree on every evaluation count, which is the acceptance quantity.
+
+**Read against the question.** A93's hypothesis (a nonzero objective residual of the census-set loop at
+1e-8 on st moves a fragile optimiser) is confirmed in its observable form: the tolerance alone does not
+move the partitioned arm (whole-`y` 1e-8 is the flat arm's behaviour in A93), the set does, and the effect
+fades exactly where A89's residual reads 0.0. The 1e-12 result on seed 1 is the new fact: the census set
+needs the loops exact, not merely below h³, before st's most fragile seed stays in its basin.
+
+**Decision under D37 (autonomous; the user: "you can modify the convergence set and tolerance as you see fit
+(inform me after)").** The campaign's declared setting stays **the census set at τ = 1e-8 in every
+configuration** — the rule's value, D32, and the user's "keep the tolerance: failed starts are results" —
+with `st_regression`'s trajectory term pre-declared non-neutral from this ladder (the mechanism named, seeds
+1 and 2 named as st's fragile seeds, seed 1's basin change a known failure mode of the census set at
+1e-8..1e-10). **Added: a supplementary st stage at τ = 1e-12**, `B0` and `B2` under the census set on the
+campaign's seed set (50 optimisations, ~10 % of the budget), reported beside the declared cell and labelled
+supplementary — the rung where A89 reads the census loops exact, the stable seeds' paths return and seed 1
+holds its basin, so the paper's st column can show the partitioned cost at matched path as well as at the
+declared τ. Not chosen: a per-configuration τ (a rule fitted to the outcome) or 1e-12 everywhere (unmeasured
+on the pulsed configurations, where 1e-8 is path-identical 30/30). Proposal (d) (seed 1's lower feasible
+basin) is noted in the queue as a finding about st's problem.
