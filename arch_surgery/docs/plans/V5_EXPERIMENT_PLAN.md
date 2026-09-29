@@ -170,7 +170,7 @@ median is nearest-rank, upper-middle (`sorted[n // 2]`, V4 §3.5).
 
 | # | quantity | rule | provenance |
 |---|---|---|---|
-| **A1** | **RQ1 — matched accuracy** | per configuration and pair (**`A1 → A2` pulsed, `A0 → A2` st — D34's pair, the one the paper prints**), each arm's audited maximum scaled residual over the restricted set (components not owned by the `per_run` node set) **within F = 10 at both median and p90**; the whole-state audit published beside; **0 components above τ on every accepted run** | V4 §3.4 check 1; D34; item 10's verification row; the restriction itself is §12 **Q2** (item 5 asks that it be reconsidered) |
+| **A1** | **RQ1 — matched accuracy** | per configuration and pair (**`A1 → A2` pulsed, `A0 → A2` st — D34's pair, the one the paper prints**), each arm's audited maximum scaled residual **over the whole state** (D36: with the deferred nodes executed, every component is audited alike) **within F = 10 at both median and p90**; the restricted statistic published beside for this revision; **0 components above τ on every accepted run**. The audit sweep is the harness's instrument: **excluded from every evaluation count and every timing** (D36) | V4 §3.4 check 1; D34; **D36** (§12 Q2); item 10's verification row |
 | **A3** | **RQ1 — cost** | on D34's pair: the ratio of the means over the runs both arms finished, the per-run median with `[min, max]`; per module (sweeps per evaluation, the paper's cells); `A2/A0` on the pulsed configurations is not printed in the paper's table | D34; the paper's tables; V4 §3.4 check 3 |
 | **A2** | **RQ1 — the fixed-point distance** | the between-arm distance at exit (A76's statistic) **reported**: median and p90, count of pairs above τ; no rule | item 10's dropped candidate (the user: one sentence that the arms reach the same fixed point) |
 | **B1** | **RQ2 — same optimum** | per configuration, paired relative `|Δ norm_objf| / max(|a|, |b|)` at accepted optima for `B0 → B1`, `B0 → B2`; yardstick the `BR → B0` spread in the campaign; **accepted at median and p90 when `r ≤ max(F × yardstick, floor)`**, F = 10, floor = 1e-6; the statistic is published whether or not it passes, **with its attribution to the rung it fails on** (V4: `lad`, on the lift rung `B0 → B1`, not the partition); clusters at 10 × floor for the hop count | V4 check 1 (D6); **item 4 as reduced** (the user, 2026-09-29: "accepted"); the neighbouring-threshold grid is not a paper table |
@@ -243,7 +243,7 @@ criterion, the tooth. Kept, new and dropped are by list item 10 unless another i
 | **G0** | `g0prime` | every V5 commit | the copy's `process/models/` byte-identical to `c0ae5b28`'s | a 1-byte change to one model file | kept |
 | **G1** | `switch_neutrality` | **each driver change, run per change, never batched** (DR9–DR13, §11) | with every switch unset, deterministic record values and every output-file line identical to a run at the pre-change commit, three configurations | a 1-ULP change to one float | kept |
 | **G2** | `prime_map` | the prime in its **once-per-evaluation form** (item 8) | from each reference exit snapshot, prime on vs off, exit states bit-identical on N/N components; **and** the once-per-evaluation form's exit states bit-identical to V4's per-sweep form on the gate job set (item 8's requirement); `n_prime_calls` = evaluations | a doctored snapshot component | kept, re-formed |
-| **G4** | `audit_restriction` | the restricted statistic (A1) | a doctored `per_run`-owned component trips the whole-state audit and not the restricted one; a doctored in-loop component trips both; one from each excluded namespace | both directions, every namespace | kept **while A1's restriction stands** (§12 Q2) |
+| **G4** | `audit_restriction` | the restricted statistic (A1) | a doctored `per_run`-owned component trips the whole-state audit and not the restricted one; a doctored in-loop component trips both; one from each excluded namespace | both directions, every namespace | **retires** once the whole-state and restricted statistics agree on the gate job set (D36, §12 Q2); kept until then |
 | **G5** | `switch_composition` | `B2` | the arm composed from the matrix equals the arm composed switch by switch | `norm_objf` hex, `n_call_models` | kept |
 | **G6** | `entry_and_warm` | phase A | seed-paired entries bit-identical across arms; each block arm from the reference snapshot reproduces the reference fixed point below τ — **at V5's τ and on the census set** | as V4 | kept |
 | **G7** | `record_completeness` | the record contract | a forced-unconverged smoke run carries every declared field, the timer fields included; a record missing one is refused | field teeth | kept |
@@ -251,7 +251,7 @@ criterion, the tooth. Kept, new and dropped are by list item 10 unless another i
 | **GT** *(new)* | — | the test set (§3) | the census set minus one declared component is caught by the whole-`y` audit, or reported not individually binding; a dropped non-census control changes nothing — **form [to be declared from A92]** | the dropped component itself | new (item 6) |
 | **GC** *(new)* | — | items 7 and 8 (DR9, DR10) | on a job set (both phases, every arm, one seed per configuration) node calls, sweeps, predicate evaluations, components compared and every exit state **identical to the digit** before and after the change | a doctored count on one record | new — the count-neutrality gate |
 | **GR** *(once)* | `reproduction` | the V5 copy **at its copy commit, before any change** (A94) | reproduces V4's twenty reference records bit for bit on every count field and hex float | +1 on a count, 1 ULP on a hex, a missing reference | run **once**; no GR beyond the copy |
-| ~~G3 / G3c~~ | `cold_chain` | the prime's cold chain | reproduce A35's counts | — | **reconsidered**: its construction (a prime at every sweep head) no longer exists once item 8 moves the prime; §12 **Q3** |
+| ~~G3 / G3c~~ | `cold_chain` | the prime's cold chain | reproduce A35's counts | — | **dropped** (the user, 2026-09-29, §12 Q3): its construction (a prime at every sweep head) no longer exists once item 8 moves the prime; G2 re-formed plus GC cover it |
 | ~~G8~~ | `predicate_mode` | the `mixed` ruler | — | — | **dropped** (item 10; D30) |
 
 **Self-checks — kept, not reported**: composition, rungs, capability, provenance, data, run path, stage
@@ -374,7 +374,8 @@ that entails each is named; the merge approval is per change.
 | **DR10** | the prime executed **once per `call_models`, before M1**, as a pre-processing step of the sequenced schedule | item 8 (the user: *"pre-processing before the partitioned MDAs can start"*) | G2 re-formed; `n_prime_calls` = evaluations; G3/G3c reconsidered (Q3) | the paper's caption ("executing the FirstWall subfunction before every MDA sweep") must stay as V4 built it, ~9–15 stamped calls per evaluation |
 | **DR11** | the loop's predicate binds a **declared test set per block** (the census set) instead of the block's whole write set; the DSM feedback set selectable for the cross-check only, never composed into an arm | item 6, **D32** | the test-set artifacts and their stage; GT; τ from the rule | V4's whole-`y` test at 1e-6 stands: correct only because it stops one sweep late (A89 §7.3) and the test is 30–39 % of an evaluation's wall (A89 §7.5) |
 | **DR12** | **observation-only timers** (the block trace's form, DR8): per node, per block loop (test, dispatch), per evaluation (objective and constraints), per run; unset ⇒ `None`, no branch | item 9, **D33** | record fields; the appendix tables; the timers-off runs | no wall-clock appendix; D29 (2)'s scope statement stands for V5 as for V4 |
-| **DR13** *(conditional on Q1)* | the flat arms' per-call and per-run deferral in phase A (and phase B) — **no new driver code**: `PROCESS_ARCH_DEFER_PER_CALL = feedforward` and the committed per-run artifact already compose on a flat arm (A89's `A0`) | list item 6's "all A arms" (the user, 2026-09-29) | matrix rows; the paper's matrix caption; `A2/A0` on the Feedforward and Post-processing rows reads 1 | the deferral stays on the intervention rung as the paper's matrix has it |
+| ~~DR13~~ | *(was: the flat arms' deferral, conditional on Q1)* — **not needed: Q1 ruled (c), D35**; the deferral stays on the intervention rung as the paper's matrix has it | — | — | — |
+| **DR11** *(addition)* | the `mixed` predicate ruler **removed** from the copy in the same change, the switch retired through the registry (`retired_names` / `RETIRED_SWITCHES`) | §12 Q5 (the user, 2026-09-29) | one fewer switch; the self-check compares the two retired lists | the mode stays in the copy uncomposed |
 
 **Data artifacts.** Regenerated: the entry references (§4). Added: **the census test sets per configuration,
 arm and block** (`test_set_<configuration>.json`, with the DSM feedback set beside as the cross-check, by the
@@ -399,7 +400,21 @@ of 1 component). Nothing here may be applied to V4.
 
 **Decisions for the user** — numbered, each with the plan's recommendation; **none is settled until ruled**.
 
-1. **The flat arms and the deferrals ("all A arms", list item 6).** The user extended item 5 to all A arms
+> **Rulings of 2026-09-29 (the user, on the orchestrator's presentation of this section):**
+> **Q1 → (c), ruled D35**: *"no. the feedforward and postprocessing should run once in phase A. It should mimic a
+> full model evaluation yielding the same output as the reference case."* The deferrals stay on the intervention
+> rung; every A arm's evaluation ends with every node computed at the converged state (the flat arms' final
+> sweep; `A2`'s one execution, measured). DR13 is not needed; Table 1's `⁽?⁾` rows stand as printed.
+> **Q2 → yes, ruled D36**: the whole-state audit is the matched-accuracy statistic; the user adds that the audit
+> sweep *"should be excluded from evaluation count and runtime measurements"* — it is (§5 B2 subtracts it; §6
+> excludes it from every total), now stated as the ruling. G4 retires when the two statistics agree on the gate
+> job set. **Q3 → drop G3/G3c** (*"fine"*). **Q5 → the `mixed` ruler is removed from the copy as part of DR11**
+> (the user asked why it would be valuable to leave it in; it is not — the removal rides on DR11's neutrality
+> press and retires the switch through the registry). **Q6 → the rule stands whatever A93 finds** (explained to
+> the user as: a start lost at the tighter τ is a result on the success table, never a reason to loosen).
+> Q7 and Q8 were answered at orchestration level in A95's assessment (§6 of its report).
+
+1. **The flat arms and the deferrals ("all A arms", list item 6).** *Ruled (c), D35.* The user extended item 5 to all A arms
    on 2026-09-29, and A89's second-pass control (`A0`: feed-forward once per call after convergence, per-run
    nodes once after) was built at the user's request and is the control of item 6's cost projection. Three
    readings: **(a)** `A0`/`A1` defer in phase A as A89 built them; **(b)** (a) plus the twins `B0`/`B1` in
@@ -413,22 +428,22 @@ of 1 component). Nothing here may be applied to V4.
    rule *and* the deferral. **Recommendation: (b)** — the user's words and A89's construction point at (a),
    and the phase parallelism the arm renaming was made for (A78) asks for its phase B twin; the paper's matrix
    gains a row. If the user wants the paper's matrix untouched, (c).
-2. **The matched-accuracy statistic (A1).** Item 5 asks that the restricted audit be reconsidered once the
+2. **The matched-accuracy statistic (A1).** *Ruled yes, D36; the audit sweep excluded from counts and timings.* Item 5 asks that the restricted audit be reconsidered once the
    deferred nodes are executed: their components can then be audited like the rest. **Recommendation:** the
    whole-state audit becomes the statistic (F = 10 at median and p90 over all components, 0 above τ), the
    restricted one is published beside for one revision, and G4 is retired when the two agree on the gate job
    set; the verification table's row then reads on the whole state, which is what item 10 lists.
-3. **G3/G3c (`cold_chain`).** Its construction — the prime at every sweep head reproducing A35's cold-chain
+3. **G3/G3c (`cold_chain`).** *Ruled: dropped.* Its construction — the prime at every sweep head reproducing A35's cold-chain
    counts — does not exist once DR10 lands. **Recommendation: drop it**; G2's re-formed criterion (exit states
    bit-identical to V4's per-sweep form on the gate job set) plus GC cover what it bound.
 4. *(Ruled while this plan was being written — **D34**, the user, 2026-09-29: the paper's phase A table
    prints `A2/A1` on the pulsed configurations and `A2/A0` on `st_regression`; phase B keeps `B2/B0`. Applied
    in §1, §2, §5 and §8; no question remains.)*
-5. **The `mixed` predicate mode.** D30 says apply the rule before the campaign or drop it; item 10 drops G8.
-   **Recommendation:** drop the trial, leave the mode in the copy uncomposed (0 driver edits, no G1 press for
-   it); removing the code is a driver change that buys nothing.
+5. **The `mixed` predicate mode.** *Ruled: removed from the copy with DR11.* D30 says apply the rule before the campaign or drop it; item 10 drops G8.
+   The task's recommendation was to leave the mode in the copy uncomposed (0 driver edits, no G1 press for
+   it); the user saw no value in keeping it, and the removal rides on DR11's press.
 6. **τ if A93 finds the derived value changes the optimiser's path or success on a configuration.**
-   **Recommendation:** declare it anyway — the rule is declared, the value follows it, and a start lost at the
+   *Ruled: the rule stands.* **Recommendation:** declare it anyway — the rule is declared, the value follows it, and a start lost at the
    tighter τ is a result on the per-arm success table, not a reason to loosen (protocol §6).
 7. **The reproduction gate's reference set (A94).** Item 10 says twenty records; which twenty is A94's to
    declare. **Recommendation:** V4's campaign records at `57dc0c14` for the arms and seeds V4's GR covered
@@ -444,3 +459,4 @@ of 1 component). Nothing here may be applied to V4.
 |---|---|
 | 2026-09-29 | Written by A95 (v5-plan) at `7986d408` from the V5 improvement list (items 1, 3–10 and their rulings D29–D33), V4's report §1–§3 and §6, the harness plan and README, A89 §7, A90 §0–§2, A91 §0 and §5, and the paper's results section. Status DRAFT · NOT APPROVED. Eight questions in §12; τ, the census population and GT's form await A92 and A93. |
 | 2026-09-29 | **D34** (the user, relayed by the orchestrator while the draft was open): the paper's phase A table prints `A2/A1` on the pulsed configurations and `A2/A0` on `st_regression`; phase B keeps `B2/B0`. Applied in §1 (RQ1), §2 (the published pairs), §5 (A1, new A3) and §8 (the main-text tables); §12 Q4 closed by it — seven questions remain open. |
+| 2026-09-29 | Merged at `5e4fd4e7`. The user rules on §12 (entered by the orchestrator): Q1 (c) — **D35**; Q2 yes with the audit sweep excluded from counts and timings — **D36**; Q3 G3/G3c dropped; Q5 the `mixed` ruler removed with DR11; Q6 the rule stands whatever A93 finds. Applied in §5 (A1 on the whole state), §7 (G3 dropped, G4 retiring), §11 (DR13 struck, DR11 extended). Still awaiting A92 (census population, GT's form) and A93 (τ). Status stays DRAFT · NOT APPROVED until those are filled and the user approves the whole. |
