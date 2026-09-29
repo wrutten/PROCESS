@@ -21,7 +21,8 @@
 > statistic and its attribution; items 5, 6, 7 stand; the A76 candidate is **dropped**; items 8 (the prime as
 > pre-processing) and 9 (wall clock as a declared measurement) are added; the phase A entry regime stays the
 > hostile δ = 0.10 for the paper's table (the user: *"I like the hostile 10 % for the paper results. We see the actual
-> result in phase B anyway."*).
+> result in phase B anyway."*); **the phase A table prints `A2/A1`** on the pulsed configurations (`A2/A0` on st),
+> the matched-accuracy pair at the same fixed point (**D34**, the user, 2026-09-29).
 
 ## Design of the comparison
 
