@@ -1,6 +1,10 @@
 # A91 (block-sweep-timing) — how long one sweep of each block takes
 
-> **Document status** — **OPEN.** Task **A91 (block-sweep-timing)**, branch `A91-block-sweep-timing`
+> **Document status** — **MERGED 2026-09-29** at `73793603` (`--no-ff`); archived here at merge — folder position records
+> lifecycle, not validity (trap T3). Records: `arch_surgery/idf_probe/runs/A91_runs/block_sweep_timing/` (the worktree's
+> `arch_surgery/idf_probe/runs/`, relocated whole by the retire script; every path below reading
+> `arch_surgery/idf_probe/runs/block_sweep_timing/` means this location). Orchestrator's assessment at the end; its finding
+> is issue I-30. Originally: **OPEN.** Task **A91 (block-sweep-timing)**, branch `A91-block-sweep-timing`
 > (worktree `.claude/worktrees/A91-block-sweep-timing`, no records seeded — fresh evaluation runs
 > only), base **`c2ac4077`**, tip **`c821dbd6`** — the last commit that touches code or a generated
 > document, and where every number this report cites was produced (the entry and reference records,
