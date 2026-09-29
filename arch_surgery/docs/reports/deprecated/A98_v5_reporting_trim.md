@@ -1,6 +1,9 @@
 # A98 (v5-reporting-trim) — item 10's removals, the harness fixes, the one generator and the recount
 
-> **Document status** — **TASK REPORT, OPEN.** Written 2026-09-29 by task A98 (v5-reporting-trim) on
+> **Document status** — **MERGED 2026-09-29 at `43ce80ab` (`--no-ff`); archived.** I-31 closed, I-32 fixed in the copy;
+> records relocated to `arch_surgery/idf_probe/runs/A98_runs/v5_reporting_trim/` (one tree: the V5 `runs/` with
+> A94's seeded records and this task's gate records); the orchestrator's assessment is §11.
+> Was: **TASK REPORT, OPEN.** Written 2026-09-29 by task A98 (v5-reporting-trim) on
 > branch `A98-v5-reporting-trim` from `43d31a04` (the tip of `architecture_surgery`). Two commits,
 > `288b6d2a` and `0d1db315`; every number below was produced by a committed script at one of those
 > commits and the record it came from is named beside it. **No PROCESS run was made**: the 30 run
