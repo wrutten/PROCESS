@@ -80,7 +80,7 @@ from ..experiment import arms as arms_mod
 from ..experiment import input_files as input_files_mod
 from . import records as records_mod
 from ..experiment import switches as switches_mod
-from .config import Campaign, Config
+from .config import TEST_SETS, Campaign, Config
 
 #: Default per-run wall-clock limit.  Not a budget: reaching it is a
 #: ``timeout`` taxonomy row, recorded and never re-run at a longer limit.
@@ -410,11 +410,10 @@ def resolve_settings(job: Job, campaign: Campaign) -> Job:
     """
     test_set = campaign.test_set if job.test_set is None else job.test_set
     tau = campaign.tau if job.tau is None else float(job.tau)
-    if test_set not in records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT and test_set != "census":
+    if test_set not in TEST_SETS:
         raise PoolError(
             f"{job.arm}/{job.config.name}/seed{job.seed}: test set "
-            f"{test_set!r} is not one this harness composes ('census' or "
-            f"'write_set')"
+            f"{test_set!r} is not one this harness composes {TEST_SETS}"
         )
     if test_set != campaign.test_set or float(tau) != float(campaign.tau):
         stage = campaign.supplementary_stage_for(
