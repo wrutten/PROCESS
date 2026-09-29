@@ -1,6 +1,8 @@
 # A96 (st-trajectory-ladder) — does `st_regression`'s path return as the loops' tolerance tightens?
 
-> **Document status** — **OPEN.** Task A96 (st-trajectory-ladder), 2026-09-29, on branch
+> **Document status** — **MERGED 2026-09-29 at `bc988eac` (`--no-ff`); archived.** Records relocated to
+> `arch_surgery/idf_probe/runs/A96_runs/st_trajectory_ladder/`; the orchestrator's assessment and the decision under D37
+> (the declared census set at τ = 1e-8 stands; a supplementary st stage at 1e-12) are §9. Was: **OPEN.** Task A96 (st-trajectory-ladder), 2026-09-29, on branch
 > `A96-st-trajectory-ladder`, worktree `.claude/worktrees/A96-st-trajectory-ladder`, base `0635dca2`
 > (= `architecture_surgery` after the A93 (tolerance-phase-b) merge). Follow-up to A93's st finding
 > (its §9, the orchestrator's assessment, states the hypothesis tested here). Exploratory: **not** a V4

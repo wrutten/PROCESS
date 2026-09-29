@@ -137,8 +137,18 @@ path shortens on 3 of 5 seeds, the partitioned arm's lengthens 1.7–4.2× on al
 iteration cap; A89's ladder shows st as the one configuration where the census-set loop leaves a nonzero
 objective residual at 1e-8 (4.9e-11; 0.0 only from 1e-10). **The plan pre-declares** that on `st_regression`
 ε may differ from 1 in either direction and that a start lost at τ is a result on the per-arm success table
-(§5 B5), never a reason to loosen. **A96 (st-trajectory-ladder)** measures whether the path returns as τ → 1e-10
-on st; its result amends this paragraph before approval. One τ for every converger in every arm and both phases (D23 stands; there is no inner
+(§5 B5), never a reason to loosen. **A96 (st-trajectory-ladder), merged, settles the mechanism and the declaration** (the orchestrator under D37,
+2026-09-29; for the user's approval on return): the tolerance alone (`B2` whole-`y` at 1e-8) leaves the partitioned
+arm on the campaign's path on st's three stable seeds and at its optimum on all five, so the lengthening at 1e-8 is
+the census set's; the set effect fades as τ tightens (`B2` census path = campaign 0/5 → 2/5 → 3/5 → 3/5 at
+1e-8 / 1e-9 / 1e-10 / 1e-12) and returns where A89's objective residual first reads 0.0 (1e-10); seeds 1 and 2 are
+**st's fragile seeds** (the campaign's path in no variant of either arm); seed 1's partitioned census arm changes
+basin at 1e-8..1e-10 and holds the campaign's only at 1e-12. **The declared setting stays τ = 1e-8 with the census
+set on st** — its trajectory term is pre-declared non-neutral with this mechanism, seed 1's basin change a known
+failure mode, and every such start a result on the per-arm success table — and **a supplementary st stage at
+τ = 1e-12** (`B0`, `B2`, the census set, the campaign's seed set) is reported beside, labelled supplementary,
+the rung where the census loops are exact (A89) and the paths return: the paper's st column can then show the
+partitioned cost at matched path as well as at the declared τ. One τ for every converger in every arm and both phases (D23 stands; there is no inner
 tolerance). Note: the retry ladder's `epsfcn × 10` attempt would license h³ = 1e-6; τ stays at the first
 attempt's value, which is tighter, and no attempt-dependent tolerance exists.
 
@@ -193,6 +203,8 @@ the harness (the optimiser's own retry ladder is recorded per attempt, DR7). Eve
 **the seeds on which every arm reached an accepted optimum** (`status == ok`, `ifail == 1`), one `n` per
 configuration, with the per-arm success table (item 3 as reduced; A82's construction) explaining that `n`
 and naming the starts lost to the intervention arms alone — descriptive, no expectation, no robustness claim.
+**On `st_regression`, seeds 1 and 2 are named fragile in advance** (A96): a path comparison on st is a statement about
+the other seeds; the optimum comparison (B1) is the statement on all.
 
 **Configurations** — declared unconditionally: `large_tokamak_nof`, `low_aspect_ratio_DEMO`, `st_regression`
 (D17; **item 1's D22 note, the user 2026-09-15: *"D22 – the conclusion was to keep. that is fine for v5 as
@@ -354,7 +366,7 @@ except by dated amendment; a value marked [A92]/[A93] is filled from that task's
 | δ (phase A) | 0.10, displaced entries; **no stencil regime** | entry displacement | the user, list header, 2026-09-29; item 10 |
 | δ (phase B) | 0.10 | start displacement | D15; V4 |
 | test set | the census-measured read-before-write set, per arm and block; DSM feedback set as cross-check. **Fallback (D39):** the block's whole write set at τ = 1e-6, V4's predicate, selectable per campaign, never mixed | what the loops stop on | **D32**, item 6; population **[A92]**; **D39** (the user, 2026-09-29) |
-| τ | **1e-8** by the rule ε ≤ `epsfcn`³ (A89; confirmed at optimisation scale by A93 on the pulsed configurations; st's trajectory term pre-declared non-neutral, §3) — one value, every converger, every arm, both phases; re-measured on the V5 copy before the campaign as a check | convergence and handover accuracy | item 6; D23 (one tolerance); the user, 2026-09-29 (Q6) |
+| τ | **1e-8** by the rule ε ≤ `epsfcn`³ (A89; confirmed at optimisation scale by A93 on the pulsed configurations; st's trajectory term pre-declared non-neutral from A96, §3; **plus the supplementary st stage at 1e-12**, §3, §10) — one value, every converger, every arm, both phases; re-measured on the V5 copy before the campaign as a check | convergence and handover accuracy | item 6; D23 (one tolerance); the user, 2026-09-29 (Q6) |
 | `epsfcn` | 1e-3 (PROCESS's default; no input file sets it) | the tolerance rule's step | A89 §7.3 |
 | predicate mode | `frozen`; `mixed` never composed | the scale `s_i` of the scaled step | D30 ("or drop it"), item 10 |
 | F | 10 | matched-accuracy (A) and same-optimum (B) factor, median and p90 | V4 Table 6 (V2 App. B) |
@@ -379,6 +391,7 @@ removed:
 | entry references | 3 | one cold `A0` per configuration |
 | phase A, δ = 0.10 | **275** | `AR` 75 + `A0` 75 + `A1` 50 + `A2` 75 |
 | phase B | **275** | 4 arms × 25 × 2 pulsed + 3 arms × 25 on st |
+| supplementary st stage, τ = 1e-12 | **50** | `B0` and `B2` × 25 on st under the census set (A96; §3) — reported beside, labelled supplementary |
 | repeatability check | 9 | one seed × 3 configurations × 3 repetitions (§6) |
 | timers off | 3 | one per configuration (§6) |
 | gates | ≈ 100–150 at a from-scratch press; **0–20 with seeded records** and `--resume` | amendment 15; GR once at the copy |
@@ -520,3 +533,4 @@ of 1 component). Nothing here may be applied to V4.
 | 2026-09-29 | **D39** (the user, during the autonomous run): V4's criterion — the block's whole write set at τ = 1e-6 — stays selectable in V5 as a campaign-level fallback beside the census set; §3 (fallback paragraph), §9 (test-set row) and §11 (DR11 row) updated; the DR11 task builds it. |
 | 2026-09-29 | A98 (v5-reporting-trim) merged at `43ce80ab`: item 10 applied in the copy; §7 Table 2's GT/GC/GR rows name the registry entries and their interim status; §11 row 10 lists the two further modules the task touched. |
 | 2026-09-29 | A99 (v5-schedule-and-prime) merged at `f6e90f61` under D37: DR9 and DR10 rows marked merged with their commits and GC results; G2's row notes part (ii) as a one-time result read from GC's straddle record. |
+| 2026-09-29 | A96 (st-trajectory-ladder) merged at `bc988eac`: §3's st paragraph filled with the mechanism and the declaration under D37 (τ = 1e-8 census stands; a supplementary st stage at 1e-12); §4 names st's fragile seeds; §9's τ row and §10's budget carry the supplementary stage. |
