@@ -11,6 +11,17 @@
 > names in item 1 are the V4 report's at `14342a72` (`BR / B0 / B1 / B3`), the names of its day;
 > **A78 (arm-renames) renamed `B3` to `B2` (and `A0p`, `A1` to `A1`, `A2`) throughout the V4 folder on
 > 2026-09-15** — the `B3` below is today's `B2` — and a V5 plan uses the names that stand when it is written.
+>
+> **Trimmed against the paper's purpose, 2026-09-29 (the user's rulings on the orchestrator's assessment).** The paper
+> (`Structuring-fusion-MDAO-with-DSMs/3 results.tex`) claims an existence proof in **model-evaluation counts** — the
+> main result, because the argument is that the real impact is for models of higher computational cost — with
+> **wall clock in the appendix** and a quantified sentence in the main text, and it **keeps its optimiser-iterations
+> table**. Under that: item 1 stands (its stated prerequisite was already resolved); item 2 is **closed** (A90);
+> item 3 is reduced to the descriptive per-arm success table, done only when needed; item 4 is reduced to the
+> statistic and its attribution; items 5, 6, 7 stand; the A76 candidate is **dropped**; items 8 (the prime as
+> pre-processing) and 9 (wall clock as a declared measurement) are added; the phase A entry regime stays the
+> hostile δ = 0.10 for the paper's table (the user: *"I like the hostile 10 % for the paper results. We see the actual
+> result in phase B anyway."*).
 
 ## Design of the comparison
 
@@ -88,7 +99,14 @@ column (it is "beside"), and §5.2's transfer factors are computed from node cal
 the table is misled, and a V5 decomposition must read `sweeps_per_eval.n_evaluations` (the count of
 `call_models` entries) for `C`. Relabelling or refilling that column in V4 is a tally correction on
 the V4 data, to be minted as its own task, not a V5 item; it is recorded here so the V5 construction
-does not inherit the field.
+does not inherit the field. *(Struck 2026-09-29: A80 (report-accuracy-audit) closed issue I-26 the same day this
+was written — the column reads `sweeps_per_eval.n_evaluations` (V4 report Table 13) and the old ratio is kept
+beside it as "sweeps median"; no task is needed.)*
+
+**The paper's use of it (the user, 2026-09-29).** The paper keeps its optimiser-iterations table, which is ε in
+the paper's terms; the module-evaluation tables remain the main result. On `lad` the module ratio `B2/B0`
+(0.47–0.59) contains the shorter path (0.70 sum, 0.81 median iterations), and the paper says so in one sentence.
+V5 prints ρ beside the iterations so that sentence is a number; the check-2 rule goes as above.
 
 **A related hazard, proposed by the agent — answered by the user 2026-09-15** (*"D22 - the conclusion was to keep. that is fine for v5 as well"*, confirmed in the orchestrating session): **`st_regression` stays in V5 unconditionally, as in V4**; the configuration set is declared without a drop rule. The hazard as written, for the record: D22 made `st_regression`'s place
 conditional on an outcome (*"if A43 shows st's trust-mode `B3` unreliable, st is dropped"*). It did
@@ -104,7 +122,14 @@ the headline ratio is said to be the cost of), not in the data, and the fix is t
 the trajectory and print its factor.
 
 
-### 2. The partition's saving by block — M2 is solved about as often as the flat arm sweeps it *(arising from A79 (report-captions), 2026-09-15; not the user's)*
+### 2. The partition's saving by block — M2 is solved about as often as the flat arm sweeps it *(arising from A79 (report-captions), 2026-09-15; not the user's)* — **CLOSED 2026-09-29**
+
+**Closed by A90 (m2-phasea-vs-phaseb), merged `f2bb2e6e`; the user, 2026-09-29: "agreed, not relevant for v5 anymore."**
+M2 binds the flat loop only on the finite-difference probes that move geometry or magnet variables (binding
+share 0 or 1 per variable and sign on 42/42 pairs on the large tokamak); in phase A the δ displacement disturbs
+every module, so the partition saves nothing on M2 there; in phase B `B2`'s M2 sweeps equal M2's own settle
+count in the flat loop on every paired evaluation (1980/1980, 5250/5250, 90/90). No block boundary is
+redrawn. The paper's phase B paragraph already states the mechanism. The text as first written, for the record:
 
 The per-module optimisation-phase split (V4 report Tables D.2–D.4) and the per-block evaluation split (Table D.7) show where the saving is *not*: the coils block M2 reads `B2/B0` 0.87 / 0.59 / 0.67 pooled with a per-run median of 0.8765 on the large tokamak and one run above 1, and `A2/A1` 1.0078 / 0.9919 / 1.0000 per evaluation — the block is iterated as often as the flat loop swept it. The saving sits in the plant block (0.51–0.61), the pulse node (0.20) and the once-per-run nodes (0). A V5 partition should take this as a design input: either M2's own fixed point is as expensive as the flat sweep because its coupling is the loop's real work, or the block boundary is drawn through it; a per-block census of M2's internal residual would say which before a new schedule is proposed.
 
@@ -115,9 +140,13 @@ The per-module optimisation-phase split (V4 report Tables D.2–D.4) and the per
 
 The benchmarking literature (Beiranvand, Hare & Lucet 2017 §4.2) counts failures against the algorithm; V4 filters them into a seed set on which every arm converged and states the set's size (22 / 11 / 22 of 25) but not each arm's rate. On the low-aspect-ratio machine the intervention arms fail one start the flat arms solve (seed 10); on the spherical tokamak two failures are asymmetric and cancel in count, not in cost. A V5 plan declares the success rate per arm over all starts (denominator: starts offered) as a published measure with its own pre-declared expectation, and publishes a **data profile** per configuration (fraction of starts solved within a node-call budget, one curve per arm) beside the medians and brackets — constructible from the records, no extra run. A82 (per-arm-success) adds the table to V4 as a descriptive cell; the profile and the expectation are V5's.
 
+**Reduced 2026-09-29 (the user: *"do it only if it is not too much over-engineering. I'm not planning to make claims about robustness … We do it when it is necessary"*).** V5 keeps A82's **descriptive per-arm success table** (it explains the paper's n per configuration and names the one start lost to the intervention arms alone) — no data profile, no pre-declared expectation, no robustness claim. Nothing else of this item is built unless a claim needs it.
+
 ### 4. Verdict sensitivity — the same-optimum floor and factor re-tallied at neighbouring values *(user, 2026-09-15, D29 (1), from A81 F5)*
 
 V4's `lad` same-optimum FAIL sits at 2.15× the 1e-6 floor with the factor F at one value. A V5 plan pre-declares the verdict at the chosen setting **and** publishes the re-tally at neighbouring settings (F ∈ {3, 10, 30}; floor ∈ {1e-7, 1e-6, 1e-5}) so a reader sees whether a verdict is a threshold artefact — the tally can produce the grid from the records at no run; only the declared cell is a verdict.
+
+**Reduced 2026-09-29 (the user: "accepted" on the orchestrator's proposal).** The paper's appendix carries the same-optimum **statistic** (median and p90 paired relative objective difference against the declared floor) and, where it fails, its attribution to the rung it fails on (V4: `lad`, on the lift rung `B0 → B1`, not the partition). The neighbouring-threshold grid is produced for the internal report only, if at all; it is not a paper table.
 
 ### 5. Phase A charges the partitioned arm its one execution of the once-per-run nodes *(user, 2026-09-28)*
 
@@ -272,7 +301,41 @@ the ruling is recorded here as the user's instruction; the decision row D31 is r
 arms — A91 measured the block-sweep dispatch (0.08–0.09 ms) and found it negligible, and A89 the
 whole-state read per sweep (small) — is checked the same way before V5's wall-clock table exists.
 
-*Candidates proposed elsewhere and not yet listed here:* A76 (fixed-point-distance)'s report §7 (d)
-notes that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
+### 8. The prime is pre-processing: executed once per evaluation, before the first block *(the user, 2026-09-29)*
+
+**What it is.** The first-wall geometry method that V4 calls the prime depends only on user inputs. V4 executes it
+at the head of **every block sweep** of the partitioned arms (about 9 calls per evaluation in phase B, 13–15 in
+phase A; stamped, never counted — D19), which was the simplest way to guarantee `build` reads this pass's value;
+gate G2 shows every execution after the first computes the same value bit for bit. The paper's footnote describes
+it as extracted and run before M2. The user: *"I need it to make sense from an architectural perspective. The prime
+was needed to fully decouple the first iteration. It is pre-processing before the partitioned MDAs can start. I see
+this as part of the minimal sequencing operations (like moving build)."*
+
+**The change.** In V5's driver copy the prime runs **once per `call_models` evaluation, before M1** — a
+pre-processing step of the sequenced schedule, not a per-sweep hook. Requirements: no count changes (it is not a
+model node and stays out of every node-call column); the exit states of a job set bit-identical to V4's
+per-sweep form (the G2 construction); the stamp records one call per evaluation. Pre-processing is once per
+evaluation, not once per sweep. The paper's caption then reads as written ("executing the FirstWall subfunction"
+before the partitioned MDAs).
+
+### 9. Wall clock as a declared measurement, for the paper's appendix *(the user, 2026-09-29; reverses D29 (2) of 2026-09-15)*
+
+**The concern, in the user's words:** *"I want the current tables that are in the paper also in terms of wall
+clock time. Include a row for the totals for each config and arm/case. I will include these in the appendix of
+the paper … I want an overview of cost break down, in terms of model evaluation cost, and overhead (flat and per
+iteration, algorithm runtime cost (both for the MDA and opt), perhaps split in dispatch and test cost). I want to
+be able to see if the architecture change makes a significant difference in terms of overhead."* And on its place:
+*"the wall clock time is for the appendix, and to quantify a bit in the main text what I write about the wall clock
+time"*; the model-evaluation counts stay the main result.
+
+**Status.** D29 (2) withdrew every timing from V4 because the conclusion is an existence proof in node calls; that
+stands for V4. For V5 the instrument, the run discipline (one worker; V4's campaign ran three concurrently, so its
+per-run `wall_s` is contended and unfit), the decomposition and the tables are the orchestrator's proposal under
+discussion (2026-09-29, the user's fourth item); the ruling is D33 when entered. Timings remain context beside the
+counts and never an acceptance quantity (CLAUDE.md; I-10). Items 5 and 7 are prerequisites of any wall-clock table.
+
+*A candidate assessed and dropped (the user, 2026-09-29):* A76 (fixed-point-distance)'s report §7 (d)
+proposed that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
 carry a pre-declared acceptance rule in a V5 plan (a natural form: headline median and p90 below τ,
-0 pairs above τ). Whether it becomes an item is the user's call.
+0 pairs above τ). The paper needs one sentence that the arms reach the same fixed point, which the reported
+distance is; no rule is added.
