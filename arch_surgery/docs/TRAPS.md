@@ -243,4 +243,10 @@ Since A79 (report-captions) the report's tables are numbered `Table D.n` in emis
 
 *Addition (A87 (v3-grid-polish), 2026-09-15):* the renderer's own generated context paragraphs cite table numbers too, and a citation sweep over the hand-written text never reaches them — Appendix D.2's and D.3's group contexts named Tables 7, 8 and 9 for tables that had become 9, 18 and 13, and a committed check's docstring pointed at the wrong companion table. When the table set changes, the generated text is re-read as well as the hand-written; `--plan-tables check` resolves `Table D.n` and `F.n`, and a bare `Table n` inside generated text is not checked at all.
 
+## T18 — A snapshot typed once at install is wrong on a cold start
+
+A read/write census that decides each coupling-state component's kind (array, scalar, list) once, when its hooks are installed, and then diffs against that kind, crashes or mis-classifies on the first evaluation from a cold start: a component that is a list default before the first `call_models` is replaced by a scalar (or an array) inside it, so the default's type is not the run's. A89's census was installed after a warm entry and never saw it; A92's first optimisation-run census crashed after one evaluation on exactly this (report §7 decision 2; the record kept under `discarded/`).
+
+**How to avoid it:** snapshot every component around every node call and treat a change of type as a write; never type a component from its value at install. A `__setattr__`-only write census has the same blind spot in a different place: it records the assignment and misses that the object's kind changed. *(A92 (optimisation-path-census), 2026-09-29.)*
+
 *Addition (A88 (function-weighted-sweeps), 2026-09-17), a fourth kind:* the renderer's own dangling-reference scan read the change log, so a record of a past table set ("Tables 11–18") became a dangling reference the day the set shrank. The scan now holds the change log out, as the citation sweep does (A86's addition).

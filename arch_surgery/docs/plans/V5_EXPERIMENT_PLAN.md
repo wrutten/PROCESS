@@ -103,11 +103,18 @@ set has 73–75 components and the blocks 16 / 46–47 / 10 (M1 / M2 / M3) plus 
 V18, V19) and is never a stopping rule: it failed the whole-`y` audit once in 12 runs at τ = 1e-8
 (`large_tokamak_nof`, cold `A0`, `costs.coecap` at 1.47e-8; A89 §7.4).
 
-**What the census runs over** — **[to be declared from A92]**: A89's sets are a union over 8 displaced
-evaluations per configuration and arm; A92 measures the census over whole optimisations (`B0`, `B2`, seeds 000
-and 001) and reports the union over the optimiser's path against A89's sets. The plan declares the campaign's
-sets as A92's union (displaced entries plus the optimiser's path) once A92 reports; if the two agree
-component for component, the displaced census alone is declared and A92's is the record that it suffices.
+**What the census runs over** — **declared from A92 (optimisation-path-census), merged `7550c285`**: A92
+measured the census over 12 whole optimisations (`B0`, `B2`, three configurations, seeds 000 and 001; 23 128
+evaluations, 12 200 finite-difference probes, 313 line-search points) and found every component carried on
+the optimiser's path in A89's 8-entry set for the twin arm, except four cold-start reads carried only at
+evaluation 0 of both seeds (`physics.first_call`, `pf_coil.first_call`, `pf_coil.n_pf_coils_in_group`,
+`build.dz_xpoint_divertor`; the first two only on `st_regression`); nothing in the 8-entry sets is absent on
+the path. **V5's test set per block is the optimisation-run census union** — the larger set, measured where
+the loops run — `coupling_subset_trial/optimisation_path_sets.json`: flat 79 / 78 / 75; `M1` 17; `M2` 50 /
+49 / 48; `M3` 10; `PULSE` 1 on st (nof / lad / st). The cold-start components are carried (inert after
+evaluation 0; 5 µs each per test). V5's census stage re-derives the sets on the V5 copy by the same rule and
+must reproduce these before the campaign; a difference is a result. The census instrument is observation-only:
+all 12 censused runs reproduced their campaign records to the `norm_objf` bit.
 
 **The tolerance** (item 6's rule, declared in A89 §7.3 before it was measured): VMCON's central-difference
 step is h = `epsfcn` = 1e-3, its truncation error O(h²) and function noise ε adds O(ε/h); they balance at
@@ -126,10 +133,19 @@ arm, uncharged — with the count of components above τ per run. A narrow test 
 the audit is wide: matched accuracy is verified per run on all 840 / 846 / 827 components, never assumed
 from the shared τ (V4 §3.6).
 
-**The teeth gate for the test set** — form **[to be declared from A92]**, whose brief states it: the census
-set minus one declared component, run at τ, must be caught by the whole-`y` exit audit, or the component is
-reported as not individually binding; dropping a non-census control component must change nothing. The gate
-is pressed per configuration and arm before the campaign and is a row of the verification table (§8).
+**The teeth gate for the test set (GT)** — form **declared from A92**. A92 found that the whole-`y` audit at
+τ is not the tooth: dropping the one component that decides the stop (`pf_coil.stress_z_cs_self_midplane_profile`
+on `large_tokamak_nof`, found by the rule "largest exit residual among the carried components") stops the loop
+one sweep early and the audit rises 50× but stays below τ — the truncated run is still *within τ*, so the full
+set is conservative by one sweep there and the audit reports that correctly. What separates a binding drop
+from the rest is the **exit state against the full-set run**: bit-identical for every non-binding drop (17 of
+19) and every control (6 of 6), different (2.6e-09 / 2.7e-10 on the ruler) for the binding one. **GT's form:**
+per configuration and arm, from the displaced entry at τ, (i) the component the declared rule finds binding is
+dropped and the run must stop earlier *and* leave an exit state that differs from the full set's — the tooth;
+(ii) a declared non-census control is dropped and the run must be bit-identical; (iii) the whole-`y` audit of
+the truncated run is reported beside as the accuracy it left. A comparison gate against a reference run, not
+a per-run audit; a row of the verification table (§8). Where no single component binds on the entry (lad at
+τ = 1e-8: exit residual 0.0 in both arms), the gate reports that and (ii) alone is the check.
 
 ---
 

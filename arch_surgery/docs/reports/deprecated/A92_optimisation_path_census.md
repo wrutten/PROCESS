@@ -1,6 +1,9 @@
 # A92 (optimisation-path-census) — the read-before-write census over an optimisation run, and its teeth
 
-> **Document status** — **OPEN.** Task A92 (optimisation-path-census), 2026-09-29, on branch
+> **Document status** — **MERGED 2026-09-29 at `7550c285` (`--no-ff`); archived.** Records relocated to
+> `arch_surgery/idf_probe/runs/A92_runs/optimisation_path_census/` (182 MB); the orchestrator's assessment is §9;
+> the living artifact is `coupling_subset_trial/optimisation_path_sets.json` (V5's test-set population, plan §3).
+> Was: **OPEN.** Task A92 (optimisation-path-census), 2026-09-29, on branch
 > `A92-optimisation-path-census`, worktree `.claude/worktrees/A92-optimisation-path-census`, base
 > `9cfb5687` (= `architecture_surgery`). V5 improvement list item 6, prerequisite (2): the
 > census-measured feedback set (ruling D32) measured over an optimisation run's evaluations, and a
