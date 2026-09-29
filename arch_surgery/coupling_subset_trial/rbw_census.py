@@ -128,12 +128,15 @@ def install(caller_mod, ms, data, spec):
             if type(ns) in classes:
                 raise RuntimeError(f"namespace class shared: {type(ns)}")
             classes[type(ns)] = (f.name, frozenset(y_by_ns[f.name]))
-    array_keys = []
-    for ns, fld in spec.keys:
-        v = object.__getattribute__(getattr(data, ns), fld)
-        if isinstance(v, (np.ndarray, list)):
-            array_keys.append((ns, fld))
-    _S["array_keys"] = array_keys
+    # Every component is snapshotted around each node, whatever its type at
+    # install time: arrays are copied and scalars held.  A92: on a cold
+    # optimisation start a field that is a list default at the first
+    # ``call_models`` is later replaced by a scalar (A89's displaced entries
+    # never met that), so the snapshot cannot be typed once at install.  A
+    # scalar changes only through ``__setattr__``, which is recorded anyway,
+    # so the value diff adds writes only for arrays and for type changes —
+    # the conservative direction, neutral for A89's records.
+    _S["array_keys"] = list(spec.keys)
     _S["data"] = data
     _S["key_names"] = [spec.name(i) for i in range(len(spec.keys))]
     _S["key_index"] = {name: i for i, name in enumerate(_S["key_names"])}
@@ -159,13 +162,30 @@ def install(caller_mod, ms, data, spec):
         out = {}
         for ns, fld in _S["array_keys"]:
             v = getattr(getattr(data, ns), fld)
-            out[(ns, fld)] = np.array(v, copy=True) if isinstance(v, np.ndarray) else list(v)
+            if isinstance(v, np.ndarray):
+                out[(ns, fld)] = np.array(v, copy=True)
+            elif isinstance(v, (list, tuple)):
+                out[(ns, fld)] = list(v)
+            else:
+                out[(ns, fld)] = v
         _S["on"] = on
         return out
 
     def changed(a, b):
+        seq = (np.ndarray, list, tuple)
+        if isinstance(a, seq) or isinstance(b, seq):
+            if not (isinstance(a, seq) and isinstance(b, seq)):
+                return True  # a type change is a write
+            try:
+                return not np.array_equal(np.asarray(a), np.asarray(b), equal_nan=True)
+            except Exception:
+                return True
+        if a is b:
+            return False
         try:
-            return not np.array_equal(np.asarray(a), np.asarray(b), equal_nan=True)
+            if a != a and b != b:
+                return False  # both NaN
+            return bool(a != b)
         except Exception:
             return True
 
