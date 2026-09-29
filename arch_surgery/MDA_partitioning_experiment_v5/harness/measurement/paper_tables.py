@@ -724,9 +724,53 @@ VERIFICATION_ROWS: tuple[tuple[str, str, str | None], ...] = (
 )
 
 
-def verification(records_dir: Path, optimisation: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+def _matched_accuracy_verdict(evaluation: Mapping[str, Mapping[str, Any]]) -> tuple[str, str]:
+    """Plan §5 A1 on the tally's evaluation stage record: per configuration,
+    the declared pair's whole-state similarity verdict (median and p90 within
+    F; the `matched accuracy by configuration` table's cell on D34's pair)
+    **and** 0 runs with a component above τ on both arms of the pair (the
+    `matched accuracy` table's count column).  Returns (verdict, detail)."""
+    by_configuration = [t for name, t in evaluation.items() if name.startswith("matched accuracy by configuration")]
+    if not by_configuration:
+        return "not pressed", "no `matched accuracy by configuration` table in the stage record"
+    parts: list[str] = []
+    verdicts: list[str] = []
+    for row in by_configuration[0]["rows"]:
+        configuration = str(row["configuration"])
+        base = str(row["reference"])
+        pair_verdict = str(row.get(f"A2_over_{base}_verdict") or "—")
+        above: dict[str, Any] = {}
+        for name, t in evaluation.items():
+            if not name.startswith(f"matched accuracy — {configuration} — "):
+                continue
+            for r in t["rows"]:
+                if r["arm"] in (base, "A2"):
+                    above[r["arm"]] = r.get("n_runs_with_a_component_above_tau")
+        clean = all(above.get(a) == 0 for a in (base, "A2")) if len(above) == 2 else None
+        if pair_verdict not in ("PASS", "FAIL") or clean is None:
+            verdict = "—"
+        else:
+            verdict = "PASS" if (pair_verdict == "PASS" and clean) else "FAIL"
+        verdicts.append(verdict)
+        parts.append(
+            f"`{SHORT.get(configuration, configuration)}` A2/{base}: similarity {pair_verdict}, "
+            f"runs with a component ≥ τ {base} {above.get(base)} / A2 {above.get('A2')} → **{verdict}**"
+        )
+    if not verdicts:
+        return "not pressed", "the table has no configuration row"
+    overall = "PASS" if all(v == "PASS" for v in verdicts) else ("FAIL" if "FAIL" in verdicts else "—")
+    return overall, "; ".join(parts) + " (whole-state statistic, D36; the second half of the rule is the count column)"
+
+
+def verification(
+    records_dir: Path,
+    optimisation: Mapping[str, Mapping[str, Any]],
+    evaluation: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
     """The verification table's rows, every gate verdict read from the
-    ``gate_table`` stage record after :func:`assert_gate_table_current`."""
+    ``gate_table`` stage record after :func:`assert_gate_table_current`;
+    A1 from the evaluation tally's stage record (D36), B1 from the
+    optimisation tally's."""
     current = assert_gate_table_current(records_dir)
     table = stage_record(records_dir, GATE_TABLE_SECTION.stage)
     by_gate = {row["gate"]: row for row in table.get("rows") or []}
@@ -761,8 +805,14 @@ def verification(records_dir: Path, optimisation: Mapping[str, Mapping[str, Any]
                 row.update(verdict="not pressed", detail="no same-optimum table in the stage record")
         elif label == "A2":
             row.update(verdict="reported, no rule", detail="the tally's fixed-point distance table (plan §5 A2)")
+        elif label == "A1":
+            if evaluation is None:
+                row.update(verdict="not pressed", detail="no evaluation stage record handed to the verification")
+            else:
+                verdict, detail = _matched_accuracy_verdict(evaluation)
+                row.update(verdict=verdict, detail=detail)
         else:
-            row.update(verdict="not pressed", detail="V5's whole-state rule (D36) is not yet a tally construction; item 5's driver change first")
+            row.update(verdict="not pressed", detail="no construction for this row")
         rows.append(row)
     return {"rows": rows, "records_read": current}
 
@@ -1058,7 +1108,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     optimisation = _stage_tables(records_dir, "tally_optimisation")
     case_rows = cases(campaign, optimisation)
     success = per_arm_success(optimisation, campaign)
-    verified = verification(records_dir, optimisation)
+    verified = verification(records_dir, optimisation, evaluation)
     check = cross_check(built, evaluation, optimisation)
     tooth = _cross_check_tooth(built, evaluation, optimisation)
     marker = population_marker(campaign, records_dir)

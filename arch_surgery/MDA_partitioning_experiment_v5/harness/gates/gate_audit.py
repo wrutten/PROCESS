@@ -606,8 +606,11 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
     _HELD["namespaces"] = namespaces_seen
     optimisation = optimisation_phase_statistic(campaign, resume=resume)
     _HELD["optimisation"] = optimisation
+    agreement = whole_state_and_restricted_agreement(campaign)
+    _HELD["agreement"] = agreement
     return {
         "passed": passed and optimisation["passed"],
+        "agreement": agreement,
         "criterion": (
             "a doctored per-run-owned component trips the whole-state audit "
             "and not the restricted one; a doctored in-loop component trips "
@@ -629,6 +632,117 @@ def audit_restriction_body(campaign: Campaign, *, resume: bool = False) -> dict[
         "n_mismatched": n_mismatched,
         "excluded_namespaces_by_configuration": namespaces_seen,
         "optimisation_phase_statistic": optimisation,
+        "rows": rows,
+    }
+
+
+# --------------------------------------------------------------------------
+# the agreement of the two statistics, once the deferred set is executed
+# --------------------------------------------------------------------------
+
+#: The driver read-back that says a run executed the per-run set at its
+#: evaluation's exit (V5 list item 5, A101 (v5-timers-and-once)).
+EXECUTION_READBACK = "process.core.caller.DEFER_PER_RUN_AT_EVALUATION_EXIT"
+
+
+def whole_state_and_restricted_agreement(campaign: Campaign) -> dict[str, Any]:
+    """**Do the whole-state and the restricted statistics agree, per configuration?**
+
+    Decision D36: once the partitioned evaluation arm executes its deferred
+    set after convergence (item 5), every component of the exit state is
+    computed at the audited state and the restriction has nothing left to
+    exclude that is stale by design — the whole-state maximum is then the
+    matched-accuracy statistic, and this gate retires when the two agree on
+    the gate job set.  *Agreement* on one record: the whole-state maximum and
+    the restricted maximum are the **same hex float** and sit on the same
+    component (the whole-state argmax is not one of the excluded components).
+
+    The population is defined by a rule, never listed: every finished
+    evaluation-phase record of the partitioned arm under the gates root
+    (the shared pool and the gates' own directories) whose driver read-back
+    says the set was executed at the evaluation's exit — G4's own baselines
+    from the reference snapshot, and every other gate's displaced entries —
+    with, for contrast, the same arm's records made *before* the change
+    (read-back false or absent), which are counted beside and are expected
+    **not** to agree.
+    """
+    root = Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH
+    by_config: dict[str, dict[str, Any]] = {}
+    for path in sorted(root.rglob("metrics.json")):
+        record = records_mod.read(path.parent)
+        if (
+            record.get("campaign_phase") != "A"
+            or record.get("campaign_arm") != G4_ARM
+            or record.get("status") != "ok"
+        ):
+            continue
+        audit = record.get("exit_audit") or {}
+        restricted = audit.get("restricted")
+        if not isinstance(restricted, Mapping):
+            continue
+        executes = bool((record.get("resolved_switches") or {}).get(EXECUTION_READBACK))
+        whole_hex = audit.get("residual_max_hex")
+        whole_argmax = (audit.get("brief") or {}).get("argmax")
+        agree = (
+            whole_hex == restricted.get("max_hex")
+            and whole_argmax == restricted.get("argmax")
+        )
+        block = by_config.setdefault(
+            record["campaign_configuration"],
+            {"after_the_change": [], "before_the_change": []},
+        )
+        block["after_the_change" if executes else "before_the_change"].append(
+            {
+                "record": str(path.relative_to(root)),
+                "tree_git_head": str(record.get("tree_git_head") or "")[:8],
+                "seed": record.get("campaign_seed"),
+                "whole_state_max_hex": whole_hex,
+                "whole_state_max": audit.get("residual_max"),
+                "whole_state_argmax": whole_argmax,
+                "restricted_max_hex": restricted.get("max_hex"),
+                "restricted_max": restricted.get("max"),
+                "restricted_argmax": restricted.get("argmax"),
+                "n_excluded": restricted.get("n_excluded"),
+                "agree": agree,
+            }
+        )
+    rows: list[dict[str, Any]] = []
+    for name in campaign.population:
+        block = by_config.get(name)
+        if block is None:
+            rows.append({"configuration": name, "n_after": 0, "n_after_agreeing": 0, "n_before": 0, "n_before_agreeing": 0, "agree": False, "why": "no partitioned evaluation record under the gates root"})
+            continue
+        after = block["after_the_change"]
+        before = block["before_the_change"]
+        rows.append(
+            {
+                "configuration": name,
+                "n_after": len(after),
+                "n_after_agreeing": sum(1 for r in after if r["agree"]),
+                "n_before": len(before),
+                "n_before_agreeing": sum(1 for r in before if r["agree"]),
+                "agree": bool(after) and all(r["agree"] for r in after),
+                "after_the_change": after,
+                "before_the_change": before,
+            }
+        )
+    return {
+        "what": (
+            "per configuration, whether the whole-state exit-audit maximum and "
+            "the restricted one are the same hex float on the same component on "
+            "every partitioned evaluation record made with the deferred set "
+            "executed at the evaluation's exit (item 5, read back from the "
+            "driver); records of the same arm made before the change are "
+            "counted beside, and are not expected to agree"
+        ),
+        "population": (
+            f"{sum(r['n_after'] for r in rows)} record(s) after the change and "
+            f"{sum(r['n_before'] for r in rows)} before it, over "
+            f"{len(campaign.population)} configuration(s), every finished "
+            f"evaluation-phase record of {G4_ARM} under {root}"
+        ),
+        "agree_on_every_configuration": bool(rows) and all(r["agree"] for r in rows),
+        "readback": EXECUTION_READBACK,
         "rows": rows,
     }
 
@@ -903,7 +1017,43 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"the boundary is the namespace and not the field"
         )
 
+    def a_doctored_whole_state_maximum_reads_as_disagreement() -> tuple[bool, str]:
+        block = _HELD.get("agreement") or {}
+        rows = [r for r in block.get("rows") or [] if r.get("n_after")]
+        if not rows:
+            return False, "the agreement block holds no record made after the change"
+        row = rows[0]
+        record = row["after_the_change"][0]
+        if not record["agree"]:
+            return False, (
+                f"{row['configuration']}'s first after-the-change record does not "
+                f"agree undoctored ({record['whole_state_max_hex']} on "
+                f"{record['whole_state_argmax']} vs {record['restricted_max_hex']} "
+                f"on {record['restricted_argmax']}), so the tooth has nothing to flip"
+            )
+        doctored = float.fromhex(record["whole_state_max_hex"]) * 2.0
+        agree = (
+            doctored.hex() == record["restricted_max_hex"]
+            and record["whole_state_argmax"] == record["restricted_argmax"]
+        )
+        return not agree, (
+            f"{row['configuration']}/{record['record']}: the whole-state maximum "
+            f"{record['whole_state_max_hex']} doubled to {doctored.hex()} against "
+            f"the restricted {record['restricted_max_hex']}: reads as "
+            f"{'agreement' if agree else 'DISAGREEMENT'}; undoctored, "
+            f"{row['n_after_agreeing']} of {row['n_after']} agree"
+        )
+
     return (
+        Tooth(
+            name="a doctored whole-state maximum reads as disagreement",
+            what=(
+                "the whole-state exit-audit maximum of one after-the-change "
+                "record doubled, against its restricted maximum"
+            ),
+            must="read as a disagreement of the two statistics",
+            check=a_doctored_whole_state_maximum_reads_as_disagreement,
+        ),
         Tooth(
             name="the restore's boundary, measured and flipped",
             what=(
