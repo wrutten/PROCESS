@@ -328,11 +328,44 @@ be able to see if the architecture change makes a significant difference in term
 *"the wall clock time is for the appendix, and to quantify a bit in the main text what I write about the wall clock
 time"*; the model-evaluation counts stay the main result.
 
-**Status.** D29 (2) withdrew every timing from V4 because the conclusion is an existence proof in node calls; that
-stands for V4. For V5 the instrument, the run discipline (one worker; V4's campaign ran three concurrently, so its
-per-run `wall_s` is contended and unfit), the decomposition and the tables are the orchestrator's proposal under
-discussion (2026-09-29, the user's fourth item); the ruling is D33 when entered. Timings remain context beside the
-counts and never an acceptance quantity (CLAUDE.md; I-10). Items 5 and 7 are prerequisites of any wall-clock table.
+**Ruled — D33 (the user, 2026-09-29: "discussion item 4 is accepted").** Wall clock is reported in the paper's
+appendix as context beside the counts, from V5's campaign at one worker with the instrument below, never as an
+acceptance quantity (CLAUDE.md; I-10); **V4 publishes no timing** (its campaign ran three workers, so its per-run
+`wall_s` is contended, and its harness bills the intervention arms for the whole-state test and I-30). D29 (2)
+stands for V4 and is superseded for V5. Items 5 and 7 are prerequisites of any wall-clock table.
+
+**The instrument.** Env-switched timers in V5's driver copy, observation-only (the block trace's precedent, DR8),
+accumulated per run and stamped into the record: per node, the model's own wall time, summed per module through
+the node map; per block loop, the **MDA convergence test** (read plus residual) and the **dispatch** (the sweep
+body less its nodes and test); per evaluation, the **objective and constraints** layer; the **optimiser's own
+time** (solve-phase wall less every evaluation); the **fixed per-run term** — process start, imports, numba cache
+load, input parse, output writing, and the once-per-run schedule derivation (item 7), which is folded here and not
+into dispatch. The run's wall time is measured independently and the unattributed residual printed, so the rows
+are checked to add up. **Harness-only costs are excluded from the total and named in the caption**: the exit audit
+sweep, the state snapshots, the census hooks, the record assembly. The instrument's own cost: one run per
+configuration with timers off, reported beside. Two words to keep apart: the *convergence test* is the
+coupling-state predicate the loops stop on; the *objective and constraints* layer is what upstream's idempotence
+predicate compares — the tables use the two long names.
+
+**Run discipline.** The whole campaign at **one worker**, so timings and counts come from the same runs; load
+average recorded per run; a repeatability check of one seed per configuration, three repetitions (A91's form).
+
+**The tables** (appendix; per configuration; arms as columns; ratio of means and per-run median with [min, max]
+as in the count tables):
+1. *phase A in wall clock*, ms per evaluation: M1, M2, M3, Feedforward, Post-processing (model time each); MDA
+   convergence test; dispatch; objective and constraints; residual; **Total** (the evaluation's measured wall).
+2. *phase B in wall clock*, s per optimisation: the same rows, plus optimiser own time and fixed per run;
+   **Total** = the run's wall time less the harness-only costs.
+3. *cost breakdown, phase B*: s per optimisation and ms per evaluation with the share of the total — model
+   evaluation (the modules summed); MDA overhead per sweep: convergence test, dispatch; optimiser overhead per
+   iteration; fixed per run; **Total**. Whether the architecture changes the overhead is read off the `B0` and
+   `B2` columns of the per-sweep rows, normalised per evaluation.
+
+**Expected reading** (from A91 and the campaign's sweep counts, large tokamak): reference to control, a few
+percent more model time and a test term of about 1 ms; control to modified, model time about 0.75 with every
+overhead row equal within 0.3 ms (dispatch 0.5 → 0.7 ms is the architecture's whole intrinsic overhead); total per
+evaluation about 0.75–0.8 where the node-call ratio reads 0.64 — because node calls weight every model equally and
+the cost sits in a few physics and coil models, which is the paper's argument for models of higher cost.
 
 ### 10. Reporting: one generated document for the paper, a report under 600 lines *(the user, 2026-09-29: "this v5 reporting approach is approved")*
 
