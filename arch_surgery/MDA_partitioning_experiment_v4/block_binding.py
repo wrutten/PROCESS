@@ -493,6 +493,24 @@ def flat_binding(per_sweep: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "consistent": k == top + 1}
 
 
+#: The largest relative difference between two runs' design vectors at which
+#: they still count as the same optimiser path (step 1 measured <= 7.5e-11 on
+#: B1/B2; the finite-difference step is epsfcn ~ 1e-3 of a variable).
+SAME_PATH_REL = 1e-8
+
+
+def _x_rel(xa: Sequence[str], xb: Sequence[str]) -> float:
+    """Largest relative difference between two hex-encoded design vectors."""
+    if len(xa) != len(xb):
+        return math.inf
+    worst = 0.0
+    for a, b in zip(xa, xb):
+        fa, fb = float.fromhex(a), float.fromhex(b)
+        d = abs(fa - fb) / abs(fa) if fa else (0.0 if fb == 0 else math.inf)
+        worst = max(worst, d)
+    return worst
+
+
 def kind_of(line: Mapping[str, Any], itvar_names: Sequence[str] | None) -> tuple[str, str | None]:
     """``(evaluation kind, design variable)`` from the optimiser's own label."""
     ev = line.get("evaluation")
@@ -667,35 +685,61 @@ def optimisation_trace(campaign) -> list[dict[str, Any]]:
             flat_tables[arm] = {"n_evaluations": n, "binding_inconsistent": inconsistent,
                                 "by_kind": by_kind, "by_variable": by_var}
 
-        # (b)/(c) evaluation by evaluation, the flat reference against B2
-        paired = {"n": 0, "x_identical": 0, "kind_identical": 0}
+        # (b)/(c) evaluation by evaluation, the flat reference against B2.
+        # A seed is paired index by index when both runs make the same number
+        # of evaluations, the optimiser labels every pair alike, and no pair's
+        # design vectors differ by more than SAME_PATH_REL (the paths agree to
+        # the convergence tolerance's echo, not bit for bit: step 1).  On a
+        # seed that fails, only the pairs at a bit-identical design vector are
+        # used, and the report says how many.
+        paired = {"n_pairs_offered": 0, "n_used": 0, "x_bit_identical": 0,
+                  "seeds_same_path": [], "seeds_not_same_path": {}}
         groups: dict[str, dict[str, Any]] = {}
         hist: dict[str, dict[int, int]] = {}
         by_var_pair: dict[str, dict[str, int]] = {}
+        identity = {"n": 0, "B2_M2_equals_flat_M2_settle": 0}
         for s in seeds:
             fr, pr = runs[(config, flat_ref, s)], runs[(config, "B2", s)]
-            for lf, lp in zip(fr["lines"], pr["lines"]):
-                paired["n"] += 1
-                if lf["x"] != lp["x"]:
+            pairs = list(zip(fr["lines"], pr["lines"]))
+            paired["n_pairs_offered"] += len(pairs)
+            max_rel = max((_x_rel(lf["x"], lp["x"]) for lf, lp in pairs), default=0.0)
+            same_path = (
+                len(fr["lines"]) == len(pr["lines"])
+                and all(lf.get("evaluation") == lp.get("evaluation") for lf, lp in pairs)
+                and max_rel <= SAME_PATH_REL
+            )
+            if same_path:
+                paired["seeds_same_path"].append({"seed": s, "max_relative_x_difference": max_rel})
+            else:
+                paired["seeds_not_same_path"][s] = {
+                    "n_flat": len(fr["lines"]), "n_B2": len(pr["lines"]),
+                    "max_relative_x_difference": max_rel}
+            for lf, lp in pairs:
+                exact = lf["x"] == lp["x"]
+                paired["x_bit_identical"] += exact
+                if not (same_path or exact):
                     continue
-                paired["x_identical"] += 1
-                paired["kind_identical"] += lf.get("evaluation") == lp.get("evaluation")
+                paired["n_used"] += 1
                 b = flat_binding(lf["per_sweep"].get(FLAT, []))
                 m2_binds = "M2" in b["binders"]
                 g = "M2 binds the flat loop" if m2_binds else "M2 does not bind"
                 flat_k = int(lf["sweeps"].get(FLAT, 0))
                 m2 = int(lp["sweeps"].get("M2", 0))
+                settle = b["last_open"].get("M2", 0) + 1
+                identity["n"] += 1
+                identity["B2_M2_equals_flat_M2_settle"] += m2 == settle
                 grp = groups.setdefault(g, {"n": 0, "flat_sweeps": 0, "B2_M2_sweeps": 0,
                                             "M2_settle_in_flat": 0})
                 grp["n"] += 1
                 grp["flat_sweeps"] += flat_k
                 grp["B2_M2_sweeps"] += m2
-                grp["M2_settle_in_flat"] += b["last_open"].get("M2", 0) + 1
+                grp["M2_settle_in_flat"] += settle
                 hist.setdefault(g, {})
                 hist[g][m2] = hist[g].get(m2, 0) + 1
                 kind, var = kind_of(lf, itvars)
                 if var is not None:
-                    v = by_var_pair.setdefault(var, {"n": 0, "M2_binds": 0, "flat": 0, "M2": 0})
+                    sign = "+" if lf["evaluation"][2] > 0 else "-"
+                    v = by_var_pair.setdefault(f"{var} {sign}", {"n": 0, "M2_binds": 0, "flat": 0, "M2": 0})
                     v["n"] += 1
                     v["M2_binds"] += m2_binds
                     v["flat"] += flat_k
@@ -709,6 +753,34 @@ def optimisation_trace(campaign) -> list[dict[str, Any]]:
             g["mean_flat"] = g["flat_sweeps"] / g["n"]
             g["mean_B2_M2"] = g["B2_M2_sweeps"] / g["n"]
             g["mean_M2_settle_in_flat"] = g["M2_settle_in_flat"] / g["n"]
+
+        # (c) the prediction from a flat run's trace alone: if B2's M2 sweeps
+        # are M2's own settle count in the flat loop, B2's per-evaluation
+        # ratio is sum(settle) / sum(k) over the flat arm's evaluations --
+        # testable without pairing, so on st too.
+        predicted = {}
+        for arm in [a for a in arms if a != "B2"]:
+            k_sum = settle_sum = 0
+            for s in seeds:
+                for ln in runs[(config, arm, s)]["lines"]:
+                    b = flat_binding(ln["per_sweep"].get(FLAT, []))
+                    k_sum += b["k"]
+                    settle_sum += b["last_open"].get("M2", 0) + 1
+            predicted[arm] = {"sum_k": k_sum, "sum_M2_settle": settle_sum,
+                              "predicted_per_evaluation_ratio": settle_sum / k_sum if k_sum else None}
+        observed = {}
+        b2_sw = b2_ev = 0
+        for s in seeds:
+            sw, ev = m2_sweeps_and_evaluations(_campaign_record(campaign, "B", config, "B2", s))
+            b2_sw += sw
+            b2_ev += ev
+        for arm in predicted:
+            f_sw = f_ev = 0
+            for s in seeds:
+                sw, ev = m2_sweeps_and_evaluations(_campaign_record(campaign, "B", config, arm, s))
+                f_sw += sw
+                f_ev += ev
+            observed[arm] = (b2_sw / b2_ev) / (f_sw / f_ev)
 
         # the same ratio from the campaign records of the same seeds, exactly
         camp_flat = camp_m2 = 0
@@ -726,6 +798,9 @@ def optimisation_trace(campaign) -> list[dict[str, Any]]:
             "flat_tables": flat_tables, "paired": paired, "groups": groups,
             "B2_M2_sweeps_histogram": {g: dict(sorted(h.items())) for g, h in hist.items()},
             "by_variable_paired": by_var_pair,
+            "identity": identity,
+            "predicted_from_flat_trace": predicted,
+            "observed_per_evaluation_ratio": observed,
             "traced_ratio": (total_m2 / total_flat) if total_flat else None,
             "traced_totals": {"flat": total_flat, "B2_M2": total_m2},
             "campaign_totals_same_seeds": {"flat": camp_flat, "B2_M2": camp_m2},
@@ -864,9 +939,19 @@ def print_trace(result: dict[str, Any]) -> None:
     print("## (b)/(c) Evaluation by evaluation: the flat reference against B2\n")
     for b in result["optimisation"]:
         p = b["paired"]
-        print(f"### {b['configuration']}: {b['flat_reference']} vs B2, seeds {len(b['seeds'])}; "
-              f"{p['x_identical']}/{p['n']} evaluation pairs at the identical design vector "
-              f"(kind identical on {p['kind_identical']})")
+        print(f"### {b['configuration']}: {b['flat_reference']} vs B2, seeds {b['seeds']}; "
+              f"{p['n_used']}/{p['n_pairs_offered']} evaluation pairs used "
+              f"({p['x_bit_identical']} at a bit-identical design vector); same path on seeds "
+              f"{[(d['seed'], f"{d['max_relative_x_difference']:.1e}") for d in p['seeds_same_path']]}; "
+              f"not the same path: {p['seeds_not_same_path']}")
+        i = b["identity"]
+        print(f"    B2's M2 sweeps = M2's own settle count in the flat loop on "
+              f"{_share(i['B2_M2_equals_flat_M2_settle'], i['n'])} used pairs")
+        for arm, pr in b["predicted_from_flat_trace"].items():
+            print(f"    (c) predicted from {arm}'s trace alone: sum(settle)/sum(k) = "
+                  f"{pr['sum_M2_settle']}/{pr['sum_k']} = {_f(pr['predicted_per_evaluation_ratio'])}; "
+                  f"observed B2/{arm} M2 sweeps per evaluation (campaign records, same seeds) "
+                  f"{_f(b['observed_per_evaluation_ratio'][arm])}")
         for g, v in b["groups"].items():
             print(f"    {g:<24} n {v['n']:>6}  flat sweeps {v['mean_flat']:.3f}  "
                   f"B2 M2 sweeps {v['mean_B2_M2']:.3f}  ratio {_f(v['ratio'])}  "
@@ -874,10 +959,10 @@ def print_trace(result: dict[str, Any]) -> None:
                   f"M2 settles in flat after {v['mean_M2_settle_in_flat']:.3f}")
         for g, h in b["B2_M2_sweeps_histogram"].items():
             print(f"      B2's M2 sweeps when {g}: {h}")
-        print(f"    traced ratio B2 M2 / {b['flat_reference']} sweeps over the paired evaluations: "
+        print(f"    traced ratio B2 M2 / {b['flat_reference']} sweeps over the used pairs: "
               f"{_f(b['traced_ratio'])} ({b['traced_totals']}); campaign records, same seeds: "
               f"{_f(b['campaign_ratio_same_seeds'])} ({b['campaign_totals_same_seeds']})")
-        print("    by design variable (gradient probes; share where M2 binds, B2 M2 / flat sweeps):")
+        print("    by design variable and probe sign (gradient probes; share where M2 binds, B2 M2 / flat sweeps):")
         for var, v in sorted(b["by_variable_paired"].items(), key=lambda kv: kv[1]["M2"] / kv[1]["flat"]):
             print(f"      {var:<40} n {v['n']:>5}  M2 binds {v['M2_binds'] / v['n']:.3f}  "
                   f"ratio {v['M2'] / v['flat']:.3f}")
