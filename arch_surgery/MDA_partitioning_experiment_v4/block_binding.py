@@ -427,6 +427,26 @@ def run_traces(campaign, *, which: Sequence[str], resume: bool) -> dict[str, Any
     jobs = trace_jobs(campaign)
     summary: dict[str, Any] = {}
     for name in which:
+        # A90's first press of the controls re-made four shared-pool gate
+        # records: a job's directory is not part of its identity, so the pool
+        # resolved the untraced controls by digest to the gate pool's own
+        # records and re-made them there.  Refuse any job that would land
+        # anywhere but the directory named for it -- or, for the controls,
+        # that would be re-made rather than kept.
+        for job in jobs[name]:
+            resolved = pool_mod.directory_for(job, campaign)
+            if name == "controls":
+                if not resume:
+                    raise BindingError(
+                        "the controls resolve to the gate pool's own records "
+                        f"({resolved}); pressing them without --resume re-makes "
+                        "those records.  Refused."
+                    )
+            elif Path(resolved).resolve() != Path(job.outdir).resolve():
+                raise BindingError(
+                    f"{job.key} resolves to {resolved}, not its named directory "
+                    f"{job.outdir}; running it would re-make another record.  Refused."
+                )
         results = pool_mod.run_all(jobs[name], campaign, resume=resume)
         statuses: dict[str, int] = {}
         for r in results:
@@ -716,15 +736,28 @@ def optimisation_trace(campaign) -> list[dict[str, Any]]:
 
 
 def controls(campaign) -> list[dict[str, Any]]:
+    """The untraced controls, read where the pool resolves them.
+
+    An untraced control's identity has no field that differs from the gate
+    pool's own job of the same arm, configuration and seed (a job's directory
+    is not part of its identity), so the pool resolves it by digest to that
+    record under ``runs/gates/_runs/`` and makes it there -- which is what
+    happened at A90's first press of the controls (reported in the task's
+    report).  Read through the same resolution, never by the named directory.
+    """
+    from harness.core import pool as pool_mod  # noqa: PLC0415
     from harness.core import records as records_mod  # noqa: PLC0415
 
     out = []
-    for key, d in _run_dirs(campaign, "untraced").items():
-        config, arm, seed = key
+    for job in trace_jobs(campaign)["controls"]:
+        d = pool_mod.directory_for(job, campaign)
+        if not (d / "metrics.json").exists():
+            continue
         record = records_mod.read(d)
-        out.append({"configuration": config, "arm": arm, "seed": seed,
+        out.append({"configuration": job.config.name, "arm": job.arm, "seed": job.seed,
+                    "directory": str(d), "tree_git_head": record.get("tree_git_head"),
                     "trace_file_absent": not (d / TRACE_FILE).exists(),
-                    **reproduction(campaign, "B", config, arm, seed, record)})
+                    **reproduction(campaign, "B", job.config.name, job.arm, job.seed, record)})
     return out
 
 
@@ -870,8 +903,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         for name in args.which:
             print(f"  {name}: {len(jobs[name])} job(s)")
             if args.list:
+                from harness.core import pool as pool_mod  # noqa: PLC0415
+                from harness.core import records as records_mod  # noqa: PLC0415
+
                 for j in jobs[name]:
-                    print(f"    {j.phase} {j.arm:<3} {j.config.name:<22} seed{j.seed:03d} -> {j.outdir}")
+                    resolved = pool_mod.directory_for(j, campaign)
+                    own = Path(resolved).resolve() == Path(j.outdir).resolve()
+                    digest = records_mod.job_digest(j.identity(Path(campaign.runs_dir)))
+                    print(f"    {j.phase} {j.arm:<3} {j.config.name:<22} seed{j.seed:03d} "
+                          f"digest {digest[:16]} -> "
+                          + ("its own directory" if own else f"ELSEWHERE: {resolved}")
+                          + f"  [{Path(j.outdir).relative_to(campaign.runs_dir)}]")
         if args.list:
             return 0
         summary = run_traces(campaign, which=args.which, resume=args.resume)
