@@ -3,7 +3,8 @@
 > still cited** — F3, F4, F11, F12 and F14 are the basis of the live and deferred experiments. Its
 > **measured figures were taken at `710a75c9`** and must not be quoted; the current baseline is
 > A1 (stage0-rebaseline)'s, at `c0ae5b28`. It sits in `reports/` rather than `reports/deprecated/`
-> precisely because it is still in use.
+> precisely because it is still in use. **Exception: F15 (added 2026-09-28) is measured at
+> `c0ae5b28`** on the V4 campaign's records and may be quoted; its section says by which script.
 
 # PROCESS driver architecture — a critical evaluation
 
@@ -55,6 +56,7 @@ drivers is corroborated by execution**. The chain is read from source.
 | F12 | Two incompatible definitions of "converged" coexist (f/c idempotence vs MFILE idempotence) | Measured | Low |
 | F13 | The FD step is purely relative, with no absolute floor: `x = 0` gives a zero denominator | Measured | Low |
 | F14 | Seven root-finders sit inside the FD stencil, each adding a tolerance-level discontinuity | Measured | Low |
+| F15 | Every accepted line-search point is evaluated twice, gradient included: ~half of all model evaluations are repeats | Measured (at `c0ae5b28`) | **High** |
 | C1 | *Credit:* scan points warm-start from the previous optimum — free continuation | Measured | — |
 
 ---
@@ -526,6 +528,57 @@ so each contributes a small discontinuity at the scale of that tolerance, inside
 every perturbed evaluation. They add to ε_f in F2 by an amount this analysis has
 not quantified.
 
+### F15 — The line-search point is evaluated twice (High)
+
+*Added 2026-09-28 (the user). Unlike the rest of this document, F15 is measured at the frozen base
+`c0ae5b28`, on the V4 campaign's records (949 run records at `57dc0c14`), by a committed script:
+`MDA_partitioning_experiment_v4/harness/measurement/paper_tables.py::optimiser_evaluations`, rendered
+into `MDA_partitioning_experiment_v4/paper_tables.md` ("How the optimiser's evaluations decompose").
+Line references are to the V4 experiment's copy of PROCESS and to pyvmcon 2.4.2 as installed.*
+
+**What one evaluated point costs (Measured, from the code).** pyvmcon has one callback, `problem(x)`,
+and it returns the value **and** the derivatives together (`Result`: f, ∇f, the constraints and
+their Jacobians). PROCESS implements it as `VmconProblem.__call__` (`solver.py:150-154`): one
+`fcnvmc1` and one `fcnvmc2` — a central-difference gradient, `2·nvar` perturbed `call_models`, and
+one reconcile call (`evaluators.py:130-159`). So **every point VMCON evaluates costs
+`k = 2·nvar + 2` full MDA convergences**, and there is no value-only evaluation (F6 is the same
+coupling seen from the gradient side).
+
+**Why two gradients per iteration (Measured, from the code).** A VMCON iteration evaluates
+`problem(x)` at its head (`vmcon.py:167-168`), solves the QP for δ, and runs a line search, which
+evaluates `problem(x + α·δ)` (`vmcon.py:454-464`). The line search needs only the merit value, but
+the single callback computes the gradient as well. That gradient is not wasted in itself: the BFGS
+update (`calculate_new_B`, `vmcon.py:234`) needs ∇L at the new point. The waste is the next
+line: the accepted point becomes `x` (`vmcon.py:245`), and the next iteration's head calls `problem(x)` **again** —
+same input vector, value and full finite-difference gradient recomputed; the line search's `Result`
+is used for the Hessian update and then discarded. One gradient per iteration is what the method
+needs; the second is the repeat.
+
+**How much (Measured, V4 campaign, phase B seed sets).** On every run solved in one attempt —
+**205 of 205** across the three configurations and all arms — the evaluation count is exactly
+
+> ε = (2·it − 1) · (2·nvar + 2)
+
+(every line search accepted its first trial; the converging iteration has none). Finite
+differences are **0.93–0.95** of all model evaluations, and the repeated evaluations of accepted
+line-search points are **0.47** (large tokamak) / **0.49** (low-aspect-ratio DEMO, spherical
+tokamak) of all of them — `(it − 1)/(2·it − 1)` per run. With nvar = 20 on the large tokamak that
+is 84 model evaluations per iteration of which 42 recompute a point already evaluated.
+
+**What this does and does not say.** The repeated call has a bit-identical input; its output may
+differ at the level of the MDA's own noise floor (F2), because each MDA warm-starts from the
+blackboard's state (F9). So reusing the line-search `Result` is not guaranteed to reproduce the
+current trajectory bit-for-bit — whether it changes the iterates, and by how much, is *not measured
+here*. The saving is **Estimated at ~45–50 % of model evaluations** if the trajectory is unchanged;
+it is of the same order as the whole MDA partition measured by the V4 experiment, and it touches no
+model.
+
+**Fixes, in increasing reach.** (a) PROCESS-side, no dependency change: memoise
+`VmconProblem.__call__` on the bytes of `x`, so the loop head returns the line search's `Result`.
+(b) pyvmcon-side: carry `new_result` into the next iteration instead of re-evaluating. (c) Give the
+callback a value-only mode, so rejected line-search trials (none occurred in V4, but the retry
+ladder of F5/F7 changes the step and they can) do not pay for a gradient.
+
 ### C1 — Credit: implicit continuation (Measured)
 
 `SolverHandler.output()` writes the solution back to `data.numerics.xcm`
@@ -647,6 +700,9 @@ available from this tool today. Step 4 is a real code change.
 - **Add an absolute floor to the FD step** (F13).
 - **Give the impromptu MDAs a convergence test** instead of a fixed count (F11).
 - **Record the FD step that succeeded** rather than resetting it (F5).
+- **Reuse the line-search point's evaluation** at the next iteration's head (F15): a memo on
+  `VmconProblem.__call__`, or carrying pyvmcon's `new_result` forward. Estimated ~45–50 % fewer
+  model evaluations; its effect on the trajectory must be measured before it is believed.
 
 ### Tier 3 — architectural
 

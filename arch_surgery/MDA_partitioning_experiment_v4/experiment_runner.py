@@ -49,6 +49,7 @@ from harness.gates import registry as registry_mod  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.child import postsolve as postsolve_mod  # noqa: E402
 from harness.core import provenance as prov  # noqa: E402
+from harness.measurement import paper_tables as paper_tables_mod  # noqa: E402
 from harness.measurement import plan_tables as plan_tables_mod  # noqa: E402
 from harness.core import framework as framework_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
@@ -694,6 +695,44 @@ def stage_plan_tables(args: argparse.Namespace, campaign: Campaign) -> int:
     return 0
 
 
+def stage_paper_tables(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The paper's three results tables, computed from the campaign's run records.
+
+    ``show`` prints ``paper_tables.md``, ``write`` writes it, ``check``
+    compares it without writing.  Unlike ``--plan-tables`` the numbers are
+    computed — with the tally's own constructions over the tally's own
+    population — because the paper's shapes are not stage tables; every cell
+    the stage records also hold is compared with them exactly first, and a
+    mismatch refuses the write.  ``--paper-tables-runs`` reads the records
+    from a retired worktree's relocated runs (``idf_probe/runs/A<n>_runs``).
+    """
+    _rule("the paper's results tables")
+    campaign = paper_tables_mod.with_runs(campaign, args.paper_tables_runs)
+    records_dir = (
+        Path(args.outdir)
+        if args.outdir
+        else Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH
+    )
+    try:
+        if args.paper_tables == "write":
+            result = paper_tables_mod.write(campaign, records_dir)
+        elif args.paper_tables == "check":
+            result = paper_tables_mod.check(campaign, records_dir)
+        else:
+            result = paper_tables_mod.render(campaign, records_dir)
+    except paper_tables_mod.PaperTablesError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    paper_tables_mod.report(result)
+    if args.paper_tables == "show":
+        print()
+        print(result["markdown"])
+    failed = result["cross_check"]["mismatched"] or not result["tooth"]
+    if args.paper_tables == "check" and (failed or not result["identical"]):
+        return 3
+    return 0
+
+
 def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
     """One gate's job set, by identity, and what ``--resume`` would do with each.
 
@@ -978,6 +1017,23 @@ def main(argv: list[str] | None = None) -> int:
         "the document ('write').  No cell is typed by hand",
     )
     parser.add_argument(
+        "--paper-tables",
+        choices=("show", "check", "write"),
+        help="compute the paper's three results tables (Structuring-fusion-"
+        "MDAO-with-DSMs, section 3, Case 2) from the campaign's run records "
+        "and print them ('show'), compare them with paper_tables.md ('check', "
+        "exits 3 on a difference) or write that file ('write'); every cell the "
+        "stage records also hold is compared with them exactly first",
+    )
+    parser.add_argument(
+        "--paper-tables-runs",
+        type=Path,
+        default=None,
+        help="for --paper-tables: the runs root to read (campaign/ and gates/ "
+        "under it), e.g. a retired worktree's idf_probe/runs/A<n>_runs; "
+        "default the experiment's own runs/",
+    )
+    parser.add_argument(
         "--selfcheck",
         action="store_true",
         help="run the harness's own gates with their teeth, and stop",
@@ -1123,6 +1179,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.plan_tables:
         return stage_plan_tables(args, campaign)
+
+    if args.paper_tables:
+        return stage_paper_tables(args, campaign)
 
     if args.gates:
         return stage_gate_catalogue(campaign)

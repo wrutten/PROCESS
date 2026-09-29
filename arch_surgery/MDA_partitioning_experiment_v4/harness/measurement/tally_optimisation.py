@@ -1759,9 +1759,13 @@ def module_sweeps(
     every node of a group runs once per sweep, and
     :func:`stats.module_sweeps` refuses the run where they did not.  The
     census counts the **whole run** — every attempt, the output path and the
-    exit audit's one sweep — so the output pass adds exactly one sweep to
-    every row in every arm; it is symmetric and cancels from every ratio it
-    appears in, and the caption says so, as the previous revision's did.
+    exit audit's one sweep.  Neither cancels from a ratio: the output path
+    is architecture and differs by arm (two MDA_Output sweeps of every node in
+    ``BR``/``B0``, none in ``B1``, one execution of each once-per-run node in
+    ``B2``), and the audit adds one sweep of every node in every arm.  The
+    caption says so.  (Until 2026-09-28 it said the output pass added one sweep
+    to every row and cancelled — the previous revision's wording, which the
+    records' own per-node census contradicts.)
     """
     base, arm = HEADLINE_PAIR
     if base not in by_arm or arm not in by_arm:
@@ -1953,11 +1957,7 @@ def module_sweeps(
                 "per-node DSM rows are not readable in this repository); the "
                 "per-arm total cells and the per-run distribution are the "
                 "v = 1 case",
-                "these are whole-run census counts: the output pass runs every "
-                "node once, so it adds exactly **one sweep to every row in "
-                "every arm**; it is symmetric across arms and cancels from "
-                "every ratio it appears in, while check 4's cost table sums "
-                "the solve phase alone",
+                "these are whole-run census counts: they include the output path — two MDA_Output sweeps of every node in `BR` and `B0`, none in `B1`, one execution of each once-per-run node in `B2` — and the exit audit's one sweep of every node in every arm, which is the harness's accuracy instrument and no arm's architecture. Neither cancels from a ratio: the audit's sweep moves a ratio by under 0.2 % in every row but the once-per-run one, where it is half of `B2`'s count, and the output path differs by arm; check 4's cost table sums the solve phase alone",
                 f"the committed node map states {executed} DSM rows execute in "
                 f"a sweep and this configuration attributes "
                 f"{int(total['models'])} of them; the remainder are rows of "
@@ -1978,8 +1978,8 @@ def module_sweeps(
                 f"every run agreed). `models` is the group's collapsed-DSM row "
                 f"count, so total calls = Σ sweeps × models, bracketed over "
                 f"the once-per-run nodes' unknown rows. Whole-run census "
-                f"counts: the output pass adds one sweep to every row in every "
-                f"arm and cancels from every ratio. Reported, not accepted on."
+                f"counts: they include the output path and the exit audit's one "
+                f"sweep, and neither cancels from a ratio. Reported, not accepted on."
             ),
         ),
         columns=(
@@ -2184,8 +2184,7 @@ def module_sweeps_function_weighted(
                 "the two attributions of the once-per-run nodes' own functions "
                 "(trap T9); the per-arm total cells and the per-run distribution "
                 "are the v = 1 case",
-                "whole-run census counts: the output pass adds one sweep to "
-                "every row in every arm and cancels from every ratio here",
+                "whole-run census counts: they include the output path (two sweeps in BR and B0, none in B1, the once-per-run nodes once in B2) and the exit audit's one sweep of every node in every arm; neither cancels from a ratio",
                 "no per-module ratio reads the weight: a ratio of sweeps is "
                 "unit-free, and the weight moves the aggregate alone",
                 "reported, not accepted on: the acceptance quantity is check 4's "

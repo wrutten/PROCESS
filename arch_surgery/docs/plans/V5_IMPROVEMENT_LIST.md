@@ -119,6 +119,34 @@ The benchmarking literature (Beiranvand, Hare & Lucet 2017 §4.2) counts failure
 
 V4's `lad` same-optimum FAIL sits at 2.15× the 1e-6 floor with the factor F at one value. A V5 plan pre-declares the verdict at the chosen setting **and** publishes the re-tally at neighbouring settings (F ∈ {3, 10, 30}; floor ∈ {1e-7, 1e-6, 1e-5}) so a reader sees whether a verdict is a threshold artefact — the tally can produce the grid from the records at no run; only the declared cell is a verdict.
 
+### 5. Phase A charges the partitioned arm its one execution of the once-per-run nodes *(user, 2026-09-28)*
+
+**The concern, in the user's words:** *"If phase A is a single evaluation run, it should converge
+the MDA and then run all these other models exactly once right? Otherwise it doesn't produce the
+same information as the reference case."* V4's phase A measures one `call_models` evaluation, and
+its census stops before the exit audit's uncharged sweep. The flat arms (`AR`, `A0`, `A1`) run
+the once-per-run nodes (`costs`, `vacuum`, `water_use`; plus `pulse` on `st_regression`) in every
+sweep, so their final sweep computes those outputs at the converged state. The partitioned arm
+`A2` defers them to the output pass, which phase A does not have. So its measured evaluation runs
+them **0** times and leaves their outputs uncomputed (campaign record `large_tokamak_nof` seed 1:
+`A0` counts 6 of each, `A2` none). V4's Table 9 prints that 0, so its once-per-run row compares two
+evaluations that do not produce the same information. Item 2's "the once-per-run nodes (0)" reads
+the same cell.
+
+**The change.** A V5 phase A evaluation is the MDA converged, **then every deferred node executed
+exactly once**. The run actually executes them, and the census counts that execution like any
+other: it is **measured, not charged** (the user, 2026-09-28: *"In v5 it should be in the
+measurement (it should actually run once)"*). The accuracy check's
+restricted audit, which currently excludes the components those nodes write, should then be
+reconsidered: with the nodes executed, their components can be audited like the rest.
+
+**What V4 does meanwhile.** Nothing in V4's report or harness changes. The paper tables
+(`MDA_partitioning_experiment_v4/paper_tables.md`, `harness/measurement/paper_tables.py`) charge
+`A2` that one execution **by construction**: 1.0 in its post-processing cell, so `A2/A0` there is
+0.18 / 0.20 / 0.17 rather than 0. They check on every run that the measured count is 0, and cite
+phase B's whole-run census (`B2` reads 2 per run: the output pass and the exit audit) as the
+measurement showing that the deferred pass is a single execution.
+
 *Candidates proposed elsewhere and not yet listed here:* A76 (fixed-point-distance)'s report §7 (d)
 notes that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
 carry a pre-declared acceptance rule in a V5 plan (a natural form: headline median and p90 below τ,

@@ -921,12 +921,7 @@ LAYOUTS: tuple[Layout, ...] = (
             "once-per-run nodes' unknown rows (trap T9). **The per-module "
             "ratio column is the result** and is unit-free; the last two "
             "columns give that ratio's per-run distribution, which the pooled "
-            "figure does not show. These are whole-run census counts: the "
-            "output pass runs every node once and so adds exactly one sweep "
-            "to every row in every arm — symmetric across arms, and it "
-            "cancels from every ratio here — while check 4 sums the solve "
-            "phase alone. `B1` is inactive on `st_regression`. Reported, not "
-            "accepted on."
+            "figure does not show. " "These are whole-run census counts: they include the output path — two MDA_Output sweeps of every node in `BR` and `B0`, none in `B1`, one execution of each once-per-run node in `B2` — and the exit audit's one sweep of every node in every arm, which is the harness's accuracy instrument and no arm's architecture. Neither cancels from a ratio: the audit's sweep moves a ratio by under 0.2 % in every row but the once-per-run one, where it is half of `B2`'s count, and the output path differs by arm; check 4's cost table sums the solve phase alone. " "`B1` is inactive on `st_regression`. Reported, not accepted on."
         ),
         why=(
             "**The previous revision's §5.5.1 table, reproduced** — the "
