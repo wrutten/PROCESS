@@ -275,3 +275,16 @@ stopped; only the run launched through the Bash tool's `run_in_background: true`
 call's tree) lived on. So: a long run is started with `run_in_background: true`, never with `nohup`/`&` inside
 a foreground call; and a record directory that gained a `command.json` and then nothing for minutes is a dead
 launch, not a slow one.
+
+## T20 — A compared leaf that is a path stays silent until the first straddle across two trees
+
+A gate whose two sides were only ever made in one working tree can carry an absolute path in a compared
+leaf for months without a symptom: GC's `defer_per_run_totals.artifact` passed A99's three presses (one
+worktree) and FAILed A100's first DR10 → DR11 press — the before side from A99's tree, the after side from
+A100's — on that one leaf, with 0 driver values and 0 components differing. G1 met the same class earlier
+(its cross-tree paths). Found by A100 (v5-test-set), 2026-09-29.
+
+**How to avoid it:** a leaf that is a path belongs in the gate's declared path-kind table from the day the
+gate is written (compared by basename or excluded by name with the reason), never discovered by the first
+cross-tree press. When a gate FAILs on a first press after a merge, read *which* leaves differ before
+reading how many: harness stamps and paths are declared, driver values are results.

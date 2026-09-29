@@ -1,6 +1,6 @@
 # A100 (v5-test-set) — DR11: the loop's test set as a switch (the census set of D32 at 1e-8, V4's whole write set at 1e-6 as the fallback of D39), the census stage, gate GT, the mixed ruler removed
 
-> **Document status** — **OPEN.** Task **A100 (v5-test-set)**, branch `A100-v5-test-set` (worktree
+> **Document status** — **MERGED 2026-09-29 at `d624f528` (`--no-ff`, under D37: DR11 on the orchestrator's assessment, §14, the driver diff in §4 for the user's review on return); archived.** Records relocated to `arch_surgery/idf_probe/runs/A100_runs/v5_test_set/` (one tree, 340 records). Was: **OPEN.** Task **A100 (v5-test-set)**, branch `A100-v5-test-set` (worktree
 > `.claude/worktrees/A100-v5-test-set`, seeded with A99 (v5-schedule-and-prime)'s relocated records
 > `idf_probe/runs/A99_runs/v5_schedule_and_prime/`), base **`66bfa240`** (= `architecture_surgery` at
 > dispatch, the merged tip of A98 (v5-reporting-trim) and A99). Written 2026-09-29 under **D37**
