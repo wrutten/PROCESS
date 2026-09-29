@@ -1,0 +1,446 @@
+# V5 experiment plan — the partitioned MDA as an existence proof in model-evaluation counts
+
+> **Document status** — **DRAFT · NOT APPROVED. Nothing may be built from it until the user approves.**
+> Written 2026-09-29 by task **A95 (v5-plan)** at `7986d408` (the tip of `architecture_surgery`), as a
+> writing task: no PROCESS run, no code change, nothing written under any `MDA_partitioning_experiment_v*/`
+> folder (A94 is making the V5 copy concurrently). **Its input is
+> [`V5_IMPROVEMENT_LIST.md`](V5_IMPROVEMENT_LIST.md)**: every ruling there is the user's and binds this plan,
+> and every quantity below is either cited to a list item and a decision row (D29–D34; the queue,
+> [`../MASTER_TODO_v2.md`](../MASTER_TODO_v2.md) §2) or marked **[to be declared from A92]** /
+> **[to be declared from A93]** — the two tasks running now (A92 (optimisation-path-census): the census over
+> whole optimisations and its teeth; A93 (tolerance-phase-b): the optimisation-phase effect of the census set at
+> τ = 1e-8). Their results are not guessed here. Where the plan needs a ruling the list does not carry, it is a
+> numbered question in §12 with a recommendation, never a settled sentence (protocol §8).
+>
+> **Form.** V4's `EXPERIMENT_REPORT.md` §1–§3 is the model, at about a third of its length; the vocabulary is the
+> harness README §3's (model, driver, node, sweep, coupling state, τ, arm, rung, configuration, seed, teeth,
+> tally, construction). Arm names are today's — `AR A0 A1 A2` / `BR B0 B1 B2` (A78 (arm-renames), 2026-09-15);
+> a document dated earlier spells them differently (trap T16). The paper this experiment serves is
+> `Structuring-fusion-MDAO-with-DSMs/3 results.tex` (read-only from this repository).
+
+---
+
+## 1. Purpose and research questions
+
+**The paper's claim** (list header, 2026-09-29; D29; D33): an existence proof that *the arrangement of solvers
+and optimisers alone* — every physics and engineering model byte-identical to the frozen base `c0ae5b28` —
+changes the cost of solving PROCESS, **in model-evaluation counts**, because the argument is that the real
+impact is for models of higher computational cost. Wall clock goes to the paper's appendix as context with
+one quantified sentence in the main text (item 9, D33); the paper keeps its optimiser-iterations table
+(item 1). Three configurations is a case study, said in one clause (D29 (3)).
+
+| RQ | question | phase and pair | V5 status |
+|---|---|---|---|
+| **RQ1** | per-call cost: at matched achieved accuracy, how many model-node evaluations does one MDA solve cost under the partitioned architecture against the flat one? | phase A, δ = 0.10 displaced entries only; the pair is **`A1 → A2` on the pulsed configurations, `A0 → A2` on `st_regression`** (where `A1` is inactive) — the comparison at matched accuracy and the same fixed point (**D34**, the user, 2026-09-29) | kept; the stencil regime is dropped (item 10) |
+| **RQ2** | end-to-end cost and correctness: inside a full optimisation, the partitioned architecture's model-node evaluations against the flat control, at the same optimum | phase B, `B0 → B2` with the rungs `B0 → B1 → B2`; `BR → B2` beside | kept; the iteration-multiplier rule retired, `R = ρ × ε` published (item 1) |
+| RQ3 | transfer from phase A to phase B | — | **dropped** with the stencil regime (item 10) |
+| **RQ4** | the stopping rule: what upstream's objective/constraint test costs against the coupling test | `AR → A0`, `BR → B0` | **columns only**, one sentence of context; no prose section (item 10) |
+| RQ5 | the trust step | — | **dropped** (item 10; answered by A43 on V3's records) |
+
+**What does not change** (V4 §2.3): the base commit (D2); the models (D5/D11); correctness on `norm_objf`
+plus a feasibility audit, never on iteration variables (D6); the partition from the collapsed DSM (D8); the
+three configurations (D17; item 1's D22 note); the reference arm beside the predicate-matched control (D14c,
+D18); the prime inside the intervention (D19); every acceptance quantity a count or a bit-comparison and no
+conclusion resting on a timing (I-10, T5, D33).
+
+---
+
+## 2. The switch matrix and arms
+
+The matrix is V4's Table 2 with four V5 changes, each stated on its row. The harness composes every arm from
+this table and nothing else, every switch cleared first (V4 §3.2). `AR`/`BR` are PROCESS as shipped, every
+switch unset. On `st_regression` (steady state, `k = 0`) the rows marked ⁺ are inactive: `A1` composes to
+`A0`, `B1` to `B0`, both recorded as skipped.
+
+**Table 1.** *The switch matrix: one column per arm, one row per switch; V5 changes in bold with the list
+item that makes them; ⁺ = pulsed configurations only. Rows with a question mark in the margin are the subject
+of §12 Q1.*
+
+| | **AR** | **A0** | **A1** | **A2** | **BR** | **B0** | **B1** | **B2** | V5 change |
+|---|---|---|---|---|---|---|---|---|---|
+| MDA solve | upstream | flat | flat | partitioned | upstream | flat | flat | partitioned | — |
+| **stopping rule** | objf/conf | **`c` @ τ** | **`c` @ τ** | **`c` @ τ per block** | objf/conf | **`c` @ τ** | **`c` @ τ** | **`c` @ τ per block** | the test set is the **census-measured feedback set `c`**, not the whole coupling state `y` (item 6, **D32**); τ from the declared rule (§3) |
+| block schedule | — | one block | one block | one pass | — | one block | one block | one pass | **resolved once per run** with the deferral sets (item 7, **D31**) |
+| arrangement · node (`build` after `physics`) | — | — | — | ✓ | — | — | — | ✓ | — |
+| arrangement · method (prime) | — | — | — | ✓ | — | — | — | ✓ | **once per evaluation, before M1**, as pre-processing (item 8); stamped, never counted (D19) |
+| deferral `per_call` ⁽?⁾ | — | — | — | ✓ | — | — | — | ✓ | phase A: **the deferred nodes are executed once after convergence and measured** (item 5); whether the flat arms `A0`/`A1` (and `B0`/`B1`) also defer is §12 **Q1** |
+| deferral `per_run` ⁽?⁾ | — | — | — | ✓ | — | — | — | ✓ | as above |
+| burn time out of the loop ⁺ | — | — | ✓ | ✓ | — | — | ✓ | ✓ | — |
+| burn-time owner ⁺ | loop | loop | constant | constant | loop | loop | optimiser | optimiser | — |
+| input file ⁺ | committed | committed | committed | committed | committed | committed | lifted | lifted | — |
+| output-time loop (`MDA_Output`) | n/a | n/a | n/a | n/a | upstream | upstream | none | none | — |
+| predicate mode | — | frozen | frozen | frozen | — | frozen | frozen | frozen | the `mixed` trial is **dropped** (item 10; D30's "or drop it") |
+
+**The rungs** (V4 Table 3, unchanged in what they isolate): `AR → A0` / `BR → B0` the stopping rule
+(reported, never accepted on); `A0 → A1` / `B0 → B1` burn-time ownership (and, in phase B only, the
+output-time loop); `A1 → A2` / `B1 → B2` the partitioning intervention. **The published pairs (D34, the
+user, 2026-09-29):** phase A prints **`A2/A1`** on the pulsed configurations and `A2/A0` on `st_regression`
+(where `A1` is inactive) — the ratio of means, the per-run median and the `[min, max]` bracket all on that
+pair — because it is the comparison at matched accuracy and the same fixed point (pinning the burn time
+moves the plant block's fixed point by 7–10 % of scale on 25/25 pairs, V4 report §5.1); this supersedes the
+paper-tables convention of 2026-09-28 (`A2/A0`). Phase B keeps **`B2/B0`**, the designed-architecture
+comparison, with the rungs beside and `BR → B2` beside it, never instead.
+
+**Phase A's partitioned arm produces the same information as the flat arms** (item 5, the user 2026-09-28:
+*"In v5 it should be in the measurement (it should actually run once)"*): the MDA converged, then every
+deferred node executed exactly once, by the run, counted by the census like any other node call. V4's
+paper-table charge of 1 by construction (`paper_tables.CHARGED_ONCE`) is retired; the cell is measured. The
+user extended this on 2026-09-29 to *all A arms* (list item 6) — for the flat arms this is either their final
+sweep (which already computes every node at the converged state) or a deferral in the control too, as A89's
+second-pass control was built; **§12 Q1**.
+
+---
+
+## 3. The convergence criterion
+
+**The test set** (item 6, **D32**, the user: *"for v5 I want to use the census feedback variables. The
+motivation is that the DSMs are not accurate enough to make this judgement, and suffer from the models not
+being strictly functional"*). A loop stops on the components of the coupling state `y` that are **read before
+their first write within a sweep of the arm's own execution order**, per block — the read-before-write census
+of A89 §7.2 (`rbw_census.py`), measured at run time, not derived from the DSM. On V4's configurations the flat
+set has 73–75 components and the blocks 16 / 46–47 / 10 (M1 / M2 / M3) plus 1 in `st`'s `PULSE` block (A89
+§7.4). **The DSM feedback set** (75 / 73 / 53; A89 §7.2) is reported beside as a cross-check (DSM validation
+V18, V19) and is never a stopping rule: it failed the whole-`y` audit once in 12 runs at τ = 1e-8
+(`large_tokamak_nof`, cold `A0`, `costs.coecap` at 1.47e-8; A89 §7.4).
+
+**What the census runs over** — **[to be declared from A92]**: A89's sets are a union over 8 displaced
+evaluations per configuration and arm; A92 measures the census over whole optimisations (`B0`, `B2`, seeds 000
+and 001) and reports the union over the optimiser's path against A89's sets. The plan declares the campaign's
+sets as A92's union (displaced entries plus the optimiser's path) once A92 reports; if the two agree
+component for component, the displaced census alone is declared and A92's is the record that it suffices.
+
+**The tolerance** (item 6's rule, declared in A89 §7.3 before it was measured): VMCON's central-difference
+step is h = `epsfcn` = 1e-3, its truncation error O(h²) and function noise ε adds O(ε/h); they balance at
+ε ≈ h³ = 1e-9 (Gill, Murray & Wright). **τ is the largest ladder value at which the MDA-induced error of the
+objective (relative) and of every normalised constraint (absolute) stays ≤ h³ at every stencil point of the
+control, in every configuration.** A89 found **1e-8** on V4's configurations with the census set (at 1e-6 the
+error reaches 2.8e-8). **The campaign value is declared from A93's stage and A89's `--choose-tau`, re-measured
+on the V5 copy before the campaign** — **[to be declared from A93]**; the *rule* is declared here, the
+*value* follows it. One τ for every converger in every arm and both phases (D23 stands; there is no inner
+tolerance). Note: the retry ladder's `epsfcn × 10` attempt would license h³ = 1e-6; τ stays at the first
+attempt's value, which is tighter, and no attempt-dependent tolerance exists.
+
+**The accuracy instrument** is unchanged: the **whole-`y` exit audit** — one further full sweep of the whole
+model set from the state the solve handed over, restored bit-exact (D25), on the same `frozen` ruler in every
+arm, uncharged — with the count of components above τ per run. A narrow test set is licensed only because
+the audit is wide: matched accuracy is verified per run on all 840 / 846 / 827 components, never assumed
+from the shared τ (V4 §3.6).
+
+**The teeth gate for the test set** — form **[to be declared from A92]**, whose brief states it: the census
+set minus one declared component, run at τ, must be caught by the whole-`y` exit audit, or the component is
+reported as not individually binding; dropping a non-census control component must change nothing. The gate
+is pressed per configuration and arm before the campaign and is a row of the verification table (§8).
+
+---
+
+## 4. Phases, entries, seeds
+
+**N = 25** per configuration per arm, both phases (V4 Table 6, from V3 (O2); unchanged).
+
+**Phase A — one `call_models` evaluation per arm.** The reference per configuration is the converged flat
+state at the design point (one `A0` evaluation from the cold entry of the committed input file — re-made for
+V5, since the test set and τ change what "converged" means; its cost is the cold-start term, reported
+beside, never pooled). Entries are the V4 δ-stream: `1 ± δ·u` on every coupling component, `u` uniform in
+`[−1, 1)` from a hash of (seed, component), **δ = 0.10**, seeds 1–25, bit-identical across arms per seed
+(**the user, list header: *"I like the hostile 10 % for the paper results. We see the actual result in phase B
+anyway."***). Every arm, `AR` included, enters from the same displaced snapshot (D26). **No stencil regime**
+(item 10). Failure taxonomy as V4 §3.4 check 4, denominators of 25.
+
+**Phase B — one optimisation per arm.** `start000` unperturbed plus 24 perturbed at **δ = 0.10** on the
+iteration variables' initial values (keyed on the variable number, bounds-clamped; V4 §3.5); no retries by
+the harness (the optimiser's own retry ladder is recorded per attempt, DR7). Every phase B table is over
+**the seeds on which every arm reached an accepted optimum** (`status == ok`, `ifail == 1`), one `n` per
+configuration, with the per-arm success table (item 3 as reduced; A82's construction) explaining that `n`
+and naming the starts lost to the intervention arms alone — descriptive, no expectation, no robustness claim.
+
+**Configurations** — declared unconditionally: `large_tokamak_nof`, `low_aspect_ratio_DEMO`, `st_regression`
+(D17; **item 1's D22 note, the user 2026-09-15: *"D22 – the conclusion was to keep. that is fine for v5 as
+well"***). No drop rule exists, so no selection at configuration level can occur.
+
+**Seed pairing**: the same seed gives every arm a bit-identical starting point in both phases, checked by
+gate G6 (phase A entries) and by the composition of the phase B start (the displacement stream keyed on the
+variable number); every comparison is paired.
+
+---
+
+## 5. Acceptance rules, pre-declared
+
+Each rule's verdict is a row of the one verification table (§8); nothing else carries a verdict. The
+median is nearest-rank, upper-middle (`sorted[n // 2]`, V4 §3.5).
+
+| # | quantity | rule | provenance |
+|---|---|---|---|
+| **A1** | **RQ1 — matched accuracy** | per configuration and pair (**`A1 → A2` pulsed, `A0 → A2` st — D34's pair, the one the paper prints**), each arm's audited maximum scaled residual over the restricted set (components not owned by the `per_run` node set) **within F = 10 at both median and p90**; the whole-state audit published beside; **0 components above τ on every accepted run** | V4 §3.4 check 1; D34; item 10's verification row; the restriction itself is §12 **Q2** (item 5 asks that it be reconsidered) |
+| **A3** | **RQ1 — cost** | on D34's pair: the ratio of the means over the runs both arms finished, the per-run median with `[min, max]`; per module (sweeps per evaluation, the paper's cells); `A2/A0` on the pulsed configurations is not printed in the paper's table | D34; the paper's tables; V4 §3.4 check 3 |
+| **A2** | **RQ1 — the fixed-point distance** | the between-arm distance at exit (A76's statistic) **reported**: median and p90, count of pairs above τ; no rule | item 10's dropped candidate (the user: one sentence that the arms reach the same fixed point) |
+| **B1** | **RQ2 — same optimum** | per configuration, paired relative `|Δ norm_objf| / max(|a|, |b|)` at accepted optima for `B0 → B1`, `B0 → B2`; yardstick the `BR → B0` spread in the campaign; **accepted at median and p90 when `r ≤ max(F × yardstick, floor)`**, F = 10, floor = 1e-6; the statistic is published whether or not it passes, **with its attribution to the rung it fails on** (V4: `lad`, on the lift rung `B0 → B1`, not the partition); clusters at 10 × floor for the hop count | V4 check 1 (D6); **item 4 as reduced** (the user, 2026-09-29: "accepted"); the neighbouring-threshold grid is not a paper table |
+| **B2** | **RQ2 — cost** | solve-phase node calls on the one seed set; per module (the paper's cells are module sweeps per run, `paper_tables.md` conventions); the ratio of the means and the per-run median with `[min, max]`; with and without retried seeds; the exit audit's sweep subtracted symmetrically | V4 §3.5 check 4; the paper's tables |
+| **B3** | **RQ2 — the decomposition** | **no iteration-multiplier rule.** `R = ρ × ε` printed per configuration and pair: ρ the per-evaluation node-call ratio, ε the evaluation-count ratio from `sweeps_per_eval.n_evaluations`, R the pooled ratio, the identity's residual stated; iterations (summed over attempts, and final attempt) beside as context; a label only, never a verdict: `|log ε| ≤ log 1.05` → *trajectory-neutral*, else *trajectory changed by ε* | **item 1** (the user, 2026-09-15: the multiplier "imposes a statistical bias"); the paper keeps its iterations table and says in one sentence that `lad`'s lifted arms take the shorter path |
+| **B4** | lift closed | constraint-93 residual at every accepted optimum, seconds and relative; reported per rung, no verdict | V4 check 3 |
+| **B5** | per-arm success | accepted optima of 25 per arm and configuration, the other starts by outcome class, the starts lost to one arm alone; **reported, no expectation** | **item 3 as reduced** (the user: *"I'm not planning to make claims about robustness"*) |
+| **—** | timing | **nothing rests on a timing**; every wall-clock number is context in the appendix (§6) | D33; CLAUDE.md; I-10; T5 |
+
+---
+
+## 6. The wall-clock instrument and tables
+
+**Ruled — D33** (the user, 2026-09-29: *"discussion item 4 is accepted"*): wall clock is reported in the
+paper's appendix as context beside the counts, from **V5's campaign at one worker**, with the instrument
+below, **never as an acceptance quantity**. D33 supersedes D29 (2) **for V5 only**; V4 publishes no timing
+(its campaign ran three workers and its harness bills the intervention arms for the whole-state test and
+I-30). Items 5 and 7 are prerequisites of every wall-clock table.
+
+**The instrument** (item 9). Env-switched timers in V5's driver copy, **observation-only** (the block
+trace's precedent, DR8: with the switch unset every hook sets `None` and takes no branch; G1 byte-identical),
+accumulated per run and stamped into the record:
+
+| row | what is timed |
+|---|---|
+| per node | the model's own wall time, summed per module through the node map (M1, M2, M3, Feedforward, Post-processing) |
+| per block loop | the **MDA convergence test** (read plus residual), and the **dispatch** (the sweep body less its nodes and its test) |
+| per evaluation | the **objective and constraints** layer (what upstream's idempotence predicate compares — kept apart from the convergence test by name) |
+| per run | the **optimiser's own time** (solve-phase wall less every evaluation); the **fixed per-run term** — process start, imports, numba cache load, input parse, output writing, and the once-per-run schedule derivation (item 7), folded here and not into dispatch |
+| check | the run's wall time measured independently; the **unattributed residual** printed so the rows are seen to add up |
+| excluded | **harness-only costs, excluded from every total and named in the caption**: the exit-audit sweep, the state snapshots, the census hooks, the record assembly |
+| the instrument's own cost | one run per configuration with timers off, reported beside |
+
+**Run discipline**: the whole campaign at **W = 1**, so timings and counts come from the same runs; load
+average recorded per run; a **repeatability check** of one seed per configuration, three repetitions, in
+A91's form (median and range; a case whose repetitions differ in counts is refused).
+
+**The three appendix tables** (per configuration; arms as columns; ratio of means and per-run median with
+`[min, max]`, as the count tables):
+
+1. **phase A in wall clock**, ms per evaluation: M1, M2, M3, Feedforward, Post-processing (model time each);
+   MDA convergence test; dispatch; objective and constraints; residual; **Total** (the evaluation's measured
+   wall).
+2. **phase B in wall clock**, s per optimisation: the same rows plus optimiser own time and fixed per run;
+   **Total** = the run's wall time less the harness-only costs.
+3. **cost breakdown, phase B**: s per optimisation and ms per evaluation with the share of the total — model
+   evaluation (the modules summed); MDA overhead per sweep: convergence test, dispatch; optimiser overhead
+   per iteration; fixed per run; **Total**. Whether the architecture changes the overhead is read off the
+   `B0` and `B2` columns of the per-sweep rows, normalised per evaluation.
+
+**Expected reading** (item 9, from A91 and the campaign's sweep counts; context): reference to control a few
+percent more model time and a test term of about 1 ms; control to modified, model time about 0.75 with every
+overhead row equal within 0.3 ms; total per evaluation about 0.75–0.8 where the node-call ratio reads 0.64 —
+because node calls weight every model equally and the cost sits in a few physics and coil models, which is
+the paper's argument.
+
+---
+
+## 7. Gates, each with teeth
+
+A failed gate blocks the dependent stage and is a result (protocol §6); every gate has a tooth (§12) and
+every count its denominator (T11). Gate records are reused across tasks (`--resume` on seeded records) and
+re-made only where a change alters what the gate reads (harness plan amendment 15).
+
+**Table 2.** *The V5 gates: one row per gate — V4's registry name where it exists, what it binds, the
+criterion, the tooth. Kept, new and dropped are by list item 10 unless another item is named.*
+
+| gate | V4 name | binds | criterion | tooth | status |
+|---|---|---|---|---|---|
+| **G0** | `g0prime` | every V5 commit | the copy's `process/models/` byte-identical to `c0ae5b28`'s | a 1-byte change to one model file | kept |
+| **G1** | `switch_neutrality` | **each driver change, run per change, never batched** (DR9–DR13, §11) | with every switch unset, deterministic record values and every output-file line identical to a run at the pre-change commit, three configurations | a 1-ULP change to one float | kept |
+| **G2** | `prime_map` | the prime in its **once-per-evaluation form** (item 8) | from each reference exit snapshot, prime on vs off, exit states bit-identical on N/N components; **and** the once-per-evaluation form's exit states bit-identical to V4's per-sweep form on the gate job set (item 8's requirement); `n_prime_calls` = evaluations | a doctored snapshot component | kept, re-formed |
+| **G4** | `audit_restriction` | the restricted statistic (A1) | a doctored `per_run`-owned component trips the whole-state audit and not the restricted one; a doctored in-loop component trips both; one from each excluded namespace | both directions, every namespace | kept **while A1's restriction stands** (§12 Q2) |
+| **G5** | `switch_composition` | `B2` | the arm composed from the matrix equals the arm composed switch by switch | `norm_objf` hex, `n_call_models` | kept |
+| **G6** | `entry_and_warm` | phase A | seed-paired entries bit-identical across arms; each block arm from the reference snapshot reproduces the reference fixed point below τ — **at V5's τ and on the census set** | as V4 | kept |
+| **G7** | `record_completeness` | the record contract | a forced-unconverged smoke run carries every declared field, the timer fields included; a record missing one is refused | field teeth | kept |
+| **G9** | `output_path` | `MDA_Output` removal | on `B1`/`B2` the state the one-call path writes is bit-identical to the state at the entry to `write_output_files` | a 1-ULP perturbation before `finalise` | kept |
+| **GT** *(new)* | — | the test set (§3) | the census set minus one declared component is caught by the whole-`y` audit, or reported not individually binding; a dropped non-census control changes nothing — **form [to be declared from A92]** | the dropped component itself | new (item 6) |
+| **GC** *(new)* | — | items 7 and 8 (DR9, DR10) | on a job set (both phases, every arm, one seed per configuration) node calls, sweeps, predicate evaluations, components compared and every exit state **identical to the digit** before and after the change | a doctored count on one record | new — the count-neutrality gate |
+| **GR** *(once)* | `reproduction` | the V5 copy **at its copy commit, before any change** (A94) | reproduces V4's twenty reference records bit for bit on every count field and hex float | +1 on a count, 1 ULP on a hex, a missing reference | run **once**; no GR beyond the copy |
+| ~~G3 / G3c~~ | `cold_chain` | the prime's cold chain | reproduce A35's counts | — | **reconsidered**: its construction (a prime at every sweep head) no longer exists once item 8 moves the prime; §12 **Q3** |
+| ~~G8~~ | `predicate_mode` | the `mixed` ruler | — | — | **dropped** (item 10; D30) |
+
+**Self-checks — kept, not reported**: composition, rungs, capability, provenance, data, run path, stage
+provenance, resume identity, run-kind separation, artifacts (check, derive inputs, census, per run), self
+containment, `copy_identity`, `edit_behaviour`, `written_file_gap` — run on every press and stated in the
+report as "N self-checks pass" in one line (item 10). I-29's harness fix (a pool-identical job with its own
+`outdir` must be refused without `--resume`) is a self-check tooth in V5, not a gate.
+
+---
+
+## 8. Reporting
+
+**Ruled — item 10** (the user, 2026-09-29: *"this v5 reporting approach is approved"*). **One generator** —
+the existing paper-tables module extended, not the plan-tables renderer — writes **one document** for the
+paper, as Markdown grids and LaTeX rows, with a `check` mode that refuses when the rendered file and the
+records disagree:
+
+- *Main text*: the switch matrix; the configurations table; phase A module sweeps per evaluation **with the
+  ratio columns on `A2/A1` (pulsed) and `A2/A0` (st) — ratio of means, per-run median, `[min, max]` — per
+  D34**, superseding today's `paper_tables.md` convention of `A2/A0`, and with `A2`'s post-processing cell
+  measured (§2); phase B optimiser iterations and phase B module sweeps per optimisation on `B2/B0` with the
+  rungs beside (D34).
+- *Appendix*: the two module tables in wall clock with a totals row and the cost breakdown (§6); the per-arm
+  success table (§5 B5); **one verification table**, one row per check: physics frozen (G0); switch
+  neutrality (G1); matched accuracy (A1: whole-state audit at 0 components above τ on every accepted run, and
+  the fixed-point distance A2); same optimum (B1, attributed where it fails); entry pairing (G6); arm
+  composition (G5); output-path equivalence (G9); the test set's teeth (GT).
+
+**Dropped from V5**: the stencil regime and RQ3; the predicate trial G8; RQ5; the three weightings (A88's
+function-weighted twins); the companion file and every per-seed table; the iteration-multiplier rule; the
+`AR → A0` stopping-rule prose (columns stay, one sentence).
+
+**Replaced**: the second implementation (`analysis.py`, 6 464 lines) by **a short independent recount of
+exactly the paper's cells** from the raw records — not a second rendering of every table.
+
+**The V5 report** has four parts — method (matrix, criterion, settings, gate list with teeth), the paper
+tables included verbatim, one short findings section per rung, the change log — **under 600 lines**. V4's
+rules stand: every number from a committed script (protocol §15), cells preserved between renders, captions
+of a few lines (§16), teeth for every gate. No companion file.
+
+---
+
+## 9. Declared settings
+
+**Table 3.** *One row per knob — symbol, value, what it controls, provenance. None may change after approval
+except by dated amendment; a value marked [A92]/[A93] is filled from that task's report before approval.*
+
+| setting | value | controls | provenance |
+|---|---|---|---|
+| N | 25 per configuration per arm, both phases | sample size | V4 Table 6 (V3 (O2)) |
+| δ (phase A) | 0.10, displaced entries; **no stencil regime** | entry displacement | the user, list header, 2026-09-29; item 10 |
+| δ (phase B) | 0.10 | start displacement | D15; V4 |
+| test set | the census-measured read-before-write set, per arm and block; DSM feedback set as cross-check | what the loops stop on | **D32**, item 6; population **[A92]** |
+| τ | **[to be declared from A93]** by the rule ε ≤ `epsfcn`³ (A89: 1e-8) — one value, every converger, every arm, both phases | convergence and handover accuracy | item 6; D23 (one tolerance) |
+| `epsfcn` | 1e-3 (PROCESS's default; no input file sets it) | the tolerance rule's step | A89 §7.3 |
+| predicate mode | `frozen`; `mixed` never composed | the scale `s_i` of the scaled step | D30 ("or drop it"), item 10 |
+| F | 10 | matched-accuracy (A) and same-optimum (B) factor, median and p90 | V4 Table 6 (V2 App. B) |
+| floor | 1e-6 relative on `norm_objf` | same-optimum yardstick floor | V4 Table 6 (V3 (O3)) |
+| cluster gap | 10 × floor = 1e-5 | the hop count in B1's attribution | V4 (V3; item 5 of V4's list) |
+| median | nearest-rank, upper-middle | every phase B statistic | V3 |
+| inner cap | 20 sweeps per block; a cap hit is a refusal, not a budget | every block loop, the flat one included | V4 |
+| upstream cap | 10 passes → `unconverged-at-cap` | `AR`/`BR` | upstream |
+| **W** | **1** for the campaign and the repeatability check | worker pool | **D33**, item 9 |
+| iteration bound | **none** (`iteration_ratio_max` retired) | — | item 1 |
+| timers | on for the campaign; off for one run per configuration | the instrument's own cost | item 9 |
+
+---
+
+## 10. Run budget
+
+**Context, never evidence** (T5). From V4's Table 6 with the stencil regime (396) and the `mixed` runs (24)
+removed:
+
+| stage | runs | derivation |
+|---|---|---|
+| entry references | 3 | one cold `A0` per configuration |
+| phase A, δ = 0.10 | **275** | `AR` 75 + `A0` 75 + `A1` 50 + `A2` 75 |
+| phase B | **275** | 4 arms × 25 × 2 pulsed + 3 arms × 25 on st |
+| repeatability check | 9 | one seed × 3 configurations × 3 repetitions (§6) |
+| timers off | 3 | one per configuration (§6) |
+| gates | ≈ 100–150 at a from-scratch press; **0–20 with seeded records** and `--resume` | amendment 15; GR once at the copy |
+
+**One-worker time estimate.** The V4 campaign's per-run `wall_s` medians (three workers, contended; surveyed
+for this brief from the campaign records, not from a committed script — a budget, not a result) are
+**nof 17–30 s, lad 25–40 s, st 29–47 s** per optimisation. Serial, at those figures, phase B is
+100 × (17–30) + 100 × (25–40) + 75 × (29–47) s ≈ **1.8–3.0 h**; an uncontended single worker should sit at or
+below the lower figure. Phase A's 275 evaluations are dominated by process start and numba cache load
+(V4: V3's 225 took ≈ 1.5 h at W = 3) — ≈ **1–2 h** serial. **Whole campaign ≈ 3–5 h at W = 1**, one heavy
+slot, machine otherwise idle (§5.1 standing rule); the load average per run says whether it was.
+
+---
+
+## 11. Harness change map
+
+The V5 copy is V4's folder copied whole by A94 and then modified (the user, 2026-09-29: "copy V4, then
+modify"). One row per list item: the V4 modules that change, what is removed, the data artifacts regenerated
+or added. Module names are V4's (README §10.1); names in V5 stay names for what a thing does (no task numbers
+or version tokens; harness plan §11.1).
+
+**Table 4.** *The change map.*
+
+| item | what changes | modules that change | removed |
+|---|---|---|---|
+| **5** phase A deferred nodes executed once, measured | the evaluation entry runs the deferred set once after convergence (A89's mechanism: a sweep over the per-run set on the output path's own route), the census counts it; `CHARGED_ONCE` retired; the restricted statistic reconsidered (Q2) | `child/evaluate.py`, `child/census.py`, `measurement/stats.py` (`node_groups`), `measurement/paper_tables.py`, `gates/gate_audit.py` | the by-construction charge and its check |
+| **6** census test set at the derived τ | the driver's predicate binds a **per-arm, per-block test set** (a new switch naming the artifact, or a field of the coupling-state artifact) and the loop stops on it; the census stage (A89's `rbw_census.py`, and A92's optimisation-path census) becomes a harness stage that derives and validates the sets; τ from `config.py`; G6's warm criterion at the new τ; **GT** | `PROCESS/process/core/solver/module_solve.py` (DR11), `child/ystate.py`, `child/predicate.py`, `child/census.py`, `experiment/artifacts.py`, `experiment/switches.py`, `core/config.py`, `gates/gate_entry.py`, new `gates/gate_test_set.py` | — |
+| **7** deferral sets and schedule resolved once per run | `Caller._resolve_defer_per_call_tails` memoised at construction or first use, keyed on `i_figure_merit`; provenance stamped once per run; **GC** | `PROCESS/process/core/caller.py` (DR9), `core/records.py` (the stamp), new `gates/gate_count_neutrality.py` | the per-call `ast` walk and JSON read |
+| **8** the prime once per evaluation before M1 | the arrangement-method hook moves from the sweep head to `call_models` pre-processing; `n_prime_calls` = evaluations; G2 re-formed | `PROCESS/process/core/caller.py` (DR10), `gates/gate_prime.py` | the per-sweep hook; G3/G3c's chain (Q3) |
+| **9** wall-clock instrument | observation-only timers per node, block loop, evaluation, run; the independent run wall and load average; timer fields in the record contract; W = 1; the repeatability and timers-off stages; the three appendix tables | `PROCESS/process/core/caller.py`, `solver/module_solve.py`, `solver/evaluators.py`, `solver/solver_handler.py` (DR12), `child/child.py`, `core/records.py`, `core/pool.py`, `core/config.py`, `measurement/paper_tables.py`, `chain.py` | — |
+| **1, 3, 4** reporting statistics | `R = ρ × ε` per configuration and pair with `C` from `sweeps_per_eval.n_evaluations`; the per-arm success table kept; the same-optimum statistic with its attribution; `iteration_ratio_max` retired | `measurement/stats.py`, `measurement/tally_optimisation.py`, `core/config.py` | check 2's verdict cell; the neighbouring-threshold grid from the paper |
+| **10** reporting | one generator, one document; the recount | `measurement/paper_tables.py` (extended), new `paper_cells_recount.py` (short), `chain.py` (the stencil chain gone: `evaluation_stencil_chains`, `stage_evaluation_stencil`, `stencil_column_set`), `gates/registry.py`, `gates/exclusion_review.py` (G1's part kept) | `measurement/analysis.py`, `measurement/plan_tables.py`, `gates/gate_predicate_mode.py`, `RESULTS_TABLES_FULL.md`, `report_cells_preserved.py`, `report_citations_repoint.py`, `report_counts_check.py`, `block_binding.py` (A90's instrument; stays in V4), `harness/data/dsm_function_counts.json` and `stats.functions_by_group` / `weighted_total`'s function weight |
+
+**Driver changes, in the harness plan's form** (its §3.2 table; numbering continues from DR8). Every row is
+a change to the copied `process/`, carries G1 per change and — for DR9 and DR10 — GC, and **needs the user's
+approval before merge** (harness plan §3; D11's review rule; collaborative mode since 2026-09-14). The ruling
+that entails each is named; the merge approval is per change.
+
+| # | driver change | entailed by | harness impact | if declined |
+|---|---|---|---|---|
+| **DR9** | the deferral sets and the block schedule resolved **once per run**, keyed on the figure of merit, reused for every evaluation; provenance stamped once per run | item 7, **D31** (the user: *"this should be fixed in v5"*) | one stamp field; gate GC; the fixed per-run term of §6 | I-30's 8–11 ms per evaluation stays in every deferring arm and biases every wall-clock table against the intervention; no count changes either way |
+| **DR10** | the prime executed **once per `call_models`, before M1**, as a pre-processing step of the sequenced schedule | item 8 (the user: *"pre-processing before the partitioned MDAs can start"*) | G2 re-formed; `n_prime_calls` = evaluations; G3/G3c reconsidered (Q3) | the paper's caption ("executing the FirstWall subfunction before every MDA sweep") must stay as V4 built it, ~9–15 stamped calls per evaluation |
+| **DR11** | the loop's predicate binds a **declared test set per block** (the census set) instead of the block's whole write set; the DSM feedback set selectable for the cross-check only, never composed into an arm | item 6, **D32** | the test-set artifacts and their stage; GT; τ from the rule | V4's whole-`y` test at 1e-6 stands: correct only because it stops one sweep late (A89 §7.3) and the test is 30–39 % of an evaluation's wall (A89 §7.5) |
+| **DR12** | **observation-only timers** (the block trace's form, DR8): per node, per block loop (test, dispatch), per evaluation (objective and constraints), per run; unset ⇒ `None`, no branch | item 9, **D33** | record fields; the appendix tables; the timers-off runs | no wall-clock appendix; D29 (2)'s scope statement stands for V5 as for V4 |
+| **DR13** *(conditional on Q1)* | the flat arms' per-call and per-run deferral in phase A (and phase B) — **no new driver code**: `PROCESS_ARCH_DEFER_PER_CALL = feedforward` and the committed per-run artifact already compose on a flat arm (A89's `A0`) | list item 6's "all A arms" (the user, 2026-09-29) | matrix rows; the paper's matrix caption; `A2/A0` on the Feedforward and Post-processing rows reads 1 | the deferral stays on the intervention rung as the paper's matrix has it |
+
+**Data artifacts.** Regenerated: the entry references (§4). Added: **the census test sets per configuration,
+arm and block** (`test_set_<configuration>.json`, with the DSM feedback set beside as the cross-check, by the
+T9 route with the sibling's pin and digests recorded in `harness/data/PROVENANCE.json`); **the schedule
+artifact** — the once-per-run resolution (block membership, per-call tails, per-run set) per configuration
+and input file, committed so that the run's stamp can be compared with it (the `artifacts_per_run` stage's
+twin). Unchanged: the coupling-state artifacts (the exit audit stays whole-`y`), the write sets, the per-run
+sets, the input files, the node map.
+
+---
+
+## 12. Scope honesty, and decisions for the user
+
+**Scope.** One code at one commit, three configurations (a case study, D29 (3)), tokamak only, one
+partitioning, one lift, one optimiser, one perturbation stream at one amplitude. Per-configuration
+conclusions; configurations are never pooled. No robustness claim (item 3). No claim that the arms reach the
+same design point (D6). No timing is evidence (D33); the wall-clock appendix is context from one machine at
+one worker, its repeatability stated beside it. The census test set is measured on the paths the census
+observed (§3) and a branch taken elsewhere is not covered — GT and the whole-`y` audit are what bound that.
+The `st` `PULSE` block is still visited empty (I-20a; D21 (d), disclaimed where it bears, now with a test set
+of 1 component). Nothing here may be applied to V4.
+
+**Decisions for the user** — numbered, each with the plan's recommendation; **none is settled until ruled**.
+
+1. **The flat arms and the deferrals ("all A arms", list item 6).** The user extended item 5 to all A arms
+   on 2026-09-29, and A89's second-pass control (`A0`: feed-forward once per call after convergence, per-run
+   nodes once after) was built at the user's request and is the control of item 6's cost projection. Three
+   readings: **(a)** `A0`/`A1` defer in phase A as A89 built them; **(b)** (a) plus the twins `B0`/`B1` in
+   phase B, so the rungs read the same in both phases; **(c)** the deferrals stay on the intervention rung as
+   the paper's matrix has it, and "all A arms" is read as *every A arm's evaluation ends with every node
+   computed at the converged state* — for the flat arms their final sweep, for `A2` the one execution.
+   Consequences of (a)/(b): a matrix row moves (Table 1's `⁽?⁾` rows; the paper's "Models sequenced" caption
+   must give up "taking the feedforward and post-processing models out of the MDA loop" to the control's
+   definition, and `A2/A0` reads 1.00 on the Feedforward and Post-processing rows); the control becomes the
+   textbook MDA the user asked for (*"a proper MDA for the control"*); `AR → A0` then changes the stopping
+   rule *and* the deferral. **Recommendation: (b)** — the user's words and A89's construction point at (a),
+   and the phase parallelism the arm renaming was made for (A78) asks for its phase B twin; the paper's matrix
+   gains a row. If the user wants the paper's matrix untouched, (c).
+2. **The matched-accuracy statistic (A1).** Item 5 asks that the restricted audit be reconsidered once the
+   deferred nodes are executed: their components can then be audited like the rest. **Recommendation:** the
+   whole-state audit becomes the statistic (F = 10 at median and p90 over all components, 0 above τ), the
+   restricted one is published beside for one revision, and G4 is retired when the two agree on the gate job
+   set; the verification table's row then reads on the whole state, which is what item 10 lists.
+3. **G3/G3c (`cold_chain`).** Its construction — the prime at every sweep head reproducing A35's cold-chain
+   counts — does not exist once DR10 lands. **Recommendation: drop it**; G2's re-formed criterion (exit states
+   bit-identical to V4's per-sweep form on the gate job set) plus GC cover what it bound.
+4. *(Ruled while this plan was being written — **D34**, the user, 2026-09-29: the paper's phase A table
+   prints `A2/A1` on the pulsed configurations and `A2/A0` on `st_regression`; phase B keeps `B2/B0`. Applied
+   in §1, §2, §5 and §8; no question remains.)*
+5. **The `mixed` predicate mode.** D30 says apply the rule before the campaign or drop it; item 10 drops G8.
+   **Recommendation:** drop the trial, leave the mode in the copy uncomposed (0 driver edits, no G1 press for
+   it); removing the code is a driver change that buys nothing.
+6. **τ if A93 finds the derived value changes the optimiser's path or success on a configuration.**
+   **Recommendation:** declare it anyway — the rule is declared, the value follows it, and a start lost at the
+   tighter τ is a result on the per-arm success table, not a reason to loosen (protocol §6).
+7. **The reproduction gate's reference set (A94).** Item 10 says twenty records; which twenty is A94's to
+   declare. **Recommendation:** V4's campaign records at `57dc0c14` for the arms and seeds V4's GR covered
+   (14 optimisations + 6 evaluations), read through `RECORDED_ARM_NAMES`, compared on V4's `compared_fields()`.
+8. **Workers for the gates.** D33 fixes W = 1 for the campaign; gates carry no timing. **Recommendation:**
+   W = 1 for the campaign, the repeatability check and the timers-off runs; gates may run at W = 3.
+
+---
+
+## Appendix — change log
+
+| date | entry |
+|---|---|
+| 2026-09-29 | Written by A95 (v5-plan) at `7986d408` from the V5 improvement list (items 1, 3–10 and their rulings D29–D33), V4's report §1–§3 and §6, the harness plan and README, A89 §7, A90 §0–§2, A91 §0 and §5, and the paper's results section. Status DRAFT · NOT APPROVED. Eight questions in §12; τ, the census population and GT's form await A92 and A93. |
+| 2026-09-29 | **D34** (the user, relayed by the orchestrator while the draft was open): the paper's phase A table prints `A2/A1` on the pulsed configurations and `A2/A0` on `st_regression`; phase B keeps `B2/B0`. Applied in §1 (RQ1), §2 (the published pairs), §5 (A1, new A3) and §8 (the main-text tables); §12 Q4 closed by it — seven questions remain open. |
