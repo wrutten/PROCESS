@@ -290,7 +290,7 @@ def compare_row(
         "widths_expected": expected_widths,
         "driver_bound_the_narrowed_set": bound_as_expected,
         "exit_state": {
-            "n_components_compared": states["n_compared"],
+            "n_components_compared": states["n_components"],
             "n_differing": states["n_differing"],
             "differing_first": states["differing"][:10],
         },
