@@ -259,6 +259,18 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "and the block reads n_resolutions = 0 with an empty list; compared "
         "wherever both sides carry it"
     ),
+    "loop_test_sets": (
+        "the once-per-run stamp of what the block loops tested that driver "
+        "change DR11 adds (A100 (v5-test-set)): absent on a side captured "
+        "before it, null after with every switch unset (no block loop runs, "
+        "so the stamp is never filled); compared wherever both sides carry it"
+    ),
+    "campaign_test_set": (
+        "the harness's stamp of the campaign-level test set (DR11): absent on "
+        "a side captured before the field existed, a value after.  The "
+        "reference arms never compose the switch it names; the driver's own "
+        "resolved value (resolved_switches) is compared in full"
+    ),
     "audit_snapshot": (
         "the snapshot block the audit-position change adds; absent on the "
         "earlier side.  Both captures audit at the same position, which is "
@@ -371,10 +383,12 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "same computation and are on both sides"
     ),
     "exit_audit.mixed": (
-        "the second ruler's audit, which the earlier side had no way to take.  "
-        "It is a second measurement of the same exit state, not a difference "
-        "in it: the exit state itself is compared through the fields above and "
-        "through every output-file line"
+        "the second ruler's audit: absent on a side captured before DR5 added "
+        "it and absent again on a side captured after DR11 (A100 "
+        "(v5-test-set)) removed the mixed ruler.  It is a second measurement "
+        "of the same exit state, not a difference in it: the exit state itself "
+        "is compared through the fields above and through every output-file "
+        "line"
     ),
     "exit_audit.rulers_note": (
         "the sentence saying that the two rulers are published together, "

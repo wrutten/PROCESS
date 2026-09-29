@@ -17,12 +17,12 @@ survey; the registry was written by task **A52 (harness-gates)**.
 **This revision's registry is the V5 plan's §7 Table 2** (task A98
 (v5-reporting-trim), 2026-09-29, list item 10): the predicate-mode gate G8,
 the prime's cold-chain gate G3/G3c and the recomputation gate with its
-``recomputed_tables`` stage are gone; the test-set gate GT is a **declared
-placeholder that refuses with "not implemented"** until the driver change it
-binds (DR11) lands; the count-neutrality gate GC is real (task A99
-(v5-schedule-and-prime), the same day, merged over this revision); the
-reproduction gate GR is **run once**, at the copy commit, and refuses to
-re-make its runs.
+``recomputed_tables`` stage are gone; the test-set gate GT was a **declared
+placeholder that refused with "not implemented"** until driver change DR11
+landed (task A100 (v5-test-set); ``gate_test_set``); the count-neutrality
+gate GC is real (task A99 (v5-schedule-and-prime), the same day, merged over
+this revision); the reproduction gate GR is **run once**, at the copy commit,
+and under ``--resume`` reads its recorded verdict, never re-making a run.
 
 Usage
 -----
@@ -78,18 +78,9 @@ GateError = framework.GateError
 #: rather than as a PASS, and ``--gate all`` stops at it as at any refusal.
 #: The body is the task's that lands the driver change, not this registry's.
 DECLARED_NOT_IMPLEMENTED: dict[str, dict[str, str]] = {
-    "test_set": {
-        "plan_name": "GT",
-        "binds": "the census test set of plan §3 (item 6, D32; driver change DR11)",
-        "what_it_proves": (
-            "per configuration and arm, from the displaced entry at τ: dropping "
-            "the component the declared rule finds binding stops the loop "
-            "earlier and leaves an exit state that differs from the full set's; "
-            "dropping a declared non-census control leaves the run bit-identical; "
-            "the whole-y audit of the truncated run is reported beside"
-        ),
-        "pending": "DR11 (the loop's predicate binding a declared test set per block)",
-    },
+    # Empty since DR11 (A100 (v5-test-set)) supplied gate GT's body
+    # (``gate_test_set``); GC's was A99's.  The mechanism stays for the next
+    # declared-before-built gate.
 }
 
 #: The gate that is pressed **once**, at the copy commit, and never re-made
@@ -245,7 +236,7 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
     Each literal lives in the module that implements the gate, as that
     module's ``gate(campaign)``; this function only collects them.
     """
-    from . import gate_audit, gate_composition, gate_count_neutrality, gate_entry, gate_prime, gate_records
+    from . import gate_audit, gate_composition, gate_count_neutrality, gate_entry, gate_prime, gate_records, gate_test_set
 
     return {
         "reproduction": _run_once("reproduction", gates_mod.reproduction_gate(campaign), campaign),
@@ -258,8 +249,9 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
         "entry_and_warm": gate_entry.entry_and_warm_gate(campaign),
         "record_completeness": gate_records.record_completeness_gate(campaign),
         "output_path": gate_output_path.gate(campaign),
-        # The V5 plan's gate GT, declared and refusing until DR11's task (see
-        # the module docstring); GC is real above (A99 (v5-schedule-and-prime)).
+        # The V5 plan's gate GT (A100 (v5-test-set), driver change DR11); GC
+        # is A99 (v5-schedule-and-prime)'s.
+        "test_set": gate_test_set.gate(campaign),
         **{
             name: _not_implemented_gate(name, spec)
             for name, spec in DECLARED_NOT_IMPLEMENTED.items()
@@ -743,6 +735,8 @@ GATE_ORDER: tuple[str, ...] = (
     "prime_map",
     "audit_restriction",
     "entry_and_warm",
+    # GT shares G6's pairing runs and makes its own drops; after G6.
+    "test_set",
     "switch_composition",
     "output_path",
     # Six runs; it reads G9's records for its beside-column, so the dependency

@@ -83,6 +83,11 @@ class Config:
     coupling_state_path: Path
     #: The committed per-node write sets used by the block solves.
     write_sets_path: Path
+    #: The committed census test sets (driver change DR11): per loop and per
+    #: block, the components the loop tests under the ``census`` test set.
+    #: Made by ``experiment/test_sets.py`` (``--census``), validated by the
+    #: artifact check; the driver reads it under ``PROCESS_ARCH_TEST_SETS``.
+    test_sets_path: Path
     #: The per-run deferral set for a run of the **committed** input file —
     #: the unmarked default.  Phase A's block arms run the committed input
     #: file (a constant owns the burn time, and a constant plus the lifted
@@ -107,6 +112,7 @@ class Config:
         return {
             "coupling_state": self.coupling_state_path,
             "write_sets": self.write_sets_path,
+            "test_sets": self.test_sets_path,
             "defer_per_run": self.defer_per_run_path,
             "defer_per_run_lifted": self.defer_per_run_lifted_path,
         }
@@ -133,6 +139,86 @@ class Removal:
     decision: str
     reason: str
     date: str
+
+
+# --------------------------------------------------------------------------
+# the test set and its tolerance (driver change DR11; D32, D39, D23)
+# --------------------------------------------------------------------------
+
+#: The two things a block loop can stop on (``PROCESS_ARCH_TEST_SET``):
+#: ``census`` — the read-before-write set measured at run time per loop and
+#: block (decision D32, the V5 default) — and ``write_set`` — the block's
+#: whole write set, exactly V4's predicate, kept as the fallback (decision
+#: D39).
+TEST_SETS: tuple[str, ...] = ("census", "write_set")
+
+#: The tolerance each test set is declared at (V5 plan §3, §9; D23: one
+#: tolerance for every converger in every arm and both phases).  The census
+#: set at 1e-8 by the rule ε ≤ epsfcn³ (A89, confirmed by A93); the write set
+#: at 1e-6, V4's.  A campaign composes ``PROCESS_ARCH_TAU`` from this table
+#: unless an explicit ``--tau`` overrides it, and the override is stamped.
+TAU_BY_TEST_SET: Mapping[str, float] = MappingProxyType({"census": 1e-8, "write_set": 1e-6})
+
+#: The campaign default (decision D32; the user, 2026-09-29).
+DEFAULT_TEST_SET = "census"
+
+#: V4's predicate: the fallback.  A job under it carries V4's job identity
+#: (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``), which is what makes every
+#: record made before DR11 a record of the fallback.
+V4_TEST_SET = "write_set"
+
+
+@dataclass(frozen=True)
+class SupplementaryStage:
+    """A declared stage reported **beside** the campaign under its own settings.
+
+    V5 plan §3 and §10 after A96 (st-trajectory-ladder): ``B0`` and ``B2``
+    under the census set at τ = 1e-12 on ``st_regression`` alone, the rung
+    where the census loops read exact and the optimiser's path returns.  Its
+    records are stamped ``run_kind == "supplementary"``, never pooled with
+    the campaign's, and carry their own ``campaign_tau`` and
+    ``campaign_test_set``; the tolerance is in the job identity, so they
+    never resolve into the campaign's records of the same arm and seed.  The
+    pool admits a job at these settings only when a declared stage matches
+    its phase, configuration and arm (``pool.resolve_settings``).
+    """
+
+    name: str
+    phase: str
+    configurations: tuple[str, ...]
+    arms: tuple[str, ...]
+    test_set: str
+    tau: float
+    run_kind: str = "supplementary"
+    why: str = ""
+
+    def admits(self, *, phase: str, configuration: str, arm: str) -> bool:
+        return (
+            phase == self.phase
+            and configuration in self.configurations
+            and arm in self.arms
+        )
+
+
+#: The one declared supplementary stage.
+SUPPLEMENTARY_STAGES: tuple[SupplementaryStage, ...] = (
+    SupplementaryStage(
+        name="st_census_exact",
+        phase="B",
+        configurations=("st_regression",),
+        arms=("B0", "B2"),
+        test_set="census",
+        tau=1e-12,
+        why=(
+            "A96 (st-trajectory-ladder): on st_regression the census set at "
+            "1e-8 moves the optimiser's path (the partitioned arm 1.7-4.2x "
+            "longer, one seed lost); at 1e-12 the census loops read exact, the "
+            "stable seeds' paths return and seed 1 holds its basin.  Reported "
+            "beside the declared cell, labelled supplementary; the campaign's "
+            "declared setting is unchanged"
+        ),
+    ),
+)
 
 
 # --------------------------------------------------------------------------
@@ -176,10 +262,23 @@ class Campaign:
     #: Entry displacement of the delta regime, and the Phase B start
     #: displacement.
     delta: float = 0.10
+    #: Which components every block loop tests (driver change DR11): one of
+    #: :data:`TEST_SETS`, one value for every arm and both phases, never mixed
+    #: within a campaign (D39).  The default is the census set (D32).
+    test_set: str = DEFAULT_TEST_SET
     #: The one tolerance of every converger, both phases, every arm (D23:
-    #: the flat loop and each block loop alike).  There is no second
+    #: the flat loop and each block loop alike).  ``None`` — the default —
+    #: means the test set's declared value, :data:`TAU_BY_TEST_SET`; a number
+    #: is an explicit override (the runner's ``--tau``), resolved once here
+    #: and stamped as such (:attr:`tau_overridden`).  There is no second
     #: tolerance; see switches.py on the retired inner-tolerance name.
-    tau: float = 1e-6
+    tau: float | None = None
+    #: Whether ``tau`` was given explicitly rather than taken from the test
+    #: set's declared value.  Derived in ``__post_init__``; never set by hand.
+    tau_overridden: bool = False
+    #: The declared supplementary stages, each with its own test set and
+    #: tolerance (:class:`SupplementaryStage`).
+    supplementary: tuple[SupplementaryStage, ...] = SUPPLEMENTARY_STAGES
     #: Similarity / same-optimum factor, applied to medians and p90s.
     similarity_factor: float = 10.0
     #: Floors.  ``objf_floor_rel`` is the relative floor on ``norm_objf``;
@@ -206,7 +305,43 @@ class Campaign:
     predicate_modes: tuple[str, ...] = ("frozen",)
     predicate_mode_default: str = "frozen"
 
+    def __post_init__(self) -> None:
+        if self.test_set not in TEST_SETS:
+            raise ValueError(
+                f"test_set {self.test_set!r} is not one of {TEST_SETS}; a "
+                f"campaign whose loops test a set nobody declared measures "
+                f"nothing anyone can name"
+            )
+        if self.tau is None:
+            object.__setattr__(self, "tau", float(TAU_BY_TEST_SET[self.test_set]))
+            object.__setattr__(self, "tau_overridden", False)
+        else:
+            object.__setattr__(self, "tau", float(self.tau))
+            object.__setattr__(
+                self,
+                "tau_overridden",
+                float(self.tau) != float(TAU_BY_TEST_SET[self.test_set]),
+            )
+
     # --- derived --------------------------------------------------------
+    @property
+    def declared_tau(self) -> float:
+        """The tolerance the test set is declared at, whatever ``tau`` is."""
+        return float(TAU_BY_TEST_SET[self.test_set])
+
+    def supplementary_stage_for(
+        self, *, phase: str, configuration: str, arm: str, test_set: str, tau: float
+    ) -> SupplementaryStage | None:
+        """The declared stage admitting these settings for this job, or None."""
+        for stage in self.supplementary:
+            if (
+                stage.test_set == test_set
+                and float(stage.tau) == float(tau)
+                and stage.admits(phase=phase, configuration=configuration, arm=arm)
+            ):
+                return stage
+        return None
+
     @property
     def is_experiment_copy(self) -> bool:
         """Whether this campaign runs against the experiment's own copy.
@@ -282,6 +417,7 @@ ARTIFACT_NAMES: dict[str, dict[str, str]] = {
     "harness": {
         "coupling_state": "coupling_state_{name}.json",
         "write_sets": "write_sets_{name}.json",
+        "test_sets": "test_sets_{name}.json",
         "defer_per_run": "defer_per_run_{name}.json",
         "defer_per_run_lifted": "defer_per_run_lifted_{name}.json",
         "defer_per_run_steady_state": "defer_per_run_{name}.json",
@@ -289,6 +425,9 @@ ARTIFACT_NAMES: dict[str, dict[str, str]] = {
     "repository": {
         "coupling_state": "ystate_a26_{name}.json",
         "write_sets": "writeset_a26_{name}.json",
+        # The repository's shared data directory never held census test sets
+        # (they are V5's, made by this harness); the same spelling either way.
+        "test_sets": "test_sets_{name}.json",
         "defer_per_run": "postsolve_nolift_{name}.json",
         "defer_per_run_lifted": "postsolve_{name}.json",
         "defer_per_run_steady_state": "postsolve_{name}.json",
@@ -318,6 +457,7 @@ def artifact_file_names(
     resolved = {
         "coupling_state": names["coupling_state"].format(name=configuration),
         "write_sets": names["write_sets"].format(name=configuration),
+        "test_sets": names["test_sets"].format(name=configuration),
     }
     if pulsed:
         resolved["defer_per_run"] = names["defer_per_run"].format(name=configuration)
@@ -341,7 +481,29 @@ DRIVER_FIXED_ARTIFACTS: dict[str, str] = {
 #: the weight of task A88's function-weighted twin tables); the mechanism —
 #: a data file entered with its own source commit, checked by the ``data``
 #: gate — stays for the next such artifact.
-MEASUREMENT_ARTIFACTS: dict[str, str] = {}
+MEASUREMENT_ARTIFACTS: dict[str, str] = {
+    # The two prior populations of the census test set (driver change DR11;
+    # A100 (v5-test-set)): A89's eight-entry read-before-write sets and A92's
+    # optimisation-path sets, entered from their own source commits.  Read
+    # by the census stage (``experiment/test_sets.py``) to compare and to
+    # union with what this tree measures; never by the driver.
+    "test_set_prior_eight_entry": "test_set_prior_eight_entry.json",
+    "test_set_prior_optimisation_path": "test_set_prior_optimisation_path.json",
+}
+
+#: Where a measurement artifact is copied **from**, by its name here, where
+#: that is not the repository's shared data directory.  The priors above are
+#: the prototype trial's own files.
+MEASUREMENT_ARTIFACT_SOURCES: dict[str, str] = {
+    "test_set_prior_eight_entry.json": "arch_surgery/coupling_subset_trial/rbw_sets.json",
+    "test_set_prior_optimisation_path.json": "arch_surgery/coupling_subset_trial/optimisation_path_sets.json",
+}
+
+#: Artifact roles **generated by this folder's own stages** and committed:
+#: their source is themselves, at the commit they were committed, and the
+#: data gate checks that the committed file is byte-identical to that commit.
+#: The census test sets (``--census write``) are the one such role.
+GENERATED_ARTIFACT_ROLES: tuple[str, ...] = ("test_sets",)
 
 
 #: Arms inactive on a steady-state configuration, with the reason recorded.
@@ -384,6 +546,7 @@ def default_configurations(
             input_path=input_dir / f"{name}.IN.DAT",
             coupling_state_path=data_dir / files["coupling_state"],
             write_sets_path=data_dir / files["write_sets"],
+            test_sets_path=data_dir / files["test_sets"],
             defer_per_run_path=data_dir / files["defer_per_run"],
             defer_per_run_lifted_path=data_dir / files["defer_per_run_lifted"],
             n_coupling_components=n_components,
@@ -421,7 +584,9 @@ def default_configurations(
     )
 
 
-def default_campaign() -> Campaign:
+def default_campaign(
+    *, test_set: str | None = None, tau: float | None = None
+) -> Campaign:
     """The production campaign: V4's own copy of PROCESS and its own data.
 
     A function, not a module-level instance: a settings object that anything
@@ -429,9 +594,16 @@ def default_campaign() -> Campaign:
     copy is created by the task that owns ``PROCESS/`` and ``harness/data/``;
     until it exists the preflight reports the absence rather than falling back
     to another tree, which would measure code nobody asked for.
+
+    ``test_set`` selects the campaign's test set (the runner's ``--test-set``;
+    the census set by default, the fallback ``write_set`` under D39) and
+    ``tau`` overrides the tolerance the test set is declared at (the runner's
+    ``--tau``); both reach every job the campaign composes, one value each.
     """
     data_dir = HERE / "data"
     return Campaign(
+        test_set=DEFAULT_TEST_SET if test_set is None else test_set,
+        tau=tau,
         tree=EXPERIMENT_DIR / "PROCESS",
         data_dir=data_dir,
         # The committed input files are copied into the experiment's own data

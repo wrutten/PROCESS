@@ -2123,9 +2123,8 @@ def full_distributions(
     minimum, median and maximum on the frozen ruler; the **count of
     components above τ** summed over the arm's runs and the **worst single
     run**'s count; the sweeps and node calls per evaluation as **ranges**;
-    and the mixed ruler's median and p90 beside, because V4 audits on both
-    rulers and a table showing one alone reports a change of ruler as a
-    change of accuracy.
+    (the mixed ruler's median and p90 stood beside these in V4; the ruler
+    went with driver change DR11 and so did the columns).
 
     The counts come from each run's own restricted block
     (``stats.restricted_statistic``'s ``n_above_tau``), which is an integer
@@ -2151,7 +2150,6 @@ def full_distributions(
                 for s in block["statistics"]
                 if s.get("present") and s.get("n_above_tau") is not None
             ]
-            mixed = stats_mod.accuracy_population(records, ruler="mixed")["values"]
             sweeps = [
                 r.get("n_model_calls_sweeps")
                 for r in records
@@ -2173,8 +2171,6 @@ def full_distributions(
                     "max": None if bracket is None else bracket[1],
                     "n_above_tau": sum(above) if above else None,
                     "worst_run": max(above) if above else None,
-                    "mixed_median": stats_mod.median(mixed),
-                    "mixed_p90": stats_mod.p90(mixed),
                     "sweeps": _range_cell(sweeps),
                     "node_calls": _range_cell(calls),
                 }
@@ -2204,9 +2200,8 @@ def full_distributions(
                 "**the count statistic needs no ruler**: `Σ components > τ` "
                 "is an integer and says whether anything at all was left "
                 "unconverged, which the magnitude columns cannot",
-                "**both rulers or neither**: the mixed ruler reads lower "
-                "wherever its denominator binds, so its two columns stand "
-                "beside the frozen ruler's rather than replacing them (D30)",
+                "**one ruler** since DR11: the frozen ruler alone (the "
+                "mixed ruler's two columns went with it, D30)",
                 "the sweeps and node calls are per **evaluation** and are the "
                 "same quantity the per-call cost table means; here they are "
                 "ranges rather than means, to show that the arms' "
@@ -2221,9 +2216,8 @@ def full_distributions(
                 f"Full restricted-audit distributions by configuration and "
                 f"arm, {tally_mod.source_phrase(source)}: minimum, median and "
                 f"maximum on the frozen ruler, the components left above "
-                f"τ summed over the runs and in the worst single run, the "
-                f"mixed ruler's median and p90 beside, and the per-evaluation "
-                f"sweeps and node calls as observed ranges."
+                f"τ summed over the runs and in the worst single run, and the "
+                f"per-evaluation sweeps and node calls as observed ranges."
             ),
         ),
         columns=(
@@ -2235,8 +2229,6 @@ def full_distributions(
             Column("max", "max", fmt=_fmt_exp),
             Column("n_above_tau", "Σ components > τ", fmt=_fmt_int),
             Column("worst_run", "worst run", fmt=_fmt_int),
-            Column("mixed_median", "mixed median", fmt=_fmt_exp),
-            Column("mixed_p90", "mixed p90", fmt=_fmt_exp),
             Column("sweeps", "sweeps"),
             Column("node_calls", "node calls"),
         ),

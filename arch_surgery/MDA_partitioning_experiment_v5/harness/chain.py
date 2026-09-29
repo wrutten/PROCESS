@@ -599,6 +599,74 @@ def optimisation_jobs(campaign: Campaign, plan: ChainPlan) -> list[pool_mod.Job]
     return jobs
 
 
+def supplementary_jobs(
+    campaign: Campaign,
+    stage,
+    *,
+    run_kind: str | None = None,
+    configurations: Sequence[str] | None = None,
+    arms: Sequence[str] | None = None,
+    seeds: Sequence[int] | None = None,
+) -> list[pool_mod.Job]:
+    """A declared supplementary stage's optimisation job set (V5 plan §3; A96).
+
+    The same construction as :func:`optimisation_jobs` with the stage's own
+    test set and tolerance on every job — admitted by the pool because the
+    stage is declared (``config.SupplementaryStage``; ``pool.resolve_settings``)
+    — its own run kind (``supplementary`` unless a smoke record is asked
+    for), and its own root under ``runs/supplementary/<name>/``.  The
+    tolerance is in the job identity, so these records never resolve into
+    the campaign's of the same arm and seed.  Narrowed by configuration, arm
+    or seed where asked; a name the stage does not declare is refused.
+    """
+    kind = stage.run_kind if run_kind is None else run_kind
+    if kind not in records_mod.RUN_KINDS:
+        raise ChainError(f"{kind!r} is not one of {records_mod.RUN_KINDS}")
+    if kind == "campaign":
+        raise ChainError(
+            f"a supplementary stage never makes a campaign record: it is "
+            f"reported beside the campaign under its own settings"
+        )
+    wanted_configs = list(stage.configurations) if configurations is None else list(configurations)
+    wanted_arms = list(stage.arms) if arms is None else list(arms)
+    wanted_seeds = list(range(campaign.n_seeds)) if seeds is None else list(seeds)
+    for name in wanted_configs:
+        if name not in stage.configurations:
+            raise ChainError(
+                f"the supplementary stage {stage.name!r} is declared on "
+                f"{list(stage.configurations)}, not on {name!r}"
+            )
+    for arm in wanted_arms:
+        if arm not in stage.arms:
+            raise ChainError(
+                f"the supplementary stage {stage.name!r} is declared for arms "
+                f"{list(stage.arms)}, not {arm!r}"
+            )
+    root = Path(campaign.runs_dir) / ("supplementary" if kind != "smoke" else "single") / stage.name
+    jobs: list[pool_mod.Job] = []
+    for name in wanted_configs:
+        config = campaign.configuration(name)
+        for arm in wanted_arms:
+            if arm not in arms_mod.active_arms(config, "B"):
+                continue
+            for seed in wanted_seeds:
+                jobs.append(
+                    pool_mod.Job(
+                        phase="B",
+                        arm=arm,
+                        config=config,
+                        seed=seed,
+                        outdir=root / config.name / arm / pool_mod.seed_directory(seed),
+                        regime="perturbed" if seed != 0 else "unperturbed",
+                        delta=campaign.delta,
+                        run_kind=kind,
+                        test_set=stage.test_set,
+                        tau=float(stage.tau),
+                    )
+                )
+    return jobs
+
+
 def stage_optimisation(
     campaign: Campaign, plan: ChainPlan, *, resume: bool
 ) -> dict[str, Any]:

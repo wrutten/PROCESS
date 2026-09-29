@@ -171,7 +171,7 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
 #: per-run artifact that both roles name, and the unmarked role wins, so the
 #: two naming schemes agree on it even though they mark opposite members of
 #: the pair.
-_ROLE_ORDER = ("coupling_state", "write_sets", "defer_per_run", "defer_per_run_lifted")
+_ROLE_ORDER = ("coupling_state", "write_sets", "test_sets", "defer_per_run", "defer_per_run_lifted")
 
 
 def _artifact_role(file_name: str, config) -> str | None:

@@ -159,6 +159,20 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             ),
             task="A56 (driver-renames)",
         ),
+        PermittedEdit(
+            kind="switch retired",
+            name="PROCESS_ARCH_PREDICATE",
+            description=(
+                "the twelfth retired name: the 'mixed' ruler of driver change "
+                "DR5 is removed from the coupling-state module under decision "
+                "D30 and the V5 plan's section 12 Q5, so the switch that "
+                "selected it raises at import like every other retired name "
+                "(driver change DR11)"
+            ),
+            task="A100 (v5-test-set)",
+            was="PROCESS_ARCH_PREDICATE=frozen | mixed (unset for frozen)",
+            now="nothing: the frozen ruler is the only ruler",
+        ),
     ],
     "process/core/solver/module_solve.py": [
         PermittedEdit(
@@ -274,6 +288,48 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A90 (m2-phasea-vs-phaseb)",
             was="no per-evaluation, per-block record",
             now="PROCESS_ARCH_BLOCK_TRACE=<file> (unset for no trace)",
+        ),
+        PermittedEdit(
+            kind="switch added",
+            name="PROCESS_ARCH_TEST_SET / PROCESS_ARCH_TEST_SETS, load_test_sets, load_loop_tests, LOOP_TEST_SETS",
+            description=(
+                "which components each block loop TESTS becomes a switch "
+                "(driver change DR11, V5 list item 6): 'write_set' binds the "
+                "block's whole write set -- exactly V4's predicate, kept as "
+                "the fallback of decision D39 -- and 'census' binds the "
+                "committed census test sets of the configuration (decision "
+                "D32), loaded by load_test_sets with the same two checks as "
+                "the write sets (the coupling-state digest bound; every key "
+                "resolves) and selected by loop key '<mda>/<burn-time owner>'.  "
+                "Required whenever the loop is on and refused when it is off, "
+                "so no run relies on a default; the artifact path is required "
+                "with 'census' and refused with 'write_set'.  load_loop_tests "
+                "returns the subsets the loops test and stamps once, in "
+                "LOOP_TEST_SETS, which set was bound and its width per block.  "
+                "With every switch unset none of this is reached (gate G1); "
+                "under the fallback every count and exit state is identical to "
+                "the digit to the copy before the change (gate GC)"
+            ),
+            task="A100 (v5-test-set)",
+            was="every block loop tested the block's whole write set",
+            now="PROCESS_ARCH_TEST_SET=census | write_set, with PROCESS_ARCH_TEST_SETS=<file> under census",
+        ),
+        PermittedEdit(
+            kind="switch retired",
+            name="PROCESS_ARCH_PREDICATE / PREDICATE_MODES / PREDICATE_MODE",
+            description=(
+                "the second ruler is removed (DR11; D30, V5 plan section 12 "
+                "Q5): PREDICATE_MODES is the one-element list the "
+                "coupling-state module's RULERS must equal, PREDICATE_MODE is "
+                "the constant 'frozen' named for the record and passed to "
+                "every predicate evaluation as before, and the environment "
+                "read with its import-time refusal is gone.  The one ruler's "
+                "arithmetic is untouched: gate G1 with every switch unset, "
+                "gate GC under the fallback"
+            ),
+            task="A100 (v5-test-set)",
+            was="PREDICATE_MODES = ('frozen', 'mixed'); PREDICATE_MODE read from PROCESS_ARCH_PREDICATE",
+            now="PREDICATE_MODES = ('frozen',); PREDICATE_MODE = 'frozen'",
         ),
     ],
     "process/core/solver/subsolve.py": [
@@ -598,6 +654,25 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A99 (v5-schedule-and-prime)",
             was="the prime at the head of every sweep, about 9-15 stamped calls per evaluation",
             now="the prime once per evaluation, before M1; n_prime_calls = evaluations",
+        ),
+        PermittedEdit(
+            kind="test set bound",
+            name="_ytests and load_loop_tests in _call_models_partitioned",
+            description=(
+                "the block loop's stopping subset is the TEST SET the run "
+                "asked for (driver change DR11): beside the write sets, "
+                "loaded once as before and still read by the block trace, the "
+                "Caller loads module_solve.load_loop_tests for the loop it "
+                "runs -- its arrangement and who owns the burn time -- and the "
+                "inner loop's 'subset = tests.get(label)' replaces "
+                "'subsets.get(label)'.  Under the fallback the two "
+                "dictionaries are the same object and nothing differs from "
+                "the copy before the change (gate GC); with every switch "
+                "unset the branch is never reached (gate G1)"
+            ),
+            task="A100 (v5-test-set)",
+            was="subset = subsets.get(label): the block's whole write set",
+            now="subset = tests.get(label): the block's test set (the write set under the fallback, the census set under census)",
         ),
     ],
     "process/core/solver/solver_handler.py": [

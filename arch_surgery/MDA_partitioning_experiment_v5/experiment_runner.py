@@ -42,6 +42,8 @@ if str(HERE) not in sys.path:
 from harness.experiment import arms as arms_mod  # noqa: E402
 from harness.experiment import artifacts as artifacts_mod  # noqa: E402
 from harness.child import census as census_mod  # noqa: E402
+from harness.experiment import test_sets as test_sets_mod  # noqa: E402
+from harness.measurement import test_set_smoke as test_set_smoke_mod  # noqa: E402
 from harness import chain as chain_mod  # noqa: E402
 from harness.gates import gate_neutrality as neutrality_mod  # noqa: E402
 from harness.gates import gates as gates_mod  # noqa: E402
@@ -57,6 +59,8 @@ from harness.gates import reference as reference_mod  # noqa: E402
 from harness.gates import selfcheck as selfcheck_mod  # noqa: E402
 from harness.core.config import (  # noqa: E402
     EXECUTION_APPROVED,
+    TAU_BY_TEST_SET,
+    TEST_SETS,
     Campaign,
     default_campaign,
 )
@@ -438,11 +442,15 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         )
         return 3
     phase = arm.phase
+    # The test set and the tolerance are in the directory name (DR11): a
+    # run under the census set and one under the fallback of the same arm
+    # and seed are two records, and a named directory is the job's.
     outdir = Path(args.outdir) if args.outdir else (
         campaign.runs_dir
         / "single"
         / config.name
         / arm.name
+        / f"{campaign.test_set}_tau{campaign.tau!r}"
         / pool_mod.seed_directory(args.seed)
     )
     job = pool_mod.Job(
@@ -461,7 +469,9 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
     )
     print(
         f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
-        f"regime {args.regime}, kind {args.run_kind}"
+        f"regime {args.regime}, kind {args.run_kind}, test set "
+        f"{campaign.test_set}, tau {campaign.tau!r}"
+        + (" (overridden)" if campaign.tau_overridden else " (the test set's declared value)")
     )
     try:
         result = pool_mod.run(job, campaign, resume=args.resume)
@@ -889,6 +899,7 @@ def _artifact_teeth(campaign: Campaign) -> tuple[int, dict[str, Any]]:
         ("input files", lambda: input_files_mod.stage_teeth(campaign)),
         ("census", lambda: census_mod.stage_teeth(campaign)),
         ("per-run deferral sets", lambda: postsolve_mod.stage_teeth(campaign)),
+        ("census test sets", lambda: test_sets_mod.stage_teeth(campaign)),
     ):
         code, record = run()
         codes.append(code)
@@ -903,9 +914,9 @@ def _artifact_teeth(campaign: Campaign) -> tuple[int, dict[str, Any]]:
     print(f"  {n_tripped}/{n_teeth} tooth/teeth tripped")
     return (0 if all(code == 0 for code in codes) else 3), {
         "check": "artifact stages — teeth",
-        "binds": "the four artifact stages' own ability to fail",
+        "binds": "the five artifact stages' own ability to fail",
         "verdict": "PASS" if all(code == 0 for code in codes) else "FAIL",
-        "population": f"{n_teeth} deliberate breaks over 4 stages",
+        "population": f"{n_teeth} deliberate breaks over 5 stages",
         "n_compared": n_teeth,
         "n_mismatched": n_teeth - n_tripped,
         "detail": [f"{n_tripped}/{n_teeth} tripped"],
@@ -917,6 +928,111 @@ def _artifact_teeth(campaign: Campaign) -> tuple[int, dict[str, Any]]:
 # --------------------------------------------------------------------------
 # entry point
 # --------------------------------------------------------------------------
+
+
+def stage_census(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The census test sets, from the button (DR11; V5 plan §3).
+
+    ``take`` runs the census job set under the fallback predicate, checks
+    every censused run reproduces its uncensused twin, derives the sets,
+    compares them with the two priors and writes the artifacts under
+    ``runs/census_test_sets/``; ``write`` does the same and copies the
+    artifacts into ``harness/data/``, where they are committed and the
+    ``artifacts`` check validates them.
+    """
+    _rule(f"census test sets — {args.census}")
+    configurations = [args.configuration] if args.configuration else None
+    try:
+        code, record = test_sets_mod.stage(
+            campaign,
+            resume=args.resume,
+            write_data=(args.census == "write"),
+            configurations=configurations,
+        )
+    except (test_sets_mod.TestSetError, pool_mod.PoolError) as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    for line in artifacts_mod.report(record):
+        print(line)
+    for name, block in (record.get("artifacts") or {}).items():
+        print(f"  {name}: widths {block['n_by_block']}")
+        for where, path in block["written"].items():
+            print(f"    {where}: {path}")
+    _write_stage_record("census-test-sets", record, args, campaign)
+    return code
+
+
+def stage_smoke_test_set(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The test-set smoke pairs, from the button (task A100 (v5-test-set))."""
+    _rule("smoke — the test-set pairs")
+    try:
+        code, record = test_set_smoke_mod.stage(
+            campaign,
+            resume=args.resume,
+            ladder_record=(Path(args.ladder_record) if args.ladder_record else None),
+        )
+    except (pool_mod.PoolError, framework_mod.GateError) as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    for line in test_set_smoke_mod.report(record):
+        print(line)
+    _write_stage_record("smoke-test-set", record, args, campaign)
+    return code
+
+
+def stage_supplementary(args: argparse.Namespace, campaign: Campaign) -> int:
+    """A declared supplementary stage, from the button (V5 plan §3; A96).
+
+    Composes the stage's optimisation jobs at the stage's own test set and
+    tolerance — admitted by the pool because the stage is declared — and
+    runs them, records stamped with the stage's run kind (``supplementary``)
+    unless ``--run-kind smoke`` asks for a smoke record.  ``--arm``, ``--seed``
+    and ``--configuration`` narrow the job set.
+    """
+    _rule(f"supplementary stage — {args.supplementary}")
+    stage = next((s for s in campaign.supplementary if s.name == args.supplementary), None)
+    if stage is None:
+        print(
+            f"  REFUSED — {args.supplementary!r} is not a declared supplementary "
+            f"stage; the declared ones are {[s.name for s in campaign.supplementary]}"
+        )
+        return 3
+    seeds = [args.seed] if args.seed_given else None
+    try:
+        jobs = chain_mod.supplementary_jobs(
+            campaign,
+            stage,
+            run_kind=args.run_kind if args.run_kind == "smoke" else stage.run_kind,
+            configurations=[args.configuration] if args.configuration else None,
+            arms=[args.arm] if args.arm else None,
+            seeds=seeds,
+        )
+    except chain_mod.ChainError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    print(
+        f"  {stage.name}: {stage.why}\n  {len(jobs)} job(s) at test set "
+        f"{stage.test_set}, tau {stage.tau!r}, run kind "
+        f"{jobs[0].run_kind if jobs else stage.run_kind}"
+    )
+    try:
+        results = pool_mod.run_all(jobs, campaign, resume=args.resume)
+    except pool_mod.PoolError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    for result in results:
+        print(f"    {result['key']}: {result['status']} -> {result['outdir']}")
+    record = {
+        "stage": stage.name,
+        "test_set": stage.test_set,
+        "tau": stage.tau,
+        "why": stage.why,
+        "n_jobs": len(jobs),
+        "results": results,
+        "tree_git_head": framework_mod.git_head(),
+    }
+    _write_stage_record(f"supplementary-{stage.name}", record, args, campaign)
+    return 0 if all(r["status"] == "ok" for r in results) else 1
 
 
 def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
@@ -1105,12 +1221,63 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-runs", action="store_true",
                         help="for --gate reproduction: compare and run the "
                         "cost-free teeth against records that already exist")
+    parser.add_argument(
+        "--test-set",
+        choices=TEST_SETS,
+        default=None,
+        help="the campaign-level test set every block loop stops on (driver "
+        "change DR11): 'census' (the measured set, D32; the default) or "
+        "'write_set' (the block's whole write set, V4's predicate, the fallback "
+        "of D39).  One value for every arm and both phases; the tolerance "
+        "follows it (" + ", ".join(f"{k}: {v:g}" for k, v in TAU_BY_TEST_SET.items()) + ")",
+    )
+    parser.add_argument(
+        "--tau",
+        type=float,
+        default=None,
+        help="override the tolerance the test set is declared at (stamped as an "
+        "override in every record; in the job identity, so records at another "
+        "tolerance never resolve into the campaign's)",
+    )
+    parser.add_argument(
+        "--census",
+        choices=("take", "write"),
+        help="the census test sets, and stop: take = run the census job set "
+        "under the fallback predicate, check it is observation-only, derive "
+        "the sets, compare them with the priors and write the artifacts under "
+        "runs/; write = the same, and copy the artifacts into harness/data/",
+    )
+    parser.add_argument(
+        "--smoke-test-set",
+        action="store_true",
+        help="the test-set smoke pairs, and stop: B0 and B2 on the cheapest "
+        "pulsed configuration at seed 0 under the census set and under the "
+        "fallback, and the supplementary stage's B2 on st_regression, each "
+        "compared with the seeded reproduction records or a ladder record",
+    )
+    parser.add_argument(
+        "--ladder-record",
+        default=None,
+        help="for --smoke-test-set: a record of the supplementary stage's B2 "
+        "st_regression seed-0 run made elsewhere, to compare with",
+    )
+    parser.add_argument(
+        "--supplementary",
+        default=None,
+        help="run one declared supplementary stage by name and stop (its own "
+        "test set and tolerance, records stamped 'supplementary'; --arm, "
+        "--seed and --configuration narrow it, --run-kind smoke makes a smoke "
+        "record)",
+    )
     parser.add_argument("--json", type=Path, help="write the preflight record here")
     args = parser.parse_args(argv)
+    args.seed_given = any(a == "--seed" or a.startswith("--seed=") for a in (argv if argv is not None else sys.argv[1:]))
 
     # The experiment's own copy of PROCESS is the only tree a record is ever
-    # made against; there is no flag to point the button anywhere else.
-    campaign = default_campaign()
+    # made against; there is no flag to point the button anywhere else.  The
+    # test set and the tolerance are the two campaign-level settings the
+    # button takes (DR11, D39): one value each, reaching every job.
+    campaign = default_campaign(test_set=args.test_set, tau=args.tau)
 
     if args.selfcheck:
         checks = selfcheck_mod.run_all(
@@ -1123,6 +1290,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.artifacts:
         return stage_artifacts(args, campaign)
+
+    if args.census:
+        return stage_census(args, campaign)
+
+    if args.smoke_test_set:
+        return stage_smoke_test_set(args, campaign)
+
+    if args.supplementary:
+        return stage_supplementary(args, campaign)
 
     if args.smoke:
         return stage_smoke(args, campaign)

@@ -44,6 +44,7 @@ elif str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
 from harness.child import child  # noqa: E402
+from harness.child import read_before_write_census as census_mod  # noqa: E402
 from harness.core import failure as failure_mod  # noqa: E402
 from harness.child import perturb  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
@@ -95,6 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regime", default="unperturbed",
                         choices=records_mod.REGIMES)
     parser.add_argument("--predicate-mode", default="frozen")
+    parser.add_argument("--test-set", required=True,
+                        help="which components every block loop tests (DR11): "
+                             "census or write_set; stamped as campaign_test_set")
     parser.add_argument("--pin-hex", default=None)
     parser.add_argument("--switches-asked", default="{}",
                         help="JSON of term -> value the arm asked for")
@@ -161,6 +165,7 @@ def main(argv: list[str] | None = None) -> int:
         input_file_kind=args.input_kind,
         pin_hex=args.pin_hex,
         switches_asked=json.loads(args.switches_asked),
+        test_set=args.test_set,
     )
     record["outdir"] = str(outdir)
     record["force_maxcal"] = args.force_maxcal
@@ -250,12 +255,22 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     single_run = None
     raised: BaseException | None = None
+    census_state = None
     try:
         single_run = SingleRun(
             str(local_input), solver="vmcon", update_obsolete=True
         )
         if args.force_maxcal is not None:
             single_run.data.globals.maxcal = int(args.force_maxcal)
+        if census_mod.wanted():
+            # The read-before-write census (V5's test-set instrument,
+            # harness/child/read_before_write_census.py): installed only when
+            # its own variable says so, which the pool digests into the job
+            # identity; observation-only, written to its own file after the
+            # run.  With the variable unset this branch is never entered.
+            spec, _prov = module_solve_mod.load_spec(str(args.coupling_state))
+            census_state = census_mod.install(caller_mod, single_run.data, spec)
+            record["read_before_write_census"] = census_mod.FILE
         single_run.run()
         record["status"] = "ok"
     except BaseException as exc:  # noqa: BLE001 - classified, then recorded
@@ -265,6 +280,8 @@ def main(argv: list[str] | None = None) -> int:
         record["traceback"] = traceback.format_exc()
     child.stamp_resources(record, usage_before, started)
     record["failure_class"] = failure_mod.classify(raised, status=record["status"])
+    if census_state is not None:
+        census_mod.write(census_state, outdir)
 
     # ------------------------------------------------------------------
     # The counters, read BEFORE the audit takes its extra sweep.

@@ -81,13 +81,21 @@ RETIRED_SWITCHES: dict[str, str] = {
     ),
     "PROCESS_ARCH_YSTATE": "PROCESS_ARCH_COUPLING_STATE",
     "PROCESS_ARCH_WRITESET": "PROCESS_ARCH_WRITE_SETS",
+    # DR11 (A100 (v5-test-set)): removed -- the frozen ruler is the only
+    # ruler (decision D30; V5 plan §12 Q5).  The 'mixed' ruler of driver
+    # change DR5 is gone from the coupling-state module, so a run naming it
+    # would be asking for a denominator this driver no longer has.
+    "PROCESS_ARCH_PREDICATE": (
+        "nothing: the frozen ruler (max|dy_i| / s_i, the measured scale "
+        "alone) is the only ruler; the 'mixed' ruler is removed (D30, DR11)"
+    ),
 }
 
 
 def assert_no_retired_switches(environ=None) -> None:
     """Raise if a retired switch name is set, naming what replaced it.
 
-    Idempotent and cheap: eleven dictionary lookups, and nothing is allocated
+    Idempotent and cheap: twelve dictionary lookups, and nothing is allocated
     on the path that finds nothing.  Called at the import of this package, so
     it binds every entry point into the driver.
     """

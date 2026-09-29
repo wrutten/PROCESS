@@ -243,7 +243,7 @@ def record_completeness_body(
         checks = {
             "the_run_produced_a_record": bool(record),
             "every_declared_field_is_carried": not missing,
-            "both_convergence_rulers_are_present": (
+            "every_declared_convergence_ruler_is_present": (
                 row["exit_audit_rulers"] == sorted(records_mod.AUDIT_RULERS)
             ),
         }
@@ -307,7 +307,7 @@ def record_completeness_body(
             "the evaluation phase has no optimiser to leave unconverged — it "
             "runs exactly one call_models — so its record is checked on an "
             "ordinary smoke run.  What it must carry is its own phase's "
-            "declared fields, both rulers, and an explicit 'no attempts' "
+            "declared fields, every declared ruler, and an explicit 'no attempts' "
             "rather than a missing key"
         ),
         "rows": rows,
@@ -352,17 +352,20 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             + (f" — {why}" if refused else "")
         )
 
-    def one_ruler() -> tuple[bool, str]:
+    def no_ruler() -> tuple[bool, str]:
         record = _HELD.get("B")
         if record is None:
             return False, "the gate made no optimisation record"
-        doctored = _remove_path(record, "exit_audit.mixed")
+        doctored = record
+        for ruler in records_mod.AUDIT_RULERS:
+            doctored = _remove_path(doctored, f"exit_audit.{ruler}")
         refused, why = _refuses(
-            lambda: records_mod.assert_both_rulers(doctored, where="a tooth")
+            lambda: records_mod.assert_audit_ruler(doctored, where="a tooth")
         )
         return refused, (
-            "the second convergence ruler's block deleted from a copy of the "
-            f"record: {'refused' if refused else 'ACCEPTED'}"
+            "every convergence ruler's block deleted from a copy of the "
+            f"record ({list(records_mod.AUDIT_RULERS)}): "
+            f"{'refused' if refused else 'ACCEPTED'}"
             + (f" — {why}" if refused else "")
         )
 
@@ -452,15 +455,13 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             check=whole_block,
         ),
         Tooth(
-            name="one convergence ruler and not both",
-            what="the second ruler's audit block deleted from a copy",
+            name="an exit audit naming no ruler",
+            what="every declared ruler's audit block deleted from a copy",
             must=(
-                "be refused: the mixed ruler reads lower wherever its "
-                "denominator binds, so a table built from records with one "
-                "column here and two there reports a change of ruler as a "
-                "change of accuracy"
+                "be refused: an achieved-accuracy figure whose denominator "
+                "is not recorded cannot be compared with one whose is"
             ),
-            check=one_ruler,
+            check=no_ruler,
         ),
         Tooth(
             name="per-attempt costs that do not sum to the run total",

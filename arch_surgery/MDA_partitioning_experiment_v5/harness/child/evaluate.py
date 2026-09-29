@@ -117,6 +117,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regime", default="unperturbed",
                         choices=records_mod.REGIMES)
     parser.add_argument("--predicate-mode", default="frozen")
+    parser.add_argument("--test-set", required=True,
+                        help="which components every block loop tests (DR11): "
+                             "census or write_set; stamped as campaign_test_set")
     parser.add_argument("--pin-hex", default=None)
     parser.add_argument("--entry-state", default=None,
                         help="a previous run's exit snapshot, written into the "
@@ -167,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         input_file_kind=args.input_kind,
         pin_hex=args.pin_hex,
         switches_asked=json.loads(args.switches_asked),
+        test_set=args.test_set,
     )
     record["outdir"] = str(outdir)
     record["reproduction_overrides"] = json.loads(args.reproduction_overrides) or None
@@ -225,15 +229,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     # ------------------------------------------------------------------
     spec, spec_provenance = module_solve_mod.load_spec(str(args.coupling_state))
     record["coupling_state_provenance"] = spec_provenance
-    # Gate G8's detector, and a no-op with its variable unset: it watches every
-    # predicate evaluation on both rulers so the gate does not have to infer
-    # "no decisive pass" from "the two runs agree", which is the thing the gate
-    # is checking.  It returns the run's own residual unchanged; the driver
-    # loads the same cached spec object this call returned, which is why
-    # installing it here reaches every evaluation the run makes.
-    ruler_observer = child.install_ruler_observer(
-        module_solve_mod, spec, outdir, run_kind=args.run_kind
-    )
     record["spec_keys_owned_by_x"] = _keys_owned_by_x(numerics, spec, n)
 
     record["entry_state"] = None
@@ -450,10 +445,6 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     )
 
     record["completeness"] = _completeness(record)
-    # The observation goes to its own file, never into the record: the record
-    # is what the switch-neutrality gate compares value for value, and a
-    # gate-only instrument's output has no place in it.
-    child.write_ruler_observation(ruler_observer, outdir)
     child.write_record(outdir, record)
     child.print_brief(
         record,
