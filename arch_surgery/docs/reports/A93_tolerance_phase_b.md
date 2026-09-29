@@ -696,3 +696,48 @@ census seed 0, later re-made) carried numba's compilation.*
 - 2026-09-29 — matrix complete, all 45 records `status ok`; one record re-made for a clean stamp
   (`fd1bbdaf`); renderer tidy (`fd1bbdaf`) and T7 (`002a4508`) committed; results and verdict
   written.
+
+## 9. Orchestrator's critical assessment (protocol §5) — 2026-09-29
+
+**Verdict: merge.** The last prerequisite of V5 list item 6 is measured; its answer is split by
+configuration, and the split is a finding the V5 plan must carry. Verified by different roads:
+
+- **Every record read against its campaign record** (45 `metrics.json` under the task's records against
+  `A90_runs/campaign/optimisation`, arm `B3` for today's `B2`; a five-line read, not the summariser). On the
+  pulsed configurations: solver iterations and evaluations identical on 30 of 30 pairs (the retried lad seed 1
+  at 9 240 included); the paired relative `norm_objf` difference at most 5.3e-13; solve-phase node calls per
+  evaluation 83.2 / 83.3–83.8 (`B0` whole-`y` 1e-8) against the campaign's 69.0 / 70.0–70.9, 72.2 / 72.0–72.2
+  (`B0` census) and 34.8 / 35.2 (`B2` census) against 42.5 / 43.3 — the report's +20 %, +2–5 %, −18 %. On
+  `st_regression`: iterations 62/43/18/20 against 53/21/18/20 (`B0` whole-`y`), 41/38/18/12 against 53/21/18/20
+  (`B0` census), 40/100/66/40/42 against 10/59/39/18/20 (`B2` census); seed 1 `B2` census `ifail` 2, 15 750
+  evaluations, 1.3e-3 off the campaign's optimum. Stamps: 44 at `4abdc165`, one at `fd1bbdaf` (renderer only),
+  none dirty. No tracked change under the V4 folder (diff empty).
+- **A89's tolerance ladder re-read** (`tolerance.json`) for the reason st behaves differently. Under the
+  census set at 1e-8 the st control's objective error is 4.9e-11 relative with a gradient error of 1.2e-8,
+  where the whole-`y` control reads 0.0 at every τ from 1e-5 down; only at 1e-10 does the census set read 0.0 on
+  st. On the pulsed configurations the census set reads 0.0 objective error from 1e-6 (lad) and at every τ (nof).
+  So the rule's bound (function error ≤ h³) is met on st at 1e-8 by its own definition, but st is the one
+  configuration where the census-set loop leaves a nonzero objective residual at that τ, and st's optimiser
+  is the fragile one already in V4 (`BR → B0` moved its path, 31.2 → 25.1 iterations). That is the likeliest
+  mechanism for the trajectory change, and it is testable: the τ ladder the report proposes (§7 (b)).
+
+**What this settles for the V5 plan.** The ruled control is safe on the pulsed configurations: the same path,
+the same optimum, exact fixed points, cost within 5 % of V4's control, and the partitioned arm's per-evaluation
+ratio at matched accuracy is 0.48–0.51 — V4's whole-`y` test at 1e-6 charged the partitioned arm for sweeps
+its blocks did not need, and the plan's expected reading (§6) is updated to that. On `st_regression` the
+trajectory term is not neutral under the rule at 1e-8 and the plan must pre-declare it so; the user has ruled
+(Q6, D36's note) that the tolerance rule stands and a lost start is a result. Before the plan fixes st's
+declaration, the two cheap measurements of §7 (b) are worth their twenty runs: `B2` whole-`y` at 1e-8 on st
+(tolerance alone, partitioned arm) and the `B2` census arm at 1e-9 / 1e-10 / 1e-12 on st (does the path return
+as the objective residual goes to 0.0?). Dispatched as **A96 (st-trajectory-ladder)**. Proposal §7 (c) (an
+extra sweep of non-census outputs) is not taken up: `tlvpmw` at 2.4e-10 is below τ and nothing in a loop reads
+it. Proposal §7 (d) is discharged by A92's whole-run census.
+
+**Where the report overstates.** "V4's whole-`y` 1e-6 test was, by its lag, the more stable control there" —
+V4's `B0` on st also moved the path against `BR` (25.1 against 31.2 iterations); the comparison A93 can make is
+against V4's control, not against a neutral one. And "the census set … takes 18–19 % off the partitioned
+arm's per-evaluation cost" is against V4's `B2` at whole-`y` 1e-6, i.e. at a *different* achieved accuracy;
+the matched-accuracy statement is the ρ = 0.48–0.51 one.
+
+**Not done here.** The exit-audit recount (§4.5) is taken from the report; the pairing check (hex of the
+displaced design vector) likewise — both are the summariser's, committed and named.
