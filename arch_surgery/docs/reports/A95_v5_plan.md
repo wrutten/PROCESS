@@ -75,3 +75,48 @@ the V5 copy).
 |---|---|
 | 2026-09-29 | Read `CLAUDE.md`, `TRAPS.md`, the queue (§1, D29–D33, I-29/I-30, §4), the V5 list in full, V4 report §1–§3 and §6, the harness plan §0–§2 and amendments 1–34, README §0/§3/§10.1, `paper_tables.md`, A89 §7, A90 §0–§2, A91 §0/§5, the paper's results section (read-only). Plan written; report written. |
 | 2026-09-29 | D34 relayed by the orchestrator (the paper's phase A pair `A2/A1` pulsed, `A2/A0` st; phase B `B2/B0`): applied in the plan's §1, §2, §5, §8; Q4 closed. |
+
+## 6. Orchestrator's critical assessment (protocol §5) — 2026-09-29
+
+**Verdict: merge**, as a draft plan for the user's rulings; the seven open questions go to the user with this
+assessment's own recommendation where it differs from the task's.
+
+**Scope and discipline.** One commit on `7986d408`; the branch touches `docs/plans/V5_EXPERIMENT_PLAN.md` and
+this report only — nothing under either experiment folder, the paper or a sibling (checked with `git diff
+--stat`). Every declared quantity carries a citation I could match against the register (D29–D34, items 1–10 as
+trimmed today) or a `[A92]` / `[A93]` marker; I found no value guessed from the running tasks. The length
+(446 lines) is two-thirds of V4's §1–§3 rather than a third; the excess is the change map, the DR table and the
+decisions section, all tables the V5 build needs and V4 kept elsewhere. Accepted as is.
+
+**Checked against what I know independently.** The tolerance rule (§3) matches A89 §7.3 as declared before its
+noise stage. The run budget's per-run medians (§10) match the survey I made of the campaign records for the
+brief (nof 17–30 s, lad 25–40 s, st 29–47 s, three workers). The switch matrix (§2) matches `arms.py`'s
+`PLAN_MATRIX` row for row with the four V5 changes marked. The removal list (§11) names the modules item 10
+drops and nothing else; `block_binding.py` correctly stays in V4.
+
+**Where I differ from the task — Q1.** The task recommends (b): the flat arms defer the feed-forward and
+per-run nodes too, in both phases. I recommend **(c)**. The paper attributes "feedforward and post-processing
+models running only once" to the sequencing intervention (its matrix row *Models sequenced* and the caption
+written today); deferring in the control moves that saving into the control and out of the `A2/A1` ratio,
+and turns `AR → A0` into a rung that changes two things. The user's "in all A arms" (2026-09-29) was said of
+item 5 — that every A arm's evaluation must *produce the same information*, i.e. every node computed at the
+converged state — which the flat arms' final sweep already does. A89's deferring control was built for a
+wall-clock projection, not as the paper's control. Under (c) DR13 is not needed and the paper's matrix stands.
+The user rules.
+
+**Q7 answered at orchestration level.** A94 presses V4's existing reproduction gate — the twenty committed
+references under `harness/reference/`, which V4 itself reproduces — through the V5 copy; that proves the copy
+is V4 without a new reference set. Whether V5 also keeps a V4-campaign reference set is not needed for the
+proof and is not added.
+
+**Q8 answered at orchestration level.** Gates may run at three workers; no gate record carries a timing that
+is published, and the campaign, the repeatability check and the timers-off runs are at one worker (D33).
+
+**One addition the plan needs (§6, the instrument).** The per-node timer sits inside the harness's node
+wrapper (the node census), so the wrapper's own cost is inside "model time"; the timers-off run measures the
+timers, not the wrapper. The plan should say that the campaign runs carry no census hooks beyond the
+call counter, and that the counter's cost is measured once by a run with the counter's wrapper removed, or
+bounded from A91's per-call figures. Added as an amendment for the build task, not a reason to hold the merge.
+
+**What this assessment did not do.** It did not re-derive the run budget by a committed script (the plan
+labels it context); it did not read A92's or A93's drafts, which are not merged.
