@@ -165,7 +165,9 @@ def summarise_case(c, arm, node_module, press=1):
     r = json.loads(p.read_text())
     case = {"configuration": c.name, "arm": arm, "status": r.get("status"),
             "tree_git_head": r.get("tree_git_head"), "tree_git_dirty": r.get("tree_git_dirty"),
-            "entry_readback_bitexact": r.get("entry_readback_bitexact")}
+            "entry_readback_bitexact": r.get("entry_readback_bitexact"),
+            "started_at": r.get("started_at"), "ended_at": r.get("ended_at"),
+            "load_average_at_end": r.get("load_average_at_end")}
     if r.get("status") != "ok":
         case["error_tail"] = (r.get("traceback") or "").strip().splitlines()[-1:]
         return case
@@ -448,6 +450,20 @@ def render(out):
             for mod in BLOCK_ORDER[:5]:
                 cells.append(f"{_ms(bm[mod])} ({cm[mod]:g})" if mod in bm else "—")
             L.append(f"| {k['configuration']} | {k['arm']} | {label} | " + " | ".join(cells) + " |")
+    # --- subprocess windows
+    L += ["", "**Subprocess windows** (local wall clock of each timing subprocess, first to "
+          "last write; the 1-minute load average at its end; press 1 is the survey).", "",
+          "| configuration | arm | press | started | ended | head | load average (1 min) |",
+          "|---|---|---|---|---|---|---|"]
+    rows = [("1", k) for k in out["cases"]] + [
+        (p, q) for p in sorted(out.get("presses") or {}) for q in out["presses"][p]]
+    for p, k in rows:
+        la = k.get("load_average_at_end")
+        L.append(f"| {k['configuration']} | {k['arm']} | {p} | {k.get('started_at')} | "
+                 f"{k.get('ended_at')} | {str(k.get('tree_git_head'))[:8]} | "
+                 f"{la[0]:.2f} |" if la else
+                 f"| {k['configuration']} | {k['arm']} | {p} | {k.get('started_at')} | "
+                 f"{k.get('ended_at')} | {str(k.get('tree_git_head'))[:8]} | — |")
     # --- repeatability across presses
     if out.get("presses"):
         presses = ["1", *sorted(out["presses"])]

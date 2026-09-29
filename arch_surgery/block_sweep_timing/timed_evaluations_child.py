@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import datetime
 import sys
 import time
 import traceback
@@ -50,9 +51,13 @@ def main() -> int:
     p.add_argument("--reps", type=int, default=7)
     a = p.parse_args()
     outdir = Path(a.outdir)
+    stamp_clock = lambda: datetime.now().astimezone().isoformat(timespec="seconds")  # noqa: E731
     out: dict = {"format": "block-sweep-timing-1", "configuration": a.configuration,
                  "arm": a.arm, "test_set": "full", "entry_state": a.entry_state,
                  "reps_requested": a.reps,
+                 # wall-clock window of this subprocess, so a timed case can be checked
+                 # against any contention notice (the orchestrator's, 2026-09-29)
+                 "started_at": stamp_clock(), "ended_at": None,
                  "architecture_environment": {k: v for k, v in os.environ.items()
                                               if k.startswith("PROCESS_ARCH")}}
     try:
@@ -114,7 +119,8 @@ def main() -> int:
             caller = caller_mod.Caller(run.models, data)
             sweep_timers.begin()
             t0 = time.perf_counter()
-            rec = evaluate(caller, x0.copy())
+            rec = {"taken_at": stamp_clock()}
+            rec.update(evaluate(caller, x0.copy()))
             rec["wall_s"] = time.perf_counter() - t0
             raw = sweep_timers.end()
             rec.update(narrowing.TIMERS)
@@ -130,6 +136,8 @@ def main() -> int:
     except BaseException:  # noqa: BLE001 - recorded
         out["status"] = "crashed"
         out["traceback"] = traceback.format_exc()
+    out["ended_at"] = stamp_clock()
+    out["load_average_at_end"] = list(os.getloadavg()) if hasattr(os, "getloadavg") else None
     (outdir / "sweep_timing.json").write_text(json.dumps(out, indent=1))
     return 0 if out["status"] == "ok" else 1
 
