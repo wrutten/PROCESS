@@ -267,3 +267,11 @@ from the process table. A task agent's "completed" notification that ends on "wa
 hand-back while its background Bash call runs: the run is alive until the agent's own report says
 otherwise. Before relaunching anything with a record directory, name the evidence of death in the log
 (the change log entry that authorises the relaunch quotes it).
+
+*Addition, the same day, the other half:* **a `nohup … &` process does not survive the end of the sandboxed
+Bash call that started it** — the call's process tree is torn down when it returns, `nohup` or not. A96's two
+relaunches each wrote for about twenty seconds (the length of the `sleep 20; cat` that followed them) and
+stopped; only the run launched through the Bash tool's `run_in_background: true` (harness-managed, outside the
+call's tree) lived on. So: a long run is started with `run_in_background: true`, never with `nohup`/`&` inside
+a foreground call; and a record directory that gained a `command.json` and then nothing for minutes is a dead
+launch, not a slow one.
