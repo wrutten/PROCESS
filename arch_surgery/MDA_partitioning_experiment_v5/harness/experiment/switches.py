@@ -350,27 +350,28 @@ REGISTRY: dict[str, Switch] = {
     ),
     "predicate_mode": Switch(
         term="predicate_mode",
-        driver_name="PROCESS_ARCH_PREDICATE",
-        intended_name="PROCESS_ARCH_PREDICATE",
+        # **Retired** (task A98 (v5-reporting-trim), 2026-09-29; V5 list item
+        # 10, D30's "or drop it").  No arm composes it: the frozen ruler is
+        # what the variable unset means, and the 'mixed' trial (driver change
+        # DR5, V4's gate G8) is dropped.  The name stays in the registry so
+        # that it is **cleared** before every arm and **refused** if present
+        # (``retired_names``); the driver's own ``RETIRED_SWITCHES`` entry
+        # rides on DR11 (``RETIRED_PENDING_IN_DRIVER`` below).
+        driver_name=None,
+        intended_name=None,
         value_kind="enum",
-        values=("frozen", "mixed"),
-        composed=True,
-        readbacks=((MODULE_SOLVE, "PREDICATE_MODE"),),
-        resolved_as_asked=lambda r, v: _resolved(r, MODULE_SOLVE, "PREDICATE_MODE") == v,
+        values=(),
+        composed=False,
+        readbacks=(),
+        retired_names={
+            "PROCESS_ARCH_PREDICATE": "dropped, D30 / item 10 (the 'mixed' ruler trial)",
+        },
         note=(
-            "Which denominator the convergence test scales a step by: "
-            "'frozen', the measured scale alone -- every earlier revision's "
-            "ruler, the driver's behaviour with the variable unset, and the "
-            "campaign default -- or 'mixed', the conventional scaled step "
-            "with that scale kept as a floor under the current magnitude.  "
-            "The two are bit-identical wherever the current magnitude is at "
-            "or below the scale, and 'mixed' is never tighter, so no count "
-            "can go up.  Both values are listed although an arm composes only "
-            "'mixed': 'frozen' is also what the variable unset means, and a "
-            "value that can be read back is a value that can be checked.  "
-            "Driver change DR5; the trial is the experiment plan's section "
-            "3.6 and gate G8, and adoption is a later decision by that "
-            "section's rule."
+            "Which denominator the convergence test scaled a step by: "
+            "'frozen', the measured scale alone -- the driver's behaviour with "
+            "the variable unset -- or 'mixed', the scale kept as a floor under "
+            "the current magnitude.  V5 composes neither: the switch is "
+            "retired and the frozen ruler is the one every arm runs under."
         ),
     ),
     "pass_trace": Switch(
@@ -550,13 +551,34 @@ def retired_names() -> dict[str, str]:
     and refuses on it too.  The two are checked against each other by the
     capability probe rather than assumed equal: a harness that cleared a name
     the driver still honoured, or refused one the driver had never heard of,
-    would be describing a tree it is not running.
+    would be describing a tree it is not running.  The one licensed
+    difference is :data:`RETIRED_PENDING_IN_DRIVER`.
     """
     return {
         name: because
         for sw in REGISTRY.values()
         for name, because in sw.retired_names.items()
     }
+
+
+#: Names the **harness** has retired that the **driver** has not yet: each
+#: with the driver change that carries its retirement.  The interim is
+#: declared here so that the capability self-check can tolerate it by name
+#: and nothing else: the check requires the driver's ``RETIRED_SWITCHES`` to
+#: equal the registry's list **minus** these, and requires every name here to
+#: be **absent** from the driver's list — so the day the driver change lands,
+#: this table must be emptied in the same commit or the check fails, and the
+#: interim cannot outlive the change silently.  While a name is here the
+#: driver still honours it; the harness clears it before every arm
+#: (``all_names``) and refuses it if present (``assert_no_retired``), so no run
+#: made through the harness can carry it.
+RETIRED_PENDING_IN_DRIVER: dict[str, str] = {
+    "PROCESS_ARCH_PREDICATE": (
+        "DR11 (task A99): the 'mixed' ruler is removed from the copied driver "
+        "and the name enters process.core.solver.RETIRED_SWITCHES in the same "
+        "change (V5 plan §11, the DR11 addition; §12 Q5)"
+    ),
+}
 
 
 #: How the previous revision spelled each switch: its variable name -> V4's
@@ -927,5 +949,11 @@ def base_environment(tree: Path, *, runs_dir: Path | None = None) -> dict[str, s
     env["PYTHONPATH"] = str(tree)
     if runs_dir is not None:
         env["MPLCONFIGDIR"] = str(Path(runs_dir) / "_mplconfig")
+        # Issue I-31: without a cache directory numba writes its compiled
+        # cache beside the imported modules, under the copied driver's
+        # ``__pycache__`` directories — 122 gitignored files in a worktree
+        # that only *read* the copy.  A harness **default**, beside the
+        # matplotlib one: a caller that sets its own keeps it.
+        env.setdefault("NUMBA_CACHE_DIR", str(Path(runs_dir) / "_numba_cache"))
     clear_all(env)
     return env

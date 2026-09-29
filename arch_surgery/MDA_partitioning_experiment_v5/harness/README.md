@@ -8,8 +8,24 @@ read by someone who has not followed the project, so everything it assumes is sp
 ## 0. The harness in plain language — an overview, layer by layer
 
 *Written 2026-09-14 at the user's request, from the orchestrator's chat explanation. Paths are
-relative to `MDA_partitioning_experiment_v4/`. The sections after this one go deeper; this one is
+relative to `MDA_partitioning_experiment_v5/`. The sections after this one go deeper; this one is
 the map.*
+
+> **Status of this README in V5** (task A98 (v5-reporting-trim), 2026-09-29). This file is V4's
+> README copied whole (A94 (v5-copy)) with its four folder self-references re-pointed to `_v5`.
+> Under V5 list item 10 the following machinery it describes **no longer exists in this copy**:
+> the second implementation (`measurement/analysis.py`, gate `recomputation`, stage
+> `recomputed_tables`; §14), the report renderer and companion file (`measurement/plan_tables.py`,
+> `RESULTS_TABLES_FULL.md`, `--plan-tables`; Layer 4, §16), the predicate-mode gate G8
+> (`gates/gate_predicate_mode.py`) and the `mixed` ruler as a composable switch, the cold-chain gate
+> G3/G3c, the stencil entry regime (`chain.py`'s stencil stage and the tally's two stencil sources;
+> §15), the function-weighted twin tables and `harness/data/dsm_function_counts.json`, and the
+> report-side scripts `report_cells_preserved.py`, `report_citations_repoint.py`,
+> `report_counts_check.py`, `block_binding.py`. What replaces them is one document generator
+> (`measurement/paper_tables.py`, `--paper-tables`) and one independent recount
+> (`paper_cells_recount.py`). The registry (§5, §8) now carries the V5 plan's §7 Table 2: GT and GC as
+> declared placeholders that refuse, GR run once. The rewrite of this README to V5's text is pending
+> (plan §8; a later task); until then read the sections named above as V4's history.
 
 **What it is for.** The experiment asks one question: does rearranging how PROCESS's models are
 solved, without changing any model, reduce the number of model evaluations needed to reach the same
@@ -621,7 +637,7 @@ implementing the renamed switches — its capability check failed 19 of 55 by co
 
 ```bash
 PY=/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
-cd arch_surgery/MDA_partitioning_experiment_v4
+cd arch_surgery/MDA_partitioning_experiment_v5
 
 # the button: preflight, the matrix, the rungs, what the tree can do
 $PY experiment_runner.py
@@ -740,7 +756,7 @@ entry point that would print a result, so the failure path is as reproducible as
 To inspect one arm without running anything:
 
 ```python
-import sys; sys.path.insert(0, "arch_surgery/MDA_partitioning_experiment_v4")
+import sys; sys.path.insert(0, "arch_surgery/MDA_partitioning_experiment_v5")
 from harness import ARMS, default_campaign, env_for, input_file_for, rung
 
 campaign = default_campaign()
@@ -1121,7 +1137,7 @@ its second copy. If the records vanish tomorrow, the gate still works.
 
 ```bash
 PY=/home/wrutten/anaconda3/envs/PROCESS_surgery_env/bin/python
-cd arch_surgery/MDA_partitioning_experiment_v4
+cd arch_surgery/MDA_partitioning_experiment_v5
 
 # what is committed, and what it does not cover — reads no records
 $PY experiment_runner.py --reference show

@@ -18,20 +18,16 @@ The sequence, in the experiment plan's order (§3.4, §3.5):
    somewhere else.
 2. **evaluation, displaced entries** — plan §3.4's δ regime: every active
    evaluation-phase arm, every seed, one ``call_models`` each from the displaced
-   snapshot.
-3. **evaluation, stencil points** — plan §3.4's second regime: the forward
-   points ``x_i (1 + epsfcn)`` from the reference fixed point and the backward
-   points ``x_i (1 − epsfcn)``, each entered from **its own forward point's
-   exit**, which is the sequence the optimiser's evaluator executes.  Serial per
-   column for that reason.
-4. **optimisation** — plan §3.5: every active optimisation-phase arm, every
+   snapshot.  (The stencil regime of V4's §3.4 is dropped in V5 — list item 10;
+   the chain runs one evaluation regime.)
+3. **optimisation** — plan §3.5: every active optimisation-phase arm, every
    start, one full optimisation each.
-5. **the tally stages**, 6. **the tally's contract gate**, 7. **the analysis's
-   own tables**, 8. **the analysis's verification** — ``--verify``, the gate
-   named ``recomputation``, which recomputes every published cell through a
-   second implementation and compares it with the tally's.
+4. **the tally stages**, 5. **the tally's contract gate**.  (The second
+   implementation's stage and gate — ``recomputed_tables``, ``recomputation`` —
+   are dropped in V5 under list item 10; the paper's cells are recounted by the
+   short script ``paper_cells_recount.py`` instead.)
 
-Stages 5–8 are the registry's; this module names them and refuses if the
+Stages 4–5 are the registry's; this module names them and refuses if the
 registry does not hold one, rather than skipping a stage nobody notices is
 gone.
 
@@ -40,9 +36,9 @@ Two separations, each with a refusal rather than a convention
 **A smoke record is never summarised as a measurement.**  A one-seed pass is a
 test of the machinery; a table computed over it would be a table over a
 population of one, published beside tables over twenty-five.  So the run kinds a
-published population may contain are declared (``stats.MEASURABLE_RUN_KINDS``
-and, independently, ``analysis.MEASURABLE_RUN_KINDS``) and a record of any other
-kind is **refused** at the population's construction, not filtered out of it.
+published population may contain are declared (``stats.MEASURABLE_RUN_KINDS``)
+and a record of any other kind is **refused** at the population's construction,
+not filtered out of it.
 **Once a campaign record exists the same refusal takes a gate record**
 (``stats.measurable_run_kinds(campaign_present=True)`` is ``campaign`` alone):
 the gate population was the tables' population for want of a campaign, and
@@ -116,16 +112,6 @@ READING_STAGES: tuple[tuple[str, str, str], ...] = (
         "gate",
         "the cells the tally must land on, and what a table may not be",
     ),
-    (
-        "recomputed_tables",
-        "measurement",
-        "the same cells, computed a second time, with their own captions",
-    ),
-    (
-        "recomputation",
-        "gate",
-        "--verify: every published cell of the two implementations compared",
-    ),
 )
 
 
@@ -155,12 +141,6 @@ class ChainPlan:
     #: Starts of the optimisation phase.  ``seed000`` is the unperturbed start
     #: and the rest are displaced (§3.5).
     optimisation_seeds: tuple[int, ...]
-    #: Which evaluation-phase entry regimes run: "displaced", "stencil".
-    entry_regimes: tuple[str, ...]
-    #: How many stencil columns per arm, or None for every column.  The smoke
-    #: takes one so that the path is exercised without paying for 2·nvar runs
-    #: per arm; the restriction is printed and recorded, never assumed.
-    stencil_columns: int | None
     #: Whether this plan needs the user's execution approval to run at all.
     needs_approval: bool
 
@@ -171,55 +151,30 @@ class ChainPlan:
 
     def budget(self, campaign: Campaign) -> dict[str, int]:
         """How many runs each run stage of this plan would make."""
-        displaced = stencil = optimisations = 0
+        displaced = optimisations = 0
         for config in self.configurations:
             evaluation_arms = [
                 arm
                 for arm in arms_mod.active_arms(config, "A")
                 if arm in arms_mod.ARMS
             ]
-            if "displaced" in self.entry_regimes:
-                displaced += len(evaluation_arms) * len(self.evaluation_seeds)
-            if "stencil" in self.entry_regimes:
-                for arm in evaluation_arms:
-                    stencil += 2 * len(self.stencil_column_set(config, arm))
+            displaced += len(evaluation_arms) * len(self.evaluation_seeds)
             optimisations += len(arms_mod.active_arms(config, "B")) * len(
                 self.optimisation_seeds
             )
         return {
             "entry_references": len(self.configurations),
             "evaluation_displaced": displaced,
-            "evaluation_stencil": stencil,
             "optimisation": optimisations,
-            "total": (
-                len(self.configurations) + displaced + stencil + optimisations
-            ),
+            "total": len(self.configurations) + displaced + optimisations,
         }
-
-    def stencil_column_set(self, config: Config, arm: str) -> tuple[int, ...]:
-        """The design-vector columns this plan visits for one arm.
-
-        Derived, never written down: the committed input file's variable count,
-        plus the one column the lifted input file adds where the arm reads it.
-        The child refuses a column outside the design vector rather than
-        clamping it, and each run stamps the ``nvar`` it actually saw, so a
-        wrong count here is caught by the run and by :func:`_assert_columns`
-        rather than by evaluating a different point under the right name.
-        """
-        lifted = (
-            arms_mod.ARMS[arm].input_file == "lifted" and config.pulsed
-        )
-        columns = config.n_iteration_variables + (1 if lifted else 0)
-        if self.stencil_columns is not None:
-            columns = min(columns, self.stencil_columns)
-        return tuple(range(columns))
 
 
 def smoke_plan(campaign: Campaign, *, configuration: str | None = None) -> ChainPlan:
     """The one-seed pass: the whole chain, on the cheapest configuration.
 
     It is not a small campaign and must never be read as one.  Every record it
-    makes is stamped ``smoke``; the tally and the analysis refuse to summarise
+    makes is stamped ``smoke``; the tally refuses to summarise
     such a record; and its purpose is to answer one question — *does the button
     run the whole chain and land on 0 mismatches?* — which nothing else in the
     package answers.
@@ -234,15 +189,12 @@ def smoke_plan(campaign: Campaign, *, configuration: str | None = None) -> Chain
         run_kind="smoke",
         what=(
             "one seed end to end on the cheapest configuration: both phases, "
-            "every arm of the matrix active on it, the unperturbed entry and "
-            "one stencil column per arm.  A test of the chain, never a "
-            "measurement"
+            "every arm of the matrix active on it, the unperturbed entry.  A "
+            "test of the chain, never a measurement"
         ),
         configurations=(config,),
         evaluation_seeds=(0,),
         optimisation_seeds=(0,),
-        entry_regimes=("displaced", "stencil"),
-        stencil_columns=1,
         needs_approval=False,
     )
 
@@ -258,7 +210,7 @@ def campaign_plan(campaign: Campaign) -> ChainPlan:
         run_kind="campaign",
         what=(
             "the experiment plan's campaign: every configuration, every arm "
-            "active on it, both evaluation-phase entry regimes, "
+            "active on it, the displaced-entry regime, "
             f"{campaign.n_seeds} seeds per arm per phase"
         ),
         configurations=tuple(campaign.configurations),
@@ -267,8 +219,6 @@ def campaign_plan(campaign: Campaign) -> ChainPlan:
         # with seed000 the unperturbed one.
         evaluation_seeds=tuple(range(1, campaign.n_seeds + 1)),
         optimisation_seeds=tuple(range(campaign.n_seeds)),
-        entry_regimes=("displaced", "stencil"),
-        stencil_columns=None,
         needs_approval=True,
     )
 
@@ -524,8 +474,8 @@ def stage_entry_references(
 ) -> dict[str, Any]:
     """One flat evaluation per configuration, from the input file's own point.
 
-    Its exit state is what every displaced entry and every stencil point is
-    entered from, and its converged burn time is the constant the pinned arms
+    Its exit state is what every displaced entry is entered from, and its
+    converged burn time is the constant the pinned arms
     own.  A reference that does not finish stops the chain: there is nothing to
     enter from, and entering from somewhere else would be a different
     experiment reported under this one's name.
@@ -621,169 +571,6 @@ def stage_evaluation_displaced(
     }
 
 
-def evaluation_stencil_chains(
-    campaign: Campaign, plan: ChainPlan, references: Mapping[str, Any]
-) -> tuple[list[list[pool_mod.Job]], list[dict[str, Any]]]:
-    """The stencil job set, as forward/backward pairs per column, with the
-    planned column list.  The backward point's entry state is its forward
-    point's exit, which is why the pair is a serial chain and not two jobs."""
-    from .gates import reproduction as reproduction_mod  # noqa: PLC0415
-
-    root = chain_root(campaign, plan) / "evaluation_stencil"
-    chains: list[list[pool_mod.Job]] = []
-    planned: list[dict[str, Any]] = []
-    for config in plan.configurations:
-        reference = references[config.name]
-        for arm in arms_mod.active_arms(config, "A"):
-            columns = plan.stencil_column_set(config, arm)
-            for column in columns:
-                forward = root / config.name / arm / f"column{column:03d}_forward"
-                backward = root / config.name / arm / f"column{column:03d}_backward"
-                pin = reproduction_mod.entry_pin(config, arm, reference)
-                forward_job = pool_mod.Job(
-                    phase="A",
-                    arm=arm,
-                    config=config,
-                    seed=0,
-                    outdir=forward,
-                    regime="stencil",
-                    delta=None,
-                    pin_hex=pin,
-                    entry_state=Path(reference["snapshot"]),
-                    stencil_column=column,
-                    stencil_sign=1,
-                    run_kind=plan.run_kind,
-                )
-                # The backward point is entered from the forward point's exit,
-                # so its entry state -- part of its identity -- names the
-                # directory the forward point's record *is* in, resolved by
-                # digest, not the directory the layout would give it today.
-                # The two differ for an arm renamed since the record was made
-                # (records.RECORDED_ARM_NAMES): the forward record of today's
-                # A1 sits under the arm's old name, and a backward job that
-                # named .../A1/... would be a job no record was ever made of.
-                forward_resolved = pool_mod.directory_for(forward_job, campaign)
-                chains.append(
-                    [
-                        forward_job,
-                        pool_mod.Job(
-                            phase="A",
-                            arm=arm,
-                            config=config,
-                            seed=0,
-                            outdir=backward,
-                            regime="stencil",
-                            delta=None,
-                            pin_hex=pin,
-                            entry_state=forward_resolved / "y_exit.json",
-                            stencil_column=column,
-                            stencil_sign=-1,
-                            run_kind=plan.run_kind,
-                        ),
-                    ]
-                )
-                planned.append(
-                    {
-                        "configuration": config.name,
-                        "arm": arm,
-                        "column": column,
-                        "n_columns_planned": len(columns),
-                    }
-                )
-    return chains, planned
-
-
-def stage_evaluation_stencil(
-    campaign: Campaign,
-    plan: ChainPlan,
-    references: Mapping[str, Any],
-    *,
-    resume: bool,
-) -> dict[str, Any]:
-    """Plan §3.4's stencil regime: the optimiser's own finite-difference points.
-
-    One column at a time: the forward point ``x_i (1 + epsfcn)`` entered from
-    the reference fixed point, then the backward point ``x_i (1 − epsfcn)``
-    entered from **that forward point's exit**, which is the order
-    ``fcnvmc2`` executes.  The pair is therefore run serially; different columns
-    are independent and go through the pool.
-
-    A column outside the design vector is refused by the child rather than
-    clamped, and every record stamps the ``nvar`` it saw, so the column set
-    derived here is checked against the runs it produced instead of trusted.
-    """
-    chains, planned = evaluation_stencil_chains(campaign, plan, references)
-    results: list[dict[str, Any]] = []
-    for pair in chains:
-        results.extend(pool_mod.run_serially(pair, campaign, resume=resume))
-    restriction = (
-        None
-        if plan.stencil_columns is None
-        else (
-            f"{plan.stencil_columns} column(s) per arm instead of every "
-            f"column: this plan exercises the stencil path rather than "
-            f"measuring the regime, and the restriction is recorded here so "
-            f"that no table is ever computed over it as if it were the regime"
-        )
-    )
-    return {
-        "stage": "evaluation_stencil",
-        "what": (
-            "the evaluation phase's stencil regime: the forward point "
-            "x_i (1 + epsfcn) from the reference fixed point and the backward "
-            "point x_i (1 − epsfcn) from that forward point's exit, per design "
-            "variable, per arm (plan §3.4)"
-        ),
-        "n_runs": sum(len(pair) for pair in chains),
-        "columns": planned,
-        "column_restriction": restriction,
-        "column_check": _assert_columns(planned, chains),
-        "results": _result_summary(results),
-    }
-
-
-def _assert_columns(
-    planned: Sequence[Mapping[str, Any]], chains: Sequence[Sequence[pool_mod.Job]]
-) -> dict[str, Any]:
-    """Check the derived column count against the ``nvar`` the runs stamped.
-
-    The derivation adds one column where the arm reads the lifted input file.
-    That is a rule about two files, and a rule about two files can be wrong
-    about one of them; the run's own ``nvar`` is the tree's answer, so it is
-    compared rather than assumed.  A mismatch is a refusal: a column set that
-    does not match the design vector evaluates a different point under the
-    right name.
-    """
-    disagreements: list[str] = []
-    compared = 0
-    for pair in chains:
-        job = pair[0]
-        record = records_mod.read(job.outdir)
-        nvar = record.get("nvar")
-        if not isinstance(nvar, int):
-            continue
-        compared += 1
-        if job.stencil_column is not None and job.stencil_column >= nvar:
-            disagreements.append(
-                f"{job.config.name}/{job.arm}: column {job.stencil_column} "
-                f"planned against nvar = {nvar} the run stamped"
-            )
-    if disagreements:
-        raise ChainError(
-            "the stencil column set does not match the design vector the runs "
-            "saw: " + "; ".join(disagreements)
-        )
-    return {
-        "n_columns_compared_against_the_run": compared,
-        "n_disagreements": 0,
-        "what": (
-            "every planned column checked against the nvar its own run "
-            "stamped; a column outside the design vector is refused by the "
-            "child rather than clamped"
-        ),
-    }
-
-
 def optimisation_jobs(campaign: Campaign, plan: ChainPlan) -> list[pool_mod.Job]:
     """The optimisation job set: every arm active on the configuration, one
     full optimisation per start of the plan."""
@@ -836,7 +623,6 @@ def stage_optimisation(
 RUN_STAGES: tuple[str, ...] = (
     "entry_references",
     "evaluation_displaced",
-    "evaluation_stencil",
     "optimisation",
 )
 
@@ -844,7 +630,7 @@ RUN_STAGES: tuple[str, ...] = (
 def campaign_jobs(campaign: Campaign, stage: str) -> list[pool_mod.Job]:
     """The **campaign** plan's job set for one run stage, composed without running.
 
-    This is what the tally's and the analysis's ``campaign_*`` sources name
+    This is what the tally's ``campaign_*`` sources name
     (harness plan rule (xi): a plan's job set is a tally population; rule
     (xiv): one job identity).  The plan is :func:`campaign_plan`'s — built
     whether or not it may run — and every job it composes is stamped
@@ -864,10 +650,7 @@ def campaign_jobs(campaign: Campaign, stage: str) -> list[pool_mod.Job]:
     if stage == "optimisation":
         return optimisation_jobs(campaign, plan)
     references = references_from_records(campaign, plan)
-    if stage == "evaluation_displaced":
-        return evaluation_displaced_jobs(campaign, plan, references)
-    chains, _ = evaluation_stencil_chains(campaign, plan, references)
-    return [job for pair in chains for job in pair]
+    return evaluation_displaced_jobs(campaign, plan, references)
 
 
 def _result_summary(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -912,17 +695,6 @@ def stage_names(plan: ChainPlan) -> list[dict[str, str]]:
             "stage": "evaluation_displaced",
             "kind": "runs",
             "what": "the evaluation phase's displaced-entry regime (plan §3.4)",
-            "skipped": (
-                "" if "displaced" in plan.entry_regimes else "not in this plan"
-            ),
-        },
-        {
-            "stage": "evaluation_stencil",
-            "kind": "runs",
-            "what": "the evaluation phase's stencil regime (plan §3.4)",
-            "skipped": (
-                "" if "stencil" in plan.entry_regimes else "not in this plan"
-            ),
         },
         {
             "stage": "optimisation",
@@ -1006,18 +778,9 @@ def run(
         references_block = stage_entry_references(campaign, plan, resume=resume)
         press["stages"].append(references_block)
         references = references_block["references"]
-        if "displaced" in plan.entry_regimes:
-            press["stages"].append(
-                stage_evaluation_displaced(
-                    campaign, plan, references, resume=resume
-                )
-            )
-        if "stencil" in plan.entry_regimes:
-            press["stages"].append(
-                stage_evaluation_stencil(
-                    campaign, plan, references, resume=resume
-                )
-            )
+        press["stages"].append(
+            stage_evaluation_displaced(campaign, plan, references, resume=resume)
+        )
         press["stages"].append(stage_optimisation(campaign, plan, resume=resume))
     except (ChainError, pool_mod.PoolError, GateError) as exc:
         press["refused"] = f"{type(exc).__name__}: {exc}"
@@ -1120,7 +883,6 @@ def print_press(press: Mapping[str, Any]) -> None:
     print(
         f"  budget     {budget['entry_references']} entry reference(s) + "
         f"{budget['evaluation_displaced']} displaced-entry evaluation(s) + "
-        f"{budget['evaluation_stencil']} stencil evaluation(s) + "
         f"{budget['optimisation']} optimisation(s) = {budget['total']} run(s)"
     )
     for block in press["stages"]:
@@ -1136,8 +898,6 @@ def print_press(press: Mapping[str, Any]) -> None:
                 f"      wall clock: {results['wall_s_summed_in_child']} s "
                 f"summed in child — {results['wall_clock_is']}"
             )
-            if block.get("column_restriction"):
-                print(f"      restricted: {block['column_restriction']}")
         provenance = block.get("runs_provenance") or {}
         if provenance:
             print(
@@ -1200,22 +960,6 @@ def _tooth_tally_refuses_a_smoke_record() -> tuple[bool, str]:
     )
 
 
-def _tooth_analysis_refuses_a_smoke_record() -> tuple[bool, str]:
-    from .measurement import analysis as analysis_mod  # noqa: PLC0415
-
-    try:
-        analysis_mod.Population.of(
-            [_doctored("smoke")], what="a doctored population, for the tooth"
-        )
-    except analysis_mod.AnalysisError as exc:
-        return True, f"the analysis's population refused it: {exc}"
-    return False, (
-        "the analysis's population accepted a record stamped 'smoke'.  The two "
-        "implementations declare this rule separately on purpose; one of them "
-        "has stopped declaring it"
-    )
-
-
 def _tooth_a_measurable_record_is_still_accepted() -> tuple[bool, str]:
     """The other half: the refusal must not refuse everything.
 
@@ -1256,43 +1000,21 @@ def _tooth_tally_refuses_a_gate_record_with_the_campaign_present() -> tuple[bool
     )
 
 
-def _tooth_analysis_refuses_a_gate_record_with_the_campaign_present() -> tuple[bool, str]:
-    from .measurement import analysis as analysis_mod  # noqa: PLC0415
-
-    try:
-        analysis_mod.Population.of(
-            [_doctored("gate")],
-            what="a doctored population, for the tooth",
-            campaign_present=True,
-        )
-    except analysis_mod.AnalysisError as exc:
-        return True, f"the analysis's population refused it: {exc}"
-    return False, (
-        "the analysis's population accepted a record stamped 'gate' with the "
-        "campaign present.  The two implementations declare this rule "
-        "separately on purpose; one of them has stopped declaring it"
-    )
-
-
 def _tooth_a_campaign_record_is_kept_with_the_campaign_present() -> tuple[bool, str]:
     """The positive control for the campaign family: the refusal above must
-    not refuse the campaign's own records, in either implementation."""
-    from .measurement import analysis as analysis_mod  # noqa: PLC0415
+    not refuse the campaign's own records."""
     from .measurement import stats as stats_mod  # noqa: PLC0415
 
     try:
         mine = stats_mod.Population.of(
             [_doctored("campaign")], what="for the tooth", campaign_present=True
         )
-        theirs = analysis_mod.Population.of(
-            [_doctored("campaign")], what="for the tooth", campaign_present=True
-        )
-    except (stats_mod.StatsError, analysis_mod.AnalysisError) as exc:
+    except stats_mod.StatsError as exc:
         return False, f"a campaign record was refused with the campaign present: {exc}"
-    kept = len(mine.records) == 1 and len(theirs.records) == 1
+    kept = len(mine.records) == 1
     return kept, (
         f"a record stamped 'campaign' is summarised with the campaign present: "
-        f"tally {len(mine.records)} of 1, analysis {len(theirs.records)} of 1 kept"
+        f"tally {len(mine.records)} of 1 kept"
     )
 
 
@@ -1520,7 +1242,7 @@ def gate(campaign: Campaign) -> Gate:
         name="run_kind_separation",
         binds=(
             "every record this package makes, and every population the tally "
-            "and the analysis build"
+            "builds"
         ),
         what_it_proves=(
             "that a one-seed test of the machinery is never summarised as a "
@@ -1550,12 +1272,6 @@ def gate(campaign: Campaign) -> Gate:
                 check=_tooth_tally_refuses_a_smoke_record,
             ),
             Tooth(
-                name="a smoke record offered to the analysis",
-                what="the same record handed to analysis.Population.of",
-                must="REFUSE",
-                check=_tooth_analysis_refuses_a_smoke_record,
-            ),
-            Tooth(
                 name="a gate record is still summarised",
                 what=(
                     "a record stamped 'gate' handed to the same population "
@@ -1574,18 +1290,12 @@ def gate(campaign: Campaign) -> Gate:
                 check=_tooth_tally_refuses_a_gate_record_with_the_campaign_present,
             ),
             Tooth(
-                name="a gate record offered to the analysis with the campaign present",
-                what="the same record handed to analysis.Population.of",
-                must="REFUSE",
-                check=_tooth_analysis_refuses_a_gate_record_with_the_campaign_present,
-            ),
-            Tooth(
                 name="a campaign record is kept with the campaign present",
                 what=(
-                    "a record stamped 'campaign' handed to both populations "
+                    "a record stamped 'campaign' handed to the population "
                     "with campaign_present=True"
                 ),
-                must="BE KEPT — the positive control for the two refusals above",
+                must="BE KEPT — the positive control for the refusal above",
                 check=_tooth_a_campaign_record_is_kept_with_the_campaign_present,
             ),
             Tooth(

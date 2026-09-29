@@ -238,9 +238,8 @@ def declared_files(campaign: Campaign) -> list[DataFile]:
                 source=f"{ARTIFACT_SOURCE_DIR}/{fixed}",
                 note=(
                     "read by the measurement layer, never by the driver; "
-                    "generated once from the dependency analysis's exports at "
-                    "the named pin by arch_surgery/fixedpoint/gen_function_counts.py "
-                    "and committed as data (trap T9); the name is unchanged"
+                    "generated once from a named pin and committed as data "
+                    "(trap T9); the name is unchanged"
                 ),
                 source_commit=None,
             )
@@ -268,7 +267,6 @@ EXPECTED_MAPPING: dict[str, str] = {
     "defer_per_run_st_regression.json": "postsolve_st_regression.json",
     "node_writesets.json": "node_writesets.json",
     "dsm_node_map.json": "dsm_node_map.json",
-    "dsm_function_counts.json": "dsm_function_counts.json",
 }
 
 

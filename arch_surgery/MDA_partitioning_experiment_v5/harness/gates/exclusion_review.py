@@ -1,11 +1,12 @@
 """The exclusion sets of every record-comparing gate, reviewed -- a measurement stage.
 
-Every exclusion of gate G1 (``switch_neutrality``) and gate G8
-(``predicate_mode``), classified by kind and measured against that gate's own
-captured records: how many leaves each name covers on each side, whether both
-sides carry them, and what this review did with the name.  It reads the
-tables from the gate modules -- ``gate_neutrality`` and ``gate_predicate_mode`` --
-and never restates them, so a name added to a gate is a name this review sees.
+Every exclusion of gate G1 (``switch_neutrality``), classified by kind and
+measured against that gate's own captured records: how many leaves each name
+covers on each side, whether both sides carry them, and what this review did
+with the name.  It reads the tables from the gate module -- ``gate_neutrality``
+-- and never restates them, so a name added to a gate is a name this review
+sees.  (Gate G8's part was removed with the gate under V5 list item 10; G1's
+part is kept, plan §11 row 10.)
 
 Moved verbatim out of ``harness/gates/gates.py`` (its ``the exclusion sets,
 reviewed`` section) by the code-move task of the simplification survey, into
@@ -46,11 +47,6 @@ from harness.gates.gate_neutrality import (  # noqa: E402
     neutrality_run_dir,
 )
 from harness.gates.gate_output_path import UNCHANGED_ON_REFERENCE_ARMS  # noqa: E402
-from harness.gates.gate_predicate_mode import (  # noqa: E402
-    PREDICATE_PAIR_EXCLUSIONS,
-    predicate_mode_pairs,
-    predicate_mode_run_dir,
-)
 
 GateError = framework.GateError
 
@@ -123,39 +119,6 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "audit_position_note": "prose quoted from a harness constant",
 }
 
-#: The kinds of thing gate G8's set excludes.  Its two sides are the **same
-#: code at the same commit** run twice with one setting changed, so almost
-#: nothing is licensed to differ and the set is small for that reason.
-PREDICATE_PAIR_KIND: dict[str, str] = {
-    "outdir": "a path",
-    "wall_s": "a timing or the machine's state",
-    "cpu_user_s": "a timing or the machine's state",
-    "cpu_sys_s": "a timing or the machine's state",
-    "cpu_s": "a timing or the machine's state",
-    "maxrss_kb": "a timing or the machine's state",
-    "loadavg": "a timing or the machine's state",
-    "mfile.process_runtime": "a timing or the machine's state",
-    "tree_untracked_paths": "the commit, or the working tree's state",
-    "tree_untracked_paths_n": "the commit, or the working tree's state",
-    "campaign_predicate_mode": "the setting being varied, or a stamp of it",
-    "switches_asked.predicate_mode": "the setting being varied, or a stamp of it",
-    "env_architecture.env_PROCESS_ARCH_PREDICATE": (
-        "the setting being varied, or a stamp of it"
-    ),
-    "resolved_switches.process.core.solver.module_solve.PREDICATE_MODE": (
-        "the setting being varied, or a stamp of it"
-    ),
-    "coupling_state_provenance.predicate_mode": (
-        "the setting being varied, or a stamp of it"
-    ),
-    "exit_audit.predicate_mode": "the setting being varied, or a stamp of it",
-    "job_identity.predicate_mode": "the setting being varied, or a stamp of it",
-    "job_digest": "the setting being varied, or a stamp of it",
-    "exit_audit.rulers_note": "prose, identical on both sides",
-    "arm_name_translation": "the setting being varied, or a stamp of it",
-}
-
-
 def _assert_every_name_is_classified() -> None:
     missing = sorted(set(ALWAYS_EXCLUDED) - set(ALWAYS_EXCLUDED_KIND))
     if missing:
@@ -168,12 +131,6 @@ def _assert_every_name_is_classified() -> None:
     if spare:
         raise GateError(
             f"{len(spare)} classified name(s) are not excluded at all: {spare}"
-        )
-    missing = sorted(set(PREDICATE_PAIR_EXCLUSIONS) - set(PREDICATE_PAIR_KIND))
-    if missing:
-        raise GateError(
-            f"{len(missing)} of gate G8's excluded name(s) carry no declared "
-            f"kind: {missing}"
         )
     missing = sorted(
         set(FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE) - set(INSTRUMENT_CHANGE_KIND)
@@ -256,30 +213,6 @@ def _neutrality_pairs(campaign: Campaign) -> list[tuple[dict, dict]]:
     return pairs
 
 
-def _predicate_pairs(campaign: Campaign) -> list[tuple[dict, dict]]:
-    pairs: list[tuple[dict, dict]] = []
-    for pair in predicate_mode_pairs(campaign):
-        config, arm, seed = pair["config"], pair["arm"], pair["seed"]
-        try:
-            directories = [
-                predicate_mode_run_dir(campaign, mode, config.name, arm, seed)
-                for mode in campaign.predicate_modes
-            ]
-        except GateError:
-            # The pair's directory is a function of the reference record it is
-            # entered from; no reference yet means no pair yet.
-            continue
-        if not all((d / "metrics.json").exists() for d in directories):
-            continue
-        pairs.append(
-            tuple(
-                _read_record(d, side=m, key=f"{arm}/{config.name}/seed{seed:03d}")
-                for d, m in zip(directories, campaign.predicate_modes)
-            )
-        )
-    return pairs
-
-
 def exclusion_review(campaign: Campaign) -> dict[str, Any]:
     """Every exclusion of every comparing gate, classified and measured.
 
@@ -289,7 +222,6 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
     the verdict — kept, made conditional, or removed.
     """
     g1_pairs = _neutrality_pairs(campaign)
-    g8_pairs = _predicate_pairs(campaign)
     # **Which pair of commits gate G1's captures straddle changes the answer**,
     # and a leaf count published without it is a number without its condition
     # (trap T11).  A name that is one-sided across a real straddle is excluded
@@ -421,27 +353,6 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
         and prefix not in {"audit_snapshot"}
     }
 
-    g8_rows: list[dict[str, Any]] = []
-    for name, reason in PREDICATE_PAIR_EXCLUSIONS.items():
-        coverage = _coverage(name, g8_pairs)
-        kind = PREDICATE_PAIR_KIND[name]
-        g8_rows.append(
-            {
-                "name": name,
-                "group": "always excluded",
-                "kind": kind,
-                "reason": reason,
-                **coverage,
-                "could_be_compared_instead": False,
-                "verdict": (
-                    "KEPT — this gate's two sides differ in exactly this "
-                    "setting, so a stamp of it must differ"
-                    if kind.startswith("the setting")
-                    else "KEPT — the kind is structural"
-                ),
-            }
-        )
-
     g9_rows = [
         {
             "name": name,
@@ -494,9 +405,8 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             "pair; 'equal where both have them' is how many of those agree. "
             "The verdict is what this review did with the name. Populations: "
             f"gate G1 over {len(g1_pairs)} run pair(s) which {g1_straddle['says']} "
-            f"— the leaf counts below hold for that pairing and no other — "
-            f"gate G8 over "
-            f"{len(g8_pairs)} run pair(s); gate G9's list is a list of fields "
+            f"— the leaf counts below hold for that pairing and no other; "
+            f"gate G9's list is a list of fields "
             "it compares, not of fields it excludes, and is shown for the same "
             "reason."
         ),
@@ -541,8 +451,6 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
                 FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE
             ),
             "G1_output_file_keys": len(VOLATILE_MFILE_KEYS),
-            "G8_before_this_review": len(PREDICATE_PAIR_EXCLUSIONS),
-            "G8_after_this_review": len(PREDICATE_PAIR_EXCLUSIONS),
             "G9_fields_compared": len(UNCHANGED_ON_REFERENCE_ARMS),
             "G9_fields_deliberately_absent": 1,
         },
@@ -568,11 +476,6 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             "population": f"{len(g1_pairs)} run pair(s)",
             "rows": g1_rows,
         },
-        "G8": {
-            "gate": "predicate_mode",
-            "population": f"{len(g8_pairs)} run pair(s)",
-            "rows": g8_rows,
-        },
         "G9": {
             "gate": "output_path",
             "population": "the fields compared against the reproduction gate",
@@ -585,7 +488,7 @@ def print_exclusion_review(block: Mapping[str, Any]) -> None:
     print(f"\n  {block['what_this_is']}")
     print(f"\n  {block['caption']}")
     print(f"\n  {block['what_the_review_changed']}\n")
-    for key in ("G1", "G8", "G9"):
+    for key in ("G1", "G9"):
         table = block[key]
         print(f"\n  --- {key} ({table['gate']}) — {table['population']}")
         print(

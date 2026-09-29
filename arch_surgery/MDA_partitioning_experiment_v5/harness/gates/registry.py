@@ -12,8 +12,16 @@ constructed by its own module's ``gate(campaign)`` and collected below.
 Moved verbatim out of ``harness/gates/gates.py`` (its ``_plan_gates``, tally,
 analysis, chain, ``the measurement stages``, ``the registry`` and ``the gate
 table`` sections and its ``main``) by the code-move task of the simplification
-survey; the registry was written by task **A52 (harness-gates)**.  Every
-registered name is unchanged.
+survey; the registry was written by task **A52 (harness-gates)**.
+
+**This revision's registry is the V5 plan's §7 Table 2** (task A98
+(v5-reporting-trim), 2026-09-29, list item 10): the predicate-mode gate G8,
+the prime's cold-chain gate G3/G3c and the recomputation gate with its
+``recomputed_tables`` stage are gone; the test-set gate GT and the
+count-neutrality gate GC are **declared placeholders that refuse with "not
+implemented"** until the driver changes they bind (DR11, DR9/DR10) land; the
+reproduction gate GR is **run once**, at the copy commit, and refuses to
+re-make its runs.
 
 Usage
 -----
@@ -22,8 +30,6 @@ Usage
     python -m harness.gates.registry switch-neutrality --capture after
     python -m harness.gates.registry switch-neutrality --compare
     python -m harness.gates.registry all            # every gate that needs no capture
-    python -m harness.gates.registry predicate-mode --capture runs
-    python -m harness.gates.registry predicate-mode
 
 The one button is ``experiment_runner.py --gate`` / ``--measure``; this command
 line predates it and runs the same registry entries.
@@ -49,19 +55,116 @@ from harness.core.config import Campaign, default_campaign  # noqa: E402
 from harness.gates import exclusion_review as exclusion_review_mod  # noqa: E402
 from harness.gates import gate_neutrality  # noqa: E402
 from harness.gates import gate_output_path  # noqa: E402
-from harness.gates import gate_predicate_mode  # noqa: E402
 from harness.gates import gates as gates_mod  # noqa: E402
 from harness.gates.gate_neutrality import capture_neutrality  # noqa: E402
 from harness.gates.gate_output_path import capture_output_path  # noqa: E402
-from harness.gates.gate_predicate_mode import (  # noqa: E402
-    capture_predicate_mode,
-    print_predicate_mode,
-)
 
 GATES_SUBPATH = framework.GATES_SUBPATH
 Gate = framework.Gate
 Measurement = framework.Measurement
 GateError = framework.GateError
+
+
+# --------------------------------------------------------------------------
+# the V5 plan's declared placeholders, and the run-once gate
+# --------------------------------------------------------------------------
+
+
+#: The gates the V5 plan declares (§7 Table 2) whose bodies do not exist yet:
+#: each binds a driver change that has not been made, and a gate that PASSed
+#: over an unmade change would be a verdict on nothing.  Each entry **refuses**
+#: with "not implemented" when pressed, so the gate table prints it as NOT RUN
+#: rather than as a PASS, and ``--gate all`` stops at it as at any refusal.
+#: The body is the task's that lands the driver change, not this registry's.
+DECLARED_NOT_IMPLEMENTED: dict[str, dict[str, str]] = {
+    "test_set": {
+        "plan_name": "GT",
+        "binds": "the census test set of plan §3 (item 6, D32; driver change DR11)",
+        "what_it_proves": (
+            "per configuration and arm, from the displaced entry at τ: dropping "
+            "the component the declared rule finds binding stops the loop "
+            "earlier and leaves an exit state that differs from the full set's; "
+            "dropping a declared non-census control leaves the run bit-identical; "
+            "the whole-y audit of the truncated run is reported beside"
+        ),
+        "pending": "DR11 (the loop's predicate binding a declared test set per block)",
+    },
+    "count_neutrality": {
+        "plan_name": "GC",
+        "binds": "items 7 and 8 of the V5 list (driver changes DR9 and DR10)",
+        "what_it_proves": (
+            "on a job set of both phases, every arm, one seed per configuration: "
+            "node calls, sweeps, predicate evaluations, components compared and "
+            "every exit state identical to the digit before and after the change"
+        ),
+        "pending": "DR9 (the deferral sets resolved once per run) and DR10 (the prime once per evaluation)",
+    },
+}
+
+#: The gate that is pressed **once**, at the copy commit, and never re-made
+#: (V5 plan §7: "No GR beyond the copy").  Its record is read under
+#: ``--resume``; a press without ``--resume`` would re-run twenty PROCESS jobs
+#: to reproduce what the copy commit already proved, and is refused.
+RUN_ONCE: dict[str, str] = {
+    "reproduction": (
+        "run and PASSed at d6c246a1 by task A94 (v5-copy): 20 of 20 reference "
+        "records reproduced, 256 values compared, 0 mismatched, 8 of 8 teeth; "
+        "read under --resume, never re-made"
+    ),
+}
+
+
+def _not_implemented_gate(name: str, spec: Mapping[str, str]) -> Gate:
+    def refuse(*, resume: bool = False) -> dict[str, Any]:
+        raise GateError(
+            f"gate {name} ({spec['plan_name']}) is not implemented: it binds "
+            f"{spec['pending']}, which has not been made.  A declared "
+            f"placeholder refuses rather than passes; the task that lands the "
+            f"driver change supplies the body and its teeth."
+        )
+
+    def a_press_is_refused() -> tuple[bool, str]:
+        try:
+            refuse(resume=True)
+        except GateError as exc:
+            return True, f"pressed with --resume: refused — {str(exc)[:120]}"
+        return False, "pressed with --resume: NOT refused; a placeholder that runs is a verdict on nothing"
+
+    return Gate(
+        name=name,
+        binds=spec["binds"],
+        what_it_proves=spec["what_it_proves"],
+        body=refuse,
+        # A gate cannot be constructed without a tooth (framework.Gate); the
+        # placeholder's one tooth is that it cannot be made to pass.
+        teeth=(
+            framework.Tooth(
+                "a_press_of_the_placeholder",
+                "the placeholder pressed, with --resume",
+                "REFUSE with 'not implemented'",
+                a_press_is_refused,
+            ),
+        ),
+        plan_name=spec["plan_name"],
+        needs_runs=False,
+    )
+
+
+def _run_once(name: str, gate: Gate) -> Gate:
+    """*gate* with its body refusing to make runs: ``--resume`` reads the record."""
+    body = gate.body
+
+    def once(*, resume: bool = False) -> dict[str, Any]:
+        if not resume:
+            raise GateError(
+                f"gate {name} is pressed once, at the copy commit, and is not "
+                f"re-made: {RUN_ONCE[name]}.  Press it with --resume to read "
+                f"its record; a from-scratch press would re-run its twenty "
+                f"PROCESS jobs to prove what the copy commit already proved."
+            )
+        return body(resume=True)
+
+    return dataclasses.replace(gate, body=once)
 
 
 # --------------------------------------------------------------------------
@@ -85,17 +188,21 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
     from . import gate_audit, gate_composition, gate_entry, gate_prime, gate_records
 
     return {
-        "reproduction": gates_mod.reproduction_gate(campaign),
+        "reproduction": _run_once("reproduction", gates_mod.reproduction_gate(campaign)),
         "g0prime": gates_mod.g0prime_gate(campaign),
         "switch_neutrality": gate_neutrality.gate(campaign),
         "prime_map": gate_prime.prime_map_gate(campaign),
-        "cold_chain": gate_prime.cold_chain_gate(campaign),
         "audit_restriction": gate_audit.audit_restriction_gate(campaign),
         "switch_composition": gate_composition.switch_composition_gate(campaign),
         "entry_and_warm": gate_entry.entry_and_warm_gate(campaign),
         "record_completeness": gate_records.record_completeness_gate(campaign),
-        "predicate_mode": gate_predicate_mode.gate(campaign),
         "output_path": gate_output_path.gate(campaign),
+        # The V5 plan's two new gates, declared and refusing (see the module
+        # docstring): GT the test set's teeth, GC count neutrality.
+        **{
+            name: _not_implemented_gate(name, spec)
+            for name, spec in DECLARED_NOT_IMPLEMENTED.items()
+        },
     }
 
 
@@ -153,52 +260,11 @@ def _tally_measurements(campaign: Campaign) -> dict[str, Measurement]:
     }
 
 
-# --------------------------------------------------------------------------
-# the analysis: one gate and one measurement stage  (task A54 (harness-analysis))
-# --------------------------------------------------------------------------
-#
-# Kept as one contiguous block, beside the tally's, so that the registry's
-# other entries and this one can be merged past each other without a conflict
-# in the middle of a dictionary.  The gate recomputes every cell the tally
-# publishes from the same run records, through a second implementation that
-# shares no construction with it; the stage publishes that implementation's own
-# tables and has nothing to pass.
-#
-# The gate reads the two tally stages' **output** on disk
-# (``runs/gates/tally_*/measurements.json``) and refuses when it is not there.
-# That dependency cannot be declared in ``reads_from``, which names gates only,
-# so the gate is ordered last and a fresh tree must run
-# ``--measure tally_evaluation tally_optimisation`` before ``--gate all``
-# reaches it.
-
-
-def _analysis_gates(campaign: Campaign) -> dict[str, Gate]:
-    """The recomputation gate, with its six teeth."""
-    from harness.measurement import analysis as analysis_mod  # noqa: PLC0415
-
-    gate = analysis_mod.gate(campaign)
-    # Declared so the button runs this after the gates whose runs it summarises
-    # **and** after the two measurement stages whose output it compares against.
-    # A dependency may name either kind; the button runs the stages first and
-    # orders the gates among themselves.
-    return {
-        "recomputation": dataclasses.replace(
-            gate,
-            reads_from=(
-                "reproduction",
-                "entry_and_warm",
-                "tally_evaluation",
-                "tally_optimisation",
-            ),
-        )
-    }
-
-
-def _analysis_measurements(campaign: Campaign) -> dict[str, Measurement]:
-    """The analysis's own tables, to be read beside the tally's."""
-    from harness.measurement import analysis as analysis_mod  # noqa: PLC0415
-
-    return {"recomputed_tables": analysis_mod.measurement(campaign)}
+# The second implementation (task A54 (harness-analysis)'s ``analysis.py``,
+# gate ``recomputation`` and stage ``recomputed_tables``) was removed under
+# V5 list item 10; its replacement is the short independent recount of the
+# paper's cells, ``paper_cells_recount.py`` beside the runner, which is a
+# script and not a registry entry.
 
 
 # --------------------------------------------------------------------------
@@ -283,7 +349,6 @@ def measurements(campaign: Campaign) -> dict[str, Measurement]:
             printer=exclusion_review_mod.print_exclusion_review,
         ),
         **_tally_measurements(campaign),
-        **_analysis_measurements(campaign),
     }
 
 
@@ -297,10 +362,10 @@ def assert_declared_dependencies(entries: Mapping[str, Any]) -> None:
 
     A dependency may name **either** a gate or a measurement stage: a gate that
     reads another gate's runs has to follow it, and a gate that reads a
-    measurement stage's *output* has to follow that stage — gate
-    ``recomputation`` compares the tally's emitted tables, which only
+    measurement stage's *output* has to follow that stage (the removed
+    ``recomputation`` gate compared the tally's emitted tables, which only
     ``--measure tally_evaluation`` and ``--measure tally_optimisation``
-    produce.  What may not be named is something nobody runs: a gate declaring
+    produce; the mechanism stays).  What may not be named is something nobody runs: a gate declaring
     one would be ordered after nothing and would read whatever happened to be
     on disk, which is the failure the declaration exists to prevent.
 
@@ -363,7 +428,6 @@ def registry(campaign: Campaign) -> dict[str, Any]:
     entries.update(gates_mod._selfcheck_gates(campaign))
     entries.update(gates_mod._artifact_gates(campaign))
     entries.update(_tally_gates(campaign))
-    entries.update(_analysis_gates(campaign))
     entries.update(_written_file_gates(campaign))
     entries.update(_identity_gates(campaign))
     entries.update(_chain_gates(campaign))
@@ -615,7 +679,6 @@ GATE_ORDER: tuple[str, ...] = (
     "artifacts_per_run",
     "record_completeness",
     "prime_map",
-    "cold_chain",
     "audit_restriction",
     "entry_and_warm",
     "switch_composition",
@@ -623,16 +686,17 @@ GATE_ORDER: tuple[str, ...] = (
     # Six runs; it reads G9's records for its beside-column, so the dependency
     # already puts it after output_path whatever this preference says.
     "written_file_gap",
-    "predicate_mode",
     "switch_neutrality",
     "reproduction",
     "tally_contracts",
-    "recomputation",
     # Last by preference and not by dependency: it reads every record the press
     # made, so running it after the press is what makes its denominator the
     # whole tree rather than whatever existed when it started.
     "run_kind_separation",
 )
+# The two declared placeholders are not in the preference: they rank after
+# every name, listed or not (``ordered_gate_names``), because each refuses and
+# a refusal stops ``--gate all`` — so nothing is left unpressed behind them.
 
 
 def ordered_gate_names(campaign: Campaign) -> list[str]:
@@ -654,7 +718,14 @@ def ordered_gate_names(campaign: Campaign) -> list[str]:
     entries = registry(campaign)          # refuses an undeclared dependency
     available = {n: e for n, e in entries.items() if isinstance(e, Gate)}
     preference = {name: i for i, name in enumerate(GATE_ORDER)}
-    rank = sorted(available, key=lambda n: (preference.get(n, len(GATE_ORDER)), n))
+    last = len(GATE_ORDER) + 1
+    rank = sorted(
+        available,
+        key=lambda n: (
+            last if n in DECLARED_NOT_IMPLEMENTED else preference.get(n, len(GATE_ORDER)),
+            n,
+        ),
+    )
     # Only a **gate** dependency takes part in this order.  A measurement
     # dependency is not ordered here because a stage has no verdict and no
     # place in the gate sequence: the button runs it immediately before the
@@ -726,9 +797,6 @@ def print_verdict(verdict: Mapping[str, Any]) -> None:
     ):
         if key in verdict:
             print(f"    {key:<28}: {verdict[key]}")
-    if verdict.get("gate") == "predicate_mode":
-        print_predicate_mode(verdict)
-        return
     for row in verdict.get("runs", []):
         if "checks" in row:
             print(
@@ -768,7 +836,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "g0prime",
             "switch-neutrality",
             "output-path",
-            "predicate-mode",
             "all",
         ),
         help="which gate to run; 'all' runs the gates that need no capture",
@@ -778,8 +845,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         choices=("before", "after", "runs"),
         help="switch-neutrality: run the two reference arms on every "
         "configuration and record them under this label ('before' or "
-        "'after'), then stop.  output-path and predicate-mode: 'runs' makes "
-        "the gate's own runs, then stops",
+        "'after'), then stop.  output-path: 'runs' makes the gate's own "
+        "runs, then stops",
     )
     parser.add_argument(
         "--compare",
@@ -806,16 +873,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"  manifest: {manifest['manifest']}")
         return 0
 
-    if args.gate == "predicate-mode" and args.capture:
-        manifest = capture_predicate_mode(campaign, resume=args.resume)
-        print(f"captured {manifest['n_runs']} run(s) at "
-              f"{manifest['tree_git_head']}")
-        for row in manifest["runs"]:
-            print(f"  {row['arm']:<3} {row['configuration']:<22} "
-                  f"seed{row['seed']:03d} {row['ruler']:<7} {row['status']}")
-        print(f"  manifest: {manifest['manifest']}")
-        return 0
-
     if args.gate == "switch-neutrality" and args.capture:
         manifest = capture_neutrality(campaign, args.capture, resume=args.resume)
         print(f"captured {manifest['n_runs']} run(s) as {args.capture!r} at "
@@ -834,12 +891,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         names = ["switch_neutrality"]
     elif args.gate == "output-path":
         names = ["output_path"]
-    elif args.gate == "predicate-mode":
-        names = ["predicate_mode"]
     elif args.gate == "all":
         names.append("switch_neutrality")
         names.append("output_path")
-        names.append("predicate_mode")
 
     gates = registry(campaign)
     status = 0

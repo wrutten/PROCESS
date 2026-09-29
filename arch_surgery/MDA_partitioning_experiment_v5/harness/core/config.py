@@ -197,9 +197,13 @@ class Campaign:
     upstream_pass_cap: int = 10
     #: Worker pool width.
     workers: int = 3
-    #: Convergence-predicate modes: the frozen ruler, and the trial that lets
-    #: the denominator move.
-    predicate_modes: tuple[str, ...] = ("frozen", "mixed")
+    #: Convergence-predicate modes an arm may compose.  V5 composes the frozen
+    #: ruler alone: the ``mixed`` trial (V4's G8, driver change DR5) is dropped
+    #: under list item 10 (D30's "or drop it") and its switch is retired in
+    #: ``experiment/switches.py``.  The exit audit still *measures* on both
+    #: rulers (``records.AUDIT_RULERS``, the record contract), which is a
+    #: different thing from composing one.
+    predicate_modes: tuple[str, ...] = ("frozen",)
     predicate_mode_default: str = "frozen"
 
     # --- derived --------------------------------------------------------
@@ -257,11 +261,6 @@ class Campaign:
             removed_configurations=self.removed_configurations
             + (Removal(name, decision, reason, date),),
         )
-
-    def stencil_runs(self, config: Config) -> int:
-        """Stencil-regime evaluations per arm on *config*: 2 (nvar + 1)."""
-        return 2 * (config.n_iteration_variables + 1)
-
 
 # --------------------------------------------------------------------------
 # the declared configuration set (D17), and the default campaign
@@ -337,18 +336,12 @@ DRIVER_FIXED_ARTIFACTS: dict[str, str] = {
     "node_map": "dsm_node_map.json",
 }
 
-#: Artifacts the **measurement layer** reads and the driver never does — the
-#: same T9 route as the node map (generated once from a named pin by a
-#: committed script in ``arch_surgery/fixedpoint/``, committed to the
-#: repository's shared data directory, copied here with its provenance
-#: recorded), but read only by ``harness/measurement/``.  ``function_counts``
-#: is the number of functions (the dependency analysis's submodels) behind
-#: each collapsed-DSM row of each module, per configuration: the weight of the
-#: function-weighted twin of the per-module sweep tables (task A88
-#: (function-weighted-sweeps), the user's instruction of 2026-09-17).
-MEASUREMENT_ARTIFACTS: dict[str, str] = {
-    "function_counts": "dsm_function_counts.json",
-}
+#: Artifacts the **measurement layer** reads and the driver never does.
+#: Empty since V5 list item 10 removed the one entry (``function_counts``,
+#: the weight of task A88's function-weighted twin tables); the mechanism —
+#: a data file entered with its own source commit, checked by the ``data``
+#: gate — stays for the next such artifact.
+MEASUREMENT_ARTIFACTS: dict[str, str] = {}
 
 
 #: Arms inactive on a steady-state configuration, with the reason recorded.

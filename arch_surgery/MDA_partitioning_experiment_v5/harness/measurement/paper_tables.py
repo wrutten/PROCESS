@@ -1,48 +1,69 @@
 #!/usr/bin/env python
-"""The paper's results tables, computed from the campaign's run records.
+"""The paper's one document, computed from the campaign's run records.
 
-The paper *Structuring fusion MDAO with DSMs* (§3, Case 2: PROCESS) prints
-three tables in shapes the report does not: the evaluation phase's module
-sweeps against the **plain** flat control ``A0`` (the report's Table 9 states
-its ratio against the declared rung reference ``A1`` and has no per-run
-distribution), the optimiser's iterations per configuration, and the
-optimisation phase's module sweeps.  This module writes them into
-:data:`PAPER_NAME` beside the report, as Markdown grids and as LaTeX rows to
-paste into the paper's ``tabular`` bodies.
+**The one generator** (V5 list item 10, the user's ruling of 2026-09-29: *"this
+v5 reporting approach is approved"*; V5 plan §8).  It writes one file,
+:data:`PAPER_NAME`, beside the report — the tables the paper *Structuring
+fusion MDAO with DSMs* (§3, Case 2: PROCESS) prints, each as a Markdown grid
+and as LaTeX rows for the paper's ``tabular`` bodies — and nothing else renders
+a table in this revision.  ``check`` refuses when the rendered file and the
+records disagree.
 
-**The shape is the user's (2026-09-28).** A cell is a module's **sweeps per
-run**, averaged over the ``n`` perturbed runs of the arm; the ratio column is
-the **ratio of the means** (Σ intervened / Σ control over the paired runs, the
-report's pooled reading); beside it the per-run ratio's median with its
-``[min, max]``.  The rows are the three modules, **Feedforward** (the pulse
-node and any feed-forward tail node: executed on every evaluation, no
-iteration) and **Post-processing** (the once-per-run deferred nodes: needed by
-no objective or constraint, so the partitioned arm runs them only in the
-output pass).  There is no total row: sweeps of different modules do not add.
+Main text
+    the switch matrix (from ``arms.matrix()``, the same data every arm is
+    composed from); the configurations table; phase A module sweeps per
+    evaluation with the ratio columns on **`A2/A1` (pulsed) and `A2/A0`
+    (`st_regression`)** — the ratio of the means, the per-run median and the
+    ``[min, max]`` bracket, all on that pair (**D34**, the user, 2026-09-29,
+    superseding the `A2/A0` convention of 2026-09-28); phase B optimiser
+    iterations and phase B module sweeps per optimisation on `B2/B0` with the
+    rungs beside.
 
-**Nothing here is a new construction.** Every number is the tally's own
-building block applied to the tally's own population: the published sources
-(:mod:`tally`), the node grouping (:func:`tally_evaluation.node_grouping`),
-:func:`stats.module_sweeps`, the optimisation phase's seed set
-(:func:`stats.every_arm_converged` over :func:`tally_optimisation.arm_groups`)
-and :func:`stats.per_seed_ratio_summary`.  And every cell the stage records
-already hold is **compared** with them, exactly, before anything is written
-(:func:`cross_check`); the comparison is shown able to fail on each run
-(:func:`_cross_check_tooth`, protocol §12).  A mismatch is reported and the
-file is not written.
+Appendix
+    the two module tables in wall clock and the cost breakdown of plan §6 —
+    **declared placeholders**: their rows and captions, with every cell empty,
+    because the instrument (item 9, driver change DR12) is a later driver
+    task; the per-arm success table (plan §5 B5); and **one verification
+    table**, one row per check of plan §8, each verdict read from the gate
+    records through the ``gate_table`` stage record where the gate exists and
+    "not pressed" otherwise.
+
+**A cell is a module's sweeps per run** (the user, 2026-09-28), averaged over
+the ``n`` runs of the arm; the ratio column is the ratio of the means
+(Σ intervened / Σ control over the paired runs); beside it the per-run
+ratio's median with its ``[min, max]``.  There is no total row: sweeps of
+different modules do not add.  **Nothing here is a new construction**: every
+number is the tally's own building block applied to the tally's own
+population, and every cell the stage records also hold is compared with them
+exactly before anything is written (:func:`cross_check`, shown able to fail
+on each run by :func:`_cross_check_tooth`, protocol §12).
+
+**`CHARGED_ONCE` is retired** (plan §2, item 5).  V4 charged `A2`'s
+post-processing cell with one execution by construction, because its phase A
+census stopped before the output pass; in V5 the deferred nodes are executed
+once after convergence *by the run* and the cell reads the measured count.
+Until item 5's driver change lands the cell reads what today's records
+measure — 0 — and the caption says so.
+
+Written by task **A98 (v5-reporting-trim)**, 2026-09-29, extending the
+paper-tables module of 2026-09-28; the stage-record stamp check and the
+population marker are moved here from the removed ``plan_tables.py``.
 """
 
 from __future__ import annotations
 
-import ast
 import copy
-import math
-import dataclasses
+import datetime as _dt
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from harness.core.config import Campaign
+import dataclasses
+
+from harness.core import framework
+from harness.core.config import EXECUTION_APPROVED, Campaign
+from harness.experiment import arms as arms_mod
 from harness.measurement import stats as stats_mod
 from harness.measurement import tally as tally_mod
 from harness.measurement import tally_evaluation as tally_a
@@ -76,37 +97,182 @@ ROWS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Post-processing", (stats_mod.ONCE_PER_RUN_GROUP,)),
 )
 
-#: The one execution of the post-processing set that completes the partitioned
-#: arm's evaluation (the user, 2026-09-28: *"If phase A is a single evaluation
-#: run, it should converge the MDA and then run all these other models exactly
-#: once right? Otherwise it doesn't produce the same information as the
-#: reference case."*).  The flat arms' final sweep already computes those
-#: outputs at the converged state; the partitioned arm's measured evaluation
-#: leaves them uncomputed, and its driver runs them once, after convergence, in
-#: the output pass.  Phase A's census stops before that pass, so the execution
-#: is **charged here by construction, not read from the census**; the premise
-#: (the measured count is exactly 0) is checked on every run, and phase B's
-#: whole-run census — 2 per run in B2, the output pass and the exit audit, on
-#: every seed — is the measurement that says it is one execution.
-CHARGED_ONCE = {"A2": 1.0}
-
-#: Phase A cells printed as the integer every run reads, not as a mean (the
-#: user, 2026-09-29): the partitioned arm's feedforward and post-processing
-#: rows run once per evaluation by construction.  A run reading anything else
-#: is a refusal, not a rounded mean.
+#: Phase A cells printed as the integer every run reads, not as a mean: the
+#: partitioned arm's feedforward and post-processing rows run a fixed number
+#: of times per evaluation by construction (once, and — until item 5's driver
+#: change — zero).  A run reading anything else, or two runs reading different
+#: integers, is a refusal, not a rounded mean.
 EXACT_CELLS = {("A2", "Feedforward"), ("A2", "Post-processing")}
 
 PHASE_A_SOURCE = tally_mod.ACCEPTANCE_REGIME
-PHASE_A_PAIR = ("A0", "A2")
 PHASE_B_SOURCE = "campaign_optimisation"
 PHASE_B_PAIR = tally_b.HEADLINE_PAIR
 
-#: The iteration quantity of the report's Table 12 (check 2's statistic).
+#: The iteration quantity (check 2's statistic, summed over attempts).
 ITERATIONS_LABEL, ITERATIONS = tally_b.PATH_QUANTITIES[0]
 
 
+def phase_a_pair(pulsed: bool) -> tuple[str, str]:
+    """**D34**: the published phase A pair — `A1 → A2` on a pulsed
+    configuration, `A0 → A2` on a steady-state one where `A1` is inactive."""
+    return ("A1", "A2") if pulsed else ("A0", "A2")
+
+
 class PaperTablesError(RuntimeError):
-    """The tables cannot be stated over the records as they are."""
+    """The document cannot be stated over the records as they are."""
+
+
+# --------------------------------------------------------------------------
+# the stage-record stamp check (trap T14), moved here from plan_tables
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Section:
+    """One stage record a part of the document is built from."""
+
+    number: str
+    heading: str
+    stage: str
+    #: Whether the stage's record must say **which records it read**, and be
+    #: refused when they have moved since (issue I-22 (a), trap T14).
+    records_read_required: bool = False
+
+
+#: The verification table is built from the ``gate_table`` **stage** record,
+#: which was made from the verdicts at the moment that stage ran.  A gate
+#: re-run afterwards would be published as it was — the same PASS or FAIL —
+#: unless the consumer refuses a record its sources have outrun, which this
+#: generator does through :func:`assert_gate_table_current` before it reads
+#: one.  The harness's ``stage_provenance`` self-check breaks a scratch copy
+#: of the records four ways and requires that call to refuse each.
+GATE_TABLE_SECTION = Section(
+    number="V",
+    heading="Verification",
+    stage="gate_table",
+    records_read_required=True,
+)
+
+
+def stage_record(records_dir: Path, stage: str) -> dict[str, Any]:
+    """One stage's own record, or a refusal naming the stage that makes it."""
+    path = Path(records_dir) / stage / "measurements.json"
+    if not path.exists():
+        raise PaperTablesError(
+            f"stage {stage!r} has written no record at {path}.  The document's "
+            f"{stage} cells are that stage's own output and are never typed by "
+            f"hand: run `experiment_runner.py --measure {stage}` first."
+        )
+    try:
+        return json.loads(path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        raise PaperTablesError(f"{path} is not readable JSON: {exc}") from exc
+
+
+def assert_stage_read_what_is_there(
+    record: Mapping[str, Any], records_dir: Path, section: Section
+) -> str:
+    """Refuse to build a part from a stage record its sources have outrun.
+
+    The check is the framework's, not this module's, so that it is one
+    mechanism: the stage declares what it reads, the framework stamps it, and
+    every consumer refuses the same way.
+    """
+    try:
+        return framework.assert_records_read_are_current(
+            record,
+            records_dir,
+            stage=section.stage,
+            remedy=(
+                f"Re-run `experiment_runner.py --measure {section.stage} "
+                f"--resume` and render again: the {section.heading} table is "
+                f"that stage's output, and a table built from a record older "
+                f"than the verdicts it summarises publishes the older verdict "
+                f"without saying so."
+            ),
+        )
+    except framework.StaleRecordError as exc:
+        raise PaperTablesError(str(exc)) from exc
+
+
+def assert_gate_table_current(records_dir: Path) -> str:
+    """The ``gate_table`` stage record under *records_dir*, checked against the
+    verdict records it names; the sentence that says so, or a refusal."""
+    record = stage_record(records_dir, GATE_TABLE_SECTION.stage)
+    return assert_stage_read_what_is_there(record, Path(records_dir), GATE_TABLE_SECTION)
+
+
+# --------------------------------------------------------------------------
+# the population marker, moved here from plan_tables
+# --------------------------------------------------------------------------
+
+
+def _survey(paths: Sequence[Path]) -> dict[str, Any]:
+    """Commit, run kind, audit position, ruler and instrument over *paths*."""
+    heads: dict[str, int] = {}
+    kinds: dict[str, int] = {}
+    positions: set[str] = set()
+    rulers: set[str] = set()
+    instruments: set[str] = set()
+    total = 0
+    for path in paths:
+        try:
+            record = json.loads(Path(path).read_text())
+        except Exception:  # noqa: BLE001 - a half-written record is not a row
+            continue
+        total += 1
+        heads[str(record.get("tree_git_head"))] = heads.get(str(record.get("tree_git_head")), 0) + 1
+        kinds[str(record.get("campaign_run_kind"))] = kinds.get(str(record.get("campaign_run_kind")), 0) + 1
+        if record.get("audit_position"):
+            positions.add(str(record["audit_position"]))
+        if record.get("campaign_predicate_mode"):
+            rulers.add(str(record["campaign_predicate_mode"]))
+        instrument = (record.get("exit_audit") or {}).get("instrument") or {}
+        if instrument.get("restores"):
+            instruments.add(str(instrument["restores"]))
+    return {
+        "n_run_records": total,
+        "records_by_commit": dict(sorted(heads.items())),
+        "records_by_run_kind": dict(sorted(kinds.items())),
+        "audit_positions": sorted(positions),
+        "predicate_modes": sorted(rulers),
+        "exit_audit_instrument": sorted(instruments),
+    }
+
+
+def population_marker(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
+    """What every cell is over, measured from the records themselves.
+
+    The commit, the record count, the audit position, the convergence ruler and
+    the exit-audit instrument version, all read from the run records of the
+    tally's published sources rather than written down here.
+    """
+    present = tally_mod.campaign_present(campaign)
+    published = tally_mod.published_sources(campaign)
+    by_source: dict[str, int] = {}
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for source in published:
+        n = 0
+        for directory in tally_mod.source_directories(campaign, source):
+            path = Path(directory) / "metrics.json"
+            if path.exists():
+                n += 1
+                if str(path) not in seen:
+                    seen.add(str(path))
+                    paths.append(path)
+        by_source[source.name] = n
+    gates = _survey(sorted(Path(records_dir).rglob("metrics.json")))
+    return {
+        "verdict_commit": framework.git_head(),
+        "campaign_present": present,
+        "population_family": "campaign" if present else "gate",
+        "published_sources": by_source,
+        **_survey(paths),
+        "gate_runs": gates,
+        "execution_approved": EXECUTION_APPROVED,
+        "generated": _dt.datetime.now().isoformat(timespec="seconds"),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -117,9 +283,9 @@ class PaperTablesError(RuntimeError):
 def with_runs(campaign: Campaign, runs_dir: Path | None) -> Campaign:
     """The campaign reading its run records from *runs_dir*.
 
-    Run records are untracked and move with a retired worktree to
-    ``idf_probe/runs/A<n>_runs/``; this points the read at such a copy.
-    Nothing else of the campaign changes, and nothing is written there.
+    Run records are untracked and a relocated tree holds them elsewhere; this
+    points the read at such a copy.  Nothing else of the campaign changes, and
+    nothing is written there.
     """
     if runs_dir is None:
         return campaign
@@ -150,10 +316,7 @@ def _population(campaign: Campaign, source_name: str, phase: str) -> stats_mod.P
             f"contract; first: {refusals[0]}"
         )
     population = tally_mod.population_for(
-        rows,
-        phase=phase,
-        what=f"{source.name} — {source.what}",
-        campaign_present=present,
+        rows, phase=phase, what=f"{source.name} — {source.what}", campaign_present=present
     )
     population.assert_no_forced_budget()
     return population
@@ -180,19 +343,19 @@ def _mean(values: Sequence[float]) -> float | None:
 
 
 # --------------------------------------------------------------------------
-# the three tables
+# the main-text tables
 # --------------------------------------------------------------------------
 
 
 def phase_a(campaign: Campaign) -> list[dict[str, Any]]:
-    """Module sweeps per evaluation, ``AR A0 A1 A2``, A2 against A0."""
+    """Module sweeps per evaluation, ``AR A0 A1 A2``, on D34's pair per configuration."""
     population = _population(campaign, PHASE_A_SOURCE, tally_a.PHASE)
-    base, arm = PHASE_A_PAIR
     blocks: list[dict[str, Any]] = []
     for config in campaign.configurations:
         by_seed = tally_a._by_arm_and_seed(population, config.name)
         if not by_seed:
             continue
+        base, arm = phase_a_pair(config.pulsed)
         finished = {
             a: {k: r for k, r in rows.items() if stats_mod.finished(r)}
             for a, rows in by_seed.items()
@@ -201,38 +364,16 @@ def phase_a(campaign: Campaign) -> list[dict[str, Any]]:
         groups = tally_a.node_grouping(campaign, config.name, every, phase=tally_a.PHASE)
         sweeps = {
             a: {
-                k: stats_mod.module_sweeps(
-                    stats_mod.per_node_census(r, phase=tally_a.PHASE), groups
-                )
+                k: stats_mod.module_sweeps(stats_mod.per_node_census(r, phase=tally_a.PHASE), groups)
                 for k, r in rows.items()
             }
             for a, rows in finished.items()
         }
-        measured = copy.deepcopy(sweeps)
-        for a, charge in CHARGED_ONCE.items():
-            for k, s in sweeps.get(a, {}).items():
-                value = s.get(stats_mod.ONCE_PER_RUN_GROUP)
-                if value is None:
-                    continue
-                if value != 0:
-                    raise PaperTablesError(
-                        f"{config.name} {a} seed {k}: the post-processing set was "
-                        f"swept {value} times in the measured evaluation; the charge "
-                        f"of one deferred execution presumes 0 and is refused"
-                    )
-                s[stats_mod.ONCE_PER_RUN_GROUP] = charge
         paired = sorted(set(finished.get(base, {})) & set(finished.get(arm, {})))
         rows_out: list[dict[str, Any]] = []
         for label, members in ROWS:
             row: dict[str, Any] = {"row": label, "groups": list(members)}
             for a in tally_a.LADDER:
-                row[f"{a}_measured"] = _mean(
-                    [
-                        v
-                        for s in measured.get(a, {}).values()
-                        if (v := _row_sweeps(s, members, config.name)) is not None
-                    ]
-                )
                 values = [
                     v
                     for k, s in sorted(sweeps.get(a, {}).items())
@@ -248,14 +389,12 @@ def phase_a(campaign: Campaign) -> list[dict[str, Any]]:
                     row[f"{a}_exact"] = int(values[0])
             left = [_row_sweeps(sweeps[base][k], members, config.name) for k in paired]
             right = [_row_sweeps(sweeps[arm][k], members, config.name) for k in paired]
-            if any(v is None for v in left + right):
-                row["summary"] = None
-            else:
-                row["summary"] = _summary(left, right)
+            row["summary"] = None if any(v is None for v in left + right) else _summary(left, right)
             rows_out.append(row)
         blocks.append(
             {
                 "configuration": config.name,
+                "pair": [base, arm],
                 "n_per_arm": {a: len(rows) for a, rows in finished.items()},
                 "n_pairs": len(paired),
                 "groups": {str(g["group"]): list(g["nodes"]) for g in groups},
@@ -289,14 +428,13 @@ def _without_exit_audit(record: Mapping[str, Any]) -> dict[str, int]:
     """Phase B's whole-run census less the exit audit's one sweep.
 
     The exit audit is the harness's accuracy instrument, not part of any
-    architecture (the user, 2026-09-28: *"If it is the experiment harness, it
-    should not add model evaluations"*), and phase A's census already stops
-    before it.  Phase B's ``per_node_counted`` includes it: the audit is one
-    sweep of the complete node set, so it adds exactly 1 to every node.  That
-    premise is checked on the record, never assumed — ``audit_node_calls``
-    must equal the number of nodes counted — and the run is refused otherwise.
-    The output path (MDA_Output in ``BR``/``B0``, the deferred nodes' one
-    execution in ``B2``) is architecture and stays in.
+    architecture (**D36**: excluded from every evaluation count).  Phase B's
+    ``per_node_counted`` includes it: the audit is one sweep of the complete
+    node set, so it adds exactly 1 to every node.  That premise is checked on
+    the record, never assumed — ``audit_node_calls`` must equal the number of
+    nodes counted — and the run is refused otherwise.  The output path
+    (MDA_Output in ``BR``/``B0``, the deferred nodes' one execution in ``B2``)
+    is architecture and stays in.
     """
     counted = stats_mod.per_node_census(record, phase=tally_b.PHASE)
     audit = (record.get("node_census") or {}).get("audit_node_calls")
@@ -352,17 +490,12 @@ def phase_b(campaign: Campaign) -> tuple[list[dict[str, Any]], list[dict[str, An
         records = [r for a in by_arm for _, r in runs_of(a)]
         groups = tally_a.node_grouping(campaign, configuration, records, phase=tally_b.PHASE)
         sweeps = {
-            a: {
-                s: stats_mod.module_sweeps(_without_exit_audit(r), groups)
-                for s, r in runs_of(a)
-            }
+            a: {s: stats_mod.module_sweeps(_without_exit_audit(r), groups) for s, r in runs_of(a)}
             for a in by_arm
         }
         measured = {
             a: {
-                s: stats_mod.module_sweeps(
-                    stats_mod.per_node_census(r, phase=tally_b.PHASE), groups
-                )
+                s: stats_mod.module_sweeps(stats_mod.per_node_census(r, phase=tally_b.PHASE), groups)
                 for s, r in runs_of(a)
             }
             for a in by_arm
@@ -386,9 +519,7 @@ def phase_b(campaign: Campaign) -> tuple[list[dict[str, Any]], list[dict[str, An
                 out[a] = _mean(values)
             left = [_row_sweeps(sweeps[base][s], members, configuration) for s in seeds]
             right = [_row_sweeps(sweeps[arm][s], members, configuration) for s in seeds]
-            out["summary"] = (
-                None if any(v is None for v in left + right) else _summary(left, right)
-            )
+            out["summary"] = None if any(v is None for v in left + right) else _summary(left, right)
             rows_out.append(out)
         modules.append(
             {
@@ -402,127 +533,56 @@ def phase_b(campaign: Campaign) -> tuple[list[dict[str, Any]], list[dict[str, An
     return iterations, modules
 
 
-def optimiser_evaluations(campaign: Campaign) -> list[dict[str, Any]]:
-    """How the optimiser's model evaluations decompose, per configuration and arm.
-
-    From the code, not assumed: every point VMCON evaluates (pyvmcon's
-    ``problem(x)``, PROCESS's ``VmconProblem.__call__``) runs one function
-    evaluation and one central-difference gradient — ``2·nvar`` perturbed
-    evaluations and one reconcile call (``evaluators.fcnvmc2``) — so
-    ``k = 2·nvar + 2`` model evaluations per point.  An iteration evaluates its
-    iterate and, unless it converges, its line-search point(s).  So a run of
-    ``it`` iterations whose every line search accepts its first trial makes
-    ``2·it − 1`` point evaluations and ``ε = (2·it − 1)·k`` model evaluations;
-    each further line-search trial adds one point.  Checked here on every run
-    of the seed set, not assumed.
-
-    The accepted line-search point is the next iterate, and the next iteration
-    evaluates it again (pyvmcon 2.4.2: ``result = problem(x)`` at the loop's
-    head; the line search's result is used only for the Hessian update).  The
-    **re-evaluated** share is ``Σ (it − 1)·k / Σ ε`` — one repeat per line
-    search, and the final iteration has none.  Both are stated over the runs
-    the optimiser solved in **one attempt**: an attempt that failed may have
-    ended at an iteration's head or after its line search, so its point count
-    is not determined by its iteration count, and the retried runs are counted
-    and set aside rather than attributed.
-    """
-    rows: list[dict[str, Any]] = []
-    for configuration, by_arm, converged in _phase_b_groups(campaign):
-        for a in sorted(by_arm, key=lambda x: tally_b.LADDER.index(x) if x in tally_b.LADDER else 99):
-            runs = [
-                by_arm[a][s]
-                for s in converged
-                if s in by_arm[a] and stats_mod.finished(by_arm[a][s])
-            ]
-            nvars = sorted({len((r.get("mfile") or {}).get("itvars") or {}) for r in runs})
-            if len(nvars) != 1 or not nvars[0]:
-                raise PaperTablesError(
-                    f"{configuration} {a}: iteration-variable counts {nvars} over "
-                    f"the seed set; one k per arm is presumed"
-                )
-            k = 2 * nvars[0] + 2
-            exact = extra = divisible = retried = 0
-            repeated = total = 0.0
-            for r in runs:
-                eps = stats_mod.n_evaluations(r)
-                it = stats_mod.iterations_summed_over_attempts(r)
-                attempts = stats_mod.n_attempts(r)
-                if eps is None or it is None or not attempts:
-                    raise PaperTablesError(
-                        f"{stats_mod._label(r)}: evaluations {eps}, iterations "
-                        f"{it}, attempts {attempts}; the decomposition is refused"
-                    )
-                divisible += eps % k == 0
-                if attempts != 1:
-                    retried += 1
-                    continue
-                if eps % k == 0:
-                    trials = eps // k - (2 * it - 1)
-                    exact += trials == 0
-                    extra += max(trials, 0)
-                repeated += (it - 1) * k
-                total += eps
-            rows.append(
-                {
-                    "configuration": configuration,
-                    "arm": a,
-                    "n": len(runs),
-                    "nvar": nvars[0],
-                    "fd_per_gradient": 2 * nvars[0],
-                    "per_point": k,
-                    "divisible": divisible,
-                    "retried": retried,
-                    "exact": exact,
-                    "extra_trials": extra,
-                    "iterations": _mean([stats_mod.iterations_summed_over_attempts(r) for r in runs]),
-                    "evaluations": _mean([stats_mod.n_evaluations(r) for r in runs]),
-                    "fd_share": (2 * nvars[0]) / k,
-                    "repeated_share": repeated / total if total else None,
-                }
-            )
-    return rows
+#: The node map's DSM rows executed in a sweep include the constraint row(s)
+#: of the collapsed DSM, which the paper's "Models" column does not count (the
+#: user, 2026-09-29).  The committed node map does not label rows by kind, so
+#: the constraint rows executed in a sweep are **declared** here rather than
+#: read: **one** at the dependency-analysis pin the node map was generated at
+#: (the single ``Constraints`` row; the sibling study's later split into two
+#: rows postdates the pin and is drift the node map does not carry — the
+#: removed function-counts file's ``known_drift``).  To be replaced by a read
+#: when the node map is regenerated with row kinds; until then this is the one
+#: typed number in the document and the report names it.
+CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP = 1
 
 
-#: The collapsed DSM's rows per configuration (the dependency-analysis
-#: study's exports, imported by ``fixedpoint/gen_function_counts.py``).
-DSM_ROWS_FILE = "dsm_function_counts.json"
-
-#: The constraint rows, not counted among the models (the user, 2026-09-29).
-#: One row in the older exports, two after the dependency-analysis study split
-#: it (its M125, 2026-09-17), which only the tok export postdates.
-CONSTRAINT_ROWS = frozenset({"Constraints", "ConsistencyConstraints", "EngineeringConstraints"})
-
-
-def cases(
-    campaign: Campaign, optimisation: Mapping[str, Mapping[str, Any]]
-) -> list[dict[str, Any]]:
+def cases(campaign: Campaign, optimisation: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
     """How the three configurations differ: objective, design variables,
     constraints, the cross-module coupling (the burn time) and the number of
-    models (the collapsed DSM's model rows, drivers and constraints excluded).
+    models.
 
     The objective, the variable and constraint counts and ``pulsed`` are the
     report's problem-definition table, read from the ``tally_optimisation``
-    stage record and not recomputed.  Derived here: the objective's variable,
-    the field the configuration's committed per-run artifact names as the
-    objective (``seeds.detail.objective``); and the cross-module coupling's
-    variable, the one iteration-variable name every lifted run (``B2``)
-    carries and no flat run (``B0``) does.  Refused where the runs disagree.
+    stage record.  Derived here: the objective's variable (the field the
+    configuration's committed per-run artifact names as the objective) and
+    the cross-module coupling's variable (the one iteration-variable name
+    every lifted run carries and no flat run does), refused where the runs
+    disagree; and the number of models — the committed node map's DSM rows
+    executed in a sweep less :data:`CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP`.
     """
+    import ast  # noqa: PLC0415
+
     table = _stage_table(optimisation, f"problem definition — {PHASE_B_SOURCE}")
     by_config = {r["configuration"]: r for r in table["rows"]}
-    dsm_rows = json.loads((Path(campaign.data_dir) / DSM_ROWS_FILE).read_text())
+    node_map = json.loads((Path(campaign.data_dir) / "dsm_node_map.json").read_text())
+    executed = ((node_map.get("units") or {}).get("dsm_rows") or {}).get("executed_in_a_sweep")
+    if not isinstance(executed, int):
+        raise PaperTablesError("the node map states no units.dsm_rows.executed_in_a_sweep; Models would be guessed")
+    models = executed - CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP
     out: list[dict[str, Any]] = []
     for configuration, by_arm, converged in _phase_b_groups(campaign):
         row = dict(by_config[configuration])
         pulsed = str(row["pulsed"]).startswith("yes")
         lifted: set[str] = set()
         if pulsed:
+
             def names(arm: str) -> set[frozenset[str]]:
                 return {
                     frozenset(((by_arm[arm][s].get("mfile") or {}).get("itvar_names") or {}).values())
                     for s in converged
                     if s in by_arm.get(arm, {}) and stats_mod.finished(by_arm[arm][s])
                 }
+
             flat, partitioned = names(PHASE_B_PAIR[0]), names(PHASE_B_PAIR[1])
             if len(flat) != 1 or len(partitioned) != 1:
                 raise PaperTablesError(
@@ -531,16 +591,13 @@ def cases(
                 )
             lifted = set(next(iter(partitioned)) - next(iter(flat)))
             if len(lifted) != 1:
-                raise PaperTablesError(
-                    f"{configuration}: the lift adds {sorted(lifted)}, not one variable"
-                )
+                raise PaperTablesError(f"{configuration}: the lift adds {sorted(lifted)}, not one variable")
         artifacts = sorted(
             {
                 Path(str(r.get("per_run_artifact"))).name
                 for arm in by_arm
                 for r in by_arm[arm].values()
-                if r.get("per_run_artifact")
-                and not str(r.get("per_run_artifact")).count("lifted")
+                if r.get("per_run_artifact") and not str(r.get("per_run_artifact")).count("lifted")
             }
         )
         if len(artifacts) != 1:
@@ -549,26 +606,165 @@ def cases(
         seeds = ast.literal_eval(seeds) if isinstance(seeds, str) else seeds
         objective_fields = [str(f) for f in seeds["detail"]["objective"]]
         if len(objective_fields) != 1:
-            raise PaperTablesError(
-                f"{configuration}: the objective reads {objective_fields}; one field expected"
-            )
-        # the models: the configuration's rows of the collapsed DSM less the
-        # top-level driver rows and the constraint rows, from the committed
-        # per-configuration counts
-        dsm = (dsm_rows.get("configurations") or {}).get(configuration)
-        if dsm is None:
-            raise PaperTablesError(
-                f"{configuration}: {DSM_ROWS_FILE} has no DSM rows for it; the number "
-                f"of models would be guessed"
-            )
-        row["models"] = sum(
-            1 for r in dsm["rows"] if r["kind"] == "model" and r["model"] not in CONSTRAINT_ROWS
-        )
+            raise PaperTablesError(f"{configuration}: the objective reads {objective_fields}; one field expected")
+        row["models"] = models
         row["objective_variable"] = objective_fields[0].split(".")[-1]
         row["lifted_variable"] = next(iter(lifted)) if lifted else None
         row["pulsed_bool"] = pulsed
         out.append(row)
     return out
+
+
+# --------------------------------------------------------------------------
+# the appendix tables
+# --------------------------------------------------------------------------
+
+
+#: The wall-clock tables of plan §6, declared with their rows and captions and
+#: no cell: the instrument is item 9's (driver change DR12), a later driver
+#: task, and a placeholder that printed a number would be a number nobody
+#: measured.  ``ms/eval`` and ``s/opt`` are the plan's units.
+WALL_CLOCK_TABLES: tuple[dict[str, Any], ...] = (
+    {
+        "key": "wall_phase_a",
+        "title": "phase A in wall clock, ms per evaluation",
+        "arms": tally_a.LADDER,
+        "rows": (
+            "M1", "M2", "M3", "Feedforward", "Post-processing",
+            "MDA convergence test", "dispatch", "objective and constraints",
+            "unattributed residual", "Total",
+        ),
+        "caption": (
+            "Per configuration, arms as columns, ms per `call_models` evaluation: each module's "
+            "own model time, the block loops' convergence test (read plus residual) and dispatch "
+            "(the sweep body less its nodes and its test), the objective-and-constraints layer, "
+            "the unattributed residual, and the evaluation's measured wall as Total; ratio of "
+            "means and per-run median with [min, max] as the count tables. Harness-only costs — "
+            "the exit-audit sweep, the state snapshots, the census hooks, the record assembly — "
+            "are excluded from every cell (plan §6). Context, never evidence (D33)."
+        ),
+    },
+    {
+        "key": "wall_phase_b",
+        "title": "phase B in wall clock, s per optimisation",
+        "arms": tally_b.LADDER,
+        "rows": (
+            "M1", "M2", "M3", "Feedforward", "Post-processing",
+            "MDA convergence test", "dispatch", "objective and constraints",
+            "optimiser own time", "fixed per run", "unattributed residual", "Total",
+        ),
+        "caption": (
+            "As the phase A table, per whole optimisation in seconds, with the optimiser's own "
+            "time (solve-phase wall less every evaluation) and the fixed per-run term (process "
+            "start, imports, numba cache load, input parse, output writing, the once-per-run "
+            "schedule derivation); Total is the run's wall less the harness-only costs (plan §6)."
+        ),
+    },
+    {
+        "key": "cost_breakdown",
+        "title": "cost breakdown, phase B",
+        "arms": ("s per optimisation", "ms per evaluation", "share of total"),
+        "rows": (
+            "model evaluation (the modules summed)",
+            "MDA overhead per sweep: convergence test",
+            "MDA overhead per sweep: dispatch",
+            "optimiser overhead per iteration",
+            "fixed per run",
+            "Total",
+        ),
+        "caption": (
+            "Per configuration and arm: seconds per optimisation and ms per evaluation with the "
+            "share of the total. Whether the architecture changes the overhead is read off the "
+            "B0 and B2 columns of the per-sweep rows, normalised per evaluation (plan §6)."
+        ),
+    },
+)
+
+WALL_CLOCK_NOT_MEASURED = (
+    "**Not measured in this revision.** The wall-clock instrument of plan §6 (list item 9, "
+    "driver change DR12: observation-only timers per node, block loop, evaluation and run) "
+    "is a later driver task; the grid below is the declared table with every cell empty, "
+    "so that the shape is fixed before the numbers exist and no number is typed in."
+)
+
+
+def per_arm_success(optimisation: Mapping[str, Mapping[str, Any]], campaign: Campaign) -> list[dict[str, Any]]:
+    """The per-arm success table (plan §5 B5), read from the stage record.
+
+    One block per configuration: the ``per-arm success`` table the
+    optimisation tally emits — accepted optima of the starts offered, the
+    other starts by outcome class, the seed set and the starts lost to one
+    arm alone.  Reported, no expectation (item 3 as reduced).
+    """
+    blocks = []
+    for config in campaign.configurations:
+        found = [t for name, t in optimisation.items() if name.startswith(f"per-arm success — {config.name} — {PHASE_B_SOURCE}")]
+        if not found:
+            continue
+        table = found[0]
+        blocks.append({"configuration": config.name, "columns": [c["key"] for c in table["columns"]], "rows": list(table["rows"])})
+    return blocks
+
+
+#: The one verification table (plan §8): one row per check, in the plan's
+#: order.  ``gate`` names the registry entry whose verdict the row reads
+#: through the ``gate_table`` stage record; ``None`` marks a check that is not
+#: a gate, whose cell is stated by :func:`verification` from the tally's
+#: records where a construction exists and "not pressed" otherwise.
+VERIFICATION_ROWS: tuple[tuple[str, str, str | None], ...] = (
+    ("physics frozen", "G0", "g0prime"),
+    ("switch neutrality", "G1", "switch_neutrality"),
+    ("matched accuracy — whole-state audit at 0 components above τ", "A1", None),
+    ("fixed-point distance between arms", "A2", None),
+    ("same optimum, attributed where it fails", "B1", None),
+    ("entry pairing", "G6", "entry_and_warm"),
+    ("arm composition", "G5", "switch_composition"),
+    ("output-path equivalence", "G9", "output_path"),
+    ("the test set's teeth", "GT", "test_set"),
+)
+
+
+def verification(records_dir: Path, optimisation: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """The verification table's rows, every gate verdict read from the
+    ``gate_table`` stage record after :func:`assert_gate_table_current`."""
+    current = assert_gate_table_current(records_dir)
+    table = stage_record(records_dir, GATE_TABLE_SECTION.stage)
+    by_gate = {row["gate"]: row for row in table.get("rows") or []}
+    rows: list[dict[str, Any]] = []
+    for check, label, gate in VERIFICATION_ROWS:
+        row: dict[str, Any] = {"check": check, "label": label, "gate": gate}
+        if gate is not None:
+            found = by_gate.get(gate)
+            if found is None:
+                row.update(verdict="not pressed", detail=f"`{gate}` is not in the gate table")
+            elif found.get("verdict") == "NOT RUN":
+                row.update(verdict="not pressed", detail=f"`{gate}` has no verdict record")
+            else:
+                teeth = f"{found.get('n_teeth_tripped')}/{found.get('n_teeth')} teeth"
+                compared = found.get("n_compared")
+                mismatched = found.get("n_mismatched")
+                counts = f"{mismatched} of {compared} mismatched" if compared is not None else str(found.get("population") or "")[:80]
+                head = str(found.get("tree_git_head") or "")[:8]
+                row.update(verdict=str(found.get("verdict")), detail=f"`{gate}` at `{head}`: {counts}; {teeth}")
+        elif label == "B1":
+            verdicts = []
+            for name, t in optimisation.items():
+                if not name.startswith("same optimum"):
+                    continue
+                configuration = name.split(" — ")[1]
+                for r in t["rows"]:
+                    if str(r.get("verdict")) in ("PASS", "FAIL"):
+                        verdicts.append(f"`{SHORT.get(configuration, configuration)}` {r['pair']}: {r['verdict']}")
+            if verdicts:
+                row.update(verdict="see detail", detail="; ".join(verdicts) + " (V4's check 1 construction; V5's attribution rule is item 4's, pending)")
+            else:
+                row.update(verdict="not pressed", detail="no same-optimum table in the stage record")
+        elif label == "A2":
+            row.update(verdict="reported, no rule", detail="the tally's fixed-point distance table (plan §5 A2)")
+        else:
+            row.update(verdict="not pressed", detail="V5's whole-state rule (D36) is not yet a tally construction; item 5's driver change first")
+        rows.append(row)
+    return {"rows": rows, "records_read": current}
 
 
 # --------------------------------------------------------------------------
@@ -586,9 +782,7 @@ def _stage_tables(records_dir: Path, stage: str) -> dict[str, Mapping[str, Any]]
 def _stage_table(tables: Mapping[str, Mapping[str, Any]], prefix: str) -> Mapping[str, Any]:
     found = [t for name, t in tables.items() if name.startswith(prefix)]
     if len(found) != 1:
-        raise PaperTablesError(
-            f"{len(found)} stage table(s) named {prefix!r}…; expected exactly one"
-        )
+        raise PaperTablesError(f"{len(found)} stage table(s) named {prefix!r}…; expected exactly one")
     return found[0]
 
 
@@ -599,13 +793,15 @@ def cross_check(
 ) -> dict[str, Any]:
     """Every cell the stage records also hold, compared exactly.
 
-    Phase A: each single-group row's per-arm mean against the report's
-    Table 9 (``module sweeps per run — <configuration> — campaign_displaced``)
-    — its ratio is against ``A1`` on a pulsed configuration and is compared
-    only where the stage's reference is ``A0``.  Phase B: the iteration row's
-    arm means, pooled ratio, median, bracket and n against Table 12; each
-    single-group module row's arm means, pooled ratio, median, bracket and
-    pair count against Table 17.  Floats are compared with ``==``.
+    Phase A: each single-group row's per-arm mean against the tally's module
+    sweeps table (``module sweeps per run — <configuration> —
+    campaign_displaced``), and — since D34's pair is the tally's own reference
+    (`A1` on a pulsed configuration, `A0` on `st`) — the pooled ratio and the
+    pair count too, where the stage's reference is the pair's base.  Phase B:
+    the iteration row's arm means, pooled ratio, median, bracket and n against
+    the optimiser's path table; each single-group module row's arm means
+    (before the exit audit is taken out) and pair count against the module
+    sweeps table.  Floats are compared with ``==``.
     """
     compared = 0
     mismatches: list[str] = []
@@ -626,16 +822,13 @@ def cross_check(
                 continue
             theirs = stage_rows[present[0]]
             for a in tally_a.LADDER:
-                same(f"A {c} {row['row']} {a} mean", row[f"{a}_measured"], theirs.get(f"{a}_mean"))
-            charged = stats_mod.ONCE_PER_RUN_GROUP in row["groups"]
-            if theirs.get("reference") == PHASE_A_PAIR[0] and row["summary"] and not charged:
+                same(f"A {c} {row['row']} {a} mean", row[a], theirs.get(f"{a}_mean"))
+            if theirs.get("reference") == block["pair"][0] and row["summary"]:
                 same(f"A {c} {row['row']} pooled", row["summary"]["pooled"], theirs.get("ratio"))
                 same(f"A {c} {row['row']} pairs", row["summary"]["n"] + row["summary"]["n_dropped"], theirs.get("n_pairs"))
 
     path = _stage_table(optimisation, f"the optimiser's path over the configurations — {PHASE_B_SOURCE}")
-    by_config = {
-        r["configuration"]: r for r in path["rows"] if r["quantity"] == ITERATIONS_LABEL
-    }
+    by_config = {r["configuration"]: r for r in path["rows"] if r["quantity"] == ITERATIONS_LABEL}
     for row in built["phase_b_iterations"]:
         c = row["configuration"]
         theirs = by_config.get(c)
@@ -652,9 +845,7 @@ def cross_check(
 
     for block in built["phase_b_modules"]:
         c = block["configuration"]
-        table = _stage_table(
-            optimisation, f"module sweeps per run — {c} — {PHASE_B_SOURCE} ·"
-        )
+        table = _stage_table(optimisation, f"module sweeps per run — {c} — {PHASE_B_SOURCE} ·")
         stage_rows = {r["module"]: r for r in table["rows"]}
         for row in block["rows"]:
             present = [g for g in row["groups"] if g in stage_rows]
@@ -674,7 +865,7 @@ def _cross_check_tooth(
 ) -> bool:
     """True if the comparison catches one altered cell on each side it reads."""
     bites = []
-    for phase, key in (("phase_a", "A2_measured"), ("phase_b_iterations", "B2"), ("phase_b_modules", "B2_measured")):
+    for phase, key in (("phase_a", "A2"), ("phase_b_iterations", "B2"), ("phase_b_modules", "B2_measured")):
         doctored = copy.deepcopy(dict(built))
         target = doctored[phase][0]
         target = target["rows"][0] if "rows" in target else target
@@ -690,52 +881,26 @@ def _cross_check_tooth(
 
 #: The rounding, one rule per table (the user, 2026-09-28), set by the size of
 #: each quantity's sampling uncertainty over the campaign's starts — the counts
-#: themselves are exact.  Standard errors from the records: phase A sweep means
-#: 0.07–0.10; phase B iterations 0.1 on tok, 4–10 elsewhere; phase B module
-#: sweeps 20–40 on tok, 500–2700 elsewhere; pooled ratios 0.01–0.25.  So phase A
-#: means and iterations to one decimal, every ratio, median and bracket to two
-#: decimals.  Phase B module sweeps are printed as integers (the user,
-#: 2026-09-28: *"It is too complicated. just round to integers"*) — more digits
-#: than their uncertainty supports, but none of them a false zero.  The comparison with
-#: the stage records reads the raw values.
+#: themselves are exact: phase A means and iterations to one decimal, every
+#: ratio, median and bracket to two decimals, phase B module sweeps as integers
+#: (the user: *"just round to integers"*).  The comparison with the stage
+#: records reads the raw values.
 RATIO_DECIMALS = 2
 MEAN_DECIMALS = 1
-SWEEP_FIGURES = 2
 
 
 def decimals(value: Any, places: int) -> str:
-    """*value* to *places* decimals: ``0.7246 → 0.72``, ``5.52 → 5.5``."""
     if value is None:
         return "—"
     return f"{float(value):.{places}f}"
 
 
-def figures(value: Any, significant: int = SWEEP_FIGURES) -> str:
-    """*value* to *significant* figures, never scientific notation, trailing
-    zeros kept: ``1977.23 → 2000``, ``640 → 640``, ``1 → 1.0``, ``0 → 0``."""
-    if value is None:
-        return "—"
-    number = float(value)
-    if number == 0:
-        return "0"
-    exponent = math.floor(math.log10(abs(number)))
-    rounded = round(number, significant - 1 - exponent)
-    # rounding can carry into the next decade (0.996 → 1.0)
-    exponent = math.floor(math.log10(abs(rounded)))
-    return f"{rounded:.{max(0, significant - 1 - exponent)}f}"
-
-
 def sig(value: Any) -> str:
-    """A ratio, median or bracket end: :data:`RATIO_DECIMALS` decimals."""
     return decimals(value, RATIO_DECIMALS)
 
 
 def mean_1dp(value: Any) -> str:
     return decimals(value, MEAN_DECIMALS)
-
-
-def _ratio(value: Any) -> str:
-    return sig(value)
 
 
 def _stage_bracket(s: Mapping[str, Any] | None) -> str:
@@ -765,44 +930,33 @@ def _n_text(n_per_arm: Mapping[str, int]) -> str:
 
 
 def _tex(text: str) -> str:
-    return text.replace("—", "--")
+    return text.replace("—", "--").replace("→", "$\\rightarrow$")
 
 
 def _module_lines(
-    blocks: Sequence[Mapping[str, Any]], ladder: Sequence[str], pair: tuple[str, str], n_of, mean,
-
+    blocks: Sequence[Mapping[str, Any]], ladder: Sequence[str], pair_of, n_of, mean
 ) -> tuple[list[str], list[str]]:
-    ratio_head = f"{pair[1]}/{pair[0]}"
-    arm_heads = list(ladder)
     md: list[str] = []
     tex: list[str] = []
     for block in blocks:
         c = block["configuration"]
+        base, arm = pair_of(block)
+        ratio_head = f"{arm}/{base}"
         md += [
-            f"**`{SHORT.get(c, c)}`** ({c}, n = {n_of(block)})",
+            f"**`{SHORT.get(c, c)}`** ({c}, n = {n_of(block)}; pair {base} → {arm})",
             "",
-            f"| Module | {' | '.join(arm_heads)} | {ratio_head} | {ratio_head} med [min, max] |",
+            f"| Module | {' | '.join(ladder)} | {ratio_head} | {ratio_head} med [min, max] |",
             "|---|" + "---:|" * len(ladder) + "---:|---:|",
         ]
         tex += [
-            f"\\multicolumn{{{len(ladder) + 3}}}{{l}}{{\\texttt{{{SHORT.get(c, c)}}} ($n = {n_of(block)}$)}} \\\\",
+            f"\\multicolumn{{{len(ladder) + 3}}}{{l}}{{\\texttt{{{SHORT.get(c, c)}}} ($n = {n_of(block)}$, {ratio_head})}} \\\\",
             "\\hline",
         ]
         for row in block["rows"]:
-            cells = [
-                str(row[f"{a}_exact"]) if f"{a}_exact" in row else mean(row[a]) for a in ladder
-            ]
-            tex_cells = cells
+            cells = [str(row[f"{a}_exact"]) if f"{a}_exact" in row else mean(row[a]) for a in ladder]
             s = row["summary"]
-            md_label = tex_label = row["row"]
-            md.append(
-                f"| {md_label} | {' | '.join(cells)} | {_ratio(s and s['pooled'])} | {_median_bracket(s)} |"
-            )
-            tex.append(
-                _tex(
-                    f"{tex_label:<15} & {' & '.join(tex_cells)} & {_ratio(s and s['pooled'])} & {_median_bracket(s)} \\\\"
-                )
-            )
+            md.append(f"| {row['row']} | {' | '.join(cells)} | {sig(s and s['pooled'])} | {_median_bracket(s)} |")
+            tex.append(_tex(f"{row['row']:<15} & {' & '.join(cells)} & {sig(s and s['pooled'])} & {_median_bracket(s)} \\\\"))
         tex.append("\\hline")
         md.append("")
     return md, tex
@@ -832,18 +986,15 @@ def _case_lines(rows: Sequence[Mapping[str, Any]], *, md: bool) -> list[str]:
         c = r["configuration"]
         short = SHORT.get(c, c)
         name = f"{FULL.get(c, c)} (`{short}`)" if md else f"{FULL.get(c, c)} (\\texttt{{{short}}})"
+
         def code(name: str) -> str:
             return f"`{name}`" if md else f"\\texttt{{{name.replace('_', '\\_')}}}"
 
-        # the name without its symbol ("Plasma major radius (R₀)" → "plasma major
-        # radius"): the variable name beside it is the precise statement
         name_of = str(r["objective"]).split(" (")[0]
-        # "major radius" alone: the tokamak's only major radius is the plasma's (the user)
         name_of = OBJECTIVE_SHORTER.get(name_of, name_of)
         sense = {"minimise": "min.", "maximise": "max."}[str(r["sense"])]
         objective = f"{sense} {name_of[:1].lower()}{name_of[1:]} ({code(r['objective_variable'])})"
         variables = f"{r['nvar']} → {r['nvar_lifted']}" if r["nvar"] != r["nvar_lifted"] else str(r["nvar"])
-        # the total alone: the stage cell reads "total (eq / ineq)"
         total, total_lifted = (int(str(r[k]).split()[0]) for k in ("constraints", "constraints_lifted"))
         constraints = f"{total} → {total_lifted}" if total != total_lifted else str(total)
         coupling = code(r["lifted_variable"]) if r["pulsed_bool"] else "none (steady state)"
@@ -856,115 +1007,137 @@ def _case_lines(rows: Sequence[Mapping[str, Any]], *, md: bool) -> list[str]:
     return out
 
 
-def _tabular(kind: str, rows: Sequence[str]) -> list[str]:
-    """The rows inside the paper's ``tabular``, with its column spec and header.
-
-    The column specs are the paper's own (``3 results.tex``); the phase B
-    module header carries the ×10² unit its cells are printed in.
-    """
+def _tabular(kind: str, rows: Sequence[str], *, ratio_head: str = "") -> list[str]:
+    """The rows inside the paper's ``tabular``, with its column spec and header
+    (the column specs are the paper's own, ``3 results.tex``)."""
     spec, header = {
-        "A": ("l|rrrr|rc", "Module & AR & A0 & A1 & A2 & A2/A0 & A2/A0 med [min, max]"),
-        "I": (
-            "l|rrrr|rc",
-            "Configuration & BR & B0 & B1 & B2 & B2/B0 & B2/B0 med [min, max]",
-        ),
-        "B": (
-            "l|cccc|cc",
-            "Module & BR & B0 & B1 & B2 & B2/B0 & B2/B0 med [min, max]",
-        ),
+        "A": ("l|rrrr|rc", f"Module & AR & A0 & A1 & A2 & {ratio_head} & {ratio_head} med [min, max]"),
+        "I": ("l|rrrr|rc", "Configuration & BR & B0 & B1 & B2 & B2/B0 & B2/B0 med [min, max]"),
+        "B": ("l|cccc|cc", "Module & BR & B0 & B1 & B2 & B2/B0 & B2/B0 med [min, max]"),
     }[kind]
     body = list(rows)
     if kind == "I":
         body = [*body, "\\hline"]
-    return [
-        f"\\begin{{tabular}}{{{spec}}}",
-        "\\hline",
-        f"{header} \\\\",
-        "\\hline",
-        *body,
-        "\\end{tabular}",
-    ]
+    return [f"\\begin{{tabular}}{{{spec}}}", "\\hline", f"{header} \\\\", "\\hline", *body, "\\end{tabular}"]
+
+
+def switch_matrix_lines() -> tuple[list[str], list[str]]:
+    """The switch matrix, from the same data every arm is composed from."""
+    order = list(arms_mod.MATRIX_ORDER)
+    md = [f"| | {' | '.join(f'**{a}**' for a in order)} |", "|---|" + "---|" * len(order)]
+    tex = [f"\\begin{{tabular}}{{l|{'c' * len(order)}}}", "\\hline", " & " + " & ".join(order) + " \\\\", "\\hline"]
+    for row, cells in arms_mod.matrix().items():
+        md.append(f"| {row} | {' | '.join(str(c) for c in cells)} |")
+        tex.append(_tex(f"{row} & " + " & ".join(str(c).replace('✓', '$\\checkmark$').replace('τ', '$\\tau$') for c in cells) + " \\\\"))
+    tex += ["\\hline", "\\end{tabular}"]
+    return md, tex
+
+
+def _empty_grid(spec: Mapping[str, Any], configurations: Sequence[str]) -> list[str]:
+    arms = list(spec["arms"])
+    lines = []
+    for c in configurations:
+        lines += [
+            f"**`{SHORT.get(c, c)}`** ({c}, n = —)",
+            "",
+            f"| Row | {' | '.join(arms)} |" + (" ratio | med [min, max] |" if spec["key"] != "cost_breakdown" else ""),
+            "|---|" + "---:|" * len(arms) + ("---:|---:|" if spec["key"] != "cost_breakdown" else ""),
+        ]
+        for row in spec["rows"]:
+            lines.append(f"| {row} | {' | '.join('' for _ in arms)} |" + (" | |" if spec["key"] != "cost_breakdown" else ""))
+        lines.append("")
+    return lines
 
 
 def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
-    """The page, and the comparison it was written under."""
+    """The page, and the comparisons it was written under."""
     a = phase_a(campaign)
     iterations, modules = phase_b(campaign)
     built = {"phase_a": a, "phase_b_iterations": iterations, "phase_b_modules": modules}
     evaluation = _stage_tables(records_dir, "tally_evaluation")
-    case_rows = cases(campaign, _stage_tables(records_dir, "tally_optimisation"))
     optimisation = _stage_tables(records_dir, "tally_optimisation")
+    case_rows = cases(campaign, optimisation)
+    success = per_arm_success(optimisation, campaign)
+    verified = verification(records_dir, optimisation)
     check = cross_check(built, evaluation, optimisation)
     tooth = _cross_check_tooth(built, evaluation, optimisation)
-
-    from harness.measurement import plan_tables as plan_tables_mod  # noqa: PLC0415
-
-    marker = plan_tables_mod.population_marker(campaign, records_dir)
+    marker = population_marker(campaign, records_dir)
     commits = ", ".join(f"`{h[:8]}`" for h in marker["records_by_commit"]) or "—"
+    configurations = [c.name for c in campaign.configurations]
 
     lines = [
         "# Paper tables — Case 2: PROCESS",
         "",
         "> **Document status** — **GENERATED, never hand-edited.** Written whole by "
         "`harness/measurement/paper_tables.py` (`experiment_runner.py --paper-tables write`) "
-        "from the campaign's run records, and compared whole by `--paper-tables check`. "
-        "It fills the three tables of `Structuring-fusion-MDAO-with-DSMs/3 results.tex` "
-        "(`tab:phaseA_results`, `tab:phaseB_iterations`, `tab:phaseB_results`); each table "
-        "is given as a Markdown grid and as LaTeX rows for the paper's `tabular` body.",
+        "from the campaign's run records and the stage records, and compared whole by "
+        "`--paper-tables check`, which refuses when this file and the records disagree. "
+        "The one document of V5 list item 10: the main-text tables of "
+        "`Structuring-fusion-MDAO-with-DSMs/3 results.tex` and the appendix tables of the V5 "
+        "plan §8; each table is a Markdown grid and, where the paper prints it, LaTeX rows for "
+        "the paper's `tabular` body.",
         "",
         f"*Over the **campaign** population — {marker['n_run_records']} run records at "
-        f"{commits}; sources `{PHASE_A_SOURCE}` (phase A) and `{PHASE_B_SOURCE}` (phase B).*",
+        f"{commits}; sources `{PHASE_A_SOURCE}` (phase A) and `{PHASE_B_SOURCE}` (phase B); "
+        f"the exit audit at position(s) {', '.join(f'`{p}`' for p in marker['audit_positions'])} "
+        f"on the ruler(s) {', '.join(f'`{r}`' for r in marker['predicate_modes'])}.*",
         "",
-        "**Conventions (the user, 2026-09-28).** A module cell is that module's **sweeps per "
-        "run** — per `call_models` evaluation in phase A, per whole optimisation in phase B — "
-        "averaged over the arm's n perturbed runs. Every model node of a module runs once per "
-        "sweep, so a sweep ratio does not depend on whether one counts model calls or DSM rows. "
-        "The ratio column is the **ratio of the means** (Σ intervened / Σ control over the "
-        "paired runs); the next column is the per-run ratio's median with its [min, max]. "
-        "**Feedforward** is the pulse node (run once per evaluation after M3, no iteration); "
-        "**Post-processing** is the once-per-run set — nodes no objective or constraint "
-        "depends on, which the partitioned arm runs once, after convergence, in the output "
-        "pass. **Phase A charges `A2` that one execution** (1 in its Post-processing "
-        "cell): the flat arms' final sweep already computes those outputs at the converged "
-        "state, and without it `A2`'s evaluation would not produce the same information. "
-        "The charge is by construction — phase A's census stops before the output pass, and "
-        "`A2`'s measured count there is 0 on every run, which is checked; phase B's census "
-        "measures the pass (`B2`'s Post-processing reads 1 per run once the exit audit is "
-        "taken out). "
-        "There is **no total row**: sweeps of different modules do not add. "
-        "Rounding follows each quantity's sampling uncertainty over the starts (the counts "
-        "themselves are exact): phase A sweep means and phase B iteration means to one "
-        "decimal, phase B module sweeps to integers, every ratio, median and bracket to two "
-        "decimals; `A2`'s phase A Feedforward and Post-processing cells are the integer 1 "
-        "every run reads (checked), not a mean. `med` in a column head is the median. "
-        "`—` is a group that does not exist on the configuration or an arm that is inactive "
-        "there (`A1`/`B1` on `st`).",
+        "**Conventions.** A module cell is that module's **sweeps per run** — per `call_models` "
+        "evaluation in phase A, per whole optimisation in phase B — averaged over the arm's n "
+        "runs. Every model node of a module runs once per sweep, so a sweep ratio does not depend "
+        "on whether one counts model calls or DSM rows. The ratio column is the **ratio of the "
+        "means** (Σ intervened / Σ control over the paired runs); the next column is the per-run "
+        "ratio's median with its [min, max]. **The phase A pair is `A2/A1` on the pulsed "
+        "configurations and `A2/A0` on `st` (D34)**: the comparison at matched accuracy and the "
+        "same fixed point; phase B's is `B2/B0`. **Feedforward** is the pulse node and the "
+        "feed-forward tail (run once per evaluation after M3, no iteration); **Post-processing** "
+        "is the once-per-run set — nodes no objective or constraint depends on, which the "
+        "partitioned arm defers. **`A2`'s Post-processing cell is measured, not charged**: V4 "
+        "charged it 1 by construction (`CHARGED_ONCE`, retired); V5's plan (§2, list item 5) has "
+        "the run execute the deferred set once after convergence and the census count it. Until "
+        "item 5's driver change lands the cell reads what the records measure — 0 — and is not "
+        "the paper's cell. There is **no total row**: sweeps of different modules do not add. "
+        "Rounding: phase A sweep means and phase B iteration means to one decimal, phase B module "
+        "sweeps to integers, every ratio, median and bracket to two decimals; `A2`'s phase A "
+        "Feedforward and Post-processing cells are the one integer every run reads (checked). "
+        "`—` is a group that does not exist on the configuration or an arm inactive there "
+        "(`A1`/`B1` on `st`).",
         "",
-        "Node groups per configuration (phase A; phase B's are restated in its section "
-        "only where they differ):",
+        "Node groups per configuration (phase A; phase B's are restated in its section only where "
+        "they differ):",
         "",
         *_groups_note(a),
         "",
-        f"**Comparison with the stage records.** {check['compared']} cells these tables share "
-        f"with the report's Tables 9, 12 and 17 (the stage records under the records "
-        f"directory) compared exactly — `A2`'s phase A Post-processing mean before the charge "
-        f"and phase B's module means before the exit audit is taken out; phase B's module "
-        f"ratios have no stage counterpart once it is: **{check['mismatched']} mismatched of "
-        f"{check['compared']}**; the comparison caught a doctored cell on each of the three "
-        f"sides: **{'yes' if tooth else 'NO'}**. The phase A ratio against `A0` and its "
-        f"per-run distribution have no stage counterpart on the pulsed configurations (the "
-        f"report's reference there is `A1`).",
+        f"**Comparison with the stage records.** {check['compared']} cells these tables share with "
+        f"the tally's stage records compared exactly — phase A's per-arm means and, on D34's pair "
+        f"(the tally's own reference), its pooled ratios and pair counts; phase B's iteration "
+        f"cells and its module means before the exit audit is taken out: "
+        f"**{check['mismatched']} mismatched of {check['compared']}**; the comparison caught a "
+        f"doctored cell on each of the three sides: **{'yes' if tooth else 'NO'}**.",
         "",
-        "## Table — how the three configurations differ",
+        "## Main text",
         "",
-        "One row per configuration. Objective, design variables and constraints are the "
-        "report's problem-definition table (the runs' own stamps); `a → b` is the flat arms "
-        "(`BR`, `B0`) → the arms with the burn time taken out of the MDA (`B1`, `B2`), which add "
-        "the burn time as an iteration variable and its consistency constraint. The objective's "
-        "variable and the cross-module coupling's variable are derived from the committed "
-        "per-run artifact and the runs. Models is the number of model rows of the "
-        "configuration's collapsed DSM, its top-level driver rows and its constraint "
-        "rows excluded (`harness/data/dsm_function_counts.json`).",
+        "### Table — the switch matrix",
+        "",
+        "One column per arm, one row per switch, from `harness/experiment/arms.py`'s matrix — the "
+        "data every arm is composed from, printed rather than transcribed. `⁺`-marked rows are "
+        "pulsed configurations only; on `st` the arms `A1`/`B1` compose to `A0`/`B0`.",
+        "",
+    ]
+    md, tex = switch_matrix_lines()
+    lines += md + ["", "```latex", *tex, "```", ""]
+
+    lines += [
+        "### Table — how the three configurations differ",
+        "",
+        "One row per configuration. Objective, design variables and constraints are the tally's "
+        "problem-definition table (the runs' own stamps); `a → b` is the flat arms (`BR`, `B0`) → "
+        "the arms with the burn time taken out of the MDA (`B1`, `B2`), which add the burn time as "
+        "an iteration variable and its consistency constraint. The objective's variable and the "
+        "cross-module coupling's variable are derived from the committed per-run artifact and the "
+        "runs. Models is the committed node map's collapsed-DSM rows executed in a sweep "
+        f"(`units.dsm_rows.executed_in_a_sweep`) less the {CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP} "
+        "constraint row, declared in the generator (`CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP`).",
         "",
         "| Configuration | Models | Objective | Design var. | Constraints | Cross-module coupling |",
         "|---|---:|---|---:|---:|---|",
@@ -980,21 +1153,21 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "\\end{tabular}",
         "```",
         "",
-        "## Table `tab:phaseA_results` — phase A, module sweeps per evaluation",
+        "### Table `tab:phaseA_results` — phase A, module sweeps per evaluation",
         "",
-        "Mean sweeps of each module in one `call_models` evaluation over the n displaced-entry "
-        "runs per arm; `A2/A0` is the ratio of the means over the runs both arms finished.",
+        "Mean sweeps of each module in one `call_models` evaluation over the n displaced-entry runs "
+        "per arm; the ratio is of the means over the runs both arms of the pair finished — "
+        "`A2/A1` on the pulsed configurations, `A2/A0` on `st` (D34).",
         "",
     ]
-    md, tex = _module_lines(a, tally_a.LADDER, PHASE_A_PAIR, lambda b: _n_text(b["n_per_arm"]), mean_1dp)
-    lines += md + ["```latex", *_tabular("A", tex), "```", ""]
+    md, tex = _module_lines(a, tally_a.LADDER, lambda b: tuple(b["pair"]), lambda b: _n_text(b["n_per_arm"]), mean_1dp)
+    lines += md + ["```latex", *_tabular("A", tex, ratio_head="A2/A1 (A2/A0 on st)"), "```", ""]
 
     lines += [
-        "## Table `tab:phaseB_iterations` — phase B, optimiser iterations",
+        "### Table `tab:phaseB_iterations` — phase B, optimiser iterations",
         "",
-        "Mean optimiser iterations per run, summed over the optimiser's retry attempts, over "
-        "the n seeds on which every arm reached an accepted optimum; `B2/B0` is the ratio of "
-        "the means. The same statistic as the report's Table 12.",
+        "Mean optimiser iterations per run, summed over the optimiser's retry attempts, over the n "
+        "seeds on which every arm reached an accepted optimum; `B2/B0` is the ratio of the means.",
         "",
         "| Configuration | n | BR | B0 | B1 | B2 | B2/B0 | B2/B0 med [min, max] |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
@@ -1004,73 +1177,66 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         c = row["configuration"]
         cells = [mean_1dp(row[x]) for x in tally_b.LADDER]
         s = row["summary"]
-        lines.append(
-            f"| `{SHORT.get(c, c)}` | {row['n']} | {' | '.join(cells)} | {_ratio(s['pooled'])} | {_median_bracket(s)} |"
-        )
-        tex.append(
-            _tex(
-                f"\\texttt{{{SHORT.get(c, c)}}} ($n = {row['n']}$) & {' & '.join(cells)} & "
-                f"{_ratio(s['pooled'])} & {_median_bracket(s)} \\\\"
-            )
-        )
+        lines.append(f"| `{SHORT.get(c, c)}` | {row['n']} | {' | '.join(cells)} | {sig(s['pooled'])} | {_median_bracket(s)} |")
+        tex.append(_tex(f"\\texttt{{{SHORT.get(c, c)}}} ($n = {row['n']}$) & {' & '.join(cells)} & {sig(s['pooled'])} & {_median_bracket(s)} \\\\"))
     lines += ["", "```latex", *_tabular("I", tex), "```", ""]
 
     lines += [
-        "## Table `tab:phaseB_results` — phase B, module sweeps per optimisation",
+        "### Table `tab:phaseB_results` — phase B, module sweeps per optimisation",
         "",
-        "Mean sweeps of each module over one whole optimisation, rounded to integers (more "
-        "digits than the seed-to-seed uncertainty supports). Every attempt and the output "
-        "path, which is architecture (MDA_Output's sweeps in `BR`/`B0`, none in `B1`, the "
-        "deferred nodes' one execution in `B2`). The exit audit's one sweep of every node is "
-        "the harness's accuracy instrument and is **subtracted** (1 per node, checked on each "
-        "run against the record's `audit_node_calls`); the report's Table 17 includes it. "
-        "Over the n seeds on which every arm reached an accepted optimum; "
-        "`B2/B0` is the ratio of the means. The paper prints `tok`; all three are given.",
+        "Mean sweeps of each module over one whole optimisation, rounded to integers. Every attempt "
+        "and the output path, which is architecture (MDA_Output's sweeps in `BR`/`B0`, none in "
+        "`B1`, the deferred nodes' one execution in `B2`). The exit audit's one sweep of every node "
+        "is the harness's accuracy instrument and is **subtracted** (1 per node, checked on each run "
+        "against the record's `audit_node_calls`; D36). Over the n seeds on which every arm reached "
+        "an accepted optimum; `B2/B0` is the ratio of the means.",
         "",
     ]
     if any(b["groups"] != x["groups"] for b, x in zip(modules, a)):
         lines += ["Node groups (phase B):", "", *_groups_note(modules), ""]
-    md, tex = _module_lines(
-        modules, tally_b.LADDER, PHASE_B_PAIR, lambda b: b["n"], lambda v: decimals(v, 0)
-    )
+    md, tex = _module_lines(modules, tally_b.LADDER, lambda b: PHASE_B_PAIR, lambda b: b["n"], lambda v: decimals(v, 0))
     lines += md + ["```latex", *_tabular("B", tex), "```", ""]
 
-    evaluations = optimiser_evaluations(campaign)
+    lines += ["## Appendix", ""]
+    for spec in WALL_CLOCK_TABLES:
+        lines += [f"### Table — {spec['title']}", "", WALL_CLOCK_NOT_MEASURED, "", spec["caption"], "", *_empty_grid(spec, configurations)]
+
     lines += [
-        "## How the optimiser's evaluations decompose (phase B)",
+        "### Table — per-arm success",
         "",
-        "Every point VMCON evaluates costs `k = 2·nvar + 2` model evaluations: one function "
-        "evaluation, a central-difference gradient (`2·nvar`) and one reconcile call. An "
-        "iteration evaluates its iterate and its line-search point, so a run of `it` "
-        "iterations whose line searches accept their first trial makes `ε = (2·it − 1)·k`. "
-        "*exact* counts the runs on which that holds with no further trial; *repeated* is the "
-        "share of all evaluations spent re-evaluating an accepted line-search point at the "
-        "next iteration's head, `Σ (it − 1)·k / Σ ε`. Over the phase B seed set; *exact*, "
-        "the extra trials and *repeated* are over the runs solved in one attempt (a failed "
-        "attempt may end before or after its line search), the retried runs counted apart.",
+        "Per configuration and arm: the starts offered, the accepted optima (`status == ok`, "
+        "`ifail == 1`), the other starts by outcome class, the one seed set every phase B table is "
+        "over, and the starts lost to this arm alone. Reported, no expectation (plan §5 B5; item 3 "
+        "as reduced). The tally's `per-arm success` table, republished.",
         "",
-        "| Configuration | arm | n | nvar | FD calls per gradient | evaluations per point k | "
-        "mean iterations | mean ε | ε divisible by k | retried runs | exact | extra line-search "
-        "trials | FD share | repeated share |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    for row in evaluations:
-        c = row["configuration"]
-        lines.append(
-            f"| `{SHORT.get(c, c)}` | {row['arm']} | {row['n']} | {row['nvar']} | "
-            f"{row['fd_per_gradient']} | {row['per_point']} | {mean_1dp(row['iterations'])} | "
-            f"{figures(row['evaluations'])} | {row['divisible']}/{row['n']} | {row['retried']} | "
-            f"{row['exact']}/{row['n'] - row['retried']} | {row['extra_trials']} | {sig(row['fd_share'])} | "
-            f"{sig(row['repeated_share'])} |"
-        )
+    for block in success:
+        c = block["configuration"]
+        cols = block["columns"]
+        lines += [f"**`{SHORT.get(c, c)}`** ({c})", "", f"| {' | '.join(cols)} |", "|" + "---|" * len(cols)]
+        for r in block["rows"]:
+            lines.append("| " + " | ".join(str(r.get(k, "")) for k in cols) + " |")
+        lines.append("")
+
+    lines += [
+        "### Table — verification",
+        "",
+        "One row per check of plan §8, in its order. A gate's verdict is read from its record "
+        "through the `gate_table` stage record, which this generator refuses when the verdict "
+        "records have been re-made, removed or added to since the stage ran; `not pressed` is a "
+        "gate with no verdict record (a declared placeholder that refuses, or one never pressed) "
+        "or a rule that is not yet a construction. A verdict is PASS only with every tooth tripped.",
+        "",
+        f"*{verified['records_read']}*",
+        "",
+        "| check | plan | verdict | detail |",
+        "|---|---|---|---|",
+    ]
+    for r in verified["rows"]:
+        lines.append(f"| {r['check']} | {r['label']} | **{r['verdict']}** | {r['detail']} |")
     lines.append("")
 
-    return {
-        "markdown": "\n".join(lines),
-        "cross_check": check,
-        "tooth": tooth,
-        "built": built,
-    }
+    return {"markdown": "\n".join(lines), "cross_check": check, "tooth": tooth, "built": built, "verification": verified}
 
 
 def paper_path(campaign: Campaign) -> Path:
@@ -1084,39 +1250,50 @@ def _refuse_on_mismatch(result: Mapping[str, Any]) -> None:
         raise PaperTablesError(
             f"the comparison with the stage records failed: {check['mismatched']} "
             f"of {check['compared']} mismatched, tooth "
-            f"{'bites' if result['tooth'] else 'DOES NOT BITE'}; first: "
-            f"{check['mismatches'][:3]}"
+            f"{'bites' if result['tooth'] else 'DOES NOT BITE'}; first: {check['mismatches'][:3]}"
         )
 
 
-def write(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
+def write(campaign: Campaign, records_dir: Path, *, path: Path | None = None) -> dict[str, Any]:
+    """Render, refuse on a cross-check mismatch, write the file (``paper_path``
+    unless *path* names another — a render into a runs directory, as a check
+    against test data that must not become the committed document)."""
     result = render(campaign, records_dir)
     _refuse_on_mismatch(result)
-    path = paper_path(campaign)
-    path.write_text(result["markdown"] + "\n")
-    return {**result, "path": str(path), "written": True}
+    out = Path(path) if path is not None else paper_path(campaign)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(result["markdown"] + "\n")
+    return {**result, "path": str(out), "written": True}
 
 
-def check(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
+def check(campaign: Campaign, records_dir: Path, *, path: Path | None = None) -> dict[str, Any]:
+    """Render and **refuse** unless the file on disk is byte-identical to the
+    rendering and the cross-check passes (item 10: ``check`` refuses when the
+    rendered file and the records disagree)."""
     result = render(campaign, records_dir)
-    path = paper_path(campaign)
-    committed = path.read_text() if path.exists() else ""
-    return {
-        **result,
-        "path": str(path),
-        "identical": committed == result["markdown"] + "\n",
-    }
+    _refuse_on_mismatch(result)
+    out = Path(path) if path is not None else paper_path(campaign)
+    committed = out.read_text() if out.exists() else ""
+    identical = committed == result["markdown"] + "\n"
+    if not identical:
+        raise PaperTablesError(
+            f"{out} does not match what the records now produce"
+            + ("" if out.exists() else " (the file does not exist)")
+            + "; `--paper-tables write` renders it again.  Nothing was written."
+        )
+    return {**result, "path": str(out), "identical": True}
 
 
 def report(result: Mapping[str, Any]) -> None:
     check_ = result["cross_check"]
     print(
         f"  cross-check with the stage records: {check_['mismatched']} mismatched "
-        f"of {check_['compared']} compared; tooth "
-        f"{'bites' if result['tooth'] else 'DOES NOT BITE'}"
+        f"of {check_['compared']} compared; tooth {'bites' if result['tooth'] else 'DOES NOT BITE'}"
     )
     for line in check_["mismatches"][:10]:
         print(f"    {line}")
+    for row in result.get("verification", {}).get("rows", []):
+        print(f"  verification {row['label']:<3} {row['verdict']:<18} {row['check']}")
     if "identical" in result:
         print(f"  {result['path']}: {'IDENTICAL' if result['identical'] else 'DIFFERS'}")
     if result.get("written"):
