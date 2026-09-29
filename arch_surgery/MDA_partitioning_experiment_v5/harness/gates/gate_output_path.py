@@ -139,12 +139,25 @@ def output_path_jobs(campaign: Campaign) -> list[pool_mod.Job]:
 
 
 def _reproduction_planned(campaign: Campaign) -> list[Any]:
-    """GR's planned runs with their entries attached, directories resolved."""
+    """GR's planned runs with their entries attached, directories resolved.
+
+    Composed under the **fallback** campaign whatever the button composed:
+    the reproduction gate is V4's own criterion on the copy (read once, never
+    re-made, D39 and V5 plan §7), so its records carry V4's job identity —
+    the fallback's — and a census campaign's rendering of the same jobs
+    would resolve to records that do not exist.  Found by the first
+    census-default press of this gate (A100 (v5-test-set)): "G1 has no
+    reproduction gate record for BR/large_tokamak_nof".
+    """
+    import dataclasses  # noqa: PLC0415
+
+    from ..core.config import V4_TEST_SET  # noqa: PLC0415
     from . import reproduction as reproduction_mod  # noqa: PLC0415
 
-    root = Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH
-    planned, _prerequisites = reproduction_mod.plan(campaign, root)
-    reproduction_mod.attach_phase_a_entries(planned, root, campaign)
+    fallback = dataclasses.replace(campaign, test_set=V4_TEST_SET, tau=None)
+    root = Path(fallback.runs_dir) / reproduction_mod.RUNS_SUBPATH
+    planned, _prerequisites = reproduction_mod.plan(fallback, root)
+    reproduction_mod.attach_phase_a_entries(planned, root, fallback)
     return planned
 
 
