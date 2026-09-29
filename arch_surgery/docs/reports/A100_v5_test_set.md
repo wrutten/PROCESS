@@ -8,7 +8,7 @@
 > for the user's review on return; every decision taken without the user is in §11 with the word
 > *autonomous* and its reversal. Commits: the harness prep before the change **`b1bb1594`**, the driver
 > change **DR11 = `5980c5dc`**, one pool fix **`60434c52`** (harness only; `git diff 5980c5dc 60434c52 --
-> …_v5/PROCESS/` is empty), then the harness-only commits `3d56c4ad` → `ba440ecd` (twelve, each named in the change log; `git diff 60434c52 ba440ecd -- …_v5/PROCESS/` is empty). The physics is untouched (`g0prime` PASS at every press).
+> …_v5/PROCESS/` is empty), then the harness-only commits `3d56c4ad` → `ba440ecd` (twelve, each named in the change log; `git diff 60434c52 ba440ecd -- …_v5/PROCESS/process/` is empty — the one file under `PROCESS/` touched after DR11 is `CHANGES.md`, at `3d56c4ad`). The physics is untouched (`g0prime` PASS at every press).
 > Every number below was written by a gate or stage of the committed harness
 > (`experiment_runner.py --gate <name>`, `--census`, `--smoke-test-set`, `--measure gate_table`; verdict
 > records under the worktree's `MDA_partitioning_experiment_v5/runs/…`) or by `run_stamp_survey.py`;
