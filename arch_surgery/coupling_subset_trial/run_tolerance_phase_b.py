@@ -265,7 +265,42 @@ def audit_recount(d, taus=(1e-8, 1e-6)):
     for tau in taus:
         out[f"n_above_{tau:.0e}"] = sum(1 for v in sc.values() if v >= tau)
         out[f"n_above_{tau:.0e}_restricted"] = sum(1 for k, v in sc.items() if k not in ex and v >= tau)
+    # every restricted component that is not at the exact fixed point (>= 1e-12), largest first
+    out["restricted_components_above_1e-12"] = sorted(
+        ((k, v) for k, v in sc.items() if k not in ex and v >= RESIDUAL_LISTING_FLOOR),
+        key=lambda kv: -kv[1])
     return out
+
+
+#: Below this a restricted exit-residual component is treated as at the fixed point
+#: for the listing of T7 (the audit's own tau is 1e-8; the listing looks four decades under it).
+RESIDUAL_LISTING_FLOOR = 1e-12
+
+
+def set_memberships(config_name):
+    """Where a component of y stands in the sets this task compares.
+
+    census: the union of the census sets of the arm's census arm (A0's FLAT for
+    B0, A2's blocks for B2); dsm: the DSM interface / feedback flags of
+    ``test_sets.json``; writer: the block of V4's committed write set that
+    writes it (the partitioned arm's schedule).
+    """
+    rbw = json.loads(RBW_SETS_FILE.read_text())["configurations"][config_name]
+    ts = json.loads((HERE / "test_sets.json").read_text())["configurations"][config_name]["components"]
+    ws = json.loads((V4_DIR / "harness" / "data" / f"write_sets_{config_name}.json").read_text())["subsets"]
+    writer = {}
+    for block, keys in ws.items():
+        for k in keys:
+            writer.setdefault(k, []).append(block)
+    census = {arm: set().union(*(set(v) for v in rbw[arm]["sets"].values())) for arm in rbw}
+
+    def describe(key, census_arm):
+        c = ts.get(key) or {}
+        return {"in_census": key in census[census_arm],
+                "dsm_interface": c.get("interface"), "dsm_feedback": c.get("feedback"),
+                "dsm_writers": c.get("writers"), "dsm_readers": c.get("readers"),
+                "written_by_block": writer.get(key)}
+    return describe
 
 
 def perturbation_rows(d):
@@ -363,6 +398,7 @@ def summarise():
     for name in CONFIGURATIONS:
         by_arm = campaign_records(name)
         seeds, converged = seed_set(name, by_arm)
+        describe = set_memberships(name)
         cfg = {"seeds": seeds, "every_arm_converged": converged,
                "n_by_block": {arm: rbw[name][arm]["n_by_block"] for arm in ("A0", "A2")},
                "per_seed": {}}
@@ -371,10 +407,20 @@ def summarise():
             for arm in ("B0", "B2"):
                 rec = by_arm[arm][seed]
                 q[f"{arm}_campaign"] = extract(rec, Path(rec["_dir"]))
+            for arm in ("B0", "B2"):
+                e = q[f"{arm}_campaign"]
+                if e.get("audit"):
+                    e["audit"]["memberships"] = {
+                        k: describe(k, "A0" if arm == "B0" else "A2")
+                        for k, _ in e["audit"]["restricted_components_above_1e-12"]}
             for arm, ts in VARIANTS:
                 d = run_dir(name, arm, ts, seed)
                 rec = records_mod.read(d)
                 e = extract(rec, d)
+                if e.get("audit"):
+                    e["audit"]["memberships"] = {
+                        k: describe(k, "A0" if arm == "B0" else "A2")
+                        for k, _ in e["audit"]["restricted_components_above_1e-12"]}
                 n = Path(d) / "narrowing.json"
                 e["narrowing"] = json.loads(n.read_text()) if n.exists() else None
                 e["pairing"] = pairing(d, Path(by_arm[arm][seed]["_dir"]), seed)
@@ -589,6 +635,31 @@ def print_tables(out):
     print(table(["configuration", "pair", "numerator / denominator", "seeds used", "R pooled",
                  "ρ pooled", "ε pooled", "R median [min, max]", "ρ median [min, max]",
                  "ε median [min, max]", "N num / den", "C num / den"], rows))
+
+    # 7 — what the loops leave unconverged at exit, by name
+    print(f"\n## T7 — restricted exit-residual components at or above {RESIDUAL_LISTING_FLOOR:.0e}, "
+          "by name, per run (runs with none are omitted)\n")
+    rows = []
+    for name, cfg in out["configurations"].items():
+        for s, q in cfg["per_seed"].items():
+            for m in MEMBERS:
+                a = q[m].get("audit") or {}
+                comps = a.get("restricted_components_above_1e-12") or []
+                if not comps:
+                    continue
+                mem = a.get("memberships") or {}
+                shown = comps[:4]
+                rows.append([name, s, m, len(comps),
+                             "; ".join(f"`{k}` {v:.1e}" for k, v in shown)
+                             + (" …" if len(comps) > 4 else ""),
+                             "; ".join(
+                                 f"{'census' if mem[k]['in_census'] else 'not census'}, "
+                                 f"{'feedback' if mem[k]['dsm_feedback'] else ('interface' if mem[k]['dsm_interface'] else 'no DSM set')}, "
+                                 f"by {'/'.join(mem[k]['written_by_block'] or ['?'])}, "
+                                 f"read by {','.join(mem[k]['dsm_readers'] or ['—'])}"
+                                 for k, _ in shown)])
+    print(table(["configuration", "seed", "run", "n ≥ floor", "largest four (name, scaled residual)",
+                 "membership of each (census set; DSM set; writing block; DSM readers)"], rows))
 
     # 6 — timing context
     print("\n## T6 — wall clock (context, never evidence): one run each, another task on the machine\n")
