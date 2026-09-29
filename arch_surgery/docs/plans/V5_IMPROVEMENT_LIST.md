@@ -208,6 +208,39 @@ declares which option is the control, or runs both as rungs, before any number e
   (context).
 - Both: the optimisation-phase effect of the tighter tolerance, which A89 did not measure.
 
+**Cost, and why the test must be narrowed in both arms before wall clock is compared** *(the user,
+2026-09-29, from A89 §7.5 and A91 (block-sweep-timing) §5; timings are context, never evidence)*.
+The convergence test costs about 5 µs per component tested whichever block (A91), so its cost
+scales with the test set: on `large_tokamak_nof` the whole-`y` test is 31 ms of a flat evaluation
+and 20 ms of a partitioned one, the census set 4.6 and 4.9 ms (A89 §7.5). Narrowing the test
+therefore removes most of the *advantage* the partition showed in that term. What remains is
+model time — 38.8 ms flat against 27.6 ms partitioned on `large_tokamak_nof` (A91 §5: the sweeps
+the partition saves are M3's cheap ones; M1 and M2, ≈ 2.8 ms a sweep each, are swept about as
+often as before) — and the deferral machinery's own cost, which is not intrinsic: the driver copy
+re-derives the deferral sets on every evaluation (8–11 ms, issue I-30). Projection from those
+measured terms: with the census test in both arms the partition's wall-clock ratio is ≈ 0.97 as
+implemented and ≈ 0.77 with I-30 fixed, against a node-call ratio of 0.50 — because node calls
+weight every model equally and PROCESS's cost sits in a few physics and coil models. Two
+consequences for the plan: **(i)** I-30 is a prerequisite for any wall-clock statement, and
+**(ii)** the paper states the model-time ratio beside the node-call ratio, with the reason.
+
+**A third option assessed and set aside: function-level (SCC) decoupling from the expanded DSM**
+*(the user's question, 2026-09-29; `coupling_subset_trial/derive_function_level_sets.py` →
+`function_level_sets.json`, read-only over the sibling's exports with digests)*. At submodel level
+(417 functions on the tokamak) the DSM's graph over `y` has 7 strongly connected components (the
+largest 39 functions). Any sequencing's tear set is a subset of the components carried by edges
+inside those SCCs: 122 / 119 / 98 on nof / lad / st. That set is **larger** than both the model-level
+feedback set (75 / 73 / 53) and the census cut set (75 / 74 / 73), and it **misses 36 / 37 / 41 of the
+census's components** — 12 of the 36 on nof are read only by the function that writes them (a
+self-read the DSM cannot classify at any level), the other 24 are read by a function the static
+order puts after the writer but which, at run time, reads the previous sweep's value. Function-level
+feedback in the code order, without sequencing, is 146 / 144 / 128 and misses 32 / 32 / 40. So the
+finer DSM comes no closer to the carried set than the coarser one: the gap is not granularity but
+the difference between a static read set and what a sweep actually reads before it writes. The
+DSM-based option in this item is therefore the model-level feedback set as defined; a function-level
+set is not a candidate unless a runtime read census is folded into it, at which point it is option
+2.
+
 *Candidates proposed elsewhere and not yet listed here:* A76 (fixed-point-distance)'s report §7 (d)
 notes that the between-arm fixed-point distance it added to V4's §4.2 as a reported statistic could
 carry a pre-declared acceptance rule in a V5 plan (a natural form: headline median and p90 below τ,
