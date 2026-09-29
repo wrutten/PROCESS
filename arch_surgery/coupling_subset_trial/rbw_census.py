@@ -36,6 +36,20 @@ through attributes on model objects, which ``y`` does not hold at all.
 
 The census is a union over every sweep of the runs it is taken in; a branch
 never taken in those runs is never observed.
+
+**Per-evaluation recording** (task A92 (optimisation-path-census), additive).
+With :func:`enable_per_evaluation` on, every ``call_models`` the wrapper
+brackets with :func:`begin_evaluation` / :func:`end_evaluation` gets its own
+record: the sweeps per block and the read-before-write set per block of
+*that* evaluation, plus how many design-vector components moved since the
+previous evaluation (one moved component is a finite-difference probe).  The
+aggregate ``RESULT`` and the ``rbw_census.json`` :func:`write` produces are
+unchanged; the per-evaluation series goes to its own file
+(:func:`write_per_evaluation`), so A89's ``--derive-rbw`` reads what it read.
+A sweep outside any evaluation — the once-per-run set that
+``write_output_files`` sweeps on a fresh Caller — still reaches ``RESULT``
+(under the label ``?``, since its node set is no block of the schedule) and
+reaches no evaluation record.
 """
 
 from __future__ import annotations
@@ -49,8 +63,44 @@ import numpy as np
 import narrowing as narrowing_mod  # the once-per-run flag is shared with it
 
 _S: dict = {"on": False, "node": None, "label": None, "first": None,
-            "rbw": None, "installed": False, "arrays": None, "sweeps": {}}
+            "rbw": None, "installed": False, "arrays": None, "sweeps": {},
+            # per-evaluation recording (A92): None = off; a list once enabled
+            "per_eval": None, "current": None, "prev_x": None, "key_index": None,
+            "key_names": None}
 RESULT: dict = {}   # label -> {key: {"reader": node, "writer": node, "n": windows}}
+
+
+def enable_per_evaluation():
+    """Record each bracketed evaluation separately (see the module docstring)."""
+    if _S["per_eval"] is None:
+        _S["per_eval"] = []
+
+
+def begin_evaluation(xc):
+    """Open the record of one ``call_models``; *xc* is the design vector it gets."""
+    if _S["per_eval"] is None:
+        return
+    x = np.array(xc, dtype=float, copy=True)
+    prev = _S["prev_x"]
+    if prev is None or prev.shape != x.shape:
+        n_changed, changed = None, None
+    else:
+        moved = np.flatnonzero(prev != x)
+        n_changed = int(moved.size)
+        changed = int(moved[0]) if moved.size == 1 else None
+    _S["prev_x"] = x
+    _S["current"] = {"i": len(_S["per_eval"]), "n_x_changed": n_changed,
+                     "x_changed_index": changed, "sweeps": {}, "rbw": {}}
+
+
+def end_evaluation():
+    """Close the open evaluation record (a raise inside the evaluation closes it too)."""
+    cur = _S["current"]
+    if cur is None:
+        return
+    cur["rbw"] = {label: sorted(v) for label, v in cur["rbw"].items()}
+    _S["per_eval"].append(cur)
+    _S["current"] = None
 
 
 def _record(key, kind):
@@ -85,6 +135,8 @@ def install(caller_mod, ms, data, spec):
             array_keys.append((ns, fld))
     _S["array_keys"] = array_keys
     _S["data"] = data
+    _S["key_names"] = [spec.name(i) for i in range(len(spec.keys))]
+    _S["key_index"] = {name: i for i, name in enumerate(_S["key_names"])}
 
     for cls, (ns_name, fset) in classes.items():
         def make(ns_name=ns_name, fset=fset):
@@ -163,6 +215,11 @@ def install(caller_mod, ms, data, spec):
                 e = rec.setdefault(key, {"reader": reader, "writer": writer, "n": 0})
                 e["n"] += 1
             _S["sweeps"][label] = _S["sweeps"].get(label, 0) + 1
+            cur = _S["current"]
+            if cur is not None:
+                cur["sweeps"][label] = cur["sweeps"].get(label, 0) + 1
+                idx = _S["key_index"]
+                cur["rbw"].setdefault(label, set()).update(idx[k] for k in _S["rbw"])
             _S.update(first=None, rbw=None)
 
     caller_mod.Caller._sweep_block = _sweep_block
@@ -174,3 +231,23 @@ def write(path):
         "sweeps_observed_by_block": _S["sweeps"],
         "rbw_by_block": RESULT,
     }, indent=1))
+
+
+def write_per_evaluation(path):
+    """The per-evaluation series: keys by the spec's index, one record per evaluation."""
+    Path(path).write_text(json.dumps({
+        "format": "rbw-census-per-evaluation-1",
+        "keys": _S["key_names"],
+        "what": {
+            "i": "evaluation index: the n-th call_models of the run, from 0",
+            "n_x_changed": "design-vector components that differ from the previous "
+                           "evaluation's vector (null on the first evaluation)",
+            "x_changed_index": "the one moved component when exactly one moved "
+                               "(a finite-difference probe), else null",
+            "sweeps": "sweeps of each block in this evaluation",
+            "rbw": "per block, indices into `keys` of the components read before "
+                   "their first write in at least one sweep of this evaluation",
+        },
+        "n_evaluations": len(_S["per_eval"] or []),
+        "evaluations": _S["per_eval"] or [],
+    }))
