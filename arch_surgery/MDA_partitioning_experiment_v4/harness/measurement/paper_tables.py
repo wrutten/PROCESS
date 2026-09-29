@@ -90,6 +90,12 @@ ROWS: tuple[tuple[str, tuple[str, ...]], ...] = (
 #: every seed — is the measurement that says it is one execution.
 CHARGED_ONCE = {"A2": 1.0}
 
+#: Phase A cells printed as the integer every run reads, not as a mean (the
+#: user, 2026-09-29): the partitioned arm's feedforward and post-processing
+#: rows run once per evaluation by construction.  A run reading anything else
+#: is a refusal, not a rounded mean.
+EXACT_CELLS = {("A2", "Feedforward"), ("A2", "Post-processing")}
+
 PHASE_A_SOURCE = tally_mod.ACCEPTANCE_REGIME
 PHASE_A_PAIR = ("A0", "A2")
 PHASE_B_SOURCE = "campaign_optimisation"
@@ -233,6 +239,13 @@ def phase_a(campaign: Campaign) -> list[dict[str, Any]]:
                     if (v := _row_sweeps(s, members, f"{config.name} {a} seed {k}")) is not None
                 ]
                 row[a] = _mean(values)
+                if (a, label) in EXACT_CELLS and values:
+                    if len(set(values)) != 1 or float(values[0]) != int(values[0]):
+                        raise PaperTablesError(
+                            f"{config.name} {a} {label}: the runs read {sorted(set(values))}; "
+                            f"the cell is printed as one integer and is refused"
+                        )
+                    row[f"{a}_exact"] = int(values[0])
             left = [_row_sweeps(sweeps[base][k], members, config.name) for k in paired]
             right = [_row_sweeps(sweeps[arm][k], members, config.name) for k in paired]
             if any(v is None for v in left + right):
@@ -470,11 +483,22 @@ def optimiser_evaluations(campaign: Campaign) -> list[dict[str, Any]]:
     return rows
 
 
+#: The collapsed DSM's rows per configuration (the dependency-analysis
+#: study's exports, imported by ``fixedpoint/gen_function_counts.py``).
+DSM_ROWS_FILE = "dsm_function_counts.json"
+
+#: The constraint rows, not counted among the models (the user, 2026-09-29).
+#: One row in the older exports, two after the dependency-analysis study split
+#: it (its M125, 2026-09-17), which only the tok export postdates.
+CONSTRAINT_ROWS = frozenset({"Constraints", "ConsistencyConstraints", "EngineeringConstraints"})
+
+
 def cases(
     campaign: Campaign, optimisation: Mapping[str, Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
     """How the three configurations differ: objective, design variables,
-    constraints and the cross-module coupling (the burn time).
+    constraints, the cross-module coupling (the burn time) and the number of
+    models (the collapsed DSM's model rows, drivers and constraints excluded).
 
     The objective, the variable and constraint counts and ``pulsed`` are the
     report's problem-definition table, read from the ``tally_optimisation``
@@ -486,6 +510,7 @@ def cases(
     """
     table = _stage_table(optimisation, f"problem definition — {PHASE_B_SOURCE}")
     by_config = {r["configuration"]: r for r in table["rows"]}
+    dsm_rows = json.loads((Path(campaign.data_dir) / DSM_ROWS_FILE).read_text())
     out: list[dict[str, Any]] = []
     for configuration, by_arm, converged in _phase_b_groups(campaign):
         row = dict(by_config[configuration])
@@ -527,6 +552,18 @@ def cases(
             raise PaperTablesError(
                 f"{configuration}: the objective reads {objective_fields}; one field expected"
             )
+        # the models: the configuration's rows of the collapsed DSM less the
+        # top-level driver rows and the constraint rows, from the committed
+        # per-configuration counts
+        dsm = (dsm_rows.get("configurations") or {}).get(configuration)
+        if dsm is None:
+            raise PaperTablesError(
+                f"{configuration}: {DSM_ROWS_FILE} has no DSM rows for it; the number "
+                f"of models would be guessed"
+            )
+        row["models"] = sum(
+            1 for r in dsm["rows"] if r["kind"] == "model" and r["model"] not in CONSTRAINT_ROWS
+        )
         row["objective_variable"] = objective_fields[0].split(".")[-1]
         row["lifted_variable"] = next(iter(lifted)) if lifted else None
         row["pulsed_bool"] = pulsed
@@ -744,7 +781,7 @@ def _module_lines(
         md += [
             f"**`{SHORT.get(c, c)}`** ({c}, n = {n_of(block)})",
             "",
-            f"| Module | {' | '.join(arm_heads)} | {ratio_head} | {ratio_head} median [min, max] |",
+            f"| Module | {' | '.join(arm_heads)} | {ratio_head} | {ratio_head} med [min, max] |",
             "|---|" + "---:|" * len(ladder) + "---:|---:|",
         ]
         tex += [
@@ -752,7 +789,9 @@ def _module_lines(
             "\\hline",
         ]
         for row in block["rows"]:
-            cells = [mean(row[a]) for a in ladder]
+            cells = [
+                str(row[f"{a}_exact"]) if f"{a}_exact" in row else mean(row[a]) for a in ladder
+            ]
             tex_cells = cells
             s = row["summary"]
             md_label = tex_label = row["row"]
@@ -783,6 +822,10 @@ def _groups_note(blocks: Sequence[Mapping[str, Any]]) -> list[str]:
     return lines
 
 
+#: Objective names the table prints shorter than the stage record states them.
+OBJECTIVE_SHORTER = {"Plasma major radius": "Major radius"}
+
+
 def _case_lines(rows: Sequence[Mapping[str, Any]], *, md: bool) -> list[str]:
     out = []
     for r in rows:
@@ -795,6 +838,8 @@ def _case_lines(rows: Sequence[Mapping[str, Any]], *, md: bool) -> list[str]:
         # the name without its symbol ("Plasma major radius (R₀)" → "plasma major
         # radius"): the variable name beside it is the precise statement
         name_of = str(r["objective"]).split(" (")[0]
+        # "major radius" alone: the tokamak's only major radius is the plasma's (the user)
+        name_of = OBJECTIVE_SHORTER.get(name_of, name_of)
         sense = {"minimise": "min.", "maximise": "max."}[str(r["sense"])]
         objective = f"{sense} {name_of[:1].lower()}{name_of[1:]} ({code(r['objective_variable'])})"
         variables = f"{r['nvar']} → {r['nvar_lifted']}" if r["nvar"] != r["nvar_lifted"] else str(r["nvar"])
@@ -803,9 +848,9 @@ def _case_lines(rows: Sequence[Mapping[str, Any]], *, md: bool) -> list[str]:
         constraints = f"{total} → {total_lifted}" if total != total_lifted else str(total)
         coupling = code(r["lifted_variable"]) if r["pulsed_bool"] else "none (steady state)"
         if md:
-            out.append(f"| {name} | {objective} | {variables} | {constraints} | {coupling} |")
+            out.append(f"| {name} | {r['models']} | {objective} | {variables} | {constraints} | {coupling} |")
         else:
-            cells = [name, objective, variables, constraints, coupling]
+            cells = [name, str(r["models"]), objective, variables, constraints, coupling]
             cells = [x.replace("→", "$\\rightarrow$").replace("₀", "$_0$").replace("ₚₗₐₛₘₐ", "$_\\mathrm{plasma}$") for x in cells]
             out.append(" & ".join(cells) + " \\\\")
     return out
@@ -818,14 +863,14 @@ def _tabular(kind: str, rows: Sequence[str]) -> list[str]:
     module header carries the ×10² unit its cells are printed in.
     """
     spec, header = {
-        "A": ("l|rrrr|rc", "Module & AR & A0 & A1 & A2 & A2/A0 & A2/A0 median [min, max]"),
+        "A": ("l|rrrr|rc", "Module & AR & A0 & A1 & A2 & A2/A0 & A2/A0 med [min, max]"),
         "I": (
             "l|rrrr|rc",
-            "Configuration & BR & B0 & B1 & B2 & B2/B0 & B2/B0 median [min, max]",
+            "Configuration & BR & B0 & B1 & B2 & B2/B0 & B2/B0 med [min, max]",
         ),
         "B": (
             "l|cccc|cc",
-            "Module & BR & B0 & B1 & B2 & B2/B0 & B2/B0 median [min, max]",
+            "Module & BR & B0 & B1 & B2 & B2/B0 & B2/B0 med [min, max]",
         ),
     }[kind]
     body = list(rows)
@@ -879,7 +924,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "**Feedforward** is the pulse node (run once per evaluation after M3, no iteration); "
         "**Post-processing** is the once-per-run set — nodes no objective or constraint "
         "depends on, which the partitioned arm runs once, after convergence, in the output "
-        "pass. **Phase A charges `A2` that one execution** (1.0 in its Post-processing "
+        "pass. **Phase A charges `A2` that one execution** (1 in its Post-processing "
         "cell): the flat arms' final sweep already computes those outputs at the converged "
         "state, and without it `A2`'s evaluation would not produce the same information. "
         "The charge is by construction — phase A's census stops before the output pass, and "
@@ -890,7 +935,8 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "Rounding follows each quantity's sampling uncertainty over the starts (the counts "
         "themselves are exact): phase A sweep means and phase B iteration means to one "
         "decimal, phase B module sweeps to integers, every ratio, median and bracket to two "
-        "decimals. "
+        "decimals; `A2`'s phase A Feedforward and Post-processing cells are the integer 1 "
+        "every run reads (checked), not a mean. `med` in a column head is the median. "
         "`—` is a group that does not exist on the configuration or an arm that is inactive "
         "there (`A1`/`B1` on `st`).",
         "",
@@ -916,16 +962,18 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "(`BR`, `B0`) → the arms with the burn time taken out of the MDA (`B1`, `B2`), which add "
         "the burn time as an iteration variable and its consistency constraint. The objective's "
         "variable and the cross-module coupling's variable are derived from the committed "
-        "per-run artifact and the runs.",
+        "per-run artifact and the runs. Models is the number of model rows of the "
+        "configuration's collapsed DSM, its top-level driver rows and its constraint "
+        "rows excluded (`harness/data/dsm_function_counts.json`).",
         "",
-        "| Configuration | Objective | Design variables | Constraints | Cross-module coupling |",
-        "|---|---|---:|---:|---|",
+        "| Configuration | Models | Objective | Design var. | Constraints | Cross-module coupling |",
+        "|---|---:|---|---:|---:|---|",
         *_case_lines(case_rows, md=True),
         "",
         "```latex",
-        "\\begin{tabular}{l|l|c|c|l}",
+        "\\begin{tabular}{l|c|l|c|c|l}",
         "\\hline",
-        "Configuration & Objective & Design variables & Constraints & Cross-module coupling \\\\",
+        "Configuration & Models & Objective & Design var. & Constraints & Cross-module coupling \\\\",
         "\\hline",
         *_case_lines(case_rows, md=False),
         "\\hline",
@@ -948,7 +996,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "the n seeds on which every arm reached an accepted optimum; `B2/B0` is the ratio of "
         "the means. The same statistic as the report's Table 12.",
         "",
-        "| Configuration | n | BR | B0 | B1 | B2 | B2/B0 | B2/B0 median [min, max] |",
+        "| Configuration | n | BR | B0 | B1 | B2 | B2/B0 | B2/B0 med [min, max] |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     tex = []
