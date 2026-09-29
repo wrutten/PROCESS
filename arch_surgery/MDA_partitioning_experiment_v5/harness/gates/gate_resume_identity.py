@@ -152,6 +152,19 @@ def by_design_pairs(campaign: Campaign) -> list[dict[str, Any]]:
     g1_after = dataclasses.replace(g1, outdir=neutrality_run_dir(campaign, "after", config.name, "BR"))
     pairs.append({"class": "G1 before vs after capture (same identity; explicit directories)", "a": g1, "b": g1_after, "must": "agree", "directories_must": "differ"})
 
+    # GC: one side's labelled job against the unlabelled job of the same arm
+    # (the label rides in override_env, an identity field; A99's proposal 4,
+    # applied by A100 (v5-test-set)).
+    from . import gate_count_neutrality  # noqa: PLC0415
+
+    gc_plan = gate_count_neutrality.count_neutrality_jobs(
+        campaign, references, gate_count_neutrality.STRADDLE[1]
+    )
+    gc_b = next((j for p, c, a, j in gc_plan if p == "B" and c == config.name and a == "B2"), None)
+    if gc_b is not None:
+        unlabelled = dataclasses.replace(gc_b, override_env={})
+        pairs.append({"class": "GC labelled side vs the unlabelled job of the same arm (override_env)", "a": gc_b, "b": unlabelled, "must": "differ"})
+
     # GR: its B2 at seed 0 against G5's B2 at seed 0 (audit position, overrides, δ).
     root = Path(campaign.runs_dir) / reproduction_mod.RUNS_SUBPATH
     planned, _prereq = reproduction_mod.plan(campaign, root)

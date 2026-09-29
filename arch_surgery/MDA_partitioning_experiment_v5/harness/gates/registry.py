@@ -104,6 +104,19 @@ RUN_ONCE: dict[str, str] = {
     ),
 }
 
+#: The commit each run-once gate's verdict was recorded at: the copy commit.
+#: A press with ``--resume`` **reads that recorded verdict** and never calls
+#: the stage — A98's wrapper only refused a press *without* ``--resume``, and
+#: with it the stage's ``pool.run_all(resume=True)`` re-made every seeded
+#: record the current contract found incomplete (A99's ``schedule_resolution``
+#: field made all 24 of them incomplete; found by A100 (v5-test-set)'s press
+#: at ``66bfa240``, stopped after three records had been deleted and restored
+#: byte-identical).  A recorded verdict that is absent, or whose stamp is not
+#: this commit, is refused.
+RUN_ONCE_COMMIT: dict[str, str] = {
+    "reproduction": "d6c246a17c7fbf18c3de6df201d55607a279aeff",
+}
+
 
 def _not_implemented_gate(name: str, spec: Mapping[str, str]) -> Gate:
     def refuse(*, resume: bool = False) -> dict[str, Any]:
@@ -141,9 +154,19 @@ def _not_implemented_gate(name: str, spec: Mapping[str, str]) -> Gate:
     )
 
 
-def _run_once(name: str, gate: Gate) -> Gate:
-    """*gate* with its body refusing to make runs: ``--resume`` reads the record."""
-    body = gate.body
+def _run_once(name: str, gate: Gate, campaign: Campaign) -> Gate:
+    """*gate* with its body never making a run: ``--resume`` reads the recorded verdict.
+
+    The recorded verdict is the file the framework wrote at the copy commit,
+    ``runs/gates/<name>/gate.json``.  The framework overwrites that file with
+    every press, so the first read archives the copy-commit verdict beside it
+    as ``verdict_at_<commit>.json`` and every later read takes the archive —
+    a read of a read is still the copy commit's verdict.  The teeth are the
+    recorded ones (``gates._REPRODUCTION_HELD``), re-read from the record so
+    that a tooth the copy commit tripped is reported as tripped there and
+    not re-run here.
+    """
+    commit = RUN_ONCE_COMMIT[name]
 
     def once(*, resume: bool = False) -> dict[str, Any]:
         if not resume:
@@ -153,9 +176,55 @@ def _run_once(name: str, gate: Gate) -> Gate:
                 f"its record; a from-scratch press would re-run its twenty "
                 f"PROCESS jobs to prove what the copy commit already proved."
             )
-        return body(resume=True)
+        directory = Path(campaign.runs_dir) / GATES_SUBPATH / name
+        archive = directory / f"verdict_at_{commit[:8]}.json"
+        live = directory / "gate.json"
+        source = archive if archive.exists() else live
+        if not source.exists():
+            raise GateError(
+                f"gate {name} is read, never re-made, and there is no recorded "
+                f"verdict at {live} (nor an archived one at {archive}).  The "
+                f"copy commit's record is what this gate is; without it there "
+                f"is nothing to read and the gate refuses rather than runs."
+            )
+        recorded = json.loads(source.read_text())
+        head = str(recorded.get("tree_git_head") or "")
+        if head != commit:
+            raise GateError(
+                f"gate {name}'s recorded verdict at {source} is stamped "
+                f"{head[:8] or '(no stamp)'}, not the copy commit {commit[:8]}: "
+                f"it is not the record this gate reads.  Refused."
+            )
+        if not archive.exists():
+            archive.write_text(source.read_text())
+        gates_mod._REPRODUCTION_HELD["verdict"] = recorded.get("reproduction") or {}
+        return {
+            "passed": recorded.get("verdict") == "PASS",
+            "criterion": recorded.get("criterion"),
+            "population": recorded.get("population"),
+            "n_compared": recorded.get("n_compared"),
+            "n_mismatched": recorded.get("n_mismatched"),
+            "n_runs": recorded.get("n_runs"),
+            "n_runs_reproduced": recorded.get("n_runs_reproduced"),
+            "read_of_the_recorded_verdict": {
+                "what": (
+                    f"a READ of the verdict recorded at the copy commit "
+                    f"{commit[:8]}, not a press: no run was made or re-made, "
+                    f"and the pool records the copy commit's press read are "
+                    f"since shared with other gates at the current record "
+                    f"contract (some re-made by them under --resume)"
+                ),
+                "path": str(source),
+                "archived_copy": str(archive),
+                "tree_git_head": head,
+                "generated": recorded.get("generated"),
+                "recorded_verdict": recorded.get("verdict"),
+                "recorded_runs_provenance": recorded.get("runs_provenance"),
+            },
+            "reproduction": recorded.get("reproduction"),
+        }
 
-    return dataclasses.replace(gate, body=once)
+    return dataclasses.replace(gate, body=once, needs_runs=False)
 
 
 # --------------------------------------------------------------------------
@@ -179,7 +248,7 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
     from . import gate_audit, gate_composition, gate_count_neutrality, gate_entry, gate_prime, gate_records
 
     return {
-        "reproduction": _run_once("reproduction", gates_mod.reproduction_gate(campaign)),
+        "reproduction": _run_once("reproduction", gates_mod.reproduction_gate(campaign), campaign),
         "g0prime": gates_mod.g0prime_gate(campaign),
         "switch_neutrality": gate_neutrality.gate(campaign),
         "prime_map": gate_prime.prime_map_gate(campaign),

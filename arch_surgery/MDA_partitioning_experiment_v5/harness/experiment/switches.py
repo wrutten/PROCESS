@@ -458,6 +458,11 @@ DIAGNOSTIC_READBACKS: tuple[tuple[str, str], ...] = (
     (CALLER, "NODE_CALLS"),
     (CALLER, "NODE_CALLS_AT_OUTPUT"),
     (CALLER, "ARRANGEMENT_METHOD_CALLS"),
+    # DR9 (A99 (v5-schedule-and-prime)): the once-per-run schedule stamp the
+    # record carries as ``schedule_resolution``; probed so a tree lacking it
+    # is reported before a record is found with a null in it (A99's proposal
+    # 3, applied by A100 (v5-test-set)).
+    (CALLER, "SCHEDULE_RESOLUTION"),
     (CALLER, "DISPATCH_SWEEPS"),
     (CALLER, "SWEEPS_PER_EVAL_HIST"),
     (CALLER, "OUTPUT_LOOP_SWEEPS"),
@@ -574,9 +579,10 @@ def retired_names() -> dict[str, str]:
 #: made through the harness can carry it.
 RETIRED_PENDING_IN_DRIVER: dict[str, str] = {
     "PROCESS_ARCH_PREDICATE": (
-        "DR11 (task A99): the 'mixed' ruler is removed from the copied driver "
-        "and the name enters process.core.solver.RETIRED_SWITCHES in the same "
-        "change (V5 plan §11, the DR11 addition; §12 Q5)"
+        "DR11 (task A100 (v5-test-set)): the 'mixed' ruler is removed from "
+        "the copied driver and the name enters "
+        "process.core.solver.RETIRED_SWITCHES in the same change (V5 plan "
+        "§11, the DR11 addition; §12 Q5)"
     ),
 }
 
@@ -955,5 +961,11 @@ def base_environment(tree: Path, *, runs_dir: Path | None = None) -> dict[str, s
         # that only *read* the copy.  A harness **default**, beside the
         # matplotlib one: a caller that sets its own keeps it.
         env.setdefault("NUMBA_CACHE_DIR", str(Path(runs_dir) / "_numba_cache"))
+    # Decision D38: every child is pinned to one thread, so a parallel pool
+    # never oversubscribes the machine and no run's floating point depends on
+    # how many threads numba or a BLAS happened to take.  Defaults beside the
+    # cache directory: a caller that sets its own keeps it.
+    env.setdefault("NUMBA_NUM_THREADS", "1")
+    env.setdefault("OMP_NUM_THREADS", "1")
     clear_all(env)
     return env
