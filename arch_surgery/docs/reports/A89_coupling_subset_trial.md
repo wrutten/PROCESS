@@ -473,3 +473,29 @@ every case.
 - **(c)** Report wall clock beside node calls in the paper, with the per-sweep dispatch overhead
   named. Consider, as a separate and approved driver change, whether `_sweep_block`'s full walk
   per block sweep is part of the architecture or an implementation cost to remove.
+
+## 8. Orchestrator's critical assessment (protocol §5) — 2026-09-29
+
+*Written by the orchestrating session (`process-surgery-65`), which also executed the task at the user's direct request; the assessment therefore verifies by checks the task did not make (the standing rule: verify differently, never by repeating the press), not by re-reading its own work. All checks below are read-only over the records and one 6-second re-made run in a scratch directory; scripted where they produce a number.*
+
+**Scope.** Exploratory, evaluation phase only, no implementation for V4 or V5. Zero edits under `MDA_partitioning_experiment_v4/`, `harness/child/` or the root `process/`: `git diff 38d2f21f..HEAD --stat` over those paths is empty, and `git status --ignored` on the V4 folder is empty after every stage. The 13 files the branch adds are the task folder, this report, and three documents (queue row, V5 item 6, DSM validation V18). Records are `smoke` kind throughout, so no V4 tally can read them.
+
+**Checks made here, and what they found.**
+
+1. **The one audit failure's mechanism, from the per-pass logs, not the audit.** At `large_tokamak_nof`, cold, `A0`: the DSM-feedback run's pass-6 residual over its set is 3.4e-09 (stop); in the same pass the whole-`y` residual has `pf_coil.stress_z_cs_self_midplane_profile` at 6.4e-08 — a component in the census set and not in the DSM set. The census run's pass-6 residual over *its* set is exactly 6.399e-08 and it takes a seventh sweep. So §7.4's reading 1 holds on the logs: the carried component the DSM set lacks is the one that decided. The components the audit then flags (`costs.coecap`, `costs.coe`) are downstream of it, in neither set, and settle after the seventh sweep.
+2. **Headline node calls recounted** from `metrics.json` (`node_calls_single_eval`), displaced entry: 147/129/129/69/55 (nof), 126/111/93/63/49 (lad), 147/123/106/81/64 (st) — every cell of §7.4's table agrees. The `A0` count decomposes as the record's node census says: 7 sweeps × 18 in-loop nodes + `costs`, `vacuum`, `water_use` once each = 129, against `A0v4`'s 21 nodes × 7 = 147. The once-per-run execution is therefore counted, and counted once.
+3. **The tolerance rule re-applied independently** to `tolerance.json`'s rows (largest τ such that it and every tighter τ meet `max(objf_rel_err, conf_abs_err) ≤ epsfcn³` on `A0 rbw` in every configuration): 1e-08, as the file records.
+4. **Timing repetitions**: node calls and sweeps identical across all 7 repetitions and the discarded warm-up in all 15 cases; every entry readback bit-exact. The medians §7.5 quotes are of same-computation repetitions.
+5. **Stamp survey** (every `metrics.json` under the task's records): 39 first-pass records at `9d80c84b`; 24 census + 2 reference at `27dc1008`; 54 trial at `33ca7b52`; **one deviation** — the `st_regression` reference at `2977fcb3` with the tree dirty (2 modified, 3 untracked: the second-pass scripts, written but not yet committed when the smoke test made it). Every st entry derives from that reference's exit state. Checked by re-making the same job at the clean tip `fea99a9f` into a scratch directory: `y_exit.json` state identical component for component, objective bit-identical, 147 node calls both. The deviation is recorded and is without consequence.
+6. **The in-process records (`inproc.json`, noise and timing) carry no tree stamp** — only `process_file`, which places them in this worktree but not at a commit. Their commit is established by this session's ordering (noise pressed after `2b6aaca4`, timing after `33ca7b52`) and by `--choose-tau` re-run at `bd543f49` reproducing `tolerance.json` byte for byte. A V5 instrument built from `inproc_child.py` must stamp `tree_git_head` the way `evaluate.py` does; noted as a defect of the scratch instrument, not of the finding.
+
+**Findings on the report itself.**
+
+- §7.3's claim "V4's own control (`A0 full`) meets the rule already at 1e-6" is read from `tolerance.json` (nof 9.6e-12, lad 0, st 2.6e-10) and holds; the report should not be read as saying V4's campaign numbers are wrong — they are not, and D30's `frozen` ruler is unaffected.
+- The first pass (§3–§4) said "no variable was shown to be missing" at τ = 1e-6; the second pass shows one at τ = 1e-8. Both statements are true at their tolerance; §4 stands as the record of its day and §7 supersedes it as the finding.
+- §7.5's dispatch-overhead explanation for `A2`'s wall-clock ratio is labelled a hypothesis and is not measured; it stays a hypothesis in V5 item 6.
+- Numbers quoted in the user's chat (e.g. "24–36 % faster") are the report's §7.5 medians; nothing was published outside the committed scripts' output.
+
+**Verdict: merge.** Nothing acceptance-bearing depends on this task; its outputs are a V5 improvement item (6), a DSM-validation entry (V18) and a queue row, and the trial's evidence for them is reproducible from the committed scripts at the stamped commits. The deviation in check 5 is recorded here rather than repaired, because the re-made reference is bit-identical and re-pressing 27 st records to change a stamp would be a repeat of the press, not a verification.
+
+**Carried forward** (not this task's to fix): the census over an optimisation run and a gate with teeth (V5 item 6); the tree stamp on in-process instruments; A90 (m2-probe-binding), registered during this assessment, reads the same block-sweep counters and should cite §7.2's per-block carried-set sizes (M2 46–47 of 240–244) as context for M2's binding.
