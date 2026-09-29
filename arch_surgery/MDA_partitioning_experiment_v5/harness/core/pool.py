@@ -454,8 +454,25 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
 
     Two directories holding the same digest at step 2 is a refusal: the pool
     cannot say which record is the job's.
+
+    **A job that names its own directory is resolved to it, and step 2 is
+    never consulted for it** (issue I-29, in the form task A99
+    (v5-schedule-and-prime) met it).  Gate G1's two captures are one identity
+    at two commits in two named directories; on a tree whose ``after``
+    directory did not exist yet, step 2 resolved the ``after`` capture by
+    digest to the ``before`` records and re-made them in place — and resolved
+    the reference arm's capture to *another* gate's record of the same digest
+    (the input-file stage's baseline evaluation, the reproduction gate's pool
+    record), so neither capture ever held the reference arm and the "before"
+    side was destroyed by the press that was to compare against it.  A named
+    directory is the caller's statement of where this record lives; a record
+    of the same digest elsewhere is another caller's, and the pool has no
+    business writing into it.  :func:`run` still refuses to remove a named
+    directory that holds another job's record.
     """
     canonical = canonical_directory_for(job, campaign)
+    if job.outdir is not None:
+        return canonical
     identity = job.identity(Path(campaign.runs_dir))
     if (canonical / "metrics.json").exists():
         existing = records_mod.read(canonical)

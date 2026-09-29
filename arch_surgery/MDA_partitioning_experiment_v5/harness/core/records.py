@@ -452,6 +452,7 @@ SCHEMA: tuple[Field, ...] = (
     _f("n_arrangement_method_calls", "AB", "always", "executions of the run-constant geometry method; stamped, never pooled"),
     _f("block_loop_totals", "AB", "finished", "the block solver's own totals"),
     _f("defer_per_run_totals", "AB", "always", "the per-run deferral's own counts, or null when it is off"),
+    _f("schedule_resolution", "AB", "always", "the block schedule and the deferral sets resolved once per run (DR9): what was resolved, keyed on the figure of merit, the digests of the files the resolution read, and how many times the resolver ran — 1 in every run of this experiment that composes a block schedule or a deferral, 0 with every switch unset"),
     _f("node_census", "AB", "always", "model executions per node name"),
     _f("exit_forensics", "AB", "always", "the five fields recorded at every exit"),
     _f("attempts", "AB", "always", "one entry per optimiser attempt, in order"),

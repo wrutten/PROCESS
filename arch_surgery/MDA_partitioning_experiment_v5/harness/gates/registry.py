@@ -17,9 +17,10 @@ survey; the registry was written by task **A52 (harness-gates)**.
 **This revision's registry is the V5 plan's §7 Table 2** (task A98
 (v5-reporting-trim), 2026-09-29, list item 10): the predicate-mode gate G8,
 the prime's cold-chain gate G3/G3c and the recomputation gate with its
-``recomputed_tables`` stage are gone; the test-set gate GT and the
-count-neutrality gate GC are **declared placeholders that refuse with "not
-implemented"** until the driver changes they bind (DR11, DR9/DR10) land; the
+``recomputed_tables`` stage are gone; the test-set gate GT is a **declared
+placeholder that refuses with "not implemented"** until the driver change it
+binds (DR11) lands; the count-neutrality gate GC is real (task A99
+(v5-schedule-and-prime), the same day, merged over this revision); the
 reproduction gate GR is **run once**, at the copy commit, and refuses to
 re-make its runs.
 
@@ -88,16 +89,6 @@ DECLARED_NOT_IMPLEMENTED: dict[str, dict[str, str]] = {
             "the whole-y audit of the truncated run is reported beside"
         ),
         "pending": "DR11 (the loop's predicate binding a declared test set per block)",
-    },
-    "count_neutrality": {
-        "plan_name": "GC",
-        "binds": "items 7 and 8 of the V5 list (driver changes DR9 and DR10)",
-        "what_it_proves": (
-            "on a job set of both phases, every arm, one seed per configuration: "
-            "node calls, sweeps, predicate evaluations, components compared and "
-            "every exit state identical to the digit before and after the change"
-        ),
-        "pending": "DR9 (the deferral sets resolved once per run) and DR10 (the prime once per evaluation)",
     },
 }
 
@@ -185,20 +176,21 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
     Each literal lives in the module that implements the gate, as that
     module's ``gate(campaign)``; this function only collects them.
     """
-    from . import gate_audit, gate_composition, gate_entry, gate_prime, gate_records
+    from . import gate_audit, gate_composition, gate_count_neutrality, gate_entry, gate_prime, gate_records
 
     return {
         "reproduction": _run_once("reproduction", gates_mod.reproduction_gate(campaign)),
         "g0prime": gates_mod.g0prime_gate(campaign),
         "switch_neutrality": gate_neutrality.gate(campaign),
         "prime_map": gate_prime.prime_map_gate(campaign),
+        "count_neutrality": gate_count_neutrality.gate(campaign),
         "audit_restriction": gate_audit.audit_restriction_gate(campaign),
         "switch_composition": gate_composition.switch_composition_gate(campaign),
         "entry_and_warm": gate_entry.entry_and_warm_gate(campaign),
         "record_completeness": gate_records.record_completeness_gate(campaign),
         "output_path": gate_output_path.gate(campaign),
-        # The V5 plan's two new gates, declared and refusing (see the module
-        # docstring): GT the test set's teeth, GC count neutrality.
+        # The V5 plan's gate GT, declared and refusing until DR11's task (see
+        # the module docstring); GC is real above (A99 (v5-schedule-and-prime)).
         **{
             name: _not_implemented_gate(name, spec)
             for name, spec in DECLARED_NOT_IMPLEMENTED.items()
@@ -678,6 +670,7 @@ GATE_ORDER: tuple[str, ...] = (
     "artifacts_census",
     "artifacts_per_run",
     "record_completeness",
+    "count_neutrality",
     "prime_map",
     "audit_restriction",
     "entry_and_warm",

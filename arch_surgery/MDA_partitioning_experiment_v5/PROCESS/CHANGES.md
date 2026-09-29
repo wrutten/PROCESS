@@ -811,7 +811,7 @@ Relative to `c0ae5b28` this file also carries constraint 93 (§3.5, inherited).
 The docstring named a retired switch; it names the one that replaced it. Nothing the constraint
 computes changes.
 
-### 4.5 `process/core/caller.py` — 13 recorded edits
+### 4.5 `process/core/caller.py` — 16 recorded edits
 
 Relative to `c0ae5b28` this file also carries everything in §3.2 (inherited).
 
@@ -1227,6 +1227,162 @@ residual 0). The exit stamp is taken in a `finally`, so an attempt that raises i
 
 **Driver, not model.** Four integer reads and two dict copies per boundary, at most eight
 boundaries in a run; no float touched, no branch a result depends on. G1 (0/2 326 values).
+
+#### 4.5.14 `resolve_schedule` / `SCHEDULE_RESOLUTION` — memoisation (DR9)
+
+*Recorded edit kind: memoisation. Made by task A99 (v5-schedule-and-prime), driver change DR9
+(V5 list item 7, decision D31). The block-trace edit of A90 (m2-phasea-vs-phaseb) — the
+`PROCESS_ARCH_BLOCK_TRACE` hooks in `_call_models_partitioned` and `_block_trace_line` — is
+recorded in `copy_gates.py` but has no subsection here; the count in this section's heading is
+`copy_gates.py`'s.*
+
+The two functions that decided which nodes an arm defers and how the blocks are filled now delegate
+to one resolver, memoised on the figure of merit:
+
+```python
+ def resolved_defer_per_call_tails(i_figure_merit: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
+     ...
+-    if not DEFER_PER_CALL_NODES:
+-        return (), ()
+-    reads = _predicate_read_fields(i_figure_merit)
+-    writes = _node_write_sets()
+-    pre, post = [], []
+-    for n in DEFER_PER_CALL_NODES:
+-        (pre if (writes.get(n, frozenset()) & reads) else post).append(n)
+-    return tuple(pre), tuple(post)
++    pre, post, _schedule, _tail = resolve_schedule(i_figure_merit)
++    return pre, post
+
+ def module_schedule(i_figure_merit: int) -> tuple[tuple, ...]:
+     ...
+-    tail = (
+-        frozenset(resolved_defer_per_call_tail(i_figure_merit))
+-        if DEFER_PER_CALL_ENABLED
+-        else frozenset()
+-    )
+-    if module_solve.FLAT:
+-        return (
+-            (module_solve.FLAT_BLOCK_LABEL, _loop_node_set(tail), True),
+-        ), tail
+-    by_module: dict[str, set[str]] = {}
+-    for node, mod in NODE_MODULE.items():
+-        by_module.setdefault(mod, set()).add(node)
+-    schedule = []
+-    for label in module_solve.BLOCK_ORDER:
+-        nodes = frozenset(by_module.get(label, set()) - tail)
+-        schedule.append((label, nodes, label in module_solve.ITERATED))
+-    return tuple(schedule), tail
++    _pre, _post, schedule, tail = resolve_schedule(i_figure_merit)
++    return schedule, tail
+```
+
+and the resolver itself, with its cache and its stamp, after `_single_block_covers_loop`:
+
+```python
++_SCHEDULE_CACHE: dict[int, tuple] = {}
++SCHEDULE_RESOLUTION: dict = {"n_resolutions": 0, "resolutions": []}
++
++def resolve_schedule(i_figure_merit):
++    key = int(i_figure_merit)
++    hit = _SCHEDULE_CACHE.get(key)
++    if hit is not None:
++        return hit
++    pre, post, inputs = [], [], {}
++    if DEFER_PER_CALL_NODES:
++        reads = _predicate_read_fields(key)          # the ast walk, once
++        writes = _node_write_sets()                   # the JSON read, once
++        for n in DEFER_PER_CALL_NODES:
++            (pre if (writes.get(n, frozenset()) & reads) else post).append(n)
++        inputs[...] = sha256 of the two predicate sources and the write census
++    tail = frozenset(pre) | frozenset(post)
++    schedule = ()
++    if MDA_ENABLED:
++        ... the same FLAT / BLOCK_ORDER construction module_schedule had ...
++        inputs["node_map"] = sha256 of the node map
++    resolved = (tuple(pre), tuple(post), schedule, tail)
++    _SCHEDULE_CACHE[key] = resolved
++    SCHEDULE_RESOLUTION["n_resolutions"] += 1
++    SCHEDULE_RESOLUTION["resolutions"].append({... key, tails, schedule, inputs ...})
++    return resolved
+```
+
+The per-call stamp goes with it: `_module_stats` loses its `tail` argument and its `deferred_tail`
+entry (two call sites in `_call_models_partitioned`), and the `Caller.__init__` comment that said
+the tail is "re-resolved on every call rather than memoised" says the opposite.
+
+**Why.** Every `call_models` of a deferring arm re-derived its deferral sets — an `ast` walk over
+the objective and constraint sources and a re-read of the committed write census — 8–11 ms
+before any model ran, 0 in the arms that defer nothing (issue I-30, measured by A91
+(block-sweep-timing)). It is not the architecture: the models, their order and every count are
+identical with or without it, and a driver written for the partitioned order would resolve its
+schedule once at start-up. The user ruled it fixed in V5 (D31). The resolution depends on one
+run-time input, the figure of merit, so the cache is keyed on that alone; a scan that changed it
+would resolve a second entry, never reuse a wrong one. The stamp — what was resolved, the
+digests of what it read, how many times the resolver ran — reaches every run record as
+`schedule_resolution`, once per run.
+
+**Driver, not model.** With every switch unset the resolver is never reached (`module_schedule`
+runs only under a block schedule, the tails only under a deferral): gate G1. On every arm the
+matrix composes, every count is identical to the digit and every coupling-state file bit-identical
+before and after the change: gate GC (the A99 report §2). No float the run computes with is read or
+written by the resolver; the digests are of files, taken once.
+
+#### 4.5.15 The arrangement-method (prime) hook — hook moved (DR10)
+
+*Recorded edit kind: hook moved. Made by task A99 (v5-schedule-and-prime), driver change DR10
+(V5 list item 8).*
+
+The prime leaves the head of every sweep:
+
+```python
+ def _call_models_once(self, xc):
+     ...
+-        # VP6 (D19, task A40): prime the first-wall geometry pair at the
+-        # head of the sweep, ...
+-        if ARRANGEMENT_METHOD_FW_GEOMETRY:
+-            ARRANGEMENT_METHOD_CALLS[0] += 1
+-            self.models.fw.set_fw_geometry()
++        # VP6 (D19, task A40): the first-wall geometry prime used to sit
++        # here, at the head of every sweep; DR10 (A99) moved it to the head
++        # of ``_call_models_inner`` -- once per evaluation, before the first
++        # block. ...
+
+         # Tokamak calls
+```
+
+and arrives at the head of the evaluation, before the block schedule (or the flat loop) starts:
+
+```python
+ def _call_models_inner(self, xc, m):
+     """..."""
++        # VP6 (D19, task A40; DR10, V5 list item 8, task A99): the
++        # arrangement's method-level move is PRE-PROCESSING of the evaluation.
++        # ...
++        if ARRANGEMENT_METHOD_FW_GEOMETRY:
++            ARRANGEMENT_METHOD_CALLS[0] += 1
++            self.models.fw.set_fw_geometry()
++
+         # VP2c: resolve (and on first use validate) the post-solve exclusion
+```
+
+Three comments follow the move (the module-level VP6 comment, the readback's one-line comment, and
+the `EMPTY_BLOCK_SWEEPS` comment that listed the prime among an empty visit's costs).
+
+**Why.** The method depends only on user inputs — a run-constant of two input-file values
+(`fw.py:347-352` at the base commit). V4 executed it at the head of every block sweep (about 9 calls
+per evaluation in the optimisation phase, 13–15 in the evaluation phase; stamped, never counted, D19)
+because that was the simplest way to guarantee `build` reads this pass's value. The user: *"I need it
+to make sense from an architectural perspective. The prime was needed to fully decouple the first
+iteration. It is pre-processing before the partitioned MDAs can start."* Once per evaluation, before
+M1, is that pre-processing; the paper's caption ("executing the FirstWall subfunction" before the
+partitioned MDAs) then reads as written. The output path and the exit audit call `_call_models_once`
+directly and no longer prime: `FirstWall` has run by then and the pair holds the same bits.
+
+**Driver, not model.** With the switch unset one boolean read moves from the sweep head to the
+evaluation head (gate G1). With it on, the exit states of GC's job set are bit-identical to the
+per-sweep form's and every count but `n_arrangement_method_calls` is identical to the digit (gate GC,
+rule `once_per_evaluation`); the prime-on / prime-off exit states from the reference snapshot are
+bit-identical (gate G2). No model file changes.
 
 ### 4.6 `process/core/solver/solver_handler.py` — 1 recorded edit
 

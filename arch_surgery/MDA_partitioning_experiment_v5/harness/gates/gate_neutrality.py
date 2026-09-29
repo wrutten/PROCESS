@@ -252,6 +252,13 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
     "output_path_entries": (
         "a counter the output-path change adds; absent on the earlier side"
     ),
+    "schedule_resolution": (
+        "the once-per-run schedule stamp driver change DR9 adds (A99 "
+        "(v5-schedule-and-prime)): absent on a side captured before it, a "
+        "block after.  With every switch unset the resolver is never reached "
+        "and the block reads n_resolutions = 0 with an empty list; compared "
+        "wherever both sides carry it"
+    ),
     "audit_snapshot": (
         "the snapshot block the audit-position change adds; absent on the "
         "earlier side.  Both captures audit at the same position, which is "
