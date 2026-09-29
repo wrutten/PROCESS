@@ -1030,8 +1030,8 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="for --paper-tables: the runs root to read (campaign/ and gates/ "
-        "under it), e.g. a retired worktree's idf_probe/runs/A<n>_runs; "
-        "default the experiment's own runs/",
+        "under it), e.g. a retired worktree's relocated records tree, the "
+        "path the retire script prints; default the experiment's own runs/",
     )
     parser.add_argument(
         "--selfcheck",
