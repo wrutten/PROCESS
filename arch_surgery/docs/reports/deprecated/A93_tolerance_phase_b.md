@@ -1,6 +1,8 @@
 # A93 (tolerance-phase-b) — the census test set at the derived tolerance, in whole optimisations
 
-> **Document status** — **OPEN.** Task A93 (tolerance-phase-b), 2026-09-29, on branch
+> **Document status** — **MERGED 2026-09-29 at `0635dca2` (`--no-ff`); archived.** Records relocated to
+> `arch_surgery/idf_probe/runs/A93_runs/tolerance_phase_b/`; the orchestrator's assessment is §9; the st finding
+> is followed up by A96 (st-trajectory-ladder). Was: **OPEN.** Task A93 (tolerance-phase-b), 2026-09-29, on branch
 > `A93-tolerance-phase-b`, worktree `.claude/worktrees/A93-tolerance-phase-b`, base `9cfb5687`
 > (= `architecture_surgery`). V5 improvement list item 6, last prerequisite. Exploratory: **not** a
 > V4 result — V4's campaign, harness and report are untouched and nothing was written to the V4

@@ -121,9 +121,20 @@ step is h = `epsfcn` = 1e-3, its truncation error O(h²) and function noise ε a
 ε ≈ h³ = 1e-9 (Gill, Murray & Wright). **τ is the largest ladder value at which the MDA-induced error of the
 objective (relative) and of every normalised constraint (absolute) stays ≤ h³ at every stencil point of the
 control, in every configuration.** A89 found **1e-8** on V4's configurations with the census set (at 1e-6 the
-error reaches 2.8e-8). **The campaign value is declared from A93's stage and A89's `--choose-tau`, re-measured
-on the V5 copy before the campaign** — **[to be declared from A93]**; the *rule* is declared here, the
-*value* follows it. One τ for every converger in every arm and both phases (D23 stands; there is no inner
+error reaches 2.8e-8). **τ = 1e-8, declared** (A93 (tolerance-phase-b), merged `0635dca2`; the user, 2026-09-29:
+*"keep the tolerance: failed starts are results"*), re-measured by A89's `--choose-tau` on the V5 copy before the
+campaign as a check that the value has not moved. **What A93 measured at this value** (45 whole optimisations,
+5 seeds × 3 configurations, paired with V4's campaign records): on the pulsed configurations the census set
+leaves the optimiser's path and optimum unchanged in 30 of 30 runs (`norm_objf` within 5.3e-13), the flat
+control costs within 5 % of V4's per evaluation, and the partitioned arm's per-evaluation node-call ratio at
+matched accuracy is **0.48–0.49** against V4's 0.61 — V4's whole-`y` test at 1e-6 charged the partitioned arm for
+sweeps its blocks did not need. On **`st_regression` the trajectory term is not neutral**: the flat control's
+path shortens on 3 of 5 seeds, the partitioned arm's lengthens 1.7–4.2× on all 5 and one seed fails at the
+iteration cap; A89's ladder shows st as the one configuration where the census-set loop leaves a nonzero
+objective residual at 1e-8 (4.9e-11; 0.0 only from 1e-10). **The plan pre-declares** that on `st_regression`
+ε may differ from 1 in either direction and that a start lost at τ is a result on the per-arm success table
+(§5 B5), never a reason to loosen. **A96 (st-trajectory-ladder)** measures whether the path returns as τ → 1e-10
+on st; its result amends this paragraph before approval. One τ for every converger in every arm and both phases (D23 stands; there is no inner
 tolerance). Note: the retry ladder's `epsfcn × 10` attempt would license h³ = 1e-6; τ stays at the first
 attempt's value, which is tighter, and no attempt-dependent tolerance exists.
 
@@ -239,9 +250,12 @@ A91's form (median and range; a case whose repetitions differ in counts is refus
 
 **Expected reading** (item 9, from A91 and the campaign's sweep counts; context): reference to control a few
 percent more model time and a test term of about 1 ms; control to modified, model time about 0.75 with every
-overhead row equal within 0.3 ms; total per evaluation about 0.75–0.8 where the node-call ratio reads 0.64 —
+overhead row equal within 0.3 ms; total per evaluation about 0.75–0.8 where V4's node-call ratio read 0.64 —
 because node calls weight every model equally and the cost sits in a few physics and coil models, which is
-the paper's argument.
+the paper's argument. *(A93, 2026-09-29: at the census test and τ = 1e-8 the per-evaluation node-call ratio
+on the pulsed configurations is 0.48–0.49, not 0.61–0.64, so the gap between the count ratio and the
+wall-clock ratio is larger than this paragraph's V4 figures suggest; the wall-clock terms themselves are
+unmeasured until V5's campaign.)*
 
 ---
 
@@ -321,7 +335,7 @@ except by dated amendment; a value marked [A92]/[A93] is filled from that task's
 | δ (phase A) | 0.10, displaced entries; **no stencil regime** | entry displacement | the user, list header, 2026-09-29; item 10 |
 | δ (phase B) | 0.10 | start displacement | D15; V4 |
 | test set | the census-measured read-before-write set, per arm and block; DSM feedback set as cross-check | what the loops stop on | **D32**, item 6; population **[A92]** |
-| τ | **[to be declared from A93]** by the rule ε ≤ `epsfcn`³ (A89: 1e-8) — one value, every converger, every arm, both phases | convergence and handover accuracy | item 6; D23 (one tolerance) |
+| τ | **1e-8** by the rule ε ≤ `epsfcn`³ (A89; confirmed at optimisation scale by A93 on the pulsed configurations; st's trajectory term pre-declared non-neutral, §3) — one value, every converger, every arm, both phases; re-measured on the V5 copy before the campaign as a check | convergence and handover accuracy | item 6; D23 (one tolerance); the user, 2026-09-29 (Q6) |
 | `epsfcn` | 1e-3 (PROCESS's default; no input file sets it) | the tolerance rule's step | A89 §7.3 |
 | predicate mode | `frozen`; `mixed` never composed | the scale `s_i` of the scaled step | D30 ("or drop it"), item 10 |
 | F | 10 | matched-accuracy (A) and same-optimum (B) factor, median and p90 | V4 Table 6 (V2 App. B) |
