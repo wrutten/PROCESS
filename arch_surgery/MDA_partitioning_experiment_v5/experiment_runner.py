@@ -30,6 +30,7 @@ Exit codes: 0 ready · 2 refused to start · 3 not ready.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -44,6 +45,7 @@ from harness.experiment import artifacts as artifacts_mod  # noqa: E402
 from harness.child import census as census_mod  # noqa: E402
 from harness.experiment import test_sets as test_sets_mod  # noqa: E402
 from harness.measurement import test_set_smoke as test_set_smoke_mod  # noqa: E402
+from harness.measurement import timing as timing_mod  # noqa: E402
 from harness import chain as chain_mod  # noqa: E402
 from harness.gates import gate_neutrality as neutrality_mod  # noqa: E402
 from harness.gates import gates as gates_mod  # noqa: E402
@@ -58,6 +60,7 @@ from harness.core import records as records_mod  # noqa: E402
 from harness.gates import reference as reference_mod  # noqa: E402
 from harness.gates import selfcheck as selfcheck_mod  # noqa: E402
 from harness.core.config import (  # noqa: E402
+    CAMPAIGN_TIMERS,
     EXECUTION_APPROVED,
     TAU_BY_TEST_SET,
     TEST_SETS,
@@ -359,6 +362,9 @@ def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
         print(f"  REFUSED — {exc}")
         return 3
     gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
+    # DR12 (V5 plan §9; D33): the campaign runs with the timers on.
+    campaign = dataclasses.replace(campaign, timers=CAMPAIGN_TIMERS)
+    print(f"  wall-clock timers: {'on' if campaign.timers else 'off'} (config.CAMPAIGN_TIMERS)")
     press = chain_mod.run(
         campaign,
         plan,
@@ -466,6 +472,7 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         stencil_column=args.stencil_column,
         stencil_sign=args.stencil_sign,
         run_kind=args.run_kind,
+        timers=(True if args.timers else None),
     )
     print(
         f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
@@ -980,6 +987,28 @@ def stage_smoke_test_set(args: argparse.Namespace, campaign: Campaign) -> int:
     return code
 
 
+def stage_timing(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The wall-clock instrument's stages, from the button (V5 plan §6; D33, D38;
+    task A101 (v5-timers-and-once)): repeatability (the gate job set three
+    times at W = 1, timers on), timers-off (once, timers unset: the
+    instrument's own cost), validity (D38's check against the campaign's
+    timing of the same seeds) and tables (the three appendix tables over the
+    repeatability records, as test data).  Context, never evidence."""
+    _rule(f"timing — {args.timing}")
+    try:
+        code, record = timing_mod.stage(campaign, args.timing, resume=args.resume)
+    except (pool_mod.PoolError, framework_mod.GateError, chain_mod.ChainError) as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    for line in timing_mod.report(record):
+        print(line)
+    out = args.json or (timing_mod.timing_root(campaign, record["stage"]) / "measurements.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(record, indent=2, default=str))
+    print(f"  record: {out}")
+    return code
+
+
 def stage_supplementary(args: argparse.Namespace, campaign: Campaign) -> int:
     """A declared supplementary stage, from the button (V5 plan §3; A96).
 
@@ -1202,6 +1231,8 @@ def main(argv: list[str] | None = None) -> int:
                         choices=("gate", "smoke"),
                         help="for --run; a campaign record is never made here")
     parser.add_argument("--pin-hex", default=None, help="for --run")
+    parser.add_argument("--timers", action="store_true",
+                        help="for --run: compose the wall-clock timers (DR12)")
     parser.add_argument("--entry-state", default=None, help="for --run")
     parser.add_argument("--stencil-column", type=int, default=None, help="for --run")
     parser.add_argument("--stencil-sign", type=int, default=1, choices=(1, -1),
@@ -1256,6 +1287,20 @@ def main(argv: list[str] | None = None) -> int:
         "compared with the seeded reproduction records or a ladder record",
     )
     parser.add_argument(
+        "--timing",
+        choices=timing_mod.STAGES,
+        default=None,
+        help="the wall-clock instrument's stages, and stop (V5 plan §6; D33, "
+        "D38): 'repeatability' runs the gate job set three times at W = 1 with "
+        "PROCESS_ARCH_TIMERS=on and reports per row the median and [min, max] "
+        "(a job whose repetitions differ in counts is refused); 'timers-off' "
+        "runs the set once with the timers unset (the instrument's own cost); "
+        "'validity' checks the campaign's timing of the same seeds against "
+        "the repetitions' range; 'tables' renders the three appendix tables "
+        "over the repeatability records as test data.  Records stamped "
+        "'timing' under runs/timing/, never pooled.  Context, never evidence",
+    )
+    parser.add_argument(
         "--ladder-record",
         default=None,
         help="for --smoke-test-set: a record of the supplementary stage's B2 "
@@ -1293,6 +1338,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.census:
         return stage_census(args, campaign)
+
+    if args.timing:
+        return stage_timing(args, campaign)
 
     if args.smoke_test_set:
         return stage_smoke_test_set(args, campaign)

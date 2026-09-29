@@ -1869,3 +1869,72 @@ all smoke records under `runs/single/test_set_smoke/`. The fallback pair must re
 reproduction records of the same arm and seed to the `norm_objf` bit (the fallback is V4 on this
 tree); the per-evaluation node-call ratio `B2/B0` is printed beside each pair as context, never a
 verdict; a ladder record handed in with `--ladder-record` is compared with the supplementary smoke.
+
+## 18. The once-executed deferred set, and the wall-clock instrument (item 5, DR12)
+
+*Added 2026-09-29 by task A101 (v5-timers-and-once); V5 list items 5 and 9; decisions D33, D35, D36,
+D38. The rewrite of this README to V5's text is still pending (plan §8); this section is the part
+these two changes own.*
+
+**Item 5 — an evaluation is the MDA converged, then every deferred node once.** The evaluation phase
+is one `call_models` and never reaches the output path, so under the per-run deferral its record
+left the deferred nodes' outputs uncomputed. `PROCESS_ARCH_DEFER_PER_RUN_EXECUTION` says *where* the
+per-run set is executed once: `output_path` (unset — the optimisation phase's place, unchanged) or
+`evaluation_exit`, at the exit of every `call_models` on the converged state, after the objective
+and constraints. The harness composes `evaluation_exit` for the evaluation phase's deferring arm
+(`A2`) and nothing for the optimisation phase; it is not a matrix row — it follows from the phase
+and the deferral. The execution is the output path's own mechanism (one sweep of the dispatch body
+over the set with the exclusion lifted), **measured, not charged**: the per-run nodes' census reads 1,
+the node totals move by their number, the sweep counters by the one sweep, and gate GC's declared
+rule for the change predicts exactly those moves and refuses any other (`COUNT_RULE_DECLARATION`).
+The record's `defer_per_run_totals` gains `execution` and `n_executions` (1 per run in both phases).
+**A kept record must have been composed from the switch terms the arm sets today**
+(`pool.why_not_composed_as_today`, compared by term name against `switches_asked`), which is what
+re-made exactly the `A2` evaluation records under `--resume` and nothing else. With the set executed,
+the whole-state exit audit is the matched-accuracy statistic (D36): gate G4 (`audit_restriction`)
+retired when the whole-state and restricted maxima agreed on every partitioned evaluation record of
+the gate job set, and the tally's matched-accuracy table reads the whole state only.
+
+**DR12 — observation-only timers.** `PROCESS_ARCH_TIMERS=on` makes the driver copy accumulate, per
+run, the wall of every node call (per node), every sweep of the dispatch body, the block loops'
+convergence test (bind, read, residual) and upstream's own comparison, the objective-and-constraints
+layer, every `call_models` (with the epochs of the first and the last), the once-per-run set-up
+(DR9's schedule, the artifacts' first load, the per-run set's validation — folded into the fixed
+per-run term, plan §6), the solve phase (bracketed in `solver_handler`) and the output path. Unset,
+`caller.TIMERS` is `None` and every hook is one `is None` test (gate G1, byte-identical outputs);
+on, no count and no exit state moves (gate GC's DR12 side is made with the timers on). The harness
+harvests the accumulators **before** its own audit sweep and measures apart, as excluded costs, the
+audit's wall and its share of the driver's timers, the state snapshots, the record assembly, its
+set-up before the run and the process's exit after the record (`timers.excluded`); the pool stamps
+its independent wall of the child and the load average at spawn and return (`launcher`). `timers` is
+an **instrument switch** (`switches.INSTRUMENT_SWITCHES`): composed into every arm of a campaign that
+asks for it, the reference arms included, and left out of every "which architecture switches are
+set" check. It is a campaign-level setting (`Campaign.timers`: off for the gates, `CAMPAIGN_TIMERS`
+on for the campaign press) and a job-identity field rendered only when on, so every gate record
+keeps its identity; the three record fields it adds (`campaign_timers`, `timers`, `launcher`) are owed
+only by a record made with the timers on (`records.fields_for(..., timers_on)`), and gate G7's smoke
+jobs are timed so its field teeth bite.
+
+**The stages** (`experiment_runner.py --timing <stage>`; `harness/measurement/timing.py`; records
+stamped `timing` under `runs/timing/`, never pooled):
+
+| stage | what |
+|---|---|
+| `repeatability` | gate GC's job set (both phases, every arm, one seed per configuration) three times at **W = 1** with the timers on; per row the median and `[min, max]` over the repetitions (A91's form); a job whose repetitions differ in any count is refused |
+| `timers-off` | the same set once with the timers unset at W = 1: the launcher's wall against the repetitions' median is the instrument's own cost, reported beside |
+| `validity` | D38: the campaign's timing of the same seeds must lie within the repetitions' range, per job and row `Total`; where it does not, the appendix's timings come from a one-worker timing pass and the stage record says so |
+| `tables` | the three appendix tables of plan §6 over the repeatability records, as **test data** under `runs/timing/tables/`; the paper's cells come from the campaign through `paper_tables.py`, which renders the same rows (`timing.tables_over`) |
+
+**The rows** (seconds; ms per evaluation in phase A, s per optimisation in phase B): `M1`, `M2`,
+`M3`, `Feedforward` (the pulse node and the feed-forward tail), `Post-processing` (the once-per-run
+set) — the models' own wall summed through the committed node map, the same grouping as the count
+tables; `MDA convergence test` (bind + read + residual, plus upstream's comparison in the reference
+arms); `dispatch` (the sweep bodies less their nodes); `objective and constraints`; `optimiser own
+time` (the solve's wall less every evaluation; phase B); `fixed per run` (spawn to the first
+evaluation less the harness's set-up, the once-per-run set-up, and the run's tail after the solve
+less the output path's own sweeps); `unattributed residual`; `Total` (the evaluation's wall in phase
+A; the launcher's wall less the excluded costs in phase B). Context, never evidence (D33): no verdict
+reads a number from here. **Known limit**: a phase A run is one evaluation in a fresh process, so its
+node times carry numba's per-process cache load inside the first call of every jitted function; the
+phase A table is a first-evaluation-in-process figure, not the warmed per-evaluation figure of
+A91's instrument, and the report says so.

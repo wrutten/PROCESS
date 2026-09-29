@@ -102,7 +102,7 @@ LABEL_VARIABLE = "HARNESS_COUNT_NEUTRALITY_LABEL"
 #: Committed with the driver change it straddles.  ``("copy", "copy")`` is the
 #: first press, at the copy commit before any change: one side, compared with
 #: itself, a determinism result.
-STRADDLE: tuple[str, str] = ("DR10", "DR11")
+STRADDLE: tuple[str, str] = ("item5", "DR12")
 
 #: The test set a labelled side is made under, where a change declares one.
 #: DR11 (A100 (v5-test-set)) made the test set a switch and V4's whole write
@@ -110,8 +110,74 @@ STRADDLE: tuple[str, str] = ("DR10", "DR11")
 #: ``write_set`` **by declaration**, so that every count and every exit state
 #: must be identical to the digit to the DR10 side's -- which is the proof
 #: that the fallback is V4's predicate exactly.  The census value is another
-#: campaign and is not GC's business; a press under it is refused.
-STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set"}
+#: campaign and is not GC's business; a press under it is refused.  Every
+#: later side straddles DR11's and is made under the same value, so that the
+#: two sides of each straddle are one campaign.
+STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set", "item5": "write_set", "DR12": "write_set"}
+
+#: The sides made **with the wall-clock timers on** (driver change DR12, A101
+#: (v5-timers-and-once)): the DR12 side of GC is made under
+#: ``PROCESS_ARCH_TIMERS=on`` by declaration, so that every count and every
+#: exit state must be identical to the digit to the item-5 side's, made
+#: without the instrument -- the proof that the timers are observation-only.
+#: The other sides are made with the timers unset, as the gates are.
+STRADDLE_TIMERS: dict[str, bool] = {"DR12": True}
+
+#: Record blocks that are **not counts by kind** and are never under a
+#: declared count path: the timers' accumulators and the launcher's wall
+#: (DR12).  Checked at import: a count path under one of these would compare
+#: a wall clock, which is context and never evidence.
+NOT_COUNTS_BY_KIND: dict[str, str] = {
+    "timers": "the wall-clock accumulators (DR12): context, never evidence",
+    "launcher": "the pool's wall of the subprocess (DR12): context, never evidence",
+    "campaign_timers": "whether the timers were composed: a harness stamp of the instrument",
+}
+
+#: What each labelled side declares about **every declared count** other
+#: than the prime count, keyed by the after label.  ``identical``: compared
+#: leaf by leaf, as before.  ``deferred_set_executed_once_at_evaluation_exit``
+#: (V5 list item 5, A101 (v5-timers-and-once); decision D35): on an
+#: **evaluation-phase** record of an arm whose driver read-back says the
+#: per-run deferred set is executed at the evaluation's exit, exactly these
+#: leaves move and by exactly this much, and nothing else -- the per-run
+#: nodes' census 0 -> 1 each, ``node_calls_total`` and
+#: ``node_calls_single_eval`` by their number, ``dispatch_sweeps`` and
+#: ``n_model_calls_sweeps`` by the one sweep that executes them (the output
+#: path's own mechanism, counted as it is in the optimisation phase), the
+#: per-evaluation sweep histogram shifted by that sweep, and the stamps of the
+#: execution (``defer_per_run_totals.executed_once``, ``…_at_node_calls`` =
+#: the node-call counter before the set ran, ``execution``, ``n_executions``
+#: = 1); the whole-state exit-audit maximum is reported on both sides and
+#: not compared (the before side's audit re-computes outputs the run left
+#: uncomputed; the after side's audits a state that carries them).  On an
+#: optimisation-phase record of a deferring arm the two new stamps read
+#: ``output_path`` and 1 and every other leaf is identical; on every other
+#: record the rule is ``identical``.  The comparison is made by predicting
+#: the after side from the before side under the rule and comparing the
+#: prediction with the after side leaf by leaf, so an undeclared move is a
+#: mismatch like any other.
+COUNT_RULE_DECLARATION: dict[str, str] = {
+    "copy": "identical",
+    "DR9": "identical",
+    "DR10": "identical",
+    "DR11": "identical",
+    "item5": "deferred_set_executed_once_at_evaluation_exit",
+    # DR12 (the observation-only timers) moves no count and no exit state.
+    "DR12": "identical",
+}
+
+#: The driver read-back that says whether a run executes the per-run set at
+#: the evaluation's exit (item 5), and the stamp block the execution writes.
+EXECUTION_READBACK = "process.core.caller.DEFER_PER_RUN_AT_EVALUATION_EXIT"
+PER_RUN_TOTALS = "defer_per_run_totals"
+
+#: Under the item-5 rule, the components of an evaluation-phase exit state
+#: that may differ: those the per-run deferred nodes write on the
+#: configuration (the write census through the per-run artifact, the exit
+#: audit's own derivation, ``gate_output_path.excluded_by_the_per_run_nodes``).
+#: Every other component must be bit-identical; the differing declared ones
+#: are counted and named beside.
+STATE_COMPONENTS_MAY_DIFFER_UNDER = {"deferred_set_executed_once_at_evaluation_exit"}
 
 #: What each labelled side declares about ``n_arrangement_method_calls``,
 #: keyed by the **after** label.  ``identical``: compared like every other
@@ -130,6 +196,11 @@ PRIME_CALLS_DECLARATION: dict[str, str] = {
     # no change to any count under the fallback: the prime count is compared
     # like every other count, and must be identical.
     "DR11": "identical",
+    # item 5 (the per-run set executed once at the evaluation's exit) moves
+    # no prime count: the execution is one sweep and the prime is not in it.
+    "item5": "identical",
+    # DR12 (the timers): no count moves.
+    "DR12": "identical",
 }
 
 #: The evaluation phase's seed: the first displaced one, as gate G6 pairs the
@@ -185,6 +256,13 @@ COUNT_PATHS: dict[str, str] = {
     "lift_residual": "the lifted component's inconsistency at exit",
 }
 
+for _path in COUNT_PATHS:
+    if _path.split(".")[0] in NOT_COUNTS_BY_KIND:
+        raise TypeError(
+            f"COUNT_PATHS names {_path!r}, which is under a block that is not "
+            f"a count by kind ({NOT_COUNTS_BY_KIND[_path.split('.')[0]]})"
+        )
+
 #: The one count the change may move, and its companion on the first
 #: evaluation of an optimisation.  Compared under :data:`PRIME_CALLS_DECLARATION`.
 PRIME_PATHS: tuple[str, ...] = (
@@ -225,9 +303,14 @@ def labelled(label: str) -> dict[str, str]:
 def count_neutrality_jobs(
     campaign: Campaign, references: Mapping[str, Any], label: str
 ) -> list[tuple[str, str, str, pool_mod.Job]]:
-    """One side's job set: ``(phase, configuration, arm, job)`` per active arm."""
+    """One side's job set: ``(phase, configuration, arm, job)`` per active arm.
+
+    A side :data:`STRADDLE_TIMERS` names is composed with the wall-clock
+    timers on (DR12); every other side with them unset.
+    """
     from . import reproduction as reproduction_mod
 
+    timers = STRADDLE_TIMERS.get(label, False)
     plan: list[tuple[str, str, str, pool_mod.Job]] = []
     for config in campaign.configurations:
         reference = references[config.name]
@@ -256,6 +339,7 @@ def count_neutrality_jobs(
                         ),
                         entry_state=snapshot,
                         run_kind="gate",
+                        timers=timers,
                         override_env=labelled(label),
                     ),
                 )
@@ -276,6 +360,7 @@ def count_neutrality_jobs(
                         regime="unperturbed",
                         delta=None,
                         run_kind="gate",
+                        timers=timers,
                         override_env=labelled(label),
                     ),
                 )
@@ -380,6 +465,118 @@ def compare_counts(
     }
 
 
+def _executes_at_evaluation_exit(record: Mapping[str, Any]) -> bool:
+    """Whether the run executed the per-run set at its evaluation's exit (item 5),
+    read back from the driver."""
+    value = (record.get("resolved_switches") or {}).get(EXECUTION_READBACK)
+    return bool(value)
+
+
+def predict_under_rule(
+    before: Mapping[str, Any], after: Mapping[str, Any], *, rule: str
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The after side **predicted** from the before side under *rule*, and the
+    declared moves (leaf, before, predicted) the prediction made.
+
+    ``identical`` predicts the before side unchanged.  The item-5 rule
+    (:data:`COUNT_RULE_DECLARATION`) applies its declared moves where the
+    after side's driver read-back says the set is executed at the
+    evaluation's exit and the record is an evaluation-phase one; on an
+    optimisation-phase record of a deferring arm it adds the two execution
+    stamps at their declared values; elsewhere it predicts no change.  The
+    prediction is compared with the after side leaf by leaf by the caller, so
+    a move the rule did not predict is a mismatch.
+    """
+    predicted = json.loads(json.dumps(before))
+    moves: list[dict[str, Any]] = []
+    if rule == "identical":
+        return predicted, moves
+    if rule != "deferred_set_executed_once_at_evaluation_exit":
+        raise GateError(
+            f"COUNT_RULE_DECLARATION names the rule {rule!r}, which this gate "
+            f"does not implement; a rule nobody implements would pass by "
+            f"never being applied"
+        )
+    totals = after.get(PER_RUN_TOTALS)
+    if not isinstance(totals, Mapping) or not isinstance(predicted.get(PER_RUN_TOTALS), Mapping):
+        return predicted, moves  # a non-deferring arm: nothing declared moves
+
+    def move(leaf: str, value: Any) -> None:
+        moves.append({"leaf": leaf, "before": records_mod.resolve_path(before, leaf) if records_mod.has_path(before, leaf) else "<absent>", "predicted": value})
+
+    if after.get("campaign_phase") != "A" or not _executes_at_evaluation_exit(after):
+        # The optimisation phase, or an evaluation of an arm that executes
+        # the set at the output path: the two stamps the change adds, at
+        # their declared values, and nothing else.
+        predicted[PER_RUN_TOTALS]["execution"] = "output_path"
+        predicted[PER_RUN_TOTALS]["n_executions"] = 1 if (totals.get("executed_once") is not None) else 0
+        move(f"{PER_RUN_TOTALS}.execution", "output_path")
+        move(f"{PER_RUN_TOTALS}.n_executions", predicted[PER_RUN_TOTALS]["n_executions"])
+        return predicted, moves
+
+    nodes = sorted(totals.get("nodes") or [])
+    n = len(nodes)
+    for leaf in ("node_calls_total", "node_calls_single_eval"):
+        if isinstance(predicted.get(leaf), int):
+            predicted[leaf] = predicted[leaf] + n
+            move(leaf, predicted[leaf])
+    for leaf in ("dispatch_sweeps", "n_model_calls_sweeps"):
+        if isinstance(predicted.get(leaf), int) and n:
+            predicted[leaf] = predicted[leaf] + 1
+            move(leaf, predicted[leaf])
+    histogram = predicted.get("sweeps_per_eval")
+    if isinstance(histogram, Mapping) and n:
+        hist = {str(int(k) + 1): v for k, v in (histogram.get("hist") or {}).items()}
+        n_evaluations = sum(hist.values())
+        n_sweeps = sum(int(k) * v for k, v in hist.items())
+        predicted["sweeps_per_eval"] = {
+            **histogram,
+            "hist": hist,
+            "n_evaluations": n_evaluations,
+            "n_sweeps": n_sweeps,
+            "mean": (n_sweeps / n_evaluations) if n_evaluations else None,
+        }
+        move("sweeps_per_eval.hist", hist)
+        move("sweeps_per_eval.n_sweeps", n_sweeps)
+    census = (predicted.get("node_census") or {}).get("counted")
+    if isinstance(census, dict):
+        for node in nodes:
+            census[node] = int(census.get(node, 0)) + 1
+            move(f"node_census.counted.{node}", census[node])
+    predicted[PER_RUN_TOTALS]["executed_once"] = nodes
+    predicted[PER_RUN_TOTALS]["executed_once_at_node_calls"] = before.get("node_calls_total")
+    predicted[PER_RUN_TOTALS]["execution"] = "evaluation_exit"
+    predicted[PER_RUN_TOTALS]["n_executions"] = 1
+    move(f"{PER_RUN_TOTALS}.executed_once", nodes)
+    move(f"{PER_RUN_TOTALS}.executed_once_at_node_calls", before.get("node_calls_total"))
+    move(f"{PER_RUN_TOTALS}.execution", "evaluation_exit")
+    move(f"{PER_RUN_TOTALS}.n_executions", 1)
+    # The whole-state audit maximum: reported on both sides, not compared.
+    leaf = "exit_audit.frozen.residual_max_hex"
+    if records_mod.has_path(after, leaf) and records_mod.has_path(predicted, leaf):
+        predicted["exit_audit"]["frozen"]["residual_max_hex"] = records_mod.resolve_path(after, leaf)
+        moves.append({
+            "leaf": leaf,
+            "before": records_mod.resolve_path(before, leaf),
+            "predicted": "<reported, not compared: the before side's audit re-computes outputs the run left uncomputed>",
+            "after": records_mod.resolve_path(after, leaf),
+        })
+    return predicted, moves
+
+
+def compare_counts_under_rule(
+    before: Mapping[str, Any], after: Mapping[str, Any], *, rule: str
+) -> dict[str, Any]:
+    """:func:`compare_counts` between the after side and the before side
+    **predicted** under *rule*; the declared moves travel in the result."""
+    predicted, moves = predict_under_rule(before, after, rule=rule)
+    result = compare_counts(predicted, after)
+    result["rule"] = rule
+    result["n_declared_moves"] = len(moves)
+    result["declared_moves"] = moves
+    return result
+
+
 def _primed(record: Mapping[str, Any]) -> bool | None:
     """Whether the run composed the prime, read back from the driver."""
     value = (record.get("resolved_switches") or {}).get(PRIME_READBACK)
@@ -464,17 +661,22 @@ def _state(directory: Path, name: str) -> dict[str, Any] | None:
     return json.loads(path.read_text())
 
 
-def compare_state_files(before_dir: Path, after_dir: Path) -> dict[str, Any]:
+def compare_state_files(
+    before_dir: Path, after_dir: Path, *, may_differ: frozenset[str] = frozenset()
+) -> dict[str, Any]:
     """Every coupling-state file the before side wrote, against the after side's.
 
     Component by component, every kind of component, floats as hex literals:
     bit equality (gate G2's construction, :func:`gate_prime.full_state_compare`).
     A file on one side only is a mismatch of its whole component count.
+    *may_differ* names the components a declared rule allows to differ (item
+    5: the per-run nodes' own writes); those that do are counted and named
+    under ``n_declared_differing`` and are not mismatches.
     """
     from . import gate_prime as prime_mod
 
     files: dict[str, Any] = {}
-    n_components = n_differing = 0
+    n_components = n_differing = n_declared = 0
     for name in STATE_FILES:
         a = _state(before_dir, name)
         b = _state(after_dir, name)
@@ -501,12 +703,28 @@ def compare_state_files(before_dir: Path, after_dir: Path) -> dict[str, Any]:
             n_differing += n
             continue
         comparison = prime_mod.full_state_compare(a["state"], b["state"])
+        if may_differ:
+            keys = sorted(set(a["state"]) | set(b["state"]))
+            differing = [k for k in keys if a["state"].get(k) != b["state"].get(k)]
+            declared = [k for k in differing if k in may_differ]
+            outside = [k for k in differing if k not in may_differ]
+            comparison = {
+                **comparison,
+                "n_differing": len(outside),
+                "differing": outside[:20],
+                "n_declared_differing": len(declared),
+                "declared_differing": declared[:40],
+                "n_declared_components": len([k for k in keys if k in may_differ]),
+            }
+            n_declared += len(declared)
         files[name] = comparison
         n_components += comparison["n_components"]
         n_differing += comparison["n_differing"]
     return {
         "n_components_compared": n_components,
         "n_components_differing": n_differing,
+        "n_declared_differing": n_declared,
+        "n_may_differ": len(may_differ),
         "files": files,
     }
 
@@ -595,6 +813,13 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
             f"{after_label!r}; a change that does not say what it does to the "
             f"prime count is not declared, and an undeclared change cannot pass"
         )
+    count_rule = COUNT_RULE_DECLARATION.get(after_label)
+    if count_rule is None:
+        raise GateError(
+            f"COUNT_RULE_DECLARATION declares nothing for the after label "
+            f"{after_label!r}; a change that does not say what it does to the "
+            f"counts is not declared, and an undeclared change cannot pass"
+        )
     declared_set = STRADDLE_TEST_SET.get(after_label)
     if declared_set is not None and campaign.test_set != declared_set:
         # The after side is made under the declared test set **whatever the
@@ -640,9 +865,21 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         key = f"{phase}/{arm}/{config_name}"
         before = _read(before_dir, side="before", key=key)
         after = _read(after_dir, side="after", key=key)
-        counts = compare_counts(before, after)
+        counts = compare_counts_under_rule(before, after, rule=count_rule)
         prime = compare_prime_calls(before, after, rule=rule)
-        states = compare_state_files(before_dir, after_dir)
+        may_differ: frozenset[str] = frozenset()
+        if (
+            count_rule in STATE_COMPONENTS_MAY_DIFFER_UNDER
+            and phase == "A"
+            and _executes_at_evaluation_exit(after)
+        ):
+            from . import gate_output_path as output_path_mod
+
+            owned, _detail = output_path_mod.excluded_by_the_per_run_nodes(
+                campaign, campaign.configuration(config_name)
+            )
+            may_differ = frozenset(owned)
+        states = compare_state_files(before_dir, after_dir, may_differ=may_differ)
         unlabelled = pool_mod.Job(
             **{
                 f.name: getattr(after_job, f.name)
@@ -705,6 +942,7 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
     straddle = _straddle(before_prov, after_prov)
     _HELD["rows"] = rows
     _HELD["rule"] = rule
+    _HELD["count_rule"] = count_rule
     outcome = {
         "passed": passed,
         "criterion": (
@@ -720,15 +958,24 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         "straddle": straddle,
         "prime_calls_rule": rule,
         "prime_calls_declaration": dict(PRIME_CALLS_DECLARATION),
+        "count_rule": count_rule,
+        "count_rule_declaration": dict(COUNT_RULE_DECLARATION),
+        "n_declared_moves": sum(int(r["counts"].get("n_declared_moves") or 0) for r in rows),
+        "n_state_components_declared_differing": sum(
+            int(r["states"].get("n_declared_differing") or 0) for r in rows
+        ),
         "test_set": campaign.test_set,
         "tau": campaign.tau,
         "straddle_test_set_declaration": dict(STRADDLE_TEST_SET),
+        "straddle_timers_declaration": dict(STRADDLE_TIMERS),
+        "after_side_timers": bool(STRADDLE_TIMERS.get(after_label, False)),
+        "not_counts_by_kind": dict(NOT_COUNTS_BY_KIND),
         "population": (
             f"{straddle['says']}  {len(rows)} run pair(s) = "
             f"{sum(1 for r in rows if r['phase'] == 'A')} evaluation(s) + "
             f"{sum(1 for r in rows if r['phase'] == 'B')} optimisation(s); "
             f"{n_compared} count leaves compared under {len(COUNT_PATHS)} "
-            f"declared paths, {n_mismatched} differing; {n_prime_compared} "
+            f"declared paths and the rule {count_rule!r}, {n_mismatched} differing; {n_prime_compared} "
             f"prime-count check(s) under the rule {rule!r}, "
             f"{n_prime_mismatched} failing; {n_components} coupling-state "
             f"components compared bit for bit over the state files, "
@@ -811,7 +1058,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         if not isinstance(was, int):
             return False, f"{field} is {was!r} on the after side; nothing to add one to"
         after[field] = was + 1
-        result = compare_counts(before, after)
+        result = compare_counts_under_rule(before, after, rule=_HELD.get("count_rule") or "identical")
         named = [m["field"] for m in result["mismatches"]]
         return result["n_mismatched"] == 1 and named == [field], (
             f"one added to {field} ({was} → {was + 1}) in a copy of "
@@ -868,7 +1115,49 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"{result['n_compared']} failing"
         )
 
+    def a_per_run_node_counted_twice() -> tuple[bool, str]:
+        """Under the item-5 rule, a per-run node counted twice on the after
+        side must be the one differing leaf; under 'identical' the tooth
+        reads the same doctoring as a plain count difference."""
+        count_rule = _HELD.get("count_rule") or "identical"
+        every = _HELD.get("rows") or []
+        rows = (
+            [r for r in every if r["phase"] == "A" and (r["counts"].get("n_declared_moves") or 0) > 0]
+            or [r for r in every if r["phase"] == "A"]
+            or every
+        )
+        if not rows:
+            return False, "the gate compared nothing"
+        row = rows[-1]
+        before = records_mod.read(Path(row["before"]["path"]))
+        after = json.loads(json.dumps(records_mod.read(Path(row["after"]["path"]))))
+        # the record's OWN census dictionary, doctored in place: the
+        # evaluation phase stamps `counted`, the optimisation phase
+        # `per_node_counted` (a fresh dictionary would doctor nothing)
+        census_key = "counted" if row["phase"] == "A" else "per_node_counted"
+        census = (after.get("node_census") or {}).get(census_key)
+        if not isinstance(census, dict) or not census:
+            return False, f"the after-side record carries no node_census.{census_key} to doctor"
+        nodes = sorted(((after.get(PER_RUN_TOTALS) or {}).get("nodes")) or [])
+        node = next((n for n in nodes if n in census), sorted(census)[0])
+        was = int(census.get(node, 0))
+        census[node] = was + 1
+        result = compare_counts_under_rule(before, after, rule=count_rule)
+        named = [m["field"] for m in result["mismatches"]]
+        return result["n_mismatched"] == 1 and named == [f"node_census.{census_key}.{node}"], (
+            f"{node} counted {was} -> {was + 1} in a copy of {row['key']}'s after-side "
+            f"record under the rule {count_rule!r}: the comparison reports "
+            f"{result['n_mismatched']} differing leaf/leaves of {result['n_compared']} "
+            f"({named}); {result['n_declared_moves']} declared move(s) applied"
+        )
+
     return (
+        Tooth(
+            name="a per-run node counted twice",
+            what="one added to a per-run node's census on a copy of an after-side record",
+            must="be the one and only differing count leaf under the declared rule",
+            check=a_per_run_node_counted_twice,
+        ),
         Tooth(
             name="a doctored count on one record",
             what="one added to node_calls_total in a copy of an after-side record",

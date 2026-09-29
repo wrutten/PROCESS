@@ -909,7 +909,7 @@ Relative to `c0ae5b28` this file also carries constraint 93 (§3.5, inherited).
 The docstring named a retired switch; it names the one that replaced it. Nothing the constraint
 computes changes.
 
-### 4.5 `process/core/caller.py` — 17 recorded edits
+### 4.5 `process/core/caller.py` — 19 recorded edits
 
 Relative to `c0ae5b28` this file also carries everything in §3.2 (inherited).
 
@@ -1513,7 +1513,102 @@ stopping subset is the test set. Under the fallback `tests` is `subsets` — the
 nothing differs from the copy before the change (gate GC); with every switch unset the branch is
 never reached (gate G1).
 
-### 4.6 `process/core/solver/solver_handler.py` — 1 recorded edit
+#### 4.5.17 `PROCESS_ARCH_DEFER_PER_RUN_EXECUTION` and `_execute_deferred_per_run_set_once` — where the per-run set is executed once (V5 list item 5)
+
+*Recorded edit kind: switch. Made by task A101 (v5-timers-and-once), V5 list item 5, decision D35.*
+
+```python
++_DEFER_PER_RUN_EXECUTIONS: tuple[str, ...] = ("output_path", "evaluation_exit")
++DEFER_PER_RUN_EXECUTION: str = (
++    os.environ.get("PROCESS_ARCH_DEFER_PER_RUN_EXECUTION", "").strip()
++    or "output_path"
++)
++# ... refused on an unknown value, and refused without PROCESS_ARCH_DEFER_PER_RUN
++DEFER_PER_RUN_AT_EVALUATION_EXIT: bool = DEFER_PER_RUN_EXECUTION == "evaluation_exit"
+```
+
+`DEFER_PER_RUN_TOTALS` gains `"execution": DEFER_PER_RUN_EXECUTION` and `"n_executions": 0`;
+`write_output_files` increments `n_executions` where it executes the set. In `call_models`:
+
+```python
+-            return self._call_models_inner(xc, m)
++            objf, conf = self._call_models_inner(xc, m)
++            if DEFER_PER_RUN_AT_EVALUATION_EXIT:
++                self._execute_deferred_per_run_set_once(xc)
++            return objf, conf
+```
+
+and the method:
+
+```python
++    def _execute_deferred_per_run_set_once(self, xc: np.ndarray) -> None:
++        ps = _defer_per_run_nodes(self.data)
++        DEFER_PER_RUN_TOTALS["executed_once"] = sorted(ps)
++        DEFER_PER_RUN_TOTALS["executed_once_at_node_calls"] = NODE_CALLS[0]
++        DEFER_PER_RUN_TOTALS["n_executions"] += 1
++        if not ps:
++            return
++        self._defer_per_run = None
++        self._sweep_block(xc, ps)
+```
+
+**What it is.** An evaluation-phase run is one `call_models` and never reaches the output path,
+so under the per-run deferral its record left the deferred nodes' outputs uncomputed (V4's
+Table 9 printed the 0). With `evaluation_exit` composed — by the harness, in the evaluation
+phase's deferring arm only — the set is executed once at the exit of every `call_models`, on the
+converged state, after the objective and constraints (which read nothing the set writes): the
+MDA converged, then every deferred node once, so the exit state carries what a flat evaluation's
+carries (the user, 2026-09-29: *"it should mimic a full model evaluation yielding the same output
+as the reference case"*). The mechanism is the output path's own: one sweep of the dispatch
+body over the set with the exclusion lifted for it, counted like any other node call and any
+other sweep — *measured, not charged*. The optimisation phase leaves the switch unset and is
+unchanged. With the switch unset the evaluation's exit is one boolean read (gate G1); gate GC
+declares the counts the evaluation phase gains (the per-run nodes' census 0 → 1 each, the node
+totals by their number, one dispatch sweep) and requires every other count and the whole
+optimisation phase identical to the digit, with the per-run nodes' own components the only ones
+of the exit state that may differ. No model file changes.
+
+#### 4.5.18 `PROCESS_ARCH_TIMERS` and `TIMERS` — observation-only wall-clock timers (DR12)
+
+*Recorded edit kind: instrument. Made by task A101 (v5-timers-and-once), driver change DR12, V5 list
+item 9, decisions D33 and D38.*
+
+```python
++_TIMERS_VALUES: tuple[str, ...] = ("on",)
++TIMERS_NAME: str | None = os.environ.get("PROCESS_ARCH_TIMERS", "").strip() or None
++# ... refused on an unknown value
++TIMERS_ENABLED: bool = TIMERS_NAME is not None
++TIMERS: dict | None = _new_timers() if TIMERS_ENABLED else None
++def timers_solve_started() -> None: ...
++def timers_solve_ended() -> None: ...
++def _timed_objective(i_figure_merit, m, data): ...
+```
+
+**The hooks, each one `is None` test with the switch unset.** In `_node`, around the node's own
+`run()` (per node: `node_s`, `node_n`); in `_run_deferred_tail`, the flat per-call tail's direct calls
+apart (`tail_node_s`); in `_call_models_once`, the sweep's wall from the counter increment to the end
+of the tokamak path (`sweep_s`, `n_sweeps`; the stellarator and IFE returns are not timed); in
+`_call_models_partitioned`, the artifacts' first load (`run_setup_s`), the coupling-state bind
+(`test_bind_s`) and, through two wrappers that replace `spec.read` / `spec.residual` for the loop,
+the reads and residuals (`test_read_s`, `test_residual_s`); in the flat loop, upstream's own
+`check_agreement` pair (`upstream_test_s`); at the four objective-and-constraints sites, the one
+helper `_timed_objective` (`objective_s`) — the same two calls in the same order, so the default
+path's floats are unchanged; in `call_models`, the evaluation's wall and the epochs of the first
+and the last (`call_models_s`, `first_call_models_at`, `last_call_models_ended_at`); in
+`resolve_schedule`'s cache-miss path and `_defer_per_run_nodes`'s validation, the once-per-run
+set-up (`run_setup_s`, folded into the fixed per-run term and out of the evaluation, plan §6); in
+`write_output_files`, the output path's wall (`output_path_s`); `timers_solve_started` /
+`timers_solve_ended`, called by `solver_handler.run`, stamp the solve phase's wall and epochs and
+freeze the accumulators at its exit (`at_solve_end`) so the run's tail can be told from the solve.
+
+**What it is not.** Nothing here touches a float a result depends on or changes a branch: unset,
+`TIMERS` is `None` and gate G1 compares the outputs byte for byte; on, gate GC compares every count
+and every exit state of a side made with the timers on against the side made without. The harness
+reads the dictionary after the run and *before* its own audit sweep, and measures the audit's share
+apart as an excluded cost. Wall clock is context, never evidence (D33; CLAUDE.md; I-10; trap T5).
+No model file changes.
+
+### 4.6 `process/core/solver/solver_handler.py` — 2 recorded edits
 
 Relative to `c0ae5b28` this file also carries the three probe `record_retry` hooks (§3.8).
 
@@ -1555,6 +1650,29 @@ positional guess.
 
 **Driver, not model.** Which attempts run, in which order, under which settings, is exactly what
 it was; the only new statements are the stamps.
+
+#### 4.6.2 `caller.timers_solve_started()` / `caller.timers_solve_ended()` around the ladder — instrument (DR12)
+
+*Recorded edit kind: instrument. Made by task A101 (v5-timers-and-once), driver change DR12.*
+
+```python
+         caller.open_ladder()
++        # DR12 (A101): the solve phase's boundaries, timers on only.
++        caller.timers_solve_started()
+         with caller.attempt(LADDER_STAGES[0]):
+             ifail = self.solver.solve()
+ ...
++        caller.timers_solve_ended()
+         self.output()
+         return ifail
+```
+
+Two calls bracketing the whole retry ladder, each a no-op with `PROCESS_ARCH_TIMERS` unset (gate
+G1); with it on they stamp the solve phase's wall and epochs and freeze the accumulators at its
+exit, so the optimiser's own time (the solve's wall less every evaluation) and the fixed per-run
+term (what lies before the first evaluation and after the solve) can be derived by the harness.
+The ladder itself — which attempts run, in which order, under which settings — is exactly what it
+was.
 
 ### 4.7 `process/core/_idf_probe_modules.py` — 1 recorded edit
 

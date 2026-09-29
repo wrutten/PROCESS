@@ -447,7 +447,7 @@ def matched_accuracy(
     configuration: str,
     source: str,
 ) -> Table:
-    """§4.2.2 — the achieved accuracy, on both rulers, with the argmax named."""
+    """§4.2.2 — the achieved accuracy on the whole state, with the argmax named (D36)."""
     by_arm = _by_arm(population, configuration)
     config = campaign.configuration(configuration)
     base, why_base = reference_arm(config.pulsed, set(by_arm))
@@ -456,35 +456,21 @@ def matched_accuracy(
     reasons: set[str] = set()
     for arm in _arm_order(by_arm):
         records = [r for r in by_arm[arm] if stats_mod.finished(r)]
-        # The audit is *measured* on both rulers (the record contract,
-        # records.AUDIT_RULERS) whatever the arm *composed*: V5 composes the
-        # frozen ruler alone (campaign.predicate_modes), and the table still
-        # reports the audit on both.
         for ruler in AUDIT_RULERS:
-            # One construction for n, declared in stats.accuracy_population: it
-            # counts the **runs** this row is over, and the column beside it
-            # says how many of them carried a restricted statistic.
-            block = stats_mod.accuracy_population(records, ruler=ruler)
-            restricted = block["statistics"]
-            restricted_values = block["values"]
+            # One construction for n, declared in stats.whole_state_population:
+            # it counts the **runs** this row is over, and the column beside
+            # it says how many of them carried the statistic.
+            block = stats_mod.whole_state_population(records, ruler=ruler)
+            statistics = block["statistics"]
+            values = block["values"]
             reasons.update(block["reasons"])
-            whole = [
-                stats_mod.whole_state_statistic(r, ruler=ruler) for r in records
+            argmaxes = sorted({s.get("argmax") for s in statistics if s.get("argmax")})
+            above = [
+                int(s.get("n_above_tau") or 0)
+                for s in statistics
+                if s.get("present") and s.get("n_above_tau") is not None
             ]
-            whole_values = [
-                s["max"] for s in whole if s.get("present") and s.get("max") is not None
-            ]
-            argmaxes = sorted(
-                {s.get("argmax") for s in restricted if s.get("argmax")}
-            )
-            excluded = sorted(
-                {
-                    s.get("n_excluded")
-                    for s in restricted
-                    if s.get("n_excluded") is not None
-                }
-            )
-            distributions.setdefault(arm, {})[ruler] = restricted_values
+            distributions.setdefault(arm, {})[ruler] = values
             positions = sorted(
                 {str(r.get("audit_position")) for r in records if r.get("audit_position")}
             )
@@ -497,14 +483,11 @@ def matched_accuracy(
                     "ruler": ruler,
                     "n": block["n"],
                     "n_with_the_statistic": block["n_with_the_statistic"],
-                    "restricted_median": stats_mod.median(restricted_values),
-                    "restricted_p90": stats_mod.p90(restricted_values),
+                    "whole_median": stats_mod.median(values),
+                    "whole_p90": stats_mod.p90(values),
                     "argmax": ", ".join(argmaxes) if argmaxes else "—",
-                    "whole_median": stats_mod.median(whole_values),
-                    "whole_p90": stats_mod.p90(whole_values),
-                    "n_excluded": (
-                        ", ".join(str(v) for v in excluded) if excluded else "—"
-                    ),
+                    "n_runs_with_a_component_above_tau": sum(1 for a in above if a > 0),
+                    "worst_run_components_above_tau": max(above) if above else None,
                     "audit_position": positions[0] if len(positions) == 1 else (
                         "/".join(positions) if positions else None
                     ),
@@ -532,6 +515,10 @@ def matched_accuracy(
                         stats_mod.p90(b),
                         factor=campaign.similarity_factor,
                     ),
+                    "n_arm_runs_with_a_component_above_tau": next(
+                        (r["n_runs_with_a_component_above_tau"] for r in rows if r["arm"] == arm and r["ruler"] == ruler),
+                        None,
+                    ),
                 }
             )
     positions = sorted({row["audit_position"] for row in rows if row["audit_position"]})
@@ -541,82 +528,75 @@ def matched_accuracy(
             units="dimensionless: the largest scaled coupling-state residual "
             "found by one further full sweep past termination",
             row_is="one arm on one ruler",
-            column_is="the restricted or whole-state maximum's median and p90 "
-            "over that arm's finished runs, the component the restricted "
-            "maximum sat on, and how many components the restriction removed",
+            column_is="the whole-state maximum's median and p90 over that "
+            "arm's finished runs, the component(s) the maximum sat on, the "
+            "runs with any component at or above τ and the worst run's count",
             population=(
                 f"{population.what}; {sum(len(v) for v in by_arm.values())} "
                 f"run(s) of {configuration}"
             ),
             construction=(
-                "stats.restricted_statistic and stats.whole_state_statistic; "
-                "median = nearest-rank upper-middle, p90 = nearest-rank "
-                "ceil(0.9 n).  The restricted maximum excludes the components "
-                "the configuration's once-per-run deferred nodes write, "
-                "derived node → write sets → spec keys, never by a prefix rule"
+                "stats.whole_state_statistic over every component of the "
+                "coupling state (decision D36: the deferred nodes are executed "
+                "once after convergence in every arm, V5 list item 5, so "
+                "every component is audited alike; the restricted statistic "
+                "of V4 is retired from this table); median = nearest-rank "
+                "upper-middle, p90 = nearest-rank ceil(0.9 n)"
             ),
             clauses=(
                 "**the audit position is a column**: a residual taken at the "
                 "entry to the output path and one taken after the run are "
                 "different quantities and never share an unlabelled table",
                 "**the audit instrument's version is read from the record** "
-                "(stats.audit_instrument), never assumed: task A61 "
-                "(insstrain-diagnosis) classified the largest residual seen at "
-                "this commit as an artefact of the instrument — an output-path "
-                "setting the snapshot does not restore — and task A62 "
-                "(exit-audit-restore) widens the snapshot to the whole data "
-                "structure under decision D25, which moves every value in "
-                "these columns.  The instrument column is what tells two "
-                "otherwise identical tables apart, and the argmax component is "
-                "read from the record rather than written into this table",
-                "**both rulers or neither**: the mixed ruler reads lower "
-                "wherever its denominator binds, by construction, so a table "
-                "showing one column alone reports a change of ruler as a "
-                "change of accuracy",
-                "the two rulers' exclusion counts are listed per row and are "
-                "never pooled; a run whose restricted block is null carries no "
-                "count at all and reads —",
-                "**n counts runs, not values** (stats.accuracy_population): a "
-                "run whose audit carries no restricted block is counted in n "
-                "and shows in the column beside it, rather than vanishing from "
-                "the denominator of a median, which is trap T11; the caption "
-                "says whether every run of the population carried it",
+                "(stats.audit_instrument), never assumed (D25, A62 "
+                "(exit-audit-restore)); the argmax component is read from the "
+                "record rather than written into this table",
+                "**the whole state is the declared statistic (D36)**: the "
+                "partitioned arm executes its once-per-run nodes after "
+                "convergence (item 5), so nothing is stale at the audit by "
+                "design and no component is excluded; gate G4 retired when the "
+                "whole-state and restricted statistics agreed on the gate job "
+                "set (A101 (v5-timers-and-once))",
+                "**n counts runs, not values** (stats.whole_state_population): "
+                "a run whose audit carries no block on the ruler is counted in "
+                "n and shows in the column beside it, rather than vanishing "
+                "from the denominator of a median, which is trap T11",
+                "the acceptance rule (plan §5 A1) is the pair's whole-state "
+                "median and p90 within F at both, **and** 0 components above "
+                "τ on every accepted run: the count column is the second half",
             ),
             summary=(
                 f"Exit accuracy by arm on {configuration}, "
-                f"{tally_mod.source_phrase(source)}: the restricted maximum "
-                f"scaled residual (median, p90) on both rulers, the whole-state "
-                f"maximum and the argmax component; audit position "
+                f"{tally_mod.source_phrase(source)}: the whole-state maximum "
+                f"scaled residual (median, p90) on the {'/'.join(AUDIT_RULERS)} "
+                f"ruler, the argmax component and the runs with a component "
+                f"above τ; audit position "
                 + (", ".join(positions) if positions else "not recorded")
-                + ". The whole-state column is large for A2 by design and is "
-                "not judged."
+                + "."
                 + (
                     ""
                     if not reasons
-                    else " Some runs carried no restricted statistic: "
+                    else " Some runs carried no statistic: "
                     + "; ".join(sorted(reasons))
                     + "."
                 )
             ),
             how_to_read=(
-                "the restricted column is the declared statistic; the "
-                "whole-state column is large for the partitioned arms by "
-                "design — their once-per-run nodes run at the end, so those "
-                "outputs are stale at the audit — and is published to show the "
-                "exclusion's size, not judged"
+                "the whole-state column is the declared statistic (D36); a "
+                "run with a component above τ is named in the count column "
+                "and fails the second half of the rule whatever the medians say"
             ),
         ),
         columns=(
             Column("arm", "arm"),
             Column("ruler", "ruler"),
             Column("n", "n (runs)", fmt=_fmt_int),
-            Column("n_with_the_statistic", "with a restricted statistic", fmt=_fmt_int),
-            Column("restricted_median", "restricted median", fmt=_fmt_exp),
-            Column("restricted_p90", "restricted p90", fmt=_fmt_exp),
-            Column("argmax", "restricted argmax"),
+            Column("n_with_the_statistic", "with the statistic", fmt=_fmt_int),
             Column("whole_median", "whole-state median", fmt=_fmt_exp),
             Column("whole_p90", "whole-state p90", fmt=_fmt_exp),
-            Column("n_excluded", "components excluded"),
+            Column("argmax", "argmax"),
+            Column("n_runs_with_a_component_above_tau", "runs with a component ≥ τ", fmt=_fmt_int),
+            Column("worst_run_components_above_tau", "worst run: components ≥ τ", fmt=_fmt_int),
             Column("audit_position", "audit position"),
             Column("instrument", "audit instrument (snapshot positions taken)"),
         ),
@@ -1817,8 +1797,8 @@ def matched_accuracy_by_configuration(
 ) -> Table | None:
     """**Check 1, the headline Phase A check** — the previous revision's §4 table.
 
-    One row per configuration; one column per arm holding the restricted
-    audit maximum's **median and p90** on the frozen ruler; then the two
+    One row per configuration; one column per arm holding the whole-state
+    audit maximum's **median and p90** on the frozen ruler (D36); then the two
     declared ratio pairs — `A2/A1` (the pulsed configurations' rung) and
     `A2/A0` (the steady-state configuration's, and published beside on the
     pulsed ones) — each as a median ratio, a p90 ratio and a **verdict**
@@ -1847,7 +1827,7 @@ def matched_accuracy_by_configuration(
         }
         n_runs += sum(len(v) for v in finished.values())
         values: dict[str, list[float]] = {
-            arm: stats_mod.accuracy_population(records, ruler=ruler)["values"]
+            arm: stats_mod.whole_state_population(records, ruler=ruler)["values"]
             for arm, records in finished.items()
         }
         row: dict[str, Any] = {
@@ -1897,7 +1877,7 @@ def matched_accuracy_by_configuration(
             "found by one further full sweep past termination; ratios are "
             "dimensionless",
             row_is="one configuration",
-            column_is="one arm's restricted audit maximum as median and p90 "
+            column_is="one arm's whole-state audit maximum as median and p90 "
             "over that arm's finished runs, or one reading of a declared "
             "pair's similarity ratio, or that pair's verdict",
             population=(
@@ -1905,7 +1885,7 @@ def matched_accuracy_by_configuration(
                 f"{len(configurations)} configuration(s)"
             ),
             construction=(
-                "stats.accuracy_population and stats.restricted_statistic on "
+                "stats.whole_state_population and stats.whole_state_statistic on "
                 f"the {ruler} ruler; median = nearest-rank upper-middle, p90 = "
                 "nearest-rank ceil(0.9 n); the ratio and the verdict are "
                 "stats.similarity — the larger statistic over the smaller, "
@@ -1922,19 +1902,20 @@ def matched_accuracy_by_configuration(
                 "A2/A0 on a steady-state one — the *reference* column names "
                 "it; the other pair is published beside and is not the "
                 "declared acceptance",
-                "the restricted maximum excludes the components the "
-                "configuration's once-per-run deferred nodes write; the "
-                "whole-state maximum is in the matched-accuracy table and is "
-                "large for A2 by design",
+                "**the whole-state maximum is the declared statistic (D36)**: "
+                "the once-per-run deferred nodes are executed after convergence "
+                "in every arm (V5 list item 5), so no component is stale at the "
+                "audit by design and none is excluded; V4's restricted "
+                "statistic is retired from this table (A101 (v5-timers-and-once))",
                 "**n counts runs** over every arm of the configuration in "
-                "this source, never values (stats.accuracy_population)",
+                "this source, never values (stats.whole_state_population)",
             ),
             how_to_read=(
                 "read the verdict against the ratio pair beside it: the rule "
                 "is within F at median **and** p90, so a PASS needs both"
             ),
             summary=(
-                f"Check 1, {tally_mod.source_phrase(source)}: the restricted "
+                f"Check 1, {tally_mod.source_phrase(source)}: the whole-state "
                 f"audit maximum (median / p90, frozen ruler) per arm and "
                 f"configuration, then the partitioned arm against its "
                 f"reference and against the flat control, each as a ratio at "
@@ -2119,15 +2100,15 @@ def full_distributions(
 ) -> Table | None:
     """**The full distributions** — the previous revision's §4.4 table.
 
-    One row per configuration and arm: the restricted audit maximum's
-    minimum, median and maximum on the frozen ruler; the **count of
+    One row per configuration and arm: the whole-state audit maximum's
+    minimum, median and maximum on the frozen ruler (D36); the **count of
     components above τ** summed over the arm's runs and the **worst single
     run**'s count; the sweeps and node calls per evaluation as **ranges**;
     (the mixed ruler's median and p90 stood beside these in V4; the ruler
     went with driver change DR11 and so did the columns).
 
-    The counts come from each run's own restricted block
-    (``stats.restricted_statistic``'s ``n_above_tau``), which is an integer
+    The counts come from each run's own whole-state brief
+    (``stats.whole_state_statistic``'s ``n_above_tau``), which is an integer
     and needs no ruler to be read — the previous revision's point that the
     count statistic is cleaner than the magnitude.
     """
@@ -2141,7 +2122,7 @@ def full_distributions(
         for arm in _arm_order(by_arm):
             records = [r for r in by_arm[arm] if stats_mod.finished(r)]
             n_runs += len(records)
-            block = stats_mod.accuracy_population(
+            block = stats_mod.whole_state_population(
                 records, ruler=campaign.predicate_mode_default
             )
             values = block["values"]
@@ -2181,7 +2162,7 @@ def full_distributions(
             units="dimensionless for the residual columns; counts for the "
             "components, sweeps and node calls",
             row_is="one arm of one configuration",
-            column_is="an order statistic of that arm's restricted audit "
+            column_is="an order statistic of that arm's whole-state audit "
             "maxima, a count of components left above τ, or the observed "
             "range of a per-evaluation count",
             population=(
@@ -2189,10 +2170,10 @@ def full_distributions(
                 f"{len(configurations)} configuration(s)"
             ),
             construction=(
-                "stats.accuracy_population on both rulers; min and max are "
+                "stats.whole_state_population on the one ruler (D36); min and max are "
                 "stats.seed_bracket's ends, median nearest-rank upper-middle, "
                 "p90 nearest-rank ceil(0.9 n); `Σ components > τ` sums each "
-                "run's restricted n_above and `worst run` is the largest of "
+                "run's whole-state n_above and `worst run` is the largest of "
                 "them; the range columns are the observed [min, max] of the "
                 "run's own per-evaluation counts"
             ),
@@ -2213,7 +2194,7 @@ def full_distributions(
                 "by a summary statistic"
             ),
             summary=(
-                f"Full restricted-audit distributions by configuration and "
+                f"Full whole-state-audit distributions by configuration and "
                 f"arm, {tally_mod.source_phrase(source)}: minimum, median and "
                 f"maximum on the frozen ruler, the components left above "
                 f"τ summed over the runs and in the worst single run, and the "

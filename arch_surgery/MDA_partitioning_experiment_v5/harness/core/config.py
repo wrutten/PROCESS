@@ -162,6 +162,10 @@ TAU_BY_TEST_SET: Mapping[str, float] = MappingProxyType({"census": 1e-8, "write_
 #: The campaign default (decision D32; the user, 2026-09-29).
 DEFAULT_TEST_SET = "census"
 
+#: The campaign runs with the wall-clock timers on (V5 plan §9; D33): the
+#: runner's campaign press composes ``timers=True``; the gates keep them off.
+CAMPAIGN_TIMERS = True
+
 #: V4's predicate: the fallback.  A job under it carries V4's job identity
 #: (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``), which is what makes every
 #: record made before DR11 a record of the fallback.
@@ -296,6 +300,13 @@ class Campaign:
     upstream_pass_cap: int = 10
     #: Worker pool width.
     workers: int = 3
+    #: The observation-only wall-clock timers (driver change DR12; V5 list
+    #: item 9; D33, D38): composed into every arm when True.  Off by default
+    #: -- the gates run without them, so their records keep their identity
+    #: -- and **on for the campaign** (``CAMPAIGN_TIMERS``, the runner's
+    #: campaign press) and the timing stages.  In the job identity, rendered
+    #: only when on.  Context, never evidence.
+    timers: bool = False
     #: Convergence-predicate modes an arm may compose.  V5 composes the frozen
     #: ruler alone: the ``mixed`` trial (V4's G8, driver change DR5) is dropped
     #: under list item 10 (D30's "or drop it") and its switch is retired in

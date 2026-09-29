@@ -97,6 +97,8 @@ class SolverHandler:
         # append to a list; the ladder -- which attempts run, in which order,
         # under which settings -- is exactly what it was.
         caller.open_ladder()
+        # DR12 (A101): the solve phase's boundaries, timers on only.
+        caller.timers_solve_started()
         with caller.attempt(LADDER_STAGES[0]):
             ifail = self.solver.solve()
 
@@ -134,6 +136,7 @@ class SolverHandler:
                 with caller.attempt(LADDER_STAGES[3]):
                     ifail = self.solver.solve()
 
+        caller.timers_solve_ended()
         self.output()
         return ifail
 

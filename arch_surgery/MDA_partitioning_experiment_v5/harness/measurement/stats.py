@@ -84,6 +84,7 @@ __all__ = [
     "failure_taxonomy",
     "restricted_statistic",
     "whole_state_statistic",
+    "whole_state_population",
     "accuracy_population",
     "audit_position_of",
     "empty_visit_shares",
@@ -1256,15 +1257,19 @@ def whole_state_statistic(
 ) -> dict[str, Any]:
     """The exit-audit maximum over **all** components on one named ruler.
 
-    Published beside the restricted statistic to show the exclusion's size, and
-    never judged on its own: the once-per-run deferred nodes' outputs are stale
-    at the audit by design, so a partitioned arm's whole-state maximum is large
-    for a reason the design chose.
+    **The declared matched-accuracy statistic since decision D36** (V5 plan
+    §5 A1; A101 (v5-timers-and-once)): once the partitioned evaluation arm
+    executes its deferred set after convergence (V5 list item 5), every
+    component of the exit state is computed at the audited state and the
+    whole-state maximum is the accuracy an arm achieved, every component
+    alike.  Until then it was published beside the restricted statistic to
+    show the exclusion's size and never judged, because the once-per-run
+    nodes' outputs were stale at the audit by design.
     """
     audit = record.get("exit_audit") or {}
     block = audit.get(ruler)
     if not isinstance(block, Mapping):
-        return {"ruler": ruler, "present": False}
+        return {"ruler": ruler, "present": False, "why": f"the record's exit audit carries no {ruler!r} block"}
     brief = block.get("brief") or {}
     return {
         "ruler": ruler,
@@ -1273,6 +1278,46 @@ def whole_state_statistic(
         "max_hex": block.get("residual_max_hex"),
         "argmax": brief.get("argmax"),
         "n_above_tau": brief.get("n_above"),
+    }
+
+
+def whole_state_population(
+    records: Sequence[Mapping[str, Any]], *, ruler: str
+) -> dict[str, Any]:
+    """**The n of a whole-state accuracy row, declared once: the runs it is over.**
+
+    :func:`accuracy_population`'s construction on the whole-state statistic
+    (D36): ``n`` counts the runs, the values are the whole-state maxima that
+    exist, and a run whose audit carries no block on this ruler is counted in
+    n and named beside with its reason, never dropped from the denominator
+    (trap T11).
+    """
+    statistics = [whole_state_statistic(record, ruler=ruler) for record in records]
+    values = [
+        statistic["max"]
+        for statistic in statistics
+        if statistic.get("present") and statistic.get("max") is not None
+    ]
+    without = [
+        {
+            "run": _label(record),
+            "why": statistic.get("why") or "the record's whole-state maximum is null",
+        }
+        for record, statistic in zip(records, statistics)
+        if not (statistic.get("present") and statistic.get("max") is not None)
+    ]
+    return {
+        "n": len(records),
+        "n_is": (
+            "the runs this row is over; a run whose audit carries no block on "
+            "this ruler is counted here and shows in the column beside as one "
+            "that carried no statistic"
+        ),
+        "statistics": statistics,
+        "values": values,
+        "n_with_the_statistic": len(values),
+        "without": without,
+        "reasons": sorted({row["why"] for row in without}),
     }
 
 

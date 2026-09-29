@@ -128,6 +128,14 @@ PLAN_COLUMN: tuple[tuple[str, Any], ...] = (
             config.per_run_artifact(lifted_input_file=config.pulsed)
         ),
     ),
+    # V5 list item 5 (A101): where the per-run set is executed once.  The
+    # optimisation phase leaves it unset -- the output path executes the set,
+    # as before -- so the plan's column composes nothing for it here; the
+    # evaluation phase's deferring arm composes 'evaluation_exit'.
+    ("defer_per_run_execution", lambda config, campaign: None),
+    # DR12 (A101): the wall-clock instrument, the campaign's setting for
+    # every arm ('on' when the campaign asks for the timers, unset otherwise).
+    ("timers", lambda config, campaign: "on" if campaign.timers else None),
     # "burn-time owner | optimiser", a row the plan marks as applying on the
     # pulsed configurations **only**: where the plant is steady state there is
     # no burn-time coupling and the row does not apply, so the switch is left

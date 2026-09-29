@@ -89,6 +89,11 @@ FORENSICS_FIELDS: tuple[str, ...] = (
     "exit_forensics.active_set",
 )
 
+#: The wall-clock fields the contract owes on a record made with the timers
+#: on (DR12, A101 (v5-timers-and-once)): each removed from a copy of the
+#: forced record, which was made with them on, must be refused by name.
+TIMER_FIELDS: tuple[str, ...] = ("timers", "launcher", "campaign_timers")
+
 _HELD: dict[str, Any] = {}
 
 
@@ -109,6 +114,9 @@ def forced_job(campaign: Campaign) -> pool_mod.Job:
         delta=None,
         run_kind="smoke",
         force_maxcal=FORCED_MAXCAL,
+        # DR12 (A101): with the timers on, so the record owes the timer
+        # fields and the contract's tooth on them can bite.
+        timers=True,
     )
 
 
@@ -127,6 +135,7 @@ def evaluation_job(campaign: Campaign) -> pool_mod.Job:
         regime="unperturbed",
         delta=None,
         run_kind="smoke",
+        timers=True,
     )
 
 
@@ -243,6 +252,12 @@ def record_completeness_body(
         checks = {
             "the_run_produced_a_record": bool(record),
             "every_declared_field_is_carried": not missing,
+            "the_timers_were_composed_and_harvested": (
+                bool(record.get("campaign_timers"))
+                and isinstance(record.get("timers"), dict)
+                and bool((record.get("timers") or {}).get("enabled"))
+                and isinstance(record.get("launcher"), dict)
+            ),
             "every_declared_convergence_ruler_is_present": (
                 row["exit_audit_rulers"] == sorted(records_mod.AUDIT_RULERS)
             ),
@@ -445,7 +460,7 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             must="be refused by the completeness contract, naming the field",
             check=field_tooth(path),
         )
-        for path in FORENSICS_FIELDS
+        for path in FORENSICS_FIELDS + TIMER_FIELDS
     )
     return teeth + (
         Tooth(

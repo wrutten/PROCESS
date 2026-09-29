@@ -20,11 +20,11 @@ Main text
     rungs beside.
 
 Appendix
-    the two module tables in wall clock and the cost breakdown of plan §6 —
-    **declared placeholders**: their rows and captions, with every cell empty,
-    because the instrument (item 9, driver change DR12) is a later driver
-    task; the per-arm success table (plan §5 B5); and **one verification
-    table**, one row per check of plan §8, each verdict read from the gate
+    the two module tables in wall clock and the cost breakdown of plan §6,
+    filled from the records' ``timers`` block (item 9, driver change DR12,
+    A101 (v5-timers-and-once); ``timing.tables_over``) — context, never
+    evidence (D33); the per-arm success table (plan §5 B5); and **one
+    verification table**, one row per check of plan §8, each verdict read from the gate
     records through the ``gate_table`` stage record where the gate exists and
     "not pressed" otherwise.
 
@@ -40,10 +40,10 @@ on each run by :func:`_cross_check_tooth`, protocol §12).
 
 **`CHARGED_ONCE` is retired** (plan §2, item 5).  V4 charged `A2`'s
 post-processing cell with one execution by construction, because its phase A
-census stopped before the output pass; in V5 the deferred nodes are executed
-once after convergence *by the run* and the cell reads the measured count.
-Until item 5's driver change lands the cell reads what today's records
-measure — 0 — and the caption says so.
+census stopped before the output pass; since item 5's driver change (A101
+(v5-timers-and-once), decision D35) the deferred nodes are executed once
+after convergence *by the run* and the cell reads the measured count — 1 on
+every run, checked as the one integer every run reads.
 
 Written by task **A98 (v5-reporting-trim)**, 2026-09-29, extending the
 paper-tables module of 2026-09-28; the stage-record stamp check and the
@@ -99,9 +99,10 @@ ROWS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 #: Phase A cells printed as the integer every run reads, not as a mean: the
 #: partitioned arm's feedforward and post-processing rows run a fixed number
-#: of times per evaluation by construction (once, and — until item 5's driver
-#: change — zero).  A run reading anything else, or two runs reading different
-#: integers, is a refusal, not a rounded mean.
+#: of times per evaluation by construction (once each: the tail after M3,
+#: and the once-per-run set at the evaluation's exit since item 5).  A run
+#: reading anything else, or two runs reading different integers, is a
+#: refusal, not a rounded mean.
 EXACT_CELLS = {("A2", "Feedforward"), ("A2", "Post-processing")}
 
 PHASE_A_SOURCE = tally_mod.ACCEPTANCE_REGIME
@@ -620,10 +621,12 @@ def cases(campaign: Campaign, optimisation: Mapping[str, Mapping[str, Any]]) -> 
 # --------------------------------------------------------------------------
 
 
-#: The wall-clock tables of plan §6, declared with their rows and captions and
-#: no cell: the instrument is item 9's (driver change DR12), a later driver
-#: task, and a placeholder that printed a number would be a number nobody
-#: measured.  ``ms/eval`` and ``s/opt`` are the plan's units.
+#: The wall-clock tables of plan §6: their titles and captions (A98 declared
+#: them as placeholders with every cell empty; A101 (v5-timers-and-once)
+#: fills them through ``timing.tables_over`` from the records' ``timers``
+#: block, driver change DR12).  The rows are ``timing.PHASE_A_ROWS`` /
+#: ``PHASE_B_ROWS`` / ``BREAKDOWN_ROWS``; the ``rows`` here are the plan's
+#: names, kept for the caption and checked against the module's.
 WALL_CLOCK_TABLES: tuple[dict[str, Any], ...] = (
     {
         "key": "wall_phase_a",
@@ -680,12 +683,44 @@ WALL_CLOCK_TABLES: tuple[dict[str, Any], ...] = (
     },
 )
 
-WALL_CLOCK_NOT_MEASURED = (
-    "**Not measured in this revision.** The wall-clock instrument of plan §6 (list item 9, "
-    "driver change DR12: observation-only timers per node, block loop, evaluation and run) "
-    "is a later driver task; the grid below is the declared table with every cell empty, "
-    "so that the shape is fixed before the numbers exist and no number is typed in."
+WALL_CLOCK_CONTEXT = (
+    "**Context, never evidence (D33).** The wall-clock instrument of plan §6 (list item 9, "
+    "driver change DR12, A101 (v5-timers-and-once)): observation-only timers in the driver copy "
+    "(`PROCESS_ARCH_TIMERS=on`) per node, block loop, evaluation and run, harvested into every "
+    "campaign record, with the launcher's independent wall beside. Excluded from every cell and "
+    "measured separately: the exit-audit sweep, the state snapshots, the record assembly and the "
+    "harness's set-up before the run. The rows are `harness/measurement/timing.py`'s; the "
+    "repeatability stage (three repetitions at W = 1) and D38's validity check are that module's "
+    "stages and their records say whether the campaign's timings may be printed here."
 )
+
+
+def wall_clock(campaign: Campaign) -> dict[str, Any]:
+    """The three appendix tables' data over the campaign's two populations
+    (``timing.tables_over``; the pairing key is the seed)."""
+    from . import timing as timing_mod  # noqa: PLC0415
+
+    records = list(_population(campaign, PHASE_A_SOURCE, tally_a.PHASE).records)
+    records += list(_population(campaign, PHASE_B_SOURCE, tally_b.PHASE).records)
+    return timing_mod.tables_over(campaign, records, key_of=lambda r: int(r.get("campaign_seed")))
+
+
+def _wall_clock_lines(campaign: Campaign) -> list[str]:
+    from . import timing as timing_mod  # noqa: PLC0415
+
+    tables = wall_clock(campaign)
+    lines = ["### Tables — wall clock (plan §6)", "", WALL_CLOCK_CONTEXT, ""]
+    for spec in WALL_CLOCK_TABLES:
+        lines += [f"**{spec['title']}** — {spec['caption']}", ""]
+    lines += timing_mod.render_markdown(
+        tables,
+        caption_w=(
+            f"W = {campaign.workers}; pairing key = the seed; the ratio is of the means over the "
+            f"paired runs and the bracket the per-run ratio's median with [min, max]; exclusions "
+            f"as stated above"
+        ),
+    )
+    return lines
 
 
 def per_arm_success(optimisation: Mapping[str, Mapping[str, Any]], campaign: Campaign) -> list[dict[str, Any]]:
@@ -724,9 +759,53 @@ VERIFICATION_ROWS: tuple[tuple[str, str, str | None], ...] = (
 )
 
 
-def verification(records_dir: Path, optimisation: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+def _matched_accuracy_verdict(evaluation: Mapping[str, Mapping[str, Any]]) -> tuple[str, str]:
+    """Plan §5 A1 on the tally's evaluation stage record: per configuration,
+    the declared pair's whole-state similarity verdict (median and p90 within
+    F; the `matched accuracy by configuration` table's cell on D34's pair)
+    **and** 0 runs with a component above τ on both arms of the pair (the
+    `matched accuracy` table's count column).  Returns (verdict, detail)."""
+    by_configuration = [t for name, t in evaluation.items() if name.startswith("matched accuracy by configuration")]
+    if not by_configuration:
+        return "not pressed", "no `matched accuracy by configuration` table in the stage record"
+    parts: list[str] = []
+    verdicts: list[str] = []
+    for row in by_configuration[0]["rows"]:
+        configuration = str(row["configuration"])
+        base = str(row["reference"])
+        pair_verdict = str(row.get(f"A2_over_{base}_verdict") or "—")
+        above: dict[str, Any] = {}
+        for name, t in evaluation.items():
+            if not name.startswith(f"matched accuracy — {configuration} — "):
+                continue
+            for r in t["rows"]:
+                if r["arm"] in (base, "A2"):
+                    above[r["arm"]] = r.get("n_runs_with_a_component_above_tau")
+        clean = all(above.get(a) == 0 for a in (base, "A2")) if len(above) == 2 else None
+        if pair_verdict not in ("PASS", "FAIL") or clean is None:
+            verdict = "—"
+        else:
+            verdict = "PASS" if (pair_verdict == "PASS" and clean) else "FAIL"
+        verdicts.append(verdict)
+        parts.append(
+            f"`{SHORT.get(configuration, configuration)}` A2/{base}: similarity {pair_verdict}, "
+            f"runs with a component ≥ τ {base} {above.get(base)} / A2 {above.get('A2')} → **{verdict}**"
+        )
+    if not verdicts:
+        return "not pressed", "the table has no configuration row"
+    overall = "PASS" if all(v == "PASS" for v in verdicts) else ("FAIL" if "FAIL" in verdicts else "—")
+    return overall, "; ".join(parts) + " (whole-state statistic, D36; the second half of the rule is the count column)"
+
+
+def verification(
+    records_dir: Path,
+    optimisation: Mapping[str, Mapping[str, Any]],
+    evaluation: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
     """The verification table's rows, every gate verdict read from the
-    ``gate_table`` stage record after :func:`assert_gate_table_current`."""
+    ``gate_table`` stage record after :func:`assert_gate_table_current`;
+    A1 from the evaluation tally's stage record (D36), B1 from the
+    optimisation tally's."""
     current = assert_gate_table_current(records_dir)
     table = stage_record(records_dir, GATE_TABLE_SECTION.stage)
     by_gate = {row["gate"]: row for row in table.get("rows") or []}
@@ -761,8 +840,14 @@ def verification(records_dir: Path, optimisation: Mapping[str, Mapping[str, Any]
                 row.update(verdict="not pressed", detail="no same-optimum table in the stage record")
         elif label == "A2":
             row.update(verdict="reported, no rule", detail="the tally's fixed-point distance table (plan §5 A2)")
+        elif label == "A1":
+            if evaluation is None:
+                row.update(verdict="not pressed", detail="no evaluation stage record handed to the verification")
+            else:
+                verdict, detail = _matched_accuracy_verdict(evaluation)
+                row.update(verdict=verdict, detail=detail)
         else:
-            row.update(verdict="not pressed", detail="V5's whole-state rule (D36) is not yet a tally construction; item 5's driver change first")
+            row.update(verdict="not pressed", detail="no construction for this row")
         rows.append(row)
     return {"rows": rows, "records_read": current}
 
@@ -1033,22 +1118,6 @@ def switch_matrix_lines() -> tuple[list[str], list[str]]:
     return md, tex
 
 
-def _empty_grid(spec: Mapping[str, Any], configurations: Sequence[str]) -> list[str]:
-    arms = list(spec["arms"])
-    lines = []
-    for c in configurations:
-        lines += [
-            f"**`{SHORT.get(c, c)}`** ({c}, n = —)",
-            "",
-            f"| Row | {' | '.join(arms)} |" + (" ratio | med [min, max] |" if spec["key"] != "cost_breakdown" else ""),
-            "|---|" + "---:|" * len(arms) + ("---:|---:|" if spec["key"] != "cost_breakdown" else ""),
-        ]
-        for row in spec["rows"]:
-            lines.append(f"| {row} | {' | '.join('' for _ in arms)} |" + (" | |" if spec["key"] != "cost_breakdown" else ""))
-        lines.append("")
-    return lines
-
-
 def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     """The page, and the comparisons it was written under."""
     a = phase_a(campaign)
@@ -1058,7 +1127,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     optimisation = _stage_tables(records_dir, "tally_optimisation")
     case_rows = cases(campaign, optimisation)
     success = per_arm_success(optimisation, campaign)
-    verified = verification(records_dir, optimisation)
+    verified = verification(records_dir, optimisation, evaluation)
     check = cross_check(built, evaluation, optimisation)
     tooth = _cross_check_tooth(built, evaluation, optimisation)
     marker = population_marker(campaign, records_dir)
@@ -1093,10 +1162,10 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "feed-forward tail (run once per evaluation after M3, no iteration); **Post-processing** "
         "is the once-per-run set — nodes no objective or constraint depends on, which the "
         "partitioned arm defers. **`A2`'s Post-processing cell is measured, not charged**: V4 "
-        "charged it 1 by construction (`CHARGED_ONCE`, retired); V5's plan (§2, list item 5) has "
-        "the run execute the deferred set once after convergence and the census count it. Until "
-        "item 5's driver change lands the cell reads what the records measure — 0 — and is not "
-        "the paper's cell. There is **no total row**: sweeps of different modules do not add. "
+        "charged it 1 by construction (`CHARGED_ONCE`, retired); since item 5's driver change "
+        "(A101, D35) the run executes the deferred set once after convergence and the census "
+        "counts it, so the cell reads the measured 1. There is **no total row**: sweeps of "
+        "different modules do not add. "
         "Rounding: phase A sweep means and phase B iteration means to one decimal, phase B module "
         "sweeps to integers, every ratio, median and bracket to two decimals; `A2`'s phase A "
         "Feedforward and Post-processing cells are the one integer every run reads (checked). "
@@ -1198,8 +1267,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     lines += md + ["```latex", *_tabular("B", tex), "```", ""]
 
     lines += ["## Appendix", ""]
-    for spec in WALL_CLOCK_TABLES:
-        lines += [f"### Table — {spec['title']}", "", WALL_CLOCK_NOT_MEASURED, "", spec["caption"], "", *_empty_grid(spec, configurations)]
+    lines += _wall_clock_lines(campaign)
 
     lines += [
         "### Table — per-arm success",

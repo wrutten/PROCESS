@@ -120,6 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-set", required=True,
                         help="which components every block loop tests (DR11): "
                              "census or write_set; stamped as campaign_test_set")
+    parser.add_argument("--timers", default="off", choices=("on", "off"),
+                        help="whether the wall-clock timers were composed "
+                             "(DR12); stamped as campaign_timers")
     parser.add_argument("--pin-hex", default=None)
     parser.add_argument("--entry-state", default=None,
                         help="a previous run's exit snapshot, written into the "
@@ -143,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
+    epochs: dict[str, Any] = {"main_entry_at": time.time()}
     args = build_parser().parse_args(argv)
 
     outdir = Path(args.outdir).resolve()
@@ -171,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         pin_hex=args.pin_hex,
         switches_asked=json.loads(args.switches_asked),
         test_set=args.test_set,
+        timers=(args.timers == "on"),
     )
     record["outdir"] = str(outdir)
     record["reproduction_overrides"] = json.loads(args.reproduction_overrides) or None
@@ -185,6 +190,13 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         "reached by there being no output path rather than by a hook"
     )
     child.stamp_driver_counters_null(record, phase="A")
+
+    # DR12: the run starts here for the fixed per-run term -- the tree
+    # assertion below imports PROCESS (numba, scipy, the models), and that
+    # import, the numba cache load and the input parse are the run's own
+    # start-up (V5 plan §6), not the harness's; what precedes this line
+    # (the record's identity half) is the harness's set-up, excluded by name.
+    epochs["run_started_at"] = time.time()
 
     process_file = child.assert_tree(Path(args.tree))
     child.stamp_tree(record, Path(args.tree), process_file)
@@ -309,8 +321,11 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         raised = exc
         record["status"] = "crashed"
         record["traceback"] = traceback.format_exc()
+    epochs["run_returned_at"] = time.time()
     child.stamp_resources(record, usage_before, started)
     record["failure_class"] = failure_mod.classify(raised, status=record["status"])
+    # DR12: the driver's timers, read before the audit as the counters are.
+    timers_before_audit = child.harvest_timers(caller_mod)
 
     # ------------------------------------------------------------------
     # 4. That evaluation's counts, frozen before the audit runs.
@@ -383,6 +398,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
     # ------------------------------------------------------------------
     # 5. The uncharged exit audit, then stop.
     # ------------------------------------------------------------------
+    epochs["audit_started_at"] = time.time()
+    audit_t0 = time.perf_counter()
     if record["status"] == "ok":
         record["exit_audit"] = child.take_exit_audit(
             caller_mod,
@@ -417,6 +434,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
             "audit_position": AUDIT_POSITION,
         }
         record["exit_state_written_to"] = None
+    audit_wall_s = time.perf_counter() - audit_t0
+    epochs["audit_ended_at"] = time.time()
 
     # ------------------------------------------------------------------
     # 6. The forensics block, in the same shape the other phase writes it.
@@ -444,12 +463,28 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         phase="A",
     )
 
+    # DR12: the timers block -- the driver's accumulators before the audit,
+    # the harness-only costs measured apart, the epochs.
+    epochs["record_written_at"] = time.time()
+    child.stamp_timers(
+        record,
+        driver_before_audit=timers_before_audit,
+        driver_after_audit=child.harvest_timers(caller_mod),
+        epochs=epochs,
+        excluded={
+            "exit_audit_wall_s": audit_wall_s,
+            "state_snapshots_s": 0.0,
+            "record_assembly_s": epochs["record_written_at"] - epochs["audit_ended_at"],
+            "harness_before_run_s": epochs["run_started_at"] - epochs["main_entry_at"],
+            "census_hooks_s": None,
+        },
+    )
     record["completeness"] = _completeness(record)
     child.write_record(outdir, record)
     child.print_brief(
         record,
         drop=("exact", "traceback", "env_architecture", "resolved_switches",
-              "coupling_state_provenance"),
+              "coupling_state_provenance", "timers"),
     )
     return 0 if record["status"] == "ok" else 1
 

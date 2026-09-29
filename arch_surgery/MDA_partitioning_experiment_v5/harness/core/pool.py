@@ -153,6 +153,11 @@ class Job:
     #: fallback's (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``).
     test_set: str | None = None
     tau: float | None = None
+    #: The wall-clock timers (DR12): ``None`` means the campaign's, resolved
+    #: by :func:`resolve_settings`; an identity field rendered only when on
+    #: (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``), so every gate record keeps
+    #: its identity and a timed job has a digest no untimed record has.
+    timers: bool | None = None
     node_census: bool = True
     #: For a ``census`` job only: which entry the census is taken at, and
     #: whether the read half of the instrument is on.
@@ -201,7 +206,9 @@ class Job:
         and is still the same job — and as given otherwise.  Mappings are
         rendered with sorted keys and string values, ``None`` kept as null.
         """
-        if campaign is not None and (self.test_set is None or self.tau is None):
+        if campaign is not None and (
+            self.test_set is None or self.tau is None or self.timers is None
+        ):
             resolve_settings(self, campaign)
         rendered: dict[str, Any] = {}
         for name in JOB_IDENTITY_FIELDS:
@@ -215,6 +222,12 @@ class Job:
                 # job carries V4's identity (see the field's comment).  An
                 # unresolved value is refused: a job rendered before the pool
                 # resolved it against the campaign would render as V4's.
+                if name == "timers" and value is None:
+                    # DR12: an unresolved instrument switch renders as off --
+                    # the default every record carries -- never as a refusal:
+                    # a job rendered without a campaign (a tooth, a listing)
+                    # asks about its architecture, and the timers are not one.
+                    continue
                 if value is None:
                     raise PoolError(
                         f"the job's {name} is unresolved: identity was asked "
@@ -329,6 +342,7 @@ JOB_IDENTITY_FIELDS: tuple[str, ...] = (
     "predicate_mode",
     "test_set",
     "tau",
+    "timers",
     "node_census",
     "census_entry",
     "census_read",
@@ -382,6 +396,8 @@ def readable_key(identity: Mapping[str, Any]) -> str:
         parts.append(f"set={identity['test_set']}")
     if identity.get("tau") is not None:
         parts.append(f"tau={identity['tau']!r}")
+    if identity.get("timers"):
+        parts.append("timers")
     usual_position = records_mod.effective_audit_position(
         str(identity.get("phase")), records_mod.AUDIT_POSITION_DECLARED
     )
@@ -455,6 +471,8 @@ def resolve_settings(job: Job, campaign: Campaign) -> Job:
             )
     job.test_set = test_set
     job.tau = float(tau)
+    if job.timers is None:
+        job.timers = bool(campaign.timers)
     return job
 
 
@@ -699,6 +717,7 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         seed=job.seed,
         test_set=job.test_set,
         tau=job.tau,
+        timers=job.timers,
     )
     pending = sorted(switches_mod.unimplemented(terms))
     if pending:
@@ -722,6 +741,7 @@ def environment_for(job: Job, campaign: Campaign) -> tuple[dict[str, str], dict]
         campaign=campaign,
         test_set=job.test_set,
         tau=job.tau,
+        timers=job.timers,
     )
     for term, value in (job.reproduction_overrides or {}).items():
         name = switches_mod.REGISTRY[term].driver_name
@@ -881,6 +901,7 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--seed", str(job.seed),
         "--tau", repr(float(job.tau if job.tau is not None else campaign.tau)),
         "--test-set", str(job.test_set or campaign.test_set),
+        "--timers", ("on" if job.timers else "off"),
         "--run-kind", job.run_kind,
         "--regime", job.regime,
         "--predicate-mode", job.predicate_mode,
@@ -942,13 +963,74 @@ def _lock_for(directory: Path) -> threading.Lock:
         return _LOCKS.setdefault(str(directory), threading.Lock())
 
 
-def _kept(job: Job, identity: Mapping[str, Any], digest: str, outdir: Path) -> dict[str, Any] | None:
+def why_not_composed_as_today(
+    record: Mapping[str, Any], terms: Mapping[str, str]
+) -> str | None:
+    """Why *record* was not composed from the switch **terms** the arm sets today, or None.
+
+    The job identity names the arm, never the switches the arm composes, so a
+    driver change that makes an arm compose one more switch (V5 list item 5:
+    the partitioned evaluation arm's once-after-convergence execution of the
+    per-run deferred set) leaves every earlier record of that arm with the
+    same digest — and ``--resume`` would keep a record of a run the arm no
+    longer makes.  The child stamps what it was asked for (``switches_asked``,
+    the composed terms), so the comparison is by **term name**: a record
+    composed with a term the arm no longer sets, or without one it now sets,
+    is not a record of this job.  Values are not compared here — a path term
+    differs between two trees by construction (trap T20) and the identity's
+    own fields cover the values that matter — and a record made before the
+    stamp existed is left to the completeness contract.
+    """
+    asked = record.get("switches_asked")
+    if not isinstance(asked, Mapping):
+        return None
+    now = set(terms)
+    then = set(asked)
+    if now == then:
+        return None
+    gained = sorted(now - then)
+    lost = sorted(then - now)
+    return (
+        "the arm composes "
+        + (f"term(s) {gained} the record was made without" if gained else "")
+        + (" and " if gained and lost else "")
+        + (f"no term {lost}, which the record was made with" if lost else "")
+        + ": a driver change made the arm compose differently, so the record is "
+        "of a run the arm no longer makes"
+    )
+
+
+def _loadavg() -> tuple[float, float, float] | None:
+    try:
+        return os.getloadavg()
+    except OSError:
+        return None
+
+
+def _kept(
+    job: Job,
+    identity: Mapping[str, Any],
+    digest: str,
+    outdir: Path,
+    *,
+    campaign: "Campaign | None" = None,
+) -> dict[str, Any] | None:
     """The outcome of a kept run, or None where the record is not this job's."""
     if not (outdir / "metrics.json").exists():
         return None
     previous = records_mod.read(outdir)
     if not records_mod.is_complete_for(previous, identity=identity, digest=digest):
         return None
+    if campaign is not None:
+        _env, terms = environment_for(job, campaign)
+        why = why_not_composed_as_today(previous, terms)
+        if why is not None:
+            print(
+                f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
+                f"re-made: {why}",
+                flush=True,
+            )
+            return None
     print(
         f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
         f"resumed (complete record of this job kept; digest {digest[:12]})",
@@ -1005,7 +1087,13 @@ def assert_not_another_jobs_record(
             )
 
 
-def stamp_identity(outdir: Path, identity: Mapping[str, Any], digest: str) -> None:
+def stamp_identity(
+    outdir: Path,
+    identity: Mapping[str, Any],
+    digest: str,
+    *,
+    launcher: Mapping[str, Any] | None = None,
+) -> None:
     """Write ``job_identity`` and ``job_digest`` into the record on disk.
 
     Stamped by the pool after the child returns, not by the child: the child
@@ -1021,6 +1109,10 @@ def stamp_identity(outdir: Path, identity: Mapping[str, Any], digest: str) -> No
         return
     record["job_identity"] = dict(identity)
     record["job_digest"] = digest
+    if launcher is not None:
+        # DR12: the launcher's independent wall of the subprocess and the
+        # load average at its spawn and return; context, never evidence.
+        record["launcher"] = dict(launcher)
     # The naming scheme the arm fields are written in.  A record made after
     # the arm renaming of 2026-09-15 says so here, and ``records.read`` then
     # leaves its names alone; one without the stamp is read through
@@ -1071,7 +1163,7 @@ def run(
     digest = records_mod.job_digest(identity)
     with _lock_for(outdir):
         if resume or (digest in _MADE_THIS_INVOCATION and not fresh):
-            kept = _kept(job, identity, digest, outdir)
+            kept = _kept(job, identity, digest, outdir, campaign=campaign)
             if kept is not None:
                 _MADE_THIS_INVOCATION[digest] = str(outdir)
                 return kept
@@ -1109,6 +1201,11 @@ def run(
         )
 
         started = time.perf_counter()
+        launcher: dict[str, Any] = {
+            "spawned_at": time.time(),
+            "loadavg_at_spawn": _loadavg(),
+            "workers": workers(campaign),
+        }
         try:
             completed = subprocess.run(
                 command,
@@ -1153,7 +1250,15 @@ def run(
                     indent=2,
                 )
             )
-        stamp_identity(outdir, identity, digest)
+        launcher["returned_at"] = time.time()
+        launcher["wall_s"] = time.perf_counter() - started
+        launcher["loadavg_at_return"] = _loadavg()
+        launcher["what"] = (
+            "the pool's own wall of the child process, spawn to return, and "
+            "the load average at both ends; the fixed per-run term and the "
+            "unattributed residual are derived from it (DR12); context, never evidence"
+        )
+        stamp_identity(outdir, identity, digest, launcher=launcher)
         record = records_mod.read(outdir)
         _MADE_THIS_INVOCATION[digest] = str(outdir)
         _index_record(campaign, digest, outdir)

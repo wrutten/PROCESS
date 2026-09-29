@@ -134,6 +134,7 @@ class Arm:
         seed: int | None = None,
         test_set: str | None = None,
         tau: float | None = None,
+        timers: bool | None = None,
     ) -> dict[str, str]:
         """The switch terms this arm sets on *config*, term -> value.
 
@@ -146,13 +147,21 @@ class Arm:
         own where a declared supplementary stage admits other values.
         """
         campaign = campaign or default_campaign()
+        # DR12 (A101 (v5-timers-and-once)): the wall-clock instrument is a
+        # campaign-level setting composed into EVERY arm, the reference arms
+        # included -- it is an instrument, not an architecture switch
+        # (switches.INSTRUMENT_SWITCHES), so the reference arm still composes
+        # to every architecture switch cleared.
+        timers = campaign.timers if timers is None else timers
+        instrument: dict[str, str] = {"timers": "on"} if timers else {}
         if self.is_reference:
-            return {}
+            return instrument
 
         test_set = campaign.test_set if test_set is None else test_set
         tau = campaign.tau if tau is None else tau
         lifted_here = config.pulsed and self.burn_time_out_of_loop
         terms: dict[str, str] = {
+            **instrument,
             "mda": self.mda,
             "tolerance": repr(float(tau)),
             "coupling_state": str(config.coupling_state_path),
@@ -180,6 +189,16 @@ class Arm:
                     lifted_input_file=self.input_file == "lifted"
                 )
             )
+            if self.phase == "A":
+                # V5 list item 5 (A101 (v5-timers-and-once); decision D35):
+                # an evaluation-phase run is one call_models and never
+                # reaches the output path, so the deferred set is executed
+                # once at the evaluation's exit instead -- the MDA converged,
+                # then every deferred node once.  Not a matrix row: it
+                # follows from the phase and the deferral.  The optimisation
+                # phase leaves the switch unset and executes the set at the
+                # output path as before.
+                terms["defer_per_run_execution"] = "evaluation_exit"
         if lifted_here:
             # One switch says who owns the burn time.  The two settings this
             # replaces could disagree with each other -- a constant owning a
@@ -548,6 +567,7 @@ def env_for(
     pending_ok: bool = False,
     test_set: str | None = None,
     tau: float | None = None,
+    timers: bool | None = None,
 ) -> dict[str, str]:
     """The environment one arm runs under on one configuration, from nothing.
 
@@ -577,6 +597,7 @@ def env_for(
         seed=seed,
         test_set=test_set,
         tau=tau,
+        timers=timers,
     )
     pending = switches.unimplemented(terms)
     if pending and not pending_ok:

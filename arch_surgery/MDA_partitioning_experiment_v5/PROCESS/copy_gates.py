@@ -674,6 +674,63 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             was="subset = subsets.get(label): the block's whole write set",
             now="subset = tests.get(label): the block's test set (the write set under the fallback, the census set under census)",
         ),
+        PermittedEdit(
+            kind="switch",
+            name="PROCESS_ARCH_DEFER_PER_RUN_EXECUTION / _execute_deferred_per_run_set_once",
+            description=(
+                "WHERE the per-run deferred set is executed once (V5 list "
+                "item 5; decision D35): 'output_path' (unset) leaves it at the "
+                "entry to write_output_files, the optimisation phase's place; "
+                "'evaluation_exit' executes it at the exit of every "
+                "call_models on the converged state, after the objective and "
+                "constraints -- the evaluation phase's one call_models is the "
+                "whole run and never reaches the output path, so an "
+                "evaluation is the MDA converged and then every deferred "
+                "node once, and its exit state carries what a flat "
+                "evaluation's carries.  The mechanism is the output path's: "
+                "one sweep of the dispatch body over the set with the "
+                "exclusion lifted, counted like any other node call and "
+                "sweep (measured, not charged).  DEFER_PER_RUN_TOTALS gains "
+                "'execution' and 'n_executions' (one per run in both phases).  "
+                "The switch is refused without PROCESS_ARCH_DEFER_PER_RUN and "
+                "refused on an unknown value; with it unset the evaluation's "
+                "exit is one boolean read (gate G1); gate GC declares the "
+                "counts it moves in the evaluation phase and requires every "
+                "other count and the optimisation phase identical"
+            ),
+            task="A101 (v5-timers-and-once)",
+            was="the set executed once at the output path only; an evaluation-phase run left its outputs uncomputed",
+            now="the set executed once at the evaluation's exit where the harness composes evaluation_exit; the output path unchanged",
+        ),
+        PermittedEdit(
+            kind="instrument",
+            name="PROCESS_ARCH_TIMERS / TIMERS, timers_solve_started, timers_solve_ended, _timed_objective",
+            description=(
+                "observation-only wall-clock timers (driver change DR12; V5 "
+                "list item 9; decision D33): with PROCESS_ARCH_TIMERS=on the "
+                "module-level TIMERS dictionary accumulates, per run, the wall "
+                "of every node call (per node, in _node; the flat per-call "
+                "tail's direct calls apart, in _run_deferred_tail), every "
+                "sweep of the dispatch body (_call_models_once), the block "
+                "loops' convergence test (the coupling-state bind, read and "
+                "residual, timed through two wrappers in "
+                "_call_models_partitioned), upstream's idempotence comparison "
+                "(the flat loop), the objective-and-constraints layer (the one "
+                "helper _timed_objective at the four sites), every call_models "
+                "with the epochs of the first and the last, the once-per-run "
+                "set-up (resolve_schedule's miss path, the per-run artifact's "
+                "validation, the artifacts' first load), the solve phase "
+                "(timers_solve_started / timers_solve_ended, called by "
+                "solver_handler.run) and the output path (write_output_files).  "
+                "Unset, TIMERS is None and every hook is one 'is None' test "
+                "that takes no branch (gate G1); on, no count and no exit "
+                "state moves (gate GC, the DR12 side made with the timers on).  "
+                "Wall clock is context, never evidence"
+            ),
+            task="A101 (v5-timers-and-once)",
+            was="no timing in the driver; the harness timed the child's whole wall",
+            now="per-node, per-sweep, per-test, per-evaluation and per-run accumulators, harvested by the harness before its audit sweep",
+        ),
     ],
     "process/core/solver/solver_handler.py": [
         PermittedEdit(
@@ -694,6 +751,21 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A60 (driver-attempts)",
             was="four bare calls to the solver, indistinguishable in the counters",
             now="the same four calls, each bracketed by a boundary stamp",
+        ),
+        PermittedEdit(
+            kind="instrument",
+            name="caller.timers_solve_started / caller.timers_solve_ended around the ladder",
+            description=(
+                "two calls bracketing the whole retry ladder (driver change "
+                "DR12): each a no-op with PROCESS_ARCH_TIMERS unset; with it "
+                "on they stamp the solve phase's wall and epochs and freeze "
+                "the timers' accumulators at its exit, so the optimiser's own "
+                "time and the fixed per-run term can be derived by the "
+                "harness.  The ladder is exactly what it was"
+            ),
+            task="A101 (v5-timers-and-once)",
+            was="the ladder unbracketed in wall clock",
+            now="the same ladder, its entry and exit stamped when the timers are on",
         ),
     ],
     "process/core/solver/evaluators.py": [

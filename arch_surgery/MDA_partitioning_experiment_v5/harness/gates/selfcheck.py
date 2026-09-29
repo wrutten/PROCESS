@@ -197,8 +197,10 @@ def _architecture_only(env: dict[str, str], config) -> dict[str, str]:
     two revisions reading *different* artifacts still compare unequal.
     """
     out = {}
+    instruments = {sw.REGISTRY[t].driver_name for t in sw.INSTRUMENT_SWITCHES}
     for name in sw.all_names():
-        if name not in env:
+        if name not in env or name in instruments:
+            # an instrument switch (the timers, DR12) is not architecture
             continue
         value = env[name]
         if value.startswith("/"):
