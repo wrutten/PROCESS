@@ -238,18 +238,28 @@ def _copy_identity_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
     Run once and shared, as G0''s are: each stages a throwaway copy of the
     whole package.
     """
-    cache: dict[str, dict] = {}
+    cache: dict[tuple[str, str | None], dict] = {}
 
-    def one(kind: str):
+    def one(kind: str, target: str | None = None):
+        # A90 (m2-phasea-vs-phaseb): keyed by tooth *and* target.  Keyed by the
+        # tooth's name alone, the per-file teeth overwrote one another and the
+        # verdict carried one of them, whichever file sorted last.
         def check() -> tuple[bool, str]:
             if not cache:
                 gates = _copy_gates(campaign)
                 prov = gates.load_provenance()
                 for record in gates.run_teeth(prov, Path(campaign.tree), "copy-identity"):
-                    cache[record["tooth"]] = record
-            record = cache.get(kind)
+                    cache[(record["tooth"], record.get("target"))] = record
+            if target is None:
+                matches = [r for (k, _t), r in cache.items() if k == kind]
+                record = matches[0] if len(matches) == 1 else None
+            else:
+                record = cache.get((kind, target))
             if record is None:
-                return False, f"copy_gates.run_teeth produced no {kind!r} tooth"
+                return False, (
+                    f"copy_gates.run_teeth produced no single {kind!r} tooth"
+                    + (f" on {target}" if target else "")
+                )
             return (
                 record["tooth_result"] == "TRIPPED",
                 f"{record['perturbation']} -> gate {record['gate_verdict']}"
@@ -277,11 +287,23 @@ def _copy_identity_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             "FAIL",
             one("file_added"),
         ),
+        *(
+            Tooth(
+                f"permitted_file_changed_elsewhere:{path}",
+                f"{path}, which is allowed to differ, changed somewhere other "
+                f"than its recorded hunks",
+                "FAIL",
+                one("permitted_file_changed_elsewhere", path),
+            )
+            for path in sorted(_copy_gates(campaign).PERMITTED_EDIT_FILES)
+        ),
         Tooth(
-            "permitted_file_changed_elsewhere",
-            "a file that is allowed to differ, changed somewhere other than its recorded hunks",
+            "edit_blessed_in_provenance_only",
+            "a copied file changed and recorded as a permitted edit in "
+            "PROVENANCE.json alone, with no row in the committed "
+            "PERMITTED_EDIT_FILES",
             "FAIL",
-            one("permitted_file_changed_elsewhere"),
+            one("edit_blessed_in_provenance_only"),
         ),
     )
 

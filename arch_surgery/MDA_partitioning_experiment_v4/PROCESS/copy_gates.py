@@ -960,6 +960,7 @@ def run_teeth(prov: dict, root: Path, gate: str) -> list[dict]:
                 results.append(
                     {
                         "tooth": kind,
+                        "target": target,
                         "perturbation": what,
                         "gate_verdict": "PASS" if res.passed else "FAIL",
                         "tooth_result": "TRIPPED" if not res.passed else "DID NOT TRIP",
@@ -973,6 +974,7 @@ def run_teeth(prov: dict, root: Path, gate: str) -> list[dict]:
             results.append(
                 {
                     "tooth": kind,
+                    "target": target,
                     "perturbation": what,
                     "gate_verdict": "PASS" if res.passed else "FAIL",
                     "tooth_result": "TRIPPED" if not res.passed else "DID NOT TRIP",

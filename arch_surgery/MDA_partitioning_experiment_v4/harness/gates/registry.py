@@ -494,7 +494,7 @@ def gate_table(campaign: Campaign, records_dir: Path | None = None) -> dict[str,
             "this appendix is cited unless every row is PASS with its teeth "
             "tripped; the two PASS rows with a nonzero mismatched count are "
             "the frozen-physics gate (1: the one approved model file, by name) "
-            "and the copy-identity gate (7: the recorded permitted driver-edit "
+            "and the copy-identity gate (8: the recorded permitted driver-edit "
             "files, by name and digest). A compared count that sums more than "
             "one kind of thing shows its parts in brackets."
         ),
