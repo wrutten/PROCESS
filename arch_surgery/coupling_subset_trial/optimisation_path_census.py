@@ -57,7 +57,8 @@ configuration and arm by:
 
 1. ``max_exit_residual_carried`` — the carried component with the largest
    whole-``y`` exit residual under the full census test (read from the full
-   ``rbw`` run's ``audit_residual.json``);
+   ``rbw`` run's ``audit_residual.json``; ties, including a whole set at
+   0.0, go to the alphabetically last key — rule 5 breaks ties the same way);
 2. ``pf_coil_self_read`` — the alphabetically first ``pf_coil.*`` component
    among the set's DSM-self-read-only components;
 3. ``most_sweeps_carried`` — the component carried in the most census sweeps
