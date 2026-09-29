@@ -14,7 +14,13 @@ What :func:`install` changes
    * ``interface`` / ``feedback``: each block's V4 write set intersected with
      the DSM-derived set of ``test_sets.json``; the flat block gets the set;
    * ``rbw``: each block's **read-before-write** set, measured by the census
-     for *this arm's* execution order (``rbw_sets.json``), used as it stands.
+     for *this arm's* execution order (``rbw_sets.json``), used as it stands;
+   * ``rbw-minus:<key>``: the ``rbw`` sets with one component removed from
+     every block that carries it (task A92 (optimisation-path-census), the
+     teeth: a dropped carried component must be caught by the whole-``y``
+     exit audit).  ``narrowing.json`` records the key and the blocks it was
+     removed from — an empty list means the key was in no block's set, which
+     is the control.
 
 2. **Once-per-run nodes execute once** (V5 improvement list item 5, extended by
    the user on 2026-09-29 to every evaluation-phase arm).  After the loop
@@ -42,6 +48,11 @@ HERE = Path(__file__).resolve().parent
 TEST_SETS_FILE = HERE / "test_sets.json"
 RBW_SETS_FILE = HERE / "rbw_sets.json"
 TEST_SETS = ("full", "interface", "feedback", "rbw")
+RBW_MINUS = "rbw-minus:"
+
+
+def _is_rbw(test_set):
+    return test_set == "rbw" or test_set.startswith(RBW_MINUS)
 
 #: Accumulated in-process; the caller reads and resets.
 TIMERS = {"call_models_s": 0.0, "predicate_read_s": 0.0, "predicate_residual_s": 0.0,
@@ -53,9 +64,13 @@ def _chosen_sets(test_set, configuration, arm):
     if test_set in ("interface", "feedback"):
         return json.loads(TEST_SETS_FILE.read_text())["configurations"][configuration][
             "sets"][test_set]
-    if test_set == "rbw":
-        return json.loads(RBW_SETS_FILE.read_text())["configurations"][configuration][
+    if _is_rbw(test_set):
+        sets = json.loads(RBW_SETS_FILE.read_text())["configurations"][configuration][
             arm]["sets"]
+        if test_set.startswith(RBW_MINUS):
+            key = test_set[len(RBW_MINUS):]
+            sets = {label: [k for k in keys if k != key] for label, keys in sets.items()}
+        return sets
     return None
 
 
@@ -81,8 +96,17 @@ def install(ms, caller_mod, *, test_set, configuration, arm, outdir=None,
         index = {spec.name(i): i for i in range(len(spec.keys))}
         if test_set == "full":
             new = dict(subsets)
-        elif test_set == "rbw":
+        elif _is_rbw(test_set):
             new = {}
+            if test_set.startswith(RBW_MINUS):
+                key = test_set[len(RBW_MINUS):]
+                raw = json.loads(RBW_SETS_FILE.read_text())["configurations"][
+                    configuration][arm]["sets"]
+                narrowing["dropped"] = key
+                narrowing["dropped_from_blocks"] = sorted(
+                    label for label, keys in raw.items() if key in keys)
+                if key not in index:
+                    raise RuntimeError(f"rbw-minus names a key y lacks: {key}")
             for label, keys in chosen.items():
                 missing = [k for k in keys if k not in index]
                 if missing:
