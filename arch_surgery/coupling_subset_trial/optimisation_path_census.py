@@ -523,7 +523,25 @@ def stage_summarise_census(campaign_records):
                     f"{len(cmp_['in_eight_entry_not_on_path'])} | "
                     f"{n_first0} / {cmp_['n_path'] - n_first0} | "
                     f"{sizes['min']} / {sizes['median']:g} / {sizes['max']} |")
+    totals = {"n_runs_ok": 0, "n_evaluations": 0, "n_fd_probes": 0,
+              "n_line_search_points": 0, "n_repeated_points": 0}
+    for arms in out["configurations"].values():
+        for arm, d in arms.items():
+            for seed, r in d["runs"].items():
+                if r.get("status") != "ok":
+                    continue
+                rec = records_mod.read(opt_dir(next(
+                    c for c, a in out["configurations"].items() if a is arms), arm, int(seed)))
+                n_x = len(rec.get("itvar_names") or [])
+                h = r["n_x_changed_histogram"]
+                totals["n_runs_ok"] += 1
+                totals["n_evaluations"] += r["n_evaluations"]
+                totals["n_fd_probes"] += r["n_fd_probes"]
+                totals["n_line_search_points"] += int(h.get(str(n_x), 0))
+                totals["n_repeated_points"] += int(h.get("0", 0))
+    out["totals"] = totals
     PATH_SETS_FILE.write_text(json.dumps(out, indent=1) + "\n")
+    print(f"totals over the censused runs: {totals}")
     header = ["| configuration | arm | block | evaluations (seed 0 / seed 1) | on path | 8-entry | "
               "common | on path, not 8-entry | 8-entry, not on path | first seen at evaluation 0 / later | "
               "set size per evaluation min / median / max |",
