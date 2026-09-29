@@ -389,7 +389,10 @@ def _complete_record_of(job: pool_mod.Job, campaign: Campaign) -> dict[str, Any]
             cursor = cursor[part]
         cursor[parts[-1]] = 0
     for name, child_name in records_mod.IDENTITY_FIELDS_STAMPED_BY_THE_CHILD.items():
-        record[child_name] = identity[name]
+        # an identity field rendered only where it differs from its default
+        # (the test set, the tolerance, the timers) is absent from a job at
+        # the default: the child stamps the default then
+        record[child_name] = identity.get(name, records_mod.IDENTITY_DEFAULTS_WHEN_ABSENT.get(name))
     record["status"] = "ok"
     record["failure_class"] = "ok"
     record["exit_audit"] = {
