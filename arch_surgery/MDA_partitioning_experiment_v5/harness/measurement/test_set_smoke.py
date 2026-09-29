@@ -64,11 +64,18 @@ def _value(record: Mapping[str, Any], path: str) -> Any:
     return records_mod.resolve_path(record, path) if records_mod.has_path(record, path) else None
 
 
+#: The configuration of the two pairs: the brief's (A100 (v5-test-set):
+#: "one B0 and one B2 optimisation on large_tokamak_nof seed 0").  A first
+#: press chose the pulsed configuration with the fewest iteration variables,
+#: which is low_aspect_ratio_DEMO; those two pairs are kept as smoke records.
+SMOKE_CONFIGURATION = "large_tokamak_nof"
+
+
 def _cheapest_pulsed(campaign: Campaign):
-    pulsed = [c for c in campaign.configurations if c.pulsed]
-    if not pulsed:
-        raise GateError("no pulsed configuration in the campaign")
-    return min(pulsed, key=lambda c: c.n_iteration_variables)
+    config = campaign.configuration(SMOKE_CONFIGURATION)
+    if not config.pulsed:
+        raise GateError(f"{SMOKE_CONFIGURATION} is not a pulsed configuration")
+    return config
 
 
 def _job(campaign: Campaign, config, arm: str, label: str, *, test_set: str | None = None, tau: float | None = None) -> pool_mod.Job:

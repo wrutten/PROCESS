@@ -37,6 +37,7 @@ from harness.experiment import arms as arms_mod  # noqa: E402
 from harness.core import framework  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
+from harness.core.config import V4_TEST_SET  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
 from harness.core.config import Campaign, Config  # noqa: E402
 from harness.gates.gate_neutrality import _read_record, _same  # noqa: E402
@@ -433,12 +434,40 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
                     n_reference_values += 1
                     if not _same(left, right):
                         diffs.append({"field": path, "gate_GR": left, "here": right})
-                n_reference_diffs += len(diffs)
+                # The reproduction gate's record is V4's criterion on the copy
+                # (the fallback test set at 1e-6, D39).  An arm whose loop
+                # stops on another test set -- B0 under the census campaign
+                # -- is another campaign's run of the same arm, and a
+                # difference from GR's record there is the test set's, not
+                # the output path's (A93 measured it: +4.6 % node calls on
+                # nof's B0).  So the sub-check is **gated only where the two
+                # are the same criterion**: the reference arm BR, which
+                # composes no test set, and every arm under the fallback;
+                # elsewhere the differences are reported, named, not gated.
+                same_criterion = (
+                    arms_mod.ARMS[arm].is_reference
+                    or campaign.test_set == V4_TEST_SET
+                )
+                if same_criterion:
+                    n_reference_diffs += len(diffs)
                 row["unchanged_against_the_reproduction_gate"] = {
                     "reference_record": str(reference / "metrics.json"),
                     "n_compared": len(UNCHANGED_ON_REFERENCE_ARMS),
                     "n_differing": len(diffs),
                     "differing": diffs,
+                    "same_criterion_as_the_reproduction_gate": same_criterion,
+                    "gated": same_criterion,
+                    "not_gated_because": (
+                        None
+                        if same_criterion
+                        else (
+                            f"this arm's loop stops on the {campaign.test_set!r} "
+                            f"test set at tau={campaign.tau!r} and the reproduction "
+                            f"gate's record on V4's write set at 1e-6 (D39): two "
+                            f"campaigns; the differences are the test set's and "
+                            f"are reported, not gated"
+                        )
+                    ),
                     "fields": list(UNCHANGED_ON_REFERENCE_ARMS),
                     "audit_residual_excluded_because": (
                         "the audit position moved to the declared one for every "
@@ -454,10 +483,16 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
                 checks += [
                     {
                         "check": "nothing about the solve changed on the reference arm",
-                        "passed": not diffs,
+                        "passed": (not diffs) if same_criterion else True,
                         "detail": (
                             f"{len(diffs)} of {len(UNCHANGED_ON_REFERENCE_ARMS)} "
                             f"fields differ from the reproduction gate's record"
+                            + (
+                                ""
+                                if same_criterion
+                                else f" — not gated: the arm's loop stops on the "
+                                f"{campaign.test_set!r} set, GR's on the write set (D39)"
+                            )
                         ),
                     },
                     {
