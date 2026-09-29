@@ -472,13 +472,30 @@ EVALUATION_KIND: list | None = None
 _BLOCK_TRACE_FILE = None
 
 
-def block_trace_modules(spec, subsets) -> list:
-    """``[(module, frozenset(indices))]`` from the committed write sets.
+_BLOCK_TRACE_MODULES: dict = {}
 
-    In a fixed order, so a per-module maximum can be taken over any residual
-    whose ``idx_c`` names the components it scored.
+
+def block_trace_modules(spec, subsets) -> tuple:
+    """``(module names, component -> module index)`` from the committed write sets.
+
+    Built once per write-set object and cached: the lookup array is what makes
+    splitting a sweep's residual by module one vectorised pass instead of a
+    membership test per component.  Components no module writes read -1
+    (``load_subsets`` refuses a write set that leaves any, so none exist).
     """
-    return [(mod, frozenset(idx)) for mod, idx in sorted(subsets.items())]
+    import numpy as np  # noqa: PLC0415 - trace path only
+
+    cached = _BLOCK_TRACE_MODULES.get(id(subsets))
+    if cached is not None:
+        return cached
+    names = sorted(subsets)
+    lookup = np.full(len(spec.keys), -1, dtype=int)
+    for k, mod in enumerate(names):
+        members = sorted(subsets[mod])
+        if members:
+            lookup[members] = k
+    _BLOCK_TRACE_MODULES[id(subsets)] = (names, lookup)
+    return names, lookup
 
 
 def block_trace_sweep(res, modules, tau) -> dict:
@@ -491,21 +508,23 @@ def block_trace_sweep(res, modules, tau) -> dict:
     """
     import numpy as np  # noqa: PLC0415 - trace path only
 
+    names, lookup = modules
     idx_c = np.asarray(res.idx_c, dtype=int)
-    flagged = set(res.mismatch_discrete) | set(res.moved_constant) | set(res.nan_new)
+    labels = lookup[idx_c] if idx_c.size else np.zeros(0, dtype=int)
+    flagged_mods = {
+        int(lookup[i])
+        for i in (*res.mismatch_discrete, *res.moved_constant, *res.nan_new)
+    }
     out_max: dict = {}
     open_: list = []
-    for mod, members in modules:
-        if idx_c.size:
-            mask = np.fromiter((i in members for i in idx_c), bool, idx_c.size)
-        else:
-            mask = np.zeros(0, bool)
-        in_flagged = any(i in members for i in flagged)
-        if not mask.any() and not in_flagged:
+    for k, mod in enumerate(names):
+        mask = labels == k
+        has = bool(mask.any())
+        if not has and k not in flagged_mods:
             continue
-        m = float(np.max(res.scaled[mask])) if mask.any() else 0.0
+        m = float(np.max(res.scaled[mask])) if has else 0.0
         out_max[mod] = m
-        if m >= tau or in_flagged:
+        if m >= tau or k in flagged_mods:
             open_.append(mod)
     return {"max": out_max, "open": open_}
 
