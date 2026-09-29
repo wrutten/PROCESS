@@ -404,11 +404,18 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
         print(f"  REFUSED — {exc}")
         return 3
     budget = plan.budget(campaign)
+    # DR12 (V5 plan §9; D33): the campaign runs with the timers on.  Composed
+    # here as the smoke composes them (A101 wired the smoke and reported the
+    # campaign press as wired too; it was not -- found by A102 (v5-campaign)
+    # before its campaign press, from the code).
+    campaign = dataclasses.replace(campaign, timers=CAMPAIGN_TIMERS)
     print(
         f"  will run: {budget['entry_references']} entry reference(s) + "
         f"{budget['evaluation_displaced']} displaced-entry evaluations + "
         f"{budget['optimisation']} optimisations = {budget['total']} runs, "
-        f"records stamped {plan.run_kind!r}, {campaign.workers} worker(s)"
+        f"records stamped {plan.run_kind!r}, {pool_mod.workers(campaign)} worker(s) "
+        f"(HARNESS_WORKERS or the campaign's {campaign.workers}), wall-clock timers "
+        f"{'on' if campaign.timers else 'off'} (config.CAMPAIGN_TIMERS)"
     )
     gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
     press = chain_mod.run(

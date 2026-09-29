@@ -379,7 +379,23 @@ def _complete_record_of(job: pool_mod.Job, campaign: Campaign) -> dict[str, Any]
     """A record that ``is_complete_for`` accepts for *job*: every declared
     field present (null where the value does not matter), stamps consistent."""
     identity = job.identity(Path(campaign.runs_dir), campaign=campaign)
-    record: dict[str, Any] = {name: None for name in records_mod.declared_field_names(job.phase)}
+    record: dict[str, Any] = {}
+    # Every declared field, a null leaf at its dotted path (null counts as
+    # carried): a nested declared field (`exit_audit.instrument.restores`,
+    # `evaluation_warmup.agrees`) needs its parents to be dictionaries, or
+    # the contract reads it as missing from a record whose parent is null --
+    # which is how A102 (v5-campaign)'s `evaluation_warmup.agrees` refused
+    # this synthetic record and nine teeth could not trip (A101's §8.6 met
+    # the same class on `timers`).
+    for name in records_mod.declared_field_names(job.phase):
+        cursor = record
+        parts = name.split(".")
+        for part in parts[:-1]:
+            if not isinstance(cursor.get(part), dict):
+                cursor[part] = {}
+            cursor = cursor[part]
+        if not isinstance(cursor.get(parts[-1]), dict):
+            cursor[parts[-1]] = None
     for path in records_mod.CONTRACT[job.phase]:
         cursor = record
         parts = path.split(".")
