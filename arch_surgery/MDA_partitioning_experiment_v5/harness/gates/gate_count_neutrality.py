@@ -597,14 +597,14 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         )
     declared_set = STRADDLE_TEST_SET.get(after_label)
     if declared_set is not None and campaign.test_set != declared_set:
-        raise GateError(
-            f"GC's after side {after_label!r} is declared under the "
-            f"{declared_set!r} test set and this press composes "
-            f"{campaign.test_set!r}: the count-neutrality claim of DR11 is that "
-            f"the fallback is V4's predicate exactly, and a side made under "
-            f"another test set would be another campaign, not a straddle.  "
-            f"Press it with --test-set {declared_set}."
-        )
+        # The after side is made under the declared test set **whatever the
+        # button composed**: the count-neutrality claim of DR11 is that the
+        # fallback is V4's predicate exactly, and a side made under another
+        # test set would be another campaign, not a straddle.  The campaign
+        # the gate runs under is therefore the declared one, built here (as
+        # the census stage builds its fallback campaign), so that --gate all
+        # under the census default still presses this straddle.
+        campaign = dataclasses.replace(campaign, test_set=declared_set, tau=None)
     references = gates_mod.entry_references(campaign, resume=resume)
     before_plan = count_neutrality_jobs(campaign, references, before_label)
     after_plan = count_neutrality_jobs(campaign, references, after_label)
