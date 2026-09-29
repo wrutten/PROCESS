@@ -936,10 +936,16 @@ def print_trace(result: dict[str, Any]) -> None:
         for arm, t in b["flat_tables"].items():
             print(f"### {b['configuration']} {arm}: {t['n_evaluations']} evaluations "
                   f"(k = 1 + max L violated on {t['binding_inconsistent']})")
+            all_tot = all_m2 = 0
             for kind, dist in t["by_kind"].items():
                 tot = sum(dist.values())
                 m2 = sum(v for k, v in dist.items() if "M2" in k.split("+"))
+                all_tot += tot
+                all_m2 += m2
                 print(f"    {kind:<11} n {tot:>6}  M2 binds {_share(m2, tot)}  binders {dist}")
+            print(f"    {'all':<11} n {all_tot:>6}  M2 binds {_share(all_m2, all_tot)}")
+            for var, dist in sorted(t["by_variable"].items()):
+                print(f"      binders of the {var} probes: {dict(sorted(dist.items(), key=lambda kv: -kv[1]))}")
         print()
 
     print("## (b)/(c) Evaluation by evaluation: the flat reference against B2\n")
