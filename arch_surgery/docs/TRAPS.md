@@ -250,3 +250,20 @@ A read/write census that decides each coupling-state component's kind (array, sc
 **How to avoid it:** snapshot every component around every node call and treat a change of type as a write; never type a component from its value at install. A `__setattr__`-only write census has the same blind spot in a different place: it records the assignment and misses that the object's kind changed. *(A92 (optimisation-path-census), 2026-09-29.)*
 
 *Addition (A88 (function-weighted-sweeps), 2026-09-17), a fourth kind:* the renderer's own dangling-reference scan read the change log, so a record of a past table set ("Tables 11–18") became a dangling reference the day the set shrank. The scan now holds the change log out, as the citation sweep does (A86's addition).
+
+## T19 — `ps` inside the sandbox sees only its own command; "no process alive" is not evidence
+
+Every Bash command runs in its own bubblewrap PID namespace: `ps -e` from a later command lists five
+processes, whatever else is running on the machine. A background run launched by an earlier command
+(the orchestrator's `run_in_background`, an agent's `nohup … &`, a Bash call still polling) is invisible
+and unkillable from any other command, from any session. On 2026-09-29 the orchestrator read an empty
+`pgrep` as "A96's ladder run died", had the agent delete a partial record and relaunch; the original run
+was alive, finished that record a minute later, and the two parents then raced through the same record
+directories. Only the user, outside the sandbox, can stop such a process.
+
+**How to avoid it:** decide whether a run is alive from its artifacts — the log's mtime against the
+record's expected wall, a record directory still gaining files, a `heartbeat` the script stamps — never
+from the process table. A task agent's "completed" notification that ends on "waiting" is an *interim*
+hand-back while its background Bash call runs: the run is alive until the agent's own report says
+otherwise. Before relaunching anything with a record directory, name the evidence of death in the log
+(the change log entry that authorises the relaunch quotes it).
