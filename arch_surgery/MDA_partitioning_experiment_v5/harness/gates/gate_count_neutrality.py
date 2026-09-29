@@ -655,7 +655,7 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
     straddle = _straddle(before_prov, after_prov)
     _HELD["rows"] = rows
     _HELD["rule"] = rule
-    return {
+    outcome = {
         "passed": passed,
         "criterion": (
             "on a job set of both phases, every arm active on each "
@@ -699,6 +699,40 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         "after_side": after_prov,
         "rows": rows,
     }
+    # One file per straddle, never overwritten by a later change's press: the
+    # framework writes the *latest* verdict to ``count_neutrality/gate.json``,
+    # and a gate that reads this gate's result for one particular change (G2
+    # reads the per-sweep -> once-per-evaluation straddle) needs that change's
+    # record whatever was pressed since.  Under the verdict directory, not the
+    # pool: it is a comparison record, not a run.
+    path = straddle_record_path(campaign, before_label, after_label)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "gate": GATE_NAME,
+                "plan_name": PLAN_NAME,
+                "tree_git_head": framework.git_head(),
+                **outcome,
+            },
+            indent=2,
+            default=str,
+        )
+        + "\n"
+    )
+    outcome["straddle_record"] = str(path)
+    return outcome
+
+
+def straddle_record_path(campaign: Campaign, before_label: str, after_label: str) -> Path:
+    """Where one straddle's comparison record is kept, by its two labels."""
+    return (
+        Path(campaign.runs_dir)
+        / framework.GATES_SUBPATH
+        / GATE_NAME
+        / "straddles"
+        / f"{before_label}__{after_label}.json"
+    )
 
 
 # --------------------------------------------------------------------------
