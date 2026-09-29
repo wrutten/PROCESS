@@ -652,3 +652,53 @@ The whole V5 `runs/` tree was moved, before retirement, to
 | 2026-09-29 | DR9 committed as `9399a42f`; its G1 press refused ("no after record") — the after capture had been resolved by digest into the before records and the reference arm's into A94's baseline evaluations and GR's pool record (§5 (2)). Chain stopped; branch reset to `f188d3db`; pool fix + tooth `f93d1df1`; DR9 cherry-picked as `e5137707`; 15 record directories stamped `9399a42f` removed; three seeded records restored byte-identical; G1 `before` re-made at `f93d1df1` (detached, clean). |
 | 2026-09-29 | At `e5137707`: G1 PASS (`f93d1df1 → e5137707`), GC PASS (`copy → DR9`), copy gates PASS, run-free self-checks PASS, `self_containment` FAIL (inherited). DR9 straddle archived under `switch_neutrality/straddles/f93d1df1__e5137707/`; G1 `before` re-captured at `e5137707`. |
 | 2026-09-29 | DR10 committed as `a0de2e13`; at `a0de2e13`: GC PASS (`DR9 → DR10`, rule `once_per_evaluation`), G2 PASS (re-formed, 3 teeth), copy gates PASS, self-checks PASS, `self_containment` FAIL (inherited). G1's first DR10 press with `--resume` kept the DR9 `after` capture and said so; re-pressed without `--resume`: PASS `e5137707 → a0de2e13`. Stamp survey: 132 records; the tree moved to `idf_probe/runs/v5_schedule_and_prime/` (0 changed, 0 lost). Report written. | |
+
+---
+
+## 11. Orchestrator's critical assessment (protocol §5) — verdict: merge, both driver changes
+
+*Written 2026-09-29 by the orchestrating session under **D37** (autonomous mode: the driver changes DR9 and
+DR10 merge on this assessment; the two diffs stand in §3 and §4 for the user's review on return). Checked
+differently from the agent, not by repeating its presses.*
+
+**Checked.** (1) `git diff --name-only 43d31a04..HEAD`: 14 files — under `PROCESS/` only `caller.py`,
+`copy_gates.py`, `PROVENANCE.json`, `CHANGES.md`; **nothing under `process/models/`** (0 paths); the nine
+harness files are exactly §6's list; the worktree is clean. (2) The two GC straddle records read from disk
+(`gates/count_neutrality/straddles/copy__DR9.json`, `DR9__DR10.json`): 22 pairs, 3 985 leaves compared and
+0 mismatched, 33 prime checks and 0 failing, 46 125 components and 0 differing, stamped `e5137707` and
+`a0de2e13` respectively — the report's figures. (3) The latest verdict records: `count_neutrality` PASS
+(straddles DR9 → DR10, `straddles_a_change: true`), `switch_neutrality` PASS (`e5137707 → a0de2e13`, a
+neutrality result), `prime_map` PASS (5 026 / 0), `copy_identity` PASS (224 / 8, the permitted files),
+`g0prime` PASS (77 / 1, the approved `pulse.py`), `resume_identity` PASS (170 / 0), `self_containment` FAIL
+(54 / 1: V4's help-string line, I-32, fixed on the trunk by A98 (v5-reporting-trim) at `43ce80ab`, so the
+merged tip is expected to PASS — A100 presses it). (4) The records tree is one tree of 435 MB at
+`idf_probe/runs/v5_schedule_and_prime/` with `_press_logs/`.
+
+**Read against the rulings.** DR9 is D31's fix as the user ruled ("this should be fixed in v5"); the
+memoisation key (the figure of merit) is the one run-time input the resolution depends on, and GC's stamp
+`n_resolutions = 1` on every deferring arm is the count that shows it. DR10 is item 8 as the user framed it
+("pre-processing before the partitioned MDAs can start"): the prime at the head of `_call_models_inner`, once
+per evaluation, the output path and the exit audit no longer priming; G2's two parts show the exit states
+identical to the per-sweep form on 12 565 + 5 026 components. The abandonment of G3/G3c is Q3's ruling. The
+I-29 fix in `pool.directory_for` (decision 2) is a harness correctness fix met on the gate itself, with a
+tooth; **I-29 closes with it.** The branch reset the agent performed was on an unpushed task branch with the
+abandoned commit's records removed and the seeded records restored byte-identical — the right recovery,
+and recorded.
+
+**Merge over A98.** A98 (merged `43ce80ab`) rewrote `registry.py`, trimmed `gate_prime.py` (G3/G3c removed)
+and `gate_resume_identity.py` (G8 pairs), and touched `PROCESS_diff.py`; A99 rewrote `gate_prime.py` (G2
+re-formed, G3/G3c removed), added the `count_neutrality` entry and removed `cold_chain` in `registry.py`, added
+one tooth in `gate_resume_identity.py`, and annotated `PROCESS_diff.py`. Resolution rule: A99's
+`gate_prime.py` whole (it contains A98's removal); A98's `registry.py` with A99's real `count_neutrality`
+entry replacing A98's refusing placeholder and `cold_chain` absent; both changes in the other two files.
+The merged tip is compiled and its run-free self-checks pressed by the orchestrator before the next task.
+
+**Not pressed at this merge (the agent's decision 10, endorsed).** GR, G4–G7, G9 stand at their seeded
+`d6c246a1` records; the schema change (`schedule_resolution`) re-makes their ~100 runs under `--resume`, and
+that press belongs to the next driver task (A100 (v5-test-set)) at the merged tip, where it also validates
+the A98 + A99 harness together — one press, not two.
+
+**Queue consequences applied at merge.** I-29 closed (`f93d1df1`); I-30 closed (DR9); proposals 1 (the DR
+rows: into the V5 plan §11, where V5's change map lives), 3, 4 and 6 to A100's brief; proposal 5 (the
+pre-existing `PROCESS_diff.py` exit 1 at the copy commit and `CHANGES.md`'s missing A90 subsection) filed
+as an issue.
