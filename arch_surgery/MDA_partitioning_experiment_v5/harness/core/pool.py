@@ -206,7 +206,9 @@ class Job:
         and is still the same job — and as given otherwise.  Mappings are
         rendered with sorted keys and string values, ``None`` kept as null.
         """
-        if campaign is not None and (self.test_set is None or self.tau is None):
+        if campaign is not None and (
+            self.test_set is None or self.tau is None or self.timers is None
+        ):
             resolve_settings(self, campaign)
         rendered: dict[str, Any] = {}
         for name in JOB_IDENTITY_FIELDS:
@@ -220,6 +222,12 @@ class Job:
                 # job carries V4's identity (see the field's comment).  An
                 # unresolved value is refused: a job rendered before the pool
                 # resolved it against the campaign would render as V4's.
+                if name == "timers" and value is None:
+                    # DR12: an unresolved instrument switch renders as off --
+                    # the default every record carries -- never as a refusal:
+                    # a job rendered without a campaign (a tooth, a listing)
+                    # asks about its architecture, and the timers are not one.
+                    continue
                 if value is None:
                     raise PoolError(
                         f"the job's {name} is unresolved: identity was asked "

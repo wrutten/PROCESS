@@ -603,7 +603,13 @@ def missing_fields(record: Mapping[str, Any]) -> list[str]:
             f"it belongs to, so there is no field list to check it against"
         )
     finished = record.get("status") == "ok"
-    timers_on = bool(record.get("campaign_timers"))
+    # The timer fields (DR12) are owed by a record made with the timers on:
+    # the stamp says so, or -- so that a copy with the stamp removed still
+    # owes it -- a harvested timers block does.
+    timers_block = record.get("timers")
+    timers_on = bool(record.get("campaign_timers")) or (
+        isinstance(timers_block, dict) and bool(timers_block.get("enabled"))
+    )
     absent = [
         field.name
         for field in fields_for(phase, finished=finished, timers_on=timers_on)

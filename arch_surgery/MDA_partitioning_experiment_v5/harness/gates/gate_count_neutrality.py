@@ -1120,25 +1120,31 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         side must be the one differing leaf; under 'identical' the tooth
         reads the same doctoring as a plain count difference."""
         count_rule = _HELD.get("count_rule") or "identical"
-        rows = [
-            r for r in (_HELD.get("rows") or [])
-            if r["phase"] == "A" and (r["counts"].get("n_declared_moves") or 0) > 0
-        ] or (_HELD.get("rows") or [])
+        every = _HELD.get("rows") or []
+        rows = (
+            [r for r in every if r["phase"] == "A" and (r["counts"].get("n_declared_moves") or 0) > 0]
+            or [r for r in every if r["phase"] == "A"]
+            or every
+        )
         if not rows:
             return False, "the gate compared nothing"
         row = rows[-1]
         before = records_mod.read(Path(row["before"]["path"]))
         after = json.loads(json.dumps(records_mod.read(Path(row["after"]["path"]))))
-        counted = ((after.get("node_census") or {}).get("counted") or {})
+        # the record's OWN census dictionary, doctored in place: the
+        # evaluation phase stamps `counted`, the optimisation phase
+        # `per_node_counted` (a fresh dictionary would doctor nothing)
+        census_key = "counted" if row["phase"] == "A" else "per_node_counted"
+        census = (after.get("node_census") or {}).get(census_key)
+        if not isinstance(census, dict) or not census:
+            return False, f"the after-side record carries no node_census.{census_key} to doctor"
         nodes = sorted(((after.get(PER_RUN_TOTALS) or {}).get("nodes")) or [])
-        node = nodes[0] if nodes else (sorted(counted)[0] if counted else None)
-        if node is None:
-            return False, "no censused node to count twice"
-        was = int(counted.get(node, 0))
-        counted[node] = was + 1
+        node = next((n for n in nodes if n in census), sorted(census)[0])
+        was = int(census.get(node, 0))
+        census[node] = was + 1
         result = compare_counts_under_rule(before, after, rule=count_rule)
         named = [m["field"] for m in result["mismatches"]]
-        return result["n_mismatched"] == 1 and named == [f"node_census.counted.{node}"], (
+        return result["n_mismatched"] == 1 and named == [f"node_census.{census_key}.{node}"], (
             f"{node} counted {was} -> {was + 1} in a copy of {row['key']}'s after-side "
             f"record under the rule {count_rule!r}: the comparison reports "
             f"{result['n_mismatched']} differing leaf/leaves of {result['n_compared']} "
