@@ -82,7 +82,7 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
     Each literal lives in the module that implements the gate, as that
     module's ``gate(campaign)``; this function only collects them.
     """
-    from . import gate_audit, gate_composition, gate_entry, gate_prime, gate_records
+    from . import gate_audit, gate_composition, gate_count_neutrality, gate_entry, gate_prime, gate_records
 
     return {
         "reproduction": gates_mod.reproduction_gate(campaign),
@@ -90,6 +90,7 @@ def _plan_gates(campaign: Campaign) -> dict[str, Gate]:
         "switch_neutrality": gate_neutrality.gate(campaign),
         "prime_map": gate_prime.prime_map_gate(campaign),
         "cold_chain": gate_prime.cold_chain_gate(campaign),
+        "count_neutrality": gate_count_neutrality.gate(campaign),
         "audit_restriction": gate_audit.audit_restriction_gate(campaign),
         "switch_composition": gate_composition.switch_composition_gate(campaign),
         "entry_and_warm": gate_entry.entry_and_warm_gate(campaign),
