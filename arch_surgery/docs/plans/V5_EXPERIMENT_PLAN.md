@@ -1,6 +1,10 @@
 # V5 experiment plan — the partitioned MDA as an existence proof in model-evaluation counts
 
-> **Document status** — **DRAFT · NOT APPROVED. Nothing may be built from it until the user approves.**
+> **Document status** — **DRAFT · NOT APPROVED as a whole; building of the ruled items authorised 2026-09-29**
+> (the user: *"continue with implementation of the v5 changes whilst it runs"*): items 7, 8 (A99), 10 and the
+> harness fixes (A98) in progress; the test-set change (DR11), the timers (DR12) and item 5 follow on the driver
+> files; §3's tolerance paragraph for `st_regression` awaits A96. Every driver change still needs the user's
+> approval per change before merge. Was: **DRAFT · NOT APPROVED. Nothing may be built from it until the user approves.**
 > Written 2026-09-29 by task **A95 (v5-plan)** at `7986d408` (the tip of `architecture_surgery`), as a
 > writing task: no PROCESS run, no code change, nothing written under any `MDA_partitioning_experiment_v*/`
 > folder (A94 is making the V5 copy concurrently). **Its input is
