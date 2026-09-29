@@ -1,10 +1,13 @@
 # A95 (v5-plan) — the V5 experiment plan, drafted from the improvement list's rulings
 
-> **Document status** — **OPEN.** Task **A95 (v5-plan)**, branch `A95-v5-plan` (worktree
+> **Document status** — **MERGED 2026-09-29 at `5e4fd4e7` (`--no-ff`); archived.** The living artifact is
+> [`../../plans/V5_EXPERIMENT_PLAN.md`](../../plans/V5_EXPERIMENT_PLAN.md), status DRAFT · NOT APPROVED until the
+> user rules on its §12; the orchestrator's assessment is §6 below. No run records (a writing task). Was: OPEN.
+> Task **A95 (v5-plan)**, branch `A95-v5-plan` (worktree
 > `.claude/worktrees/A95-v5-plan`), base **`7986d408`** = `architecture_surgery`. A writing task: **no PROCESS run,
 > no code change, no file written under any `MDA_partitioning_experiment_v*/` folder** (A94 makes the V5 copy
 > concurrently). One living artifact delivered —
-> [`../plans/V5_EXPERIMENT_PLAN.md`](../plans/V5_EXPERIMENT_PLAN.md), status **DRAFT · NOT APPROVED** — and this
+> [`../../plans/V5_EXPERIMENT_PLAN.md`](../../plans/V5_EXPERIMENT_PLAN.md), status **DRAFT · NOT APPROVED** — and this
 > report. Arm names are today's (`AR A0 A1 A2` / `BR B0 B1 B2`; trap T16).
 
 ## 1. Verdict
