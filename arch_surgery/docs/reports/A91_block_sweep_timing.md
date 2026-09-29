@@ -600,3 +600,20 @@ pulsed ones.
   from those. The references and entries (13:56–13:57, inside the window) carry only counts and bit-exact
   states and were not re-made.
 - 2026-09-29 — Report written (this document); committed after the tip, touching no code.
+
+## Orchestrator's critical assessment (protocol §5) — 2026-09-29
+
+*By the orchestrating session (`process-surgery-65`), which dispatched the task to a task agent and did not execute it. Verified by checks the agent did not make, over the records and the code; nothing re-pressed.*
+
+**Scope.** Four files added under `arch_surgery/block_sweep_timing/` and this report; `git diff c2ac4077..133f82d8` over `arch_surgery/MDA_partitioning_experiment_v4/`, `process/` and `harness/` is empty, and `git status --ignored` on the V4 folder is empty. Records untracked under `arch_surgery/idf_probe/runs/block_sweep_timing/`. Survey only; nothing acceptance-bearing.
+
+**Checks made here.**
+
+1. **Recount from the raw sweep records** (`large_tokamak_nof/timing/A2/sweep_timing.json`, per repetition the mean over that block's sweeps, then the median and [min, max] over the 7 repetitions): M1 2.94 [2.86, 3.14], M2 2.92 [2.84, 3.00], M3 0.67 [0.64, 0.69] ms per sweep; dispatch (sweep wall − Σ node calls) 0.094 / 0.084 / 0.083 ms — the verdict table's cells to the rounding.
+2. **Stamps and windows** on all 18 published timing records: every one at `c821dbd6`; every subprocess started between 14:02:59 and 14:04:29, i.e. after the contention window the orchestrator declared (A90's four control runs ended ≈ 13:59); node calls and sweeps identical across the 7 repetitions of every case and between the two presses (nof `A0v4`/`A0`/`A2` 126/111/63 calls, 6/8/14 sweeps; lad 105/93/63, 5/7/14; st 126/106/66, 6/8/16). The two contended presses are set aside under `contended_2026-09-29_1357-1401/` and cited nowhere.
+3. **The `module_schedule` finding, in the code and in the records.** In the driver copy, `_predicate_read_fields` is an `ast` walk over the objective and constraint sources with no cache, `_node_write_sets` re-reads `node_writesets.json` on every call, and `Caller._resolve_defer_per_call_tails` calls both on every `call_models` (its comment: "re-resolved on every call rather than memoised"). In the records: `other.module_schedule_s` per repetition is 8.1–10.6 ms in `A2` and 8.6–11.0 ms in `A0` (plus the one 86.6 ms outlier the report names), 0 in `A0v4`, against `call_models` of 54–57 ms in `A2`. The finding stands: **the deferring arms' non-model cost is a per-evaluation re-derivation of the deferral sets, not per-sweep dispatch**, which corrects the hypothesis A89 §7.5 put forward (recorded there as a hypothesis). It is an implementation cost of the driver copy; whether to cache it is the user's ruling (a driver change), filed as issue I-30 at merge. No published V4 number depends on it: V4's wall-clock section was withdrawn (D29), and counts are unaffected.
+4. **Counts against A89.** `A2` at 63 node calls / 14 dispatch sweeps is A89's first-pass `A2 full` (60 / 13, displaced seed 1, τ = 1e-6) plus the once-per-run set executed once (+3 calls, +1 sweep) — consistent.
+
+**On the report.** The verdict states that every timing is context, never evidence, and the tables carry median, [min, max] and the repetition count; the PULSE mis-charge (0.16 ms of M3's entry read charged to the empty sweep by the position rule) is stated rather than corrected, which is right for a survey. The cold entry was not timed, for a stated reason with a reversal; the `A0` second-repetition `module_schedule` spike is reported as an unexplained oddity — acceptable, since nothing rests on it.
+
+**Verdict: merge.** Carried forward: I-30 (the uncached deferral-set derivation, a candidate driver change for the user's ruling); the per-block test cost (≈5 µs per component tested, 1.3–1.6 ms per block sweep) is the context V5 item 6 should quote beside its census-set numbers.
