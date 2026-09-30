@@ -390,6 +390,7 @@ python experiment_runner.py --gates                  # the registry: gates, meas
 python experiment_runner.py --gate all --resume      # every gate, cheapest first (G7's tooth makes one smoke run)
 python experiment_runner.py --gate tally_contracts --resume
 python experiment_runner.py --jobs <gate>            # one gate's jobs by identity, and whether --resume keeps each
+python experiment_runner.py --jobs campaign          # the campaign press's jobs, composed as the press composes them, and whether --resume keeps each
 python experiment_runner.py --measure gate_table --resume
 python experiment_runner.py --measure tally_evaluation --resume
 python experiment_runner.py --measure tally_optimisation --resume

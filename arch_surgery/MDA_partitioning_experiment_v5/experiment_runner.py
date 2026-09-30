@@ -795,6 +795,8 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
     resume decision (rule (vii)); this shows it without pressing anything.
     With ``all``, the union over every gate, and which gates share each job.
     """
+    if args.jobs == CAMPAIGN_JOBS:
+        return stage_campaign_jobs(args, campaign)
     _rule(f"jobs of gate {args.jobs}")
     available = registry_mod.gates_only(campaign)
     names = registry_mod.ordered_gate_names(campaign) if args.jobs == "all" else [args.jobs]
@@ -847,6 +849,88 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
         for digest, gates in sorted(shared.items(), key=lambda kv: by_digest[kv[0]]["key"]):
             print(f"    {by_digest[digest]['key']}  <- {', '.join(gates)}")
     return 0
+
+
+#: The name ``--jobs`` takes for the campaign press's own job set rather than
+#: a gate's.  No gate may be registered under it.
+CAMPAIGN_JOBS = "campaign"
+
+
+def stage_campaign_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The campaign press's job set, by identity, and what ``--resume`` would
+    do with each.  Nothing runs.
+
+    The same jobs the press composes — ``chain.campaign_jobs`` per run stage,
+    under the press's own composition (:func:`campaign_press_composition`,
+    the timers on) — each resolved by the pool and put through
+    ``pool.why_not_kept``, the decision ``pool.run`` takes under ``--resume``.
+    So "a resumed campaign press would re-make these" is read off the records
+    without pressing anything (task A105 (v5-resume-fixes-and-tau-rule),
+    issue I-38).  The dependent stage (the displaced evaluations) is composed
+    from the entry references' records; where one is absent the stage says
+    so and lists nothing.  ``--json`` writes the rows.
+    """
+    if CAMPAIGN_JOBS in registry_mod.gates_only(campaign):
+        print(f"  REFUSED — a gate is registered as {CAMPAIGN_JOBS!r}, the name --jobs reserves for the campaign")
+        return 3
+    composed = campaign_press_composition(campaign)
+    _rule(
+        f"jobs of the campaign press (test set {composed.test_set}, "
+        f"{_tolerance_words(composed)}, wall-clock timers "
+        f"{'on' if composed.timers else 'off'})"
+    )
+    stages: dict[str, list[dict[str, Any]]] = {}
+    for stage in chain_mod.RUN_STAGES:
+        try:
+            jobs = chain_mod.campaign_jobs(composed, stage)
+        except chain_mod.ChainError as exc:
+            print(f"  {stage}: not composable yet — {exc}")
+            stages[stage] = []
+            continue
+        stages[stage] = pool_mod.job_listing(jobs, composed)
+    n_jobs = sum(len(rows) for rows in stages.values())
+    n_kept = sum(1 for rows in stages.values() for r in rows if r["why_not_complete"] is None)
+    for stage, rows in stages.items():
+        kept = sum(1 for r in rows if r["why_not_complete"] is None)
+        print(f"  {stage:<22} {len(rows):>4} distinct job(s); --resume would keep {kept}, run {len(rows) - kept}")
+    print(f"  {'all run stages':<22} {n_jobs:>4} distinct job(s); --resume would keep {n_kept}, run {n_jobs - n_kept}\n")
+    for stage, rows in stages.items():
+        for row in rows:
+            if row["why_not_complete"] is None:
+                continue
+            relative = framework_mod._relative(Path(row["path"]), Path(composed.runs_dir))
+            print(f"    RUN  {row['key']}")
+            print(f"         {relative}: {row['why_not_complete']}")
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(
+            json.dumps(
+                {
+                    "tree_git_head": framework_mod.git_head(),
+                    "test_set": composed.test_set,
+                    "tolerance": _tolerance_words(composed),
+                    "timers": bool(composed.timers),
+                    "n_jobs": n_jobs,
+                    "n_kept": n_kept,
+                    "stages": {
+                        stage: [
+                            {k: r[k] for k in ("key", "job_digest", "path", "why_not_complete")}
+                            for r in rows
+                        ]
+                        for stage, rows in stages.items()
+                    },
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        print(f"\n  record: {args.json}")
+    return 0
+
+
+def _tolerance_words(campaign: Campaign) -> str:
+    """The campaign's tolerance as a listing prints it."""
+    return f"tau {campaign.tau!r}" + (" (overridden)" if campaign.tau_overridden else "")
 
 
 def stage_gate_catalogue(campaign: Campaign) -> int:
@@ -1267,7 +1351,8 @@ def main(argv: list[str] | None = None) -> int:
         help="list one gate's job set by identity — key, digest, shared-pool "
         "directory, and whether --resume would keep the record there, with "
         "the reason where it would not — and stop.  Nothing runs.  'all' "
-        "lists the union and which gates share each job",
+        "lists the union and which gates share each job; 'campaign' lists the "
+        "campaign press's own job set, composed as the press composes it",
     )
     parser.add_argument(
         "--gate",

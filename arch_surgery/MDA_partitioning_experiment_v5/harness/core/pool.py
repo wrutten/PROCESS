@@ -644,9 +644,11 @@ def job_listing(jobs: Sequence[Job], campaign: Campaign) -> list[dict[str, Any]]
     record of it is on disk — the resume decision, shown without running.
 
     What a gate's ``jobs`` declaration returns to the framework and what
-    ``experiment_runner.py --jobs <gate>`` prints.  ``why_not_complete`` is
-    :func:`records.why_not_complete_for`'s sentence, or None where ``--resume``
-    would keep the record; it is computed from the record alone (rule (vii)).
+    ``experiment_runner.py --jobs <gate>`` (and ``--jobs campaign``) prints.
+    ``why_not_complete`` is :func:`why_not_kept`'s sentence — the whole of the
+    decision :func:`run` takes under ``--resume``, the completeness contract
+    and the composition check alike — or None where ``--resume`` would keep
+    the record; it is computed from the record alone (rule (vii)).
     """
     runs_dir = Path(campaign.runs_dir)
     rows: list[dict[str, Any]] = []
@@ -659,12 +661,9 @@ def job_listing(jobs: Sequence[Job], campaign: Campaign) -> list[dict[str, Any]]
             continue
         seen.add(digest)
         directory = directory_for(job, campaign)
-        if (directory / "metrics.json").exists():
-            why = records_mod.why_not_complete_for(
-                records_mod.read(directory), identity=identity, digest=digest
-            )
-        else:
-            why = "no record on disk"
+        why = why_not_kept(
+            job, campaign, identity=identity, digest=digest, directory=directory
+        )
         rows.append(
             {
                 "key": job.key,
@@ -1007,30 +1006,60 @@ def _loadavg() -> tuple[float, float, float] | None:
         return None
 
 
+#: What :func:`why_not_kept` says when the directory holds no record at all.
+NO_RECORD_ON_DISK = "no record on disk"
+
+
+def why_not_kept(
+    job: Job,
+    campaign: Campaign,
+    *,
+    identity: Mapping[str, Any],
+    digest: str,
+    directory: Path,
+) -> str | None:
+    """Why ``--resume`` would re-make this job's record in *directory*, or None.
+
+    The one resume decision, in one place: :func:`run` keeps a record exactly
+    when this returns None, and :func:`job_listing` prints this sentence, so
+    a listing can never promise a keep the press would not make (task A105
+    (v5-resume-fixes-and-tau-rule): the listing consulted the completeness
+    contract alone and left the composition check to the press).  Two
+    comparisons, both over the record and the job only (rule (vii), trap
+    T13): :func:`records.why_not_complete_for` — the identity, the stamps
+    and the completeness contract — and :func:`why_not_composed_as_today` —
+    the switch terms the arm composes now against those the record was made
+    with.
+    """
+    if not (Path(directory) / "metrics.json").exists():
+        return NO_RECORD_ON_DISK
+    previous = records_mod.read(directory)
+    why = records_mod.why_not_complete_for(previous, identity=identity, digest=digest)
+    if why is not None:
+        return why
+    _env, terms = environment_for(job, campaign)
+    return why_not_composed_as_today(previous, terms)
+
+
 def _kept(
     job: Job,
     identity: Mapping[str, Any],
     digest: str,
     outdir: Path,
     *,
-    campaign: "Campaign | None" = None,
+    campaign: Campaign,
 ) -> dict[str, Any] | None:
     """The outcome of a kept run, or None where the record is not this job's."""
-    if not (outdir / "metrics.json").exists():
-        return None
-    previous = records_mod.read(outdir)
-    if not records_mod.is_complete_for(previous, identity=identity, digest=digest):
-        return None
-    if campaign is not None:
-        _env, terms = environment_for(job, campaign)
-        why = why_not_composed_as_today(previous, terms)
-        if why is not None:
+    why = why_not_kept(job, campaign, identity=identity, digest=digest, directory=outdir)
+    if why is not None:
+        if why != NO_RECORD_ON_DISK:
             print(
                 f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
                 f"re-made: {why}",
                 flush=True,
             )
-            return None
+        return None
+    previous = records_mod.read(outdir)
     print(
         f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
         f"resumed (complete record of this job kept; digest {digest[:12]})",
