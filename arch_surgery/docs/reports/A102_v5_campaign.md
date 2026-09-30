@@ -3049,3 +3049,54 @@ One row per check of plan §8, in its order. A gate's verdict is read from its r
 | output-path equivalence | G9 | **PASS** | `output_path` at `75b9e9d4`: 0 of 3879 mismatched; 4/4 teeth |
 | the test set's teeth | GT | **PASS** | `test_set` at `75b9e9d4`: 794 of 13424 mismatched; 4/4 teeth |
 
+
+---
+
+## 16. Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-09-30 by the orchestrating session, the user present. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --name-only 7185b208..7a4de286`: 20 files, all harness, generator, scripts, the
+committed `paper_tables.md` and this report; **0 paths under the V5 driver copy `PROCESS/`, 0 under
+`process/models/`, 0 under `_v4/`**; worktree clean; `merge-tree` against the trunk: no conflict.
+(2) `compileall` clean and `--gates` constructs the registry at the tip, run by the orchestrator.
+(3) The gate-table record on disk: **29 PASS, 0 FAIL**, every verdict stamped `75b9e9d4` on a clean tree
+(G4's retired last verdict kept beside); `tally_contracts` PASS 270 / 0 with 236 / 0 reference cells;
+`evaluation_warmup` PASS 1 426 / 0; `reproduction` read 256 / 0. (4) The campaign population recounted from
+every `metrics.json`: **553 records, none on a dirty tree** — 458 at `6221af70` with W = 4, 95 at `f4a75f8e`
+with W = 3 (the 75 re-made st optimisations and the 20 crashed runs, which every `--resume` re-makes);
+533 `ok`, 20 `crashed`; 50 supplementary records. (5) The committed `paper_tables.md`'s count tables (phase A
+modules, the iterations table, phase B modules) are **identical, cell for cell, to the orchestrator's own
+preview rendering made at `59e6bd8a` before the st re-make** — so the st re-make changed no count in any
+published cell, which is what `compare_record_trees.py` says per record (75 of 75 identical, pressed by the
+orchestrator and again by the agent). (6) The orchestrator's three commits on this branch are its own
+(`0045bc88` D40; `75b9e9d4` D41 and D42), each on the user's direct instruction after the agent's session
+refused the relayed ruling; the st re-make likewise.
+
+**What the campaign says (the agent's reading, which the records support).** Phase A: the matched-accuracy
+rule passes on the three configurations on the whole state, and the partitioned arm's modules M1 and M3 run
+0.34–0.60 of the flat arm's sweeps. Phase B: the per-evaluation ratio ρ is 0.48 / 0.49 / 0.51 with almost no
+spread; `tok` is trajectory-neutral and reaches the same optimum (R = 0.50); `lad`'s path and optimum move
+at the lift (`B0 → B1`), not at the partition (`B1 → B2` identical on 12 of 12 seeds); **`st` at the declared
+criterion (census set, τ = 1e-8) is a net loss** (ε = 2.44, R = 1.24, four starts lost to `B2` alone) —
+**and at τ = 1e-12 in the supplementary stage it is not**: `B2` recovers the four starts, ε's median is
+1.000, the optimum agrees (r median 1.8e-13, p90 2.6e-10) and `B2/B0` is 0.44 in node calls per run. That is
+A96's mechanism confirmed on 25 starts: on `st` the census loop at 1e-8 leaves an objective residual the
+optimiser's path is sensitive to. Which of the two st results the paper's main table carries is the user's
+decision; the plan pre-declared 1e-8 with the supplementary stage beside.
+
+**Defects and gaps, none blocking the merge.** (a) `tally_contracts` FAILs *inside* the campaign press and
+PASSes alone: the campaign press adds the timers switch to every job identity, so the reproduction gate's
+records are not found from inside it (report §9.3) — filed as I-37; I-35 is closed by the campaign's presence.
+(b) Item 4's attribution (plan §5 B1) is not built; the tally still prints V4's check-2 verdict column
+(item 1 retired the rule) — both to the report task. (c) The switch matrix's stopping-rule cell prints
+"y @ τ" where V5's is the census couplings — to the report task. (d) A crashed record is re-made by every
+`--resume` — filed as I-38 (low). (e) Phase B's first evaluation carries 0.26–0.44 s of numba cache load in
+the module rows (1–3 %) — stated in the caption by the report task, no harness change. (f) Phase B's
+whole-state accuracy statistic on `B2` reads large because the audit snapshot precedes the deferred nodes'
+one execution on the output path (report §13) — a limit of where the audit sits in phase B, to be stated;
+the phase B acceptance rules do not read it.
+
+**Queue consequences at merge.** A102 merged; I-35 closed; I-37 and I-38 filed; the V5 plan's §6 (D42: the
+appendix timings are the campaign's, the one-worker pass not run), §8 and §10 amended; the report task (A103)
+briefed with (b), (c), (e), (f), the st decision as the user rules it, and the V5 experiment report.
