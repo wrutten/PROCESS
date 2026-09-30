@@ -576,3 +576,34 @@ index c8045413..41751cd8 100644
 +| the test set's teeth | GT | **PASS** | `test_set` at `c2295511`: 794 of 13424 mismatched; 4/4 teeth |
  
 ```
+
+---
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-09-30 by the orchestrating session, the user present. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --name-only b84892e8..fca03a32`: 17 files — tally, generator, one gate, the
+matrix, the runner, the README, `paper_tables.md`, this report; **0 paths under the V5 driver copy
+`PROCESS/`, 0 under `process/models/`, 0 under `_v4/`**; worktree clean; `merge-tree`: no conflict.
+(2) `compileall` clean and `--gates` constructs the registry at the tip. (3) The diff of `paper_tables.md`
+read line by line: the switch matrix's stopping-rule row, the phase B wall-clock caption, the verification
+table's B1 row, the records-read line and the gate rows' stamps — **no count cell and no wall-clock cell
+moved**, which is the brief's condition. (4) The gate-table record on disk: 29 PASS; 28 verdicts at
+`c2295511` on a clean tree and `record_completeness` kept at `75b9e9d4` (the agent's declared deviation: its
+tooth re-makes one smoke evaluation, and the brief said no PROCESS run — the right call); 553 campaign
+records present and untouched.
+
+**Read against the rulings.** Item 4 as the list reduced it: the statistic kept, the attribution per seed and
+rung beside it — `lad`'s failures enter at the lift and none at the partition, `st`'s at the test set at
+1e-8, with the yardstick itself hopping on two of the three st seeds, which is st's own fragility (A96).
+Item 1: the verdict and its threshold are gone, every number kept, ε labelled by the plan's rule; the paper's
+iterations table is untouched (the user, 2026-09-30, confirmed the table stays). The matrix cell is read
+from the campaign's settings. I-37: fixed with a tooth and shown PASS composed both ways over the existing
+records; a whole `--campaign` press through the new function is unpressed and costs nothing to leave so —
+**I-37 closed on that evidence**. The hop count on `lad` reads 4 of 12 here against "2/12" in A102's
+clustering column: two definitions (objective difference above the floor, against the clustering
+statistic); the attribution table's is the plan's.
+
+**Queue consequences at merge.** A103 merged; I-37 closed; V5 list items 1 and 4 done; the README rewrite
+(plan §8) done; what remains for V5 is the experiment report, after the user's decision on st.
