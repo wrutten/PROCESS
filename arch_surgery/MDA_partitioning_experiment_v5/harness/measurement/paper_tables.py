@@ -801,6 +801,32 @@ def _validity_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
     return lines + [""]
 
 
+def _cache_load_sentence(campaign: Campaign) -> str:
+    """The phase B caption's statement of the first evaluation's numba cache
+    load (A102 (v5-campaign) §6), read from the cache-load stage's record
+    (``--timing cache-load``); refuses where the stage was never pressed."""
+    from . import timing as timing_mod  # noqa: PLC0415
+
+    record = timing_mod.cache_load_record(campaign)
+    if record is None:
+        raise PaperTablesError(
+            "the timing cache-load stage has not been pressed (--timing cache-load): the phase B "
+            "wall-clock caption cannot state the first evaluation's cache load"
+        )
+    c = timing_mod.cache_load_summary(record)
+    if c["load_s_min"] is None or c["share_min"] is None:
+        raise PaperTablesError("the cache-load stage's record carries no phase A load or no phase B module time")
+    return (
+        "**The module rows include one numba cache load per run**: a phase B run's first evaluation "
+        "is not warmed (the fixed per-run term ends at its start), so its module rows carry the "
+        "per-process cache load the warmed phase A records measure as warm-up less measured model time — "
+        f"a median of {c['load_s_min']:.2f}–{c['load_s_max']:.2f} s per run over the "
+        f"{c['n_arm_rows']} configuration and arm rows, {100 * c['share_min']:.1f}–{100 * c['share_max']:.1f} % "
+        "of the median module time per run of the arm's phase B twin, the same order in every arm "
+        f"(`--timing cache-load`, record at `{str(c['tree_git_head'])[:8]}`)."
+    )
+
+
 def _wall_clock_lines(campaign: Campaign) -> list[str]:
     from . import timing as timing_mod  # noqa: PLC0415
 
@@ -832,7 +858,8 @@ def _wall_clock_lines(campaign: Campaign) -> list[str]:
     lines = ["### Tables — wall clock (plan §6)", "", WALL_CLOCK_CONTEXT, "", source_line, ""]
     lines += _validity_lines(source["validity_rows"])
     for spec in WALL_CLOCK_TABLES:
-        lines += [f"**{spec['title']}** — {spec['caption']}", ""]
+        caption = spec["caption"] + (" " + _cache_load_sentence(campaign) if spec["key"] == "wall_phase_b" else "")
+        lines += [f"**{spec['title']}** — {caption}", ""]
     lines += timing_mod.render_markdown(
         tables,
         caption_w=(

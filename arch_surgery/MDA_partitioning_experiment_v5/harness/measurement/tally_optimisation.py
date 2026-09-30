@@ -2010,6 +2010,19 @@ def achieved_accuracy(
                 "decision D25, which moves every value in these columns.  The "
                 "argmax is read from the record and is not written into this "
                 "table",
+                "**the whole-state statistic on the deferring arm (B2) is taken "
+                "at an audit snapshot that precedes the deferred nodes' one "
+                "execution on the output path** (A102 (v5-campaign) §13): the "
+                "driver copy takes the snapshot at the entry to "
+                "write_output_files and executes the per-run nodes immediately "
+                "after it (caller.py, write_output_files), so at the snapshot "
+                "their components still hold the values of an earlier state "
+                "and the whole-state maximum reads large on them; the "
+                "restricted statistic excludes them.  No phase B acceptance rule reads the whole-state "
+                "column: rule B1 reads exact.norm_objf, B2 and B3 counts, B4 "
+                "constraint 93's residual, B5 the exit status; D36's whole-state "
+                "rule is phase A's (A1), where the deferred set is executed "
+                "before the audit",
                 "**both rulers or neither**: the mixed ruler reads lower "
                 "wherever its denominator binds, by construction",
                 "the two rulers' exclusion counts are listed per row and never "
@@ -2033,8 +2046,12 @@ def achieved_accuracy(
                 f"scaled residual (median, max) on both rulers, the argmax and "
                 f"the whole-state maximum; audit position "
                 + (", ".join(positions) if positions else "not recorded")
-                + ". The whole-state column is large for B2 by design and is "
-                "not judged."
+                + ". The whole-state column reads large on B2 by construction: "
+                "the audit snapshot is taken at the entry to the output path, "
+                "before the deferred per-run nodes' one execution there, so the "
+                "components those nodes own are stale in it; no phase B rule "
+                "reads this column (plan §5: B1 reads the objective, B4 the "
+                "lift's residual; D36's whole-state rule is phase A's A1)."
                 + (
                     ""
                     if not reasons
