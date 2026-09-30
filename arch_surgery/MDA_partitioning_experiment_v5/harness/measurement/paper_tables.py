@@ -534,17 +534,13 @@ def phase_b(campaign: Campaign) -> tuple[list[dict[str, Any]], list[dict[str, An
     return iterations, modules
 
 
-#: The node map's DSM rows executed in a sweep include the constraint row(s)
-#: of the collapsed DSM, which the paper's "Models" column does not count (the
-#: user, 2026-09-29).  The committed node map does not label rows by kind, so
-#: the constraint rows executed in a sweep are **declared** here rather than
-#: read: **one** at the dependency-analysis pin the node map was generated at
-#: (the single ``Constraints`` row; the sibling study's later split into two
-#: rows postdates the pin and is drift the node map does not carry — the
-#: removed function-counts file's ``known_drift``).  To be replaced by a read
-#: when the node map is regenerated with row kinds; until then this is the one
-#: typed number in the document and the report names it.
-CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP = 1
+#: "Models" is the node map's collapsed-DSM rows executed in a sweep, read and
+#: never typed: 52 at the dependency-analysis pin the node map was generated
+#: at, the constraints evaluation's row included (D40, the user, 2026-09-30:
+#: "Print 52").  Until then the generator subtracted one declared constraint
+#: row to print the paper's earlier 51; the committed node map does not label
+#: rows by kind, so that subtraction was the one typed number in the document
+#: and is gone.
 
 
 def cases(campaign: Campaign, optimisation: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -559,7 +555,7 @@ def cases(campaign: Campaign, optimisation: Mapping[str, Mapping[str, Any]]) -> 
     the cross-module coupling's variable (the one iteration-variable name
     every lifted run carries and no flat run does), refused where the runs
     disagree; and the number of models — the committed node map's DSM rows
-    executed in a sweep less :data:`CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP`.
+    executed in a sweep, the constraints evaluation's row included (D40).
     """
     import ast  # noqa: PLC0415
 
@@ -569,7 +565,7 @@ def cases(campaign: Campaign, optimisation: Mapping[str, Mapping[str, Any]]) -> 
     executed = ((node_map.get("units") or {}).get("dsm_rows") or {}).get("executed_in_a_sweep")
     if not isinstance(executed, int):
         raise PaperTablesError("the node map states no units.dsm_rows.executed_in_a_sweep; Models would be guessed")
-    models = executed - CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP
+    models = executed
     out: list[dict[str, Any]] = []
     for configuration, by_arm, converged in _phase_b_groups(campaign):
         row = dict(by_config[configuration])
@@ -1210,8 +1206,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "an iteration variable and its consistency constraint. The objective's variable and the "
         "cross-module coupling's variable are derived from the committed per-run artifact and the "
         "runs. Models is the committed node map's collapsed-DSM rows executed in a sweep "
-        f"(`units.dsm_rows.executed_in_a_sweep`) less the {CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP} "
-        "constraint row, declared in the generator (`CONSTRAINT_ROWS_EXECUTED_IN_A_SWEEP`).",
+        "(`units.dsm_rows.executed_in_a_sweep`), the constraints evaluation's row included (D40).",
         "",
         "| Configuration | Models | Objective | Design var. | Constraints | Cross-module coupling |",
         "|---|---:|---|---:|---:|---|",
