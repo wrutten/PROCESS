@@ -14,7 +14,7 @@
 **Why the loop's test set and tolerance change the optimiser's path on st.** At st's optimum the
 objective does not change when three inboard radial-build variables — the bore, the central-solenoid
 thickness and the TF-coil nose case — trade against each other: the partitioned arm at τ = 1e-8 ends
-up to 96 % away from the flat arm in those variables with the objective equal to 1.5e-11, and in 10 of
+up to 96 % away from the flat arm in those variables with the objective equal to within 1.5e-11 relative, and in 10 of
 its 20 accepted runs with the nose case at its lower bound, which no other arm reaches (**measured**,
 §4). Along such a flat direction the optimiser has nothing to follow but the errors in its
 finite-difference gradient, so any loop setting that changes those errors can change where it goes
