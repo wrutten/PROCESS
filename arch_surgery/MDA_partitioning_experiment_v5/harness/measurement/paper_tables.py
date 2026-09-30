@@ -696,18 +696,42 @@ WALL_CLOCK_CONTEXT = (
 )
 
 
+#: Where the appendix's wall-clock tables take their timings from (**D42**, the
+#: user, 2026-09-30, on the validity check's result: "This is the reason why
+#: these are in the appendix. Report them with the spread (as is done in table
+#: format, matching count reporting, already). I will note that.").  The
+#: campaign's own records, whatever the validity check reads; its outcome and
+#: the one-worker repetitions' spread are printed beside the tables instead
+#: of sending a phase to the one-worker pass (D38's remedy, not run).  The
+#: other value, ``"validity"``, is D38's rule as A102 (v5-campaign) built it.
+WALL_CLOCK_TIMINGS_FROM = "campaign"
+WALL_CLOCK_TIMINGS_FROM_VALUES = ("campaign", "validity")
+
+
 def wall_clock(campaign: Campaign) -> dict[str, Any]:
     """The three appendix tables' data over the campaign's two populations
     (``timing.tables_over``; the pairing key is the seed)."""
     from . import timing as timing_mod  # noqa: PLC0415
 
     source = wall_clock_source(campaign)
+    # D41 (the user, 2026-09-30): the wall-clock tables are built the way the
+    # count tables are.  Phase B is over the one seed set per configuration on
+    # which every arm reached an accepted optimum (``_phase_b_groups``, the
+    # count tables' own); phase A over every paired evaluation, as its count
+    # table.  Without this the phase B table paired every finished run.
+    seed_sets = {configuration: set(converged) for configuration, _by_arm, converged in _phase_b_groups(campaign)}
     records: list[Mapping[str, Any]] = []
     for phase, source_name, tally_phase in (("A", PHASE_A_SOURCE, tally_a.PHASE), ("B", PHASE_B_SOURCE, tally_b.PHASE)):
         if phase in source["phases_from_the_one_worker_pass"]:
-            records += timing_mod.seed_set_records(campaign, phase)
+            of_phase = list(timing_mod.seed_set_records(campaign, phase))
         else:
-            records += list(_population(campaign, source_name, tally_phase).records)
+            of_phase = list(_population(campaign, source_name, tally_phase).records)
+        if phase == "B":
+            of_phase = [
+                r for r in of_phase
+                if int(r.get("campaign_seed")) in seed_sets.get(str(r.get("campaign_configuration")), set())
+            ]
+        records += of_phase
     tables = timing_mod.tables_over(campaign, records, key_of=lambda r: int(r.get("campaign_seed")))
     tables["source"] = source
     tables["workers_stamped"] = sorted(
@@ -731,12 +755,50 @@ def wall_clock_source(campaign: Campaign) -> dict[str, Any]:
             "the timing validity stage has not been pressed (--timing validity): the wall-clock "
             "tables cannot say whether the campaign's timings may be printed (D38)"
         )
+    if WALL_CLOCK_TIMINGS_FROM not in WALL_CLOCK_TIMINGS_FROM_VALUES:
+        raise PaperTablesError(f"WALL_CLOCK_TIMINGS_FROM = {WALL_CLOCK_TIMINGS_FROM!r} is not one of {WALL_CLOCK_TIMINGS_FROM_VALUES}")
+    outside = timing_mod.phases_outside(validity)
     return {
-        "phases_from_the_one_worker_pass": timing_mod.phases_outside(validity),
+        "timings_from": WALL_CLOCK_TIMINGS_FROM,
+        "phases_outside_the_repetitions_range": outside,
+        "phases_from_the_one_worker_pass": outside if WALL_CLOCK_TIMINGS_FROM == "validity" else [],
+        "validity_rows": list(validity.get("rows") or []),
         "validity_n_within": validity.get("n_within"),
         "validity_n_outside": validity.get("n_outside"),
         "validity_tree_git_head": validity.get("tree_git_head"),
     }
+
+
+def _validity_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The validity check's own rows, one per job: the W = 1 repetitions'
+    range of Total, its spread, the campaign's Total of the same job and the
+    factor between them.  Context beside the wall-clock tables (D42)."""
+    if not rows:
+        return []
+    lines = [
+        "**the validity check, per job** — One row per repeatability job (one seed per configuration and "
+        "arm, both phases): Total over the three W = 1 repetitions as [min, max] with the spread "
+        "(max − min over the median), the campaign's Total of the same job, and the campaign's Total "
+        "over the repetitions' median. Phase A in ms per evaluation, phase B in s per optimisation.",
+        "",
+        "| phase | configuration | arm | seed | W = 1 repetitions [min, max] | spread | campaign | campaign / W = 1 median | within |",
+        "|---|---|---|---:|---:|---:|---:|---:|---|",
+    ]
+    for r in rows:
+        reps = r.get("repetitions_total_s") or {}
+        unit = 1000.0 if str(r.get("phase")) == "A" else 1.0
+        lo, hi, med, camp = reps.get("min"), reps.get("max"), reps.get("median"), r.get("campaign_total_s")
+        if None in (lo, hi, med) or not med:
+            lines.append(f"| {r.get('phase')} | `{r.get('configuration')}` | {r.get('arm')} | {r.get('seed')} | — | — | — | — | — |")
+            continue
+        camp_cell = f"{camp * unit:.2f}" if camp is not None else "—"
+        factor = f"{camp / med:.2f}" if camp is not None else "—"
+        lines.append(
+            f"| {r.get('phase')} | `{r.get('configuration')}` | {r.get('arm')} | {r.get('seed')} | "
+            f"[{lo * unit:.2f}, {hi * unit:.2f}] | {100.0 * (hi - lo) / med:.1f} % | {camp_cell} | {factor} | "
+            f"{'yes' if r.get('within_the_repetitions_range') else 'no'} |"
+        )
+    return lines + [""]
 
 
 def _wall_clock_lines(campaign: Campaign) -> list[str]:
@@ -754,11 +816,21 @@ def _wall_clock_lines(campaign: Campaign) -> list[str]:
             "Phase " + " and ".join(from_pass) + " timings are therefore from the one-worker timing pass "
             "over the seed set (`--timing seed-set`: the campaign's jobs re-run at W = 1 with the timers on, "
             "every count identical to the campaign record's, a differing job refused); "
-            if from_pass else "Every timing is the campaign's own; "
+            if from_pass
+            else (
+                "Every timing is the campaign's own, made with several workers at once and reported with "
+                "its spread (D42, the user, 2026-09-30: the one-worker pass D38 would send "
+                + ("phase " + " and ".join(source["phases_outside_the_repetitions_range"]) if source["phases_outside_the_repetitions_range"] else "no phase")
+                + " to is not run; the table below is the check's own rows); "
+                if source["timings_from"] == "campaign"
+                else "Every timing is the campaign's own; "
+            )
         )
-        + "the worker counts the records are stamped with: W = " + ", ".join(tables["workers_stamped"]) + "."
+        + "the worker counts the records are stamped with: W = " + ", ".join(tables["workers_stamped"]) + ". "
+        "Phase B is over the count tables' seed set (every arm at an accepted optimum; D41)."
     )
     lines = ["### Tables — wall clock (plan §6)", "", WALL_CLOCK_CONTEXT, "", source_line, ""]
+    lines += _validity_lines(source["validity_rows"])
     for spec in WALL_CLOCK_TABLES:
         lines += [f"**{spec['title']}** — {spec['caption']}", ""]
     lines += timing_mod.render_markdown(
