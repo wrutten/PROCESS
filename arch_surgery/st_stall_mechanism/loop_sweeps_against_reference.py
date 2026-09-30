@@ -216,6 +216,24 @@ def reproduction_check(config_name: str, cells: dict) -> list[str]:
     return lines
 
 
+def campaign_context(config_name: str) -> list[str]:
+    """The campaign's own phase A records at census 1e-8, all 25 seeds: context and a check."""
+    import statistics  # noqa: PLC0415
+
+    rows = []
+    for arm in (["AR", "A0", "A1", "A2"] if pulsed(config_name) else ["AR", "A0", "A2"]):
+        recs = [records_mod.read(CAMPAIGN_RUNS / "evaluation" / config_name / arm / f"seed{s:03d}") for s in range(1, 26)]
+        ok = [r for r in recs if r.get("status") == "ok"]
+        sweeps = [r.get("n_model_calls_sweeps") for r in ok]
+        nodes = [r.get("node_calls_single_eval") for r in ok]
+        audit = [(r.get("exit_audit") or {}).get("residual_max") for r in ok]
+        rows.append(
+            f"| {arm} | {len(ok)} of {len(recs)} | {mean(sweeps):.2f} | {mean(nodes):.1f} | "
+            f"{statistics.median(audit):.1e} [{min(audit):.1e}, {max(audit):.1e}] |"
+        )
+    return rows
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--press", action="store_true")
@@ -242,6 +260,12 @@ def main(argv=None) -> int:
         heads = sorted({h for st in stats.values() for k in kinds for h in st[k]["heads"]})
         print(f"records made at: {heads}\n")
         print("Reproduction of the campaign's displaced census 1e-8 records: " + "; ".join(reproduction_check(name, cells)) + "\n")
+        print(f"The campaign's own phase A records ({s}, census 1e-8, displaced seeds 1-25; context):\n")
+        print("| arm | ok | sweeps per evaluation (mean; dispatch sweeps, the partitioned arm's once-execution included) | node calls (mean) | exit audit, whole state: median [min, max] |")
+        print("|---|---|---|---|---|")
+        for row in campaign_context(name):
+            print(row)
+        print()
         for k in kinds:
             n_entries = next(iter(stats.values()))[k]["n"]
             print(f"### {s}, {k} entries ({n_entries} per cell)\n")
@@ -253,7 +277,13 @@ def main(argv=None) -> int:
                 be = "; ".join(f"{b}: " + ", ".join(f"{e} {n}" for e, n in sorted(d.items())) for b, d in c["ended_per_block"].items())
                 en = ", ".join(f"{e} {n}" for e, n in sorted(c["ended"].items()))
                 nc = c["node_calls_mean"] if c["node_calls_mean"] is not None else c["node_calls_mean_all"]
-                flag = "" if c["n_ok"] == c["n"] else f" ({c['n'] - c['n_ok']} raised; mean over all, the raised at their cap)"
+                n_missing = c["ended"].get("no_record", 0)
+                n_raised = c["n"] - c["n_ok"] - n_missing
+                flag = ""
+                if n_raised:
+                    flag += f" ({n_raised} raised at the cap; mean over all, the raised at the node calls they spent)"
+                if n_missing:
+                    flag += f" ({n_missing} not made)"
                 print(f"| {label} | {fmt(nc, '.1f')}{flag} | {sw} | {en} | {be} | {fmt(c['audit_max'], '.1e')} |")
             print()
             # the ratios
