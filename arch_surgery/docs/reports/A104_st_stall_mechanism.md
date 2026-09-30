@@ -616,3 +616,49 @@ printed tables of every script at `ea6ca92c`).
 
 
 
+
+---
+
+## 12. Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-09-30 by the orchestrating session under the user's autonomous grant of that day. Checked
+differently from the agent. The report's conclusions are inputs to the open question OQ-tolerance, which
+is the user's.*
+
+**Checked.** (1) `git diff --name-only 44bc70f3..52096125`: six scripts under
+`arch_surgery/st_stall_mechanism/` and this report — **nothing under the V5 folder, the driver copy or
+`process/models/`**; worktree clean; `merge-tree`: no conflict; the scripts compile. (2) Records: 3 437 new
+`smoke` records under the task's own root; the 553 campaign records present and untouched. (3) **The
+report's central new claim, recounted by the orchestrator from the campaign's output files, not from the
+agent's scripts**: on st at census 1e-8 the partitioned arm ends at different designs with the same
+objective. Seed 0: `B0` ends at `dr_bore` 0.218, `dr_cs` 0.193, `dr_tf_nose_case` 0.254; `B2` at 1e-8 at
+0.638, 0.030 (its lower bound) and 0.0100 (its lower bound); `B2` at 1e-12 at `B0`'s values to nine digits.
+Over the accepted runs: `dr_tf_nose_case` within 1 % of its lower bound in **10 of 20** `B2` runs at 1e-8
+and in **0** of `BR`'s 24, `B0`'s 24, and of both arms' 24 at 1e-12; `dr_cs` at its lower bound in 6 of 20
+and 0 elsewhere; the bore's median 0.537 in `B2` at 1e-8 against 0.20 in every other arm and setting. So
+the agent's reformulation of H1 stands on the campaign's own records: **a walk along a direction in which
+st's objective is flat, to the variables' bounds — not a stall at the optimum.** (4) The hovering counts are
+the orchestrator's own of earlier in the day (tok 0; lad 2 of 12 in every arm; st 7 of 24, 7 of 24 and
+15 of 20), reproduced by the committed script. (5) Table 2's node calls per evaluation are the
+orchestrator's figures to the last digit but one.
+
+**What the orchestrator had wrong, and the report corrects.** H2 and H3 as the orchestrator put them to
+the user — the partitioned loop leaves more error because the flat loop over-solves, and the optimiser
+stalls when that error exceeds its tolerance — are **refuted**: from a converged state the two loops return
+bit-identical values, and along the optimiser's evaluation chain their errors are of equal size; the flat
+arm and the reference carry errors far above `epsvmc` and do not wander. The rule "τ = `epsvmc` × `epsfcn`"
+was built on that reasoning; it is sufficient on the evidence but its derivation is not what the
+measurements support. What is measured: at census 1e-8 on st the objective's finite-difference derivative
+carries discrete jumps (the loop stopping after different sweep counts at the two points of a difference)
+in both arms, the partitioned arm's fall on the bore — one of the three variables of the flat direction —
+and at 1e-10 the jumps are below `epsvmc`. That this is what drives the walk is conjecture, and the report
+says so.
+
+**Limits the orchestrator adds.** The post hoc criterion is post hoc and rests on two design points of one
+configuration; "census 1e-10 suffices on st" is a prediction, not a measurement — no V5 optimisation was
+run at 1e-10 (A96, on V4's copy, found the path returning on 3 of 5 seeds at 1e-10 and seed 1 changing
+basin there). M0's ratios are means over two or three entries. M3 is deferred.
+
+**Queue consequences at merge.** A104 merged; OQ-tolerance gains its findings; the orchestrator runs, as a
+labelled exploratory stage and not as a campaign, st's phase B at census 1e-10 (`B0`, `B2`, the 25 starts)
+so that the prediction is a measurement when the user decides.
