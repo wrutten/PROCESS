@@ -23,7 +23,7 @@ One column per arm, one row per switch, from `harness/experiment/arms.py`'s matr
 | | **AR** | **A0** | **A1** | **A2** | **BR** | **B0** | **B1** | **B2** |
 |---|---|---|---|---|---|---|---|---|
 | MDA solve | upstream | flat | flat | partitioned | upstream | flat | flat | partitioned |
-| stopping rule | objf/conf | y @ τ | y @ τ | y @ τ | objf/conf | y @ τ | y @ τ | y @ τ |
+| stopping rule | objf/conf | feedback couplings @ τ = 1e-08 | feedback couplings @ τ = 1e-08 | feedback couplings @ τ = 1e-08 per block | objf/conf | feedback couplings @ τ = 1e-08 | feedback couplings @ τ = 1e-08 | feedback couplings @ τ = 1e-08 per block |
 | block schedule | — | (one block) | (one block) | one pass | — | (one block) | (one block) | one pass |
 | arrangement · node (build after physics) | — | — | — | ✓ | — | — | — | ✓ |
 | arrangement · method (prime) | — | — | — | ✓ | — | — | — | ✓ |
@@ -40,7 +40,7 @@ One column per arm, one row per switch, from `harness/experiment/arms.py`'s matr
  & AR & A0 & A1 & A2 & BR & B0 & B1 & B2 \\
 \hline
 MDA solve & upstream & flat & flat & partitioned & upstream & flat & flat & partitioned \\
-stopping rule & objf/conf & y @ $\tau$ & y @ $\tau$ & y @ $\tau$ & objf/conf & y @ $\tau$ & y @ $\tau$ & y @ $\tau$ \\
+stopping rule & objf/conf & feedback couplings @ $\tau$ = 1e-08 & feedback couplings @ $\tau$ = 1e-08 & feedback couplings @ $\tau$ = 1e-08 per block & objf/conf & feedback couplings @ $\tau$ = 1e-08 & feedback couplings @ $\tau$ = 1e-08 & feedback couplings @ $\tau$ = 1e-08 per block \\
 block schedule & -- & (one block) & (one block) & one pass & -- & (one block) & (one block) & one pass \\
 arrangement · node (build after physics) & -- & -- & -- & $\checkmark$ & -- & -- & -- & $\checkmark$ \\
 arrangement · method (prime) & -- & -- & -- & $\checkmark$ & -- & -- & -- & $\checkmark$ \\
@@ -267,7 +267,7 @@ Post-processing & 5734 & 3895 & -- & 1 & 0.00 & 0.00 [0.00, 0.00] \\
 
 **phase A in wall clock, ms per evaluation** — Per configuration, arms as columns, ms per `call_models` evaluation: each module's own model time, the block loops' convergence test (read plus residual) and dispatch (the sweep body less its nodes and its test), the objective-and-constraints layer, the unattributed residual, and the evaluation's measured wall as Total; ratio of means and per-run median with [min, max] as the count tables. Harness-only costs — the exit-audit sweep, the state snapshots, the census hooks, the record assembly — are excluded from every cell (plan §6). Context, never evidence (D33).
 
-**phase B in wall clock, s per optimisation** — As the phase A table, per whole optimisation in seconds, with the optimiser's own time (solve-phase wall less every evaluation) and the fixed per-run term (process start, imports, numba cache load, input parse, output writing, the once-per-run schedule derivation); Total is the run's wall less the harness-only costs (plan §6).
+**phase B in wall clock, s per optimisation** — As the phase A table, per whole optimisation in seconds, with the optimiser's own time (solve-phase wall less every evaluation) and the fixed per-run term (process start, imports, numba cache load, input parse, output writing, the once-per-run schedule derivation); Total is the run's wall less the harness-only costs (plan §6). **The module rows include one numba cache load per run**: a phase B run's first evaluation is not warmed (the fixed per-run term ends at its start), so its module rows carry the per-process cache load the warmed phase A records measure as warm-up less measured model time — a median of 0.26–0.44 s per run over the 11 configuration and arm rows, 0.6–3.3 % of the median module time per run of the arm's phase B twin, the same order in every arm (`--timing cache-load`, record at `c2295511`).
 
 **cost breakdown, phase B** — Per configuration and arm: seconds per optimisation and ms per evaluation with the share of the total. Whether the architecture changes the overhead is read off the B0 and B2 columns of the per-sweep rows, normalised per evaluation (plan §6).
 
@@ -434,17 +434,17 @@ Per configuration and arm: the starts offered, the accepted optima (`status == o
 
 One row per check of plan §8, in its order. A gate's verdict is read from its record through the `gate_table` stage record, which this generator refuses when the verdict records have been re-made, removed or added to since the stage ran; `not pressed` is a gate with no verdict record (a declared placeholder that refuses, or one never pressed) or a rule that is not yet a construction. A verdict is PASS only with every tooth tripped.
 
-*the gate_table stage record read 30 record(s) at ['0353c52471c95adbc903274ef93e82da351a200d', '75b9e9d4e1f6658d13558d7a909a1bd139cfbe09'], and every one of them is byte-identical to what is on disk now*
+*the gate_table stage record read 30 record(s) at ['0353c52471c95adbc903274ef93e82da351a200d', '75b9e9d4e1f6658d13558d7a909a1bd139cfbe09', 'c2295511298249638e0c2e9a1bb3620dfc1bbe11'], and every one of them is byte-identical to what is on disk now*
 
 | check | plan | verdict | detail |
 |---|---|---|---|
-| physics frozen | G0 | **PASS** | `g0prime` at `75b9e9d4`: 1 of 77 mismatched; 4/4 teeth |
-| switch neutrality | G1 | **PASS** | `switch_neutrality` at `75b9e9d4`: 0 of 54988 mismatched; 9/9 teeth |
+| physics frozen | G0 | **PASS** | `g0prime` at `c2295511`: 1 of 77 mismatched; 4/4 teeth |
+| switch neutrality | G1 | **PASS** | `switch_neutrality` at `c2295511`: 0 of 54988 mismatched; 9/9 teeth |
 | matched accuracy — whole-state audit at 0 components above τ | A1 | **PASS** | `tok` A2/A1: similarity PASS, runs with a component ≥ τ A1 0 / A2 0 → **PASS**; `lad` A2/A1: similarity PASS, runs with a component ≥ τ A1 0 / A2 0 → **PASS**; `st` A2/A0: similarity PASS, runs with a component ≥ τ A0 0 / A2 0 → **PASS** (whole-state statistic, D36; the second half of the rule is the count column) |
 | fixed-point distance between arms | A2 | **reported, no rule** | the tally's fixed-point distance table (plan §5 A2) |
-| same optimum, attributed where it fails | B1 | **see detail** | `tok` B0 → B1: PASS; `tok` B0 → B2: PASS; `lad` B0 → B1: FAIL; `lad` B0 → B2: FAIL; `st` B0 → B2: FAIL (V4's check 1 construction; V5's attribution rule is item 4's, pending) |
-| entry pairing | G6 | **PASS** | `entry_and_warm` at `75b9e9d4`: 0 of 6717 mismatched; 3/3 teeth |
-| arm composition | G5 | **PASS** | `switch_composition` at `75b9e9d4`: 0 of 156 mismatched; 4/4 teeth |
-| output-path equivalence | G9 | **PASS** | `output_path` at `75b9e9d4`: 0 of 3879 mismatched; 4/4 teeth |
-| the test set's teeth | GT | **PASS** | `test_set` at `75b9e9d4`: 794 of 13424 mismatched; 4/4 teeth |
+| same optimum, attributed where it fails | B1 | **PASS tok · FAIL lad, st** | `tok` B0 → B1 PASS, B0 → B2 PASS (objf p90 4.6e-11 ≤ 1.0e-06; 0 hops of 22); `lad` B0 → B1 FAIL, B0 → B2 FAIL at p90 (objf p90 3.1e-04 > 1.0e-06): 4 hops of 12 (2 across clusters; seeds 1*, 10*, 11, 13), entering at B0 → B1 (the lift) 4 of 4; B1 → B2 (the partition) adds none: objf median 8.9e-15, p90 2.3e-14, same path on 12 of 12; the yardstick BR → B0 also hops on 0 of 4 of these seeds; `st` B0 → B2 FAIL at p90 (objf p90 1.3e-03 > 1.0e-06): 3 hops of 20 (3 across clusters; seeds 5*, 12*, 24*), entering at B0 → B2 3 of 3 — the partition, its block loops on the feedback couplings at τ = 1e-08; no B1 on this configuration; the yardstick BR → B0 also hops on 2 of 3 of these seeds (hop: objective difference above the floor; * = a retried arm; the tally's `same optimum by rung` table, plan §5 B1) |
+| entry pairing | G6 | **PASS** | `entry_and_warm` at `c2295511`: 0 of 6717 mismatched; 3/3 teeth |
+| arm composition | G5 | **PASS** | `switch_composition` at `c2295511`: 0 of 156 mismatched; 4/4 teeth |
+| output-path equivalence | G9 | **PASS** | `output_path` at `c2295511`: 0 of 3879 mismatched; 4/4 teeth |
+| the test set's teeth | GT | **PASS** | `test_set` at `c2295511`: 794 of 13424 mismatched; 4/4 teeth |
 
