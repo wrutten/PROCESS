@@ -1,6 +1,6 @@
 # A104 (st-stall-mechanism) — why `st`'s partitioned arm stalls at τ = 1e-8, and what the loop tolerance costs against PROCESS's own loop
 
-> **Document status** — **OPEN.** Task A104 (st-stall-mechanism), 2026-09-30, branch
+> **Document status** — **MERGED 2026-09-30 at `b79725d3` (`--no-ff`; assessment §12); archived.** Records relocated to `arch_surgery/idf_probe/runs/A104_runs/st_stall_mechanism/` (this task's 3 437 records under its `st_stall_mechanism/` subfolder; the scripts' default record root must be pointed there to re-read the tables). Was: **OPEN.** Task A104 (st-stall-mechanism), 2026-09-30, branch
 > `A104-st-stall-mechanism`, worktree `.claude/worktrees/A104-st-stall-mechanism`, base `44bc70f3`.
 > Exploratory measurement for the open question OQ-tolerance (queue §5); **proposes nothing as
 > decided** — the loop tolerance and the test set are the user's to choose. Measurement M3 (why st's
