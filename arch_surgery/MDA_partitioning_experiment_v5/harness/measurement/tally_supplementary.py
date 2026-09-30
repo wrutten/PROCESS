@@ -14,7 +14,7 @@ record is refused by every campaign table.
 supplementary population, each table named ``supplementary …`` and captioned
 with the stage's test set and tolerance: the seed set (the starts on which
 every arm reached an accepted optimum), the per-arm success table, the
-failure table, the same-optimum check (B1's statistic), the iterations table
+failure table, the same-optimum check (B1's statistic) with its attribution per seed and rung, the iterations table
 with ``R = ρ × ε`` (B3), the cost with and without retried seeds (B2), the
 achieved accuracy at the accepted optimum, the per-sweep overhead and the
 module sweeps per run.  And one table this module builds itself: **beside
@@ -235,6 +235,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         )
         if population.is_empty:
             continue
+        rung_rows: list[dict[str, Any]] = []
         for configuration in stage.configurations:
             whole = tally_b._by_arm_and_seed(population, configuration)
             if not whole:
@@ -248,9 +249,12 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 emitted.append(table)
                 emitted.extend(tally_b.per_arm_success(population, configuration, by_arm, label))
                 emitted.append(tally_b.failure_table(population, configuration, by_arm, converged, label))
+                attributed = tally_b.same_optimum_by_seed(under, population, configuration, by_arm, converged, label)
+                if attributed is not None:
+                    rung_rows.extend(attributed[1])
                 for name, built in (
                     ("same optimum (B1)", tally_b.same_optimum(under, population, configuration, by_arm, converged, label)),
-                    ("iterations and R = ρ × ε (B3)", tally_b.iterations(under, population, configuration, by_arm, converged, label)),
+                    ("iterations and ε (B3)", tally_b.iterations(under, population, configuration, by_arm, converged, label)),
                     ("cost (B2)", tally_b.cost(population, configuration, by_arm, converged, label)),
                     ("module sweeps per run (B2)", tally_b.module_sweeps(under, population, configuration, by_arm, converged, label)),
                     ("node calls per module", tally_b.node_calls_per_module(under, population, configuration, by_arm, converged, label)),
@@ -259,10 +263,15 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                         not_produced.append({"table": f"{name} — {configuration} — {label}", "why": "no flat control in the arm group"})
                     else:
                         emitted.append(built)
+                        if name == "same optimum (B1)" and attributed is not None:
+                            emitted.append(attributed[0])
                 emitted.append(tally_b.attempts(population, configuration, by_arm, label))
                 emitted.append(tally_b.achieved_accuracy(under, population, configuration, by_arm, label))
                 emitted.append(tally_b.per_sweep_overhead(population, configuration, by_arm, label))
             emitted.append(beside_the_campaign(campaign, stage, configuration, whole))
+        by_rung = tally_b.same_optimum_by_rung(under, population, f"supplementary {stage.name}", rung_rows)
+        if by_rung is not None:
+            emitted.append(by_rung)
     provenance = tally_mod.survey(every_path)
     return {
         "stage": STAGE_NAME,

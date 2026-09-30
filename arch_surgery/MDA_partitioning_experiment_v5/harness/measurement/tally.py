@@ -771,12 +771,16 @@ def reference_cells(
     # The gate's runs, by their job identities; where the references are not
     # made yet no run is composable and every row reads as ``no_record``,
     # which the caller refuses on (trap T11), never as an empty comparison.
+    prerequisite_error: str | None = None
     try:
         directories = reproduction_run_directories(campaign)
     except Exception as exc:  # noqa: BLE001 - a missing prerequisite is stated
         if type(exc).__name__ not in ("GateError", "ReproductionError"):
             raise
         directories = {}
+        # Named in the result (issue I-37): 236 cells reading ``no_record``
+        # are otherwise indistinguishable from 236 ordinary mismatches.
+        prerequisite_error = f"{type(exc).__name__}: {str(exc).splitlines()[0]}"
     rows: list[dict[str, Any]] = []
 
     for run in reference_mod.reference_set(campaign):
@@ -933,10 +937,16 @@ def reference_cells(
             {str(row["audit_position"]) for row in rows if row["audit_position"]}
         ),
         "passed": bool(rows) and n_cells > 0 and n_matched == n_cells,
+        "prerequisite_error": prerequisite_error,
         "why_not": (
             "the comparison is empty: a gate that cannot find its reference "
             "must refuse, never pass over nothing"
             if not rows or n_cells == 0
-            else None
+            else (
+                f"the reference runs' directories could not be composed "
+                f"({prerequisite_error}), so every cell reads no_record"
+                if prerequisite_error
+                else None
+            )
         ),
     }

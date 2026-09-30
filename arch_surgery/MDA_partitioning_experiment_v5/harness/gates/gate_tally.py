@@ -18,6 +18,11 @@ the previous revision's published cells.
    ``stats.n_attempts``), which is what makes this a stronger statement than the
    reproduction gate's field-for-field comparison: a construction landing on the
    previous revision's published number says the rule is the same rule.
+   **1b.** The same twenty runs resolve to the same directories whatever
+   instrument switch the campaign composes (issue I-37, task A103
+   (v5-tally-and-tables): inside the campaign press, which composes the
+   wall-clock timers, every reference cell read ``no_record``); one comparison
+   per run and instrument switch, folded into the table-contract count.
 2. **Every table the tally emits carries a caption and a denominator**, and the
    denominator is a count rather than a letter.
 3. **No acceptance table carries a timing column.**
@@ -25,7 +30,7 @@ the previous revision's published cells.
    missing a declared field, no record carrying one ruler and not both, no
    record whose per-attempt costs do not sum to the run total.
 
-**Twelve teeth**, one per way a tally can go wrong quietly.  Each constructs the
+**Eighteen teeth**, one per way a tally can go wrong quietly.  Each constructs the
 break and requires the refusal; a tooth that does not trip fails the gate.
 
 Written by task **A53 (harness-tally)**.
@@ -34,12 +39,14 @@ Written by task **A53 (harness-tally)**.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from harness.core import pool as pool_mod
 from harness.core import records as records_mod
+from harness.experiment import switches as switches_mod
 from harness.gates import reference as reference_mod
 from harness.measurement import stats as stats_mod
 from harness.measurement import tables as tables_mod
@@ -96,6 +103,108 @@ def _refuses(call: Callable[[], Any], *, what: str) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------------------
+# the reference runs whatever the campaign composes (issue I-37)
+# --------------------------------------------------------------------------
+
+
+def instrument_invariance(
+    campaign: Campaign,
+    *,
+    doctor: Callable[[list[pool_mod.Job], Campaign], None] | None = None,
+) -> dict[str, Any]:
+    """The reproduction gate's twenty planned runs resolve to the **same
+    directories** whatever instrument switch the campaign composes.
+
+    Issue I-37 (found by A102 (v5-campaign)): the campaign press composes the
+    wall-clock timers into every job, GR's jobs took the campaign's value, and
+    inside that press every reference cell read ``no_record`` (0 of 236).  So
+    part 1 of this gate is pressed here once per instrument switch, turned on
+    in a copy of the campaign, and each run's directory is compared with the
+    directory it resolves to with every instrument switch off.  A composition
+    that refuses (the reference record not found) counts every run as a
+    mismatch, which is what the defect did.  *doctor* is the tooth's hook: it
+    may change the composed jobs before their directories are compared.
+    """
+    from harness.gates import reproduction as reproduction_mod  # noqa: PLC0415
+
+    switches = [n for n in switches_mod.INSTRUMENT_SWITCHES if hasattr(campaign, n)]
+    missing = [n for n in switches_mod.INSTRUMENT_SWITCHES if not hasattr(campaign, n)]
+    plain = dataclasses.replace(campaign, **{n: False for n in switches})
+    base = reproduction_mod.planned_directories(plain)
+    compared = 0
+    mismatched = 0
+    detail: list[str] = [
+        f"instrument switch {n!r} is not a campaign setting; it cannot be composed here"
+        for n in missing
+    ]
+    mismatched += len(missing)
+    for name in switches:
+        on = dataclasses.replace(campaign, **{name: True})
+        try:
+            jobs = reproduction_mod.planned_jobs(on)
+        except reproduction_mod.ReproductionError as exc:
+            compared += len(base)
+            mismatched += len(base)
+            detail.append(
+                f"with {name!r} on, the reproduction gate's runs do not compose: "
+                f"{str(exc).splitlines()[0]}"
+            )
+            continue
+        if doctor is not None:
+            doctor(jobs, on)
+        for job in jobs:
+            key = (job.config.name, job.arm, job.seed)
+            compared += 1
+            if Path(job.outdir) != base.get(key):
+                mismatched += 1
+                detail.append(
+                    f"with {name!r} on, {job.arm}/{job.config.name}/seed{job.seed:03d} "
+                    f"resolves to {Path(job.outdir).name}, not {base.get(key, Path('—')).name}"
+                )
+    return {
+        "switches": switches,
+        "n_runs": len(base),
+        "n_compared": compared,
+        "n_mismatched": mismatched,
+        "detail": detail,
+    }
+
+
+def _tooth_instrument_switch_reaches_a_reference_job(
+    campaign: Campaign,
+) -> Callable[[], tuple[bool, str]]:
+    """Let one reproduction job take the campaign's instrument switch — the
+    defect of I-37 on one job — and require the comparison to trip."""
+
+    def look() -> tuple[bool, str]:
+        doctored: list[str] = []
+
+        def doctor(jobs: list[pool_mod.Job], on: Campaign) -> None:
+            job = jobs[0]
+            for name in switches_mod.INSTRUMENT_SWITCHES:
+                if hasattr(job, name):
+                    setattr(job, name, getattr(on, name))
+            # The planned job names the directory it was resolved to, and a
+            # named directory is never re-resolved (pool.directory_for, I-29):
+            # clear it so the doctored identity is resolved as a fresh job is.
+            job.outdir = None
+            job.outdir = pool_mod.directory_for(job, on)
+            doctored.append(f"{job.arm}/{job.config.name}/seed{job.seed:03d}")
+
+        plain = instrument_invariance(campaign)
+        after = instrument_invariance(campaign, doctor=doctor)
+        caught = after["n_mismatched"] > plain["n_mismatched"]
+        return caught, (
+            f"{', '.join(doctored) or 'no job'} composed with the campaign's instrument "
+            f"switch on: {plain['n_mismatched']} → {after['n_mismatched']} of "
+            f"{after['n_compared']} directories differ"
+            + ("" if caught else " — NOT CAUGHT")
+        )
+
+    return look
+
+
+# --------------------------------------------------------------------------
 # the criterion
 # --------------------------------------------------------------------------
 
@@ -120,6 +229,8 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             "rather than read from a field: "
             + ", ".join(cells["cells_by_construction"])
         )
+    if cells.get("prerequisite_error"):
+        detail.append(f"REFERENCE RUNS NOT COMPOSED: {cells['why_not']}")
     for row in cells["rows"]:
         for cell in row["cells"]:
             if not cell["matched"]:
@@ -127,6 +238,18 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                     f"MOVED: {row['key']} {cell['cell']} — expected "
                     f"{cell.get('expected')!r}, found {cell.get('found')!r}"
                 )
+
+    # --- part 1b: the same reference runs under every instrument switch ------
+    invariance = instrument_invariance(campaign)
+    n_compared += invariance["n_compared"]
+    n_mismatched += invariance["n_mismatched"]
+    detail.append(
+        f"the reproduction gate's {invariance['n_runs']} runs resolved with each "
+        f"instrument switch on ({', '.join(invariance['switches']) or 'none'}) "
+        f"against every switch off (I-37): {invariance['n_mismatched']} of "
+        f"{invariance['n_compared']} directories differ"
+    )
+    detail.extend(invariance["detail"])
 
     # --- parts 2 and 3: every emitted table --------------------------------
     emitted: list[Mapping[str, Any]] = []
@@ -176,7 +299,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     detail.append(
         f"{len(emitted)} table(s) emitted, each checked for a caption, a "
         f"denominator that is a count, and a sentence saying what the "
-        f"denominator counts: {n_compared} checks"
+        f"denominator counts: {3 * len(emitted)} checks"
     )
     acceptance = [t for t in emitted if t.get("acceptance")]
     detail.append(
@@ -358,8 +481,14 @@ def _tooth_forced_budget() -> tuple[bool, str]:
     )
 
 
-def _tooth_check_two_constructions() -> tuple[bool, str]:
-    """Doctor one attempt's iteration count and require the two to disagree."""
+def _tooth_iteration_constructions_disagree() -> tuple[bool, str]:
+    """Doctor one attempt's iteration count and require the two to disagree.
+
+    Named for the two constructions, not for V4's check 2: the iteration
+    multiplier's verdict is retired (plan §5 B3; V5 list item 1; task A103
+    (v5-tally-and-tables)), and the tooth stays because the iterations table
+    still publishes both constructions side by side, which is what it guards.
+    """
     record = {
         "campaign_phase": "B",
         "attempts": [
@@ -810,7 +939,8 @@ def pool_tally_jobs(campaign: Campaign) -> list[dict[str, Any]]:
 
 
 def gate(campaign: Campaign) -> Gate:
-    """The tally's gate, with its eighteen teeth."""
+    """The tally's gate, with its eighteen teeth (the seventeenth, an
+    instrument switch reaching a reference job, added for I-37)."""
     return Gate(
         name="tally_contracts",
         binds="every table the tally emits, and the cells it reproduces",
@@ -923,10 +1053,10 @@ def gate(campaign: Campaign) -> Gate:
                 check=_tooth_forced_budget,
             ),
             Tooth(
-                name="check 2's two constructions disagree",
+                name="the two iteration constructions disagree",
                 what="a failed attempt's iteration count moved by one",
                 must="SEPARATE THE TWO CONSTRUCTIONS",
-                check=_tooth_check_two_constructions,
+                check=_tooth_iteration_constructions_disagree,
             ),
             Tooth(
                 name="the summation identity broken by one",
@@ -934,6 +1064,13 @@ def gate(campaign: Campaign) -> Gate:
                 "of its attempts",
                 must="REFUSE",
                 check=_tooth_summation_broken,
+            ),
+            Tooth(
+                name="an instrument switch reaches a reference job",
+                what="one of the reproduction gate's jobs composed with the "
+                "campaign's instrument switch on (I-37's defect, on one job)",
+                must="TRIP",
+                check=_tooth_instrument_switch_reaches_a_reference_job(campaign),
             ),
             Tooth(
                 name="a reference cell moved by one",

@@ -328,7 +328,9 @@ def _tally_measurements(campaign: Campaign) -> dict[str, Measurement]:
             reports=(
                 "the optimisation phase's tables of the experiment plan's "
                 "section 4.3 -- the one seed set and the failure table, the "
-                "same-optimum check, check 2 in both iteration constructions, "
+                "same-optimum rule B1 with its attribution per seed and rung, "
+                "the iterations in both constructions with ε and its label "
+                "(B3, no verdict), "
                 "the attempt summation identity, the cost with and without "
                 "the retried seeds, and the lift's residual"
             ),

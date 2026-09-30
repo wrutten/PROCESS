@@ -380,6 +380,83 @@ def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
     return 3 if press.get("refused") else 0
 
 
+def campaign_press_composition(campaign: Campaign) -> Campaign:
+    """The campaign as the campaign press composes it, and as nothing else does.
+
+    DR12 (V5 plan §9; D33): the campaign runs with the wall-clock timers on.
+    Composed here as the smoke composes them (A101 wired the smoke and reported
+    the campaign press as wired too; it was not -- found by A102 (v5-campaign)
+    before its campaign press, from the code).  One function, so that
+    ``--reading-stages campaign-press`` reads the records under the press's own
+    composition rather than a retyped one (issue I-37).
+    """
+    return dataclasses.replace(campaign, timers=CAMPAIGN_TIMERS)
+
+
+#: The two compositions ``--reading-stages`` presses the chain's reading
+#: stages under: the campaign press's, and the plain campaign every ``--gate``
+#: and ``--measure`` press uses.
+READING_STAGE_COMPOSITIONS = ("campaign-press", "plain")
+
+
+def stage_reading_stages(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The chain's reading stages alone, over the records on disk: the two
+    tallies and the tally's contract gate, under the composition named —
+    ``campaign-press`` (:func:`campaign_press_composition`, the timers on) or
+    ``plain`` — with no run stage and no PROCESS run.
+
+    Issue I-37: ``tally_contracts`` failed inside the campaign press and passed
+    pressed alone, and only a whole campaign press could reach it under the
+    press's composition.  This presses exactly the stages the press runs after
+    its runs (``chain.run_reading_stages``, the function the press calls),
+    under the press's composition, read-only.  Verdicts and stage records go
+    where ``--outdir`` says, or to the campaign's records directory.
+    """
+    composed = (
+        campaign_press_composition(campaign)
+        if args.reading_stages == "campaign-press"
+        else campaign
+    )
+    records_dir = _gate_records_dir(args, campaign)
+    _rule(
+        f"the chain's reading stages, composed as {args.reading_stages!r} "
+        f"(wall-clock timers {'on' if composed.timers else 'off'})"
+    )
+    print(f"  records to: {records_dir}")
+    stages, refused = chain_mod.run_reading_stages(
+        composed, records_dir=records_dir, resume=args.resume, teeth=not args.no_teeth
+    )
+    for block in stages:
+        if block["kind"] == "gate":
+            print(
+                f"  {block['stage']:<20} {block['verdict']}: {block['n_mismatched']} of "
+                f"{block['n_compared']} mismatched; teeth {block['n_teeth_tripped']}/{block['n_teeth']}"
+            )
+        else:
+            print(f"  {block['stage']:<20} {block['n_tables']} table(s); {block['population']}")
+    if refused:
+        print(f"  REFUSED — {refused}")
+    out = args.json or (records_dir / "reading_stages" / f"{args.reading_stages}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps(
+            {
+                "composition": args.reading_stages,
+                "timers": bool(composed.timers),
+                "resumed": bool(args.resume),
+                "tree_git_head": framework_mod.git_head(),
+                "stages": stages,
+                "refused": refused,
+            },
+            indent=2,
+            default=str,
+        )
+        + "\n"
+    )
+    print(f"\n  record: {out}")
+    return 3 if refused else 0
+
+
 def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
     """The campaign: the whole chain, every configuration, the plan's seeds.
 
@@ -404,11 +481,7 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
         print(f"  REFUSED — {exc}")
         return 3
     budget = plan.budget(campaign)
-    # DR12 (V5 plan §9; D33): the campaign runs with the timers on.  Composed
-    # here as the smoke composes them (A101 wired the smoke and reported the
-    # campaign press as wired too; it was not -- found by A102 (v5-campaign)
-    # before its campaign press, from the code).
-    campaign = dataclasses.replace(campaign, timers=CAMPAIGN_TIMERS)
+    campaign = campaign_press_composition(campaign)
     print(
         f"  will run: {budget['entry_references']} entry reference(s) + "
         f"{budget['evaluation_displaced']} displaced-entry evaluations + "
@@ -1112,6 +1185,16 @@ def main(argv: list[str] | None = None) -> int:
         "no campaign record",
     )
     parser.add_argument(
+        "--reading-stages",
+        choices=READING_STAGE_COMPOSITIONS,
+        default=None,
+        help="the chain's reading stages alone (the two tallies, then the "
+        "tally's contract gate) over the records on disk, and stop: no run "
+        "stage, no PROCESS run.  'campaign-press' composes the campaign as the "
+        "campaign press does (the wall-clock timers on); 'plain' as --gate and "
+        "--measure do.  Records go where --outdir says (issue I-37)",
+    )
+    parser.add_argument(
         "--paper-tables",
         choices=("show", "check", "write"),
         help="compute the paper's one document (Structuring-fusion-MDAO-with-"
@@ -1380,6 +1463,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.campaign:
         return stage_campaign_press(args, campaign)
+
+    if args.reading_stages:
+        return stage_reading_stages(args, campaign)
 
     if args.paper_tables:
         return stage_paper_tables(args, campaign)

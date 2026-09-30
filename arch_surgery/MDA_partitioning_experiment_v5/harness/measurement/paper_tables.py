@@ -10,7 +10,7 @@ a table in this revision.  ``check`` refuses when the rendered file and the
 records disagree.
 
 Main text
-    the switch matrix (from ``arms.matrix()``, the same data every arm is
+    the switch matrix (from ``arms.matrix(campaign)``, the same data every arm is
     composed from); the configurations table; phase A module sweeps per
     evaluation with the ratio columns on **`A2/A1` (pulsed) and `A2/A0`
     (`st_regression`)** — the ratio of the means, the per-run median and the
@@ -109,7 +109,7 @@ PHASE_A_SOURCE = tally_mod.ACCEPTANCE_REGIME
 PHASE_B_SOURCE = "campaign_optimisation"
 PHASE_B_PAIR = tally_b.HEADLINE_PAIR
 
-#: The iteration quantity (check 2's statistic, summed over attempts).
+#: The iteration quantity (summed over attempts; plan §5 B3, context beside ε).
 ITERATIONS_LABEL, ITERATIONS = tally_b.PATH_QUANTITIES[0]
 
 
@@ -801,6 +801,32 @@ def _validity_lines(rows: Sequence[Mapping[str, Any]]) -> list[str]:
     return lines + [""]
 
 
+def _cache_load_sentence(campaign: Campaign) -> str:
+    """The phase B caption's statement of the first evaluation's numba cache
+    load (A102 (v5-campaign) §6), read from the cache-load stage's record
+    (``--timing cache-load``); refuses where the stage was never pressed."""
+    from . import timing as timing_mod  # noqa: PLC0415
+
+    record = timing_mod.cache_load_record(campaign)
+    if record is None:
+        raise PaperTablesError(
+            "the timing cache-load stage has not been pressed (--timing cache-load): the phase B "
+            "wall-clock caption cannot state the first evaluation's cache load"
+        )
+    c = timing_mod.cache_load_summary(record)
+    if c["load_s_min"] is None or c["share_min"] is None:
+        raise PaperTablesError("the cache-load stage's record carries no phase A load or no phase B module time")
+    return (
+        "**The module rows include one numba cache load per run**: a phase B run's first evaluation "
+        "is not warmed (the fixed per-run term ends at its start), so its module rows carry the "
+        "per-process cache load the warmed phase A records measure as warm-up less measured model time — "
+        f"a median of {c['load_s_min']:.2f}–{c['load_s_max']:.2f} s per run over the "
+        f"{c['n_arm_rows']} configuration and arm rows, {100 * c['share_min']:.1f}–{100 * c['share_max']:.1f} % "
+        "of the median module time per run of the arm's phase B twin, the same order in every arm "
+        f"(`--timing cache-load`, record at `{str(c['tree_git_head'])[:8]}`)."
+    )
+
+
 def _wall_clock_lines(campaign: Campaign) -> list[str]:
     from . import timing as timing_mod  # noqa: PLC0415
 
@@ -832,7 +858,8 @@ def _wall_clock_lines(campaign: Campaign) -> list[str]:
     lines = ["### Tables — wall clock (plan §6)", "", WALL_CLOCK_CONTEXT, "", source_line, ""]
     lines += _validity_lines(source["validity_rows"])
     for spec in WALL_CLOCK_TABLES:
-        lines += [f"**{spec['title']}** — {spec['caption']}", ""]
+        caption = spec["caption"] + (" " + _cache_load_sentence(campaign) if spec["key"] == "wall_phase_b" else "")
+        lines += [f"**{spec['title']}** — {caption}", ""]
     lines += timing_mod.render_markdown(
         tables,
         caption_w=(
@@ -918,6 +945,72 @@ def _matched_accuracy_verdict(evaluation: Mapping[str, Mapping[str, Any]]) -> tu
     return overall, "; ".join(parts) + " (whole-state statistic, D36; the second half of the rule is the count column)"
 
 
+def _exp(value: Any) -> str:
+    return "—" if value is None else f"{float(value):.1e}"
+
+
+def _same_optimum_verdict(optimisation: Mapping[str, Mapping[str, Any]]) -> tuple[str, str]:
+    """Plan §5 B1 with its attribution, read from the optimisation tally's
+    stage record (the `same optimum by rung` table): per configuration, each
+    judged pair's verdict, and where the headline pair fails, how many of its
+    seeds hop, the ladder step their difference enters at, and the steps that
+    add nothing.  Returns (verdict, detail)."""
+    found = [t for name, t in optimisation.items() if name == f"same optimum by rung — {PHASE_B_SOURCE}"]
+    if not found:
+        return "not pressed", "no `same optimum by rung` table in the stage record"
+    by_configuration: dict[str, list[Mapping[str, Any]]] = {}
+    for r in found[0]["rows"]:
+        by_configuration.setdefault(str(r["configuration"]), []).append(r)
+    passed: list[str] = []
+    failed: list[str] = []
+    parts: list[str] = []
+    for configuration, rows in by_configuration.items():
+        short = SHORT.get(configuration, configuration)
+        judged = [r for r in rows if r["role"] == "judged"]
+        if not judged:
+            continue
+        verdicts = ", ".join(f"{str(r['pair']).split(' (')[0]} {r['verdict']}" for r in judged)
+        headline = judged[-1]
+        if all(r["verdict"] == "PASS" for r in judged):
+            passed.append(short)
+            parts.append(
+                f"`{short}` {verdicts} (objf p90 {_exp(headline['r_p90'])} ≤ {_exp(headline['threshold_p90'])}; "
+                f"{headline['hops']} hops of {headline['n']})"
+            )
+            continue
+        failed.append(short)
+        text = (
+            f"`{short}` {verdicts} at {headline['fails_at']} (objf p90 {_exp(headline['r_p90'])} > "
+            f"{_exp(headline['threshold_p90'])}): {headline['hops']} hops of {headline['n']} "
+            f"({headline['across_clusters']} across clusters; seeds {headline['hop_seeds']}), entering at "
+            f"{headline['hops_enter_at']}"
+        )
+        quiet = [r for r in rows if r["role"] == "step" and not r["hops"]]
+        for r in quiet:
+            text += (
+                f"; {r['pair']} adds none: objf median {_exp(r['r_median'])}, p90 {_exp(r['r_p90'])}, "
+                f"same path on {r['same_path']} of {r['n']}"
+            )
+        if " (" in str(headline["pair"]):
+            text += f" — {str(headline['pair']).split(' (', 1)[1][:-1]}"
+        if headline.get("yardstick_hops_too") not in (None, "—"):
+            text += f"; the yardstick BR → B0 also hops on {headline['yardstick_hops_too']} of these seeds"
+        parts.append(text)
+    if not parts:
+        return "not pressed", "the table has no judged row"
+    verdict = " · ".join(
+        x for x in (
+            ("PASS " + ", ".join(passed)) if passed else "",
+            ("FAIL " + ", ".join(failed)) if failed else "",
+        ) if x
+    )
+    return verdict, (
+        "; ".join(parts)
+        + " (hop: objective difference above the floor; * = a retried arm; the tally's "
+        "`same optimum by rung` table, plan §5 B1)"
+    )
+
+
 def verification(
     records_dir: Path,
     optimisation: Mapping[str, Mapping[str, Any]],
@@ -947,18 +1040,8 @@ def verification(
                 head = str(found.get("tree_git_head") or "")[:8]
                 row.update(verdict=str(found.get("verdict")), detail=f"`{gate}` at `{head}`: {counts}; {teeth}")
         elif label == "B1":
-            verdicts = []
-            for name, t in optimisation.items():
-                if not name.startswith("same optimum"):
-                    continue
-                configuration = name.split(" — ")[1]
-                for r in t["rows"]:
-                    if str(r.get("verdict")) in ("PASS", "FAIL"):
-                        verdicts.append(f"`{SHORT.get(configuration, configuration)}` {r['pair']}: {r['verdict']}")
-            if verdicts:
-                row.update(verdict="see detail", detail="; ".join(verdicts) + " (V4's check 1 construction; V5's attribution rule is item 4's, pending)")
-            else:
-                row.update(verdict="not pressed", detail="no same-optimum table in the stage record")
+            verdict, detail = _same_optimum_verdict(optimisation)
+            row.update(verdict=verdict, detail=detail)
         elif label == "A2":
             row.update(verdict="reported, no rule", detail="the tally's fixed-point distance table (plan §5 A2)")
         elif label == "A1":
@@ -1227,12 +1310,14 @@ def _tabular(kind: str, rows: Sequence[str], *, ratio_head: str = "") -> list[st
     return [f"\\begin{{tabular}}{{{spec}}}", "\\hline", f"{header} \\\\", "\\hline", *body, "\\end{tabular}"]
 
 
-def switch_matrix_lines() -> tuple[list[str], list[str]]:
-    """The switch matrix, from the same data every arm is composed from."""
+def switch_matrix_lines(campaign: Campaign) -> tuple[list[str], list[str]]:
+    """The switch matrix, from the same data every arm is composed from; the
+    stopping-rule row reads the campaign's test set and τ (``arms.matrix``
+    with the campaign), never a typed cell."""
     order = list(arms_mod.MATRIX_ORDER)
     md = [f"| | {' | '.join(f'**{a}**' for a in order)} |", "|---|" + "---|" * len(order)]
     tex = [f"\\begin{{tabular}}{{l|{'c' * len(order)}}}", "\\hline", " & " + " & ".join(order) + " \\\\", "\\hline"]
-    for row, cells in arms_mod.matrix().items():
+    for row, cells in arms_mod.matrix(campaign).items():
         md.append(f"| {row} | {' | '.join(str(c) for c in cells)} |")
         tex.append(_tex(f"{row} & " + " & ".join(str(c).replace('✓', '$\\checkmark$').replace('τ', '$\\tau$') for c in cells) + " \\\\"))
     tex += ["\\hline", "\\end{tabular}"]
@@ -1314,7 +1399,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "pulsed configurations only; on `st` the arms `A1`/`B1` compose to `A0`/`B0`.",
         "",
     ]
-    md, tex = switch_matrix_lines()
+    md, tex = switch_matrix_lines(campaign)
     lines += md + ["", "```latex", *tex, "```", ""]
 
     lines += [

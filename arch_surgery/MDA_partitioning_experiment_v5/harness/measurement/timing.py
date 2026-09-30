@@ -851,6 +851,48 @@ def validity_record(campaign: Campaign) -> Mapping[str, Any] | None:
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def cache_load_record(campaign: Campaign) -> Mapping[str, Any] | None:
+    """The cache-load stage's record on disk, or None where it was never pressed."""
+    path = timing_root(campaign, "cache_load") / "measurements.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def cache_load_summary(record: Mapping[str, Any]) -> dict[str, Any]:
+    """What the phase B wall-clock caption states about the first
+    evaluation's numba cache load, from the cache-load stage's record: the
+    range over configurations and arms of the per-arm median load (warm-up
+    less measured model time on the warmed phase A records, summed over the
+    module rows), and the range of that load as a share of the phase B module
+    time per run of the arm's phase B twin (``A<k>`` ↔ ``B<k>``) on the same
+    configuration.  Context, never evidence (D33)."""
+    loads: dict[tuple[str, str], float] = {}
+    modules: dict[tuple[str, str], float] = {}
+    for row in record.get("rows") or []:
+        configuration, arm = str(row["configuration"]), str(row["arm"])
+        if row.get("phase") == "A":
+            median = ((row.get("load_s") or {}).get("modules") or {}).get("median")
+            if median is not None:
+                loads[(configuration, arm)] = float(median)
+        elif row.get("phase") == "B":
+            median = (row.get("modules_per_run_s") or {}).get("median")
+            if median:
+                modules[(configuration, arm)] = float(median)
+    shares = [
+        load / modules[(configuration, "B" + arm[1:])]
+        for (configuration, arm), load in loads.items()
+        if (configuration, "B" + arm[1:]) in modules
+    ]
+    return {
+        "load_s_min": min(loads.values()) if loads else None,
+        "load_s_max": max(loads.values()) if loads else None,
+        "share_min": min(shares) if shares else None,
+        "share_max": max(shares) if shares else None,
+        "n_arm_rows": len(loads),
+        "n_shares": len(shares),
+        "tree_git_head": record.get("tree_git_head"),
+    }
+
+
 def phases_outside(validity: Mapping[str, Any]) -> list[str]:
     """The phases on which the validity check found a campaign timing outside
     the repetitions' range: D38 sends their appendix timings to the one-worker

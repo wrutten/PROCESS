@@ -59,7 +59,7 @@ class Config:
     """One input file defining one optimisation problem.
 
     The configuration is the *problem*; its **input file** is the file the
-    problem is read from (README §3).
+    problem is read from (V4 README §3, the vocabulary).
     """
 
     #: Configuration name; also the committed input file's stem.
@@ -158,6 +158,14 @@ TEST_SETS: tuple[str, ...] = ("census", "write_set")
 #: at 1e-6, V4's.  A campaign composes ``PROCESS_ARCH_TAU`` from this table
 #: unless an explicit ``--tau`` overrides it, and the override is stamped.
 TAU_BY_TEST_SET: Mapping[str, float] = MappingProxyType({"census": 1e-8, "write_set": 1e-6})
+
+#: What each test set is, in words, for the tables that print the campaign's
+#: stopping rule (the paper's switch matrix; rule B1's attribution): the
+#: census set is the feedback couplings measured at run time (D32), the
+#: fallback the block's whole write set (D39).
+TEST_SET_WORDS: Mapping[str, str] = MappingProxyType(
+    {"census": "feedback couplings", "write_set": "whole write set"}
+)
 
 #: The campaign default (decision D32; the user, 2026-09-29).
 DEFAULT_TEST_SET = "census"
@@ -289,8 +297,13 @@ class Campaign:
     #: ``cluster_gap_factor`` x that floor separates optima clusters.
     objf_floor_rel: float = 1e-6
     cluster_gap_factor: float = 10.0
-    #: Bound on the median paired optimiser-iteration ratio.
-    iteration_ratio_max: float = 1.05
+    #: The band of plan §5 B3's **label** on the evaluation-count ratio ε:
+    #: ``|log ε| ≤ log band`` reads *trajectory-neutral*, anything else
+    #: *trajectory changed by ε*.  A label, never a verdict: V4's iteration
+    #: multiplier (an acceptance bound of 1.05 on the summed-iteration median,
+    #: ``iteration_ratio_max``) is retired with its verdict (V5 list item 1;
+    #: task A103 (v5-tally-and-tables)).
+    trajectory_neutral_band: float = 1.05
     #: The declared median, stated so a report can quote it verbatim.
     median_construction: str = "nearest-rank upper-middle: sorted_values[n // 2]"
     #: Sweeps a block loop may take before the run is refused (not a budget:

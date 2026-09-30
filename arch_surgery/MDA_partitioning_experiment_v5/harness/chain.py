@@ -855,11 +855,38 @@ def run(
         return press
 
     press["run_records"] = _survey_own_records(campaign, plan)
+    stages, refused = run_reading_stages(
+        campaign, records_dir=records_dir, resume=resume, teeth=teeth
+    )
+    press["stages"].extend(stages)
+    press["refused"] = refused
+    return press
 
+
+def run_reading_stages(
+    campaign: Campaign,
+    *,
+    records_dir: Path,
+    resume: bool = False,
+    teeth: bool = True,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """The chain's reading stages (:data:`READING_STAGES`) over the records on
+    disk, under *campaign* as the caller composed it: the two tallies, then
+    the tally's contract gate.  No run stage and no PROCESS run.
+
+    :func:`run` calls this after its run stages; the runner's
+    ``--reading-stages`` calls it alone, with the campaign composed as the
+    campaign press composes it, so the reading half of a campaign press can be
+    pressed over existing records read-only (issue I-37: the contract gate
+    failed inside the press and passed pressed alone, and nothing but a whole
+    campaign press could show which).  Returns the stage blocks and the
+    refusal, ``None`` when every stage ran and every gate passed.
+    """
     from .gates import registry as gates_mod  # noqa: PLC0415
 
     available_gates = gates_mod.gates_only(campaign)
     available_stages = gates_mod.measurements(campaign)
+    stages: list[dict[str, Any]] = []
     for name, kind, what in READING_STAGES:
         try:
             if kind == "gate":
@@ -895,17 +922,15 @@ def run(
                     "record": emitted.get("record"),
                 }
         except (GateError, FileNotFoundError, KeyError) as exc:
-            press["refused"] = f"stage {name}: {type(exc).__name__}: {exc}"
-            return press
-        press["stages"].append(block)
+            return stages, f"stage {name}: {type(exc).__name__}: {exc}"
+        stages.append(block)
         if block.get("verdict") not in (None, "PASS"):
-            press["refused"] = (
+            return stages, (
                 f"gate {name!r} did not pass; the chain stops here.  A failed "
                 f"gate is a result, not an obstacle: nothing below is re-run "
                 f"with different settings."
             )
-            return press
-    return press
+    return stages, None
 
 
 def _survey_own_records(campaign: Campaign, plan: ChainPlan) -> dict[str, Any]:
