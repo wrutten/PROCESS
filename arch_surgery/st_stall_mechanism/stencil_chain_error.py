@@ -124,6 +124,36 @@ def press_chains() -> None:
                 list(ex.map(_run, batch))
 
 
+def partition_against_flat(point: str, n: int) -> dict:
+    """Per (test set, τ): the partitioned chain against the flat chain at the same setting."""
+    seq = sequence(n)
+    out = {}
+    for lp in m2.loops_for(NAME):
+        if lp.arm != "A0":
+            continue
+        other = Loop("A2", lp.test_set, lp.tau)
+        ra = [read_evaluation(chain_dir(point, lp, k, lab), lp) for k, (lab, _c, _s) in enumerate(seq)]
+        rb = [read_evaluation(chain_dir(point, other, k, lab), other) for k, (lab, _c, _s) in enumerate(seq)]
+        if any(r.get("objf") is None for r in ra + rb):
+            out[(lp.test_set, lp.tau)] = None
+            continue
+        df = dc = 0.0
+        for c in range(n):
+            kp, km = 1 + 2 * c, 2 + 2 * c
+            df = max(df, abs((ra[kp]["objf"] - ra[km]["objf"]) - (rb[kp]["objf"] - rb[km]["objf"])) / (2 * STEP))
+            for i in range(len(ra[kp]["conf"])):
+                dc = max(dc, abs((ra[kp]["conf"][i] - ra[km]["conf"][i]) - (rb[kp]["conf"][i] - rb[km]["conf"][i])) / (2 * STEP))
+        out[(lp.test_set, lp.tau)] = {
+            "same": sum(1 for a, b in zip(ra, rb, strict=True) if a["objf"] == b["objf"] and a["conf"] == b["conf"]),
+            "n": len(ra),
+            "value_f": max(abs(a["objf"] - b["objf"]) for a, b in zip(ra, rb, strict=True)),
+            "value_c": max(max(abs(x - y) for x, y in zip(a["conf"], b["conf"], strict=True)) for a, b in zip(ra, rb, strict=True)),
+            "deriv_f": df,
+            "deriv_c": dc,
+        }
+    return out
+
+
 def tables_chains() -> dict:
     eps = EPSVMC[NAME]
     result = {}
@@ -174,6 +204,30 @@ def tables_chains() -> dict:
                   f"{cc:.1e} / {ncc:.1e} / {gc:.1e} | {max(gf, gc) / eps:.2g} |")
             rows.append({"loop": lp.label, "value_f": vf, "value_c": vc, "grad_f": gf, "grad_c": gc,
                          "common_f": cf, "noncommon_f": ncf, "common_c": cc, "noncommon_c": ncc, "nodes": nodes})
+        # the same point twice: the base (entered from the converged state) and the reconcile call (entered
+        # after the whole stencil) -- a difference is history dependence, nothing else
+        print("\nThe same design point evaluated twice in the chain -- first (the base, entered from the "
+              "converged state) and last (the reconcile call, entered after all 2n stencil points): the difference "
+              "is what the history alone does to the value.\n")
+        print("| loop | objective: reconcile − base | largest constraint: |reconcile − base| |")
+        print("|---|---|---|")
+        for lp in loops:
+            a, b = runs[lp][0], runs[lp][-1]
+            if a.get("objf") is None or b.get("objf") is None:
+                continue
+            print(f"| {lp.label} | {b['objf'] - a['objf']:.1e} | "
+                  f"{max(abs(x - y) for x, y in zip(a['conf'], b['conf'], strict=True)):.1e} |")
+        # the partitioned loop against the flat loop at the same setting: the partition's own contribution
+        print("\nThe partitioned loop against the flat loop at the same test set and τ, along the same chain "
+              "(largest over the points or columns; derivative differences at the step):\n")
+        print("| setting | points whose objective and constraints are bit-identical | value difference: objective / constraints | "
+              "derivative difference: objective / constraints |")
+        print("|---|---|---|---|")
+        for (ts, tau), d in partition_against_flat(point, n).items():
+            if d is None:
+                continue
+            print(f"| {ts} {tau:.0e} | {d['same']} of {d['n']} | {d['value_f']:.1e} / {d['value_c']:.1e} | "
+                  f"{d['deriv_f']:.1e} / {d['deriv_c']:.1e} |")
         # block loops that accepted their entry after one sweep with a nonzero change
         print("\nAlong the chain: per block, evaluations whose loop stopped after its first sweep with a first-sweep "
               "change that was not zero (the entry's lag accepted and carried on), and the largest such change:\n")
@@ -228,9 +282,10 @@ def press_traces() -> None:
 def tables_traces() -> None:
     print("\n## The traced optimisations (st, seed 0)\n")
     print("| arm, τ | reproduces its record (iterations, evaluations, norm_objf to the bit) | iterations | "
-          "evaluations traced | gradient evaluations with a loop that stopped after one sweep carrying a nonzero change: "
+          "evaluations traced | of which gradient evaluations | block loops stopped after one sweep, any change: block: evaluations | "
+          "gradient evaluations with a loop that stopped after one sweep carrying a nonzero change: "
           "block: evaluations (share of gradient evaluations), largest change |")
-    print("|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|")
     per_iter_all = {}
     for (job, loop), (arm, tau, src) in zip(trace_jobs(), TRACED, strict=True):
         rec = records_mod.read(job.outdir)
@@ -248,10 +303,14 @@ def tables_traces() -> None:
         grads = [ln for ln in lines if isinstance(ln.get("evaluation"), list) and ln["evaluation"] and ln["evaluation"][0] == "gradient"]
         per: dict = {}
         per_iter: dict = {}
+        single: dict = {}
         for ln in grads:
             it = ln.get("iteration")
+            per_iter.setdefault(it, {}).setdefault("_n", [0, 0.0])[0] += 1
             for b, sweeps in (ln.get("per_sweep") or {}).items():
                 vals = [max(s["max"].values()) if s["max"] else 0.0 for s in sweeps]
+                if len(vals) == 1:
+                    single[b] = single.get(b, 0) + 1
                 if len(vals) == 1 and vals[0] != 0.0:
                     d = per.setdefault(b, [0, 0.0])
                     d[0] += 1
@@ -261,12 +320,13 @@ def tables_traces() -> None:
                     pi[1] = max(pi[1], vals[0])
         per_iter_all[(arm, tau)] = (per_iter, len(grads))
         cells = "; ".join(f"{b}: {v[0]} ({v[0] / max(len(grads), 1):.0%}), {v[1]:.1e}" for b, v in per.items()) or "none"
-        print(f"| {arm}, {tau:g} | {'yes' if same else 'NO'} | {rec.get('n_solver_iterations')} | {len(lines)} | {cells} |")
+        one = "; ".join(f"{b}: {v}" for b, v in single.items()) or "none"
+        print(f"| {arm}, {tau:g} | {'yes' if same else 'NO'} | {rec.get('n_solver_iterations')} | {len(lines)} | {len(grads)} | {one} | {cells} |")
     print("\nPer iteration (the solver's iteration counter at the evaluation), the partitioned arm at 1e-8 and 1e-12: "
           "M2's gradient evaluations that carried a nonzero change after one sweep, and the largest such change:\n")
     for key in (("B2", 1e-8), ("B2", 1e-12)):
         per_iter, ng = per_iter_all.get(key, ({}, 0))
-        txt = ", ".join(f"{it}: {v['M2'][0]} ({v['M2'][1]:.0e})" for it, v in sorted(per_iter.items()) if "M2" in v)
+        txt = ", ".join(f"{it}: {v['M2'][0]} of {v['_n'][0]} ({v['M2'][1]:.0e})" for it, v in sorted(per_iter.items()) if "M2" in v)
         print(f"- {key[0]} at {key[1]:g}: {txt or 'none'}")
 
 

@@ -32,6 +32,7 @@ import sys
 
 import evaluation_error_at_optimum as m2
 import loop_sweeps_against_reference as m0
+import stencil_chain_error as chain
 from loop_runs import EPSVMC, SHORT, Loop
 
 
@@ -127,6 +128,31 @@ def main() -> int:
         v = worst.get(("AR", sorted(steps_all, reverse=True)[0])) if steps_all else None
         print(f"\nThe reference loop AR at the default step: optimiser-relevant error / epsvmc = "
               f"{'—' if v is None else format(v / eps, '.2g')}.\n")
+        if name == chain.NAME:
+            print("**Post hoc, labelled as such** (added after the declared condition failed M1's test): the "
+                  "partition's own, history-dependent contribution -- the largest difference between the "
+                  "partitioned and the flat loop's finite-difference derivatives (objective and constraints) along "
+                  "the optimiser's evaluation chain (M2's second part, step 1e-3) -- over epsvmc, per chain start:\n")
+            print("| setting | " + " | ".join(f"chain at {a}_seed{s:03d}" for a, s in chain.POINTS) + " | node calls / AR at this setting, stencil; displaced (M0) |")
+            print("|---|" + "---|" * len(chain.POINTS) + "---|")
+            per_point = []
+            for a, s in chain.POINTS:
+                try:
+                    n = len(m2.optimum(name, a, s)["xcs"])
+                    per_point.append(chain.partition_against_flat(m2.point_label(a, s), n))
+                except Exception:  # noqa: BLE001
+                    per_point.append({})
+            keys = [("census", 1e-8), ("census", 1e-10), ("census", 1e-12), ("write_set", 1e-6), ("write_set", 1e-8)]
+            for ts, t in keys:
+                cells_txt = []
+                for d in per_point:
+                    e = d.get((ts, t))
+                    cells_txt.append("—" if not e else f"{max(e['deriv_f'], e['deriv_c']) / eps:.2g}")
+                st = m0_stats.get(Loop("A2", ts, t).label)
+                cost = "—" if not st or not ref["stencil"] else (
+                    f"{st['stencil']['node_calls_mean'] / ref['stencil']:.2f}; {st['displaced']['node_calls_mean'] / ref['displaced']:.2f}")
+                print(f"| {ts} {t:.0e} | " + " | ".join(cells_txt) + f" | {cost} |")
+            print()
     return 0
 
 
