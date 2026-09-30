@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Mapping
 
 from . import switches
-from ..core.config import Campaign, Config, default_campaign
+from ..core.config import TEST_SET_WORDS, Campaign, Config, default_campaign
 from .switches import SwitchError
 
 # --------------------------------------------------------------------------
@@ -33,6 +33,11 @@ from .switches import SwitchError
 #: whether the burn time is out of the loop, and which input file is read —
 #: are not listed here because they are not choices: each follows from a field
 #: below, and :data:`PLAN_MATRIX` is regenerated from these to prove it.
+#: The two symbols of the stopping rule's form (:attr:`Arm.stopping_rule`),
+#: which a campaign's settings fill in (:func:`stopping_rule_text`).
+TEST_SET_FORM = "test set"
+TAU_FORM = "τ"
+
 MATRIX_FIELDS: tuple[str, ...] = (
     "mda",
     "arrangement_node",
@@ -79,8 +84,18 @@ class Arm:
 
     @property
     def stopping_rule(self) -> str:
-        """What ends the analysis loop."""
-        return "objf/conf" if self.mda == "upstream" else "y @ τ"
+        """What ends the analysis loop, as a form: upstream's objective and
+        constraint test, or the campaign's **test set at τ** — per block on
+        the partitioned loop, whose every block loop stops on its own members
+        of the set.  Which set and which τ are the campaign's settings, never
+        the arm's: :func:`stopping_rule_text` fills them in (the paper's
+        matrix, :func:`matrix` with a campaign).  V4's cell read ``y @ τ``,
+        the whole coupling state; since driver change DR11 the default is the
+        census feedback couplings (D32) and the whole write set the fallback
+        (D39), one value per campaign."""
+        if self.mda == "upstream":
+            return "objf/conf"
+        return f"{TEST_SET_FORM} @ {TAU_FORM}" + (" per block" if self.mda == "partitioned" else "")
 
     @property
     def schedule_passes(self) -> str:
@@ -372,8 +387,8 @@ MATRIX_ORDER = ("AR", "A0", "A1", "A2", "BR", "B0", "B1", "B2")
 PLAN_MATRIX: dict[str, tuple[str, ...]] = {
     "MDA solve": ("upstream", "flat", "flat", "partitioned",
                   "upstream", "flat", "flat", "partitioned"),
-    "stopping rule": ("objf/conf", "y @ τ", "y @ τ", "y @ τ",
-                      "objf/conf", "y @ τ", "y @ τ", "y @ τ"),
+    "stopping rule": ("objf/conf", "test set @ τ", "test set @ τ", "test set @ τ per block",
+                      "objf/conf", "test set @ τ", "test set @ τ", "test set @ τ per block"),
     "block schedule": ("—", "(one block)", "(one block)", "one pass",
                        "—", "(one block)", "(one block)", "one pass"),
     "arrangement · node (build after physics)": ("—", "—", "—", "✓",
@@ -421,12 +436,34 @@ def matrix_cell(arm: Arm, row: str) -> str:
     raise KeyError(f"{row!r} is not a row of the matrix")
 
 
-def matrix() -> dict[str, tuple[str, ...]]:
-    """The whole matrix regenerated from :data:`ARMS`, in the plan's order."""
-    return {
+def stopping_rule_text(cell: str, campaign: Campaign) -> str:
+    """A stopping-rule cell with the campaign's test set and tolerance in
+    place of the form's two symbols: ``test set @ τ`` reads e.g.
+    ``feedback couplings @ τ = 1e-08`` under the census set
+    (``config.TEST_SET_WORDS``, ``campaign.tau``).  Upstream's cell has
+    neither symbol and is returned as it is."""
+    if not cell.startswith(TEST_SET_FORM):
+        return cell
+    return cell.replace(TEST_SET_FORM, TEST_SET_WORDS[campaign.test_set], 1).replace(
+        TAU_FORM, f"{TAU_FORM} = {campaign.tau:g}", 1
+    )
+
+
+def matrix(campaign: Campaign | None = None) -> dict[str, tuple[str, ...]]:
+    """The whole matrix regenerated from :data:`ARMS`, in the plan's order.
+
+    With a *campaign*, the stopping-rule row reads that campaign's test set
+    and tolerance (:func:`stopping_rule_text`); without one it is the form the
+    plan's table is compared against."""
+    rows = {
         row: tuple(matrix_cell(ARMS[name], row) for name in MATRIX_ORDER)
         for row in PLAN_MATRIX
     }
+    if campaign is not None:
+        rows["stopping rule"] = tuple(
+            stopping_rule_text(cell, campaign) for cell in rows["stopping rule"]
+        )
+    return rows
 
 
 # --------------------------------------------------------------------------

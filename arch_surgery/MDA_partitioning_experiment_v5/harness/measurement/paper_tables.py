@@ -10,7 +10,7 @@ a table in this revision.  ``check`` refuses when the rendered file and the
 records disagree.
 
 Main text
-    the switch matrix (from ``arms.matrix()``, the same data every arm is
+    the switch matrix (from ``arms.matrix(campaign)``, the same data every arm is
     composed from); the configurations table; phase A module sweeps per
     evaluation with the ratio columns on **`A2/A1` (pulsed) and `A2/A0`
     (`st_regression`)** — the ratio of the means, the per-run median and the
@@ -1283,12 +1283,14 @@ def _tabular(kind: str, rows: Sequence[str], *, ratio_head: str = "") -> list[st
     return [f"\\begin{{tabular}}{{{spec}}}", "\\hline", f"{header} \\\\", "\\hline", *body, "\\end{tabular}"]
 
 
-def switch_matrix_lines() -> tuple[list[str], list[str]]:
-    """The switch matrix, from the same data every arm is composed from."""
+def switch_matrix_lines(campaign: Campaign) -> tuple[list[str], list[str]]:
+    """The switch matrix, from the same data every arm is composed from; the
+    stopping-rule row reads the campaign's test set and τ (``arms.matrix``
+    with the campaign), never a typed cell."""
     order = list(arms_mod.MATRIX_ORDER)
     md = [f"| | {' | '.join(f'**{a}**' for a in order)} |", "|---|" + "---|" * len(order)]
     tex = [f"\\begin{{tabular}}{{l|{'c' * len(order)}}}", "\\hline", " & " + " & ".join(order) + " \\\\", "\\hline"]
-    for row, cells in arms_mod.matrix().items():
+    for row, cells in arms_mod.matrix(campaign).items():
         md.append(f"| {row} | {' | '.join(str(c) for c in cells)} |")
         tex.append(_tex(f"{row} & " + " & ".join(str(c).replace('✓', '$\\checkmark$').replace('τ', '$\\tau$') for c in cells) + " \\\\"))
     tex += ["\\hline", "\\end{tabular}"]
@@ -1370,7 +1372,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         "pulsed configurations only; on `st` the arms `A1`/`B1` compose to `A0`/`B0`.",
         "",
     ]
-    md, tex = switch_matrix_lines()
+    md, tex = switch_matrix_lines(campaign)
     lines += md + ["", "```latex", *tex, "```", ""]
 
     lines += [
