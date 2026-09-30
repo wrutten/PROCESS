@@ -299,7 +299,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     detail.append(
         f"{len(emitted)} table(s) emitted, each checked for a caption, a "
         f"denominator that is a count, and a sentence saying what the "
-        f"denominator counts: {n_compared} checks"
+        f"denominator counts: {3 * len(emitted)} checks"
     )
     acceptance = [t for t in emitted if t.get("acceptance")]
     detail.append(
