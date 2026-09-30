@@ -21,9 +21,19 @@ Eight tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
                     reported, not accepted on (decision D29).  Its per-seed
                     companion ``per_arm_success_by_seed`` is one row per seed.
                     *(Task A82 (per-arm-success), 2026-09-15.)*
-``same_optimum``    §4.3.2 / check 1 — the paired relative objective difference
-                    against the threshold the campaign's own yardstick sets,
-                    with clusters, hops and the below-resolution category.
+``same_optimum``    plan §5 B1 (V4's check 1) — the paired relative objective
+                    difference against the threshold the campaign's own
+                    yardstick sets, with clusters, hops and the
+                    below-resolution category.
+``same_optimum_by_seed`` / ``same_optimum_by_rung`` — B1's **attribution**
+                    (V5 list item 4 as reduced; task A103
+                    (v5-tally-and-tables)): per seed, each ladder step's and
+                    each judged pair's objective and design-point difference,
+                    hop (objective above the floor) or relocation (objective
+                    within it, the point moved), the retried arms and the step
+                    the headline pair's difference enters at; and one row per
+                    configuration and pair with the verdict and the counts.
+                    The paper's verification row reads the second.
 ``iterations``      check 2 — **both** constructions: the final attempt's count
                     and the count summed over every attempt, beside the
                     evaluation count, which is the multiplier the transfer
@@ -78,7 +88,7 @@ from typing import Any, Mapping, Sequence
 from harness.experiment import arms as arms_mod
 from harness.measurement import stats as stats_mod
 from harness.measurement import tally as tally_mod
-from harness.core.config import Campaign
+from harness.core.config import TEST_SET_WORDS, Campaign
 from harness.measurement.tables import (
     Caption,
     Column,
@@ -691,29 +701,67 @@ def failure_taxonomy(
     )
 
 
-def same_optimum(
-    campaign: Campaign,
-    population: stats_mod.Population,
-    configuration: str,
-    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
-    converged: Sequence[int],
-    source: str,
-) -> Table | None:
-    """§4.3.2 / check 1 — is it the same optimum?
+# --------------------------------------------------------------------------
+# rule B1: the same optimum, its verdict, and where a difference enters
+# --------------------------------------------------------------------------
 
-    ``None`` where this arm group carries no flat control: every pair of this
-    check is anchored on it, so without it there is nothing to compare and an
-    empty table would state a denominator over no comparison.  The omission is
-    named in the stage's record rather than left as a blank table.
-    """
+#: The rungs of the optimisation ladder rule B1 attributes a difference to
+#: (plan §3.3, §5 B1), by the pair of arms each step joins: the lift takes the
+#: burn time out of the loop and gives it to the optimiser; the partition is
+#: the architectural intervention.  A configuration without ``B1`` (the
+#: steady-state one, where the lift composes to nothing) has one step,
+#: ``B0 → B2``, named by :func:`rung_steps` with the campaign's test set and
+#: tolerance, because on it the partition's block loops are the only thing the
+#: pair changes and they stop on that test set at that tolerance.
+RUNG_NAMES: Mapping[tuple[str, str], str] = {
+    ("B0", "B1"): "the lift",
+    ("B1", "B2"): "the partition",
+}
+
+
+def published_pairs(
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]]
+) -> list[tuple[str, str]]:
+    """The pairs rule B1 judges: every arm present against the flat control,
+    the yardstick's other side excepted (plan §5 B1: ``B0 → B1``, ``B0 → B2``)."""
     if BASE_ARM not in by_arm:
-        return None
-    pairs: list[tuple[str, str]] = []
-    if all(a in by_arm for a in YARDSTICK_PAIR):
-        pairs.append(YARDSTICK_PAIR)
-    for arm in _arm_order(by_arm):
-        if arm != BASE_ARM and BASE_ARM in by_arm and arm not in YARDSTICK_PAIR:
-            pairs.append((BASE_ARM, arm))
+        return []
+    return [
+        (BASE_ARM, arm)
+        for arm in _arm_order(by_arm)
+        if arm != BASE_ARM and arm not in YARDSTICK_PAIR
+    ]
+
+
+def rung_steps(
+    campaign: Campaign, by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]]
+) -> list[tuple[str, str, str]]:
+    """The ladder's steps between consecutive arms present, from the flat
+    control on: ``(a, b, name)``.  Derived from the arms the group carries,
+    never typed per configuration."""
+    ladder = [arm for arm in LADDER[LADDER.index(BASE_ARM):] if arm in by_arm]
+    steps: list[tuple[str, str, str]] = []
+    for a, b in zip(ladder, ladder[1:]):
+        name = RUNG_NAMES.get((a, b))
+        if name is None:
+            skipped = " or ".join(
+                x for x in LADDER if LADDER.index(a) < LADDER.index(x) < LADDER.index(b)
+            )
+            name = (
+                f"the partition, its block loops on the "
+                f"{TEST_SET_WORDS[campaign.test_set]} at τ = {campaign.tau:g}; "
+                f"no {skipped} on this configuration"
+            )
+        steps.append((a, b, name))
+    return steps
+
+
+def objective_clusters(
+    campaign: Campaign, by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]]
+) -> tuple[dict[tuple[str, int], int], float]:
+    """Every accepted optimum of the group in its objective cluster
+    (``stats.clusters`` at ``cluster_gap_factor × objf_floor_rel``), keyed by
+    (arm, seed); and the gap."""
     accepted: list[tuple[str, int, float]] = []
     for arm, rows in by_arm.items():
         for seed, record in rows.items():
@@ -728,58 +776,493 @@ def same_optimum(
         for position in group:
             arm, seed, _ = accepted[position]
             cluster_of[(arm, seed)] = index
+    return cluster_of, gap
 
-    def relatives(a: str, b: str) -> tuple[list[float], list[int]]:
-        values: list[float] = []
-        seeds: list[int] = []
-        for seed in converged:
-            ra, rb = by_arm.get(a, {}).get(seed), by_arm.get(b, {}).get(seed)
-            if not (ra and rb):
-                continue
-            fa = _hexf((ra.get("exact") or {}).get("norm_objf"))
-            fb = _hexf((rb.get("exact") or {}).get("norm_objf"))
-            if fa is None or fb is None:
-                continue
-            values.append(stats_mod.relative_objective_difference(fa, fb))
-            seeds.append(seed)
-        return values, seeds
 
-    yardstick_values, _ = (
-        relatives(*YARDSTICK_PAIR) if all(a in by_arm for a in YARDSTICK_PAIR) else ([], [])
+def _yardstick_values(
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]], converged: Sequence[int]
+) -> list[float]:
+    if not all(a in by_arm for a in YARDSTICK_PAIR):
+        return []
+    values, _ = _objective_pairs(by_arm, *YARDSTICK_PAIR, converged)
+    return values
+
+
+def judge_pair(
+    campaign: Campaign,
+    values: Sequence[float],
+    yardstick_values: Sequence[float] | None,
+) -> dict[str, Any]:
+    """Rule B1 on one pair: the median and p90 of *values* against
+    ``max(F × yardstick, floor)`` at the same order statistic.  ``None`` for
+    *yardstick_values* is the yardstick row itself, which carries no threshold
+    and no verdict.  ``fails_at`` names the order statistic(s) above their
+    threshold."""
+    observed_median = stats_mod.median(values)
+    observed_p90 = stats_mod.p90(values)
+    threshold_median = threshold_p90 = None
+    if yardstick_values is not None:
+        threshold_median = stats_mod.acceptance_threshold(
+            stats_mod.median(yardstick_values),
+            factor=campaign.similarity_factor,
+            floor=campaign.objf_floor_rel,
+        )
+        threshold_p90 = stats_mod.acceptance_threshold(
+            stats_mod.p90(yardstick_values),
+            factor=campaign.similarity_factor,
+            floor=campaign.objf_floor_rel,
+        )
+    verdict = "—"
+    fails_at: list[str] = []
+    if threshold_median is not None and observed_median is not None:
+        if observed_median > threshold_median:
+            fails_at.append("median")
+        if (
+            observed_p90 is not None
+            and threshold_p90 is not None
+            and observed_p90 > threshold_p90
+        ):
+            fails_at.append("p90")
+        verdict = "FAIL" if fails_at else "PASS"
+    return {
+        "r_median": observed_median,
+        "r_p90": observed_p90,
+        "threshold_median": threshold_median,
+        "threshold_p90": threshold_p90,
+        "verdict": verdict,
+        "fails_at": fails_at,
+    }
+
+
+def difference_kind(r: float | None, point: float | None, floor: float) -> str | None:
+    """What one paired difference is, against the correctness floor:
+    ``hop`` — the objective differs by more than the floor, another optimum;
+    ``relocation`` — the objective within the floor and the design point moved
+    by more than the floor (the largest relative difference over the shared
+    iteration variables), a move along a flat direction of the same optimum;
+    ``within the floor`` — neither.  ``None`` where the pair has no objective."""
+    if r is None:
+        return None
+    if r > floor:
+        return "hop"
+    if point is not None and point > floor:
+        return "relocation"
+    return "within the floor"
+
+
+def _step_difference(
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    a: str,
+    b: str,
+    seed: int,
+    floor: float,
+    cluster_of: Mapping[tuple[str, int], int],
+) -> dict[str, Any]:
+    """One seed's difference across one pair: the objective's relative
+    difference, the design point's, their kind, whether the two optima sit in
+    different objective clusters, and whether the optimiser took the same
+    path (the same evaluations and the same iterations summed over attempts)."""
+    ra, rb = by_arm[a][seed], by_arm[b][seed]
+    fa = _hexf((ra.get("exact") or {}).get("norm_objf"))
+    fb = _hexf((rb.get("exact") or {}).get("norm_objf"))
+    r = (
+        None
+        if fa is None or fb is None
+        else stats_mod.relative_objective_difference(fa, fb)
     )
-    yard_median = stats_mod.median(yardstick_values)
-    yard_p90 = stats_mod.p90(yardstick_values)
+    point = stats_mod.point_difference(
+        stats_mod.iteration_variables(ra), stats_mod.iteration_variables(rb)
+    )["max"]
+    same_path = (
+        stats_mod.n_evaluations(ra) == stats_mod.n_evaluations(rb)
+        and stats_mod.iterations_summed_over_attempts(ra)
+        == stats_mod.iterations_summed_over_attempts(rb)
+    )
+    return {
+        "r": r,
+        "point": point,
+        "kind": difference_kind(r, point, floor),
+        "across_clusters": (
+            (a, seed) in cluster_of
+            and (b, seed) in cluster_of
+            and cluster_of[(a, seed)] != cluster_of[(b, seed)]
+        ),
+        "same_path": same_path,
+    }
+
+
+def _steps_within(
+    steps: Sequence[tuple[str, str, str]], a: str, b: str
+) -> list[tuple[str, str, str]]:
+    """The ladder steps a pair ``a → b`` spans, in order."""
+    order = [steps[0][0], *(s[1] for s in steps)] if steps else []
+    if a not in order or b not in order:
+        return []
+    lo, hi = order.index(a), order.index(b)
+    return [s for s in steps if lo <= order.index(s[0]) and order.index(s[1]) <= hi]
+
+
+def entry_step(
+    kind: str | None,
+    spanned: Sequence[tuple[str, str, str]],
+    by_step: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> str:
+    """Where a pair's difference of *kind* enters: the first spanned step
+    whose own difference is of the same kind, and any later step that shows it
+    again.  ``—`` where there is no difference; ``no single step`` where the
+    pair's difference is of a kind no spanned step shows alone."""
+    if kind in (None, "within the floor"):
+        return "—"
+    showing = [f"{a} → {b}" for a, b, _ in spanned if by_step[(a, b)]["kind"] == kind]
+    if not showing:
+        return "no single step"
+    return showing[0] + ("" if len(showing) == 1 else f" (again at {', '.join(showing[1:])})")
+
+
+def _pair_label(a: str, b: str) -> str:
+    return f"{a} → {b}"
+
+
+def same_optimum_by_seed(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    configuration: str,
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    source: str,
+) -> tuple[Table, list[dict[str, Any]]] | None:
+    """**Rule B1's attribution** (plan §5 B1; V5 list item 4 as reduced): per
+    seed of the seed set, each ladder step's difference and each judged pair's,
+    and the step the headline pair's difference enters at.
+
+    Returns the per-seed table and the summary rows for
+    :func:`same_optimum_by_rung` — one per configuration and pair (the
+    yardstick and every ladder step that is not itself a judged pair beside,
+    without a verdict) — so the two tables are one computation.  ``None``
+    where the group carries no flat control.
+    """
+    if BASE_ARM not in by_arm:
+        return None
+    floor = campaign.objf_floor_rel
+    cluster_of, gap = objective_clusters(campaign, by_arm)
+    steps = rung_steps(campaign, by_arm)
+    judged_pairs = published_pairs(by_arm)
+    yardstick = YARDSTICK_PAIR if all(a in by_arm for a in YARDSTICK_PAIR) else None
+    compared: list[tuple[str, str]] = []
+    for pair in ([yardstick] if yardstick else []) + [(a, b) for a, b, _ in steps] + judged_pairs:
+        if pair not in compared:
+            compared.append(pair)
+    headline = judged_pairs[-1] if judged_pairs else None
+    seeds = [s for s in converged if all(s in by_arm[x] for x in by_arm)]
+    rows: list[dict[str, Any]] = []
+    per_pair: dict[tuple[str, str], list[tuple[int, dict[str, Any]]]] = {p: [] for p in compared}
+    for seed in seeds:
+        by_step = {
+            pair: _step_difference(by_arm, *pair, seed, floor, cluster_of)
+            for pair in compared
+        }
+        for pair in compared:
+            per_pair[pair].append((seed, by_step[pair]))
+        retried = [arm for arm in _arm_order(by_arm) if stats_mod.retried(by_arm[arm][seed])]
+        row: dict[str, Any] = {
+            "seed": seed,
+            "retried": cell_list(retried),
+        }
+        for a, b in compared:
+            d = by_step[(a, b)]
+            key = f"{a}_{b}"
+            row[f"{key}_r"] = d["r"]
+            row[f"{key}_point"] = d["point"]
+            row[f"{key}_kind"] = (
+                "—"
+                if d["kind"] is None
+                else d["kind"] + (" (across clusters)" if d["kind"] == "hop" and d["across_clusters"] else "")
+            )
+            row[f"{key}_same_path"] = "yes" if d["same_path"] else "no"
+        if headline is not None:
+            row["enters_at"] = entry_step(
+                by_step[headline]["kind"], _steps_within(steps, *headline), by_step
+            )
+        rows.append(row)
+
+    summary: list[dict[str, Any]] = []
+    yardstick_values = _yardstick_values(by_arm, converged)
+    for pair in compared:
+        a, b = pair
+        entries = per_pair[pair]
+        values = [d["r"] for _, d in entries if d["r"] is not None]
+        is_judged = pair in judged_pairs
+        judged = judge_pair(campaign, values, yardstick_values if is_judged else None)
+        spanned = _steps_within(steps, a, b)
+        role = (
+            "yardstick"
+            if pair == yardstick
+            else ("judged" if is_judged else "step")
+        )
+        hops = [(s, d) for s, d in entries if d["kind"] == "hop"]
+        relocations = [(s, d) for s, d in entries if d["kind"] == "relocation"]
+        entered: dict[str, dict[str, int]] = {"hop": {}, "relocation": {}}
+        if spanned and role != "yardstick":
+            for seed, d in hops + relocations:
+                by_step = {p: dict(per_pair[p])[seed] for p in compared}
+                where = entry_step(d["kind"], spanned, by_step)
+                named = next(
+                    (f"{where} ({RUNG_NAMES[(x, y)]})" for x, y, _ in spanned
+                     if f"{x} → {y}" == where and (x, y) in RUNG_NAMES),
+                    where,
+                )
+                entered[d["kind"]][named] = entered[d["kind"]].get(named, 0) + 1
+        yardstick_hops = (
+            {s for s, d in per_pair[yardstick] if d["kind"] == "hop"} if yardstick else set()
+        )
+        step_name = next((name for x, y, name in steps if (x, y) == pair), "")
+        summary.append(
+            {
+                "configuration": configuration,
+                "pair": _pair_label(a, b) + (f" ({step_name})" if step_name else ""),
+                "role": role,
+                "n": len(values),
+                "r_median": judged["r_median"],
+                "r_p90": judged["r_p90"],
+                "threshold_p90": judged["threshold_p90"],
+                "verdict": judged["verdict"],
+                "fails_at": cell_list(judged["fails_at"]),
+                "hops": len(hops),
+                "across_clusters": sum(1 for _, d in hops if d["across_clusters"]),
+                "relocations": len(relocations),
+                "within_floor": sum(1 for _, d in entries if d["kind"] == "within the floor"),
+                "same_path": sum(1 for _, d in entries if d["same_path"]),
+                "hops_enter_at": cell_list(
+                    [f"{where} {n} of {len(hops)}" for where, n in entered["hop"].items()]
+                ),
+                "relocations_enter_at": cell_list(
+                    [f"{where} {n} of {len(relocations)}" for where, n in entered["relocation"].items()]
+                ),
+                "hop_seeds": cell_list(
+                    [
+                        f"{s}{'*' if any(stats_mod.retried(by_arm[x][s]) for x in (a, b)) else ''}"
+                        for s, _ in hops
+                    ],
+                    separator=", ",
+                ),
+                "yardstick_hops_too": (
+                    "—"
+                    if role == "yardstick" or not yardstick or not hops
+                    else f"{sum(1 for s, _ in hops if s in yardstick_hops)} of {len(hops)}"
+                ),
+            }
+        )
+
+    columns: list[Column] = [
+        Column("seed", "seed", fmt=_fmt_int),
+        Column("retried", "retried arms"),
+    ]
+    for a, b in compared:
+        key = f"{a}_{b}"
+        label = _pair_label(a, b)
+        columns += [
+            Column(f"{key}_r", f"{label} objf", fmt=_fmt_exp),
+            Column(f"{key}_point", f"{label} point", fmt=_fmt_exp),
+            Column(f"{key}_kind", f"{label} kind"),
+            Column(f"{key}_same_path", f"{label} same path"),
+        ]
+    if headline is not None:
+        columns.append(Column("enters_at", f"{_pair_label(*headline)} enters at"))
+    step_text = "; ".join(f"{a} → {b} = {name}" for a, b, name in steps)
+    table = Table(
+        name=f"same optimum per seed and rung — {configuration} — {source}",
+        caption=Caption(
+            units=(
+                "dimensionless: relative differences of the normalised objective "
+                "and of the design point; labels"
+            ),
+            row_is="one seed of the seed set",
+            column_is=(
+                "for each pair — the yardstick, each ladder step, each pair rule "
+                "B1 judges — the objective's relative difference, the design "
+                "point's, the kind of difference and whether the optimiser took "
+                "the same path; then the step the headline pair's difference "
+                "enters at"
+            ),
+            population=(
+                f"{population.what}; {len(seeds)} seed(s) on which every arm of "
+                f"{configuration} reached an accepted optimum"
+            ),
+            construction=(
+                "objf = stats.relative_objective_difference on the hex floats "
+                "(rule B1's own statistic); point = stats.point_difference, the "
+                "largest relative difference over the iteration variables the two "
+                "sides share by name (a diagnostic, D6: never gated on); kind = "
+                f"difference_kind against the floor {floor:g} — hop where objf > "
+                "floor (across clusters where the two optima sit in different "
+                f"stats.clusters at the gap {gap:g}, the check's own hop), "
+                "relocation where objf ≤ floor and point > floor, within the floor "
+                "otherwise; same path = equal sweeps_per_eval.n_evaluations and "
+                "equal iterations summed over attempts; enters at = the first "
+                "ladder step the headline pair spans whose own difference is of "
+                f"the headline pair's kind (entry_step). Steps: {step_text}"
+            ),
+            clauses=(
+                "the design-point column separates a hop from a relocation and "
+                "is never a verdict (D6): some iteration variables are not "
+                "identified by the problem",
+                "the lifted arms carry one more iteration variable than the flat "
+                "ones; the point difference compares the shared ones only",
+                "retried arms are named per seed (stats.retried, from attempts[])",
+            ),
+            how_to_read=(
+                "a hop on a judged pair whose ladder step before it reads within "
+                "the floor is carried by the later step; the yardstick column "
+                "says whether the flat control itself moved against the shipped "
+                "reference on the same seed"
+            ),
+            summary=(
+                f"Rule B1's attribution on {configuration}, per seed of the seed "
+                f"set: each ladder step's and each judged pair's objective and "
+                f"design-point difference, whether it is a hop (objective above "
+                f"the floor {floor:g}) or a relocation (objective within it, the "
+                f"point moved), whether the path was the same, retried arms named, "
+                f"and the step the headline pair's difference enters at."
+            ),
+        ),
+        columns=tuple(columns),
+        rows=tuple(rows),
+        denominator=len(seeds),
+        denominator_is=f"seeds on which every arm of {configuration} converged",
+        kind="same_optimum_by_seed",
+        detail=True,
+    )
+    return table, summary
+
+
+def same_optimum_by_rung(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    source: str,
+    summaries: Sequence[Mapping[str, Any]],
+) -> Table | None:
+    """Rule B1 with its attribution, one row per configuration and pair
+    (plan §5 B1): the verdict of each judged pair and, beside it, the
+    yardstick and each ladder step, with the kinds of difference counted and
+    the step each hop and relocation enters at.  The verification table's B1
+    row is read from this table's stage record."""
+    rows = [dict(r) for r in summaries]
+    if not rows:
+        return None
+    floor = campaign.objf_floor_rel
+    return Table(
+        name=f"same optimum by rung — {source}",
+        caption=Caption(
+            units="dimensionless (the objective statistic) and counts of seeds",
+            row_is=(
+                "one pair of one configuration: the yardstick, a pair rule B1 "
+                "judges, or a ladder step beside"
+            ),
+            column_is=(
+                "the objective statistic and its verdict, then the pair's seeds "
+                "counted by kind of difference, the seeds on which the optimiser "
+                "took the same path, where the hops and relocations enter, the "
+                "hop seeds (* = a retried arm) and how many of them the yardstick "
+                "hops on too"
+            ),
+            population=(
+                f"{population.what}; {len({r['configuration'] for r in rows})} "
+                f"configuration(s), each over its own seed set"
+            ),
+            construction=(
+                "judge_pair (rule B1: median and p90 against max(F × yardstick, "
+                f"floor), F = {campaign.similarity_factor:g}, floor = {floor:g}) "
+                "and same_optimum_by_seed's per-seed kinds (hop: objf > floor; "
+                "relocation: objf ≤ floor, point > floor), entry_step for the "
+                "step each enters at"
+            ),
+            clauses=(
+                "only a judged row carries a verdict; the yardstick is the "
+                "threshold's calibration and a step row is the attribution's "
+                "evidence",
+                "a hop across clusters is V4's hop (objective clusters at 10 × "
+                "the floor); the rest of the hops sit below cluster resolution",
+            ),
+            how_to_read=(
+                "where a judged pair fails, read its `hops enter at`: a step "
+                "whose row reads 0 hops and the same path on every seed adds "
+                "nothing to the difference"
+            ),
+            summary=(
+                f"Rule B1 with its attribution, per configuration and pair: the "
+                f"objective statistic's verdict on each judged pair, and the "
+                f"seeds counted as hops (objective above {floor:g}), relocations "
+                f"(the point moved within the floor) or neither, with the ladder "
+                f"step each enters at; the yardstick and the steps beside."
+            ),
+        ),
+        columns=(
+            Column("configuration", "configuration"),
+            Column("pair", "pair"),
+            Column("role", "role"),
+            Column("n", "n", fmt=_fmt_int),
+            Column("r_median", "objf median", fmt=_fmt_exp),
+            Column("r_p90", "objf p90", fmt=_fmt_exp),
+            Column("threshold_p90", "threshold p90", fmt=_fmt_exp),
+            Column("verdict", "verdict"),
+            Column("fails_at", "fails at"),
+            Column("hops", "hops", fmt=_fmt_int),
+            Column("across_clusters", "across clusters", fmt=_fmt_int),
+            Column("relocations", "relocations", fmt=_fmt_int),
+            Column("within_floor", "within the floor", fmt=_fmt_int),
+            Column("same_path", "same path", fmt=_fmt_int),
+            Column("hops_enter_at", "hops enter at"),
+            Column("relocations_enter_at", "relocations enter at"),
+            Column("hop_seeds", "hop seeds"),
+            Column("yardstick_hops_too", "yardstick hops too"),
+        ),
+        rows=tuple(rows),
+        denominator=sum(r["n"] for r in rows if r["role"] == "judged"),
+        denominator_is="seed pairs judged, summed over the judged rows",
+        acceptance=True,
+        kind="same_optimum_by_rung",
+    )
+
+
+def same_optimum(
+    campaign: Campaign,
+    population: stats_mod.Population,
+    configuration: str,
+    by_arm: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    converged: Sequence[int],
+    source: str,
+) -> Table | None:
+    """Plan §5 B1 (V4's check 1) — is it the same optimum?
+
+    The statistic and its verdict per pair; the attribution of a failing pair
+    to the rung its difference enters at is :func:`same_optimum_by_seed` and
+    :func:`same_optimum_by_rung`, over the same verdicts (:func:`judge_pair`).
+
+    ``None`` where this arm group carries no flat control: every pair of this
+    check is anchored on it, so without it there is nothing to compare and an
+    empty table would state a denominator over no comparison.  The omission is
+    named in the stage's record rather than left as a blank table.
+    """
+    if BASE_ARM not in by_arm:
+        return None
+    pairs: list[tuple[str, str]] = []
+    if all(a in by_arm for a in YARDSTICK_PAIR):
+        pairs.append(YARDSTICK_PAIR)
+    pairs.extend(published_pairs(by_arm))
+    cluster_of, gap = objective_clusters(campaign, by_arm)
+    yardstick_values = _yardstick_values(by_arm, converged)
     rows: list[dict[str, Any]] = []
     for a, b in pairs:
-        values, seeds = relatives(a, b)
+        values, seeds = _objective_pairs(by_arm, a, b, converged)
         is_yardstick = (a, b) == YARDSTICK_PAIR
-        threshold_median = (
-            None
-            if is_yardstick
-            else stats_mod.acceptance_threshold(
-                yard_median,
-                factor=campaign.similarity_factor,
-                floor=campaign.objf_floor_rel,
-            )
+        judged = judge_pair(
+            campaign, values, None if is_yardstick else yardstick_values
         )
-        threshold_p90 = (
-            None
-            if is_yardstick
-            else stats_mod.acceptance_threshold(
-                yard_p90,
-                factor=campaign.similarity_factor,
-                floor=campaign.objf_floor_rel,
-            )
-        )
-        observed_median = stats_mod.median(values)
-        observed_p90 = stats_mod.p90(values)
-        verdict = "—"
-        if threshold_median is not None and observed_median is not None:
-            passed = observed_median <= threshold_median and (
-                observed_p90 is None or threshold_p90 is None
-                or observed_p90 <= threshold_p90
-            )
-            verdict = "PASS" if passed else "FAIL"
+        threshold_median = judged["threshold_median"]
+        threshold_p90 = judged["threshold_p90"]
+        observed_median = judged["r_median"]
+        observed_p90 = judged["r_p90"]
+        verdict = judged["verdict"]
         hop = stats_mod.hops(
             cluster_of, [((a, s), (b, s)) for s in seeds]
         )
@@ -807,7 +1290,7 @@ def same_optimum(
             }
         )
     return Table(
-        name=f"same optimum (check 1) — {configuration} — {source}",
+        name=f"same optimum (B1) — {configuration} — {source}",
         caption=Caption(
             units="dimensionless: a relative difference of the normalised "
             "objective",
@@ -840,6 +1323,11 @@ def same_optimum(
                 "the retried column is computed from attempts[], never from a "
                 "stored flag, so a pair containing a retry is visible here as "
                 "well as in the cost table",
+                "**the attribution** (plan §5 B1: the statistic is published "
+                "whether or not it passes, attributed to the rung it fails on) "
+                "is the per-seed table `same optimum per seed and rung` beside "
+                "this one and the summary `same optimum by rung`: the verdicts "
+                "here are the same construction (judge_pair), read once",
             ),
             how_to_read=(
                 "a verdict is read only where a threshold exists; a hop is a "
@@ -847,12 +1335,13 @@ def same_optimum(
                 "and the yardstick pair's own hop rate is the comparator"
             ),
             summary=(
-                f"Check 1 on {configuration}: the paired relative objective "
-                f"difference of each arm against B0 over the seed set (median, "
-                f"p90) against max(F × yardstick, floor), the yardstick being "
-                f"{YARDSTICK_PAIR[0]} → {YARDSTICK_PAIR[1]} in this population, "
-                f"with hops and pairs below cluster resolution. The yardstick "
-                f"row carries no verdict."
+                f"Rule B1's statistic on {configuration}: the paired relative "
+                f"objective difference of each arm against B0 over the seed set "
+                f"(median, p90) against max(F × yardstick, floor), the yardstick "
+                f"being {YARDSTICK_PAIR[0]} → {YARDSTICK_PAIR[1]} in this "
+                f"population, with hops and pairs below cluster resolution. The "
+                f"yardstick row carries no verdict; where a pair fails, the "
+                f"attribution is the per-seed table beside this one."
             ),
         ),
         columns=(
@@ -3307,6 +3796,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         if population.is_empty:
             continue
         path_groups: list[tuple[str, tuple[str, ...], Mapping[str, Mapping[int, Mapping[str, Any]]], Sequence[int]]] = []
+        rung_summaries: list[dict[str, Any]] = []
         for config in campaign.configurations:
             whole = _by_arm_and_seed(population, config.name)
             if not whole:
@@ -3328,9 +3818,14 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                 emitted.append(
                     failure_table(population, config.name, by_arm, converged, label)
                 )
+                attributed = same_optimum_by_seed(
+                    campaign, population, config.name, by_arm, converged, label
+                )
+                if attributed is not None:
+                    rung_summaries.extend(attributed[1])
                 for name, table in (
                     (
-                        "same optimum (check 1)",
+                        "same optimum (B1)",
                         same_optimum(
                             campaign, population, config.name, by_arm,
                             converged, label,
@@ -3362,6 +3857,8 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                         )
                     else:
                         emitted.append(table)
+                        if name == "same optimum (B1)" and attributed is not None:
+                            emitted.append(attributed[0])
                 emitted.append(attempts(population, config.name, by_arm, label))
                 emitted.append(
                     achieved_accuracy(
@@ -3391,6 +3888,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         # (v3-tables-remainder)): one row per configuration, or per
         # configuration and pair, arm or published set.
         for built in (
+            same_optimum_by_rung(campaign, population, source.name, rung_summaries),
             location_diagnostic(campaign, population, source.name, path_groups),
             identity(population, source.name, path_groups),
             cost_sums(population, source.name, path_groups),

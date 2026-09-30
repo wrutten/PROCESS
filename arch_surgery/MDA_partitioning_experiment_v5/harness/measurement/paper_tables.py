@@ -918,6 +918,72 @@ def _matched_accuracy_verdict(evaluation: Mapping[str, Mapping[str, Any]]) -> tu
     return overall, "; ".join(parts) + " (whole-state statistic, D36; the second half of the rule is the count column)"
 
 
+def _exp(value: Any) -> str:
+    return "—" if value is None else f"{float(value):.1e}"
+
+
+def _same_optimum_verdict(optimisation: Mapping[str, Mapping[str, Any]]) -> tuple[str, str]:
+    """Plan §5 B1 with its attribution, read from the optimisation tally's
+    stage record (the `same optimum by rung` table): per configuration, each
+    judged pair's verdict, and where the headline pair fails, how many of its
+    seeds hop, the ladder step their difference enters at, and the steps that
+    add nothing.  Returns (verdict, detail)."""
+    found = [t for name, t in optimisation.items() if name == f"same optimum by rung — {PHASE_B_SOURCE}"]
+    if not found:
+        return "not pressed", "no `same optimum by rung` table in the stage record"
+    by_configuration: dict[str, list[Mapping[str, Any]]] = {}
+    for r in found[0]["rows"]:
+        by_configuration.setdefault(str(r["configuration"]), []).append(r)
+    passed: list[str] = []
+    failed: list[str] = []
+    parts: list[str] = []
+    for configuration, rows in by_configuration.items():
+        short = SHORT.get(configuration, configuration)
+        judged = [r for r in rows if r["role"] == "judged"]
+        if not judged:
+            continue
+        verdicts = ", ".join(f"{str(r['pair']).split(' (')[0]} {r['verdict']}" for r in judged)
+        headline = judged[-1]
+        if all(r["verdict"] == "PASS" for r in judged):
+            passed.append(short)
+            parts.append(
+                f"`{short}` {verdicts} (objf p90 {_exp(headline['r_p90'])} ≤ {_exp(headline['threshold_p90'])}; "
+                f"{headline['hops']} hops of {headline['n']})"
+            )
+            continue
+        failed.append(short)
+        text = (
+            f"`{short}` {verdicts} at {headline['fails_at']} (objf p90 {_exp(headline['r_p90'])} > "
+            f"{_exp(headline['threshold_p90'])}): {headline['hops']} hops of {headline['n']} "
+            f"({headline['across_clusters']} across clusters; seeds {headline['hop_seeds']}), entering at "
+            f"{headline['hops_enter_at']}"
+        )
+        quiet = [r for r in rows if r["role"] == "step" and not r["hops"]]
+        for r in quiet:
+            text += (
+                f"; {r['pair']} adds none: objf median {_exp(r['r_median'])}, p90 {_exp(r['r_p90'])}, "
+                f"same path on {r['same_path']} of {r['n']}"
+            )
+        if " (" in str(headline["pair"]):
+            text += f" — {str(headline['pair']).split(' (', 1)[1][:-1]}"
+        if headline.get("yardstick_hops_too") not in (None, "—"):
+            text += f"; the yardstick BR → B0 also hops on {headline['yardstick_hops_too']} of these seeds"
+        parts.append(text)
+    if not parts:
+        return "not pressed", "the table has no judged row"
+    verdict = " · ".join(
+        x for x in (
+            ("PASS " + ", ".join(passed)) if passed else "",
+            ("FAIL " + ", ".join(failed)) if failed else "",
+        ) if x
+    )
+    return verdict, (
+        "; ".join(parts)
+        + " (hop: objective difference above the floor; * = a retried arm; the tally's "
+        "`same optimum by rung` table, plan §5 B1)"
+    )
+
+
 def verification(
     records_dir: Path,
     optimisation: Mapping[str, Mapping[str, Any]],
@@ -947,18 +1013,8 @@ def verification(
                 head = str(found.get("tree_git_head") or "")[:8]
                 row.update(verdict=str(found.get("verdict")), detail=f"`{gate}` at `{head}`: {counts}; {teeth}")
         elif label == "B1":
-            verdicts = []
-            for name, t in optimisation.items():
-                if not name.startswith("same optimum"):
-                    continue
-                configuration = name.split(" — ")[1]
-                for r in t["rows"]:
-                    if str(r.get("verdict")) in ("PASS", "FAIL"):
-                        verdicts.append(f"`{SHORT.get(configuration, configuration)}` {r['pair']}: {r['verdict']}")
-            if verdicts:
-                row.update(verdict="see detail", detail="; ".join(verdicts) + " (V4's check 1 construction; V5's attribution rule is item 4's, pending)")
-            else:
-                row.update(verdict="not pressed", detail="no same-optimum table in the stage record")
+            verdict, detail = _same_optimum_verdict(optimisation)
+            row.update(verdict=verdict, detail=detail)
         elif label == "A2":
             row.update(verdict="reported, no rule", detail="the tally's fixed-point distance table (plan §5 A2)")
         elif label == "A1":

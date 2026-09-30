@@ -159,6 +159,14 @@ TEST_SETS: tuple[str, ...] = ("census", "write_set")
 #: unless an explicit ``--tau`` overrides it, and the override is stamped.
 TAU_BY_TEST_SET: Mapping[str, float] = MappingProxyType({"census": 1e-8, "write_set": 1e-6})
 
+#: What each test set is, in words, for the tables that print the campaign's
+#: stopping rule (the paper's switch matrix; rule B1's attribution): the
+#: census set is the feedback couplings measured at run time (D32), the
+#: fallback the block's whole write set (D39).
+TEST_SET_WORDS: Mapping[str, str] = MappingProxyType(
+    {"census": "feedback couplings", "write_set": "whole write set"}
+)
+
 #: The campaign default (decision D32; the user, 2026-09-29).
 DEFAULT_TEST_SET = "census"
 
