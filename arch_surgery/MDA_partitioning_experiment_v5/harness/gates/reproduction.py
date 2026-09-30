@@ -247,9 +247,27 @@ def v4_criterion(job: pool_mod.Job) -> pool_mod.Job:
     reading GR's records resolves GR's own directories and not a census
     record of the same arm; the pool admits V4's criterion for any job that
     is not a campaign record (``pool.resolve_settings``).
+
+    **Every instrument switch cleared** (issue I-37; task A103
+    (v5-tally-and-tables)).  GR's records are untimed by construction — they
+    were made once, at the copy commit, before driver change DR12 — and an
+    instrument switch observes a run without changing it, so it must never
+    change *which* record a comparison reads.  Left unset, the pool composed
+    the campaign's own value (``pool.resolve_settings``: ``job.timers is None``
+    takes ``campaign.timers``); the campaign press composes the timers on, so
+    inside it GR's jobs resolved to digests no record carries and the tally's
+    reference cells read ``no_record`` on 236 of 236.
     """
     job.test_set = V4_TEST_SET
     job.tau = float(TAU_BY_TEST_SET[V4_TEST_SET])
+    for name in switches_mod.INSTRUMENT_SWITCHES:
+        if not hasattr(job, name):
+            raise ReproductionError(
+                f"instrument switch {name!r} has no field on the pool's Job, so the "
+                f"reproduction gate cannot clear it; a job composed with it would "
+                f"take the campaign's value and resolve away from GR's records (I-37)"
+            )
+        setattr(job, name, False)
     return job
 
 
