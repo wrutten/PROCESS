@@ -1,6 +1,6 @@
 # A103 (v5-tally-and-tables) — rule B1's attribution, the retired iteration multiplier, the matrix's stopping-rule cell, two captions, I-37, and the V5 harness README
 
-> **Document status** — **OPEN task report** (branch `A103-v5-tally-and-tables`, from
+> **Document status** — **MERGED 2026-09-30 at `ab93df89` (`--no-ff`; the orchestrator's assessment at the end); archived.** Records relocated to `arch_surgery/idf_probe/runs/A103_runs/v5_tally_and_tables/` (the V5 campaign's records with this task's stage records; the latest relocated V5 tree). Was: **OPEN task report** (branch `A103-v5-tally-and-tables`, from
 > `architecture_surgery` at `b84892e8`). Analysis and rendering over the V5 campaign's existing records
 > (A102 (v5-campaign)); **no PROCESS run was made and no driver file changed**. Every number below comes
 > from `experiment_runner.py` or `paper_cells_recount.py` at the commit named beside it. The V5 experiment
