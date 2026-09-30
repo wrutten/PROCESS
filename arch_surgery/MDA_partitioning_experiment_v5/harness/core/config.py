@@ -297,8 +297,13 @@ class Campaign:
     #: ``cluster_gap_factor`` x that floor separates optima clusters.
     objf_floor_rel: float = 1e-6
     cluster_gap_factor: float = 10.0
-    #: Bound on the median paired optimiser-iteration ratio.
-    iteration_ratio_max: float = 1.05
+    #: The band of plan §5 B3's **label** on the evaluation-count ratio ε:
+    #: ``|log ε| ≤ log band`` reads *trajectory-neutral*, anything else
+    #: *trajectory changed by ε*.  A label, never a verdict: V4's iteration
+    #: multiplier (an acceptance bound of 1.05 on the summed-iteration median,
+    #: ``iteration_ratio_max``) is retired with its verdict (V5 list item 1;
+    #: task A103 (v5-tally-and-tables)).
+    trajectory_neutral_band: float = 1.05
     #: The declared median, stated so a report can quote it verbatim.
     median_construction: str = "nearest-rank upper-middle: sorted_values[n // 2]"
     #: Sweeps a block loop may take before the run is refused (not a budget:

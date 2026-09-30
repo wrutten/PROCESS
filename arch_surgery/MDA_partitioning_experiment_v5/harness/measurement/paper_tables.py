@@ -109,7 +109,7 @@ PHASE_A_SOURCE = tally_mod.ACCEPTANCE_REGIME
 PHASE_B_SOURCE = "campaign_optimisation"
 PHASE_B_PAIR = tally_b.HEADLINE_PAIR
 
-#: The iteration quantity (check 2's statistic, summed over attempts).
+#: The iteration quantity (summed over attempts; plan §5 B3, context beside ε).
 ITERATIONS_LABEL, ITERATIONS = tally_b.PATH_QUANTITIES[0]
 
 

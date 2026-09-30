@@ -681,7 +681,7 @@ def node_calls_by_attempt(record: Mapping[str, Any]) -> list[int | None]:
     The cost half of the per-attempt accounting (driver change DR7).  The
     with- and without-retried-seeds ratios of the plan's §3.5 are built from
     these, never from the run total alone: a retry's evaluations are in the run
-    total while its iterations are not in check 2, and pooling them into a cost
+    total while its iterations are not in the final attempt's count, and pooling them into a cost
     ratio without saying so is what made the previous revision's headline on
     one configuration unreadable.
     """
@@ -760,12 +760,13 @@ def iterations_final_attempt(record: Mapping[str, Any]) -> int | None:
 
 
 def iterations_summed_over_attempts(record: Mapping[str, Any]) -> int | None:
-    """**Check 2, construction two**: iterations **summed over every attempt**,
-    failed attempts included.
+    """**The iterations, construction two**: iterations **summed over every
+    attempt**, failed attempts included.
 
-    The declared acceptance statistic of check 2 (plan §3.5, amended
-    2026-09-10): the trajectory the check controls is the whole optimiser path,
-    and a failed attempt is part of it.  ``None`` where any attempt carries no
+    The declared iteration construction (V4 plan §3.5, amended 2026-09-10, where
+    it was check 2's acceptance statistic; in V5 context beside ε, plan §5 B3,
+    no verdict): the optimiser's path is the whole path, and a failed attempt is
+    part of it.  ``None`` where any attempt carries no
     iteration count, because a partial sum is not a sum.
     """
     attempts = record.get("attempts") or []

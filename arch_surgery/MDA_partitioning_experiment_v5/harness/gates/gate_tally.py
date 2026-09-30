@@ -358,8 +358,14 @@ def _tooth_forced_budget() -> tuple[bool, str]:
     )
 
 
-def _tooth_check_two_constructions() -> tuple[bool, str]:
-    """Doctor one attempt's iteration count and require the two to disagree."""
+def _tooth_iteration_constructions_disagree() -> tuple[bool, str]:
+    """Doctor one attempt's iteration count and require the two to disagree.
+
+    Named for the two constructions, not for V4's check 2: the iteration
+    multiplier's verdict is retired (plan §5 B3; V5 list item 1; task A103
+    (v5-tally-and-tables)), and the tooth stays because the iterations table
+    still publishes both constructions side by side, which is what it guards.
+    """
     record = {
         "campaign_phase": "B",
         "attempts": [
@@ -923,10 +929,10 @@ def gate(campaign: Campaign) -> Gate:
                 check=_tooth_forced_budget,
             ),
             Tooth(
-                name="check 2's two constructions disagree",
+                name="the two iteration constructions disagree",
                 what="a failed attempt's iteration count moved by one",
                 must="SEPARATE THE TWO CONSTRUCTIONS",
-                check=_tooth_check_two_constructions,
+                check=_tooth_iteration_constructions_disagree,
             ),
             Tooth(
                 name="the summation identity broken by one",

@@ -34,10 +34,11 @@ Eight tables, each the shape of one of the plan's §4.3 or §3.5 placeholders:
                     the headline pair's difference enters at; and one row per
                     configuration and pair with the verdict and the counts.
                     The paper's verification row reads the second.
-``iterations``      check 2 — **both** constructions: the final attempt's count
-                    and the count summed over every attempt, beside the
-                    evaluation count, which is the multiplier the transfer
-                    needs.
+``iterations``      plan §5 B3 — **both** iteration constructions (the final
+                    attempt's count and the count summed over every attempt)
+                    beside the evaluation-count ratio ε and the plan's label on
+                    it (trajectory-neutral, or changed by ε).  No verdict: V4's
+                    iteration multiplier (check 2) is retired (V5 list item 1).
 ``attempts``        the summation identity, printed: Σ over attempts equals the
                     run's solve-phase total, for node calls and for sweeps.
 ``cost``            check 4 — solve-phase node calls in the one format, with
@@ -82,6 +83,7 @@ taxonomy table by task **A75 (campaign-tally-source)**.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -116,12 +118,6 @@ BASE_ARM = "B0"
 #: campaign measures between two arms that differ only in the stopping rule.
 YARDSTICK_PAIR = ("BR", "B0")
 
-#: The arms check 2's acceptance rule is read on (plan §3.5 check 2).  Every
-#: other pair is **published beside**, outside the rule: the shipped reference
-#: differs from the flat control by the stopping rule, which is not what this
-#: check controls, and a verdict printed against it would be a verdict on the
-#: wrong comparison.
-ACCEPTANCE_PAIRS: tuple[str, ...] = ("B1", "B2")
 
 
 def _fmt_ratio(value: Any) -> str:
@@ -1366,6 +1362,18 @@ def same_optimum(
     )
 
 
+def trajectory_label(epsilon: float | None, band: float) -> str:
+    """Plan §5 B3's label on ε — **a label only, never a verdict**:
+    ``|log ε| ≤ log band`` reads *trajectory-neutral*, anything else
+    *trajectory changed by ε*.  Two-sided, so a shorter path is labelled as
+    plainly as a longer one (V5 list item 1)."""
+    if epsilon is None or epsilon <= 0:
+        return "—"
+    if abs(math.log(epsilon)) <= math.log(band):
+        return "trajectory-neutral"
+    return f"trajectory changed by ε = {epsilon:.4f}"
+
+
 def iterations(
     campaign: Campaign,
     population: stats_mod.Population,
@@ -1374,40 +1382,38 @@ def iterations(
     converged: Sequence[int],
     source: str,
 ) -> Table | None:
-    """Check 2 — the iteration multiplier, in **both** declared constructions.
+    """Plan §5 B3 — the optimiser's path per pair: iterations in **both**
+    declared constructions, the evaluation-count ratio ε, and ε's label.
 
-    The acceptance statistic is the **summed** median; the final attempt's is
-    published beside it for comparability with the previous revision.  Both sit
-    beside the evaluation count, which is the multiplier the transfer needs and
-    which neither iteration construction captures: iterations miss the lifted
-    arm's extra stencil column and the line-search evaluations that vary at
-    equal iteration count.
+    **No iteration-multiplier rule** (V5 list item 1, the user 2026-09-15: the
+    multiplier "imposes a statistical bias"; plan §5 B3).  V4's check 2
+    accepted a pair when the summed-iteration median was ≤ 1.05 — a one-sided
+    bound that let a shorter path pass and be read as a per-evaluation saving.
+    The verdict and its threshold are gone (task A103 (v5-tally-and-tables));
+    every number stays: the summed and final-attempt iteration ratios (median
+    and ratio of the sums), ε as a median and as the ratio of the summed
+    evaluations over the pair's seeds — the pooled ε of ``R = ρ × ε`` — the
+    sweep ratio and the attempts per seed.  Beside ε, the plan's **label**
+    (:func:`trajectory_label` on the pooled ε).
 
-    **The evaluation column reads ε** — ``sweeps_per_eval.n_evaluations``
-    through :func:`stats.n_evaluations`, the count of ``call_models``
-    evaluations summed over the attempts — since task A80
-    (report-accuracy-audit) closed issue **I-26**: until then the column read
-    the record field ``n_model_calls``, which is the driver's count of
-    *sweeps* of the dispatch body (``numerics.n_model_calls``; the copied
-    driver declares it not comparable between a flat loop and a block
-    schedule), under a heading that said evaluations.  That sweep ratio is
-    kept as its own column, **sweeps median**, because the discussion reads
-    it (the partitioned arm's dispatch runs ~2.7× as many sweeps, each over a
-    third of the map) and a reader wants both numbers side by side.
+    **ε reads** ``sweeps_per_eval.n_evaluations`` through
+    :func:`stats.n_evaluations`, the count of ``call_models`` evaluations
+    summed over the attempts (issue I-26, closed by task A80
+    (report-accuracy-audit)); the record field ``n_model_calls`` counts
+    *sweeps* of the dispatch body and is its own column, **sweeps median**.
 
-    The rows are every arm against the flat control, and — as the plan's
-    §3.5 declared ("``B1 → B2`` and ``B0 → BR`` reported beside, outside the
-    acceptance rule") — the **``B1 → B2`` step itself**, beside, where both
-    arms are present: it is the row the pre-declared ``ε = 1`` expectation is
-    read from, per seed.
+    The rows are every arm against the flat control and the ``B1 → B2`` step
+    where both arms are present: it is the row the pre-declared ``ε = 1``
+    expectation is read from, per seed.
     """
     if BASE_ARM not in by_arm:
         return None
     pairs: list[tuple[str, str]] = [
         (BASE_ARM, arm) for arm in _arm_order(by_arm) if arm != BASE_ARM
     ]
-    if all(arm in by_arm for arm in ACCEPTANCE_PAIRS):
-        pairs.append(tuple(ACCEPTANCE_PAIRS[:2]))  # the plan's B1 → B2, beside
+    if all(arm in by_arm for arm in IDENTITY_PAIR):
+        pairs.append(IDENTITY_PAIR)
+    band = campaign.trajectory_neutral_band
     rows: list[dict[str, Any]] = []
     for base_arm, arm in pairs:
         seeds = [
@@ -1421,6 +1427,7 @@ def iterations(
         sweep_ratios: list[float] = []
         final_sums = [0, 0]
         summed_sums = [0, 0]
+        evaluation_sums = [0, 0]
         disagreements = 0
         for seed in seeds:
             base_record, arm_record = by_arm[base_arm][seed], by_arm[arm][seed]
@@ -1442,39 +1449,30 @@ def iterations(
             eb = stats_mod.n_evaluations(arm_record)
             if ea and eb:
                 evaluation_ratios.append(eb / ea)
+                evaluation_sums[0] += ea
+                evaluation_sums[1] += eb
             wa = base_record.get("n_model_calls")
             wb = arm_record.get("n_model_calls")
             if wa and wb:
                 sweep_ratios.append(wb / wa)
-        summed_median = stats_mod.median(summed_ratios)
-        accepted_on = base_arm == BASE_ARM and arm in ACCEPTANCE_PAIRS
+        epsilon = (
+            (evaluation_sums[1] / evaluation_sums[0]) if evaluation_sums[0] else None
+        )
         rows.append(
             {
-                "pair": f"{base_arm} → {arm}"
-                + ("" if accepted_on else " (beside)"),
+                "pair": f"{base_arm} → {arm}",
                 "n": len(seeds),
                 "final_median": stats_mod.median(final_ratios),
                 "final_sum_ratio": (
                     (final_sums[1] / final_sums[0]) if final_sums[0] else None
                 ),
-                "summed_median": summed_median,
+                "summed_median": stats_mod.median(summed_ratios),
                 "summed_sum_ratio": (
                     (summed_sums[1] / summed_sums[0]) if summed_sums[0] else None
                 ),
-                "acceptance": (
-                    "beside"
-                    if not accepted_on
-                    else (
-                        "—"
-                        if summed_median is None
-                        else (
-                            "PASS"
-                            if summed_median <= campaign.iteration_ratio_max
-                            else "FAIL"
-                        )
-                    )
-                ),
                 "evaluations_median": stats_mod.median(evaluation_ratios),
+                "evaluations_sum_ratio": epsilon,
+                "trajectory": trajectory_label(epsilon, band),
                 "evaluations_equal": sum(1 for r in evaluation_ratios if r == 1.0),
                 "sweeps_median": stats_mod.median(sweep_ratios),
                 "attempts": ", ".join(
@@ -1487,76 +1485,71 @@ def iterations(
             }
         )
     return Table(
-        name=f"iteration multiplier (check 2) — {configuration} — {source}",
+        name=f"iterations and ε (B3) — {configuration} — {source}",
         caption=Caption(
-            units="dimensionless ratios of counts",
+            units="dimensionless ratios of counts; a label",
             row_is="one arm against the flat control over the seed set, and "
-            "the B1 → B2 step beside where both arms are present",
-            column_is="one of check 2's two iteration constructions, its sum "
-            "ratio, the evaluation-count ratio ε beside them, the seeds on "
-            "which ε is exactly 1, and the sweep ratio",
+            "the B1 → B2 step where both arms are present",
+            column_is="one of the two iteration constructions (median and "
+            "ratio of the sums), the evaluation-count ratio ε (median and ratio "
+            "of the sums) with the plan's label beside it, the seeds on which ε "
+            "is exactly 1, and the sweep ratio",
             population=(
                 f"{population.what}; {len(converged)} seed(s) on which every "
                 f"arm of {configuration} reached an accepted optimum"
             ),
             construction=(
-                "stats.iterations_summed_over_attempts (the **declared "
-                "acceptance statistic**, nearest-rank upper-middle median "
-                f"against {campaign.iteration_ratio_max:g}) and "
-                "stats.iterations_final_attempt (the previous revision's "
-                "construction, published beside for comparability).  Both are "
-                "read from attempts[], so a disagreement between them is a "
-                "disagreement about that list and not about which field was "
-                "read"
+                "stats.iterations_summed_over_attempts and "
+                "stats.iterations_final_attempt, both read from attempts[], so a "
+                "disagreement between them is a disagreement about that list and "
+                "not about which field was read; ε = stats.n_evaluations "
+                "(sweeps_per_eval.n_evaluations, call_models evaluations summed "
+                "over the attempts); the label is trajectory_label on the ratio "
+                f"of the sums: |log ε| ≤ log {band:g} → trajectory-neutral, else "
+                "trajectory changed by ε"
             ),
             clauses=(
+                "**no verdict** (plan §5 B3; V5 list item 1): V4's iteration "
+                "multiplier accepted a pair on the summed median against 1.05 "
+                "and was one-sided; the label is two-sided and decides nothing",
                 "the sum ratio is published beside every median because a "
                 "median of per-seed ratios and the ratio of the sums can point "
-                "in opposite directions",
-                "the evaluation-count ratio ε is beside both: iterations, even "
-                "summed, miss the lifted arm's extra stencil column and the "
-                "line-search evaluations that vary at equal iteration count.  "
-                "It reads stats.n_evaluations (sweeps_per_eval.n_evaluations, "
-                "call_models evaluations summed over the attempts) — issue "
-                "I-26, closed by task A80 (report-accuracy-audit): until then "
-                "this column read n_model_calls, the driver's count of sweeps "
-                "of the dispatch body, under a heading that said evaluations",
+                "in opposite directions; ε's ratio of the sums is the ε of "
+                "R = ρ × ε (the optimiser's path table)",
                 "the sweep ratio (n_model_calls, sweeps of the dispatch body "
                 "over the whole run) is its own column: a block sweep runs one "
                 "module, not all of them, so it is a mechanism, not a cost, and "
-                "is never read as ε",
+                "is never read as ε (issue I-26)",
                 "*ε = 1 on* counts the seeds on which the two arms took exactly "
                 "the same number of evaluations; on the B1 → B2 row it is the "
-                "plan's §3.5 pre-declared expectation, per seed",
+                "plan's pre-declared expectation, per seed",
                 "*constructions disagree* counts the seeds on which the final "
                 "attempt's pair and the summed pair are not the same numbers — "
                 "0 means no run in this population retried",
             ),
             how_to_read=(
-                "read the acceptance column against the summed median; a "
-                "final-attempt median that differs from it names the retried "
-                "seeds, which the attempts column lists"
+                "read ε's label as a statement about the optimiser's path, never "
+                "as a pass: a changed trajectory is a finding published beside ρ"
             ),
             summary=(
-                f"Check 2 on {configuration}: the optimiser's iterations "
-                f"against B0 over the seed set, summed over attempts (the "
-                f"acceptance statistic, median against "
-                f"{campaign.iteration_ratio_max:g}) and on the final attempt, "
-                f"with the ratio of sums beside; ε is the evaluation-count "
-                f"ratio (sweeps_per_eval.n_evaluations, I-26 closed) with the "
-                f"seeds on which it is exactly 1, and the sweep ratio is its "
-                f"own column. The B1 → B2 row is the plan's pre-declared ε = 1."
+                f"The optimiser's path on {configuration}, each arm against B0 "
+                f"over the seed set (and B1 → B2): iterations summed over "
+                f"attempts and on the final attempt, the evaluation-count ratio ε "
+                f"with the plan's label (|log ε| ≤ log {band:g}: "
+                f"trajectory-neutral), the seeds on which ε is exactly 1, and the "
+                f"sweep ratio. No verdict: plan §5 B3."
             ),
         ),
         columns=(
             Column("pair", "pair"),
             Column("n", "n", fmt=_fmt_int),
-            Column("summed_median", "summed median (acceptance)", fmt=_fmt_ratio),
+            Column("summed_median", "summed median", fmt=_fmt_ratio),
             Column("summed_sum_ratio", "summed sum ratio", fmt=_fmt_ratio),
-            Column("acceptance", "verdict"),
             Column("final_median", "final-attempt median", fmt=_fmt_ratio),
             Column("final_sum_ratio", "final-attempt sum ratio", fmt=_fmt_ratio),
             Column("evaluations_median", "ε median (evaluations)", fmt=_fmt_ratio),
+            Column("evaluations_sum_ratio", "ε sum ratio", fmt=_fmt_ratio),
+            Column("trajectory", "ε label"),
             Column("evaluations_equal", "ε = 1 on", fmt=_fmt_int),
             Column("sweeps_median", "sweeps median", fmt=_fmt_ratio),
             Column("attempts", "attempts per seed (base/arm)"),
@@ -1567,8 +1560,7 @@ def iterations(
         denominator_is=(
             f"seeds on which every arm of {configuration} converged"
         ),
-        acceptance=True,
-        kind="iteration_multiplier",
+        kind="iterations",
         report_omits=("attempts",),
     )
 
@@ -3583,7 +3575,7 @@ def optimiser_path(
 
     One table per source, one row per quantity and configuration (and arm
     group, which in a campaign is one per configuration): the optimiser's
-    **iterations** summed over attempts (check 2's declared construction),
+    **iterations** summed over attempts (the declared construction, plan §5 B3),
     the **evaluations** of the model set ε (``sweeps_per_eval.n_evaluations``
     — the field issue I-26 names; it sums the attempts), the **node calls per
     evaluation** ρ = R / ε and the **node calls per run** R (check 4's unit,
@@ -3669,8 +3661,8 @@ def optimiser_path(
                 + ", ".join(f"{c} {n}" for c, n in per_configuration_n)
             ),
             construction=(
-                "stats.iterations_summed_over_attempts (check 2's declared "
-                "statistic); stats.n_evaluations (sweeps_per_eval.n_evaluations, "
+                "stats.iterations_summed_over_attempts (the declared "
+                "construction, plan §5 B3); stats.n_evaluations (sweeps_per_eval.n_evaluations, "
                 "the field issue I-26 names — the driver's histogram summed over "
                 "the attempts, output path excluded); R = solve-phase node calls "
                 "summed over attempts[] (check 4's unit); ρ = R / ε per run.  "
@@ -3695,11 +3687,12 @@ def optimiser_path(
                 "differ by a lot where a few long runs dominate the sums, and "
                 "publishing one under the other's name would state the wrong "
                 "quantity (task A86 (v3-tables-remainder))",
-                "the iteration row is the same construction as check 2's "
-                "acceptance column, and the ε row the same field as check 2's "
-                "ε column (issue I-26, closed by task A80 (report-accuracy-"
+                "the iteration row is the same construction as the iterations "
+                "table's summed columns, and the ε row the same field as its ε "
+                "columns (issue I-26, closed by task A80 (report-accuracy-"
                 "audit): until then that column read n_model_calls, the "
-                "driver's sweep count)",
+                "driver's sweep count); the plan's label on ε is printed there, "
+                "a label and never a verdict (plan §5 B3)",
                 "B1 is absent on a steady-state configuration and reads —",
             ),
             how_to_read=(
@@ -3832,7 +3825,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                         ),
                     ),
                     (
-                        "iteration multiplier (check 2)",
+                        "iterations and ε (B3)",
                         iterations(
                             campaign, population, config.name, by_arm,
                             converged, label,

@@ -254,7 +254,7 @@ def tally(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
                     rung_rows.extend(attributed[1])
                 for name, built in (
                     ("same optimum (B1)", tally_b.same_optimum(under, population, configuration, by_arm, converged, label)),
-                    ("iterations and R = ρ × ε (B3)", tally_b.iterations(under, population, configuration, by_arm, converged, label)),
+                    ("iterations and ε (B3)", tally_b.iterations(under, population, configuration, by_arm, converged, label)),
                     ("cost (B2)", tally_b.cost(population, configuration, by_arm, converged, label)),
                     ("module sweeps per run (B2)", tally_b.module_sweeps(under, population, configuration, by_arm, converged, label)),
                     ("node calls per module", tally_b.node_calls_per_module(under, population, configuration, by_arm, converged, label)),
