@@ -571,6 +571,47 @@ def stage(
     for name, entry in derived.items():
         config = under.configuration(name)
         record = artifact_for(under, config, entry, head=head)
+        # The re-derived sets against the committed artifact the campaign's
+        # loops stop on (A102 (v5-campaign): "re-derive the sets and compare
+        # them with the committed test_sets_<configuration>.json"): the sets'
+        # digest, and per loop key and block the members, before --census
+        # write could overwrite the committed copy.  A difference is a result
+        # and fails the stage.
+        committed_path = artifact_path(under, config, committed=True)
+        against_committed: dict[str, Any] = {"path": str(committed_path), "available": committed_path.exists()}
+        if committed_path.exists():
+            committed = json.loads(committed_path.read_text())
+            differing_blocks = []
+            for key in sorted(set(committed.get("sets") or {}) | set(record["sets"])):
+                mine = (record["sets"].get(key) or {}).get("blocks") or {}
+                theirs = ((committed.get("sets") or {}).get(key) or {}).get("blocks") or {}
+                for block in sorted(set(mine) | set(theirs)):
+                    check.n_compared += 1
+                    if sorted(mine.get(block) or []) != sorted(theirs.get(block) or []):
+                        check.n_mismatched += 1
+                        differing_blocks.append(f"{key}/{block}")
+            identical = committed.get("sets_sha256") == record["sets_sha256"] and not differing_blocks
+            against_committed.update(
+                {
+                    "committed_sets_sha256": committed.get("sets_sha256"),
+                    "rederived_sets_sha256": record["sets_sha256"],
+                    "committed_generated_at_tree_git_head": committed.get("generated_at_tree_git_head"),
+                    "identical": identical,
+                    "differing_blocks": differing_blocks,
+                }
+            )
+            if not identical:
+                check.passed = False
+            check.note(
+                f"{name}: re-derived sets {'IDENTICAL to' if identical else 'DIFFER from'} the committed "
+                f"{committed_path.name} (sets_sha256 {record['sets_sha256'][:12]} vs "
+                f"{str(committed.get('sets_sha256'))[:12]}"
+                + (f"; differing blocks: {differing_blocks}" if differing_blocks else "")
+                + ")"
+            )
+        else:
+            check.passed = False
+            check.note(f"{name}: no committed artifact at {committed_path} to compare with")
         out = artifact_path(under, config, committed=False)
         out.write_text(json.dumps(record, indent=1) + "\n")
         written = {"runs_copy": str(out)}
@@ -588,6 +629,7 @@ def stage(
             },
             "against_eight_entry": record["against_eight_entry"],
             "against_optimisation_path": record["against_optimisation_path"],
+            "against_committed": against_committed,
         }
         for arm, cmp in record["against_optimisation_path"].items():
             if cmp.get("available"):
