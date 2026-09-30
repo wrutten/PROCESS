@@ -701,22 +701,70 @@ def wall_clock(campaign: Campaign) -> dict[str, Any]:
     (``timing.tables_over``; the pairing key is the seed)."""
     from . import timing as timing_mod  # noqa: PLC0415
 
-    records = list(_population(campaign, PHASE_A_SOURCE, tally_a.PHASE).records)
-    records += list(_population(campaign, PHASE_B_SOURCE, tally_b.PHASE).records)
-    return timing_mod.tables_over(campaign, records, key_of=lambda r: int(r.get("campaign_seed")))
+    source = wall_clock_source(campaign)
+    records: list[Mapping[str, Any]] = []
+    for phase, source_name, tally_phase in (("A", PHASE_A_SOURCE, tally_a.PHASE), ("B", PHASE_B_SOURCE, tally_b.PHASE)):
+        if phase in source["phases_from_the_one_worker_pass"]:
+            records += timing_mod.seed_set_records(campaign, phase)
+        else:
+            records += list(_population(campaign, source_name, tally_phase).records)
+    tables = timing_mod.tables_over(campaign, records, key_of=lambda r: int(r.get("campaign_seed")))
+    tables["source"] = source
+    tables["workers_stamped"] = sorted(
+        {str((r.get("launcher") or {}).get("workers")) for r in records if r.get("status") == "ok"}
+    )
+    return tables
+
+
+def wall_clock_source(campaign: Campaign) -> dict[str, Any]:
+    """Where the appendix timings come from, per phase (D38): the campaign's
+    records, unless the validity stage's record found a campaign timing of the
+    phase outside the W = 1 repetitions' range, in which case the one-worker
+    timing pass over the seed set (``timing.seed_set``).  Refuses where the
+    validity stage was never pressed: the tables would not say whether their
+    timings may be printed (A102 (v5-campaign))."""
+    from . import timing as timing_mod  # noqa: PLC0415
+
+    validity = timing_mod.validity_record(campaign)
+    if validity is None:
+        raise PaperTablesError(
+            "the timing validity stage has not been pressed (--timing validity): the wall-clock "
+            "tables cannot say whether the campaign's timings may be printed (D38)"
+        )
+    return {
+        "phases_from_the_one_worker_pass": timing_mod.phases_outside(validity),
+        "validity_n_within": validity.get("n_within"),
+        "validity_n_outside": validity.get("n_outside"),
+        "validity_tree_git_head": validity.get("tree_git_head"),
+    }
 
 
 def _wall_clock_lines(campaign: Campaign) -> list[str]:
     from . import timing as timing_mod  # noqa: PLC0415
 
     tables = wall_clock(campaign)
-    lines = ["### Tables — wall clock (plan §6)", "", WALL_CLOCK_CONTEXT, ""]
+    source = tables["source"]
+    from_pass = source["phases_from_the_one_worker_pass"]
+    source_line = (
+        f"**Where these timings come from (D38).** The validity check (`--timing validity`, at "
+        f"`{str(source['validity_tree_git_head'])[:8]}`) found {source['validity_n_within']} of the campaign's "
+        f"timings of the repeatability seeds within the W = 1 repetitions' range and "
+        f"{source['validity_n_outside']} outside. "
+        + (
+            "Phase " + " and ".join(from_pass) + " timings are therefore from the one-worker timing pass "
+            "over the seed set (`--timing seed-set`: the campaign's jobs re-run at W = 1 with the timers on, "
+            "every count identical to the campaign record's, a differing job refused); "
+            if from_pass else "Every timing is the campaign's own; "
+        )
+        + "the worker counts the records are stamped with: W = " + ", ".join(tables["workers_stamped"]) + "."
+    )
+    lines = ["### Tables — wall clock (plan §6)", "", WALL_CLOCK_CONTEXT, "", source_line, ""]
     for spec in WALL_CLOCK_TABLES:
         lines += [f"**{spec['title']}** — {spec['caption']}", ""]
     lines += timing_mod.render_markdown(
         tables,
         caption_w=(
-            f"W = {campaign.workers}; pairing key = the seed; the ratio is of the means over the "
+            f"W = {', '.join(tables['workers_stamped'])} (as stamped); pairing key = the seed; the ratio is of the means over the "
             f"paired runs and the bracket the per-run ratio's median with [min, max]; exclusions "
             f"as stated above"
         ),
