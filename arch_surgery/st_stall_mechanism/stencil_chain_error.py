@@ -228,6 +228,20 @@ def tables_chains() -> dict:
                 continue
             print(f"| {ts} {tau:.0e} | {d['same']} of {d['n']} | {d['value_f']:.1e} / {d['value_c']:.1e} | "
                   f"{d['deriv_f']:.1e} / {d['deriv_c']:.1e} |")
+        # per column at census 1e-8: where the objective's derivative error sits, and the sweeps behind it
+        print("\nPer column at census τ = 1e-8: the objective's finite-difference derivative error against the exact "
+              "loop, flat and partitioned, and the sweeps each loop took at the +h and -h points (flat: FLAT; "
+              "partitioned: M2):\n")
+        print("| column (iteration variable) | flat: derivative error | flat sweeps +h / -h | partitioned: derivative error | partitioned M2 sweeps +h / -h |")
+        print("|---|---|---|---|---|")
+        la, lb = Loop("A0", "census", 1e-8), Loop("A2", "census", 1e-8)
+        for c in range(n):
+            kp, km = 1 + 2 * c, 2 + 2 * c
+            def der(rs):
+                return ((rs[kp]["objf"] - exact[kp]["objf"]) - (rs[km]["objf"] - exact[km]["objf"])) / (2 * STEP)
+            ra, rb = runs[la], runs[lb]
+            print(f"| {c} ({opt['names'][c]}) | {der(ra):.1e} | {ra[kp]['per_block'].get('FLAT')} / {ra[km]['per_block'].get('FLAT')} | "
+                  f"{der(rb):.1e} | {rb[kp]['per_block'].get('M2')} / {rb[km]['per_block'].get('M2')} |")
         # block loops that accepted their entry after one sweep with a nonzero change
         print("\nAlong the chain: per block, evaluations whose loop stopped after its first sweep with a first-sweep "
               "change that was not zero (the entry's lag accepted and carried on), and the largest such change:\n")
