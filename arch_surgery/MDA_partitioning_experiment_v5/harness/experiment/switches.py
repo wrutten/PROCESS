@@ -60,7 +60,7 @@ SOLVER_HANDLER = "process.core.solver.solver_handler"
 class Switch:
     """One thing the driver can be told to do."""
 
-    #: V4's term for it (README §3), used as the key everywhere in the harness.
+    #: V4's term for it (V4 README §3; this README §3's switch table), used as the key everywhere in the harness.
     term: str
     #: Environment variable the tree implements *today*, or None when the
     #: capability does not exist yet and an approved driver change will add it.

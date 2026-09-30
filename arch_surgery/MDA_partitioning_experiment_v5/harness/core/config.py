@@ -59,7 +59,7 @@ class Config:
     """One input file defining one optimisation problem.
 
     The configuration is the *problem*; its **input file** is the file the
-    problem is read from (README §3).
+    problem is read from (V4 README §3, the vocabulary).
     """
 
     #: Configuration name; also the committed input file's stem.
