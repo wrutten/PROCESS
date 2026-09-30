@@ -6,7 +6,7 @@
 > relate as ledger and journal: every decision, issue and task minted before 2026-09-14 is *recorded*
 > there in full and *summarised* here with its current state and a pointer; everything minted from
 > 2026-09-14 onward lives here only. **A number is never reused and the numbering continues** —
-> next free: **A103**, **D43**, **I-39** *(at creation: A75, D28, I-24)* (confirmed against the archived file's numbering
+> next free: **A104**, **D43**, **I-39** *(at creation: A75, D28, I-24)* (confirmed against the archived file's numbering
 > line at `c5fc49d3`; those three numbers occur nowhere else in it). Check the line when you add a row.
 > "The archived queue" below means `plans/MASTER_TODO.md`; "§n" points at its protocol numbering.
 
@@ -141,6 +141,7 @@ Rows are filed by state. A task appears in exactly one table. **Tasks A1–A74 l
 
 | # | Task | Prereqs | State |
 |---|---|---|---|
+| **A103** | **v5-tally-and-tables** — analysis and rendering over the campaign's records, no PROCESS run and no driver change: item 4's same-optimum rule with attribution (plan §5 B1), the check-2 verdict column removed (item 1; the numbers and the trajectory label kept), the switch matrix's stopping-rule cell read from the campaign's test set, the phase B cache-load and audit-position captions, I-37's fix with a tooth, the harness README rewritten to V5; `paper_tables.md` re-rendered with every count cell unchanged. One deliverable: `reports/A103_v5_tally_and_tables.md`. The V5 experiment report is not this task's: it waits on the user's decision on st | A102 | **DISPATCHED 2026-09-30** (Opus) from `b84892e8`, seeded with `A102_runs/v5_campaign/` |
 | **A84** | **table-polish** — the last rendering pass on the report's tables, no cell touched: (1) mean and `[min, max]` in one cell (`3 957 [3 516, 4 560]`) wherever they are separate columns (Table 8 runs to 16 columns); (2) sub-heading rows reduced to `configuration (n = 22)` — the tally's full table name goes to the construction line under the grid; the pooled `n = 100` group lines gone; (3) **pending the user's ruling**: the regime as *column groups* in the report's Appendix D tables (block, fixed-point distance, cost per call, matched accuracy — one row per configuration × pair/arm, `median / p90 / ≥ τ` per regime) with the full row-key form kept in the companion, or the row-key form as A83 left it. Renderer `Layout` change only; `check` IDENTICAL, cell preservation by the committed check, gates once with `--resume`, zero PROCESS runs | — | **CANCELLED 2026-09-15**, superseded by A85 (v3-table-formats): the user ruled the formats are V3's §4/§5 tables, which settles (1)–(3) |
 
 ### 4.2 Merged — the index
