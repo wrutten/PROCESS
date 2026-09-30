@@ -491,8 +491,8 @@ def main(argv=None) -> int:
           "evaluations, pooled (ratio of sums) over the configuration's seed set -- the seeds on which every "
           "campaign arm of the configuration reached an accepted optimum (the paper's population); the "
           "supplementary arms are read over the same seeds.\n")
-    print("| configuration | arm | retried / finished | seed set size | node calls per evaluation (seed set) |")
-    print("|---|---|---|---|---|")
+    print("| configuration | arm | retried / finished | seed set size | node calls per evaluation (seed set) | over BR's | over the path-matched flat arm's at the same τ |")
+    print("|---|---|---|---|---|---|---|")
     for config, sources in SOURCES.items():
         recs = result["configurations"][config]["records"]
         campaign_labels = [lb for lb, sub, _ in sources if sub.startswith("campaign/")]
@@ -500,13 +500,21 @@ def main(argv=None) -> int:
             str(s) for s in range(N_SEEDS)
             if all(recs[lb][str(s)].get("usable") and recs[lb][str(s)].get("ifail") == 1 for lb in campaign_labels)
         ]
+        per_eval = {}
+        for label, _sub, _arm in sources:
+            nodes = sum(recs[label][s]["node_calls_solve_phase"] or 0 for s in seed_set)
+            evals = sum(sum(recs[label][s]["evals_per_attempt"]) for s in seed_set)
+            per_eval[label] = nodes / evals if evals else None
+        flat_of = {"B2": "B1", "B2@1e-8": "B0@1e-8", "B2@1e-12": "B0@1e-12"}
         for label, _sub, _arm in sources:
             rs = [r for r in recs[label].values() if r.get("usable") and r.get("status") == "ok"]
             retried = sum(1 for r in rs if r["n_attempts"] > 1)
-            nodes = sum(recs[label][s]["node_calls_solve_phase"] or 0 for s in seed_set)
-            evals = sum(sum(recs[label][s]["evals_per_attempt"]) for s in seed_set)
-            per = nodes / evals if evals else None
-            print(f"| {config} | {label} | {retried} / {len(rs)} | {len(seed_set)} | {fmt(per, '.1f')} |")
+            per = per_eval[label]
+            over_ref = per / per_eval["BR"] if per and per_eval.get("BR") else None
+            flat = flat_of.get(label)
+            over_flat = per / per_eval[flat] if flat and per and per_eval.get(flat) else None
+            print(f"| {config} | {label} | {retried} / {len(rs)} | {len(seed_set)} | {fmt(per, '.1f')} | "
+                  f"{fmt(over_ref, '.2f')} | {fmt(over_flat, '.2f')} |")
     print("\n## Where the accepted runs end: iteration variables within one finite-difference step (1e-3 "
           "relative) of a bound the input file sets, runs per variable over the accepted runs\n")
     print("| configuration | arm | accepted runs judged | variable: runs ending within one step of its bound |")

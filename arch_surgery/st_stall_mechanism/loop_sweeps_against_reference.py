@@ -308,6 +308,17 @@ def main(argv=None) -> int:
                     row += ("—" if r0 is None else ("yes" if r0 <= COMPARABLE else "no")) + " |"
                     print(row)
             print()
+        print(f"#### {s}: the largest scaled change on each block's test set after every sweep (block trace), census set, per entry\n")
+        print("| loop | entry | per block: change after sweep 1, 2, ... |")
+        print("|---|---|---|")
+        for t in (1e-8, 1e-12):
+            for arm in (["A0", "A1", "A2"] if pulsed(name) else ["A0", "A2"]):
+                label = f"{arm} census {t:.0e}"
+                for ename, r in cells[label].items():
+                    per = r.get("residual_per_sweep") or {}
+                    txt = "; ".join(f"{b}: " + ", ".join(f"{v:.1e}" for v in vals) for b, vals in per.items())
+                    print(f"| {label} | {ename} | {txt} |")
+        print()
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json).write_text(json.dumps(result, indent=1, default=str))

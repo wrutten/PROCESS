@@ -373,6 +373,29 @@ def main(argv=None) -> int:
                 print(f"| {e['loop']} | {e['exact']} | {e['node_calls_base']} / {e['node_calls_stencil_mean']:.1f} | "
                       f"{fmt(e['base_f'])} ({fmt(e['base_f_rel'])}) / {fmt(e['base_c'])} | {fs} | {cs} | {worst / eps:.2g} |")
             result.setdefault(name, {})[point] = rows
+            # how each block loop ended at the stencil points: sweeps, and the first sweep's change
+            print("\nAt the stencil points (every column, both signs, every step): per block, the "
+                  "evaluations whose block loop stopped after its **first** sweep, and the first sweep's "
+                  "largest scaled change on the block's test set, median [min, max]:\n")
+            print("| loop | block: stopped after one sweep / evaluations; first-sweep change median [min, max] |")
+            print("|---|---|")
+            import statistics  # noqa: PLC0415
+            for loop in loops_for(name):
+                if loop.arm == "AR" or loop not in cache:
+                    continue
+                per_block: dict = {}
+                for r in cache[loop][1].values():
+                    for b, vals in (r.get("residual_per_sweep") or {}).items():
+                        d = per_block.setdefault(b, {"one": 0, "n": 0, "first": []})
+                        d["n"] += 1
+                        d["one"] += 1 if len(vals) == 1 else 0
+                        d["first"].append(vals[0])
+                txt = "; ".join(
+                    f"{b}: {d['one']}/{d['n']}; {statistics.median(d['first']):.1e} "
+                    f"[{min(d['first']):.1e}, {max(d['first']):.1e}]"
+                    for b, d in per_block.items()
+                )
+                print(f"| {loop.label} | {txt} |")
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json).write_text(json.dumps(result, indent=1, default=str))
