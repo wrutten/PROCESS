@@ -1,6 +1,6 @@
 # A102 (v5-campaign) — the V5 campaign: the warmed evaluation child, the census/1e-8 campaign, the supplementary st stage, the timing stages, the gates, the tally and the paper tables
 
-> **Document status** — **OPEN** task report, branch `A102-v5-campaign` from `architecture_surgery` at
+> **Document status** — **MERGED 2026-09-30 at `b387066a` (`--no-ff`; assessment §16); archived.** Records relocated to `arch_surgery/idf_probe/runs/A102_runs/v5_campaign/` (1 168 run records, the 553 campaign records among them) and `A102_runs/v5_campaign_superseded/` (the 75 superseded st optimisations). Was: **OPEN** task report, branch `A102-v5-campaign` from `architecture_surgery` at
 > `7185b208`, under autonomous mode (D37). Written by two agents: stage 0 and the first two campaign presses
 > by the first (to `ba1cd923`), everything from the third press on by the second, who took the task over on
 > 2026-09-30 at ~10:02 (§4). Every number here names the commit it was made at and the committed script that
