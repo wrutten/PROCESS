@@ -478,12 +478,12 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         entry_state=(Path(args.entry_state) if args.entry_state else None),
         stencil_column=args.stencil_column,
         stencil_sign=args.stencil_sign,
-        run_kind=args.run_kind,
+        run_kind=(args.run_kind or "smoke"),
         timers=(True if args.timers else None),
     )
     print(
         f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
-        f"regime {args.regime}, kind {args.run_kind}, test set "
+        f"regime {args.regime}, kind {args.run_kind or 'smoke'}, test set "
         f"{campaign.test_set}, tau {campaign.tau!r}"
         + (" (overridden)" if campaign.tau_overridden else " (the test set's declared value)")
     )
@@ -1234,9 +1234,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="displacement size, for --run")
     parser.add_argument("--regime", default="unperturbed",
                         choices=records_mod.REGIMES, help="for --run")
-    parser.add_argument("--run-kind", default="smoke",
+    # No default here (A102 (v5-campaign)): the default was "smoke", so
+    # --supplementary without --run-kind made smoke records although the stage
+    # promises its own run kind "unless --run-kind smoke asks for a smoke
+    # record".  --run resolves None to "smoke" (its default, unchanged);
+    # --supplementary to the stage's declared kind.
+    parser.add_argument("--run-kind", default=None,
                         choices=("gate", "smoke"),
-                        help="for --run; a campaign record is never made here")
+                        help="for --run (default smoke) and --supplementary (default the "
+                        "stage's own kind); a campaign record is never made here")
     parser.add_argument("--pin-hex", default=None, help="for --run")
     parser.add_argument("--timers", action="store_true",
                         help="for --run: compose the wall-clock timers (DR12)")
