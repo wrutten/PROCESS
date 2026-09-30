@@ -404,11 +404,18 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
         print(f"  REFUSED — {exc}")
         return 3
     budget = plan.budget(campaign)
+    # DR12 (V5 plan §9; D33): the campaign runs with the timers on.  Composed
+    # here as the smoke composes them (A101 wired the smoke and reported the
+    # campaign press as wired too; it was not -- found by A102 (v5-campaign)
+    # before its campaign press, from the code).
+    campaign = dataclasses.replace(campaign, timers=CAMPAIGN_TIMERS)
     print(
         f"  will run: {budget['entry_references']} entry reference(s) + "
         f"{budget['evaluation_displaced']} displaced-entry evaluations + "
         f"{budget['optimisation']} optimisations = {budget['total']} runs, "
-        f"records stamped {plan.run_kind!r}, {campaign.workers} worker(s)"
+        f"records stamped {plan.run_kind!r}, {pool_mod.workers(campaign)} worker(s) "
+        f"(HARNESS_WORKERS or the campaign's {campaign.workers}), wall-clock timers "
+        f"{'on' if campaign.timers else 'off'} (config.CAMPAIGN_TIMERS)"
     )
     gates_mod.CENSUS_ENTRY["entry"] = args.census_entry
     press = chain_mod.run(
@@ -471,12 +478,12 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         entry_state=(Path(args.entry_state) if args.entry_state else None),
         stencil_column=args.stencil_column,
         stencil_sign=args.stencil_sign,
-        run_kind=args.run_kind,
+        run_kind=(args.run_kind or "smoke"),
         timers=(True if args.timers else None),
     )
     print(
         f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
-        f"regime {args.regime}, kind {args.run_kind}, test set "
+        f"regime {args.regime}, kind {args.run_kind or 'smoke'}, test set "
         f"{campaign.test_set}, tau {campaign.tau!r}"
         + (" (overridden)" if campaign.tau_overridden else " (the test set's declared value)")
     )
@@ -1227,9 +1234,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="displacement size, for --run")
     parser.add_argument("--regime", default="unperturbed",
                         choices=records_mod.REGIMES, help="for --run")
-    parser.add_argument("--run-kind", default="smoke",
+    # No default here (A102 (v5-campaign)): the default was "smoke", so
+    # --supplementary without --run-kind made smoke records although the stage
+    # promises its own run kind "unless --run-kind smoke asks for a smoke
+    # record".  --run resolves None to "smoke" (its default, unchanged);
+    # --supplementary to the stage's declared kind.
+    parser.add_argument("--run-kind", default=None,
                         choices=("gate", "smoke"),
-                        help="for --run; a campaign record is never made here")
+                        help="for --run (default smoke) and --supplementary (default the "
+                        "stage's own kind); a campaign record is never made here")
     parser.add_argument("--pin-hex", default=None, help="for --run")
     parser.add_argument("--timers", action="store_true",
                         help="for --run: compose the wall-clock timers (DR12)")
@@ -1314,8 +1327,22 @@ def main(argv: list[str] | None = None) -> int:
         "--seed and --configuration narrow it, --run-kind smoke makes a smoke "
         "record)",
     )
+    parser.add_argument(
+        "--evaluation-warmup",
+        choices=("check",),
+        default=None,
+        help="the warmed evaluation child's neutrality check, and stop (V5 plan "
+        "§6; A102 (v5-campaign)): gate 'evaluation_warmup' -- A101's cold-child "
+        "records of the gate job set's evaluation half (archived on the first "
+        "press) against the same jobs made by the warmed child, every count and "
+        "every exit-state component identical, each warmed record's own "
+        "determinism check re-derived; two teeth.  The same as --gate "
+        "evaluation_warmup",
+    )
     parser.add_argument("--json", type=Path, help="write the preflight record here")
     args = parser.parse_args(argv)
+    if args.evaluation_warmup:
+        args.gate = "evaluation_warmup"
     args.seed_given = any(a == "--seed" or a.startswith("--seed=") for a in (argv if argv is not None else sys.argv[1:]))
 
     # The experiment's own copy of PROCESS is the only tree a record is ever

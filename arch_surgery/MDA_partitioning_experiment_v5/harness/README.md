@@ -1938,3 +1938,55 @@ reads a number from here. **Known limit**: a phase A run is one evaluation in a 
 node times carry numba's per-process cache load inside the first call of every jitted function; the
 phase A table is a first-evaluation-in-process figure, not the warmed per-evaluation figure of
 A91's instrument, and the report says so.
+
+## 19. The warmed evaluation, and its neutrality gate (A102 (v5-campaign))
+
+*Added 2026-09-29 by task A102 (v5-campaign); V5 plan §6 ("Phase A's timing is warmed"), ruled by the
+orchestrator under D37 at A101's merge. A harness change to the evaluation child, not a driver change:
+no gate G1 press; its neutrality is gate `evaluation_warmup`.*
+
+**Why.** A phase A record is one `call_models` in a fresh process, so numba's per-process cache load
+landed inside the first call of every jitted function and the module rows read 259–351 ms per
+evaluation where an optimisation's warmed evaluations read 21–32 ms (A101 §13). The count fields were
+never affected; the wall-clock rows were.
+
+**What the child does now** (`harness/child/evaluate.py`, `_WarmedEvaluation`; A91's form): after the
+entry state is written and displaced and `y_entry.json` is recorded, (1) a whole-data-structure snapshot
+of the entry is taken (`child/data_structure.py`, ruling D25's mechanism); (2) a **warm-up** evaluation
+runs — a fresh `Caller`, one `call_models` — and its counts, exit-state digest and timer accumulators are
+harvested and discarded from every measurement; (3) the data structure is put back to the entry snapshot
+field by derived field (every field the warm-up moved; nothing held back — the run's own `numerics`
+counters are rewound on purpose), the coupling state is re-entered bit-exact (`predicate.write_entry_state`,
+read back and checked), and the record is **refused** if any field still differs; (4) every driver counter
+is reset in place to its import-time value (`COUNTER_CELLS`, `COUNTER_DICTS`, `COUNTER_LISTS`; the per-run
+deferral totals' per-evaluation keys; the node census; the timers), while the once-per-run set-up is kept
+as an optimisation's warmed evaluations keep it (the memoised schedule and artifact caches of DR9, the
+validated per-run set, `SCHEDULE_RESOLUTION`); (5) the **measured** evaluation runs — a fresh `Caller`,
+one `call_models` — and is what the record's counts, exit state, audit and timers are. The two
+evaluations' flattened count leaves (GC's count vocabulary plus the census, the objective and the
+constraint vector as hex) and exit-state digests are stamped under `evaluation_warmup` and the record is
+**refused** where they differ: the warm-up is a per-record determinism check. The record contract owes
+`evaluation_warmup` (and `evaluation_warmup.agrees` on a finished record), so every evaluation record made
+by the cold child is incomplete under it and re-made once under `--resume` — the rule that re-made item
+5's records.
+
+**Timers.** `timers.driver` is the measured evaluation's alone (the accumulators were reset);
+`timers.warmup_driver` is the warm-up's, kept apart; `timers.epochs.warmup_first_call_models_at` is where
+the fixed per-run term ends (`timing.rows_of` stamps it as `fixed_per_run_s` on a phase A record; it is
+not a row of the phase A table, plan §6); the warm-up's wall and the restore's snapshots are excluded costs
+(`timers.excluded.warmup_evaluation_s`, `state_snapshots_s`). Gate G1's tables classify the block: its
+counts and digests are compared wherever both sides carry it, its wall-clock leaves are excluded by name.
+
+**Gate `evaluation_warmup`** (`--gate evaluation_warmup`, or `--evaluation-warmup check`; in `--gate all`
+before the gates whose evaluation records it vouches for): the gate job set's evaluation half — every
+active arm on each configuration at GC's seed under the campaign's declared setting, timers on — made
+by the **cold** child (A101's repeatability stage, first repetition, archived under
+`runs/gates/evaluation_warmup/before/` on the first press and never overwritten, G1's rule for a side
+made at a commit behind us; a source already carrying the block is refused) against the same jobs made
+by the **warmed** child at this commit (`runs/gates/evaluation_warmup/after/`, the side in the identity
+through `HARNESS_EVALUATION_WARMUP_LABEL`). GC's own comparisons: every count leaf under GC's paths
+identical, the prime count identical, every coupling-state file bit-identical; and each warmed record's
+determinism check **re-derived** from its stamped leaves rather than trusted. Two teeth: one added to a
+count on a copy of an after record is the one differing leaf; one added to a warm-up count on a copy
+reads as disagreement in the re-derived check. The cold and warmed module times per pair are reported
+beside as context.

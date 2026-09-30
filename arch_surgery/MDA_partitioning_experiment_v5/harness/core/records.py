@@ -519,6 +519,12 @@ SCHEMA: tuple[Field, ...] = (
     _f("t_plant_pulse_burn_hex", "A", "finished", "the same, as a hex float"),
     _f("lift_residual", "A", "finished", "the lifted component's inconsistency at exit"),
     _f("exact", "A", "finished", "the objective at exit, as a hex float"),
+    # A102 (v5-campaign; V5 plan §6): the warmed evaluation.  Owed by every
+    # evaluation record, so a record made by the cold child (one evaluation
+    # in a fresh process) is incomplete under this contract and is re-made
+    # once under --resume -- the same rule that re-made item 5's records.
+    _f("evaluation_warmup", "A", "always", "the warmed form (A91's): the discarded warm-up's counts and exit-state digest, the entry's restore (D25's mechanism), the counters reset, and the measured evaluation's counts and digest beside; the record is refused where they differ"),
+    _f("evaluation_warmup.agrees", "A", "finished", "True on every finished record: the warm-up and the measured evaluation agree on every count leaf and on the exit-state digest (the per-record determinism check)"),
 )
 
 

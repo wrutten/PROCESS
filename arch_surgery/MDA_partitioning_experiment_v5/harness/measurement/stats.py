@@ -199,6 +199,7 @@ class Population:
         what: str,
         denominator: int | None = None,
         campaign_present: bool = False,
+        kinds: tuple[str, ...] | None = None,
     ) -> "Population":
         """Build a population, refusing what may not be in one.
 
@@ -220,7 +221,14 @@ class Population:
         offered = list(records)
         kept: list[Mapping[str, Any]] = []
         excluded: list[tuple[str, str]] = []
-        allowed = measurable_run_kinds(campaign_present=campaign_present)
+        # ``kinds`` is a **declared** population of another kind -- the
+        # supplementary stage's (``config.SupplementaryStage``; V5 plan §3):
+        # its tables are computed over ``supplementary`` records alone and a
+        # campaign or gate record offered to such a population is refused
+        # exactly as a supplementary record is refused here without it.  A
+        # kind may be declared this way only by name, never mixed
+        # (A102 (v5-campaign); the run-kind separation gate's rule).
+        allowed = tuple(kinds) if kinds else measurable_run_kinds(campaign_present=campaign_present)
         unsummarisable = [
             (_label(record), str(record.get("campaign_run_kind")))
             for record in offered

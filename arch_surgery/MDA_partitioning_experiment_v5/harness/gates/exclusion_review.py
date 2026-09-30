@@ -124,6 +124,12 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "campaign_tau": "the campaign's declared setting, a harness stamp",
     "campaign_test_set": "the campaign's declared setting, a harness stamp",
     "exit_audit.rulers_note": "prose quoted from a harness constant",
+    # A102 (v5-campaign): the warmed evaluation child's own wall-clock leaves.
+    "evaluation_warmup.warmup.wall_s": "a timing or the machine's state",
+    "evaluation_warmup.measured.wall_s": "a timing or the machine's state",
+    "evaluation_warmup.warmup.timers_driver": "a timing or the machine's state",
+    "evaluation_warmup.restore_wall_s": "a timing or the machine's state",
+    "evaluation_warmup.warmup_wall_s": "a timing or the machine's state",
 }
 
 def _assert_every_name_is_classified() -> None:

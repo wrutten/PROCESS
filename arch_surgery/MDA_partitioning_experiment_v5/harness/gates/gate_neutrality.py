@@ -163,6 +163,14 @@ ALWAYS_EXCLUDED: dict[str, str] = {
     ),
     # when it happened, and how long it took
     "launcher": "the pool's wall of the subprocess and the load average (DR12): context, never evidence",
+    # A102 (v5-campaign): the warmed evaluation child's own timings.  The
+    # block's counts and digests stay compared (FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE
+    # names the block); these leaves are wall clock.
+    "evaluation_warmup.warmup.wall_s": "the discarded warm-up evaluation's wall: context, never evidence",
+    "evaluation_warmup.measured.wall_s": "the measured evaluation's wall: context, never evidence",
+    "evaluation_warmup.warmup.timers_driver": "the warm-up's own timer accumulators (DR12): context, never evidence",
+    "evaluation_warmup.restore_wall_s": "the whole-structure restore's wall: context, never evidence",
+    "evaluation_warmup.warmup_wall_s": "the warm-up's wall: context, never evidence",
     "wall_s": "wall clock is context, never evidence (I-10)",
     "cpu_user_s": "cpu time is a contention diagnostic",
     "cpu_sys_s": "cpu time is a contention diagnostic",
@@ -315,6 +323,22 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
         "earlier side.  Both captures audit at the same position, which is "
         "checked before the comparison runs and is what makes exit_audit "
         "comparable"
+    ),
+    # A102 (v5-campaign; V5 plan §6): the warmed evaluation child's block --
+    # a harness change to the child, not a driver change, but the same shape
+    # as the timer fields above: absent on a side captured before the child
+    # warmed, a block after; its counts and exit-state digests are compared
+    # wherever both sides carry it (its wall-clock leaves are excluded by
+    # name, ALWAYS_EXCLUDED).  First placed in the instrument-change table,
+    # which applies only where the audit instrument's stamp differs; the
+    # after capture re-made by the warmed child at d08e8ab4 then read every
+    # leaf of the block as present on one side only (933 values, 0 output-file
+    # lines) -- moved here at that press.
+    "evaluation_warmup": (
+        "the warmed evaluation's own account of itself (A102 (v5-campaign)): "
+        "the discarded warm-up's counts and digest, the entry's restore, the "
+        "measured evaluation's counts and digest.  Absent on a side captured "
+        "by the cold child, a block after; compared wherever both sides carry it"
     ),
     "reproduction_overrides": (
         "a field the record gains so that a run made under the reproduction "

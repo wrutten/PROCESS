@@ -51,6 +51,14 @@ asserted.
 * ``tables`` — the three appendix tables rendered over the repeatability
   records as **test data** (never the paper's document, which
   ``paper_tables.py`` renders over the campaign through the same functions).
+* ``seed-set`` — D38's remedy (A102 (v5-campaign)): the campaign's job set
+  at W = 1, timers on, for the phases the validity check found outside the
+  repetitions' range; every count compared with the campaign record of the
+  same job; the appendix tables of those phases are rendered from it;
+* ``cache-load`` — the numba cache load a process's first evaluation carries:
+  the warmed phase A records' warm-up less measured model time, beside the
+  phase B module time per run (A102; the phase B tables keep it in the
+  module rows).
 
 Every record these stages make is ``run_kind == "timing"`` under
 ``runs/timing/`` and is never pooled with the campaign or the gates.
@@ -74,7 +82,7 @@ from . import stats as stats_mod
 
 RUNS_SUBPATH = Path("timing")
 RUN_KIND = "timing"
-STAGES: tuple[str, ...] = ("repeatability", "timers-off", "validity", "tables")
+STAGES: tuple[str, ...] = ("repeatability", "timers-off", "validity", "tables", "seed-set", "cache-load")
 
 #: The repetition index travels in the job identity through a variable the
 #: driver never reads (gate GC's label mechanism), so three repetitions are
@@ -322,11 +330,25 @@ def rows_of(
     rows["dispatch"] = dispatch
     rows["objective and constraints"] = objective
     if phase == "A":
-        # per evaluation: the one call_models is the whole evaluation
+        # per evaluation: the one MEASURED call_models is the whole evaluation
+        # (the warmed form, A102: the discarded warm-up's timers are kept
+        # apart under timers.warmup_driver and are in no row)
         total = call_models_s
         attributed = sum(modules.values()) + ungrouped_s + test + dispatch + objective + run_setup
         rows["unattributed residual"] = total - attributed
         rows["Total"] = total
+        # The fixed per-run term of an evaluation record: process start to
+        # the WARM-UP's first evaluation (where the numba cache load lands)
+        # less the harness's set-up, plus the once-per-run set-up inside it.
+        # Not a row of the phase A table (plan §6); stamped beside for the
+        # report.  None on a record made by the cold child.
+        warmup_driver = timers.get("warmup_driver") or {}
+        warmup_first = epochs.get("warmup_first_call_models_at")
+        if spawned is not None and warmup_first is not None:
+            fixed = (
+                float(warmup_first) - float(spawned) - harness_before
+                + float(warmup_driver.get("run_setup_s") or 0.0)
+            )
     else:
         total = (float(launcher_wall) - excluded_total) if launcher_wall is not None else None
         rows["optimiser own time"] = optimiser_own
@@ -347,6 +369,7 @@ def rows_of(
         "n_sweeps": int(driver.get("n_sweeps") or 0),
         "n_iterations": _at(record, "exit_forensics.n_solver_iterations_summed_over_attempts") or record.get("n_solver_iterations"),
         "call_models_s": call_models_s,
+        "fixed_per_run_s": fixed,
         "run_setup_s": run_setup,
         "post_solve_attributed_s": post_solve_attributed,
         "launcher_wall_s": launcher_wall,
@@ -811,6 +834,196 @@ def tables_stage(campaign: Campaign) -> dict[str, Any]:
     }
 
 
+
+
+# --------------------------------------------------------------------------
+# the one-worker timing pass over the seed set (D38's remedy), and the
+# first evaluation's cache load (A102 (v5-campaign))
+# --------------------------------------------------------------------------
+
+#: Where the one-worker pass's records go, under ``runs/timing/``.
+SEED_SET_DIRECTORY = "seed_set"
+
+
+def validity_record(campaign: Campaign) -> Mapping[str, Any] | None:
+    """The validity stage's record on disk, or None where it was never pressed."""
+    path = timing_root(campaign, "validity") / "measurements.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def phases_outside(validity: Mapping[str, Any]) -> list[str]:
+    """The phases on which the validity check found a campaign timing outside
+    the repetitions' range: D38 sends their appendix timings to the one-worker
+    pass.  A phase is taken whole — the check is one seed per configuration
+    and arm, so a job outside the range says the campaign's conditions (the
+    worker count, the load) moved its timings, not that one seed did."""
+    return sorted({str(r["phase"]) for r in validity.get("rows") or [] if r.get("within_the_repetitions_range") is False})
+
+
+def seed_set_jobs(campaign: Campaign) -> list[tuple[str, str, str, int, pool_mod.Job, Path]]:
+    """``(phase, configuration, arm, seed, timing job, campaign directory)`` for
+    every job of the campaign plan: the campaign's own jobs — the same entry
+    pins and entry states from the campaign's own references, the same starts —
+    with run kind ``timing``, the timers on, and a named directory under
+    ``runs/timing/seed_set/``, so the counts must equal the campaign record's."""
+    from .. import chain as chain_mod  # noqa: PLC0415
+
+    plan = chain_mod.campaign_plan(campaign)
+    references = chain_mod.references_from_records(campaign, plan)
+    root = timing_root(campaign, SEED_SET_DIRECTORY)
+    out: list[tuple[str, str, str, int, pool_mod.Job, Path]] = []
+    for job in chain_mod.evaluation_displaced_jobs(campaign, plan, references) + chain_mod.optimisation_jobs(campaign, plan):
+        timed = dataclasses.replace(
+            job,
+            run_kind=RUN_KIND,
+            timers=True,
+            outdir=root / job.config.name / f"{job.phase}_{job.arm}" / pool_mod.seed_directory(job.seed),
+        )
+        out.append((job.phase, job.config.name, job.arm, int(job.seed), timed, Path(job.outdir)))
+    return out
+
+
+def seed_set(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
+    """D38's remedy: the campaign's job set at **W = 1** with the timers on,
+    for the phases the validity check sent here, every record ``timing``.
+
+    Each record's counts (``COUNT_FIELDS``) are compared with the campaign
+    record of the same job; a job whose counts differ is refused from the
+    appendix tables (its timing would be of another run) and named.  The
+    campaign's own records are read, never touched.
+    """
+    validity = validity_record(campaign)
+    if validity is None:
+        raise GateError("the validity stage has not been pressed: --timing validity first (D38)")
+    phases = phases_outside(validity)
+    if not phases:
+        raise GateError(
+            "the validity check found no campaign timing outside the repetitions' range; "
+            "D38's one-worker pass is not called for"
+        )
+    timed = one_worker(campaign, timers=True)
+    # The order (the orchestrator, 2026-09-30): phase B before phase A and
+    # st_regression first, so the longest runs go while the machine is
+    # quietest; the seeds in order within an arm.  Serial either way (W = 1).
+    order = {name: i for i, name in enumerate(("st_regression", "low_aspect_ratio_DEMO", "large_tokamak_nof"))}
+    plan = sorted(
+        (p for p in seed_set_jobs(timed) if p[0] in phases),
+        key=lambda p: (p[0] != "B", order.get(p[1], 99), p[2], p[3]),
+    )
+    load_before = os.getloadavg()
+    pool_mod.run_serially([p[4] for p in plan], timed, resume=resume)
+    load_after = os.getloadavg()
+    rows: list[dict[str, Any]] = []
+    for phase, config_name, arm, seed, job, campaign_dir in plan:
+        record = records_mod.read(job.outdir)
+        reference = records_mod.read(campaign_dir)
+        mine, theirs = _counts(record), _counts(reference)
+        differing = sorted(k for k in COUNT_FIELDS if mine.get(k) != theirs.get(k))
+        rows.append(
+            {
+                "phase": phase,
+                "configuration": config_name,
+                "arm": arm,
+                "seed": seed,
+                "status": record.get("status"),
+                "campaign_status": reference.get("status"),
+                "counts_identical": not differing,
+                "differing": differing,
+                "workers": (record.get("launcher") or {}).get("workers"),
+                "loadavg_at_spawn": (record.get("launcher") or {}).get("loadavg_at_spawn"),
+                "loadavg_at_return": (record.get("launcher") or {}).get("loadavg_at_return"),
+                "tree_git_head": record.get("tree_git_head"),
+                "path": str(job.outdir),
+                "campaign_path": str(campaign_dir),
+            }
+        )
+    n_differing = sum(1 for r in rows if not r["counts_identical"])
+    return {
+        "stage": "seed_set",
+        "what": (
+            "D38's remedy: the campaign's job set at W = 1 with the timers on, for the phases the "
+            "validity check found outside the repetitions' range; every count compared with the "
+            "campaign record of the same job, a differing job refused from the appendix tables"
+        ),
+        "tree_git_head": framework.git_head(),
+        "workers": 1,
+        "phases": phases,
+        "validity_generated_from": {
+            "n_within": validity.get("n_within"),
+            "n_outside": validity.get("n_outside"),
+            "tree_git_head": validity.get("tree_git_head"),
+        },
+        "n_jobs": len(rows),
+        "n_counts_identical": len(rows) - n_differing,
+        "n_counts_differing": n_differing,
+        "loadavg_before": load_before,
+        "loadavg_after": load_after,
+        "rows": rows,
+        "context": "context, never evidence (D33): no verdict reads these numbers",
+    }
+
+
+def seed_set_records(campaign: Campaign, phase: str) -> list[Mapping[str, Any]]:
+    """The one-worker pass's records of ``phase`` whose counts equal the
+    campaign's, from the stage's own record; refuses where the stage was not
+    pressed for that phase."""
+    path = timing_root(campaign, SEED_SET_DIRECTORY) / "measurements.json"
+    if not path.exists():
+        raise GateError(f"the one-worker timing pass has not been pressed (--timing seed-set); no {path}")
+    stage_record = json.loads(path.read_text())
+    if phase not in stage_record.get("phases", []):
+        raise GateError(f"the one-worker timing pass did not cover phase {phase} (it covered {stage_record.get('phases')})")
+    return [records_mod.read(Path(r["path"])) for r in stage_record["rows"] if r["phase"] == phase and r["counts_identical"]]
+
+
+def cache_load(campaign: Campaign) -> dict[str, Any]:
+    """The numba cache load inside a process's first evaluation, from the
+    campaign's warmed phase A records: per configuration and arm, the warm-up
+    evaluation's model time less the measured evaluation's on the same entry
+    (the same state, the same counts — the record is refused otherwise), per
+    module row and summed; beside it, the phase B records' module time per
+    run, in which a run's first evaluation carries the same load (the fixed
+    per-run term ends at the first evaluation's start)."""
+    from .. import chain as chain_mod  # noqa: PLC0415
+
+    plan = chain_mod.campaign_plan(campaign)
+    root = chain_mod.chain_root(campaign, plan)
+    out: list[dict[str, Any]] = []
+    for config in campaign.configurations:
+        eval_records = [records_mod.read(p.parent) for p in sorted((root / "evaluation" / config.name).glob("*/seed*/metrics.json"))]
+        eval_records = [r for r in eval_records if r.get("status") == "ok" and (r.get("timers") or {}).get("warmup_driver")]
+        opt_records = [records_mod.read(p.parent) for p in sorted((root / "optimisation" / config.name).glob("*/seed*/metrics.json"))]
+        opt_records = [r for r in opt_records if r.get("status") == "ok" and (r.get("timers") or {}).get("enabled")]
+        groups_a = _grouping(campaign, config.name, eval_records, "A") if eval_records else []
+        groups_b = _grouping(campaign, config.name, opt_records, "B") if opt_records else []
+        for arm in arms_mod.active_arms(config, "A"):
+            mine = [r for r in eval_records if r.get("campaign_arm") == arm]
+            per_row: dict[str, list[float]] = {row: [] for row in (*MODULE_ROWS, "modules")}
+            for record in mine:
+                warm = {"timers": {**record["timers"], "driver": record["timers"]["warmup_driver"]}, "launcher": record.get("launcher"), "campaign_phase": "A"}
+                cold_rows = rows_of(warm, groups_a)["rows"]
+                measured_rows = rows_of(record, groups_a)["rows"]
+                for row in MODULE_ROWS:
+                    per_row[row].append(float(cold_rows[row]) - float(measured_rows[row]))
+                per_row["modules"].append(sum(float(cold_rows[r]) - float(measured_rows[r]) for r in MODULE_ROWS))
+            out.append({"configuration": config.name, "phase": "A", "arm": arm, "n": len(mine), "load_s": {k: _median_bracket(v) for k, v in per_row.items()}})
+        for arm in arms_mod.active_arms(config, "B"):
+            mine = [r for r in opt_records if r.get("campaign_arm") == arm]
+            modules = [sum(float(rows_of(r, groups_b)["rows"][m]) for m in MODULE_ROWS) for r in mine]
+            out.append({"configuration": config.name, "phase": "B", "arm": arm, "n": len(mine), "modules_per_run_s": _median_bracket(modules)})
+    return {
+        "stage": "cache_load",
+        "what": (
+            "the numba cache load in a process's first evaluation: warm-up less measured model time "
+            "on the campaign's warmed phase A records (same entry, same counts), per module row; "
+            "beside it the phase B module time per run that carries one such first evaluation"
+        ),
+        "tree_git_head": framework.git_head(),
+        "rows": out,
+        "context": "context, never evidence (D33)",
+    }
+
+
 def stage(campaign: Campaign, name: str, *, resume: bool = False) -> tuple[int, dict[str, Any]]:
     if name == "repeatability":
         record = repeatability(campaign, resume=resume)
@@ -823,6 +1036,11 @@ def stage(campaign: Campaign, name: str, *, resume: bool = False) -> tuple[int, 
         return (0 if record["n_outside"] == 0 else 1), record
     if name == "tables":
         return 0, tables_stage(campaign)
+    if name == "seed-set":
+        record = seed_set(campaign, resume=resume)
+        return (0 if record["n_counts_differing"] == 0 else 1), record
+    if name == "cache-load":
+        return 0, cache_load(campaign)
     raise GateError(f"{name!r} is not a timing stage; the stages are {STAGES}")
 
 
@@ -859,4 +1077,24 @@ def report(record: Mapping[str, Any]) -> list[str]:
         lines.append(f"  appendix timings from: {record['appendix_timings_from']}")
     elif record["stage"] == "tables":
         lines.append(f"  {record['n_records']} record(s) -> {record['written']}")
+    elif record["stage"] == "seed_set":
+        lines.append(
+            f"  phases {record['phases']}: {record['n_jobs']} job(s) at W = 1; counts identical to the "
+            f"campaign record on {record['n_counts_identical']}, differing on {record['n_counts_differing']}"
+        )
+        for row in record["rows"]:
+            if not row["counts_identical"]:
+                lines.append(f"  {row['phase']}/{row['arm']}/{row['configuration']}/seed{row['seed']:03d}: counts differ on {row['differing']}")
+    elif record["stage"] == "cache_load":
+        for row in record["rows"]:
+            if row["phase"] == "A":
+                b = row["load_s"]["modules"]
+                lines.append(
+                    f"  A/{row['arm']}/{row['configuration']}: first-evaluation load {_fmt(b['median'], 1000.0)} ms "
+                    f"[{_fmt(b['min'], 1000.0)}, {_fmt(b['max'], 1000.0)}] over {row['n']} (M1 "
+                    f"{_fmt(row['load_s']['M1']['median'], 1000.0)}, M2 {_fmt(row['load_s']['M2']['median'], 1000.0)})"
+                )
+            else:
+                b = row["modules_per_run_s"]
+                lines.append(f"  B/{row['arm']}/{row['configuration']}: module time per run {_fmt(b['median'], 1.0)} s [{_fmt(b['min'], 1.0)}, {_fmt(b['max'], 1.0)}] over {row['n']}")
     return lines
