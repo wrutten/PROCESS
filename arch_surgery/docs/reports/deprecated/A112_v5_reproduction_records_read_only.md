@@ -1,6 +1,6 @@
 # A112 (v5-reproduction-records-read-only): the reproduction gate's records as a read-only archive (I-41)
 
-> **Document status**: **OPEN (task report, awaiting the orchestrator's assessment).** Task A112, branch
+> **Document status**: **MERGED 2026-10-01 at `51737df7` (`--no-ff`; the orchestrator's assessment at the end); archived.** Records relocated by move to `arch_surgery/idf_probe/runs/A112_runs/` (the one V5 records tree: `census_tau1e-08/`, `write_set_tau1e-06/`, the shared caches); the paths below that begin `runs/` are read from there. Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A112, branch
 > `A112-v5-reproduction-records-read-only`, worktree `.claude/worktrees/A112-v5-reproduction-records-read-only`, from trunk
 > `ab576660`, 2026-10-01. Harness only. Nothing changed in the driver copy (`MDA_partitioning_experiment_v5/PROCESS/`),
 > in `process/` or in V4.
