@@ -1,6 +1,6 @@
 # A109 (v5-write-set-gates) — the ten gates not yet pressed under run ID `write_set_tau1e-06`
 
-> **Document status** — **OPEN (task report, awaiting the orchestrator's assessment).** Task A109, branch
+> **Document status** — **MERGED 2026-10-01 at `cff49790` (`--no-ff`; the orchestrator's assessment at the end); archived.** The one V5 records tree moved on with the next task (A110); after A110's retirement read `arch_surgery/idf_probe/runs/A110_runs/`. Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A109, branch
 > `A109-v5-write-set-gates`, worktree `.claude/worktrees/A109-v5-write-set-gates`, from trunk `52ea57be`, 2026-10-01.
 > A run task: no change to the driver copy (`MDA_partitioning_experiment_v5/PROCESS/`), `process/`, V4 or the harness.
 > Every number below is printed by `experiment_runner.py` at `52ea57be` (the harness and driver copy are unchanged at
