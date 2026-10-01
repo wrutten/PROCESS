@@ -148,6 +148,17 @@ within a campaign (D39):
 | `write_set` (the fallback) | the block's **whole write set** — exactly V4's predicate | 1e-6, V4's | D39 |
 
 τ follows the set (`config.TAU_BY_TEST_SET`) unless `--tau` overrides it, and an override is stamped.
+**A named tolerance rule** (`--tau-rule <name>`, `Campaign.tau_rule`; `config.TAU_RULES`; A105) gives
+each configuration its own τ = factor × `epsvmc`, read from the configuration's committed input file
+(PROCESS's default where it sets none), the factor declared by the rule: `epsvmc_times_epsfcn` (factor
+`epsfcn`, 1e-3 by default: tok 1e-10, lad 1e-11, st 1e-12) and `epsvmc_times_tenth_epsfcn` (a tenth of
+it, the retry ladder's smallest step: 1e-11, 1e-12, 1e-13). Refused with `--tau`. The rule's name
+(`tau_rule`) and each τ are job-identity fields — `tau_rule` rendered only when set — and stamped
+(`campaign_tau_rule` by the child, `tau_rule_derivation` by the pool; owed only by a rule's record); a
+rule campaign's chain writes under `runs/campaign_tau_rule_<rule>/`. It reaches the flat and partitioned
+loops; the reference arm composes no tolerance; a supplementary stage keeps its own τ. **No rule is the
+default, and then no job, identity, digest or record changes.** Which rule, if any, a campaign is pressed
+under is the user's open question (OQ-tolerance).
 The test set and τ are job-identity fields rendered only where they differ from V4's, so a fallback job
 carries V4's identity — which is what makes every record made before DR11 a fallback record and lets
 GR read V4's reference records on this tree. The pool refuses a job at another setting than the
@@ -411,7 +422,7 @@ python experiment_runner.py --run --arm B2 --configuration st_regression --seed 
 python run_stamp_survey.py                           # the commit of every record under runs/
 ```
 
-`--test-set write_set` (or `--tau`) sets the campaign-level test set for any press; `--outdir` sends a
+`--test-set write_set` (or `--tau`, or `--tau-rule <name>`) sets the campaign-level test set or tolerance for any press; `--outdir` sends a
 gate's or stage's records elsewhere; `--no-teeth` skips a gate's teeth and says so in the verdict.
 
 ---

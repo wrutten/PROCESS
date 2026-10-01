@@ -248,6 +248,56 @@ def check_pairs(pairs: list[dict[str, Any]], campaign: Campaign) -> list[dict[st
 # --------------------------------------------------------------------------
 
 
+def tolerance_rule_identity_rows(campaign: Campaign) -> list[dict[str, Any]]:
+    """A named tolerance rule moves no default identity and owns its own.
+
+    Task A105 (v5-resume-fixes-and-tau-rule).  Per rule and configuration,
+    the flat control's seed-1 evaluation is composed three ways — under this
+    campaign with no rule, under the rule, and under ``--tau`` set to the
+    rule's own value — and must give: no ``tau_rule`` in the identity
+    without a rule (so no record made without one moves); the rule's name
+    and its τ in the identity under it; three distinct digests (a rule's
+    record never resolves into the plain campaign's, nor into a ``--tau``
+    campaign's at the same value).
+    """
+    from ..core.config import TAU_RULES  # noqa: PLC0415
+
+    plain = dataclasses.replace(campaign, tau=None, tau_rule=None)
+    runs_dir = Path(campaign.runs_dir)
+    rows: list[dict[str, Any]] = []
+    for rule in TAU_RULES:
+        ruled = dataclasses.replace(plain, tau_rule=rule.name)
+        for config in campaign.configurations:
+            def job() -> pool_mod.Job:
+                return pool_mod.Job(
+                    phase="A", arm="A0", config=config, seed=1, regime="perturbed",
+                    delta=campaign.delta, run_kind="gate",
+                )
+            tau = ruled.tau_for(config)
+            same_tau = dataclasses.replace(plain, tau=tau)
+            identities = {
+                "none": job().identity(runs_dir, campaign=plain),
+                "rule": job().identity(runs_dir, campaign=ruled),
+                "tau": job().identity(runs_dir, campaign=same_tau),
+            }
+            digests = {k: records_mod.job_digest(v) for k, v in identities.items()}
+            holds = (
+                "tau_rule" not in identities["none"]
+                and identities["rule"].get("tau_rule") == rule.name
+                and identities["rule"].get("tau") == tau
+                and "tau_rule" not in identities["tau"]
+                and len(set(digests.values())) == 3
+            )
+            rows.append({
+                "rule": rule.name,
+                "configuration": config.name,
+                "tau": tau,
+                "digests": {k: v[:16] for k, v in digests.items()},
+                "holds": holds,
+            })
+    return rows
+
+
 def arm_name_translation_survey(campaign: Campaign) -> dict[str, Any]:
     """Every record under ``runs/`` by how its arm name was read.
 
@@ -321,12 +371,17 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     fields_ok = declared == classified
     rows = check_pairs(by_design_pairs(campaign), campaign)
     _HELD["rows"] = rows
+    rule_rows = tolerance_rule_identity_rows(campaign)
     table_problems = check_translation_table()
     survey = arm_name_translation_survey(campaign)
-    n_compared = len(declared) + len(rows) + len(records_mod.RECORDED_ARM_NAMES) + survey["n_records"]
+    n_compared = (
+        len(declared) + len(rows) + len(rule_rows)
+        + len(records_mod.RECORDED_ARM_NAMES) + survey["n_records"]
+    )
     n_mismatched = (
         (0 if fields_ok else len(set(declared) ^ set(classified)))
         + sum(1 for r in rows if not r["holds"])
+        + sum(1 for r in rule_rows if not r["holds"])
         + len(table_problems)
         + len(survey["refusals"])
     )
@@ -334,6 +389,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "passed": (
             fields_ok
             and all(r["holds"] for r in rows)
+            and all(r["holds"] for r in rule_rows)
             and not table_problems
             and not survey["refusals"]
         ),
@@ -349,6 +405,8 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             f"{len(declared)} Job field(s); {len(rows)} by-design pair(s) "
             f"({sum(1 for r in rows if r['must'] == 'differ')} must differ, "
             f"{sum(1 for r in rows if r['must'] == 'agree')} must agree); "
+            f"{len(rule_rows)} tolerance-rule identity row(s) (rule x "
+            f"configuration: no rule, the rule, --tau at the rule's value); "
             f"{len(records_mod.RECORDED_ARM_NAMES)} recorded-name row(s); "
             f"{survey['n_records']} record(s) under runs/ read by arm name"
         ),
@@ -359,6 +417,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "job_fields": declared,
         "pool_root": str(pool_mod.POOL_SUBPATH),
         "pairs": rows,
+        "tolerance_rule_identity": rule_rows,
         "arm_names": {
             "table_problems": table_problems,
             "survey": survey,

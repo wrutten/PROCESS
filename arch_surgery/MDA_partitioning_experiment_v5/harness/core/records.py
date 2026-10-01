@@ -416,6 +416,11 @@ SCHEMA: tuple[Field, ...] = (
     _f("campaign_timers", "AB", "timers", "whether the wall-clock timers were composed (PROCESS_ARCH_TIMERS=on); context, never evidence"),
     _f("timers", "AB", "timers", "the driver's wall-clock accumulators harvested before the audit, the harness's excluded costs and the epochs (DR12); context, never evidence"),
     _f("launcher", "AB", "timers", "the pool's independent wall of the subprocess, its spawn and return epochs and the load average at both (DR12); context, never evidence"),
+    # A105 (v5-resume-fixes-and-tau-rule): the two tolerance-rule fields are
+    # owed only by a record made under a named rule (``when == "tau_rule"``),
+    # so no record made without one owes them and none is re-made.
+    _f("campaign_tau_rule", "AB", "tau_rule", "the named tolerance rule the job's tau came from (config.TAU_RULES), stamped by the child"),
+    _f("tau_rule_derivation", "AB", "tau_rule", "the rule's derivation of tau from the configuration's committed input file: epsvmc and the factor's setting, where each was read, the tau; stamped by the pool"),
     _f("campaign_predicate_mode", "AB", "always", "which denominator the test scales by: 'frozen', the one ruler since DR11"),
     _f("campaign_input_file", "AB", "always", "the input file actually read"),
     _f("campaign_input_file_kind", "AB", "always", "committed or lifted"),
@@ -561,7 +566,9 @@ CONTRACT: dict[str, tuple[str, ...]] = {
 }
 
 
-def fields_for(phase: str, *, finished: bool, timers_on: bool = False) -> tuple[Field, ...]:
+def fields_for(
+    phase: str, *, finished: bool, timers_on: bool = False, tau_rule_on: bool = False
+) -> tuple[Field, ...]:
     """The fields a record of this phase must carry.
 
     ``when == "timers"`` fields are owed only by a record made with the
@@ -575,6 +582,7 @@ def fields_for(phase: str, *, finished: bool, timers_on: bool = False) -> tuple[
             field.when == "always"
             or (field.when == "finished" and finished)
             or (field.when == "timers" and timers_on)
+            or (field.when == "tau_rule" and tau_rule_on)
         )
     )
 
@@ -616,9 +624,18 @@ def missing_fields(record: Mapping[str, Any]) -> list[str]:
     timers_on = bool(record.get("campaign_timers")) or (
         isinstance(timers_block, dict) and bool(timers_block.get("enabled"))
     )
+    # A named tolerance rule's fields are owed by a record made under one:
+    # the child's stamp says so, or -- so that a copy with the stamp removed
+    # still owes it -- the pool's stamped identity does.
+    identity = record.get("job_identity")
+    tau_rule_on = bool(record.get("campaign_tau_rule")) or (
+        isinstance(identity, dict) and identity.get("tau_rule") is not None
+    )
     absent = [
         field.name
-        for field in fields_for(phase, finished=finished, timers_on=timers_on)
+        for field in fields_for(
+            phase, finished=finished, timers_on=timers_on, tau_rule_on=tau_rule_on
+        )
         if not has_path(record, field.name)
     ]
     if finished:
@@ -1323,6 +1340,7 @@ IDENTITY_FIELDS_STAMPED_BY_THE_CHILD: dict[str, str] = {
     "audit_position": "audit_position",
     "test_set": "campaign_test_set",
     "tau": "campaign_tau",
+    "tau_rule": "campaign_tau_rule",
     "timers": "campaign_timers",
 }
 
@@ -1342,6 +1360,9 @@ IDENTITY_FIELDS_STAMPED_BY_THE_CHILD: dict[str, str] = {
 IDENTITY_DEFAULTS_WHEN_ABSENT: dict[str, Any] = {
     "test_set": "write_set",
     "tau": 1e-6,
+    # A105 (v5-resume-fixes-and-tau-rule): no named tolerance rule -- every
+    # record made before the rule existed, and every one made without one.
+    "tau_rule": None,
     # DR12: the timers off -- every record made before the instrument, and
     # every gate record since, is a record made without it.
     "timers": False,

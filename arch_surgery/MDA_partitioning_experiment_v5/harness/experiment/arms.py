@@ -173,7 +173,9 @@ class Arm:
             return instrument
 
         test_set = campaign.test_set if test_set is None else test_set
-        tau = campaign.tau if tau is None else tau
+        # A named tolerance rule gives each configuration its own τ
+        # (config.TauRule); without one this is the campaign's one τ.
+        tau = campaign.tau_for(config) if tau is None else tau
         lifted_here = config.pulsed and self.burn_time_out_of_loop
         terms: dict[str, str] = {
             **instrument,
@@ -444,8 +446,13 @@ def stopping_rule_text(cell: str, campaign: Campaign) -> str:
     neither symbol and is returned as it is."""
     if not cell.startswith(TEST_SET_FORM):
         return cell
+    tolerance = (
+        f"{TAU_FORM} by rule {campaign.tau_rule}"
+        if campaign.tau_rule is not None
+        else f"{TAU_FORM} = {campaign.tau:g}"
+    )
     return cell.replace(TEST_SET_FORM, TEST_SET_WORDS[campaign.test_set], 1).replace(
-        TAU_FORM, f"{TAU_FORM} = {campaign.tau:g}", 1
+        TAU_FORM, tolerance, 1
     )
 
 

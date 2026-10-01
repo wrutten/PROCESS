@@ -63,6 +63,7 @@ from harness.core.config import (  # noqa: E402
     CAMPAIGN_TIMERS,
     EXECUTION_APPROVED,
     TAU_BY_TEST_SET,
+    TAU_RULES,
     TEST_SETS,
     Campaign,
     default_campaign,
@@ -373,7 +374,7 @@ def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
         teeth=not args.no_teeth,
     )
     chain_mod.print_press(press)
-    out = args.json or (campaign.runs_dir / plan.root_name / "press.json")
+    out = args.json or (chain_mod.chain_root(campaign, plan) / "press.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(press, indent=2, default=str) + "\n")
     print(f"\n  record: {out}")
@@ -499,7 +500,7 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
         teeth=not args.no_teeth,
     )
     chain_mod.print_press(press)
-    out = args.json or (campaign.runs_dir / plan.root_name / "press.json")
+    out = args.json or (chain_mod.chain_root(campaign, plan) / "press.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(press, indent=2, default=str) + "\n")
     print(f"\n  record: {out}")
@@ -536,7 +537,10 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         / "single"
         / config.name
         / arm.name
-        / f"{campaign.test_set}_tau{campaign.tau!r}"
+        / (
+            f"{campaign.test_set}_tau{campaign.tau_for(config)!r}"
+            + (f"_rule_{campaign.tau_rule}" if campaign.tau_rule is not None else "")
+        )
         / pool_mod.seed_directory(args.seed)
     )
     job = pool_mod.Job(
@@ -557,8 +561,12 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
     print(
         f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
         f"regime {args.regime}, kind {args.run_kind or 'smoke'}, test set "
-        f"{campaign.test_set}, tau {campaign.tau!r}"
-        + (" (overridden)" if campaign.tau_overridden else " (the test set's declared value)")
+        f"{campaign.test_set}, tau {campaign.tau_for(config)!r}"
+        + (
+            f" (rule {campaign.tau_rule})"
+            if campaign.tau_rule is not None
+            else (" (overridden)" if campaign.tau_overridden else " (the test set's declared value)")
+        )
     )
     try:
         result = pool_mod.run(job, campaign, resume=args.resume)
@@ -938,6 +946,10 @@ def stage_campaign_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
 
 def _tolerance_words(campaign: Campaign) -> str:
     """The campaign's tolerance as a listing prints it."""
+    if campaign.tau_rule is not None:
+        return f"tau by rule {campaign.tau_rule} (" + ", ".join(
+            f"{config.name} {campaign.tau_for(config)!r}" for config in campaign.configurations
+        ) + ")"
     return f"tau {campaign.tau!r}" + (" (overridden)" if campaign.tau_overridden else "")
 
 
@@ -1460,6 +1472,16 @@ def main(argv: list[str] | None = None) -> int:
         "tolerance never resolve into the campaign's)",
     )
     parser.add_argument(
+        "--tau-rule",
+        choices=tuple(rule.name for rule in TAU_RULES),
+        default=None,
+        help="a named tolerance rule instead of one tau: each configuration's "
+        "tau computed from its committed input file ("
+        + "; ".join(f"{rule.name}: {rule.why}" for rule in TAU_RULES)
+        + ").  Refused with --tau.  The rule's name and each tau are in the "
+        "job identity and stamped on every record; none by default",
+    )
+    parser.add_argument(
         "--census",
         choices=("take", "write"),
         help="the census test sets, and stop: take = run the census job set "
@@ -1525,7 +1547,10 @@ def main(argv: list[str] | None = None) -> int:
     # made against; there is no flag to point the button anywhere else.  The
     # test set and the tolerance are the two campaign-level settings the
     # button takes (DR11, D39): one value each, reaching every job.
-    campaign = default_campaign(test_set=args.test_set, tau=args.tau)
+    if args.tau_rule is not None and args.tau is not None:
+        print("  REFUSED — --tau-rule and --tau both given; a campaign takes its tolerance one way")
+        return 3
+    campaign = default_campaign(test_set=args.test_set, tau=args.tau, tau_rule=args.tau_rule)
 
     if args.selfcheck:
         checks = selfcheck_mod.run_all(

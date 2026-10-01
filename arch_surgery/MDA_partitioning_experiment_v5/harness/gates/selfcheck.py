@@ -53,6 +53,7 @@ if str(_EXPERIMENT_DIR) not in sys.path:
 
 from harness.experiment import arms as arms_mod  # noqa: E402
 from harness.experiment import data_provenance as data_mod  # noqa: E402
+from harness.core import config as config_mod  # noqa: E402
 from harness.core import framework  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.child import perturb as perturb_mod  # noqa: E402
@@ -126,7 +127,7 @@ def _previous_environment(arm: str, config, campaign: Campaign) -> dict[str, str
     """
     name = config.name
     pulsed = config.pulsed
-    tau = repr(campaign.tau)
+    tau = repr(campaign.tau_for(config))
     if arm == "BR":
         return {}
     base = {
@@ -555,7 +556,104 @@ def check_composition(campaign: Campaign) -> Check:
             caught,
             f"A1 on {steady[0].name} is recorded as skipped and must refuse",
         )
+    _check_tolerance_rules(check, campaign)
     return check
+
+
+def _check_tolerance_rules(check: Check, campaign: Campaign) -> None:
+    """The named tolerance rules (``config.TAU_RULES``; task A105
+    (v5-resume-fixes-and-tau-rule)), checked as part of the composition.
+
+    Three statements and five teeth, no PROCESS run: PROCESS's defaults the
+    rules fall back on are the ones the copy declares; every rule gives every
+    configuration ``factor × epsvmc`` from its committed input file, and an
+    arm under this campaign composes exactly the tolerance the campaign
+    gives the configuration; without a rule, every configuration's τ is the
+    campaign's one τ (the default untouched).
+    """
+    import re
+
+    source = (Path(campaign.tree) / config_mod.PROCESS_OPTIMISER_DEFAULTS_SOURCE)
+    text = source.read_text() if source.exists() else ""
+    for name, value in config_mod.PROCESS_OPTIMISER_DEFAULTS.items():
+        check.n_compared += 1
+        match = re.search(rf"^\s*{name}: float = ([0-9.eE+-]+)\s*$", text, re.MULTILINE)
+        if match is None or float(match.group(1)) != float(value):
+            check.fail(
+                f"PROCESS's default {name} is declared {value!r} in config but "
+                f"{match.group(1) if match else 'absent'} in {source}"
+            )
+    derivations = []
+    for rule in config_mod.TAU_RULES:
+        for config in campaign.configurations:
+            check.n_compared += 1
+            d = rule.derivation(config)
+            derivations.append(f"{rule.name}/{config.name} {d['tau']!r}")
+            expected = float(f"{d['factor'] * d['epsvmc']:.{config_mod.TAU_RULE_DIGITS}g}")
+            if d["tau"] != expected or d["epsvmc"] <= 0 or d["factor"] <= 0:
+                check.fail(f"{rule.name} on {config.name}: {d}")
+    for config in campaign.configurations:
+        check.n_compared += 1
+        if campaign.tau_rule is None and campaign.tau_for(config) != float(campaign.tau):
+            check.fail(f"no rule, yet {config.name}'s tau {campaign.tau_for(config)!r} is not the campaign's {campaign.tau!r}")
+        for name in ("A0", "B0", "A2", "B2"):
+            if name in config.skips:
+                continue
+            terms = arms_mod.ARMS[name].terms(config, pin_hex=_PIN_HEX, campaign=campaign, seed=0)
+            if terms.get("tolerance") != repr(float(campaign.tau_for(config))):
+                check.fail(f"{name} on {config.name} composes tolerance {terms.get('tolerance')} against the campaign's {campaign.tau_for(config)!r}")
+    check.note(
+        "tolerance rules: "
+        + ("none in force" if campaign.tau_rule is None else f"{campaign.tau_rule} in force")
+        + "; " + ", ".join(derivations)
+    )
+
+    first = config_mod.TAU_RULES[0]
+    config = campaign.configurations[0]
+    base = first.derivation(config)
+    with tempfile.TemporaryDirectory(prefix="tau_rule_tooth_") as td:
+        lines = config.input_path.read_text().splitlines()
+        doubled = [
+            re.sub(r"^epsvmc(\s*)=.*$", f"epsvmc = {base['epsvmc'] * 2!r}", line)
+            for line in lines
+        ]
+        path = Path(td) / "doubled.IN.DAT"
+        path.write_text("\n".join(doubled) + "\n")
+        got = first.derivation(dataclasses.replace(config, input_path=path))["tau"]
+        check.tooth(
+            "an input file with epsvmc doubled",
+            got == float(f"{base['tau'] * 2:.{config_mod.TAU_RULE_DIGITS}g}"),
+            f"{first.name} on a copy of {config.input_path.name} with epsvmc doubled gives {got!r} against {base['tau']!r}",
+        )
+        commented = ["*" + line if re.match(r"^epsvmc\s*=", line) else line for line in lines]
+        path = Path(td) / "commented.IN.DAT"
+        path.write_text("\n".join(commented) + "\n")
+        d = first.derivation(dataclasses.replace(config, input_path=path))
+        check.tooth(
+            "an input file whose epsvmc line is a comment",
+            d["epsvmc"] == config_mod.PROCESS_OPTIMISER_DEFAULTS["epsvmc"] and d["epsvmc_from"] == "PROCESS default",
+            f"the same file with its epsvmc line commented out reads epsvmc {d['epsvmc']!r} from {d['epsvmc_from']}",
+        )
+        path = Path(td) / "twice.IN.DAT"
+        path.write_text("\n".join(lines + ["epsvmc = 1e-5"]) + "\n")
+        try:
+            first.derivation(dataclasses.replace(config, input_path=path))
+            caught, said = False, "ACCEPTED"
+        except ValueError as exc:
+            caught, said = "2 times" in str(exc), str(exc)[:120]
+        check.tooth("an input file setting epsvmc twice", caught, f"refused: {said}")
+    try:
+        dataclasses.replace(campaign, tau_rule=first.name, tau=1e-9)
+        caught, said = False, "ACCEPTED"
+    except ValueError as exc:
+        caught, said = True, str(exc)[:100]
+    check.tooth("a rule and an explicit tau together", caught, f"refused: {said}")
+    try:
+        dataclasses.replace(campaign, tau_rule="a_rule_nobody_declared", tau=None)
+        caught, said = False, "ACCEPTED"
+    except ValueError as exc:
+        caught, said = "a_rule_nobody_declared" in str(exc), str(exc)[:100]
+    check.tooth("a rule nobody declared", caught, f"refused: {said}")
 
 
 # --------------------------------------------------------------------------

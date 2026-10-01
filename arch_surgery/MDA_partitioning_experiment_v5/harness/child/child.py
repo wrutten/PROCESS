@@ -1784,17 +1784,20 @@ def open_record(
     switches_asked: Mapping[str, str],
     test_set: str,
     timers: bool = False,
+    tau_rule: str | None = None,
 ) -> dict[str, Any]:
     """The identity half of a record, filled before anything runs.
 
     Filled first so that a run which crashes before it reaches the driver still
     produces a record saying what it was trying to be.  ``test_set`` is the
     campaign-level test set the loops were asked to test (DR11), stamped as
-    ``campaign_test_set`` beside the tolerance it was composed with.
+    ``campaign_test_set`` beside the tolerance it was composed with; a named
+    tolerance rule, when the job's tolerance came from one, as
+    ``campaign_tau_rule``.
     """
     from .. import __version__ as harness_version
 
-    return {
+    record = {
         "record_format": records_mod.FORMAT,
         "harness_version": harness_version,
         "runner": runner,
@@ -1818,6 +1821,12 @@ def open_record(
         "pythonpath": os.environ.get("PYTHONPATH"),
         "env_architecture": architecture_environment(),
     }
+    if tau_rule is not None:
+        # A named tolerance rule (task A105 (v5-resume-fixes-and-tau-rule)):
+        # stamped only when given, so a record made without one has exactly
+        # the shape it had before the rule existed.
+        record["campaign_tau_rule"] = tau_rule
+    return record
 
 
 def stamp_tree(record: dict[str, Any], tree: Path, process_file: str) -> None:

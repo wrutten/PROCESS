@@ -80,7 +80,7 @@ from ..experiment import arms as arms_mod
 from ..experiment import input_files as input_files_mod
 from . import records as records_mod
 from ..experiment import switches as switches_mod
-from .config import TEST_SETS, Campaign, Config
+from .config import TEST_SETS, Campaign, Config, tau_rule_named
 
 #: Default per-run wall-clock limit.  Not a budget: reaching it is a
 #: ``timeout`` taxonomy row, recorded and never re-run at a longer limit.
@@ -153,6 +153,14 @@ class Job:
     #: fallback's (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``).
     test_set: str | None = None
     tau: float | None = None
+    #: The campaign's named tolerance rule, where the job's τ came from one
+    #: (``config.TauRule``): resolved by :func:`resolve_settings` — the
+    #: campaign's rule for a job that takes the campaign's τ, None for a job
+    #: that names its own (a supplementary stage, the reproduction gate).  An
+    #: identity field rendered only when set, so no record made without a
+    #: rule moves, and a rule's record never resolves into a ``--tau``
+    #: campaign's record at the same value.
+    tau_rule: str | None = None
     #: The wall-clock timers (DR12): ``None`` means the campaign's, resolved
     #: by :func:`resolve_settings`; an identity field rendered only when on
     #: (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``), so every gate record keeps
@@ -222,6 +230,10 @@ class Job:
                 # job carries V4's identity (see the field's comment).  An
                 # unresolved value is refused: a job rendered before the pool
                 # resolved it against the campaign would render as V4's.
+                if name == "tau_rule" and value is None:
+                    # No rule is a resolved value: the default every record
+                    # made without one carries, rendered by its absence.
+                    continue
                 if name == "timers" and value is None:
                     # DR12: an unresolved instrument switch renders as off --
                     # the default every record carries -- never as a refusal:
@@ -342,6 +354,7 @@ JOB_IDENTITY_FIELDS: tuple[str, ...] = (
     "predicate_mode",
     "test_set",
     "tau",
+    "tau_rule",
     "timers",
     "node_census",
     "census_entry",
@@ -396,6 +409,8 @@ def readable_key(identity: Mapping[str, Any]) -> str:
         parts.append(f"set={identity['test_set']}")
     if identity.get("tau") is not None:
         parts.append(f"tau={identity['tau']!r}")
+    if identity.get("tau_rule") is not None:
+        parts.append(f"rule={identity['tau_rule']}")
     if identity.get("timers"):
         parts.append("timers")
     usual_position = records_mod.effective_audit_position(
@@ -434,13 +449,29 @@ def resolve_settings(job: Job, campaign: Campaign) -> Job:
     every pool entry so that a job's identity is never rendered unresolved.
     """
     test_set = campaign.test_set if job.test_set is None else job.test_set
-    tau = campaign.tau if job.tau is None else float(job.tau)
+    # A tolerance rule gives each configuration its own τ (config.TauRule);
+    # a job that names no τ takes the campaign's for its configuration and
+    # carries the rule's name, one that names its own keeps it and no rule.
+    campaign_tau = campaign.tau_for(job.config)
+    if job.tau is None:
+        tau = campaign_tau
+        if job.tau_rule is None:
+            job.tau_rule = campaign.tau_rule
+    else:
+        tau = float(job.tau)
     if test_set not in TEST_SETS:
         raise PoolError(
             f"{job.arm}/{job.config.name}/seed{job.seed}: test set "
             f"{test_set!r} is not one this harness composes {TEST_SETS}"
         )
-    if test_set != campaign.test_set or float(tau) != float(campaign.tau):
+    if job.tau_rule is not None and job.tau_rule != campaign.tau_rule:
+        raise PoolError(
+            f"{job.arm}/{job.config.name}/seed{job.seed} carries tolerance rule "
+            f"{job.tau_rule!r} while the campaign composes "
+            f"{campaign.tau_rule!r}; refused rather than run under a rule the "
+            f"campaign did not declare"
+        )
+    if test_set != campaign.test_set or float(tau) != float(campaign_tau):
         stage = campaign.supplementary_stage_for(
             phase=job.phase,
             configuration=job.config.name,
@@ -463,7 +494,7 @@ def resolve_settings(job: Job, campaign: Campaign) -> Job:
             raise PoolError(
                 f"{job.arm}/{job.config.name}/seed{job.seed} asks for test set "
                 f"{test_set!r} at tau={tau!r} while the campaign composes "
-                f"{campaign.test_set!r} at tau={campaign.tau!r}, and no declared "
+                f"{campaign.test_set!r} at tau={campaign_tau!r}, and no declared "
                 f"supplementary stage admits those values for this phase, "
                 f"configuration and arm.  A campaign never mixes test sets "
                 f"(decision D39); refused rather than run under a setting the "
@@ -928,7 +959,7 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--input-kind", input_kind,
         "--coupling-state", str(job.config.coupling_state_path),
         "--seed", str(job.seed),
-        "--tau", repr(float(job.tau if job.tau is not None else campaign.tau)),
+        "--tau", repr(float(job.tau if job.tau is not None else campaign.tau_for(job.config))),
         "--test-set", str(job.test_set or campaign.test_set),
         "--timers", ("on" if job.timers else "off"),
         "--run-kind", job.run_kind,
@@ -937,6 +968,8 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--switches-asked", json.dumps(dict(terms)),
         "--reproduction-overrides", json.dumps(dict(job.reproduction_overrides or {})),
     ]
+    if job.tau_rule is not None:
+        command += ["--tau-rule", job.tau_rule]
     if job.delta is not None:
         command += ["--delta", repr(job.delta)]
     if job.pin_hex is not None:
@@ -1152,6 +1185,7 @@ def stamp_identity(
     digest: str,
     *,
     launcher: Mapping[str, Any] | None = None,
+    tau_rule_derivation: Mapping[str, Any] | None = None,
 ) -> None:
     """Write ``job_identity`` and ``job_digest`` into the record on disk.
 
@@ -1172,6 +1206,12 @@ def stamp_identity(
         # DR12: the launcher's independent wall of the subprocess and the
         # load average at its spawn and return; context, never evidence.
         record["launcher"] = dict(launcher)
+    if tau_rule_derivation is not None:
+        # The named tolerance rule's derivation of this job's τ from the
+        # configuration's committed input file (config.TauRule): what the
+        # rule read, where, and the τ it gave.  Stamped by the pool, which
+        # composed it; the child stamps the rule's name it was handed.
+        record["tau_rule_derivation"] = dict(tau_rule_derivation)
     # The naming scheme the arm fields are written in.  A record made after
     # the arm renaming of 2026-09-15 says so here, and ``records.read`` then
     # leaves its names alone; one without the stamp is read through
@@ -1317,7 +1357,17 @@ def run(
             "the load average at both ends; the fixed per-run term and the "
             "unattributed residual are derived from it (DR12); context, never evidence"
         )
-        stamp_identity(outdir, identity, digest, launcher=launcher)
+        stamp_identity(
+            outdir,
+            identity,
+            digest,
+            launcher=launcher,
+            tau_rule_derivation=(
+                tau_rule_named(job.tau_rule).derivation(job.config)
+                if job.tau_rule is not None
+                else None
+            ),
+        )
         record = records_mod.read(outdir)
         _MADE_THIS_INVOCATION[digest] = str(outdir)
         _index_record(campaign, digest, outdir)
