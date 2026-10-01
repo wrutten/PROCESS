@@ -383,7 +383,14 @@ def _identity_gates(campaign: Campaign) -> dict[str, Gate]:
 def _instrument_gates(campaign: Campaign) -> dict[str, Gate]:
     """The warmed evaluation child's neutrality gate (A102 (v5-campaign); V5
     plan §6): a harness instrument change shown count-neutral the way gate GC
-    shows a driver change.  Not one of the plan's §7 gates: no ``plan_name``."""
+    shows a driver change.  Not one of the plan's §7 gates: no ``plan_name``.
+
+    **Read once** since D44 (A110 (v5-warmup-verdict-once)): like GR it
+    returns the verdict recorded at its commit (``c2295511``, over the warmed
+    child's records at ``ff9e73a2``) under every run ID, verified and
+    re-derived from its archive, and makes no run; unlike GR's wrapper it
+    reads with or without ``--resume`` (it has nothing to re-make) and its
+    teeth run live on the archive (``gate_evaluation_warmup``)."""
     from . import gate_evaluation_warmup
 
     return {gate_evaluation_warmup.GATE_NAME: gate_evaluation_warmup.gate(campaign)}
@@ -776,8 +783,9 @@ GATE_ORDER: tuple[str, ...] = (
     "artifacts_derive_inputs",
     "artifacts_census",
     "artifacts_per_run",
-    # The warmed evaluation child against A101's cold-child records: eleven
-    # evaluations; before the gates whose evaluation records it vouches for.
+    # The warmed evaluation child against A101's cold-child records: read once
+    # (D44), no PROCESS run; before the gates whose evaluation records it
+    # vouches for.
     "evaluation_warmup",
     "record_completeness",
     "count_neutrality",

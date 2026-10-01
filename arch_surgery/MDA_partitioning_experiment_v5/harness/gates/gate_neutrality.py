@@ -117,6 +117,22 @@ ALWAYS_EXCLUDED: dict[str, str] = {
         "compared through coupling_state_provenance.components_sha256"
     ),
     "coupling_state_provenance.path": "the same absolute path, inside the provenance block",
+    # A110 (v5-warmup-verdict-once): the same absolute path again, inside the
+    # snapshot block (child.install_exit_snapshot_hook's state), added after
+    # the group above was written.  It agreed only while both captures were
+    # made in one tree; A109's write-set press of G1, the first with its two
+    # captures in two trees (A101's and A109's), failed on it alone (3 of 3 651
+    # values, 0 of 51 319 output lines; trap T20).  The hook loads the file
+    # with the same load_spec as the exit audit, and in every optimisation
+    # record this leaf equals exit_audit.coupling_state, whose file's identity
+    # is compared through exit_audit.components_sha256 (the rebuilt spec's
+    # digest, refused at load unless it equals the artifact's own); measured
+    # by the exclusion review (exclusion_review.PATH_CONTENT_WITNESS).
+    "audit_snapshot.coupling_state": (
+        "the same absolute path, inside the snapshot block.  The file is the "
+        "one exit_audit.coupling_state names in the same record, and its "
+        "identity is compared through exit_audit.components_sha256"
+    ),
     "exit_audit.frozen.restricted.artifact": (
         "an absolute path; the per-ruler copy of the leaf above, which DR5 "
         "added when the audit began publishing both rulers"

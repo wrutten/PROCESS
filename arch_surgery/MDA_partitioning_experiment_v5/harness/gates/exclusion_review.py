@@ -18,6 +18,7 @@ name and record path are unchanged; it is registered in
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -90,6 +91,7 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "process_copy_provenance.path": "a path",
     "coupling_state_artifact": "a path",
     "coupling_state_provenance.path": "a path",
+    "audit_snapshot.coupling_state": "a path",
     "exit_audit.frozen.restricted.artifact": "a path",
     "exit_audit.frozen.restricted.census": "a path",
     "exit_audit.mixed.restricted.artifact": "a path",
@@ -203,6 +205,127 @@ def _coverage(
         "leaves_equal_where_both_sides_have_them": equal,
         "present_on_both_sides_everywhere": both == on_a == on_b and both > 0,
         "equal_everywhere_it_is_present": both > 0 and equal == both,
+    }
+
+
+#: The absolute-path names of G1's table whose **file** is still compared by
+#: content (A110 (v5-warmup-verdict-once); the table's own comment says so of
+#: the coupling-state group, and trap T20 asks that it be shown, not assumed):
+#: name -> (the leaf that carries the file's identity by content, the leaf in
+#: the same record that names the same file, or None).  The review measures,
+#: on every G1 pair, that wherever the path leaf is present the identity leaf
+#: is present on both sides, is compared by G1 (excluded by no table at that
+#: pairing) and is equal, and that the sibling names the same file.
+PATH_CONTENT_WITNESS: dict[str, tuple[str, str | None]] = {
+    "exit_audit.coupling_state": ("exit_audit.components_sha256", None),
+    "audit_snapshot.coupling_state": ("exit_audit.components_sha256", "exit_audit.coupling_state"),
+    "coupling_state_artifact": ("coupling_state_provenance.components_sha256", None),
+    "coupling_state_provenance.path": ("coupling_state_provenance.components_sha256", "coupling_state_artifact"),
+}
+
+
+def _compared_by_g1(before: Mapping[str, Any], after: Mapping[str, Any]) -> dict[str, Any]:
+    return compare_records(
+        before,
+        after,
+        excluded=ALWAYS_EXCLUDED,
+        conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+        instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+    )
+
+
+def path_content_witness(
+    pairs: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """For each name of :data:`PATH_CONTENT_WITNESS`, over G1's pairs: is the
+    file its path names still compared by content?"""
+    rows = []
+    for name, (identity, sibling) in PATH_CONTENT_WITNESS.items():
+        n_pairs = n_identity_compared = n_identity_equal = n_sibling_same = 0
+        for before, after in pairs:
+            a, b = leaves(dict(before)), leaves(dict(after))
+            if name not in a and name not in b:
+                continue
+            n_pairs += 1
+            excluded = set(_compared_by_g1(before, after)["excluded"])
+            if identity in a and identity in b and identity not in excluded:
+                n_identity_compared += 1
+                n_identity_equal += int(_same(a[identity], b[identity]))
+            if sibling is not None:
+                n_sibling_same += int(
+                    all(
+                        side.get(name) is not None and side.get(name) == side.get(sibling)
+                        for side in (a, b)
+                    )
+                )
+        rows.append(
+            {
+                "name": name,
+                "excluded_by_name": name in ALWAYS_EXCLUDED,
+                "identity_leaf": identity,
+                "same_file_as": sibling,
+                "n_pairs_carrying_the_path": n_pairs,
+                "n_pairs_identity_compared": n_identity_compared,
+                "n_pairs_identity_equal": n_identity_equal,
+                "n_pairs_same_file_as_the_sibling_on_both_sides": n_sibling_same if sibling else None,
+                "content_still_compared": (
+                    n_pairs > 0
+                    and n_identity_compared == n_pairs
+                    and (sibling is None or n_sibling_same == n_pairs)
+                ),
+            }
+        )
+    return {
+        "what": (
+            "the absolute-path names of G1's table whose file is compared by "
+            "content instead: on every G1 pair carrying the path, the identity "
+            "leaf present on both sides and compared (excluded by no table at "
+            "that pairing), and where a sibling is named, the same file on both "
+            "sides"
+        ),
+        "rows": rows,
+        "all_content_still_compared": all(r["content_still_compared"] for r in rows),
+    }
+
+
+def path_valued_leaves(
+    pairs: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """Every leaf of G1's pairs whose value is an absolute path on either side
+    (trap T20: a path leaf agrees only by location until the first straddle
+    across two trees), by name with list indices collapsed: whether G1's
+    table excludes it and, where it does not, whether it reads equal."""
+    by_name: dict[str, dict[str, Any]] = {}
+    for before, after in pairs:
+        a, b = leaves(dict(before)), leaves(dict(after))
+        for path in sorted(set(a) | set(b)):
+            values = (a.get(path), b.get(path))
+            if not any(isinstance(v, str) and v.startswith("/") for v in values):
+                continue
+            name = re.sub(r"\[\d+\]", "[]", path)
+            row = by_name.setdefault(
+                name,
+                {
+                    "name": name,
+                    "excluded_by": is_volatile(path, ALWAYS_EXCLUDED) and "ALWAYS_EXCLUDED",
+                    "n_leaves": 0,
+                    "n_equal": 0,
+                },
+            )
+            row["n_leaves"] += 1
+            row["n_equal"] += int(values[0] == values[1])
+    rows = sorted(by_name.values(), key=lambda r: (bool(r["excluded_by"]), r["name"]))
+    compared = [r for r in rows if not r["excluded_by"]]
+    return {
+        "what": (
+            "every record leaf of G1's pairs whose value is an absolute path on "
+            "either side, by name: excluded by G1's table, or compared (and then "
+            "whether it reads equal on this pairing)"
+        ),
+        "n_names": len(rows),
+        "n_names_excluded": len(rows) - len(compared),
+        "names_compared": [r["name"] for r in compared],
+        "rows": rows,
     }
 
 
@@ -424,6 +547,8 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
             "reason."
         ),
         "G1_pairing": g1_straddle,
+        "G1_path_content_witness": path_content_witness(g1_pairs),
+        "G1_path_valued_leaves": path_valued_leaves(g1_pairs),
         "G1_instrument_leaves_by_prefix": {
             "what": (
                 "every record leaf the instrument-change group removed from "
@@ -526,6 +651,33 @@ def print_exclusion_review(block: Mapping[str, Any]) -> None:
         )
         for prefix, count in leaves["by_prefix"].items():
             print(f"    {prefix:<34} {count}")
+    witness = block.get("G1_path_content_witness")
+    if witness:
+        print("\n  G1's path names whose file is compared by content (pairs carrying the path):")
+        for row in witness["rows"]:
+            print(
+                f"    {row['name']:<34} identity {row['identity_leaf']:<46} "
+                f"compared {row['n_pairs_identity_compared']}/{row['n_pairs_carrying_the_path']}, "
+                f"equal {row['n_pairs_identity_equal']}"
+                + (
+                    f", same file as {row['same_file_as']} on "
+                    f"{row['n_pairs_same_file_as_the_sibling_on_both_sides']}"
+                    if row["same_file_as"]
+                    else ""
+                )
+                + f"  -> {'YES' if row['content_still_compared'] else 'NO'}"
+            )
+    paths = block.get("G1_path_valued_leaves")
+    if paths:
+        print(
+            f"\n  G1's leaves holding an absolute path: {paths['n_names']} name(s), "
+            f"{paths['n_names_excluded']} excluded by name; compared: {paths['names_compared']}"
+        )
+        for row in paths["rows"]:
+            print(
+                f"    {row['name']:<52} {row['excluded_by'] or 'COMPARED':<16} "
+                f"leaves {row['n_leaves']:>3}, equal {row['n_equal']:>3}"
+            )
     sizes = block["sizes"]
     print("\n  sizes:")
     for name, value in sizes.items():
