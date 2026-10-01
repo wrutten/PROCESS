@@ -1,6 +1,6 @@
 # A105 (v5-resume-fixes-and-tau-rule) — crashed records kept under `--resume` (I-38), `--jobs` on the reproduction gate's unnamed job (I-36), and the loop tolerance per configuration as a named-rule capability
 
-> **Document status** — **ACTIVE (task report, open).** Branch `A105-v5-resume-fixes-and-tau-rule`, from
+> **Document status** — **MERGED 2026-10-01 at `1856a922` (`--no-ff`; the orchestrator's assessment at the end); archived.** Records relocated to `arch_surgery/idf_probe/runs/A105_runs/v5_resume_fixes_and_tau_rule/` (the latest relocated V5 records tree). Was: **ACTIVE (task report, open).** Branch `A105-v5-resume-fixes-and-tau-rule`, from
 > `59f36aed`. Harness only: nothing under the V5 folder's `PROCESS/`, nothing under `process/models/`,
 > nothing under `MDA_partitioning_experiment_v4/`, no sibling clone touched. Records relocated to
 > `arch_surgery/idf_probe/runs/v5_resume_fixes_and_tau_rule/` (§9).
