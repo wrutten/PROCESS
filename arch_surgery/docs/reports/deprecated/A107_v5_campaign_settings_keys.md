@@ -1,6 +1,6 @@
 # A107 (v5-campaign-settings-keys) — one folder of records per campaign settings
 
-> **Document status** — **OPEN (task report, awaiting the orchestrator's assessment).** Task A107, branch
+> **Document status** — **MERGED 2026-10-01 at `3d369b6c` (`--no-ff`; the orchestrator's assessment at the end); archived.** Records relocated to `arch_surgery/idf_probe/runs/A107_runs/v5_campaign_settings_keys/` (the latest relocated V5 records tree, in the run-ID layout: `census_tau1e-08/`, `write_set_tau1e-06/`). Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A107, branch
 > `A107-v5-campaign-settings-keys`, 2026-10-01. Harness only (`arch_surgery/MDA_partitioning_experiment_v5/`, nothing
 > under its `PROCESS/`, nothing under `process/models/`, nothing in V4). Every number below comes from a committed
 > entry point (`experiment_runner.py`, `paper_cells_recount.py`) at the commit named beside it; the press logs are under
