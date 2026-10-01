@@ -201,10 +201,11 @@ def _run_once(name: str, gate: Gate, campaign: Campaign) -> Gate:
             "read_of_the_recorded_verdict": {
                 "what": (
                     f"a READ of the verdict recorded at the copy commit "
-                    f"{commit[:8]}, not a press: no run was made or re-made, "
-                    f"and the pool records the copy commit's press read are "
-                    f"since shared with other gates at the current record "
-                    f"contract (some re-made by them under --resume)"
+                    f"{commit[:8]}, not a press: no run was made or re-made.  "
+                    f"The gate's records are read from its read-only archive "
+                    f"gates/{name}/pool_records/ (issue I-41, task A112), which "
+                    f"no press writes; the shared pool's records of the same "
+                    f"identities are other gates' own"
                 ),
                 "path": str(source),
                 "archived_copy": str(archive),

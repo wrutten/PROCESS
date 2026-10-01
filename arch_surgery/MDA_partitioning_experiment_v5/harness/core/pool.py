@@ -527,6 +527,60 @@ def pool_root(campaign: Campaign) -> Path:
     return Path(campaign.runs_dir) / POOL_SUBPATH
 
 
+#: The reproduction gate's **read-only archive** of the pool records its press
+#: read, relative to the run ID's folder (issue I-41; task A112
+#: (v5-reproduction-records-read-only)).  GR's job identities are V4's (the
+#: whole write set at 1e-6, timers off), so under a run ID whose settings are
+#: V4's own another gate's job -- gate G6's ``A2`` seed-1 evaluations -- has
+#: exactly GR's identity, resolved to GR's record in the shared pool and, the
+#: record lacking fields today's contract owes, re-made it with today's driver;
+#: ``tally_contracts`` then compared today's driver with V4's reference cells.
+#: GR's readers (``reproduction.attach_phase_a_entries`` and the job sets built
+#: on it) name directories here; the shared pool keeps its own records of the
+#: same identities, which belong to whichever gate composes them.  The archive
+#: lies under a gate's own root, so step 2 of :func:`directory_for` never
+#: resolves an unnamed job into it (I-36), and :func:`run` refuses any job that
+#: resolves into it (:func:`refuse_a_read_only_archive`).
+REPRODUCTION_ARCHIVE_SUBPATH = Path("gates") / "reproduction" / "pool_records"
+
+#: Every archive no press may write into, relative to the run ID's folder.
+READ_ONLY_ARCHIVES: tuple[Path, ...] = (REPRODUCTION_ARCHIVE_SUBPATH,)
+
+
+def read_only_archive_of(directory: Path, campaign: Campaign) -> Path | None:
+    """The read-only archive *directory* lies in, or None."""
+    resolved = Path(directory).resolve()
+    for subpath in READ_ONLY_ARCHIVES:
+        root = (Path(campaign.runs_dir) / subpath).resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            continue
+        return subpath
+    return None
+
+
+def refuse_a_read_only_archive(directory: Path, campaign: Campaign, *, job: Job | None = None) -> Path:
+    """*directory*, or a refusal where it lies in a read-only archive.
+
+    Called by :func:`run` on the directory a job resolved to, before anything
+    is kept, removed or made: a record in a read-only archive is read by its
+    owner's readers and is never re-made, kept by a press or written into,
+    whatever the job and whatever ``--resume`` says (I-41).
+    """
+    archive = read_only_archive_of(directory, campaign)
+    if archive is not None:
+        raise PoolError(
+            f"{job.key + ': ' if job is not None else ''}{directory} lies in the "
+            f"read-only archive runs/<run ID>/{archive.as_posix()}/.  A record "
+            f"there is the reproduction gate's, made by the V4-identical driver "
+            f"and read, never re-made or written by a press (issue I-41); a job "
+            f"of the same identity is made in the shared pool as its own record.  "
+            f"Refused before anything was removed or made."
+        )
+    return Path(directory)
+
+
 def canonical_directory_for(job: Job, campaign: Campaign) -> Path:
     """Where this job's record goes when none exists yet: its own ``outdir``,
     or the pool's directory — a pure function of the identity.
@@ -1312,7 +1366,7 @@ def run(
             f"self-check, and a measurement of a tree nobody asked for is "
             f"exactly what that separation prevents."
         )
-    outdir = directory_for(job, campaign)
+    outdir = refuse_a_read_only_archive(directory_for(job, campaign), campaign, job=job)
     job.outdir = outdir
     identity = job.identity(Path(campaign.runs_dir))
     digest = records_mod.job_digest(identity)
