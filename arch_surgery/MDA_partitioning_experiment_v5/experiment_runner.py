@@ -1427,13 +1427,14 @@ def stage_copy_archived_records(args: argparse.Namespace, campaign: Campaign) ->
         print(f"  REFUSED — runs/{source_id}/'s settings name the run ID {source.run_id!r}, not its folder's name")
         return 3
     try:
-        block = archived_records_mod.copy(source, campaign, apply=args.apply)
+        block = archived_records_mod.copy(source, campaign, apply=args.apply, only=args.archive)
     except (archived_records_mod.ArchiveError, pool_mod.PoolError) as exc:
         print(f"  REFUSED — {exc}")
         return 3
     resolved = (
         archived_records_mod.agreement(
-            archived_records_mod.resolution(source), archived_records_mod.resolution(campaign)
+            archived_records_mod.resolution(source, only=args.archive),
+            archived_records_mod.resolution(campaign, only=args.archive),
         )
         if block.get("applied")
         else None
@@ -1771,6 +1772,16 @@ def main(argv: list[str] | None = None) -> int:
         "archived straddles, the warm-up gate's cold-child records, the derived "
         "input files) from that run ID's folder into the folder of the run ID "
         "the settings name, and stop.  A dry run unless --apply",
+    )
+    parser.add_argument(
+        "--archive",
+        metavar="GATE",
+        action="append",
+        default=None,
+        help="with --copy-archived-records: copy only that gate's archive "
+        "(repeatable; harness/gates/archived_records.ARCHIVES names them), so a "
+        "run ID that holds the others is given one new or changed archive "
+        "without refusing on verdict files a re-press has since rewritten",
     )
     parser.add_argument(
         "--compact-run-logs",

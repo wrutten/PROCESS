@@ -239,9 +239,14 @@ field still differs), re-enters the coupling state bit-exact, resets every drive
 **measured** evaluation. Both evaluations' count leaves and exit-state digests are stamped under
 `evaluation_warmup` and the record is refused where they differ, so every phase A record carries its own
 determinism check. The fixed per-run term ends at the warm-up's first evaluation. Gate `evaluation_warmup`
-compares the cold child's records of the gate job set's evaluation half (archived on its first press) with
-the warmed child's: every count and every exit-state component identical, each warmed record's check
-re-derived. **Phase B is not warmed**: a run's first evaluation carries the cache load inside its module
+compared the cold child's records of the gate job set's evaluation half (archived) with the warmed child's
+at the commit that introduced it (`ff9e73a2`), under the default settings: every count and every exit-state
+component identical, each warmed record's check re-derived (PASS, recorded at `c2295511`). **It gives that
+verdict once and is read, never re-pressed, under every run ID (D44, A110)**, as GR is: the read verifies the
+record's stamp and settings, that every file it compared is byte-identical to the archive manifest, and that
+the comparison re-derived from those files gives the recorded numbers. Under another run ID's settings the
+pressed form compared a census-made archive with records made under those settings and failed by construction
+(I-40); what guards each campaign is the per-record check above. **Phase B is not warmed**: a run's first evaluation carries the cache load inside its module
 rows; the paper's phase B wall-clock caption states its size from the `cache_load` timing stage (§9).
 
 ---
@@ -345,7 +350,7 @@ so its zeros are shown capable of failing (protocol §12). A failed gate is a re
 | `composition`, `rungs`, `provenance`, `data`, `run_path`, `capability`, `stage_provenance` | — | the harness itself: arm composition, the matrix and the rungs, the git stamps, the committed data, the record's run path, the tree's switches, the stage-record stamps | no |
 | `resume_identity` | — | every `--resume` decision and every directory of the shared pool | no |
 | `artifacts_check`, `artifacts_derive_inputs`, `artifacts_census`, `artifacts_per_run` | — | the committed artifacts, the lifted input files, the write census, the per-run deferral sets | the last three |
-| `evaluation_warmup` | — | the warmed evaluation child (§8) | yes |
+| `evaluation_warmup` | — | the warmed evaluation child (§8) — **read once** (D44): its verdict at `c2295511` over the records made at `ff9e73a2`, verified and re-derived under every run ID | no (read-once) |
 | `record_completeness` | G7 | a forced-unconverged run carries every declared field, the timer fields included | yes (its tooth re-makes one smoke evaluation on every press) |
 | `count_neutrality` | GC | each count-neutral driver change (§6) | yes |
 | `prime_map` | G2 | the prime in its once-per-evaluation form (§6) | yes |
@@ -455,7 +460,8 @@ gate table, the paper's document); one with no stamp was made before the layout 
 **Read-only records reach a new run ID by an explicit copy**, `--copy-archived-records <from run ID>` (a
 listing; `--apply` copies; `harness/gates/archived_records.py`): the reproduction gate's verdict at the copy
 commit and its job set's pool records, gate GC's straddle records and both labelled sides, gate G1's `before`
-capture and archived straddles, the warm-up gate's cold-child records, the derived input files. Copied to the
+capture and archived straddles, the warm-up gate's verdict archive, its manifest and both sides it compared,
+the derived input files (`--archive <gate>` copies one gate's archive alone, A110). Copied to the
 same relative path, a record is the same job by construction (a shared area outside the folder would render
 its paths against another root and the gates would make it again); copies, not hard links (a re-press rewrites
 a verdict in place); every file's SHA-256 checked; afterwards the gates' job sets are composed under the
@@ -516,6 +522,7 @@ python experiment_runner.py --runs                   # the run IDs on disk and w
 python experiment_runner.py --adopt-records-layout   # re-lay runs/ in the old layout under its run ID (--apply to do it)
 python experiment_runner.py --compact-run-logs       # one compressed PROCESS log per run folder, every run ID (a run ID to name one; --apply to do it)
 python experiment_runner.py --test-set write_set --copy-archived-records census_tau1e-08 --apply   # a new run ID's read-only records
+python experiment_runner.py --test-set write_set --copy-archived-records census_tau1e-08 --archive evaluation_warmup --apply   # one gate's archive
 python experiment_runner.py --test-set write_set --run-isolation smoke   # the smoke under that run ID, nothing else touched
 ```
 
@@ -527,6 +534,16 @@ unless `--runs` names another run ID's folder (with `--document paper_tables_<ru
 ---
 
 ## Change log
+
+- **2026-10-01, A110 (v5-warmup-verdict-once):** gate `evaluation_warmup` read once (D44; §§8, 11): its verdict at
+  `c2295511` over the warmed child's records at `ff9e73a2` (the default settings) is read under every run ID,
+  verified (stamp, settings, a SHA-256 manifest of every compared file taken by the first read, the comparison
+  re-derived and reconciled pair by pair) and never re-pressed; five teeth (two kept, three new). The archive it
+  reads (verdict, manifest, before and after sides) is what `--copy-archived-records` carries for it, and
+  `--archive <gate>` copies one gate's archive alone (§12). Gate G1's path table gains
+  `audit_snapshot.coupling_state` (trap T20); the `exclusion_review` stage measures that the file each
+  coupling-state path names is still compared by content, and lists every leaf of G1's pairs that holds an
+  absolute path.
 
 - **2026-10-01, A108 (v5-one-compressed-log):** one PROCESS log per run folder, gzip-compressed, by the pool's
   close-out (§4 step 6, `core/process_log.py`); the log forms in the record contract (§12); `--compact-run-logs`

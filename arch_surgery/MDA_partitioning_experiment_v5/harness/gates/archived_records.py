@@ -14,8 +14,9 @@ design** — made once, at a commit that is gone, and never re-made:
   under, so the same jobs under every run ID;
 * gate G1's ``before`` capture and its archived straddles, each made at the
   commit before a driver change;
-* gate ``evaluation_warmup``'s archived cold-child records (A101's child,
-  gone from the tree);
+* gate ``evaluation_warmup``'s archived verdict, its manifest and both sides
+  it compared (A101's cold child, gone from the tree, and A102's warmed child
+  under the default settings): the gate is read, never pressed (D44, A110);
 * the derived (lifted) input files, whose bytes are gated on a committed
   digest and so are the same under every setting.
 
@@ -43,9 +44,16 @@ step before anything is copied.  Nothing under the source folder is written.
 Afterwards the step composes the gates' own job sets **under the destination
 campaign** and states how many of them the pool resolves to a copied record
 and keeps — the proof that the copies are the records those presses read.
-Whether a gate whose archive was made under the source's settings (G1, the
-warm-up gate) passes under the destination's is that gate's verdict to give,
-not this step's.
+Whether a gate whose archive was made under the source's settings (G1)
+passes under the destination's is that gate's verdict to give, not this
+step's; the warm-up gate's verdict is the source's by construction (D44).
+
+**One archive at a time** (``--archive <gate>``, A110): a run ID that already
+holds the other archives can be given one archive that is new or changed
+without the whole step refusing on the files a re-press has since rewritten
+in place (a verdict file such as ``gates/reproduction/gate.json`` is
+rewritten by every read).  The conflict rule is unchanged within the archives
+selected.
 """
 
 from __future__ import annotations
@@ -132,9 +140,21 @@ ARCHIVES: tuple[Archive, ...] = (
     ),
     Archive(
         gate="evaluation_warmup",
-        what="the cold evaluation child's records of the gate job set's evaluation half, archived on the gate's first press",
-        why_read_only="A101's cold child is gone from the tree; its records cannot be made again",
-        paths=("gates/evaluation_warmup/before",),
+        what=(
+            "the gate's verdict at c2295511 and its manifest, archived by its first read, and both sides "
+            "the verdict compared: the cold evaluation child's records of the gate job set's evaluation "
+            "half and the warmed child's at ff9e73a2, all under the default settings"
+        ),
+        why_read_only=(
+            "D44: the verdict is given once, at the commit that introduced the warmed child, and read "
+            "under every run ID; A101's cold child is gone from the tree, so its side cannot be made again"
+        ),
+        paths=(
+            "gates/evaluation_warmup/before",
+            "gates/evaluation_warmup/after",
+            "gates/evaluation_warmup/verdict_at_*.json",
+            "gates/evaluation_warmup/archive_manifest.json",
+        ),
     ),
     Archive(
         gate="artifacts_derive_inputs",
@@ -163,7 +183,17 @@ def _files_under(path: Path) -> list[Path]:
     return sorted(p for p in path.rglob("*") if p.is_file())
 
 
-def plan(source: Campaign, destination: Campaign) -> dict[str, Any]:
+def selected(only: Sequence[str] | None) -> tuple[Archive, ...]:
+    """The declared archives, or those of the gates *only* names; refuses a name no archive has."""
+    if not only:
+        return ARCHIVES
+    unknown = sorted(set(only) - {archive.gate for archive in ARCHIVES})
+    if unknown:
+        raise ArchiveError(f"no archive is declared for {unknown}; the archives are {[a.gate for a in ARCHIVES]}")
+    return tuple(archive for archive in ARCHIVES if archive.gate in set(only))
+
+
+def plan(source: Campaign, destination: Campaign, *, only: Sequence[str] | None = None) -> dict[str, Any]:
     """What the copy would do, archive by archive, reading the source only."""
     if source.run_id is None or destination.run_id is None:
         raise ArchiveError("both campaigns must be run IDs' campaigns")
@@ -174,7 +204,7 @@ def plan(source: Campaign, destination: Campaign) -> dict[str, Any]:
         raise ArchiveError(f"runs/{source.run_id}/ is not a run ID's folder (no {run_layout.SETTINGS_FILE})")
     rows: list[dict[str, Any]] = []
     files: dict[str, Path] = {}
-    for archive in ARCHIVES:
+    for archive in selected(only):
         row: dict[str, Any] = {
             "gate": archive.gate,
             "what": archive.what,
@@ -212,14 +242,17 @@ def plan(source: Campaign, destination: Campaign) -> dict[str, Any]:
         "n_files": len(files),
         "n_bytes": sum(p.stat().st_size for p in files.values()),
         "n_already_present": len(present),
+        "only": list(only) if only else None,
         "files": files,
     }
 
 
-def copy(source: Campaign, destination: Campaign, *, apply: bool) -> dict[str, Any]:
+def copy(source: Campaign, destination: Campaign, *, apply: bool, only: Sequence[str] | None = None) -> dict[str, Any]:
     """The copy: a listing unless *apply*; refuses before copying anything
-    where a file is already in the destination with other bytes."""
-    block = plan(source, destination)
+    where a file is already in the destination with other bytes.  With
+    *only*, the archives of those gates alone, and the record of the copy is
+    written under its own name so the whole copy's record is left as made."""
+    block = plan(source, destination, only=only)
     block["applied"] = False
     if not apply:
         return block
@@ -260,11 +293,14 @@ def copy(source: Campaign, destination: Campaign, *, apply: bool) -> dict[str, A
         "tree_git_head": framework.git_head(),
         "run": run_layout.stamp(destination),
         "archives": block["archives"],
+        "only": list(only) if only else None,
         "n_copied": len(copied),
         "n_already_present_with_the_same_bytes": skipped,
         "copied": copied,
     }
-    out = destination_dir / COPY_RECORD
+    out = destination_dir / (
+        COPY_RECORD if not only else COPY_RECORD.replace(".json", "_" + "_".join(sorted(only)) + ".json")
+    )
     if copied or not out.exists():
         # A repeated copy that found every file already there leaves the
         # record of the copy that made them.
@@ -273,7 +309,7 @@ def copy(source: Campaign, destination: Campaign, *, apply: bool) -> dict[str, A
     return block
 
 
-def resolution(campaign: Campaign) -> list[dict[str, Any]]:
+def resolution(campaign: Campaign, *, only: Sequence[str] | None = None) -> list[dict[str, Any]]:
     """The archives' job sets composed **under** *campaign*: per job, the
     directory the pool resolves it to (relative to the run ID's folder) and
     the resume decision there.  Run on the source and on the destination,
@@ -281,7 +317,7 @@ def resolution(campaign: Campaign) -> list[dict[str, Any]]:
     decision — which is the proof that the copies are the records the
     destination's presses read, and are read as the source's are."""
     rows = []
-    for archive in ARCHIVES:
+    for archive in selected(only):
         if archive.jobs is None:
             continue
         try:
@@ -351,6 +387,8 @@ def report(block: Mapping[str, Any], resolved: Mapping[str, Any] | None = None) 
         lines.append(f"  copied {block['n_copied']} file(s); {block['n_skipped_same_bytes']} already present with the same bytes; record {block['record']}")
     else:
         lines.append("  dry run: nothing copied (--apply copies)")
+    if block.get("only"):
+        lines.append(f"  only the archive(s) of {block['only']} (--archive)")
     if resolved is not None:
         for row in resolved["gates"]:
             if row["refused"]:
