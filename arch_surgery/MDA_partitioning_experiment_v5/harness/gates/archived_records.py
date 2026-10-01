@@ -265,40 +265,74 @@ def copy(source: Campaign, destination: Campaign, *, apply: bool) -> dict[str, A
         "copied": copied,
     }
     out = destination_dir / COPY_RECORD
-    out.write_text(json.dumps(record, indent=2) + "\n")
+    if copied or not out.exists():
+        # A repeated copy that found every file already there leaves the
+        # record of the copy that made them.
+        out.write_text(json.dumps(record, indent=2) + "\n")
     block.update(applied=True, n_copied=len(copied), n_skipped_same_bytes=skipped, record=str(out))
     return block
 
 
-def resolution(destination: Campaign) -> list[dict[str, Any]]:
-    """The archives' job sets composed **under the destination campaign**, and
-    how many the pool resolves to a record it would keep there."""
+def resolution(campaign: Campaign) -> list[dict[str, Any]]:
+    """The archives' job sets composed **under** *campaign*: per job, the
+    directory the pool resolves it to (relative to the run ID's folder) and
+    the resume decision there.  Run on the source and on the destination,
+    the two must agree job for job — the same relative directory, the same
+    decision — which is the proof that the copies are the records the
+    destination's presses read, and are read as the source's are."""
     rows = []
     for archive in ARCHIVES:
         if archive.jobs is None:
             continue
         try:
-            composed, jobs = archive.jobs(destination)
+            composed, jobs = archive.jobs(campaign)
             listing = pool_mod.job_listing(jobs, composed)
         except Exception as exc:  # noqa: BLE001 - a refusal is the row
             rows.append({"gate": archive.gate, "refused": f"{type(exc).__name__}: {exc}"})
             continue
+        base = Path(campaign.runs_dir).resolve()
         rows.append(
             {
                 "gate": archive.gate,
                 "n_jobs": len(listing),
                 "n_kept": sum(1 for r in listing if r["why_not_complete"] is None),
-                "not_kept": [
-                    {"key": r["key"], "why": r["why_not_complete"]}
+                "jobs": {
+                    r["job_digest"]: {
+                        "key": r["key"],
+                        "path": framework._relative(Path(r["path"]), base),
+                        "why_not_kept": r["why_not_complete"],
+                    }
                     for r in listing
-                    if r["why_not_complete"] is not None
-                ],
+                },
             }
         )
     return rows
 
 
-def report(block: Mapping[str, Any], resolved: Sequence[Mapping[str, Any]] | None = None) -> list[str]:
+def agreement(source_rows: Sequence[Mapping[str, Any]], destination_rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Job for job, do the destination's resolutions equal the source's?"""
+    by_gate = {row["gate"]: row for row in source_rows}
+    out = []
+    for row in destination_rows:
+        source = by_gate.get(row["gate"]) or {}
+        mine, theirs = row.get("jobs") or {}, source.get("jobs") or {}
+        differing = sorted(d for d in set(mine) | set(theirs) if mine.get(d) != theirs.get(d))
+        out.append(
+            {
+                "gate": row["gate"],
+                "n_jobs": row.get("n_jobs"),
+                "n_kept": row.get("n_kept"),
+                "source_n_jobs": source.get("n_jobs"),
+                "source_n_kept": source.get("n_kept"),
+                "n_differing": len(differing),
+                "differing": [(mine.get(d) or theirs.get(d) or {}).get("key") for d in differing[:5]],
+                "refused": row.get("refused") or source.get("refused"),
+            }
+        )
+    return {"gates": out, "agree": all(r["n_differing"] == 0 and not r["refused"] for r in out)}
+
+
+def report(block: Mapping[str, Any], resolved: Mapping[str, Any] | None = None) -> list[str]:
     lines = [
         f"  from runs/{block['source']}/ into runs/{block['destination']}/: "
         f"{block['n_files']} file(s), {block['n_bytes'] / 1e6:.1f} MB; "
@@ -317,14 +351,19 @@ def report(block: Mapping[str, Any], resolved: Sequence[Mapping[str, Any]] | Non
         lines.append(f"  copied {block['n_copied']} file(s); {block['n_skipped_same_bytes']} already present with the same bytes; record {block['record']}")
     else:
         lines.append("  dry run: nothing copied (--apply copies)")
-    for row in resolved or ():
-        if "refused" in row:
-            lines.append(f"  under runs/{block['destination']}/, {row['gate']}'s job set: not composable — {row['refused']}")
-        else:
+    if resolved is not None:
+        for row in resolved["gates"]:
+            if row["refused"]:
+                lines.append(f"  {row['gate']}'s job set: not composable — {row['refused']}")
+                continue
             lines.append(
-                f"  under runs/{block['destination']}/, {row['gate']}'s job set: {row['n_jobs']} job(s), "
-                f"--resume would keep {row['n_kept']}"
+                f"  {row['gate']}'s job set: under runs/{block['destination']}/ {row['n_jobs']} job(s), "
+                f"--resume keeps {row['n_kept']}; under runs/{block['source']}/ {row['source_n_jobs']} "
+                f"job(s), keeps {row['source_n_kept']}; jobs resolving or deciding differently: {row['n_differing']}"
+                + (f" (first: {row['differing']})" if row["differing"] else "")
             )
-            for item in row["not_kept"][:5]:
-                lines.append(f"    RUN {item['key']}: {item['why']}")
+        lines.append(
+            "  the destination's job sets resolve to the copies exactly as the source's to the originals: "
+            + ("YES" if resolved["agree"] else "NO")
+        )
     return lines

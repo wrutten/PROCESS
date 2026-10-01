@@ -1388,10 +1388,16 @@ def stage_copy_archived_records(args: argparse.Namespace, campaign: Campaign) ->
     except (archived_records_mod.ArchiveError, pool_mod.PoolError) as exc:
         print(f"  REFUSED — {exc}")
         return 3
-    resolved = archived_records_mod.resolution(campaign) if block.get("applied") else None
+    resolved = (
+        archived_records_mod.agreement(
+            archived_records_mod.resolution(source), archived_records_mod.resolution(campaign)
+        )
+        if block.get("applied")
+        else None
+    )
     for line in archived_records_mod.report(block, resolved):
         print(line)
-    return 0
+    return 0 if resolved is None or resolved["agree"] else 1
 
 
 def stage_run_isolation(args: argparse.Namespace, campaign: Campaign) -> int:
