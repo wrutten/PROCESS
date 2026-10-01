@@ -232,3 +232,37 @@ run-ID guard and the resume search use; and nothing a gate compares. `resume_ide
 ## Change log
 
 - 2026-10-01 — report written; parts 1–3 committed; compaction applied to both run IDs; checks run.
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat e9decb5c..48073c53`: 9 files — the runner, six harness files, `paper_tables.md`
+and this report; **0 diff lines under the V5 driver copy `PROCESS/` and under `process/`**; worktree clean; the
+harness compiles. (2) `paper_tables.md` differs in **one line**, the verification table's stamp (the commit list of
+the gate records the `gate_table` stage read); no cell of any table moved, and `--paper-tables check` at the tip
+reads **IDENTICAL**. (3) **Every compressed log is whole**: `gzip -t` over all 1 323 `process.log.gz` under `runs/`
+reports 0 failures; 0 plain logs and 0 partial files remain; the header time is zero in the five sampled (the
+deterministic form of decision 5). (4) **No record was modified**, checked without the agent's digests: the only
+`metrics.json` files with a modification time after the task began are the three runs it made new (the two smoke
+runs of §3 and the `record_completeness` tooth's run); the newest campaign record is dated 2026-09-30 12:01, and
+there are 553. (5) `--jobs campaign --resume` at the tip: **553 distinct jobs, keeps 553, runs 0**. `--runs` prints
+2.78 GB (campaign 1.20 GB) and 0.30 GB.
+
+**The counts reconciled.** 1 323 compressed logs against 1 321 records: four folders hold a log and no record (three
+under `single/st_census_exact/` and one under `timing/seed_set/`, runs interrupted before their record was written),
+and two records hold no log (the reproduction gate's `missing_key` tooth, a synthetic record); 1 323 − 4 = 1 321 − 2.
+The agent's 1 321 compacted folders plus its two smoke runs give 1 323; the tooth's run re-made an existing folder.
+
+**The decisions taken alone**, all accepted. Removing the duplicate in the close-out rather than silencing PROCESS's
+handler keeps the driver copy untouched (decision 1). Not stamping the log form into the record (decision 2) is what
+lets the compaction leave every existing record byte-identical, which check (4) relies on. A hidden entry of `runs/`
+no longer reading as the old layout (decision 4) is right for a reason beyond this worktree: the harness writes no
+hidden entry, and the agent environment will create that one wherever an agent's tools write under `runs/`.
+
+**A limit the report does not state.** `process_log_compaction.json` records how many `metrics.json` digests were
+compared and how many differed, not the digests themselves, so the before-and-after comparison cannot be repeated
+from the record. The evidence that survives is check (4) and the unchanged tables.
+
+**Not taken.** Compressing `MFILE.DAT` (about 1.34 GB in `census_tau1e-08`, three readers to change) is the agent's
+proposal and is left for the user; nothing in this merge depends on it.
