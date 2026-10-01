@@ -1,6 +1,6 @@
 # A106 (v5-campaign-full-state) — the V5 campaign under the whole write set at τ = 1e-6 (D39's fallback)
 
-> **Document status** — **OPEN (task report, awaiting the orchestrator's assessment).** Task A106, branch
+> **Document status** — **MERGED 2026-10-01 at `17b374ca` (`--no-ff`; the orchestrator's assessment at the end, with one correction to §6 and §10); archived.** Records relocated by move to `arch_surgery/idf_probe/runs/A106_runs/` (**the one V5 records tree**: `census_tau1e-08/`, `write_set_tau1e-06/`, the shared caches); the paths below that begin `runs/` are read from there. **The gate table under this run ID is incomplete** (18 PASS, 1 FAIL, 10 not run; issue I-40, task A109). Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A106, branch
 > `A106-v5-campaign-full-state`, worktree `.claude/worktrees/A106-v5-campaign-full-state`, from trunk `a1db0a0c`,
 > 2026-10-01. A run task: no change to the driver copy (`MDA_partitioning_experiment_v5/PROCESS/`), to `process/` or to V4;
 > no harness change. One script change (A104's `optimiser_path_split.py`, two options, §10). **Stopped early on the disk
