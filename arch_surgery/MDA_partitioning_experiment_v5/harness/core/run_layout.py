@@ -520,7 +520,10 @@ def _stage_record_summary(path: Path) -> dict[str, Any] | None:
         record = json.loads(path.read_text())
     except Exception:  # noqa: BLE001
         return {"readable": False}
-    summary: dict[str, Any] = {"generated": record.get("generated") or record.get("generated_at")}
+    summary: dict[str, Any] = {
+        "written": _dt.datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds"),
+        "tree_git_head": record.get("tree_git_head"),
+    }
     if "n_pass" in record:
         summary.update(n_pass=record.get("n_pass"), n_gates=record.get("n_gates"), n_fail=record.get("n_fail"), n_not_run=record.get("n_not_run"))
     run = record.get("run") if isinstance(record.get("run"), Mapping) else None
@@ -593,9 +596,9 @@ def print_listing(block: Mapping[str, Any]) -> None:
         else:
             print(
                 f"    gate table: {table.get('n_pass')} PASS of {table.get('n_gates')} "
-                f"({table.get('n_fail')} FAIL, {table.get('n_not_run')} not run), generated {table.get('generated')}"
+                f"({table.get('n_fail')} FAIL, {table.get('n_not_run')} not run), written {table.get('written')}"
             )
         for name, tally in row["tallies"].items():
-            print(f"    {name}: " + ("none" if tally is None else f"record generated {tally.get('generated')}"))
+            print(f"    {name}: " + ("none" if tally is None else f"record written {tally.get('written')}"))
         doc = row["tables_document"]
         print(f"    tables document {doc['name']}: {'present' if doc['exists'] else 'none'}")
