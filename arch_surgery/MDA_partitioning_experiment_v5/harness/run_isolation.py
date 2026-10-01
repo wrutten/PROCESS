@@ -7,8 +7,9 @@ cheapest configuration, both phases, every arm, the tallies and the tally's
 contract gate) under the run ID the settings name, and around it:
 
 (a) every file the press created or changed under ``runs/`` (the shared caches
-    aside) is under ``runs/<run ID>/``, and the smoke's own records, stage
-    records and press record are among them;
+    aside) is under ``runs/<run ID>/``, and the smoke's press record
+    (``smoke/press.json``) is among them, with its run records made there or,
+    under ``--resume``, kept there;
 (b) **nothing under any other run ID's folder changed**: a manifest of every
     file's path, size and modification time, and the SHA-256 of every
     ``metrics.json``, taken before and after the press, identical;
@@ -118,7 +119,12 @@ def check(campaign: Campaign, press: Callable[[], int]) -> dict[str, Any]:
         "n_smoke_records_made": len(smoke_records),
         "run_records_outside": [p for p in new_records if not p.startswith(f"{mine}/")],
         "press_record": str(press_record) if press_record.exists() else None,
-        "passed": not outside and press_record.exists() and bool(smoke_records),
+        # The press wrote its record inside this folder; its runs may have been
+        # made by it or, under --resume, kept from an earlier press of the
+        # same run ID (the first press of A107 made them; a criterion that
+        # required new records failed a resumed press for keeping them).
+        "press_record_written_by_this_press": f"{mine}/smoke/press.json" in touched,
+        "passed": not outside and f"{mine}/smoke/press.json" in touched,
     }
 
     part_b = {}
