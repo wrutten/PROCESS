@@ -1,6 +1,6 @@
 # A110 (v5-warmup-verdict-once): gate `evaluation_warmup` read once (D44), and gate G1's missing path leaf
 
-> **Document status**: **OPEN (task report, awaiting the orchestrator's assessment).** Task A110, branch
+> **Document status**: **MERGED 2026-10-01 at `c3160245` (`--no-ff`; the orchestrator's assessment at the end, which corrects the stated cause of the `tally_contracts` FAIL); archived.** The one V5 records tree moved on with the next task (A111). Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A110, branch
 > `A110-v5-warmup-verdict-once`, worktree `.claude/worktrees/A110-v5-warmup-verdict-once`, from trunk `ff1abec4`,
 > 2026-10-01. Harness only: no change to the driver copy (`MDA_partitioning_experiment_v5/PROCESS/`), to `process/`
 > or to V4.
