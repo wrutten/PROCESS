@@ -33,7 +33,7 @@ name.  It is deliberately a copy of the harness's table, not an import.
 
 Usage
 -----
-    python paper_cells_recount.py --runs <runs root> --document <paper_tables.md>
+    python paper_cells_recount.py --runs <runs/run ID folder> --document <paper_tables.md>
 
 Exit status 0 when every cell agrees, 1 otherwise; the mismatch count is the
 last line printed.  Written by task **A98 (v5-reporting-trim)**, 2026-09-29.
@@ -301,9 +301,22 @@ def compare(runs: Path, document: Path) -> int:
     return 1 if mismatched else 0
 
 
+#: The run ID of the declared default campaign, whose folder holds the
+#: records ``paper_tables.md`` is of (``harness/core/config.DEFAULT_RUN_ID``,
+#: task A107 (v5-campaign-settings-keys)).  Written here rather than imported,
+#: as everything else in this script is: it imports no module of the harness.
+DEFAULT_RUN_ID = "census_tau1e-08"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--runs", type=Path, default=HERE / "runs", help="the runs root (campaign/ under it)")
+    parser.add_argument(
+        "--runs",
+        type=Path,
+        default=HERE / "runs" / DEFAULT_RUN_ID,
+        help="the run ID's folder (campaign/ under it); the declared default "
+        "campaign's, runs/" + DEFAULT_RUN_ID + "/, unless named",
+    )
     parser.add_argument("--document", type=Path, default=HERE / "paper_tables.md", help="the generator's rendered file")
     args = parser.parse_args(argv)
     if not (args.runs / "campaign").exists():

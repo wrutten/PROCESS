@@ -632,7 +632,7 @@ def env_for(
             f"{arm.name} is not active on {config.name}: "
             f"{config.skips[arm.name]}"
         )
-    env = switches.base_environment(campaign.tree, runs_dir=campaign.runs_dir)
+    env = switches.base_environment(campaign.tree, cache_dir=campaign.cache_dir)
     terms = arm.terms(
         config,
         pin_hex=pin_hex,

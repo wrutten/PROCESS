@@ -57,10 +57,14 @@ from harness.measurement import paper_tables as paper_tables_mod  # noqa: E402
 from harness.core import framework as framework_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
+from harness.core import run_layout  # noqa: E402
+from harness.gates import archived_records as archived_records_mod  # noqa: E402
+from harness import run_isolation as run_isolation_mod  # noqa: E402
 from harness.gates import reference as reference_mod  # noqa: E402
 from harness.gates import selfcheck as selfcheck_mod  # noqa: E402
 from harness.core.config import (  # noqa: E402
     CAMPAIGN_TIMERS,
+    DEFAULT_RUN_ID,
     EXECUTION_APPROVED,
     TAU_BY_TEST_SET,
     TAU_RULES,
@@ -443,6 +447,7 @@ def stage_reading_stages(args: argparse.Namespace, campaign: Campaign) -> int:
         json.dumps(
             {
                 "composition": args.reading_stages,
+                "run": run_layout.stamp(campaign),
                 "timers": bool(composed.timers),
                 "resumed": bool(args.resume),
                 "tree_git_head": framework_mod.git_head(),
@@ -614,7 +619,9 @@ def _gate_records_dir(args: argparse.Namespace, campaign: Campaign) -> Path:
     that line, and it applies to every gate rather than to one.
     """
     if args.outdir:
-        return Path(args.outdir)
+        # A verdict sent into another run ID's folder would be read there as
+        # that run ID's (task A107 (v5-campaign-settings-keys)); refused.
+        return pool_mod.refuse_another_runs_folder(Path(args.outdir), campaign)
     return Path(campaign.runs_dir) / gates_mod.GATES_SUBPATH
 
 
@@ -943,6 +950,7 @@ def stage_campaign_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
             json.dumps(
                 {
                     "tree_git_head": framework_mod.git_head(),
+                    "run": run_layout.stamp(composed),
                     "test_set": composed.test_set,
                     "tolerance": _tolerance_words(composed),
                     "timers": bool(composed.timers),
@@ -1027,6 +1035,7 @@ ARTIFACT_STAGES = {
 def _write_stage_record(
     name: str, record: dict[str, Any], args: argparse.Namespace, campaign: Campaign
 ) -> None:
+    record = {**record, "run": run_layout.stamp(campaign)}
     out = args.json or (
         campaign.runs_dir / "artifacts" / f"{name.replace('-', '_')}.json"
     )
@@ -1208,6 +1217,7 @@ def stage_timing(args: argparse.Namespace, campaign: Campaign) -> int:
         print(line)
     out = args.json or (timing_mod.timing_root(campaign, record["stage"]) / "measurements.json")
     out.parent.mkdir(parents=True, exist_ok=True)
+    record = {**record, "run": run_layout.stamp(campaign)}
     out.write_text(json.dumps(record, indent=2, default=str))
     print(f"  record: {out}")
     return code
@@ -1282,6 +1292,135 @@ def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
     out.write_text(json.dumps(record, indent=2, default=str))
     print(f"record: {out}")
     return code
+
+
+# --------------------------------------------------------------------------
+# the run IDs: one folder of records per campaign settings (task A107)
+# --------------------------------------------------------------------------
+
+
+def stage_runs(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The run IDs on disk, each with its settings, its campaign records by
+    phase and status, the commits they were made at, and whether its gate
+    table, tallies and tables document exist.  Nothing is compared between
+    run IDs: the folders are the comparison's input, not this listing's."""
+    _rule("the run IDs under runs/")
+    block = run_layout.listing(campaign.runs_root or campaign.runs_dir)
+    run_layout.print_listing(block)
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(block, indent=2, default=str) + "\n")
+        print(f"\n  record: {args.json}")
+    return 0
+
+
+def stage_adopt_records_layout(args: argparse.Namespace, campaign: Campaign) -> int:
+    """Re-lay a ``runs/`` in the layout before run IDs under the run ID its
+    campaign records were made under: a listing unless ``--apply``.  One
+    rename per top-level entry on the same filesystem; no file's bytes or
+    modification time change (``run_layout.adopt``)."""
+    _rule("adopt the records layout: runs/<entry> -> runs/<run ID>/<entry>" + ("" if args.apply else " (dry run)"))
+    root = campaign.runs_root or campaign.runs_dir
+    try:
+        plan = run_layout.adopt(root, fallback=campaign, apply=args.apply)
+    except (OSError, run_layout.RunLayoutError) as exc:
+        print(f"  REFUSED — {type(exc).__name__}: {exc}")
+        return 3
+    print(f"  runs/ = {plan['root']}: {plan['n_records']} run record(s) in {len(plan['legacy_entries'])} entr(ies) in the old layout")
+    print("  campaign records by settings (these decide the run ID):")
+    for row in plan["campaign_records_by_settings"] or [{"n": 0}]:
+        if row["n"]:
+            print(f"    {row['n']:>5}  test set {row['test_set']}, tau {row['tau']!r}, rule {row['tau_rule']!r}  (e.g. {row['example']})")
+        else:
+            print("    none")
+    print("  other records by run kind and settings (carried along; they do not decide):")
+    for row in plan["other_records_by_kind_and_settings"]:
+        print(f"    {row['n']:>5}  {row['run_kind']:<13} test set {row['test_set']}, tau {row['tau']!r}, rule {row['tau_rule']!r}")
+    if plan["refused"]:
+        print(f"  REFUSED — {plan['refused']}")
+        return 3
+    print(f"  run ID: {plan['run_id']} ({plan['decided_by']})")
+    print(f"  stays shared at the top level: {', '.join(plan['shared_caches_staying']) or '(none)'}")
+    for move in plan["moves"]:
+        print(f"    runs/{move['from']}  ->  runs/{move['to']}")
+    if plan["applied"]:
+        print(
+            f"  APPLIED: {len(plan['moves'])} rename(s); run records under runs/ {plan['n_records_before']} before, "
+            f"{plan['n_records_after']} after, {plan['n_records_in_folder']} in runs/{plan['run_id']}/"
+        )
+        m = plan["manifest_comparison"]
+        print(
+            f"  manifest of the moved entries before and after, by path relative to the entry: "
+            f"{m['n_files_compared']} file(s) by size and modification time, {m['n_run_records_digested']} "
+            f"run record(s) by SHA-256; {m['n_differing']} differing"
+        )
+    else:
+        print("  dry run: nothing moved (--apply moves)")
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(plan, indent=2, default=str) + "\n")
+        print(f"  record: {args.json}")
+    return 0
+
+
+def stage_copy_archived_records(args: argparse.Namespace, campaign: Campaign) -> int:
+    """Copy the read-only records every run ID reads (the reproduction gate's
+    verdict and pool records, the neutrality gates' archives, the derived
+    input files) from another run ID's folder into this one: a listing unless
+    ``--apply`` (``harness/gates/archived_records.py``)."""
+    source_id = args.copy_archived_records
+    _rule(f"archived records: runs/{source_id}/ -> runs/{campaign.run_id}/" + ("" if args.apply else " (dry run)"))
+    root = Path(campaign.runs_root or campaign.runs_dir)
+    settings = run_layout.read_settings(root / source_id)
+    if settings is None:
+        print(f"  REFUSED — runs/{source_id}/ is not a run ID's folder; the run IDs on disk are {[f.name for f in run_layout.run_folders(root)]}")
+        return 3
+    source = default_campaign(
+        test_set=settings["test_set"],
+        tau=None if settings.get("tau_rule") else settings.get("tau"),
+        tau_rule=settings.get("tau_rule"),
+    )
+    if source.run_id != source_id:
+        print(f"  REFUSED — runs/{source_id}/'s settings name the run ID {source.run_id!r}, not its folder's name")
+        return 3
+    try:
+        block = archived_records_mod.copy(source, campaign, apply=args.apply)
+    except (archived_records_mod.ArchiveError, pool_mod.PoolError) as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    resolved = archived_records_mod.resolution(campaign) if block.get("applied") else None
+    for line in archived_records_mod.report(block, resolved):
+        print(line)
+    return 0
+
+
+def stage_run_isolation(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The run-ID layout's acceptance check around a smoke press under this
+    run ID (``harness/run_isolation.py``): (a) written inside its folder, (b)
+    every other run ID's folder unchanged, (c) the reproduction gate not
+    pressed and its verdict read from this folder, (d) the listing."""
+    _rule(f"run isolation — the smoke chain under run ID {campaign.run_id}, and nothing else touched")
+    try:
+        record = run_isolation_mod.check(campaign, press=lambda: stage_smoke(args, campaign))
+    except framework_mod.GateError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    _rule("run isolation — the check")
+    for line in run_isolation_mod.report(record):
+        print(line)
+    return 0 if record["verdict"] == "PASS" else 1
+
+
+#: The stages that only read: they never create a run ID's folder.
+def _reads_only(args: argparse.Namespace) -> bool:
+    pressing = (
+        args.selfcheck or args.reference or args.artifacts or args.census or args.timing
+        or args.smoke_test_set or args.supplementary or args.smoke or args.campaign
+        or args.reading_stages or args.gate or args.measure or args.run
+        or args.copy_archived_records or args.run_isolation
+        or args.paper_tables == "write"
+    )
+    return not pressing
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1557,6 +1696,49 @@ def main(argv: list[str] | None = None) -> int:
         "determinism check re-derived; two teeth.  The same as --gate "
         "evaluation_warmup",
     )
+    parser.add_argument(
+        "--runs",
+        action="store_true",
+        help="list the run IDs on disk (one folder per campaign settings under "
+        "runs/): each one's settings, its campaign records by phase and status, "
+        "the commits they were made at, and whether its gate table, tallies and "
+        "tables document exist; and stop.  No comparison between run IDs",
+    )
+    parser.add_argument(
+        "--adopt-records-layout",
+        action="store_true",
+        help="re-lay a runs/ in the layout before run IDs under the run ID its "
+        "campaign records were made under (runs/<entry> -> runs/<run ID>/<entry>, "
+        "one rename per entry, no file changed), and stop.  A dry run with the "
+        "listing unless --apply; a tree whose campaign records carry more than "
+        "one setting is refused with the list",
+    )
+    parser.add_argument(
+        "--copy-archived-records",
+        metavar="FROM_RUN_ID",
+        default=None,
+        help="copy the read-only records every run ID reads and none re-makes "
+        "(the reproduction gate's verdict and pool records, gates GC's and G1's "
+        "archived straddles, the warm-up gate's cold-child records, the derived "
+        "input files) from that run ID's folder into the folder of the run ID "
+        "the settings name, and stop.  A dry run unless --apply",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="for --adopt-records-layout and --copy-archived-records: do it",
+    )
+    parser.add_argument(
+        "--run-isolation",
+        choices=("smoke",),
+        default=None,
+        help="the run-ID layout's acceptance check: press the smoke chain under "
+        "the run ID the settings name and show that everything it wrote is in "
+        "that run ID's folder, that no other run ID's folder changed (path, size, "
+        "modification time, run-record SHA-256), that the reproduction gate was "
+        "not pressed and its verdict reads from this folder, and that the "
+        "listing shows every run ID; two teeth",
+    )
     parser.add_argument("--json", type=Path, help="write the preflight record here")
     args = parser.parse_args(argv)
     if args.evaluation_warmup:
@@ -1571,6 +1753,35 @@ def main(argv: list[str] | None = None) -> int:
         print("  REFUSED — --tau-rule and --tau both given; a campaign takes its tolerance one way")
         return 3
     campaign = default_campaign(test_set=args.test_set, tau=args.tau, tau_rule=args.tau_rule)
+
+    # The run ID (task A107 (v5-campaign-settings-keys)): every record this
+    # press makes or reads is under runs/<run ID>/.  The listing and the
+    # adoption look at the whole of runs/ and pass no guard; every other stage
+    # refuses a runs/ in the old layout and a folder of other settings.
+    if args.runs:
+        return stage_runs(args, campaign)
+    if args.adopt_records_layout:
+        return stage_adopt_records_layout(args, campaign)
+    print(f"{run_layout.header(campaign)}")
+    try:
+        run_layout.open_run(campaign, create=not _reads_only(args))
+    except run_layout.RunLayoutError as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    try:
+        return _dispatch(args, campaign)
+    except (pool_mod.PoolError, run_layout.RunLayoutError) as exc:
+        print(f"  REFUSED — {type(exc).__name__}: {exc}")
+        return 3
+
+
+def _dispatch(args: argparse.Namespace, campaign: Campaign) -> int:
+    """Every stage but the listing and the adoption, after the run-ID guard."""
+    if args.copy_archived_records:
+        return stage_copy_archived_records(args, campaign)
+
+    if args.run_isolation:
+        return stage_run_isolation(args, campaign)
 
     if args.selfcheck:
         checks = selfcheck_mod.run_all(

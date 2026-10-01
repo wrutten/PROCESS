@@ -70,6 +70,7 @@ from .experiment import arms as arms_mod
 from .core import framework
 from .core import pool as pool_mod
 from .core import records as records_mod
+from .core import run_layout
 from .core.config import EXECUTION_APPROVED, Campaign, Config, default_campaign
 from .core.framework import Gate, GateError, Tooth
 
@@ -403,15 +404,16 @@ def chain_root(campaign: Campaign, plan: ChainPlan) -> Path:
     that must refuse them, which is a refusal waiting to be tripped by a
     directory layout rather than by a decision.
 
-    Under a named tolerance rule (``Campaign.tau_rule``) the root carries the
-    rule's name, ``runs/<plan>_tau_rule_<rule>/``: the chain names its jobs'
-    directories, and a rule's job has the same readable identity as the
-    default campaign's job of the same arm and seed, so in the default root
-    a press would remove the default campaign's record to make its own.
-    Without a rule the root is the plan's name, as before.
+    The root is under the campaign's **run ID's folder**
+    (``runs/<run ID>/<plan>/``, ``Campaign.runs_dir``): the chain names its
+    jobs' directories, and a job under other settings has the same readable
+    identity as this campaign's job of the same arm and seed, so a shared
+    root would let one campaign's press remove another's record to make its
+    own.  The run ID carries the test set and the tolerance or rule, so the
+    folder keeps them apart; A105's rule-named root
+    (``runs/<plan>_tau_rule_<rule>/``) was the first instance and is
+    replaced by it (task A107 (v5-campaign-settings-keys)).
     """
-    if campaign.tau_rule is not None:
-        return Path(campaign.runs_dir) / f"{plan.root_name}_tau_rule_{campaign.tau_rule}"
     return Path(campaign.runs_dir) / plan.root_name
 
 
@@ -849,6 +851,7 @@ def run(
         "stages": [],
         "refused": None,
         "tree_git_head": framework.git_head(),
+        "run": run_layout.stamp(campaign),
     }
 
     try:

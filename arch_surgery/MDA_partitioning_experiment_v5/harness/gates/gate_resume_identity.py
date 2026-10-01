@@ -37,7 +37,8 @@ a post-renaming record (stamped ``arm_naming``) is not translated, an arm
 nobody declared is refused by name, and a canonical directory occupied by
 another job's record is not removed.
 
-Teeth: a crash record is kept only when complete as a crash (issue I-38);
+Teeth: a job never resolves into another run ID's folder (task A107
+(v5-campaign-settings-keys)); a crash record is kept only when complete as a crash (issue I-38);
 an unnamed job never resolves into another gate's root (issue I-36);
 a record whose digest matches but whose child-stamped δ differs is
 refused; a record with no digest is incomplete; a digest that does not
@@ -482,6 +483,65 @@ def _complete_record_of(job: pool_mod.Job, campaign: Campaign) -> dict[str, Any]
     return record
 
 
+def a_job_never_resolves_into_another_run_ids_folder(campaign: Campaign) -> tuple[bool, str]:
+    """The run-ID layout's rule (task A107 (v5-campaign-settings-keys)): a job
+    composed under one run ID never resolves into another run ID's folder.
+
+    In a scratch ``runs/`` holding two run IDs' folders: a job that **names**
+    its directory in the other folder is refused by the pool
+    (``pool.refuse_another_runs_folder``); an unnamed job whose digest is on
+    disk **only** in the other folder resolves to its canonical directory in
+    this one (step 2's search is confined to the run ID's folder); and, as
+    the control that keeps the second part from passing over a dead search,
+    the same record put inside this folder is found by digest.
+    """
+    config = campaign.configurations[0]
+    with tempfile.TemporaryDirectory(prefix="run_id_tooth_") as td:
+        root = Path(td) / "runs"
+        here = dataclasses.replace(
+            campaign,
+            run_id="this_run",
+            runs_root=root,
+            runs_dir=root / "this_run",
+            derived_input_dir=root / "this_run" / "input_files",
+        )
+        other = root / "other_run"
+        named = pool_mod.Job(
+            phase="A", arm="AR", config=config, seed=0, run_kind="gate",
+            outdir=other / "single" / config.name / "AR" / "seed000",
+        )
+        try:
+            pool_mod.directory_for(named, here)
+            named_refused, named_message = False, "resolved without a refusal"
+        except pool_mod.PoolError as exc:
+            named_refused, named_message = True, str(exc)[:160]
+        unnamed = pool_mod.Job(phase="A", arm="AR", config=config, seed=0, run_kind="gate")
+        text = json.dumps(_complete_record_of(dataclasses.replace(unnamed), here))
+        canonical = pool_mod.canonical_directory_for(dataclasses.replace(unnamed), here)
+        elsewhere = other / "gates" / "_runs" / "a_record_of_this_digest"
+        inside = here.runs_dir / "single" / "a_record_of_this_digest"
+        try:
+            elsewhere.mkdir(parents=True)
+            (elsewhere / "metrics.json").write_text(text)
+            pool_mod.forget_record_index()
+            confined = pool_mod.directory_for(dataclasses.replace(unnamed), here)
+            inside.mkdir(parents=True)
+            (inside / "metrics.json").write_text(text)
+            pool_mod.forget_record_index()
+            control = pool_mod.directory_for(dataclasses.replace(unnamed), here)
+        finally:
+            pool_mod.forget_record_index()
+    stays = confined.resolve() == canonical.resolve()
+    found = control.resolve() == inside.resolve()
+    return (named_refused and stays and found), (
+        f"a job naming a directory in another run ID's folder: "
+        f"{'refused' if named_refused else 'NOT refused'} ({named_message}); an unnamed "
+        f"job whose digest is only in the other folder resolves to "
+        f"{'its canonical directory in this one' if stays else str(confined)}; the same "
+        f"record inside this folder is {'found by digest' if found else 'NOT found: ' + str(control)}"
+    )
+
+
 def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
     def _job() -> pool_mod.Job:
         config = campaign.configurations[0]
@@ -859,6 +919,20 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
         )
 
     return (
+        Tooth(
+            name="a job never resolves into another run ID's folder",
+            what=(
+                "in a scratch runs/ with two run IDs' folders: a job naming its "
+                "directory in the other folder; an unnamed job whose digest is "
+                "on disk only there; the same record inside this folder"
+            ),
+            must=(
+                "refuse the first (PoolError), resolve the second to its "
+                "canonical directory in this folder, and find the third by "
+                "digest (task A107 (v5-campaign-settings-keys))"
+            ),
+            check=lambda: a_job_never_resolves_into_another_run_ids_folder(campaign),
+        ),
         Tooth(
             name="a record composed with one term fewer, or one more",
             what=(

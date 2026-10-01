@@ -52,7 +52,8 @@ if str(_EXPERIMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_EXPERIMENT_DIR))
 
 from harness.core import framework  # noqa: E402
-from harness.core.config import Campaign, default_campaign  # noqa: E402
+from harness.core import run_layout  # noqa: E402
+from harness.core.config import EXPERIMENT_DIR, Campaign, default_campaign  # noqa: E402
 from harness.gates import exclusion_review as exclusion_review_mod  # noqa: E402
 from harness.gates import gate_neutrality  # noqa: E402
 from harness.gates import gate_output_path  # noqa: E402
@@ -595,6 +596,13 @@ def gate_table(campaign: Campaign, records_dir: Path | None = None) -> dict[str,
             )
             continue
         verdict = json.loads(path.read_text())
+        # A verdict of another run ID is never a row of this run ID's table
+        # (task A107 (v5-campaign-settings-keys)).
+        run_layout.assert_stage_record_is_of_this_run(
+            verdict,
+            run_id=(run_layout.stamp_of_directory(root) or {}).get("run_id"),
+            what=f"gate {name}'s verdict at {path}",
+        )
         teeth = verdict.get("teeth") or []
         compared, differing, named = _counts(verdict)
         rows.append(
@@ -612,7 +620,7 @@ def gate_table(campaign: Campaign, records_dir: Path | None = None) -> dict[str,
                 "teeth": [t.get("tooth") for t in teeth],
                 "generated": verdict.get("generated"),
                 "tree_git_head": verdict.get("tree_git_head"),
-                "record": str(path.relative_to(Path(campaign.runs_dir).parent)),
+                "record": framework._relative(path, EXPERIMENT_DIR),
             }
         )
     plan_rows = [row for row in rows if row["plan_name"]]

@@ -43,6 +43,11 @@ EXPERIMENT_DIR = HERE.parent
 #: The repository root of the checkout this file belongs to.
 REPO_ROOT = EXPERIMENT_DIR.parent.parent
 
+#: The top level of the untracked records: one folder per **run ID** under it
+#: (:func:`run_id_for`), and the shared caches (:data:`SHARED_CACHES`) beside
+#: them.  Nothing that carries a result is written here directly.
+RUNS_ROOT = EXPERIMENT_DIR / "runs"
+
 #: Master switch.  While False the runner executes preflight, gates and smoke
 #: work only and refuses every campaign stage.  The user flips it in the same
 #: commit that records the dated approval in EXPERIMENT_REPORT.md.
@@ -324,6 +329,69 @@ def tau_rule_named(name: str) -> TauRule:
     )
 
 
+# --------------------------------------------------------------------------
+# the run ID: one folder of records per campaign settings
+# --------------------------------------------------------------------------
+
+
+def run_id_for(test_set: str, tau: float, tau_rule: str | None) -> str:
+    """The run ID of a campaign's settings: the name of its records' folder.
+
+    ``<test set>_tau<τ>`` without a tolerance rule — ``census_tau1e-08``,
+    ``write_set_tau1e-06`` — and ``<test set>_rule_<rule>`` under one —
+    ``census_rule_epsvmc_times_epsfcn`` — where ``<τ>`` is Python's ``repr``
+    of the float, the shortest string that reads back as the same float.
+
+    **Injective over the settings the harness admits.**  The test set is one
+    of :data:`TEST_SETS`, a fixed list of names none of which followed by
+    ``_tau`` or ``_rule_`` is another's prefix, so the test set is recovered
+    by matching the declared names; what follows is either ``_tau`` and a
+    ``repr`` (which round-trips: two different floats never print alike) or
+    ``_rule_`` and a declared rule's name (distinct by declaration, and the
+    two markers cannot be confused).  A campaign is fully described by those
+    two settings — a rule replaces τ, an explicit ``--tau`` equal to the
+    declared value is the same campaign and the same jobs — so two campaigns
+    with one run ID compose the same jobs, and two with different jobs never
+    share one.  The timers are not a setting of the campaign but of the
+    press (the campaign press composes them on, the gates off), and the
+    supplementary stages carry their own declared τ in their jobs; neither
+    is in the run ID.  A τ that is not a positive finite number is refused,
+    so ``inf`` and ``nan`` never become folder names.  Readable, no spaces,
+    stable: the format is the contract the folders on disk are named by.
+    """
+    if test_set not in TEST_SETS:
+        raise ValueError(f"test set {test_set!r} is not one of {TEST_SETS}")
+    if tau_rule is not None:
+        tau_rule_named(tau_rule)
+        return f"{test_set}_rule_{tau_rule}"
+    value = float(tau)
+    if not (value > 0.0 and value != float("inf")):
+        raise ValueError(f"tau {tau!r} is not a positive finite number; it names no run")
+    return f"{test_set}_tau{value!r}"
+
+
+#: Entries of :data:`RUNS_ROOT` that are **shared by every run ID**, with why
+#: that is safe: each is a pure cache that carries no result and is never
+#: read as a record.  A new run ID starting with them warm does not start
+#: with a cold numba compile (minutes per child on a cold cache), and nothing
+#: a record says depends on whether its child found the cache warm — the
+#: warmed evaluation child (§8 of the README) discards its first evaluation
+#: anyway, and the timing stages state the cache load they measure.
+SHARED_CACHES: Mapping[str, str] = MappingProxyType(
+    {
+        "_numba_cache": (
+            "numba's compiled-function cache (NUMBA_CACHE_DIR, issue I-31): "
+            "keyed by the source file and its digest, it holds machine code, "
+            "never a measured value"
+        ),
+        "_mplconfig": (
+            "matplotlib's configuration and font cache (MPLCONFIGDIR): no "
+            "child plots, and nothing in it reaches a record"
+        ),
+    }
+)
+
+
 @dataclass(frozen=True)
 class SupplementaryStage:
     """A declared stage reported **beside** the campaign under its own settings.
@@ -400,7 +468,10 @@ class Campaign:
     data_dir: Path
     #: Directory holding the committed input files (never edited, D9).
     input_dir: Path
-    #: Untracked bulk output.
+    #: Untracked bulk output: **the run ID's folder**, ``runs/<run ID>/``,
+    #: under which every record a press of this campaign makes or reads
+    #: lives.  Every path below it is rendered relative to it in a job
+    #: identity, so a folder moved whole keeps every digest.
     runs_dir: Path
     #: Derived (lifted) input files, produced by a committed stage.
     derived_input_dir: Path
@@ -480,6 +551,17 @@ class Campaign:
     #: different thing from composing one.
     predicate_modes: tuple[str, ...] = ("frozen",)
     predicate_mode_default: str = "frozen"
+    #: The run ID this campaign's press was asked for (:func:`run_id_for`),
+    #: fixed when the campaign is made (:func:`default_campaign`) and **not**
+    #: re-derived when a gate replaces a setting for its own jobs (gate GC's
+    #: declared straddle test set, the census stage's fallback): those jobs
+    #: belong to the press that made them and live in its folder.  ``None``
+    #: for a fixture whose ``runs_dir`` is not a run ID's folder.
+    run_id: str | None = None
+    #: The top level the run ID's folder is in (:data:`RUNS_ROOT`), where the
+    #: shared caches live; ``None`` for a fixture, which keeps its caches in
+    #: its own ``runs_dir`` and has no other run ID to keep out of.
+    runs_root: Path | None = None
 
     def __post_init__(self) -> None:
         if self.test_set not in TEST_SETS:
@@ -514,6 +596,20 @@ class Campaign:
         if self.tau_rule is None:
             return float(self.tau)
         return tau_rule_named(self.tau_rule).tau_for(config)
+
+    @property
+    def settings_run_id(self) -> str:
+        """The run ID these settings name (:func:`run_id_for`) — which is
+        :attr:`run_id` for the campaign a press was asked for, and differs
+        from it only inside a gate that composes its own jobs under another
+        setting."""
+        return run_id_for(self.test_set, self.declared_tau if self.tau_rule else self.tau, self.tau_rule)
+
+    @property
+    def cache_dir(self) -> Path:
+        """Where the children's caches live: the shared top level
+        (:data:`SHARED_CACHES`), or the fixture's own ``runs_dir``."""
+        return Path(self.runs_root) if self.runs_root is not None else Path(self.runs_dir)
 
     @property
     def declared_tau(self) -> float:
@@ -795,9 +891,15 @@ def default_campaign(
     ``--tau``); both reach every job the campaign composes, one value each.
     ``tau_rule`` names a tolerance rule instead (the runner's ``--tau-rule``;
     refused with ``tau``): one τ per configuration from its input file.
+
+    The settings name the **run ID** (:func:`run_id_for`), and every record
+    the campaign makes or reads lives in that run ID's folder,
+    ``runs/<run ID>/`` (task A107 (v5-campaign-settings-keys)): two campaigns
+    under different settings never share a directory, a stage record or a
+    tables document.
     """
     data_dir = HERE / "data"
-    return Campaign(
+    settings = Campaign(
         test_set=DEFAULT_TEST_SET if test_set is None else test_set,
         tau=tau,
         tau_rule=tau_rule,
@@ -806,10 +908,24 @@ def default_campaign(
         # The committed input files are copied into the experiment's own data
         # directory too, so that a run reads nothing from outside this folder.
         input_dir=data_dir,
-        runs_dir=EXPERIMENT_DIR / "runs",
-        derived_input_dir=EXPERIMENT_DIR / "runs" / "input_files",
+        runs_dir=RUNS_ROOT,
+        derived_input_dir=RUNS_ROOT / "input_files",
         configurations=default_configurations(
             input_dir=data_dir, data_dir=data_dir, naming="harness"
         ),
     )
+    run_id = settings.settings_run_id
+    return replace(
+        settings,
+        run_id=run_id,
+        runs_root=RUNS_ROOT,
+        runs_dir=RUNS_ROOT / run_id,
+        derived_input_dir=RUNS_ROOT / run_id / "input_files",
+    )
+
+
+#: The run ID of the declared default campaign (decision D32: the census set
+#: at its declared τ, no rule): the one whose tables document is the
+#: committed ``paper_tables.md``.
+DEFAULT_RUN_ID = run_id_for(DEFAULT_TEST_SET, TAU_BY_TEST_SET[DEFAULT_TEST_SET], None)
 

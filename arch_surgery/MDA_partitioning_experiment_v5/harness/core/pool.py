@@ -80,7 +80,7 @@ from ..experiment import arms as arms_mod
 from ..experiment import input_files as input_files_mod
 from . import records as records_mod
 from ..experiment import switches as switches_mod
-from .config import TEST_SETS, Campaign, Config, tau_rule_named
+from .config import EXPERIMENT_DIR, TEST_SETS, Campaign, Config, tau_rule_named
 
 #: Default per-run wall-clock limit.  Not a budget: reaching it is a
 #: ``timeout`` taxonomy row, recorded and never re-run at a longer limit.
@@ -311,8 +311,11 @@ def _render_string(value: str, runs_dir: Path | None) -> str:
     working tree, and the job never resumed anywhere but where it was made
     (found by A78 (arm-renames)' press: `--jobs all` listed those three jobs
     "no record on disk" in every worktree but the one that made them).  A
-    value that is an absolute path under the experiment directory (the parent
-    of ``runs/``) is rendered relative to it, ``experiment:harness/data/…``;
+    value that is an absolute path under the experiment directory
+    (``config.EXPERIMENT_DIR``; it was ``runs/``'s parent until the run-ID
+    layout put the campaign's folder one level down, task A107
+    (v5-campaign-settings-keys), and naming it keeps every rendering as it
+    was) is rendered relative to it, ``experiment:harness/data/…``;
     one under ``runs/`` relative to that, as :func:`_render_path` does; any
     other string is left as it is.  Only G5's three hand-composed jobs carry
     such a value, so only their digests changed.
@@ -326,7 +329,7 @@ def _render_string(value: str, runs_dir: Path | None) -> str:
     except ValueError:
         pass
     try:
-        return "experiment:" + path.resolve().relative_to(runs.parent).as_posix()
+        return "experiment:" + path.resolve().relative_to(EXPERIMENT_DIR.resolve()).as_posix()
     except ValueError:
         return value
 
@@ -557,6 +560,10 @@ _RECORD_INDEX_GUARD = threading.Lock()
 
 
 def _record_index(campaign: Campaign) -> dict[str, list[Path]]:
+    """Every record under **this run ID's folder** by digest — the one place
+    step 2 of :func:`directory_for` searches, and so the confinement of that
+    search to the run ID: a record in another run ID's folder is not in this
+    index and is never a candidate (task A107 (v5-campaign-settings-keys))."""
     key = str(Path(campaign.runs_dir).resolve())
     with _RECORD_INDEX_GUARD:
         index = _RECORD_INDEX.get(key)
@@ -600,7 +607,10 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
        directory is the job's, whatever the record's state (the resume
        comparison decides whether it is kept);
     2. otherwise, a record of exactly this job's **digest** is on disk under
-       ``runs/`` — then that directory, whatever it is called, is the job's;
+       **this run ID's folder** ``runs/<run ID>/`` (``campaign.runs_dir``;
+       the index :func:`_record_index` is built over that folder and no
+       other, so another run ID's records are never candidates) — then that
+       directory, whatever it is called, is the job's;
     3. otherwise the canonical directory, where the run will be made.
 
     Step 2 goes by digest and not by path because a directory name is the
@@ -649,7 +659,7 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
     resolve_settings(job, campaign)
     canonical = canonical_directory_for(job, campaign)
     if job.outdir is not None:
-        return canonical
+        return refuse_another_runs_folder(canonical, campaign, job=job)
     identity = job.identity(Path(campaign.runs_dir))
     if (canonical / "metrics.json").exists():
         existing = records_mod.read(canonical)
@@ -677,7 +687,52 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
             f"canonical {canonical}: {[str(h) for h in hits]}.  The pool cannot "
             f"say which is the job's record; refused rather than picked."
         )
-    return hits[0]
+    return refuse_another_runs_folder(hits[0], campaign, job=job)
+
+
+def other_run_folder(directory: Path, campaign: Campaign) -> str | None:
+    """The run ID whose folder *directory* lies in, where that is **not** this
+    campaign's; None where it is this campaign's folder, or outside ``runs/``
+    altogether, or the campaign is a fixture with no run ID."""
+    if campaign.runs_root is None:
+        return None
+    root = Path(campaign.runs_root).resolve()
+    own = Path(campaign.runs_dir).resolve()
+    resolved = Path(directory).resolve()
+    try:
+        resolved.relative_to(own)
+        return None
+    except ValueError:
+        pass
+    try:
+        relative = resolved.relative_to(root)
+    except ValueError:
+        return None
+    return relative.parts[0] if relative.parts else "(the top level of runs/)"
+
+
+def refuse_another_runs_folder(directory: Path, campaign: Campaign, *, job: Job | None = None) -> Path:
+    """*directory*, or a refusal where it lies in **another run ID's folder**.
+
+    The run-ID layout's one rule (task A107 (v5-campaign-settings-keys)): a
+    press under one run ID never reads, re-makes, moves or writes anything
+    under another run ID's folder.  Step 2 of :func:`directory_for` cannot
+    reach one — :func:`_record_index` is built over this campaign's folder
+    alone — so the only way in is a job that **names** its directory there
+    (``Job.outdir``, a ``--run --outdir``), and that is refused here, in the
+    one function every pool entry resolves through, before any directory is
+    made or removed.  A directory outside ``runs/`` altogether is the caller's
+    explicit choice and is not this rule's business.
+    """
+    other = other_run_folder(directory, campaign)
+    if other is not None:
+        raise PoolError(
+            f"{job.key + ': ' if job is not None else ''}{directory} lies under "
+            f"runs/{other}/, another run ID's folder, while this press is "
+            f"under runs/{campaign.run_id}/.  A press never reads, re-makes or "
+            f"writes another run ID's records; refused."
+        )
+    return Path(directory)
 
 
 def is_under_another_gates_root(directory: Path, campaign: Campaign) -> bool:
@@ -1398,7 +1453,7 @@ def run_all(
 ) -> list[dict[str, Any]]:
     """Every job, W at a time.  Deterministic order; nothing is ever retried."""
     width = workers(campaign)
-    (Path(campaign.runs_dir) / "_mplconfig").mkdir(parents=True, exist_ok=True)
+    (campaign.cache_dir / "_mplconfig").mkdir(parents=True, exist_ok=True)
     # Two jobs of one identity in one list would race on one directory; the
     # second is served the first's outcome (the per-directory lock in ``run``
     # makes even that ordering safe, but there is no reason to start it).
@@ -1431,5 +1486,5 @@ def run_serially(
     For a chain whose later members are entered from an earlier member's exit —
     the backward stencil points, and anything anchored on a reference run.
     """
-    (Path(campaign.runs_dir) / "_mplconfig").mkdir(parents=True, exist_ok=True)
+    (campaign.cache_dir / "_mplconfig").mkdir(parents=True, exist_ok=True)
     return [run(job, campaign, resume=resume) for job in jobs]

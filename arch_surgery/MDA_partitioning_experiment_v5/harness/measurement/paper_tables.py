@@ -62,15 +62,19 @@ from typing import Any, Mapping, Sequence
 import dataclasses
 
 from harness.core import framework
-from harness.core.config import EXECUTION_APPROVED, Campaign
+from harness.core import run_layout
+from harness.core.config import DEFAULT_RUN_ID, EXECUTION_APPROVED, Campaign
 from harness.experiment import arms as arms_mod
 from harness.measurement import stats as stats_mod
 from harness.measurement import tally as tally_mod
 from harness.measurement import tally_evaluation as tally_a
 from harness.measurement import tally_optimisation as tally_b
 
-#: The generated file, beside ``EXPERIMENT_REPORT.md``.
-PAPER_NAME = "paper_tables.md"
+#: The generated file of the declared default campaign, beside
+#: ``EXPERIMENT_REPORT.md``; a campaign under other settings writes
+#: ``paper_tables_<run ID>.md`` beside it (:func:`paper_path`;
+#: ``run_layout.tables_document_name``).
+PAPER_NAME = run_layout.DEFAULT_TABLES_DOCUMENT
 
 #: The paper's configuration labels.
 SHORT = {
@@ -165,9 +169,20 @@ def stage_record(records_dir: Path, stage: str) -> dict[str, Any]:
             f"hand: run `experiment_runner.py --measure {stage}` first."
         )
     try:
-        return json.loads(path.read_text())
+        record = json.loads(path.read_text())
     except Exception as exc:  # noqa: BLE001
         raise PaperTablesError(f"{path} is not readable JSON: {exc}") from exc
+    # A stage record of another run ID is never a part of this run ID's
+    # document (task A107 (v5-campaign-settings-keys)).
+    try:
+        run_layout.assert_stage_record_is_of_this_run(
+            record,
+            run_id=(run_layout.stamp_of_directory(records_dir) or {}).get("run_id"),
+            what=f"the {stage} stage record at {path}",
+        )
+    except run_layout.RunLayoutError as exc:
+        raise PaperTablesError(str(exc)) from exc
+    return record
 
 
 def assert_stage_read_what_is_there(
@@ -1324,6 +1339,24 @@ def switch_matrix_lines(campaign: Campaign) -> tuple[list[str], list[str]]:
     return md, tex
 
 
+def _run_id_lines(campaign: Campaign) -> list[str]:
+    """The header's statement of which run ID the document is of.
+
+    Printed for every run ID but the declared default's, whose document is
+    the committed ``paper_tables.md`` — its name says which campaign it is
+    of, and the file stays byte-identical to what it was before run IDs
+    existed (task A107 (v5-campaign-settings-keys)).
+    """
+    if campaign.run_id is None or campaign.run_id == DEFAULT_RUN_ID:
+        return []
+    return [
+        f"*Of run ID **`{campaign.run_id}`** — {run_layout.header(campaign).split(': ', 1)[1]}; "
+        f"not the declared default campaign's (`{DEFAULT_RUN_ID}`, whose document is "
+        f"`{run_layout.DEFAULT_TABLES_DOCUMENT}`).*",
+        "",
+    ]
+
+
 def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     """The page, and the comparisons it was written under."""
     a = phase_a(campaign)
@@ -1357,6 +1390,7 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         f"the exit audit at position(s) {', '.join(f'`{p}`' for p in marker['audit_positions'])} "
         f"on the ruler(s) {', '.join(f'`{r}`' for r in marker['predicate_modes'])}.*",
         "",
+        *_run_id_lines(campaign),
         "**Conventions.** A module cell is that module's **sweeps per run** — per `call_models` "
         "evaluation in phase A, per whole optimisation in phase B — averaged over the arm's n "
         "runs. Every model node of a module runs once per sweep, so a sweep ratio does not depend "
@@ -1513,8 +1547,12 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
 
 
 def paper_path(campaign: Campaign) -> Path:
-    """Beside ``EXPERIMENT_REPORT.md`` — the experiment folder, whatever runs dir is read."""
-    return Path(__file__).resolve().parents[2] / PAPER_NAME
+    """Beside ``EXPERIMENT_REPORT.md`` — the experiment folder, whatever runs dir
+    is read — named for the campaign's run ID: ``paper_tables.md`` for the
+    declared default campaign, ``paper_tables_<run ID>.md`` for any other
+    (task A107 (v5-campaign-settings-keys)), so a press under other settings
+    never writes or checks the committed document."""
+    return Path(__file__).resolve().parents[2] / run_layout.tables_document_name(campaign.run_id)
 
 
 def _refuse_on_mismatch(result: Mapping[str, Any]) -> None:
