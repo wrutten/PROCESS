@@ -471,3 +471,45 @@ in order: `record_completeness`, `prime_map`, `entry_and_warm`, `test_set`, `swi
 `tally_contracts` already hold verdicts. Then run `--measure gate_table --resume --test-set write_set`, then
 `--paper-tables write --test-set write_set` (the verification table's stamp line will move) and commit. A107 §7 L2 says
 G2 makes 12 of its 15 jobs. The others' job counts are in `press04_jobs_all_before_gates.log`.
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge, with the gate table incomplete
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat a1db0a0c..0af1de11`: three files — the tables document, this report, and A104's
+`optimiser_path_split.py`; **0 diff lines under the V5 driver copy, `process/`, the V5 harness, V4, or
+`paper_tables.md`**; worktree clean. The script change is two options that narrow and relabel the sources; with neither
+set the code path is the old one. (2) **The records**, read by the orchestrator from the 553 `metrics.json` under
+`runs/write_set_tau1e-06/campaign/`: 525 `ok`, 20 `crashed`, 8 `crashed/unconverged`; every one stamped `a1db0a0c`,
+test set `write_set`, τ = 1e-6. (3) **The equality with V4**, compared by the orchestrator line against line between
+`MDA_partitioning_experiment_v4/paper_tables.md` and `paper_tables_write_set_tau1e-06.md`: the three phase B iteration
+rows are identical strings; the 18 phase B module rows are identical strings; the 18 phase A rows carry identical arm
+means, and differ in the ratio and bracket cells only (the pair, D34). (4) At the tip: `--jobs campaign --test-set
+write_set --resume` keeps 553 of 553; `--paper-tables check --test-set write_set` reads IDENTICAL. (5) **The census run
+ID is untouched**: no file of any kind under `runs/census_tau1e-08/` has a modification time after 11:10 (the task began
+at 11:13); `--jobs campaign --resume` keeps 553 of 553; `--paper-tables check` reads IDENTICAL.
+
+**One statement in §6 and §10 corrected.** The eight coupling-loop caps on `low_aspect_ratio_DEMO` are called "new in
+V5". They are new against the census campaign only. V4's campaign records
+(`arch_surgery/idf_probe/runs/A90_runs/campaign/`, read by the orchestrator) hold the same eight, on the same starts:
+`B0` seeds 4 and 22, `B1` seeds 4, 10 and 22, and V4's partitioned arm (there named `B3`) seeds 4, 10 and 22, each
+`status = crashed`, `failure_class = unconverged`, beside the same 20 `RuntimeError` crashes. The failure population
+of this run is V4's.
+
+**What the equality with V4 means, and does not.** Under V4's predicate the V5 driver walks V4's optimiser paths: the
+iteration counts, the module sweeps and the seed sets are V4's. The driver changes made since (the prime once per
+evaluation, the schedule once per run, the deferred set executed once in phase A) therefore leave every count the
+paper prints unchanged, and the difference between the paper's numbers and the census campaign's is the test set and
+tolerance alone. It does not say which criterion is the right one; that stays the user's open question.
+
+**The gate table is incomplete, and that is carried forward, not waived.** 18 PASS, 1 FAIL, 10 not run. The FAIL
+(`evaluation_warmup`) is a gate comparing records made under two different settings, as A107's assessment foresaw; it
+says nothing about this campaign's records, and it was rightly not worked around. The ten gates not run include the
+ones the tables document's verification table prints (G1, G5, G6, G9). They wait on disk room (issue I-40, task A109).
+Until they are pressed the verification table of `paper_tables_write_set_tau1e-06.md` reads "not pressed" for them, and
+the document must not be cited as verified.
+
+**The disk.** The agent stopped at the floor as briefed, and continued only with stages that make no PROCESS run. The
+virtual disk file did not grow (229 147 410 432 bytes throughout, allocated equal to apparent); the 6.1 GB that C:
+lost was not written by this campaign's records (1.2 GB, into space the file already held). Its cause is on the
+Windows side and is not established.
