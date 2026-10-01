@@ -34,7 +34,8 @@ What this module holds:
   stamped with another run ID;
 * :func:`adoption_plan` and :func:`adopt` — moving a tree in the old layout
   under the run ID its campaign records were made under;
-* :func:`listing` — the run IDs on disk, with what each holds;
+* :func:`listing` — the run IDs on disk, with what each holds and its size
+  on disk;
 * :func:`compact_process_logs` — every run folder of a run ID left with one
   compressed PROCESS log (``process_log.compact``), with the run records'
   SHA-256 compared before and after.
@@ -627,6 +628,25 @@ def print_compaction(block: Mapping[str, Any]) -> None:
 # --------------------------------------------------------------------------
 
 
+def disk_bytes(folder: Path) -> int:
+    """The bytes *folder* occupies on disk (allocated blocks, as ``du``), each
+    hard-linked file counted once; 0 for a folder that does not exist."""
+    seen: set[tuple[int, int]] = set()
+    total = 0
+    for here, _dirs, files in os.walk(folder):
+        for name in files:
+            try:
+                st = os.lstat(os.path.join(here, name))
+            except OSError:
+                continue
+            key = (st.st_dev, st.st_ino)
+            if key in seen:
+                continue
+            seen.add(key)
+            total += st.st_blocks * 512
+    return total
+
+
 def _campaign_records(folder: Path) -> dict[str, Any]:
     by_phase: dict[str, Counter] = {}
     heads: Counter = Counter()
@@ -683,6 +703,8 @@ def listing(root: Path) -> dict[str, Any]:
                 "name_matches_settings": settings.get("run_id") == folder.name,
                 "campaign_records": _campaign_records(folder),
                 "n_run_records": sum(1 for _ in folder.rglob("metrics.json")),
+                "disk_bytes": disk_bytes(folder),
+                "campaign_disk_bytes": disk_bytes(folder / CAMPAIGN_ROOT),
                 "gate_table": _stage_record_summary(gates / "gate_table" / "measurements.json"),
                 "tallies": {
                     name: _stage_record_summary(gates / name / "measurements.json")
@@ -725,6 +747,10 @@ def print_listing(block: Mapping[str, Any]) -> None:
             if statuses:
                 print(f"      {phase:<18} " + ", ".join(f"{k} {v}" for k, v in statuses.items()))
         print(f"    run records in the folder: {row['n_run_records']}")
+        print(
+            f"    size on disk: {row['disk_bytes'] / 1e9:.2f} GB, of which the campaign "
+            f"(campaign/) {row['campaign_disk_bytes'] / 1e9:.2f} GB"
+        )
         table = row["gate_table"]
         if table is None:
             print("    gate table: none")

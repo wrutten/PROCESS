@@ -1301,7 +1301,8 @@ def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
 
 def stage_runs(args: argparse.Namespace, campaign: Campaign) -> int:
     """The run IDs on disk, each with its settings, its campaign records by
-    phase and status, the commits they were made at, and whether its gate
+    phase and status, the commits they were made at, its size on disk and its
+    campaign's, and whether its gate
     table, tallies and tables document exist.  Nothing is compared between
     run IDs: the folders are the comparison's input, not this listing's."""
     _rule("the run IDs under runs/")
@@ -1736,8 +1737,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="list the run IDs on disk (one folder per campaign settings under "
         "runs/): each one's settings, its campaign records by phase and status, "
-        "the commits they were made at, and whether its gate table, tallies and "
-        "tables document exist; and stop.  No comparison between run IDs",
+        "the commits they were made at, its size on disk and its campaign's, and "
+        "whether its gate table, tallies and tables document exist; and stop.  No comparison between run IDs",
     )
     parser.add_argument(
         "--adopt-records-layout",
