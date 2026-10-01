@@ -842,7 +842,109 @@ def _cache_load_sentence(campaign: Campaign) -> str:
     )
 
 
-def _wall_clock_lines(campaign: Campaign) -> list[str]:
+#: The LaTeX block's title, printed above it and searched for by the check.
+WALL_B_LATEX_TITLE = "phase B in wall clock, s per optimisation — LaTeX"
+
+
+def _latex_label(text: str) -> str:
+    """A row label as the Markdown grid prints it, LaTeX-safe."""
+    for char in ("\\", "&", "%", "$", "#", "_", "{", "}"):
+        text = text.replace(char, "\\" + char)
+    return _tex(text)
+
+
+def wall_phase_b_tabular(tables: Mapping[str, Any]) -> list[str]:
+    """The three configurations' phase B wall-clock tables as one ``tabular``
+    in the house style of ``tab:phaseB_results`` (A111 (v5-wall-clock-latex),
+    the user, 2026-10-01).  Every cell is ``timing.table_cells``'s string —
+    the one the Markdown grid prints — with ``—`` as ``--``; ``n`` is the
+    table's own pair count; the ``Total`` row is set off by an ``\\hline``."""
+    from . import timing as timing_mod  # noqa: PLC0415
+
+    blocks = [(b["configuration"], b["phase_b"]) for b in tables["configurations"] if b.get("phase_b") is not None]
+    if not blocks:
+        return []
+    shapes = {(tuple(t["pair"]), tuple(t["arms"])) for _c, t in blocks}
+    if len(shapes) != 1:
+        raise PaperTablesError(f"the phase B wall-clock tables differ in pair or arms ({sorted(shapes)}): one tabular cannot hold them")
+    (base, arm), ladder = shapes.pop()
+    width = max(len(_latex_label(name)) for _c, t in blocks for name in t["rows"])
+    body: list[str] = []
+    for c, t in blocks:
+        body += [f"\\multicolumn{{{len(ladder) + 3}}}{{l}}{{\\texttt{{{SHORT.get(c, c)}}} ($n = {t['n_pairs']}$)}} \\\\", "\\hline"]
+        for name, cells in timing_mod.table_cells(t):
+            if name == "Total":
+                body.append("\\hline")
+            body.append(f"{_latex_label(name):<{width}} & " + _tex(" & ".join(cells)) + " \\\\")
+        body.append("\\hline")
+    header = f"Row & {' & '.join(ladder)} & {arm}/{base} & {arm}/{base} med [min, max] \\\\"
+    return [f"\\begin{{tabular}}{{l|{'c' * len(ladder)}|cc}}", "\\hline", header, "\\hline", *body, "\\end{tabular}"]
+
+
+def wall_latex_check(md_lines: Sequence[str], tex_lines: Sequence[str]) -> dict[str, Any]:
+    """The LaTeX block's cells against the Markdown grids' cells, read back
+    from the two renderings: per configuration its ``n``, then row by row the
+    label and every cell (``—`` read as ``--``).  A row or a configuration on
+    one side only is a mismatch."""
+    import re  # noqa: PLC0415
+
+    md: dict[str, list[list[str]]] = {}
+    current = None
+    for line in md_lines:
+        head = re.match(r"\*\*`([^`]+)` — phase B in wall clock, s per optimisation\*\* \(pair \S+, (\d+) pair\(s\);", line)
+        if head:
+            current = SHORT.get(head.group(1), head.group(1))
+            md[current] = [["n", head.group(2)]]
+            continue
+        if current is None:
+            continue
+        if line.startswith("| row |") or line.startswith("|---"):
+            continue
+        if line.startswith("| "):
+            md[current].append([_latex_label(x.strip()) for x in line.strip().strip("|").split(" | ")])
+        else:
+            current = None if line == "" and len(md[current]) > 1 else current
+    tex: dict[str, list[list[str]]] = {}
+    current = None
+    for line in tex_lines:
+        head = re.match(r"\\multicolumn\{\d+\}\{l\}\{\\texttt\{(\w+)\} \(\$n = (\d+)\$\)\} \\\\$", line)
+        if head:
+            current = head.group(1)
+            tex[current] = [["n", head.group(2)]]
+        elif current is not None and line.endswith(" \\\\") and " & " in line:
+            tex[current].append([x.strip() for x in line[: -len(" \\\\")].split(" & ")])
+    compared = 0
+    mismatches: list[str] = []
+    for c in sorted(set(md) | set(tex)):
+        mine, theirs = md.get(c, []), tex.get(c, [])
+        if len(mine) != len(theirs):
+            mismatches.append(f"{c}: {len(mine)} Markdown row(s), {len(theirs)} LaTeX row(s)")
+        for m, t in zip(mine, theirs):
+            if len(m) != len(t):
+                mismatches.append(f"{c} {m[0]}: {len(m)} Markdown cell(s), {len(t)} LaTeX cell(s)")
+            for i, (x, y) in enumerate(zip(m, t)):
+                compared += 1
+                if x != y:
+                    mismatches.append(f"{c} {m[0]} cell {i}: Markdown {x!r}, LaTeX {y!r}")
+    return {"compared": compared, "mismatched": len(mismatches), "mismatches": mismatches, "configurations": sorted(tex)}
+
+
+def _wall_latex_tooth(md_lines: Sequence[str], tex_lines: Sequence[str]) -> bool:
+    """True if the check catches one doctored LaTeX cell (the first row's
+    first arm cell, one digit appended)."""
+    doctored = list(tex_lines)
+    for i, line in enumerate(doctored):
+        if not line.startswith("\\") and " & " in line and not line.startswith("Row &"):
+            cells = line.split(" & ")
+            cells[1] = cells[1] + "9"
+            doctored[i] = " & ".join(cells)
+            break
+    else:
+        return False
+    return wall_latex_check(md_lines, doctored)["mismatched"] > 0
+
+
+def _wall_clock_lines(campaign: Campaign) -> tuple[list[str], dict[str, Any]]:
     from . import timing as timing_mod  # noqa: PLC0415
 
     tables = wall_clock(campaign)
@@ -875,7 +977,7 @@ def _wall_clock_lines(campaign: Campaign) -> list[str]:
     for spec in WALL_CLOCK_TABLES:
         caption = spec["caption"] + (" " + _cache_load_sentence(campaign) if spec["key"] == "wall_phase_b" else "")
         lines += [f"**{spec['title']}** — {caption}", ""]
-    lines += timing_mod.render_markdown(
+    grids = timing_mod.render_markdown(
         tables,
         caption_w=(
             f"W = {', '.join(tables['workers_stamped'])} (as stamped); pairing key = the seed; the ratio is of the means over the "
@@ -883,7 +985,23 @@ def _wall_clock_lines(campaign: Campaign) -> list[str]:
             f"as stated above"
         ),
     )
-    return lines
+    lines += grids
+    tex = wall_phase_b_tabular(tables)
+    check = {**wall_latex_check(grids, tex), "tooth": _wall_latex_tooth(grids, tex)}
+    if tex:
+        lines += [
+            f"**{WALL_B_LATEX_TITLE}** — The LaTeX form of the phase B wall-clock tables above, the "
+            f"{len(check['configurations'])} configurations in one `tabular` (n is each table's pair count): "
+            f"every cell the Markdown grid's own string, compared with it before writing — "
+            f"**{check['mismatched']} mismatched of {check['compared']}**; a doctored cell caught: "
+            f"**{'yes' if check['tooth'] else 'NO'}**. Wall clock is context, never evidence (D33).",
+            "",
+            "```latex",
+            *tex,
+            "```",
+            "",
+        ]
+    return lines, check
 
 
 def per_arm_success(optimisation: Mapping[str, Mapping[str, Any]], campaign: Campaign) -> list[dict[str, Any]]:
@@ -1506,7 +1624,8 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
     lines += md + ["```latex", *_tabular("B", tex), "```", ""]
 
     lines += ["## Appendix", ""]
-    lines += _wall_clock_lines(campaign)
+    wall_lines, wall_latex = _wall_clock_lines(campaign)
+    lines += wall_lines
 
     lines += [
         "### Table — per-arm success",
@@ -1543,7 +1662,10 @@ def render(campaign: Campaign, records_dir: Path) -> dict[str, Any]:
         lines.append(f"| {r['check']} | {r['label']} | **{r['verdict']}** | {r['detail']} |")
     lines.append("")
 
-    return {"markdown": "\n".join(lines), "cross_check": check, "tooth": tooth, "built": built, "verification": verified}
+    return {
+        "markdown": "\n".join(lines), "cross_check": check, "tooth": tooth, "built": built,
+        "verification": verified, "wall_latex_check": wall_latex,
+    }
 
 
 def paper_path(campaign: Campaign) -> Path:
@@ -1562,6 +1684,13 @@ def _refuse_on_mismatch(result: Mapping[str, Any]) -> None:
             f"the comparison with the stage records failed: {check['mismatched']} "
             f"of {check['compared']} mismatched, tooth "
             f"{'bites' if result['tooth'] else 'DOES NOT BITE'}; first: {check['mismatches'][:3]}"
+        )
+    wall = result["wall_latex_check"]
+    if wall["mismatched"] or not wall["tooth"]:
+        raise PaperTablesError(
+            f"the phase B wall-clock LaTeX block disagrees with its Markdown grids: {wall['mismatched']} "
+            f"of {wall['compared']} mismatched, tooth {'bites' if wall['tooth'] else 'DOES NOT BITE'}; "
+            f"first: {wall['mismatches'][:3]}"
         )
 
 
@@ -1603,6 +1732,14 @@ def report(result: Mapping[str, Any]) -> None:
     )
     for line in check_["mismatches"][:10]:
         print(f"    {line}")
+    wall = result.get("wall_latex_check")
+    if wall is not None:
+        print(
+            f"  phase B wall-clock LaTeX against its Markdown grids: {wall['mismatched']} mismatched "
+            f"of {wall['compared']} compared; tooth {'bites' if wall['tooth'] else 'DOES NOT BITE'}"
+        )
+        for line in wall["mismatches"][:10]:
+            print(f"    {line}")
     for row in result.get("verification", {}).get("rows", []):
         print(f"  verification {row['label']:<3} {row['verdict']:<18} {row['check']}")
     if "identical" in result:

@@ -555,6 +555,23 @@ def _fmt_ratio(summary: Mapping[str, Any] | None) -> tuple[str, str]:
     return f"{summary['pooled']:.2f}", bracket
 
 
+def table_cells(table: Mapping[str, Any]) -> list[tuple[str, list[str]]]:
+    """One phase table's printed cells, row by row: the row's name and its
+    cells — one per arm, then the ratio of the means and the median with
+    [min, max] — formatted once here, so that the Markdown grid and the
+    paper tables' LaTeX block (``paper_tables``, A111 (v5-wall-clock-latex))
+    print the same strings."""
+    out = []
+    for name in table["rows"]:
+        cells = [
+            _fmt((table["columns"][a] or {}).get(name, {}).get("mean") if table["columns"].get(a) else None, table["scale"])
+            for a in table["arms"]
+        ]
+        pooled, bracket = _fmt_ratio((table["ratio"] or {}).get(name)) if table["ratio"] else ("—", "—")
+        out.append((name, [*cells, pooled, bracket]))
+    return out
+
+
 def render_markdown(tables: Mapping[str, Any], *, caption_w: str) -> list[str]:
     """The three tables as Markdown grids, per configuration."""
     lines: list[str] = []
@@ -573,13 +590,8 @@ def render_markdown(tables: Mapping[str, Any], *, caption_w: str) -> list[str]:
                 f"| row | {head} | {arm}/{base} | {arm}/{base} med [min, max] |",
                 "|---|" + "---:|" * (len(table["arms"]) + 2),
             ]
-            for name in table["rows"]:
-                cells = [
-                    _fmt((table["columns"][a] or {}).get(name, {}).get("mean") if table["columns"].get(a) else None, table["scale"])
-                    for a in table["arms"]
-                ]
-                pooled, bracket = _fmt_ratio((table["ratio"] or {}).get(name)) if table["ratio"] else ("—", "—")
-                lines.append(f"| {name} | {' | '.join(cells)} | {pooled} | {bracket} |")
+            for name, cells in table_cells(table):
+                lines.append(f"| {name} | {' | '.join(cells)} |")
             lines.append("")
         breakdown = block.get("breakdown")
         if breakdown is not None:
