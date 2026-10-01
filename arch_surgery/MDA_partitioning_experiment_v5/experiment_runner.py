@@ -56,6 +56,7 @@ from harness.core import provenance as prov  # noqa: E402
 from harness.measurement import paper_tables as paper_tables_mod  # noqa: E402
 from harness.core import framework as framework_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
+from harness.core import process_log as process_log_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
 from harness.core import run_layout  # noqa: E402
 from harness.gates import archived_records as archived_records_mod  # noqa: E402
@@ -607,6 +608,18 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         + ("complete" if completeness.get("complete") else
            f"INCOMPLETE — {completeness.get('refusal')}")
     )
+    log = process_log_mod.open_text(outdir)
+    if log is None:
+        print("  PROCESS log: none")
+    else:
+        with log:
+            lines = log.read().splitlines()
+        files = sorted(p.name for p in outdir.iterdir() if "process.log" in p.name)
+        print(
+            f"  PROCESS log: form {process_log_mod.form_of(outdir)!r} ({', '.join(files)}); "
+            f"{len(lines)} line(s) read back"
+            + (f", the last: {lines[-1][:100]}" if lines else "")
+        )
     return 0 if result["status"] == "ok" else 1
 
 
