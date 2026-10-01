@@ -288,3 +288,32 @@ and whether each resolves into the archived directory. "Makes runs" is a propert
 
 **Hand-back state.** The records tree is the one V5 tree, left in place at
 `arch_surgery/MDA_partitioning_experiment_v5/runs/`. The queue and the paper were not edited.
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat ab576660..a06251be`: ten files, all V5 harness, runner, README, the two tables
+documents and this report; 0 diff lines under the V5 driver copy, `process/` or V4; worktree clean; the harness
+compiles. (2) The two tables documents moved in the verification table's stamp line and gate rows only (7 and 6 lines
+replaced); `--paper-tables check` reads IDENTICAL under both settings. (3) `--runs` at the tip: `census_tau1e-08`
+29 PASS of 29; `write_set_tau1e-06` 28 PASS, 0 FAIL, 1 not run (GT, by design). (4) The archive, read by the
+orchestrator under each run ID: 27 records (16 at `d6c246a1`, 8 at `66bfa240`, 3 at `d08e8ab4`), and its three `A2`
+seed-1 records read 13 / 13 / 15 sweeps — the V4-identical driver's. The shared pool under the write set keeps
+today's driver's records of the same digests (14 / 14 / 16, at `52ea57be`) as G6's own, and under census the pool's
+are unchanged. `tally_contracts` reads PASS, 236 cells, under both. (5) Both campaigns: 553 of 553 kept under each
+setting; no file under either `campaign/` folder modified since the task began.
+
+**The agent's two corrections to the brief's account are accepted**: the collision was at the canonical directory
+(step 1 of `directory_for`), not the by-digest search, and eight records had been re-made, not three. The design —
+a copy of the reproduction records under the gate's own root that the pool refuses to write into, with every existing
+digest and the census pool left as they were — is the smallest of the shapes considered.
+
+**Limits to carry.** (a) The new tooth's bite was shown by hand (the refusal patched out), not by a committed
+script; the tooth itself is committed and trips 15/15. (b) The archive freezes the reproduction records as they stood
+today: the phase A ones are stamped `66bfa240` and `d08e8ab4`, earlier presses having re-made them in the census
+pool; they reproduce all 236 reference cells, and GR's verdict is the one recorded at `d6c246a1`. (c) Nothing
+re-verifies the archive's bytes on read, though the freeze record holds every file's SHA-256. (d) **The same class is
+latent for gate GC's three archived entry references under the write set** (nine jobs of G6, G2 and GT resolve into
+them; flat-arm records, so today's driver gives the same counts, and nothing has been overwritten): filed as I-42,
+not fixed here.
