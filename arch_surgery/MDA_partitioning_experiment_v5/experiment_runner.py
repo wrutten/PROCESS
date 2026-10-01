@@ -806,6 +806,7 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
         return 3
     by_digest: dict[str, dict[str, Any]] = {}
     readers: dict[str, list[str]] = {}
+    refused: list[str] = []
     for name in names:
         gate = available[name]
         if gate.jobs is None:
@@ -819,6 +820,10 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
             rows = list(gate.jobs())
         except gates_mod.GateError as exc:
             print(f"  gate {name}: not composable yet — {exc}")
+            continue
+        except pool_mod.PoolError as exc:
+            print(f"  gate {name}: REFUSED by the pool — {exc}")
+            refused.append(name)
             continue
         except Exception as exc:  # noqa: BLE001 - the reproduction gate's own refusal
             if type(exc).__name__ != "ReproductionError":
@@ -848,6 +853,9 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
         )
         for digest, gates in sorted(shared.items(), key=lambda kv: by_digest[kv[0]]["key"]):
             print(f"    {by_digest[digest]['key']}  <- {', '.join(gates)}")
+    if refused:
+        print(f"\n  REFUSED by the pool: {refused}")
+        return 3
     return 0
 
 

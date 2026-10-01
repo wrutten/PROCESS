@@ -362,7 +362,7 @@ before a worktree is retired (`arch_surgery/bin/retire_task_worktree.sh`; the re
 |---|---|
 | `campaign/entry_references/`, `campaign/evaluation/<configuration>/<arm>/seedNNN/`, `campaign/optimisation/…` | the campaign's records (553 at A102: 3 entry references, 275 evaluations, 275 optimisations) and `campaign/press.json` |
 | `supplementary/<stage>/<configuration>/<arm>/seedNNN/` | the supplementary stage's records |
-| `gates/_runs/` | the shared pool: every gate's runs, one directory per job digest |
+| `gates/_runs/` | the shared pool: every gate's runs, one directory per job digest. A job that names no directory resolves here, or by digest to a record elsewhere under `runs/` — **never into another gate's root** `gates/<gate>/` (G1's named captures; issue I-36) |
 | `gates/<gate>/gate.json`, `gates/<stage>/measurements.json` | the verdict records and the measurement stages' records (the tallies, `gate_table`) |
 | `timing/<stage>/` | the timing stages' records and their `measurements.json` |
 | `census/`, `census_test_sets/` | the census stage's runs and the derived artifacts |

@@ -599,6 +599,21 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
     of the same digest elsewhere is another caller's, and the pool has no
     business writing into it.  :func:`run` still refuses to remove a named
     directory that holds another job's record.
+
+    **A directory under another gate's own root is never a candidate for an
+    unnamed job** (issue I-36; task A105 (v5-resume-fixes-and-tau-rule)):
+    step 2 skips every hit under ``runs/gates/<gate>/`` other than the
+    shared pool itself (:func:`is_under_another_gates_root`).  Such a
+    directory is a gate's *named* record — gate G1's ``before``/``after``
+    captures, a straddle archived at two commits — and is the mirror image
+    of I-29: an unnamed job resolved into it would read a capture made at
+    another commit as its own record, and a press without ``--resume``
+    would remove and re-make it.  Found on the reproduction gate's unnamed
+    ``AR`` substitute, whose digest five of G1's captures carry, so that
+    ``--jobs reproduction`` refused.  Hits elsewhere under ``runs/`` (the
+    campaign's directories under the arms' recorded names, a stage's named
+    directory such as the input-file stage's baseline evaluation) stay
+    candidates, as before.
     """
     resolve_settings(job, campaign)
     canonical = canonical_directory_for(job, campaign)
@@ -614,7 +629,11 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
         ):
             return canonical
     digest = records_mod.job_digest(identity)
-    hits = _record_index(campaign).get(digest, [])
+    hits = [
+        hit
+        for hit in _record_index(campaign).get(digest, [])
+        if not is_under_another_gates_root(hit, campaign)
+    ]
     if not hits:
         return canonical
     resolved_canonical = canonical.resolve()
@@ -628,6 +647,17 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
             f"say which is the job's record; refused rather than picked."
         )
     return hits[0]
+
+
+def is_under_another_gates_root(directory: Path, campaign: Campaign) -> bool:
+    """Whether *directory* lies under a gate's own root, ``runs/gates/<gate>/``,
+    and not under the shared pool ``runs/gates/_runs/`` (issue I-36)."""
+    gates_root = (Path(campaign.runs_dir) / POOL_SUBPATH.parent).resolve()
+    try:
+        relative = Path(directory).resolve().relative_to(gates_root)
+    except ValueError:
+        return False
+    return bool(relative.parts) and relative.parts[0] != POOL_SUBPATH.name
 
 
 def directories_for(jobs: Sequence[Job], campaign: Campaign) -> list[Path]:

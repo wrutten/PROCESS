@@ -38,6 +38,7 @@ nobody declared is refused by name, and a canonical directory occupied by
 another job's record is not removed.
 
 Teeth: a crash record is kept only when complete as a crash (issue I-38);
+an unnamed job never resolves into another gate's root (issue I-36);
 a record whose digest matches but whose child-stamped δ differs is
 refused; a record with no digest is incomplete; a digest that does not
 re-derive from the stamped identity is refused; an unclassified job field
@@ -671,6 +672,48 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"(the named one must never be re-made into another caller's record)"
         )
 
+    def an_unnamed_job_never_resolves_into_another_gates_root() -> tuple[bool, str]:
+        """Issue I-36: the reproduction gate's unnamed AR substitute resolved by
+        digest to five of gate G1's named captures and the pool refused.
+
+        A record of an unnamed job's digest under ``runs/gates/<gate>/`` (one
+        copy, then two) must leave the job at its canonical pool directory;
+        the same record under ``runs/elsewhere`` must still resolve by digest.
+        """
+        config = campaign.configurations[0]
+        with tempfile.TemporaryDirectory(prefix="gate_root_tooth_") as td:
+            runs = Path(td) / "runs"
+            local = dataclasses.replace(campaign, runs_dir=runs)
+            unnamed = pool_mod.Job(phase="A", arm="AR", config=config, seed=0, run_kind="gate")
+            text = json.dumps(_complete_record_of(unnamed, local))
+            canonical = pool_mod.canonical_directory_for(dataclasses.replace(unnamed), local)
+            captures = [runs / "gates" / "switch_neutrality" / side / config.name / "AR" for side in ("before", "after")]
+            resolved: list[Path] = []
+            try:
+                for n in (1, 2):
+                    captures[n - 1].mkdir(parents=True)
+                    (captures[n - 1] / "metrics.json").write_text(text)
+                    pool_mod.forget_record_index()
+                    resolved.append(pool_mod.directory_for(dataclasses.replace(unnamed), local))
+                elsewhere = runs / "elsewhere"
+                elsewhere.mkdir(parents=True)
+                (elsewhere / "metrics.json").write_text(text)
+                pool_mod.forget_record_index()
+                resolved.append(pool_mod.directory_for(dataclasses.replace(unnamed), local))
+            finally:
+                pool_mod.forget_record_index()
+        ok = (
+            all(r.resolve() == canonical.resolve() for r in resolved[:2])
+            and resolved[2].resolve() == elsewhere.resolve()
+        )
+        return ok, (
+            f"a record of {unnamed.key}'s digest in one, then two, of G1's named "
+            f"captures under runs/gates/switch_neutrality/: the unnamed job resolves to "
+            f"{'its canonical pool directory both times' if all(r.resolve() == canonical.resolve() for r in resolved[:2]) else [str(r) for r in resolved[:2]]}; "
+            f"with a third copy under runs/elsewhere it resolves to "
+            f"{'that record by digest' if resolved[2].resolve() == elsewhere.resolve() else str(resolved[2])}"
+        )
+
     def a_crash_is_kept_only_when_complete_as_a_crash() -> tuple[bool, str]:
         """Issue I-38: a crashed record complete as a crash is kept by --resume.
 
@@ -789,6 +832,20 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             what="'delta' dropped from JOB_IDENTITY_FIELDS",
             must="refuse the classification (TypeError)",
             check=an_unclassified_job_field,
+        ),
+        Tooth(
+            name="an unnamed job never resolves into another gate's root",
+            what=(
+                "a complete record of an unnamed job's digest in one and then "
+                "two of gate G1's named capture directories, then a third copy "
+                "outside runs/gates/"
+            ),
+            must=(
+                "leave the job at its canonical pool directory while the copies "
+                "are under a gate's root, and resolve it to the copy outside by "
+                "digest (issue I-36)"
+            ),
+            check=an_unnamed_job_never_resolves_into_another_gates_root,
         ),
         Tooth(
             name="a crash is kept only when complete as a crash",
