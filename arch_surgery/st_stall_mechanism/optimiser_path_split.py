@@ -138,6 +138,9 @@ SOURCES = {
     ],
 }
 
+#: The path-matched flat arm of each partitioned label (the context table).
+FLAT_OF = {"B2": "B1", "B2@1e-8": "B0@1e-8", "B2@1e-12": "B0@1e-12"}
+
 #: The pairs compared, per configuration, ``(a, b)``: ``b`` is read against ``a``.
 PAIRS = {
     "st_regression": [
@@ -397,12 +400,36 @@ def fmt(v, spec=".1e"):
     return str(v)
 
 
+def select_sources(*, campaign_only: bool, campaign_label: str | None) -> None:
+    """Narrow ``SOURCES`` and ``PAIRS`` in place for a records root other than
+    A104's (task A106): with neither option set nothing changes."""
+    def relabel(label: str) -> str:
+        return label.replace("@1e-8", f"@{campaign_label}") if campaign_label else label
+
+    for config in list(SOURCES):
+        kept = [(relabel(lb), sub, arm) for lb, sub, arm in SOURCES[config]
+                if not (campaign_only and not sub.startswith("campaign/"))]
+        names = {lb for lb, _s, _a in kept}
+        SOURCES[config] = kept
+        PAIRS[config] = [(relabel(a), relabel(b)) for a, b in PAIRS[config]
+                         if relabel(a) in names and relabel(b) in names]
+    if campaign_label:
+        FLAT_OF[f"B2@{campaign_label}"] = f"B0@{campaign_label}"
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--runs", default=str(V5 / "runs"))
     p.add_argument("--json", default=None, help="write the per-start results here")
+    p.add_argument("--campaign-only", action="store_true",
+                   help="read the campaign's phase B records alone: drop the supplementary stage's sources "
+                        "and every pair that names one (a run ID folder with no supplementary stage, A106)")
+    p.add_argument("--campaign-label", default=None,
+                   help="relabel the st campaign arms' '@1e-8' suffix, e.g. 'ws1e-6' for the write-set "
+                        "campaign at tau 1e-6 (A106); the default keeps A104's labels")
     args = p.parse_args(argv)
     runs = Path(args.runs)
+    select_sources(campaign_only=args.campaign_only, campaign_label=args.campaign_label)
 
     result: dict = {"runs": str(runs), "configurations": {}}
     hover_rows = []
@@ -505,7 +532,7 @@ def main(argv=None) -> int:
             nodes = sum(recs[label][s]["node_calls_solve_phase"] or 0 for s in seed_set)
             evals = sum(sum(recs[label][s]["evals_per_attempt"]) for s in seed_set)
             per_eval[label] = nodes / evals if evals else None
-        flat_of = {"B2": "B1", "B2@1e-8": "B0@1e-8", "B2@1e-12": "B0@1e-12"}
+        flat_of = FLAT_OF
         for label, _sub, _arm in sources:
             rs = [r for r in recs[label].values() if r.get("usable") and r.get("status") == "ok"]
             retried = sum(1 for r in rs if r["n_attempts"] > 1)
