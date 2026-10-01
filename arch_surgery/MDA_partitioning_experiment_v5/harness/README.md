@@ -115,7 +115,11 @@ the `mixed` ruler (DR11).
    `campaign`, `supplementary`, `timing`), the campaign's test set and τ, the timers, and any entry
    state or pinned burn time. The job's rendered identity and its digest name the record
    (`pool.Job.identity`, `records.job_digest`); `--resume` keeps an existing record only when it is
-   the same job and complete under today's contract (trap T13).
+   the same job and complete under today's contract (trap T13) — finished (`status == "ok"`), or
+   **complete as a crash** (`records.why_not_complete_as_a_crash`: status `crashed` in a result row —
+   `crashed`, `unconverged`, `unconverged-at-cap` — the traceback's last line and the pool's launcher
+   stamps; issue I-38), so a model's own raise is a kept result and never re-run by a resumed press.
+   `pool.why_not_kept` is the one decision; `--jobs` prints it without running.
 2. A fresh subprocess runs `child/optimise.py` (one optimisation) or `child/evaluate.py` (one
    evaluation, warmed, §8) against `PROCESS/`, under the composed environment.
 3. **Inside the driver copy**, per run: the deferral sets and the block schedule are resolved **once**
@@ -144,6 +148,17 @@ within a campaign (D39):
 | `write_set` (the fallback) | the block's **whole write set** — exactly V4's predicate | 1e-6, V4's | D39 |
 
 τ follows the set (`config.TAU_BY_TEST_SET`) unless `--tau` overrides it, and an override is stamped.
+**A named tolerance rule** (`--tau-rule <name>`, `Campaign.tau_rule`; `config.TAU_RULES`; A105) gives
+each configuration its own τ = factor × `epsvmc`, read from the configuration's committed input file
+(PROCESS's default where it sets none), the factor declared by the rule: `epsvmc_times_epsfcn` (factor
+`epsfcn`, 1e-3 by default: tok 1e-10, lad 1e-11, st 1e-12) and `epsvmc_times_tenth_epsfcn` (a tenth of
+it, the retry ladder's smallest step: 1e-11, 1e-12, 1e-13). Refused with `--tau`. The rule's name
+(`tau_rule`) and each τ are job-identity fields — `tau_rule` rendered only when set — and stamped
+(`campaign_tau_rule` by the child, `tau_rule_derivation` by the pool; owed only by a rule's record); a
+rule campaign's chain writes under `runs/campaign_tau_rule_<rule>/`. It reaches the flat and partitioned
+loops; the reference arm composes no tolerance; a supplementary stage keeps its own τ. **No rule is the
+default, and then no job, identity, digest or record changes.** Which rule, if any, a campaign is pressed
+under is the user's open question (OQ-tolerance).
 The test set and τ are job-identity fields rendered only where they differ from V4's, so a fallback job
 carries V4's identity — which is what makes every record made before DR11 a fallback record and lets
 GR read V4's reference records on this tree. The pool refuses a job at another setting than the
@@ -358,7 +373,7 @@ before a worktree is retired (`arch_surgery/bin/retire_task_worktree.sh`; the re
 |---|---|
 | `campaign/entry_references/`, `campaign/evaluation/<configuration>/<arm>/seedNNN/`, `campaign/optimisation/…` | the campaign's records (553 at A102: 3 entry references, 275 evaluations, 275 optimisations) and `campaign/press.json` |
 | `supplementary/<stage>/<configuration>/<arm>/seedNNN/` | the supplementary stage's records |
-| `gates/_runs/` | the shared pool: every gate's runs, one directory per job digest |
+| `gates/_runs/` | the shared pool: every gate's runs, one directory per job digest. A job that names no directory resolves here, or by digest to a record elsewhere under `runs/` — **never into another gate's root** `gates/<gate>/` (G1's named captures; issue I-36) |
 | `gates/<gate>/gate.json`, `gates/<stage>/measurements.json` | the verdict records and the measurement stages' records (the tallies, `gate_table`) |
 | `timing/<stage>/` | the timing stages' records and their `measurements.json` |
 | `census/`, `census_test_sets/` | the census stage's runs and the derived artifacts |
@@ -390,6 +405,7 @@ python experiment_runner.py --gates                  # the registry: gates, meas
 python experiment_runner.py --gate all --resume      # every gate, cheapest first (G7's tooth makes one smoke run)
 python experiment_runner.py --gate tally_contracts --resume
 python experiment_runner.py --jobs <gate>            # one gate's jobs by identity, and whether --resume keeps each
+python experiment_runner.py --jobs campaign          # the campaign press's jobs, composed as the press composes them, and whether --resume keeps each
 python experiment_runner.py --measure gate_table --resume
 python experiment_runner.py --measure tally_evaluation --resume
 python experiment_runner.py --measure tally_optimisation --resume
@@ -406,7 +422,7 @@ python experiment_runner.py --run --arm B2 --configuration st_regression --seed 
 python run_stamp_survey.py                           # the commit of every record under runs/
 ```
 
-`--test-set write_set` (or `--tau`) sets the campaign-level test set for any press; `--outdir` sends a
+`--test-set write_set` (or `--tau`, or `--tau-rule <name>`) sets the campaign-level test set or tolerance for any press; `--outdir` sends a
 gate's or stage's records elsewhere; `--no-teeth` skips a gate's teeth and says so in the verdict.
 
 ---

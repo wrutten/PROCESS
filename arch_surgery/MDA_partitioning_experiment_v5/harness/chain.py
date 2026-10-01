@@ -402,7 +402,16 @@ def chain_root(campaign: Campaign, plan: ChainPlan) -> Path:
     chain's own records anywhere under that tree would offer them to a stage
     that must refuse them, which is a refusal waiting to be tripped by a
     directory layout rather than by a decision.
+
+    Under a named tolerance rule (``Campaign.tau_rule``) the root carries the
+    rule's name, ``runs/<plan>_tau_rule_<rule>/``: the chain names its jobs'
+    directories, and a rule's job has the same readable identity as the
+    default campaign's job of the same arm and seed, so in the default root
+    a press would remove the default campaign's record to make its own.
+    Without a rule the root is the plan's name, as before.
     """
+    if campaign.tau_rule is not None:
+        return Path(campaign.runs_dir) / f"{plan.root_name}_tau_rule_{campaign.tau_rule}"
     return Path(campaign.runs_dir) / plan.root_name
 
 

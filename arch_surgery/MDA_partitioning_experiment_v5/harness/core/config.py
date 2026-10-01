@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
+from typing import Any, Mapping
 
 #: The package directory: ``…/MDA_partitioning_experiment_v4/harness``.
 #: This module lives one level down, in ``harness/core/``.
@@ -180,6 +180,150 @@ CAMPAIGN_TIMERS = True
 V4_TEST_SET = "write_set"
 
 
+# --------------------------------------------------------------------------
+# a named tolerance rule: one τ per configuration, from its input file
+# --------------------------------------------------------------------------
+
+#: PROCESS's own defaults for the two optimiser settings a tolerance rule
+#: reads, used where an input file sets none: ``numerics.epsvmc`` (the
+#: optimiser's stopping tolerance) and ``numerics.epsfcn`` (its
+#: finite-difference step), as the experiment's copy declares them in
+#: ``PROCESS/process/data_structure/numerics.py``.  Repeated here because the
+#: harness never imports the driver in the parent process; the composition
+#: self-check reads that file and refuses a disagreement.
+PROCESS_OPTIMISER_DEFAULTS: Mapping[str, float] = MappingProxyType({"epsvmc": 1.0e-6, "epsfcn": 1.0e-3})
+
+#: Where those defaults are declared in the copy, for the self-check.
+PROCESS_OPTIMISER_DEFAULTS_SOURCE = Path("process") / "data_structure" / "numerics.py"
+
+#: Significant digits a rule's τ is rounded to, so that ``1e-7 × 1e-3`` reads
+#: ``1e-10`` in the job identity and the record rather than the product's
+#: binary noise ``1.0000000000000001e-11`` (a declared rounding, applied once).
+TAU_RULE_DIGITS = 12
+
+
+def read_real_setting(path: Path, name: str) -> tuple[float | None, int | None]:
+    """The value an input file gives the real-valued setting *name*, and its line.
+
+    Read by PROCESS's own line rule (``process/core/input.py``,
+    ``parse_input_file``): a line whose first non-blank character is ``*`` is
+    a comment, otherwise ``name = value`` with anything after the value
+    ignored.  ``(None, None)`` where the file does not set it; a file that
+    sets it twice is refused, because which line PROCESS keeps is then a
+    question of its parser, not of the file.
+    """
+    import re
+
+    pattern = re.compile(rf"^{re.escape(name)}[ ]*=[ ]*([+\-0-9.eEdD]+)", re.IGNORECASE)
+    found: list[tuple[float, int]] = []
+    for number, line in enumerate(Path(path).read_text().splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("*"):
+            continue
+        match = pattern.match(stripped)
+        if match:
+            found.append((float(match.group(1).replace("d", "e").replace("D", "e")), number))
+    if len(found) > 1:
+        raise ValueError(
+            f"{path} sets {name} {len(found)} times (lines {[n for _v, n in found]}); "
+            f"a tolerance rule refuses to guess which one PROCESS keeps"
+        )
+    return found[0] if found else (None, None)
+
+
+@dataclass(frozen=True)
+class TauRule:
+    """A named rule giving each configuration its own loop tolerance.
+
+    ``τ = factor × epsvmc``: ``epsvmc`` is the optimiser's stopping tolerance
+    as the configuration's **committed** input file sets it (PROCESS's
+    default where it sets none), and the factor is declared by the rule:
+    ``factor_multiplier`` times the input file's ``factor_setting`` (again
+    with PROCESS's default), or ``factor_multiplier`` alone where the rule
+    names no setting.  Computed from the file, never typed per
+    configuration.  A rule replaces the test set's one declared τ for the
+    flat and partitioned arms' loops; the reference arm composes no
+    tolerance and is untouched; a supplementary stage keeps its own τ.
+    """
+
+    name: str
+    factor_setting: str | None
+    factor_multiplier: float
+    why: str
+
+    def derivation(self, config: Config) -> dict[str, Any]:
+        """τ for *config*, with every number it came from and where."""
+        epsvmc, epsvmc_line = read_real_setting(config.input_path, "epsvmc")
+        epsvmc_from = f"input file line {epsvmc_line}" if epsvmc_line else "PROCESS default"
+        if epsvmc is None:
+            epsvmc = float(PROCESS_OPTIMISER_DEFAULTS["epsvmc"])
+        factor = float(self.factor_multiplier)
+        setting: dict[str, Any] = {}
+        if self.factor_setting is not None:
+            value, line = read_real_setting(config.input_path, self.factor_setting)
+            setting = {
+                "name": self.factor_setting,
+                "value": float(PROCESS_OPTIMISER_DEFAULTS[self.factor_setting]) if value is None else value,
+                "from": f"input file line {line}" if line else "PROCESS default",
+            }
+            factor = factor * setting["value"]
+        tau = float(f"{factor * epsvmc:.{TAU_RULE_DIGITS}g}")
+        return {
+            "rule": self.name,
+            "formula": (
+                f"tau = {self.factor_multiplier!r}"
+                + (f" x {self.factor_setting}" if self.factor_setting else "")
+                + " x epsvmc"
+            ),
+            "input_file": config.input_path.name,
+            "epsvmc": epsvmc,
+            "epsvmc_from": epsvmc_from,
+            "factor_setting": setting or None,
+            "factor": factor,
+            "tau": tau,
+        }
+
+    def tau_for(self, config: Config) -> float:
+        return float(self.derivation(config)["tau"])
+
+
+#: The declared tolerance rules.  The first two (task A105
+#: (v5-resume-fixes-and-tau-rule)) are the capability the open tolerance
+#: question asked for; which rule, if any, a campaign is pressed under is
+#: the user's decision, and no rule is the default.
+TAU_RULES: tuple[TauRule, ...] = (
+    TauRule(
+        name="epsvmc_times_epsfcn",
+        factor_setting="epsfcn",
+        factor_multiplier=1.0,
+        why=(
+            "the loop error sized to the optimiser's stopping tolerance at the "
+            "finite-difference step of the first attempt (epsfcn; 1e-3 where "
+            "the file sets none)"
+        ),
+    ),
+    TauRule(
+        name="epsvmc_times_tenth_epsfcn",
+        factor_setting="epsfcn",
+        factor_multiplier=0.1,
+        why=(
+            "the same at the retry ladder's smallest step, a tenth of epsfcn "
+            "(the third attempt)"
+        ),
+    ),
+)
+
+
+def tau_rule_named(name: str) -> TauRule:
+    for rule in TAU_RULES:
+        if rule.name == name:
+            return rule
+    raise ValueError(
+        f"{name!r} is not a declared tolerance rule; the rules are "
+        f"{[r.name for r in TAU_RULES]}"
+    )
+
+
 @dataclass(frozen=True)
 class SupplementaryStage:
     """A declared stage reported **beside** the campaign under its own settings.
@@ -288,6 +432,14 @@ class Campaign:
     #: Whether ``tau`` was given explicitly rather than taken from the test
     #: set's declared value.  Derived in ``__post_init__``; never set by hand.
     tau_overridden: bool = False
+    #: A named tolerance rule (:data:`TAU_RULES`): one τ per configuration,
+    #: computed from its committed input file (:meth:`tau_for`).  ``None`` —
+    #: the default — is no rule, and then nothing about any job changes.
+    #: Refused together with an explicit ``tau``.  Under a rule ``tau`` keeps
+    #: the test set's declared value and is no job's tolerance; every job
+    #: takes :meth:`tau_for` its configuration, and the rule's name is a job
+    #: identity field and a record stamp.
+    tau_rule: str | None = None
     #: The declared supplementary stages, each with its own test set and
     #: tolerance (:class:`SupplementaryStage`).
     supplementary: tuple[SupplementaryStage, ...] = SUPPLEMENTARY_STAGES
@@ -336,6 +488,14 @@ class Campaign:
                 f"campaign whose loops test a set nobody declared measures "
                 f"nothing anyone can name"
             )
+        if self.tau_rule is not None:
+            tau_rule_named(self.tau_rule)  # refuses a name nobody declared
+            if self.tau is not None and float(self.tau) != float(TAU_BY_TEST_SET[self.test_set]):
+                raise ValueError(
+                    f"a tolerance rule ({self.tau_rule!r}) and an explicit tau "
+                    f"({self.tau!r}) were both given; a campaign takes its "
+                    f"tolerance one way"
+                )
         if self.tau is None:
             object.__setattr__(self, "tau", float(TAU_BY_TEST_SET[self.test_set]))
             object.__setattr__(self, "tau_overridden", False)
@@ -348,6 +508,13 @@ class Campaign:
             )
 
     # --- derived --------------------------------------------------------
+    def tau_for(self, config: Config) -> float:
+        """The tolerance this campaign's jobs on *config* take: the rule's
+        value for the configuration under a rule, :attr:`tau` otherwise."""
+        if self.tau_rule is None:
+            return float(self.tau)
+        return tau_rule_named(self.tau_rule).tau_for(config)
+
     @property
     def declared_tau(self) -> float:
         """The tolerance the test set is declared at, whatever ``tau`` is."""
@@ -609,7 +776,10 @@ def default_configurations(
 
 
 def default_campaign(
-    *, test_set: str | None = None, tau: float | None = None
+    *,
+    test_set: str | None = None,
+    tau: float | None = None,
+    tau_rule: str | None = None,
 ) -> Campaign:
     """The production campaign: V4's own copy of PROCESS and its own data.
 
@@ -623,11 +793,14 @@ def default_campaign(
     the census set by default, the fallback ``write_set`` under D39) and
     ``tau`` overrides the tolerance the test set is declared at (the runner's
     ``--tau``); both reach every job the campaign composes, one value each.
+    ``tau_rule`` names a tolerance rule instead (the runner's ``--tau-rule``;
+    refused with ``tau``): one τ per configuration from its input file.
     """
     data_dir = HERE / "data"
     return Campaign(
         test_set=DEFAULT_TEST_SET if test_set is None else test_set,
         tau=tau,
+        tau_rule=tau_rule,
         tree=EXPERIMENT_DIR / "PROCESS",
         data_dir=data_dir,
         # The committed input files are copied into the experiment's own data

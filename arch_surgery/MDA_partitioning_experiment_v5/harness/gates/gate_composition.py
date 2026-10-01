@@ -92,7 +92,7 @@ PLAN_COLUMN: tuple[tuple[str, Any], ...] = (
     ("mda", lambda config, campaign: "partitioned"),
     # "stopping rule | y @ tau" -- the one tolerance of every converger (D23),
     # the test set's declared value unless overridden (DR11).
-    ("tolerance", lambda config, campaign: repr(float(campaign.tau))),
+    ("tolerance", lambda config, campaign: repr(float(campaign.tau_for(config)))),
     # The two committed artifacts that define y and the per-block write sets.
     ("coupling_state", lambda config, campaign: str(config.coupling_state_path)),
     ("write_sets", lambda config, campaign: str(config.write_sets_path)),

@@ -63,6 +63,7 @@ from harness.core.config import (  # noqa: E402
     CAMPAIGN_TIMERS,
     EXECUTION_APPROVED,
     TAU_BY_TEST_SET,
+    TAU_RULES,
     TEST_SETS,
     Campaign,
     default_campaign,
@@ -373,7 +374,7 @@ def stage_smoke(args: argparse.Namespace, campaign: Campaign) -> int:
         teeth=not args.no_teeth,
     )
     chain_mod.print_press(press)
-    out = args.json or (campaign.runs_dir / plan.root_name / "press.json")
+    out = args.json or (chain_mod.chain_root(campaign, plan) / "press.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(press, indent=2, default=str) + "\n")
     print(f"\n  record: {out}")
@@ -499,7 +500,7 @@ def stage_campaign_press(args: argparse.Namespace, campaign: Campaign) -> int:
         teeth=not args.no_teeth,
     )
     chain_mod.print_press(press)
-    out = args.json or (campaign.runs_dir / plan.root_name / "press.json")
+    out = args.json or (chain_mod.chain_root(campaign, plan) / "press.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(press, indent=2, default=str) + "\n")
     print(f"\n  record: {out}")
@@ -536,7 +537,10 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         / "single"
         / config.name
         / arm.name
-        / f"{campaign.test_set}_tau{campaign.tau!r}"
+        / (
+            f"{campaign.test_set}_tau{campaign.tau_for(config)!r}"
+            + (f"_rule_{campaign.tau_rule}" if campaign.tau_rule is not None else "")
+        )
         / pool_mod.seed_directory(args.seed)
     )
     job = pool_mod.Job(
@@ -557,8 +561,12 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
     print(
         f"  {arm.name} on {config.name}, seed {args.seed}, phase {phase}, "
         f"regime {args.regime}, kind {args.run_kind or 'smoke'}, test set "
-        f"{campaign.test_set}, tau {campaign.tau!r}"
-        + (" (overridden)" if campaign.tau_overridden else " (the test set's declared value)")
+        f"{campaign.test_set}, tau {campaign.tau_for(config)!r}"
+        + (
+            f" (rule {campaign.tau_rule})"
+            if campaign.tau_rule is not None
+            else (" (overridden)" if campaign.tau_overridden else " (the test set's declared value)")
+        )
     )
     try:
         result = pool_mod.run(job, campaign, resume=args.resume)
@@ -567,6 +575,26 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         return 3
     record = records_mod.read(outdir)
     print(f"  status {result['status']!r}  taxonomy {result['failure_class']!r}")
+    print(
+        f"  stamped: test set {record.get('campaign_test_set')!r}, tau "
+        f"{record.get('campaign_tau')!r}, tolerance rule {record.get('campaign_tau_rule')!r}"
+        + (
+            f" (derivation: {record['tau_rule_derivation'].get('formula')}, epsvmc "
+            f"{record['tau_rule_derivation'].get('epsvmc')!r} from "
+            f"{record['tau_rule_derivation'].get('epsvmc_from')})"
+            if isinstance(record.get("tau_rule_derivation"), dict)
+            else ""
+        )
+    )
+    if phase == "B":
+        print(
+            f"  counts: ifail {(record.get('mfile') or {}).get('ifail')!r}, solver "
+            f"iterations {record.get('n_solver_iterations')!r}, evaluations "
+            f"{(record.get('sweeps_per_eval') or {}).get('n_evaluations')!r}, solve-phase "
+            f"node calls {record.get('node_calls_solve_phase')!r}, attempts "
+            f"{(record.get('exit_forensics') or {}).get('n_attempts')!r} — plumbing "
+            f"evidence of one smoke run, never a result"
+        )
     print(f"  record {outdir / 'metrics.json'}")
     completeness = record.get("completeness") or {}
     print(
@@ -795,6 +823,8 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
     resume decision (rule (vii)); this shows it without pressing anything.
     With ``all``, the union over every gate, and which gates share each job.
     """
+    if args.jobs == CAMPAIGN_JOBS:
+        return stage_campaign_jobs(args, campaign)
     _rule(f"jobs of gate {args.jobs}")
     available = registry_mod.gates_only(campaign)
     names = registry_mod.ordered_gate_names(campaign) if args.jobs == "all" else [args.jobs]
@@ -804,6 +834,7 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
         return 3
     by_digest: dict[str, dict[str, Any]] = {}
     readers: dict[str, list[str]] = {}
+    refused: list[str] = []
     for name in names:
         gate = available[name]
         if gate.jobs is None:
@@ -817,6 +848,10 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
             rows = list(gate.jobs())
         except gates_mod.GateError as exc:
             print(f"  gate {name}: not composable yet — {exc}")
+            continue
+        except pool_mod.PoolError as exc:
+            print(f"  gate {name}: REFUSED by the pool — {exc}")
+            refused.append(name)
             continue
         except Exception as exc:  # noqa: BLE001 - the reproduction gate's own refusal
             if type(exc).__name__ != "ReproductionError":
@@ -846,7 +881,96 @@ def stage_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
         )
         for digest, gates in sorted(shared.items(), key=lambda kv: by_digest[kv[0]]["key"]):
             print(f"    {by_digest[digest]['key']}  <- {', '.join(gates)}")
+    if refused:
+        print(f"\n  REFUSED by the pool: {refused}")
+        return 3
     return 0
+
+
+#: The name ``--jobs`` takes for the campaign press's own job set rather than
+#: a gate's.  No gate may be registered under it.
+CAMPAIGN_JOBS = "campaign"
+
+
+def stage_campaign_jobs(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The campaign press's job set, by identity, and what ``--resume`` would
+    do with each.  Nothing runs.
+
+    The same jobs the press composes — ``chain.campaign_jobs`` per run stage,
+    under the press's own composition (:func:`campaign_press_composition`,
+    the timers on) — each resolved by the pool and put through
+    ``pool.why_not_kept``, the decision ``pool.run`` takes under ``--resume``.
+    So "a resumed campaign press would re-make these" is read off the records
+    without pressing anything (task A105 (v5-resume-fixes-and-tau-rule),
+    issue I-38).  The dependent stage (the displaced evaluations) is composed
+    from the entry references' records; where one is absent the stage says
+    so and lists nothing.  ``--json`` writes the rows.
+    """
+    if CAMPAIGN_JOBS in registry_mod.gates_only(campaign):
+        print(f"  REFUSED — a gate is registered as {CAMPAIGN_JOBS!r}, the name --jobs reserves for the campaign")
+        return 3
+    composed = campaign_press_composition(campaign)
+    _rule(
+        f"jobs of the campaign press (test set {composed.test_set}, "
+        f"{_tolerance_words(composed)}, wall-clock timers "
+        f"{'on' if composed.timers else 'off'})"
+    )
+    stages: dict[str, list[dict[str, Any]]] = {}
+    for stage in chain_mod.RUN_STAGES:
+        try:
+            jobs = chain_mod.campaign_jobs(composed, stage)
+        except chain_mod.ChainError as exc:
+            print(f"  {stage}: not composable yet — {exc}")
+            stages[stage] = []
+            continue
+        stages[stage] = pool_mod.job_listing(jobs, composed)
+    n_jobs = sum(len(rows) for rows in stages.values())
+    n_kept = sum(1 for rows in stages.values() for r in rows if r["why_not_complete"] is None)
+    for stage, rows in stages.items():
+        kept = sum(1 for r in rows if r["why_not_complete"] is None)
+        print(f"  {stage:<22} {len(rows):>4} distinct job(s); --resume would keep {kept}, run {len(rows) - kept}")
+    print(f"  {'all run stages':<22} {n_jobs:>4} distinct job(s); --resume would keep {n_kept}, run {n_jobs - n_kept}\n")
+    for stage, rows in stages.items():
+        for row in rows:
+            if row["why_not_complete"] is None:
+                continue
+            relative = framework_mod._relative(Path(row["path"]), Path(composed.runs_dir))
+            print(f"    RUN  {row['key']}")
+            print(f"         {relative}: {row['why_not_complete']}")
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(
+            json.dumps(
+                {
+                    "tree_git_head": framework_mod.git_head(),
+                    "test_set": composed.test_set,
+                    "tolerance": _tolerance_words(composed),
+                    "timers": bool(composed.timers),
+                    "n_jobs": n_jobs,
+                    "n_kept": n_kept,
+                    "stages": {
+                        stage: [
+                            {k: r[k] for k in ("key", "job_digest", "path", "why_not_complete")}
+                            for r in rows
+                        ]
+                        for stage, rows in stages.items()
+                    },
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        print(f"\n  record: {args.json}")
+    return 0
+
+
+def _tolerance_words(campaign: Campaign) -> str:
+    """The campaign's tolerance as a listing prints it."""
+    if campaign.tau_rule is not None:
+        return f"tau by rule {campaign.tau_rule} (" + ", ".join(
+            f"{config.name} {campaign.tau_for(config)!r}" for config in campaign.configurations
+        ) + ")"
+    return f"tau {campaign.tau!r}" + (" (overridden)" if campaign.tau_overridden else "")
 
 
 def stage_gate_catalogue(campaign: Campaign) -> int:
@@ -1267,7 +1391,8 @@ def main(argv: list[str] | None = None) -> int:
         help="list one gate's job set by identity — key, digest, shared-pool "
         "directory, and whether --resume would keep the record there, with "
         "the reason where it would not — and stop.  Nothing runs.  'all' "
-        "lists the union and which gates share each job",
+        "lists the union and which gates share each job; 'campaign' lists the "
+        "campaign press's own job set, composed as the press composes it",
     )
     parser.add_argument(
         "--gate",
@@ -1367,6 +1492,16 @@ def main(argv: list[str] | None = None) -> int:
         "tolerance never resolve into the campaign's)",
     )
     parser.add_argument(
+        "--tau-rule",
+        choices=tuple(rule.name for rule in TAU_RULES),
+        default=None,
+        help="a named tolerance rule instead of one tau: each configuration's "
+        "tau computed from its committed input file ("
+        + "; ".join(f"{rule.name}: {rule.why}" for rule in TAU_RULES)
+        + ").  Refused with --tau.  The rule's name and each tau are in the "
+        "job identity and stamped on every record; none by default",
+    )
+    parser.add_argument(
         "--census",
         choices=("take", "write"),
         help="the census test sets, and stop: take = run the census job set "
@@ -1432,7 +1567,10 @@ def main(argv: list[str] | None = None) -> int:
     # made against; there is no flag to point the button anywhere else.  The
     # test set and the tolerance are the two campaign-level settings the
     # button takes (DR11, D39): one value each, reaching every job.
-    campaign = default_campaign(test_set=args.test_set, tau=args.tau)
+    if args.tau_rule is not None and args.tau is not None:
+        print("  REFUSED — --tau-rule and --tau both given; a campaign takes its tolerance one way")
+        return 3
+    campaign = default_campaign(test_set=args.test_set, tau=args.tau, tau_rule=args.tau_rule)
 
     if args.selfcheck:
         checks = selfcheck_mod.run_all(

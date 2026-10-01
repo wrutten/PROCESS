@@ -80,7 +80,7 @@ from ..experiment import arms as arms_mod
 from ..experiment import input_files as input_files_mod
 from . import records as records_mod
 from ..experiment import switches as switches_mod
-from .config import TEST_SETS, Campaign, Config
+from .config import TEST_SETS, Campaign, Config, tau_rule_named
 
 #: Default per-run wall-clock limit.  Not a budget: reaching it is a
 #: ``timeout`` taxonomy row, recorded and never re-run at a longer limit.
@@ -153,6 +153,14 @@ class Job:
     #: fallback's (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``).
     test_set: str | None = None
     tau: float | None = None
+    #: The campaign's named tolerance rule, where the job's τ came from one
+    #: (``config.TauRule``): resolved by :func:`resolve_settings` — the
+    #: campaign's rule for a job that takes the campaign's τ, None for a job
+    #: that names its own (a supplementary stage, the reproduction gate).  An
+    #: identity field rendered only when set, so no record made without a
+    #: rule moves, and a rule's record never resolves into a ``--tau``
+    #: campaign's record at the same value.
+    tau_rule: str | None = None
     #: The wall-clock timers (DR12): ``None`` means the campaign's, resolved
     #: by :func:`resolve_settings`; an identity field rendered only when on
     #: (``records.IDENTITY_DEFAULTS_WHEN_ABSENT``), so every gate record keeps
@@ -222,6 +230,10 @@ class Job:
                 # job carries V4's identity (see the field's comment).  An
                 # unresolved value is refused: a job rendered before the pool
                 # resolved it against the campaign would render as V4's.
+                if name == "tau_rule" and value is None:
+                    # No rule is a resolved value: the default every record
+                    # made without one carries, rendered by its absence.
+                    continue
                 if name == "timers" and value is None:
                     # DR12: an unresolved instrument switch renders as off --
                     # the default every record carries -- never as a refusal:
@@ -342,6 +354,7 @@ JOB_IDENTITY_FIELDS: tuple[str, ...] = (
     "predicate_mode",
     "test_set",
     "tau",
+    "tau_rule",
     "timers",
     "node_census",
     "census_entry",
@@ -396,6 +409,8 @@ def readable_key(identity: Mapping[str, Any]) -> str:
         parts.append(f"set={identity['test_set']}")
     if identity.get("tau") is not None:
         parts.append(f"tau={identity['tau']!r}")
+    if identity.get("tau_rule") is not None:
+        parts.append(f"rule={identity['tau_rule']}")
     if identity.get("timers"):
         parts.append("timers")
     usual_position = records_mod.effective_audit_position(
@@ -434,13 +449,29 @@ def resolve_settings(job: Job, campaign: Campaign) -> Job:
     every pool entry so that a job's identity is never rendered unresolved.
     """
     test_set = campaign.test_set if job.test_set is None else job.test_set
-    tau = campaign.tau if job.tau is None else float(job.tau)
+    # A tolerance rule gives each configuration its own τ (config.TauRule);
+    # a job that names no τ takes the campaign's for its configuration and
+    # carries the rule's name, one that names its own keeps it and no rule.
+    campaign_tau = campaign.tau_for(job.config)
+    if job.tau is None:
+        tau = campaign_tau
+        if job.tau_rule is None:
+            job.tau_rule = campaign.tau_rule
+    else:
+        tau = float(job.tau)
     if test_set not in TEST_SETS:
         raise PoolError(
             f"{job.arm}/{job.config.name}/seed{job.seed}: test set "
             f"{test_set!r} is not one this harness composes {TEST_SETS}"
         )
-    if test_set != campaign.test_set or float(tau) != float(campaign.tau):
+    if job.tau_rule is not None and job.tau_rule != campaign.tau_rule:
+        raise PoolError(
+            f"{job.arm}/{job.config.name}/seed{job.seed} carries tolerance rule "
+            f"{job.tau_rule!r} while the campaign composes "
+            f"{campaign.tau_rule!r}; refused rather than run under a rule the "
+            f"campaign did not declare"
+        )
+    if test_set != campaign.test_set or float(tau) != float(campaign_tau):
         stage = campaign.supplementary_stage_for(
             phase=job.phase,
             configuration=job.config.name,
@@ -463,7 +494,7 @@ def resolve_settings(job: Job, campaign: Campaign) -> Job:
             raise PoolError(
                 f"{job.arm}/{job.config.name}/seed{job.seed} asks for test set "
                 f"{test_set!r} at tau={tau!r} while the campaign composes "
-                f"{campaign.test_set!r} at tau={campaign.tau!r}, and no declared "
+                f"{campaign.test_set!r} at tau={campaign_tau!r}, and no declared "
                 f"supplementary stage admits those values for this phase, "
                 f"configuration and arm.  A campaign never mixes test sets "
                 f"(decision D39); refused rather than run under a setting the "
@@ -599,6 +630,21 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
     of the same digest elsewhere is another caller's, and the pool has no
     business writing into it.  :func:`run` still refuses to remove a named
     directory that holds another job's record.
+
+    **A directory under another gate's own root is never a candidate for an
+    unnamed job** (issue I-36; task A105 (v5-resume-fixes-and-tau-rule)):
+    step 2 skips every hit under ``runs/gates/<gate>/`` other than the
+    shared pool itself (:func:`is_under_another_gates_root`).  Such a
+    directory is a gate's *named* record — gate G1's ``before``/``after``
+    captures, a straddle archived at two commits — and is the mirror image
+    of I-29: an unnamed job resolved into it would read a capture made at
+    another commit as its own record, and a press without ``--resume``
+    would remove and re-make it.  Found on the reproduction gate's unnamed
+    ``AR`` substitute, whose digest five of G1's captures carry, so that
+    ``--jobs reproduction`` refused.  Hits elsewhere under ``runs/`` (the
+    campaign's directories under the arms' recorded names, a stage's named
+    directory such as the input-file stage's baseline evaluation) stay
+    candidates, as before.
     """
     resolve_settings(job, campaign)
     canonical = canonical_directory_for(job, campaign)
@@ -614,7 +660,11 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
         ):
             return canonical
     digest = records_mod.job_digest(identity)
-    hits = _record_index(campaign).get(digest, [])
+    hits = [
+        hit
+        for hit in _record_index(campaign).get(digest, [])
+        if not is_under_another_gates_root(hit, campaign)
+    ]
     if not hits:
         return canonical
     resolved_canonical = canonical.resolve()
@@ -628,6 +678,17 @@ def directory_for(job: Job, campaign: Campaign) -> Path:
             f"say which is the job's record; refused rather than picked."
         )
     return hits[0]
+
+
+def is_under_another_gates_root(directory: Path, campaign: Campaign) -> bool:
+    """Whether *directory* lies under a gate's own root, ``runs/gates/<gate>/``,
+    and not under the shared pool ``runs/gates/_runs/`` (issue I-36)."""
+    gates_root = (Path(campaign.runs_dir) / POOL_SUBPATH.parent).resolve()
+    try:
+        relative = Path(directory).resolve().relative_to(gates_root)
+    except ValueError:
+        return False
+    return bool(relative.parts) and relative.parts[0] != POOL_SUBPATH.name
 
 
 def directories_for(jobs: Sequence[Job], campaign: Campaign) -> list[Path]:
@@ -644,9 +705,11 @@ def job_listing(jobs: Sequence[Job], campaign: Campaign) -> list[dict[str, Any]]
     record of it is on disk — the resume decision, shown without running.
 
     What a gate's ``jobs`` declaration returns to the framework and what
-    ``experiment_runner.py --jobs <gate>`` prints.  ``why_not_complete`` is
-    :func:`records.why_not_complete_for`'s sentence, or None where ``--resume``
-    would keep the record; it is computed from the record alone (rule (vii)).
+    ``experiment_runner.py --jobs <gate>`` (and ``--jobs campaign``) prints.
+    ``why_not_complete`` is :func:`why_not_kept`'s sentence — the whole of the
+    decision :func:`run` takes under ``--resume``, the completeness contract
+    and the composition check alike — or None where ``--resume`` would keep
+    the record; it is computed from the record alone (rule (vii)).
     """
     runs_dir = Path(campaign.runs_dir)
     rows: list[dict[str, Any]] = []
@@ -659,12 +722,9 @@ def job_listing(jobs: Sequence[Job], campaign: Campaign) -> list[dict[str, Any]]
             continue
         seen.add(digest)
         directory = directory_for(job, campaign)
-        if (directory / "metrics.json").exists():
-            why = records_mod.why_not_complete_for(
-                records_mod.read(directory), identity=identity, digest=digest
-            )
-        else:
-            why = "no record on disk"
+        why = why_not_kept(
+            job, campaign, identity=identity, digest=digest, directory=directory
+        )
         rows.append(
             {
                 "key": job.key,
@@ -899,7 +959,7 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--input-kind", input_kind,
         "--coupling-state", str(job.config.coupling_state_path),
         "--seed", str(job.seed),
-        "--tau", repr(float(job.tau if job.tau is not None else campaign.tau)),
+        "--tau", repr(float(job.tau if job.tau is not None else campaign.tau_for(job.config))),
         "--test-set", str(job.test_set or campaign.test_set),
         "--timers", ("on" if job.timers else "off"),
         "--run-kind", job.run_kind,
@@ -908,6 +968,8 @@ def _command(job: Job, campaign: Campaign, terms: Mapping[str, str]) -> list[str
         "--switches-asked", json.dumps(dict(terms)),
         "--reproduction-overrides", json.dumps(dict(job.reproduction_overrides or {})),
     ]
+    if job.tau_rule is not None:
+        command += ["--tau-rule", job.tau_rule]
     if job.delta is not None:
         command += ["--delta", repr(job.delta)]
     if job.pin_hex is not None:
@@ -1007,30 +1069,60 @@ def _loadavg() -> tuple[float, float, float] | None:
         return None
 
 
+#: What :func:`why_not_kept` says when the directory holds no record at all.
+NO_RECORD_ON_DISK = "no record on disk"
+
+
+def why_not_kept(
+    job: Job,
+    campaign: Campaign,
+    *,
+    identity: Mapping[str, Any],
+    digest: str,
+    directory: Path,
+) -> str | None:
+    """Why ``--resume`` would re-make this job's record in *directory*, or None.
+
+    The one resume decision, in one place: :func:`run` keeps a record exactly
+    when this returns None, and :func:`job_listing` prints this sentence, so
+    a listing can never promise a keep the press would not make (task A105
+    (v5-resume-fixes-and-tau-rule): the listing consulted the completeness
+    contract alone and left the composition check to the press).  Two
+    comparisons, both over the record and the job only (rule (vii), trap
+    T13): :func:`records.why_not_complete_for` — the identity, the stamps
+    and the completeness contract — and :func:`why_not_composed_as_today` —
+    the switch terms the arm composes now against those the record was made
+    with.
+    """
+    if not (Path(directory) / "metrics.json").exists():
+        return NO_RECORD_ON_DISK
+    previous = records_mod.read(directory)
+    why = records_mod.why_not_complete_for(previous, identity=identity, digest=digest)
+    if why is not None:
+        return why
+    _env, terms = environment_for(job, campaign)
+    return why_not_composed_as_today(previous, terms)
+
+
 def _kept(
     job: Job,
     identity: Mapping[str, Any],
     digest: str,
     outdir: Path,
     *,
-    campaign: "Campaign | None" = None,
+    campaign: Campaign,
 ) -> dict[str, Any] | None:
     """The outcome of a kept run, or None where the record is not this job's."""
-    if not (outdir / "metrics.json").exists():
-        return None
-    previous = records_mod.read(outdir)
-    if not records_mod.is_complete_for(previous, identity=identity, digest=digest):
-        return None
-    if campaign is not None:
-        _env, terms = environment_for(job, campaign)
-        why = why_not_composed_as_today(previous, terms)
-        if why is not None:
+    why = why_not_kept(job, campaign, identity=identity, digest=digest, directory=outdir)
+    if why is not None:
+        if why != NO_RECORD_ON_DISK:
             print(
                 f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
                 f"re-made: {why}",
                 flush=True,
             )
-            return None
+        return None
+    previous = records_mod.read(outdir)
     print(
         f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} "
         f"resumed (complete record of this job kept; digest {digest[:12]})",
@@ -1093,6 +1185,7 @@ def stamp_identity(
     digest: str,
     *,
     launcher: Mapping[str, Any] | None = None,
+    tau_rule_derivation: Mapping[str, Any] | None = None,
 ) -> None:
     """Write ``job_identity`` and ``job_digest`` into the record on disk.
 
@@ -1113,6 +1206,12 @@ def stamp_identity(
         # DR12: the launcher's independent wall of the subprocess and the
         # load average at its spawn and return; context, never evidence.
         record["launcher"] = dict(launcher)
+    if tau_rule_derivation is not None:
+        # The named tolerance rule's derivation of this job's τ from the
+        # configuration's committed input file (config.TauRule): what the
+        # rule read, where, and the τ it gave.  Stamped by the pool, which
+        # composed it; the child stamps the rule's name it was handed.
+        record["tau_rule_derivation"] = dict(tau_rule_derivation)
     # The naming scheme the arm fields are written in.  A record made after
     # the arm renaming of 2026-09-15 says so here, and ``records.read`` then
     # leaves its names alone; one without the stamp is read through
@@ -1258,7 +1357,17 @@ def run(
             "the load average at both ends; the fixed per-run term and the "
             "unattributed residual are derived from it (DR12); context, never evidence"
         )
-        stamp_identity(outdir, identity, digest, launcher=launcher)
+        stamp_identity(
+            outdir,
+            identity,
+            digest,
+            launcher=launcher,
+            tau_rule_derivation=(
+                tau_rule_named(job.tau_rule).derivation(job.config)
+                if job.tau_rule is not None
+                else None
+            ),
+        )
         record = records_mod.read(outdir)
         _MADE_THIS_INVOCATION[digest] = str(outdir)
         _index_record(campaign, digest, outdir)

@@ -37,7 +37,9 @@ a post-renaming record (stamped ``arm_naming``) is not translated, an arm
 nobody declared is refused by name, and a canonical directory occupied by
 another job's record is not removed.
 
-Teeth: a record whose digest matches but whose child-stamped δ differs is
+Teeth: a crash record is kept only when complete as a crash (issue I-38);
+an unnamed job never resolves into another gate's root (issue I-36);
+a record whose digest matches but whose child-stamped δ differs is
 refused; a record with no digest is incomplete; a digest that does not
 re-derive from the stamped identity is refused; an unclassified job field
 refuses the module; a by-design pair doctored to collide is reported; and the
@@ -246,6 +248,56 @@ def check_pairs(pairs: list[dict[str, Any]], campaign: Campaign) -> list[dict[st
 # --------------------------------------------------------------------------
 
 
+def tolerance_rule_identity_rows(campaign: Campaign) -> list[dict[str, Any]]:
+    """A named tolerance rule moves no default identity and owns its own.
+
+    Task A105 (v5-resume-fixes-and-tau-rule).  Per rule and configuration,
+    the flat control's seed-1 evaluation is composed three ways — under this
+    campaign with no rule, under the rule, and under ``--tau`` set to the
+    rule's own value — and must give: no ``tau_rule`` in the identity
+    without a rule (so no record made without one moves); the rule's name
+    and its τ in the identity under it; three distinct digests (a rule's
+    record never resolves into the plain campaign's, nor into a ``--tau``
+    campaign's at the same value).
+    """
+    from ..core.config import TAU_RULES  # noqa: PLC0415
+
+    plain = dataclasses.replace(campaign, tau=None, tau_rule=None)
+    runs_dir = Path(campaign.runs_dir)
+    rows: list[dict[str, Any]] = []
+    for rule in TAU_RULES:
+        ruled = dataclasses.replace(plain, tau_rule=rule.name)
+        for config in campaign.configurations:
+            def job() -> pool_mod.Job:
+                return pool_mod.Job(
+                    phase="A", arm="A0", config=config, seed=1, regime="perturbed",
+                    delta=campaign.delta, run_kind="gate",
+                )
+            tau = ruled.tau_for(config)
+            same_tau = dataclasses.replace(plain, tau=tau)
+            identities = {
+                "none": job().identity(runs_dir, campaign=plain),
+                "rule": job().identity(runs_dir, campaign=ruled),
+                "tau": job().identity(runs_dir, campaign=same_tau),
+            }
+            digests = {k: records_mod.job_digest(v) for k, v in identities.items()}
+            holds = (
+                "tau_rule" not in identities["none"]
+                and identities["rule"].get("tau_rule") == rule.name
+                and identities["rule"].get("tau") == tau
+                and "tau_rule" not in identities["tau"]
+                and len(set(digests.values())) == 3
+            )
+            rows.append({
+                "rule": rule.name,
+                "configuration": config.name,
+                "tau": tau,
+                "digests": {k: v[:16] for k, v in digests.items()},
+                "holds": holds,
+            })
+    return rows
+
+
 def arm_name_translation_survey(campaign: Campaign) -> dict[str, Any]:
     """Every record under ``runs/`` by how its arm name was read.
 
@@ -319,12 +371,17 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
     fields_ok = declared == classified
     rows = check_pairs(by_design_pairs(campaign), campaign)
     _HELD["rows"] = rows
+    rule_rows = tolerance_rule_identity_rows(campaign)
     table_problems = check_translation_table()
     survey = arm_name_translation_survey(campaign)
-    n_compared = len(declared) + len(rows) + len(records_mod.RECORDED_ARM_NAMES) + survey["n_records"]
+    n_compared = (
+        len(declared) + len(rows) + len(rule_rows)
+        + len(records_mod.RECORDED_ARM_NAMES) + survey["n_records"]
+    )
     n_mismatched = (
         (0 if fields_ok else len(set(declared) ^ set(classified)))
         + sum(1 for r in rows if not r["holds"])
+        + sum(1 for r in rule_rows if not r["holds"])
         + len(table_problems)
         + len(survey["refusals"])
     )
@@ -332,6 +389,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "passed": (
             fields_ok
             and all(r["holds"] for r in rows)
+            and all(r["holds"] for r in rule_rows)
             and not table_problems
             and not survey["refusals"]
         ),
@@ -347,6 +405,8 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
             f"{len(declared)} Job field(s); {len(rows)} by-design pair(s) "
             f"({sum(1 for r in rows if r['must'] == 'differ')} must differ, "
             f"{sum(1 for r in rows if r['must'] == 'agree')} must agree); "
+            f"{len(rule_rows)} tolerance-rule identity row(s) (rule x "
+            f"configuration: no rule, the rule, --tau at the rule's value); "
             f"{len(records_mod.RECORDED_ARM_NAMES)} recorded-name row(s); "
             f"{survey['n_records']} record(s) under runs/ read by arm name"
         ),
@@ -357,6 +417,7 @@ def body(campaign: Campaign, *, resume: bool = False) -> dict[str, Any]:
         "job_fields": declared,
         "pool_root": str(pool_mod.POOL_SUBPATH),
         "pairs": rows,
+        "tolerance_rule_identity": rule_rows,
         "arm_names": {
             "table_problems": table_problems,
             "survey": survey,
@@ -670,6 +731,84 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"(the named one must never be re-made into another caller's record)"
         )
 
+    def an_unnamed_job_never_resolves_into_another_gates_root() -> tuple[bool, str]:
+        """Issue I-36: the reproduction gate's unnamed AR substitute resolved by
+        digest to five of gate G1's named captures and the pool refused.
+
+        A record of an unnamed job's digest under ``runs/gates/<gate>/`` (one
+        copy, then two) must leave the job at its canonical pool directory;
+        the same record under ``runs/elsewhere`` must still resolve by digest.
+        """
+        config = campaign.configurations[0]
+        with tempfile.TemporaryDirectory(prefix="gate_root_tooth_") as td:
+            runs = Path(td) / "runs"
+            local = dataclasses.replace(campaign, runs_dir=runs)
+            unnamed = pool_mod.Job(phase="A", arm="AR", config=config, seed=0, run_kind="gate")
+            text = json.dumps(_complete_record_of(unnamed, local))
+            canonical = pool_mod.canonical_directory_for(dataclasses.replace(unnamed), local)
+            captures = [runs / "gates" / "switch_neutrality" / side / config.name / "AR" for side in ("before", "after")]
+            resolved: list[Path] = []
+            try:
+                for n in (1, 2):
+                    captures[n - 1].mkdir(parents=True)
+                    (captures[n - 1] / "metrics.json").write_text(text)
+                    pool_mod.forget_record_index()
+                    resolved.append(pool_mod.directory_for(dataclasses.replace(unnamed), local))
+                elsewhere = runs / "elsewhere"
+                elsewhere.mkdir(parents=True)
+                (elsewhere / "metrics.json").write_text(text)
+                pool_mod.forget_record_index()
+                resolved.append(pool_mod.directory_for(dataclasses.replace(unnamed), local))
+            finally:
+                pool_mod.forget_record_index()
+        ok = (
+            all(r.resolve() == canonical.resolve() for r in resolved[:2])
+            and resolved[2].resolve() == elsewhere.resolve()
+        )
+        return ok, (
+            f"a record of {unnamed.key}'s digest in one, then two, of G1's named "
+            f"captures under runs/gates/switch_neutrality/: the unnamed job resolves to "
+            f"{'its canonical pool directory both times' if all(r.resolve() == canonical.resolve() for r in resolved[:2]) else [str(r) for r in resolved[:2]]}; "
+            f"with a third copy under runs/elsewhere it resolves to "
+            f"{'that record by digest' if resolved[2].resolve() == elsewhere.resolve() else str(resolved[2])}"
+        )
+
+    def a_crash_is_kept_only_when_complete_as_a_crash() -> tuple[bool, str]:
+        """Issue I-38: a crashed record complete as a crash is kept by --resume.
+
+        Before task A105 (v5-resume-fixes-and-tau-rule) every record whose
+        status was not ``ok`` was re-made, so each resumed campaign press
+        re-ran the 20 crashing starts and re-stamped them.  A crash record
+        with its identity, status, traceback and the pool's launcher stamps
+        must now be kept; the same record without the traceback, without the
+        launcher, or in the ``machinery`` row must still be re-made, each by
+        name.
+        """
+        job = _job()
+        record = _complete_record_of(job, campaign)
+        record["status"] = "crashed"
+        record["failure_class"] = "crashed"
+        record["traceback"] = (
+            "Traceback (most recent call last):\n  File \"x.py\", line 1, in run\n"
+            "RuntimeError: Failed to converge after 50 iterations, value is nan.\n"
+        )
+        record["launcher"] = {"spawned_at": 1.0, "returned_at": 2.0, "wall_s": 1.0}
+        kept = _why(record, job)
+        doctored = {
+            "traceback": dict(record, traceback=""),
+            "launcher": {k: v for k, v in record.items() if k != "launcher"},
+            "failure_class": dict(record, failure_class="machinery"),
+        }
+        whys = {name: _why(rec, job) for name, rec in doctored.items()}
+        caught = kept is None and all(
+            why is not None and name in why for name, why in whys.items()
+        )
+        return caught, (
+            f"a crash record with its identity, traceback and launcher stamps: "
+            f"{'kept' if kept is None else 'RE-MADE (' + kept + ')'}; "
+            + "; ".join(f"without its {name} (or machinery): {why!r}" for name, why in whys.items())
+        )
+
     def a_by_design_pair_made_to_collide() -> tuple[bool, str]:
         from . import gate_composition
 
@@ -752,6 +891,34 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             what="'delta' dropped from JOB_IDENTITY_FIELDS",
             must="refuse the classification (TypeError)",
             check=an_unclassified_job_field,
+        ),
+        Tooth(
+            name="an unnamed job never resolves into another gate's root",
+            what=(
+                "a complete record of an unnamed job's digest in one and then "
+                "two of gate G1's named capture directories, then a third copy "
+                "outside runs/gates/"
+            ),
+            must=(
+                "leave the job at its canonical pool directory while the copies "
+                "are under a gate's root, and resolve it to the copy outside by "
+                "digest (issue I-36)"
+            ),
+            check=an_unnamed_job_never_resolves_into_another_gates_root,
+        ),
+        Tooth(
+            name="a crash is kept only when complete as a crash",
+            what=(
+                "a complete crash record (status crashed, a result row, the "
+                "traceback's last line, the launcher stamps), then the same "
+                "record with its traceback emptied, its launcher removed, or "
+                "its failure class machinery"
+            ),
+            must=(
+                "keep the first under --resume and re-make each doctored "
+                "copy, naming what it lacks (issue I-38)"
+            ),
+            check=a_crash_is_kept_only_when_complete_as_a_crash,
         ),
         Tooth(
             name="a by-design pair made to collide",

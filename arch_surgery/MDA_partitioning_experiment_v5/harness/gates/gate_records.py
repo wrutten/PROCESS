@@ -55,6 +55,7 @@ Written by task **A52 (harness-gates)**.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any, Mapping
@@ -62,7 +63,7 @@ from typing import Any, Mapping
 from . import gates as gates_mod
 from ..core import pool as pool_mod
 from ..core import records as records_mod
-from ..core.config import Campaign
+from ..core.config import TAU_RULES, Campaign
 from ..core.framework import Gate, GateError, Tooth
 
 #: The iteration budget the forced run is capped at.  Two is enough for the
@@ -139,8 +140,52 @@ def evaluation_job(campaign: Campaign) -> pool_mod.Job:
     )
 
 
+#: The fields a record made under a named tolerance rule owes (task A105
+#: (v5-resume-fixes-and-tau-rule)): each removed from a copy of the
+#: rule-stamped record must be refused by name.
+TAU_RULE_FIELDS: tuple[str, ...] = ("campaign_tau_rule", "tau_rule_derivation")
+
+#: The flat control: the arm whose loop the rule's τ reaches (the reference
+#: arm composes no tolerance).
+RULE_ARM = "A0"
+
+
+def rule_campaign(campaign: Campaign) -> Campaign:
+    """The campaign the rule-stamped run is made under: this one's rule, or
+    the first declared rule where this campaign has none."""
+    return dataclasses.replace(
+        campaign, tau=None, tau_rule=campaign.tau_rule or TAU_RULES[0].name
+    )
+
+
+def rule_evaluation_job(campaign: Campaign) -> pool_mod.Job:
+    """One smoke evaluation of the flat control under a named tolerance rule:
+    the record that shows a rule's stamps are carried and owed.  The rule's
+    name is in its identity, so it shares no record with the plain smoke
+    evaluation."""
+    return pool_mod.Job(
+        phase="A",
+        arm=RULE_ARM,
+        config=fewest_variables_configuration(campaign),
+        seed=0,
+        regime="unperturbed",
+        delta=None,
+        run_kind="smoke",
+        timers=True,
+    )
+
+
 def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
     return [forced_job(campaign), evaluation_job(campaign)]
+
+
+def job_rows(campaign: Campaign) -> list[dict[str, Any]]:
+    """The gate's job listing: its two plain runs under this campaign and the
+    rule-stamped one under :func:`rule_campaign`."""
+    ruled = rule_campaign(campaign)
+    return gates_mod.job_rows(jobs_read, campaign) + pool_mod.job_listing(
+        [rule_evaluation_job(ruled)], ruled
+    )
 
 
 def fewest_variables_configuration(campaign: Campaign):
@@ -212,6 +257,9 @@ def record_completeness_body(
     forced = forced_job(campaign)
     evaluation = evaluation_job(campaign)
     pool_mod.run_all([forced, evaluation], campaign, resume=resume)
+    ruled = rule_campaign(campaign)
+    ruled_job = rule_evaluation_job(ruled)
+    pool_mod.run_all([ruled_job], ruled, resume=resume)
 
     rows: list[dict[str, Any]] = []
     passed = True
@@ -220,6 +268,7 @@ def record_completeness_body(
     for label, job, phase in (
         ("optimisation (forced unconverged)", forced, "B"),
         ("evaluation (smoke)", evaluation, "A"),
+        (f"evaluation under tolerance rule {ruled.tau_rule} (smoke)", ruled_job, "A"),
     ):
         record = records_mod.read(job.outdir)
         declared = records_mod.declared_field_names(phase)
@@ -282,6 +331,18 @@ def record_completeness_body(
                 row["n_attempts"] == 0
                 and row["attempts_node_calls_available"] is not None
             )
+        if job is ruled_job:
+            derivation = record.get("tau_rule_derivation") or {}
+            row["campaign_tau_rule"] = record.get("campaign_tau_rule")
+            row["campaign_tau"] = record.get("campaign_tau")
+            row["tau_rule_derivation"] = derivation
+            checks["the_rule_is_stamped_and_its_tau_composed"] = (
+                record.get("campaign_tau_rule") == ruled.tau_rule
+                and record.get("campaign_tau") == ruled.tau_for(config)
+                and derivation.get("tau") == ruled.tau_for(config)
+                and (record.get("job_identity") or {}).get("tau_rule") == ruled.tau_rule
+            )
+            _HELD["rule"] = record
         row["checks"] = checks
         row["passed"] = all(checks.values())
         n_compared += len(declared)
@@ -305,8 +366,9 @@ def record_completeness_body(
             "ruler pair and the per-attempt cost decomposition"
         ),
         "population": (
-            f"2 runs on {config.name} (the configuration with the fewest "
-            f"iteration variables, derived); "
+            f"3 runs on {config.name} (the configuration with the fewest "
+            f"iteration variables, derived), the third under tolerance rule "
+            f"{ruled.tau_rule} at tau {ruled.tau_for(config)!r}; "
             f"{rows[0]['n_declared_fields']} declared field(s) in the "
             f"optimisation phase and {rows[1]['n_declared_fields']} in the "
             f"evaluation phase"
@@ -347,6 +409,23 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             names = path.split(".")[-1] in why or path in why
             return refused and names, (
                 f"{path} deleted from a copy of the forced-unconverged record: "
+                f"{'refused' if refused else 'ACCEPTED'}"
+                + (f", naming the field — {why}" if refused else "")
+            )
+
+        return look
+
+    def rule_field_tooth(path: str):
+        def look() -> tuple[bool, str]:
+            record = _HELD.get("rule")
+            if record is None:
+                return False, "the gate made no rule-stamped record to doctor"
+            doctored = _remove_path(record, path)
+            refused, why = _refuses(
+                lambda: records_mod.assert_complete(doctored, where="a tooth")
+            )
+            return refused and path in why, (
+                f"{path} deleted from a copy of the rule-stamped record: "
                 f"{'refused' if refused else 'ACCEPTED'}"
                 + (f", naming the field — {why}" if refused else "")
             )
@@ -461,6 +540,14 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             check=field_tooth(path),
         )
         for path in FORENSICS_FIELDS + TIMER_FIELDS
+    ) + tuple(
+        Tooth(
+            name=f"the tolerance-rule field {path} removed",
+            what="one field a rule-stamped record owes deleted from a copy of it",
+            must="be refused by the completeness contract, naming the field",
+            check=rule_field_tooth(path),
+        )
+        for path in TAU_RULE_FIELDS
     )
     return teeth + (
         Tooth(
@@ -501,6 +588,6 @@ def record_completeness_gate(campaign: Campaign) -> Gate:
             "is refused by name rather than summarised over"
         ),
         body=lambda *, resume=False: record_completeness_body(campaign, resume=resume),
-        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
+        jobs=lambda: job_rows(campaign),
         teeth=_teeth(campaign),
     )

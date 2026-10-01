@@ -434,7 +434,7 @@ Per configuration and arm: the starts offered, the accepted optima (`status == o
 
 One row per check of plan §8, in its order. A gate's verdict is read from its record through the `gate_table` stage record, which this generator refuses when the verdict records have been re-made, removed or added to since the stage ran; `not pressed` is a gate with no verdict record (a declared placeholder that refuses, or one never pressed) or a rule that is not yet a construction. A verdict is PASS only with every tooth tripped.
 
-*the gate_table stage record read 30 record(s) at ['0353c52471c95adbc903274ef93e82da351a200d', '75b9e9d4e1f6658d13558d7a909a1bd139cfbe09', 'c2295511298249638e0c2e9a1bb3620dfc1bbe11'], and every one of them is byte-identical to what is on disk now*
+*the gate_table stage record read 30 record(s) at ['0353c52471c95adbc903274ef93e82da351a200d', '2bd27bf5653552b4d88509000aa098f37b56a376', 'c2295511298249638e0c2e9a1bb3620dfc1bbe11', 'd218b8798c5ff1a547db4bac37e4632f62b2ca98'], and every one of them is byte-identical to what is on disk now*
 
 | check | plan | verdict | detail |
 |---|---|---|---|

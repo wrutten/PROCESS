@@ -120,6 +120,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-set", required=True,
                         help="which components every block loop tests (DR11): "
                              "census or write_set; stamped as campaign_test_set")
+    parser.add_argument("--tau-rule", default=None,
+                        help="the named tolerance rule --tau came from, if any "
+                             "(config.TAU_RULES); stamped as campaign_tau_rule "
+                             "only when given")
     parser.add_argument("--timers", default="off", choices=("on", "off"),
                         help="whether the wall-clock timers were composed "
                              "(DR12); stamped as campaign_timers")
@@ -176,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912, PLR0915
         switches_asked=json.loads(args.switches_asked),
         test_set=args.test_set,
         timers=(args.timers == "on"),
+        tau_rule=args.tau_rule,
     )
     record["outdir"] = str(outdir)
     record["reproduction_overrides"] = json.loads(args.reproduction_overrides) or None
