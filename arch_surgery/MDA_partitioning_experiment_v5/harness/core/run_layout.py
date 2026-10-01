@@ -162,14 +162,21 @@ def run_folders(root: Path) -> list[Path]:
 
 def legacy_entries(root: Path) -> list[Path]:
     """Entries of ``runs/`` in the layout before run IDs: everything at the
-    top level that is neither a shared cache nor a run ID's folder."""
+    top level that is neither a shared cache, nor a run ID's folder, nor a
+    hidden entry.  A hidden entry (a name starting with ``.``) is never a
+    record — the harness writes none — and the agent environment creates one
+    (``.claude/.cc-writes``, empty) in a folder its tools write under; read
+    as the old layout it refused every press (task A108
+    (v5-one-compressed-log))."""
     root = Path(root)
     if not root.exists():
         return []
     return sorted(
         p
         for p in root.iterdir()
-        if p.name not in SHARED_CACHES and not (p.is_dir() and settings_path(p).exists())
+        if p.name not in SHARED_CACHES
+        and not p.name.startswith(".")
+        and not (p.is_dir() and settings_path(p).exists())
     )
 
 
