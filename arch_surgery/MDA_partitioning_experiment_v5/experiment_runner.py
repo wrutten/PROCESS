@@ -1444,6 +1444,36 @@ def stage_copy_archived_records(args: argparse.Namespace, campaign: Campaign) ->
     return 0 if resolved is None or resolved["agree"] else 1
 
 
+def stage_freeze_reproduction_records(args: argparse.Namespace, campaign: Campaign) -> int:
+    """Make the reproduction gate's read-only archive from this run ID's own
+    shared pool: a listing unless ``--apply`` (issue I-41; task A112;
+    ``archived_records.freeze_reproduction_records``)."""
+    _rule(f"the reproduction gate's archive, frozen from runs/{campaign.run_id}/'s pool" + ("" if args.apply else " (dry run)"))
+    try:
+        block = archived_records_mod.freeze_reproduction_records(campaign, apply=args.apply)
+    except (archived_records_mod.ArchiveError, pool_mod.PoolError) as exc:
+        print(f"  REFUSED — {exc}")
+        return 3
+    for line in archived_records_mod.freeze_report(block):
+        print(line)
+    return 0
+
+
+def stage_archive_collisions(args: argparse.Namespace, campaign: Campaign) -> int:
+    """Which other gates' jobs carry an archived record's identity, and where
+    each resolves (issue I-41's class; ``archived_records.collisions``).
+    Nothing runs or is written but ``--json``."""
+    _rule(f"archived records and the other gates' jobs of the same identity under runs/{campaign.run_id}/")
+    block = archived_records_mod.collisions(campaign)
+    for line in archived_records_mod.collisions_report(block):
+        print(line)
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(block, indent=2, default=str) + "\n")
+        print(f"  record: {args.json}")
+    return 0
+
+
 def stage_run_isolation(args: argparse.Namespace, campaign: Campaign) -> int:
     """The run-ID layout's acceptance check around a smoke press under this
     run ID (``harness/run_isolation.py``): (a) written inside its folder, (b)
@@ -1468,6 +1498,7 @@ def _reads_only(args: argparse.Namespace) -> bool:
         or args.smoke_test_set or args.supplementary or args.smoke or args.campaign
         or args.reading_stages or args.gate or args.measure or args.run
         or (args.copy_archived_records and args.apply) or args.run_isolation
+        or (args.freeze_reproduction_records and args.apply)
         or args.paper_tables == "write"
     )
     return not pressing
@@ -1774,6 +1805,24 @@ def main(argv: list[str] | None = None) -> int:
         "the settings name, and stop.  A dry run unless --apply",
     )
     parser.add_argument(
+        "--freeze-reproduction-records",
+        action="store_true",
+        help="copy the reproduction gate's job set's records from this run ID's "
+        "shared pool into its read-only archive, gates/reproduction/pool_records/, "
+        "which its readers (tally_contracts among them) read and no press writes "
+        "(issue I-41), and stop.  Refused under a run ID whose settings are V4's "
+        "own (use --copy-archived-records ... --archive reproduction there).  A dry "
+        "run unless --apply",
+    )
+    parser.add_argument(
+        "--archive-collisions",
+        action="store_true",
+        help="list, per declared archive of read-only records, the other gates' "
+        "jobs that carry one of its records' identities and whether each resolves "
+        "into the archived directory (issue I-41's class), and stop.  Nothing runs; "
+        "--json writes the rows",
+    )
+    parser.add_argument(
         "--archive",
         metavar="GATE",
         action="append",
@@ -1799,8 +1848,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="for --adopt-records-layout, --copy-archived-records and "
-        "--compact-run-logs: do it",
+        help="for --adopt-records-layout, --copy-archived-records, "
+        "--freeze-reproduction-records and --compact-run-logs: do it",
     )
     parser.add_argument(
         "--run-isolation",
@@ -1855,6 +1904,12 @@ def _dispatch(args: argparse.Namespace, campaign: Campaign) -> int:
     """Every stage but the listing and the adoption, after the run-ID guard."""
     if args.copy_archived_records:
         return stage_copy_archived_records(args, campaign)
+
+    if args.freeze_reproduction_records:
+        return stage_freeze_reproduction_records(args, campaign)
+
+    if args.archive_collisions:
+        return stage_archive_collisions(args, campaign)
 
     if args.run_isolation:
         return stage_run_isolation(args, campaign)

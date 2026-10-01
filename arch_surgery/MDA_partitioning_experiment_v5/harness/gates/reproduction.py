@@ -69,6 +69,7 @@ framework, this module is what it registers.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
 from dataclasses import dataclass
@@ -215,10 +216,38 @@ def entry_reference_job(config: Config) -> pool_mod.Job:
     )
 
 
-def phase_a_reference_directory(campaign: Campaign, config: Config) -> Path:
+#: Where the gate's records are read from: its read-only archive (I-41; task
+#: A112 (v5-reproduction-records-read-only)), one directory per job named as
+#: the shared pool names it, under the gate's own root.
+ARCHIVE_SUBPATH = pool_mod.REPRODUCTION_ARCHIVE_SUBPATH
+
+
+def archived_directory_for(job: pool_mod.Job, campaign: Campaign) -> Path:
+    """The archive's directory of *job*: the pool's canonical name for its
+    identity, under :data:`ARCHIVE_SUBPATH`.  A pure function of the identity,
+    so no job digest and no record's stamped identity changes."""
+    name = pool_mod.canonical_directory_for(dataclasses.replace(job, outdir=None), campaign).name
+    return Path(campaign.runs_dir) / ARCHIVE_SUBPATH / name
+
+
+def phase_a_reference_directory(
+    campaign: Campaign, config: Config, *, from_the_pool: bool = False
+) -> Path:
     """Where the configuration's reference record is under V4's criterion: the
-    pool's directory of the reproduction gate's own prerequisite."""
-    return pool_mod.directory_for(v4_criterion(entry_reference_job(config)), campaign)
+    gate's archive (or, with *from_the_pool*, the shared pool's directory of the
+    gate's own prerequisite -- what the archive was frozen from)."""
+    job = v4_criterion(entry_reference_job(config))
+    if from_the_pool:
+        return pool_mod.directory_for(job, campaign)
+    return archived_directory_for(job, campaign)
+
+
+def phase_a_entry_snapshot(campaign: Campaign, config: Config) -> Path:
+    """The entry state every displaced evaluation's **identity** names: the
+    reference's exit snapshot at the shared pool's canonical directory, as the
+    gate composed it at the copy commit.  An identity field, not a file read
+    here; the archive keeps the rendering so that no digest moves."""
+    return pool_mod.canonical_directory_for(v4_criterion(entry_reference_job(config)), campaign) / "y_exit.json"
 
 
 def plan(campaign: Campaign, root: Path) -> tuple[list[PlannedRun], list[pool_mod.Job]]:
@@ -341,15 +370,29 @@ def entry_pin(
 
 
 def attach_phase_a_entries(
-    planned: Sequence[PlannedRun], root: Path, campaign: Campaign
+    planned: Sequence[PlannedRun],
+    root: Path,
+    campaign: Campaign,
+    *,
+    from_the_pool: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Fill in each evaluation-phase job's entry state and constant.
 
     Called after the references have run, because both come from them.
+
+    **Read from the gate's archive** (issue I-41; task A112): the reference
+    records are read there and every planned job is resolved to its archive
+    directory (:func:`archived_directory_for`), never to the shared pool,
+    where a job of another gate carrying the same identity is made as that
+    gate's own record.  The entry state each identity names stays the pool's
+    canonical path (:func:`phase_a_entry_snapshot`), as the copy commit composed
+    it, so no digest moves.  *from_the_pool* resolves as before A112 -- the
+    shared pool -- and is for the step that freezes the archive alone
+    (``archived_records.freeze_reproduction_records``).
     """
     references: dict[str, dict[str, Any]] = {}
     for config in campaign.configurations:
-        directory = phase_a_reference_directory(campaign, config)
+        directory = phase_a_reference_directory(campaign, config, from_the_pool=from_the_pool)
         record = records_mod.read(directory)
         references[config.name] = {
             "outdir": str(directory),
@@ -361,7 +404,9 @@ def attach_phase_a_entries(
             "audit_residual_max_hex": (record.get("exit_audit") or {}).get(
                 "residual_max_hex"
             ),
-            "snapshot": str(directory / "y_exit.json"),
+            "snapshot": str(
+                directory / "y_exit.json" if from_the_pool else phase_a_entry_snapshot(campaign, config)
+            ),
         }
     for item in planned:
         if item.job.phase != "A":
@@ -382,11 +427,14 @@ def attach_phase_a_entries(
             item.job.pin_hex = pin_for(
                 entry["t_plant_pulse_burn_hex"], item.job.seed, campaign.delta
             )
-    # The identity is complete now, so the pool's directory is known: resolve
-    # it here so that a comparison over kept records (``--skip-runs``) reads
-    # the same place a run would have written.
+    # The identity is complete now, so the directory is known: the archive's
+    # (the pool's with *from_the_pool*).
     for item in planned:
-        item.job.outdir = pool_mod.directory_for(item.job, campaign)
+        item.job.outdir = (
+            pool_mod.directory_for(item.job, campaign)
+            if from_the_pool
+            else archived_directory_for(item.job, campaign)
+        )
     return references
 
 
@@ -500,7 +548,7 @@ def planned_directories(campaign: Campaign) -> dict[tuple[str, str, int], Path]:
     }
 
 
-def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
+def jobs_read(campaign: Campaign, *, from_the_pool: bool = False) -> list[pool_mod.Job]:
     """Every job this gate reads, by identity, composed from records on disk.
 
     The references first, then the twenty planned runs with their entries
@@ -508,16 +556,26 @@ def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
     composition tooth's run.  Refuses (``ReproductionError``) where a reference
     record is not there yet, because the dependent jobs' identities carry its
     exit state and burn time.
+
+    Every job names its directory in the gate's archive (I-41; A112); with
+    *from_the_pool* none is named and the pool resolves each, as before A112
+    -- for the step that freezes the archive alone.
     """
     root = Path(campaign.runs_dir) / RUNS_SUBPATH
     planned, prerequisites = plan(campaign, root)
-    references = attach_phase_a_entries(planned, root, campaign)
+    references = attach_phase_a_entries(planned, root, campaign, from_the_pool=from_the_pool)
     jobs = list(prerequisites) + [item.job for item in planned]
     jobs += [job for _config, job in substitute_a0p_jobs(campaign, references)]
     jobs += substitute_ar_jobs(campaign)
     _chosen, tooth_job = composition_tooth_job(planned, campaign)
     if tooth_job is not None:
         jobs.append(tooth_job)
+    if from_the_pool:
+        for job in jobs:
+            job.outdir = None
+    else:
+        for job in jobs:
+            job.outdir = archived_directory_for(job, campaign)
     return jobs
 
 

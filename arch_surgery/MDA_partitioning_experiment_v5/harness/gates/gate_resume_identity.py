@@ -59,7 +59,7 @@ from ..experiment import arms as arms_mod
 
 from ..core import pool as pool_mod
 from ..core import records as records_mod
-from ..core.config import Campaign, Config
+from ..core.config import V4_TEST_SET, Campaign, Config
 from ..core.framework import Gate, Tooth
 
 GATE_NAME = "resume_identity"
@@ -542,6 +542,81 @@ def a_job_never_resolves_into_another_run_ids_folder(campaign: Campaign) -> tupl
     )
 
 
+def an_archived_reproduction_record_is_never_re_made(campaign: Campaign) -> tuple[bool, str]:
+    """Issue I-41 (task A112 (v5-reproduction-records-read-only)), on a scratch copy.
+
+    In a scratch run ID whose settings are V4's own (the whole write set at
+    1e-6, where another gate's job carries the reproduction gate's identity):
+    a reproduction job's record in the gate's archive, **incomplete** under
+    today's contract as the copied records were at A109's press.  (a) The other
+    gate's unnamed job of the same identity resolves to its canonical pool
+    directory, not into the archive -- it is made as its own record; (b) a
+    resumed press of a job naming the archived directory is refused by the
+    pool before anything is removed, and the archived record's bytes are
+    unchanged; and, so that (b) refuses something real, (c) the resume decision
+    on that record says it would be re-made, and the pool directory is not
+    refused.
+    """
+    from . import reproduction as reproduction_mod  # noqa: PLC0415
+
+    config = campaign.configurations[0]
+    with tempfile.TemporaryDirectory(prefix="reproduction_archive_tooth_") as td:
+        root = Path(td) / "runs"
+        here = dataclasses.replace(
+            campaign,
+            test_set=V4_TEST_SET,
+            tau=None,
+            tau_rule=None,
+            run_id="this_run",
+            runs_root=root,
+            runs_dir=root / "this_run",
+            derived_input_dir=root / "this_run" / "input_files",
+        )
+        archived_job = reproduction_mod.v4_criterion(
+            pool_mod.Job(phase="A", arm="AR", config=config, seed=0, run_kind="gate")
+        )
+        archived = reproduction_mod.archived_directory_for(archived_job, here)
+        record = _complete_record_of(dataclasses.replace(archived_job), here)
+        dropped = next(n for n in records_mod.declared_field_names("A") if "." not in n and n in record)
+        record.pop(dropped)
+        archived.mkdir(parents=True)
+        text = json.dumps(record)
+        (archived / "metrics.json").write_text(text)
+        try:
+            pool_mod.forget_record_index()
+            other = pool_mod.Job(phase="A", arm="AR", config=config, seed=0, run_kind="gate")
+            same_identity = pool_mod.digest_for(other, here) == pool_mod.digest_for(dataclasses.replace(archived_job), here)
+            canonical = pool_mod.canonical_directory_for(dataclasses.replace(other), here)
+            redirected = pool_mod.directory_for(dataclasses.replace(other), here).resolve() == canonical.resolve()
+            named = dataclasses.replace(archived_job, outdir=archived)
+            try:
+                pool_mod.run(named, here, resume=True)
+                refused, message = False, "the press was NOT refused"
+            except pool_mod.PoolError as exc:
+                refused, message = True, str(exc)[:120]
+            unchanged = (archived / "metrics.json").exists() and (archived / "metrics.json").read_text() == text
+            identity = named.identity(Path(here.runs_dir))
+            would_remake = pool_mod.why_not_kept(
+                named, here, identity=identity, digest=records_mod.job_digest(identity), directory=archived
+            )
+            try:
+                pool_mod.refuse_a_read_only_archive(canonical, here)
+                pool_free = True
+            except pool_mod.PoolError:
+                pool_free = False
+        finally:
+            pool_mod.forget_record_index()
+    caught = same_identity and redirected and refused and unchanged and would_remake is not None and pool_free
+    return caught, (
+        f"a reproduction record of {archived_job.key} in the archive lacking {dropped!r}: the other gate's "
+        f"job {'has' if same_identity else 'does NOT have'} the same digest and resolves to "
+        f"{'its canonical pool directory' if redirected else 'the ARCHIVE'}; a resumed press naming the "
+        f"archived directory is {'refused (' + message + ')' if refused else 'NOT refused'}; the archived "
+        f"bytes {'unchanged' if unchanged else 'CHANGED'}; the resume decision there: {would_remake!r}; "
+        f"the pool directory {'is not refused' if pool_free else 'is refused too'}"
+    )
+
+
 def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
     def _job() -> pool_mod.Job:
         config = campaign.configurations[0]
@@ -932,6 +1007,22 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
                 "digest (task A107 (v5-campaign-settings-keys))"
             ),
             check=lambda: a_job_never_resolves_into_another_run_ids_folder(campaign),
+        ),
+        Tooth(
+            name="an archived reproduction record is never re-made",
+            what=(
+                "in a scratch run ID at V4's settings: a reproduction record in the "
+                "gate's archive, incomplete under today's contract; another gate's "
+                "unnamed job of the same identity; a resumed press naming the "
+                "archived directory"
+            ),
+            must=(
+                "resolve the other gate's job to its canonical pool directory, "
+                "refuse the press (PoolError) with the archived bytes unchanged, "
+                "while the resume decision says the record would otherwise be "
+                "re-made (issue I-41, task A112)"
+            ),
+            check=lambda: an_archived_reproduction_record_is_never_re_made(campaign),
         ),
         Tooth(
             name="a record composed with one term fewer, or one more",
