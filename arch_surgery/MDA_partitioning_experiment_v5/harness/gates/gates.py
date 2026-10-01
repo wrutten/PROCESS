@@ -684,6 +684,14 @@ def _selfcheck_gates(campaign: Campaign) -> dict[str, Gate]:
             "the fold read as a difference",
             "a schedule policy the fold does not cover",
             "a skipped arm asked to compose",
+            # The named tolerance rules (A105 (v5-resume-fixes-and-tau-rule)),
+            # added to the check and first left undeclared here, so --gate
+            # composition FAILed at d218b879 on five undeclared teeth.
+            "an input file with epsvmc doubled",
+            "an input file whose epsvmc line is a comment",
+            "an input file setting epsvmc twice",
+            "a rule and an explicit tau together",
+            "a rule nobody declared",
         ),
         "rungs": (
             "a wrong expected difference in the rung table",
