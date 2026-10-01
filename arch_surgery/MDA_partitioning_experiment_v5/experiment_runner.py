@@ -575,6 +575,26 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         return 3
     record = records_mod.read(outdir)
     print(f"  status {result['status']!r}  taxonomy {result['failure_class']!r}")
+    print(
+        f"  stamped: test set {record.get('campaign_test_set')!r}, tau "
+        f"{record.get('campaign_tau')!r}, tolerance rule {record.get('campaign_tau_rule')!r}"
+        + (
+            f" (derivation: {record['tau_rule_derivation'].get('formula')}, epsvmc "
+            f"{record['tau_rule_derivation'].get('epsvmc')!r} from "
+            f"{record['tau_rule_derivation'].get('epsvmc_from')})"
+            if isinstance(record.get("tau_rule_derivation"), dict)
+            else ""
+        )
+    )
+    if phase == "B":
+        print(
+            f"  counts: ifail {(record.get('mfile') or {}).get('ifail')!r}, solver "
+            f"iterations {record.get('n_solver_iterations')!r}, evaluations "
+            f"{(record.get('sweeps_per_eval') or {}).get('n_evaluations')!r}, solve-phase "
+            f"node calls {record.get('node_calls_solve_phase')!r}, attempts "
+            f"{(record.get('exit_forensics') or {}).get('n_attempts')!r} — plumbing "
+            f"evidence of one smoke run, never a result"
+        )
     print(f"  record {outdir / 'metrics.json'}")
     completeness = record.get("completeness") or {}
     print(
