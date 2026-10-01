@@ -358,10 +358,10 @@ so its zeros are shown capable of failing (protocol §12). A failed gate is a re
 | `test_set` | GT | the census test set binds (§5) | yes |
 | `switch_composition` | G5 | `B2` composed from the matrix equals `B2` composed switch by switch | yes |
 | `switch_neutrality` | G1 | each driver change, per change: every switch unset, outputs identical to the pre-change commit | yes |
-| `reproduction` | GR | the copy at its copy commit reproduces V4's twenty reference records bit for bit — **run once** (`registry.RUN_ONCE`); later presses read its verdict at `d6c246a1` | no (read-once) |
+| `reproduction` | GR | the copy at its copy commit reproduces V4's twenty reference records bit for bit — **run once** (`registry.RUN_ONCE`); later presses read its verdict at `d6c246a1`, and its records from its read-only archive `gates/reproduction/pool_records/` (§12, I-41) | no (read-once) |
 | `output_path` | G9 | the output-time loop's removal on `B1`/`B2` | yes |
 | `written_file_gap` | — | the written-file gap on the one-call output path (issue I-21) | yes |
-| `tally_contracts` | — | every tally table carries a caption and a real denominator, no acceptance table a timing; the tally reproduces V4's published cells on GR's twenty runs (236 cells), and resolves those runs to the same directories under every instrument switch (I-37) | no |
+| `tally_contracts` | — | every tally table carries a caption and a real denominator, no acceptance table a timing; the tally reproduces V4's published cells on GR's twenty runs (236 cells), read from GR's archive (I-41), and resolves those runs to the same directories under every instrument switch (I-37) | no |
 | `run_kind_separation` | — | every record's run kind, and every population the tally builds | no |
 
 Dropped in V5: G3/G3c (the prime's cold chain), G8 (the `mixed` ruler), G4 (retired, D36), the second
@@ -419,7 +419,8 @@ runs/
 | `single/` | `--run` records and the smoke pairs; `artifacts/`, `input_files/` the artifact stages' output |
 | `reading_stages/<composition>/` | `--reading-stages` presses written with `--outdir` (A103) |
 | `_press_logs/` | the terminal output of every press a task makes under this run ID, by task and number |
-| `archived_records_copied.json` | where the read-only records came from (below), every file's SHA-256 |
+| `archived_records_copied.json` | where the read-only records came from (below), every file's SHA-256 (`archived_records_copied_<gate>.json` for a one-archive copy) |
+| `gates/reproduction/pool_records/`, `…/pool_records_frozen.json` | GR's read-only archive (below) and the record of the freeze that made it |
 | `process_log_compaction.json` | every `--compact-run-logs --apply` on this run ID: folders, outcomes, log bytes before and after, the run records' SHA-256 compared |
 
 **What a run folder holds** besides `metrics.json`: `command.json`, `stdout.log`, `stderr.log`, the input
@@ -456,6 +457,24 @@ any directory is made or removed; `--outdir` into another run ID's folder is ref
 folder compared by path, size, modification time and run-record SHA-256 before and after) bind it. A stage record
 stamped with another run ID is refused by its readers (`run_layout.assert_stage_record_is_of_this_run`: the
 gate table, the paper's document); one with no stamp was made before the layout and is read as the folder's.
+
+**The reproduction gate's records are a read-only archive** (issue I-41; task A112 (v5-reproduction-records-read-only)).
+GR's job identities are V4's (the whole write set at 1e-6, timers off), so under a run ID whose settings are V4's own
+another gate's job has exactly GR's identity: at A109 gate G6's `A2`, `A0` seed-1 and `A1` seed-0 evaluations resolved to
+GR's records in the shared pool (step 1 of `pool.directory_for`: the same identity names the same canonical directory),
+found them lacking fields today's contract owes and re-made eight of them with today's driver, and `tally_contracts`
+then compared today's driver with V4's cells (9 of 236 differing). GR's readers — `reproduction.attach_phase_a_entries`
+and every job set built on it (`jobs_read`, `planned_jobs`, `planned_directories`: `tally_contracts`, G9, the copy step,
+the run-isolation check) — now name directories in `gates/reproduction/pool_records/`, one per job under the pool's
+canonical name (`reproduction.archived_directory_for`; no digest changes: the entry state each identity names stays
+the pool's path). The archive lies under a gate's own root, so no unnamed job resolves into it (I-36), and `pool.run`
+refuses any job that does (`pool.refuse_a_read_only_archive`, `pool.READ_ONLY_ARCHIVES`); a job of another gate with
+the same identity is made in the shared pool as that gate's own record. The archive is made once per run ID:
+`--freeze-reproduction-records --apply` copies GR's job set's records from the run ID's own pool (refused under a run ID
+whose settings are V4's own, where the pool's records of those identities are other gates' too), or
+`--copy-archived-records <run ID> --archive reproduction --apply` copies it from another run ID. `--archive-collisions`
+lists, per declared archive, the other gates' jobs that carry an archived identity and where each resolves (resume_identity's
+tooth *an archived reproduction record is never re-made* binds the refusal on a scratch copy).
 
 **Read-only records reach a new run ID by an explicit copy**, `--copy-archived-records <from run ID>` (a
 listing; `--apply` copies; `harness/gates/archived_records.py`): the reproduction gate's verdict at the copy
@@ -524,6 +543,9 @@ python experiment_runner.py --compact-run-logs       # one compressed PROCESS lo
 python experiment_runner.py --test-set write_set --copy-archived-records census_tau1e-08 --apply   # a new run ID's read-only records
 python experiment_runner.py --test-set write_set --copy-archived-records census_tau1e-08 --archive evaluation_warmup --apply   # one gate's archive
 python experiment_runner.py --test-set write_set --run-isolation smoke   # the smoke under that run ID, nothing else touched
+python experiment_runner.py --freeze-reproduction-records --apply        # GR's read-only archive from this run ID's own pool (not at V4's settings)
+python experiment_runner.py --test-set write_set --copy-archived-records census_tau1e-08 --archive reproduction --apply   # or from another run ID
+python experiment_runner.py --archive-collisions                         # other gates' jobs carrying an archived record's identity
 ```
 
 `--test-set write_set` (or `--tau`, or `--tau-rule <name>`) sets the campaign-level test set or tolerance for any press, and so
@@ -534,6 +556,11 @@ unless `--runs` names another run ID's folder (with `--document paper_tables_<ru
 ---
 
 ## Change log
+
+- **2026-10-01, A112 (v5-reproduction-records-read-only):** the reproduction gate's records read from a read-only archive,
+  `gates/reproduction/pool_records/`, which `pool.run` refuses to write (I-41; §§11, 12); `--freeze-reproduction-records`,
+  `--archive-collisions`; the copy step's GR archive is the verdict at the copy commit, its teeth record, the archive and
+  its freeze record (no longer the whole folder, whose `gate.json` every read rewrites); resume_identity's fifteenth tooth.
 
 - **2026-10-01, A110 (v5-warmup-verdict-once):** gate `evaluation_warmup` read once (D44; §§8, 11): its verdict at
   `c2295511` over the warmed child's records at `ff9e73a2` (the default settings) is read under every run ID,
