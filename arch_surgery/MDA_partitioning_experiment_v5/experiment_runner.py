@@ -1417,7 +1417,7 @@ def _reads_only(args: argparse.Namespace) -> bool:
         args.selfcheck or args.reference or args.artifacts or args.census or args.timing
         or args.smoke_test_set or args.supplementary or args.smoke or args.campaign
         or args.reading_stages or args.gate or args.measure or args.run
-        or args.copy_archived_records or args.run_isolation
+        or (args.copy_archived_records and args.apply) or args.run_isolation
         or args.paper_tables == "write"
     )
     return not pressing
