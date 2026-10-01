@@ -161,7 +161,7 @@ def launch_summary(root: Path, *, load_above: float, windows: list[tuple[str, st
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs", default=str(RUNS), help="the runs root to survey")
+    parser.add_argument("--runs", default=str(RUNS), help="the runs root to survey (every run ID's folder), or one run ID's folder")
     parser.add_argument("--json", help="write the survey here")
     parser.add_argument("--against", help="a survey written earlier, to compare with")
     parser.add_argument("--launch-summary", action="append", default=[],

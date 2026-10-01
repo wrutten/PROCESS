@@ -234,6 +234,7 @@ class Gate:
             "teeth_run": teeth,
             "generated": _dt.datetime.now().isoformat(timespec="seconds"),
             "tree_git_head": git_head(),
+            "run": run_stamp(records_dir),
             **{k: v for k, v in outcome.items() if k != "passed"},
             "teeth": tooth_records,
         }
@@ -277,7 +278,8 @@ class Measurement:
     reads_records: tuple[str, ...] = ()
 
     def run(self, *, records_dir: Path, resume: bool = False) -> dict[str, Any]:
-        block = self.body(resume=resume)
+        block = dict(self.body(resume=resume))
+        block.setdefault("run", run_stamp(records_dir))
         if self.reads_records:
             block = dict(block)
             block["records_read"] = survey_records(
@@ -292,6 +294,17 @@ class Measurement:
         block = dict(block)
         block["record"] = str(out)
         return block
+
+
+def run_stamp(records_dir: Path) -> dict[str, Any] | None:
+    """The run ID and settings of the folder *records_dir* is in (task A107
+    (v5-campaign-settings-keys)): stamped on every verdict and stage record,
+    so a consumer can refuse one of another run ID
+    (``run_layout.assert_stage_record_is_of_this_run``).  None outside every
+    run ID's folder."""
+    from .run_layout import stamp_of_directory  # noqa: PLC0415 - run_layout reads git_head from here
+
+    return stamp_of_directory(records_dir)
 
 
 def _relative(path: Path, root: Path) -> str:

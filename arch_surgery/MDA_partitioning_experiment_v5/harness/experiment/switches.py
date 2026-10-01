@@ -1050,23 +1050,25 @@ def assert_capable(
     return cap
 
 
-def base_environment(tree: Path, *, runs_dir: Path | None = None) -> dict[str, str]:
+def base_environment(tree: Path, *, cache_dir: Path | None = None) -> dict[str, str]:
     """A copy of this process's environment with every known switch cleared.
 
     Nothing is assumed absent: V3's discipline, kept.  ``PYTHONPATH`` names
     the tree under test because the editable install points at the main
-    checkout and a worktree does not redirect it (trap T6).
+    checkout and a worktree does not redirect it (trap T6).  *cache_dir* is
+    where the children's caches go: the top level of ``runs/``, shared by
+    every run ID (``config.SHARED_CACHES``; ``Campaign.cache_dir``).
     """
     env = dict(os.environ)
     env["PYTHONPATH"] = str(tree)
-    if runs_dir is not None:
-        env["MPLCONFIGDIR"] = str(Path(runs_dir) / "_mplconfig")
+    if cache_dir is not None:
+        env["MPLCONFIGDIR"] = str(Path(cache_dir) / "_mplconfig")
         # Issue I-31: without a cache directory numba writes its compiled
         # cache beside the imported modules, under the copied driver's
         # ``__pycache__`` directories — 122 gitignored files in a worktree
         # that only *read* the copy.  A harness **default**, beside the
         # matplotlib one: a caller that sets its own keeps it.
-        env.setdefault("NUMBA_CACHE_DIR", str(Path(runs_dir) / "_numba_cache"))
+        env.setdefault("NUMBA_CACHE_DIR", str(Path(cache_dir) / "_numba_cache"))
     # Decision D38: every child is pinned to one thread, so a parallel pool
     # never oversubscribes the machine and no run's floating point depends on
     # how many threads numba or a BLAS happened to take.  Defaults beside the

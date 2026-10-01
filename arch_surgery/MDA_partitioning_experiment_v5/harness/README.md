@@ -31,7 +31,7 @@ The folder holds four things:
 | `PROCESS/` | **the experiment's own copy of PROCESS.** Every run measures this tree, never the repository root's. Its `process/models/` is byte-identical to the frozen base `c0ae5b28` (gate `g0prime`); its driver files carry the architecture changes as environment-switched branches, each proven neutral with every switch unset (gate G1). `PROCESS/copy_gates.py` holds the copy's gates; `PROCESS/PROVENANCE.json` and `PROCESS/CHANGES.md` say what was copied from where and what changed since. |
 | `harness/` | this package: it composes each arm from the switch matrix, runs PROCESS in isolated subprocesses, records what each run cost and how accurately it stopped, checks itself with gates, and summarises the records into tables. |
 | `experiment_runner.py` | **the one button.** Every stage — preflight, gates, measurements, the campaign, the timing stages, the census, the paper's document — is a flag of this script (§11). A refused start or a failed gate is a result printed from the same entry point, never a crash. |
-| `paper_tables.md` | the one generated document of the paper's tables (V5 list item 10), written by `--paper-tables write` and compared by `--paper-tables check`; beside it `paper_cells_recount.py`, a short independent recount of exactly those cells from the raw records. |
+| `paper_tables.md` | the one generated document of the paper's tables (V5 list item 10), written by `--paper-tables write` and compared by `--paper-tables check` — the document of the **declared default campaign** (run ID `census_tau1e-08`); a campaign under other settings writes `paper_tables_<run ID>.md` beside it (§12); beside it `paper_cells_recount.py`, a short independent recount of exactly those cells from the raw records. |
 
 Also at the top level: `run_stamp_survey.py` (the commits, worker counts, dirty flags and load averages
 every record under `runs/` was made with; trap T13's survey), `compare_record_trees.py` (two record trees
@@ -155,7 +155,7 @@ each configuration its own τ = factor × `epsvmc`, read from the configuration'
 it, the retry ladder's smallest step: 1e-11, 1e-12, 1e-13). Refused with `--tau`. The rule's name
 (`tau_rule`) and each τ are job-identity fields — `tau_rule` rendered only when set — and stamped
 (`campaign_tau_rule` by the child, `tau_rule_derivation` by the pool; owed only by a rule's record); a
-rule campaign's chain writes under `runs/campaign_tau_rule_<rule>/`. It reaches the flat and partitioned
+rule campaign is its own run ID, `runs/<test set>_rule_<rule>/` (§12). It reaches the flat and partitioned
 loops; the reference arm composes no tolerance; a supplementary stage keeps its own τ. **No rule is the
 default, and then no job, identity, digest or record changes.** Which rule, if any, a campaign is pressed
 under is the user's open question (OQ-tolerance).
@@ -362,25 +362,85 @@ it reads. G1 and GC compare two sides made at two commits and read their archive
 
 ---
 
-## 12. Where records live, and what a record is
+## 12. Where records live: one folder per run ID, and what a record is
 
 Everything under `runs/` is untracked. **Summaries and verdicts are committed; raw records are not**, so a
 number is only published from a committed script and a record that exists only in `runs/` must be relocated
 before a worktree is retired (`arch_surgery/bin/retire_task_worktree.sh`; the relocated trees are under
 `arch_surgery/idf_probe/runs/`).
 
-| under `runs/` | what |
+**The run ID** (task A107 (v5-campaign-settings-keys)). A campaign's settings — its test set and its
+tolerance, or its tolerance rule — name a **run ID** (`config.run_id_for`): `<test set>_tau<τ>` without a
+rule, `<test set>_rule_<rule>` under one, τ printed as Python's `repr` (the shortest string that reads back
+as the same float) — `census_tau1e-08`, `write_set_tau1e-06`, `census_rule_epsvmc_times_epsfcn`. Injective
+over the settings the harness admits: the test set is one of two declared names, what follows is `_tau`
+and a round-tripping float or `_rule_` and a declared rule. The timers (a property of the press, not the
+campaign) and a supplementary stage's own τ (in its jobs) are not in it. **Every record a press makes or
+reads lives in that run ID's folder**, `runs/<run ID>/` — `Campaign.runs_dir` is that folder, so every
+path the harness derives from it lands inside, and every job identity renders its paths relative to it
+(a folder moved whole keeps every digest). Every entry point takes the settings as before (`--test-set`,
+`--tau`, `--tau-rule`; the default is the declared default campaign, `census_tau1e-08`), resolves the run ID
+from them and prints it first; there is no `--run-id`.
+
+```
+runs/
+  _numba_cache/  _mplconfig/          shared caches (config.SHARED_CACHES)
+  census_tau1e-08/                    the V5 campaign (adopted, A107)
+    run_settings.json                 the settings this folder is of
+    campaign/ supplementary/ gates/ timing/ single/ smoke/ census/ census_test_sets/
+    artifacts/ input_files/ reading_stages/ _press_logs/
+  write_set_tau1e-06/                 a second campaign's folder: the same tree
+    run_settings.json  archived_records_copied.json  gates/ input_files/ smoke/ …
+```
+
+| under `runs/<run ID>/` | what |
 |---|---|
-| `campaign/entry_references/`, `campaign/evaluation/<configuration>/<arm>/seedNNN/`, `campaign/optimisation/…` | the campaign's records (553 at A102: 3 entry references, 275 evaluations, 275 optimisations) and `campaign/press.json` |
-| `supplementary/<stage>/<configuration>/<arm>/seedNNN/` | the supplementary stage's records |
-| `gates/_runs/` | the shared pool: every gate's runs, one directory per job digest. A job that names no directory resolves here, or by digest to a record elsewhere under `runs/` — **never into another gate's root** `gates/<gate>/` (G1's named captures; issue I-36) |
-| `gates/<gate>/gate.json`, `gates/<stage>/measurements.json` | the verdict records and the measurement stages' records (the tallies, `gate_table`) |
+| `run_settings.json` | the folder's settings (`run_layout`): written on the first press under them, or by the adoption with the evidence that decided it; a press whose settings disagree with it is refused |
+| `campaign/entry_references/`, `campaign/evaluation/<configuration>/<arm>/seedNNN/`, `campaign/optimisation/…` | the campaign's records (553 in `census_tau1e-08`: 3 entry references, 275 evaluations, 275 optimisations) and `campaign/press.json` |
+| `smoke/` | the smoke chain's records and `smoke/press.json` |
+| `supplementary/<stage>/<configuration>/<arm>/seedNNN/` | the supplementary stage's records, pressed beside this run ID's campaign |
+| `gates/_runs/` | the shared pool: every gate's runs, one directory per job digest. A job that names no directory resolves here, or by digest to a record elsewhere **in this run ID's folder** — never into another gate's root `gates/<gate>/` (issue I-36), never into another run ID's folder |
+| `gates/<gate>/gate.json`, `gates/<stage>/measurements.json` | the verdict records and the measurement stages' records (the tallies, `gate_table`), each stamped with the run ID (`run`) |
 | `timing/<stage>/` | the timing stages' records and their `measurements.json` |
 | `census/`, `census_test_sets/` | the census stage's runs and the derived artifacts |
 | `single/` | `--run` records and the smoke pairs; `artifacts/`, `input_files/` the artifact stages' output |
 | `reading_stages/<composition>/` | `--reading-stages` presses written with `--outdir` (A103) |
-| `_press_logs/` | the terminal output of every press a task makes, by task and number |
-| `_numba_cache/`, `_mplconfig/` | the children's caches |
+| `_press_logs/` | the terminal output of every press a task makes under this run ID, by task and number |
+| `archived_records_copied.json` | where the read-only records came from (below), every file's SHA-256 |
+
+**What is shared, and why it is safe.** Only `_numba_cache/` and `_mplconfig/` at the top level of `runs/`:
+pure caches that carry no result (numba's compiled functions keyed by source digest; matplotlib's font cache),
+so a new run ID does not start with a cold compile and nothing a record says depends on them.
+
+**Isolation, enforced in the pool.** Step 2 of `pool.directory_for` — the by-digest search — searches
+`pool._record_index`, which is built over this run ID's folder alone; a job that *names* a directory in another
+run ID's folder is refused by `pool.refuse_another_runs_folder`, through which every pool entry resolves, before
+any directory is made or removed; `--outdir` into another run ID's folder is refused by the runner. Gate
+`resume_identity`'s tooth *a job never resolves into another run ID's folder* and the acceptance check
+`--run-isolation smoke` (`harness/run_isolation.py`: the smoke pressed under one run ID, every other run ID's
+folder compared by path, size, modification time and run-record SHA-256 before and after) bind it. A stage record
+stamped with another run ID is refused by its readers (`run_layout.assert_stage_record_is_of_this_run`: the
+gate table, the paper's document); one with no stamp was made before the layout and is read as the folder's.
+
+**Read-only records reach a new run ID by an explicit copy**, `--copy-archived-records <from run ID>` (a
+listing; `--apply` copies; `harness/gates/archived_records.py`): the reproduction gate's verdict at the copy
+commit and its job set's pool records, gate GC's straddle records and both labelled sides, gate G1's `before`
+capture and archived straddles, the warm-up gate's cold-child records, the derived input files. Copied to the
+same relative path, a record is the same job by construction (a shared area outside the folder would render
+its paths against another root and the gates would make it again); copies, not hard links (a re-press rewrites
+a verdict in place); every file's SHA-256 checked; afterwards the gates' job sets are composed under the
+destination and must resolve and decide exactly as under the source, job for job. About 470 MB per run ID.
+
+**The layout before run IDs** (everything directly under `runs/`) is refused by every stage, naming
+`--adopt-records-layout`: a listing of the move, decided by the **campaign records'** job-identity settings
+(gate, smoke, timing and supplementary records carry settings of their own by design and are carried along,
+counted); `--apply` renames each entry into `runs/<run ID>/` on the same filesystem and compares a manifest of
+every moved file (path relative to the entry, size, modification time, run-record SHA-256) before and after.
+A tree whose campaign records carry more than one setting is refused with the list.
+
+**The listing**, `--runs`: each run ID's settings, its campaign records by phase and status and the commits
+they were made at, its run-record count, and whether its gate table, tallies and tables document exist. No
+comparison between run IDs: the user compares from the folders.
 
 A record (`metrics.json`, schema `core/records.py`) carries what was run (the job identity and digest, the
 composed environment as the driver resolved it), where (interpreter, tree, commit, dirty state), what it
@@ -419,15 +479,27 @@ python experiment_runner.py --supplementary st_census_exact --resume
 python experiment_runner.py --smoke                  # the chain once, one seed, cheapest configuration, smoke records
 python experiment_runner.py --campaign --resume      # the campaign (refused unless EXECUTION_APPROVED)
 python experiment_runner.py --run --arm B2 --configuration st_regression --seed 0   # one run, never a campaign record
-python run_stamp_survey.py                           # the commit of every record under runs/
+python run_stamp_survey.py                           # the commit of every record under runs/ (--runs runs/<run ID> for one)
+python experiment_runner.py --runs                   # the run IDs on disk and what each holds
+python experiment_runner.py --adopt-records-layout   # re-lay runs/ in the old layout under its run ID (--apply to do it)
+python experiment_runner.py --test-set write_set --copy-archived-records census_tau1e-08 --apply   # a new run ID's read-only records
+python experiment_runner.py --test-set write_set --run-isolation smoke   # the smoke under that run ID, nothing else touched
 ```
 
-`--test-set write_set` (or `--tau`, or `--tau-rule <name>`) sets the campaign-level test set or tolerance for any press; `--outdir` sends a
-gate's or stage's records elsewhere; `--no-teeth` skips a gate's teeth and says so in the verdict.
+`--test-set write_set` (or `--tau`, or `--tau-rule <name>`) sets the campaign-level test set or tolerance for any press, and so
+**the run ID and its folder** (§12); `--outdir` sends a gate's or stage's records elsewhere (never into another run ID's
+folder); `--no-teeth` skips a gate's teeth and says so in the verdict. `paper_cells_recount.py` reads `runs/census_tau1e-08/`
+unless `--runs` names another run ID's folder (with `--document paper_tables_<run ID>.md`).
 
 ---
 
 ## Change log
+
+- **2026-10-01, A107 (v5-campaign-settings-keys):** the run-ID layout (§12): one self-contained folder per campaign
+  settings under `runs/`, named by `config.run_id_for`; the shared caches at the top level; `run_settings.json`, the
+  guard, the run-ID stamp on every verdict and stage record, the adoption (`--adopt-records-layout`), the listing
+  (`--runs`), the archived-records copy (`--copy-archived-records`), the acceptance check (`--run-isolation smoke`),
+  the tables document per run ID; A105's rule-named chain root `runs/campaign_tau_rule_<rule>/` replaced by the run ID.
 
 - **2026-09-30, A103 (v5-tally-and-tables):** rewritten to V5's text (V5 plan §8): V4's sections on the
   second implementation, the report renderer, the predicate-mode gate, the cold chain, the stencil regime

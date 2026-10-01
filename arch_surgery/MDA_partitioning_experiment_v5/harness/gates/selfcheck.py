@@ -850,7 +850,7 @@ def check_capability(campaign: Campaign, *, timeout: int = 600) -> Check:
     )
 
     # --- teeth -------------------------------------------------------------
-    reference_env = sw.base_environment(campaign.tree, runs_dir=campaign.runs_dir)
+    reference_env = sw.base_environment(campaign.tree, cache_dir=campaign.cache_dir)
     bogus = sw.Switch(
         term="tooth_absent_switch",
         driver_name="PROCESS_ARCH_A_SWITCH_THAT_DOES_NOT_EXIST",
