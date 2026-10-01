@@ -1,6 +1,6 @@
 # A108 (v5-one-compressed-log) — one PROCESS log per run folder, compressed
 
-> **Document status** — **OPEN (task report, awaiting the orchestrator's assessment).** Task A108, branch
+> **Document status** — **MERGED 2026-10-01 at `0e676a1c` (`--no-ff`; the orchestrator's assessment at the end); archived.** The records tree was not relocated to `idf_probe/runs/`: it exists once and was **moved** (I-39) into the next task's worktree, `.claude/worktrees/A106-v5-campaign-full-state/arch_surgery/MDA_partitioning_experiment_v5/runs/` (A106 (v5-campaign-full-state)); the paths in this report that begin `runs/` are read from there until A106 is retired. Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A108, branch
 > `A108-v5-one-compressed-log`, 2026-10-01, from `e9decb5c`. Harness only (`arch_surgery/MDA_partitioning_experiment_v5/`,
 > nothing under its `PROCESS/`, nothing under `process/models/`). Every number below comes from a committed entry point,
 > `experiment_runner.py`, at the commit named beside it. The press logs are under
