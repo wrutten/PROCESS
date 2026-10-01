@@ -360,3 +360,34 @@ Commits: `9f840d70`, `9e05d87c`, `3f19c89b`, `e2a64e9f`, `ce84a759`, and this re
 ## Change log
 
 - **2026-10-01, A107:** written.
+
+---
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --name-only 76de5646..2bcc570b`: 18 files, harness, runner, two scripts, the
+README and this report — **0 paths under the V5 driver copy `PROCESS/`, 0 under `process/models/`, 0 under
+`_v4/`; `paper_tables.md` not in the diff** (byte-identical, as the brief required); worktree clean;
+`merge-tree`: no conflict; the harness compiles. (2) The layout on disk is what the user asked for:
+`runs/census_tau1e-08/` and `runs/write_set_tau1e-06/` side by side, each self-contained, the two caches
+shared at the top. (3) **The adoption changed no campaign record**, checked by the orchestrator against the
+archive made before this task: the SHA-256 of all 553 campaign `metrics.json` under
+`census_tau1e-08/campaign/` equals that of `A105_runs/…/campaign/`, file for file. (4) The write-set folder
+holds no campaign record (144 records: the smoke's and the copied read-only ones) — no campaign was run,
+as briefed.
+
+**Read against the user's words.** "I presume data will be stored under …\runs\<some run ID>": yes, and the
+ID is the settings key, readable from the folder name. "No need to build comparison of runs into the
+harness": none was built. The copy of the read-only records into a new run ID (469 MB each) rather than a
+shared area is the choice that keeps "self-contained" true and the job identities untouched; its cost is
+disk, which is not scarce here.
+
+**What the next task inherits** (the report's point 8, accepted as stated): in a fresh run ID the tally's
+contract gate fails until campaign records exist (the reproduction gate's copied records are of an older
+record contract — I-35's shape, cleared by the campaign's presence as before); gate GT refuses under the
+fallback by design; G1 and the warm-up gate read archives made under census settings and return their own
+verdict under the write set; the supplementary st stage is the census campaign's and is not carried over.
+`census_tau1e-08` holds 14 smoke records of earlier tasks made under other settings, in no published
+population.
