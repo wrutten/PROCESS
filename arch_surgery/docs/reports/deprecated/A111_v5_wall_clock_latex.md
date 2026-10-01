@@ -1,6 +1,6 @@
 # A111 (v5-wall-clock-latex): a LaTeX block for the phase B wall-clock tables
 
-> **Document status**: **OPEN (task report, awaiting the orchestrator's assessment).** Task A111, branch
+> **Document status**: **MERGED 2026-10-01 at `b6228366` (`--no-ff`; the orchestrator's assessment at the end); archived.** Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A111, branch
 > `A111-v5-wall-clock-latex`, worktree `.claude/worktrees/A111-v5-wall-clock-latex`, from trunk `decde489`,
 > 2026-10-01. Harness generator only: no change to the driver copy (`MDA_partitioning_experiment_v5/PROCESS/`),
 > to `process/` or to V4; no PROCESS run made beyond what `--selfcheck` makes itself.
