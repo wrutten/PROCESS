@@ -78,6 +78,7 @@ from typing import Any, Mapping, Sequence
 
 from ..experiment import arms as arms_mod
 from ..experiment import input_files as input_files_mod
+from . import process_log as process_log_mod
 from . import records as records_mod
 from ..experiment import switches as switches_mod
 from .config import EXPERIMENT_DIR, TEST_SETS, Campaign, Config, tau_rule_named
@@ -1424,6 +1425,14 @@ def run(
             ),
         )
         record = records_mod.read(outdir)
+        # The close-out: PROCESS wrote its log twice (``process_log``'s
+        # docstring says where each comes from); the run folder keeps one,
+        # gzip-compressed, once the pair is verified identical and the round
+        # trip verified.  After the record is assembled; no record field read
+        # or written.
+        log = process_log_mod.close_out(outdir)
+        if log["action"] not in ("compacted", "no log"):
+            print(f"  {job.config.name:24s} {job.arm:4s} seed={job.seed:<3d} process log {log['action']}", flush=True)
         _MADE_THIS_INVOCATION[digest] = str(outdir)
         _index_record(campaign, digest, outdir)
     wall = time.perf_counter() - started

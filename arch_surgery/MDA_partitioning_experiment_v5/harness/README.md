@@ -133,6 +133,14 @@ the `mixed` ruler (DR11).
 5. The child writes `metrics.json`; the pool stamps the identity, the digest and its own launcher block
    (independent wall, workers, load average). A record missing a declared field is refused by every
    reader (`records.assert_usable`), never summarised over.
+6. **The close-out** (task A108 (v5-one-compressed-log); `core/process_log.py`): PROCESS writes its log
+   twice into the run folder — `process.log` from `process/main.py`'s module-level `FileHandler`, opened in
+   the working directory at import, and `<configuration>.process.log` from `setup_loggers` at the output
+   prefix — two identical files, and avoiding one would be a driver change. After the record is assembled
+   the pool verifies the two identical, writes `process.log.gz` from one (gzip level 6, no name or time in
+   the header, so deterministic), verifies that it decompresses to the same SHA-256, and only then removes
+   both plain files. A pair that differs is left as it is and printed. `metrics.json` is neither read nor
+   written by it.
 
 ---
 
@@ -407,6 +415,28 @@ runs/
 | `reading_stages/<composition>/` | `--reading-stages` presses written with `--outdir` (A103) |
 | `_press_logs/` | the terminal output of every press a task makes under this run ID, by task and number |
 | `archived_records_copied.json` | where the read-only records came from (below), every file's SHA-256 |
+| `process_log_compaction.json` | every `--compact-run-logs --apply` on this run ID: folders, outcomes, log bytes before and after, the run records' SHA-256 compared |
+
+**What a run folder holds** besides `metrics.json`: `command.json`, `stdout.log`, `stderr.log`, the input
+file, PROCESS's `OUT.DAT` and `MFILE.DAT`, the state snapshots (`y_entry.json`, `y_exit.json`,
+`audit_residual.json`, …) and **PROCESS's log in one of the forms `process_log.FORMS` declares**:
+`compressed` — one `process.log.gz`, every run made since A108 (§4 step 6) and every folder compacted;
+`plain pair` — `process.log` and `<configuration>.process.log`, a run made before it and not compacted;
+`plain single` or `none`. Every form is valid for a complete record: no record field is read from the log
+(the failure taxonomy's detail is the record's own `traceback`), so the form never changes a job's identity,
+digest, completeness or the `--resume` decision. `process_log.open_text` is the one reader; it reads every
+form. No harness stage read the log before A108, and none does now.
+
+**Compacting folders made before the close-out**, `--compact-run-logs [<run ID>]` (every run ID without one):
+a dry run listing, per run ID and in total, the folders and PROCESS-log bytes now and after (the size after
+measured by compressing into nothing); `--apply` does to each folder what the close-out does to a new run —
+pair verified identical, one compressed, round trip verified, then the plain files removed; a folder whose
+logs differ, or whose existing `process.log.gz` does not hold its plain log, is left and listed. Restartable:
+the compressed file is written as `process.log.gz.partial`, synced, verified and renamed into place, so an
+interrupted compaction leaves at most a partial file (removed by the next) or a whole compressed file beside a
+plain one (verified and finished by the next). With `--apply` every `metrics.json` of the run ID is digested
+before and after and must not differ, and the crashed records' traceback lines are read back. Applied to both
+run IDs on 2026-10-01 (A108's report).
 
 **What is shared, and why it is safe.** Only `_numba_cache/` and `_mplconfig/` at the top level of `runs/`:
 pure caches that carry no result (numba's compiled functions keyed by source digest; matplotlib's font cache),
@@ -431,7 +461,8 @@ its paths against another root and the gates would make it again); copies, not h
 a verdict in place); every file's SHA-256 checked; afterwards the gates' job sets are composed under the
 destination and must resolve and decide exactly as under the source, job for job. About 470 MB per run ID.
 
-**The layout before run IDs** (everything directly under `runs/`) is refused by every stage, naming
+**The layout before run IDs** (everything directly under `runs/` but the shared caches and hidden entries —
+the agent environment creates an empty `.claude/` where its tools write) is refused by every stage, naming
 `--adopt-records-layout`: a listing of the move, decided by the **campaign records'** job-identity settings
 (gate, smoke, timing and supplementary records carry settings of their own by design and are carried along,
 counted); `--apply` renames each entry into `runs/<run ID>/` on the same filesystem and compares a manifest of
@@ -439,7 +470,8 @@ every moved file (path relative to the entry, size, modification time, run-recor
 A tree whose campaign records carry more than one setting is refused with the list.
 
 **The listing**, `--runs`: each run ID's settings, its campaign records by phase and status and the commits
-they were made at, its run-record count, and whether its gate table, tallies and tables document exist. No
+they were made at, its run-record count, its size on disk and its campaign's (`campaign/`; allocated blocks, as
+`du`), and whether its gate table, tallies and tables document exist. No
 comparison between run IDs: the user compares from the folders.
 
 A record (`metrics.json`, schema `core/records.py`) carries what was run (the job identity and digest, the
@@ -482,6 +514,7 @@ python experiment_runner.py --run --arm B2 --configuration st_regression --seed 
 python run_stamp_survey.py                           # the commit of every record under runs/ (--runs runs/<run ID> for one)
 python experiment_runner.py --runs                   # the run IDs on disk and what each holds
 python experiment_runner.py --adopt-records-layout   # re-lay runs/ in the old layout under its run ID (--apply to do it)
+python experiment_runner.py --compact-run-logs       # one compressed PROCESS log per run folder, every run ID (a run ID to name one; --apply to do it)
 python experiment_runner.py --test-set write_set --copy-archived-records census_tau1e-08 --apply   # a new run ID's read-only records
 python experiment_runner.py --test-set write_set --run-isolation smoke   # the smoke under that run ID, nothing else touched
 ```
@@ -494,6 +527,11 @@ unless `--runs` names another run ID's folder (with `--document paper_tables_<ru
 ---
 
 ## Change log
+
+- **2026-10-01, A108 (v5-one-compressed-log):** one PROCESS log per run folder, gzip-compressed, by the pool's
+  close-out (§4 step 6, `core/process_log.py`); the log forms in the record contract (§12); `--compact-run-logs`
+  for folders made before it (§12); `--runs` prints each run ID's size and its campaign's; hidden entries of
+  `runs/` are not the layout before run IDs; selfcheck `process log`.
 
 - **2026-10-01, A107 (v5-campaign-settings-keys):** the run-ID layout (§12): one self-contained folder per campaign
   settings under `runs/`, named by `config.run_id_for`; the shared caches at the top level; `run_settings.json`, the

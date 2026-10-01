@@ -34,7 +34,11 @@ What this module holds:
   stamped with another run ID;
 * :func:`adoption_plan` and :func:`adopt` — moving a tree in the old layout
   under the run ID its campaign records were made under;
-* :func:`listing` — the run IDs on disk, with what each holds.
+* :func:`listing` — the run IDs on disk, with what each holds and its size
+  on disk;
+* :func:`compact_process_logs` — every run folder of a run ID left with one
+  compressed PROCESS log (``process_log.compact``), with the run records'
+  SHA-256 compared before and after.
 
 The settings-independent records every run ID needs without pressing them
 again (the reproduction gate's verdict and pool records, the neutrality gates'
@@ -53,6 +57,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from . import framework
+from . import process_log as process_log_mod
 from . import records as records_mod
 from .config import (
     DEFAULT_RUN_ID,
@@ -157,14 +162,21 @@ def run_folders(root: Path) -> list[Path]:
 
 def legacy_entries(root: Path) -> list[Path]:
     """Entries of ``runs/`` in the layout before run IDs: everything at the
-    top level that is neither a shared cache nor a run ID's folder."""
+    top level that is neither a shared cache, nor a run ID's folder, nor a
+    hidden entry.  A hidden entry (a name starting with ``.``) is never a
+    record — the harness writes none — and the agent environment creates one
+    (``.claude/.cc-writes``, empty) in a folder its tools write under; read
+    as the old layout it refused every press (task A108
+    (v5-one-compressed-log))."""
     root = Path(root)
     if not root.exists():
         return []
     return sorted(
         p
         for p in root.iterdir()
-        if p.name not in SHARED_CACHES and not (p.is_dir() and settings_path(p).exists())
+        if p.name not in SHARED_CACHES
+        and not p.name.startswith(".")
+        and not (p.is_dir() and settings_path(p).exists())
     )
 
 
@@ -488,8 +500,158 @@ def adopt(root: Path, *, fallback: Campaign, apply: bool) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------
+# the PROCESS logs of a run ID's folders
+# --------------------------------------------------------------------------
+
+#: The record of every compaction applied to a run ID, in its folder.
+COMPACTION_RECORD = "process_log_compaction.json"
+
+
+def _record_digests(folder: Path) -> dict[str, str]:
+    return {
+        path.relative_to(folder).as_posix(): _sha256(path)
+        for path in sorted(Path(folder).rglob("metrics.json"))
+    }
+
+
+def _crashed_tracebacks(directories: list[Path]) -> dict[str, Any]:
+    """Every crashed record among *directories*, and whether its traceback's
+    last line still reads (``records.traceback_last_line``: the failure
+    taxonomy's detail, read from the record, never from the log)."""
+    crashed = read = 0
+    example = None
+    for directory in directories:
+        path = directory / "metrics.json"
+        if not path.exists():
+            continue
+        try:
+            record = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if record.get("status") != "crashed":
+            continue
+        crashed += 1
+        line = records_mod.traceback_last_line(record)
+        if line:
+            read += 1
+            if example is None:
+                example = {"directory": str(directory), "traceback_last_line": line, "log_form": process_log_mod.form_of(directory)}
+    return {"n_crashed": crashed, "n_traceback_read": read, "example": example}
+
+
+def compact_process_logs(root: Path, *, run_id: str | None, apply: bool) -> dict[str, Any]:
+    """Every run folder of every run ID (or of *run_id*) left with one
+    compressed PROCESS log — a listing unless *apply*.
+
+    Per folder, ``process_log.compact``: the two plain logs verified
+    identical, one compressed, the round trip verified by SHA-256, and only
+    then the plain files removed; a folder whose logs differ is left as it is
+    and listed.  Nothing else in the folder is opened for writing.  With
+    *apply* the SHA-256 of every ``metrics.json`` of the run ID is taken
+    before and after and compared, the crashed records' traceback lines are
+    read back from the compacted folders, and the whole is appended to the
+    run ID's :data:`COMPACTION_RECORD`.  Restartable: an interrupted
+    compaction is finished by the next.
+    """
+    root = Path(root)
+    folders = run_folders(root)
+    if run_id is not None:
+        folders = [f for f in folders if f.name == run_id]
+        if not folders:
+            raise RunLayoutError(
+                f"runs/{run_id}/ is not a run ID's folder; the run IDs on disk are "
+                f"{[f.name for f in run_folders(root)]}"
+            )
+    block: dict[str, Any] = {"root": str(root), "applied": apply, "run_ids": []}
+    for folder in folders:
+        before = _record_digests(folder) if apply else None
+        rows = [process_log_mod.compact(d, apply=apply) for d in process_log_mod.log_folders(folder)]
+        by_action = Counter(r["action"] if not r["action"].startswith("left") else "left" for r in rows)
+        entry: dict[str, Any] = {
+            "run_id": folder.name,
+            "n_folders": len(rows),
+            "by_action": dict(sorted(by_action.items())),
+            "bytes_before": sum(r["bytes_before"] for r in rows),
+            "bytes_after": sum(r["bytes_after"] for r in rows),
+            "left": [{"directory": r["directory"], "why": r["action"]} for r in rows if r["action"].startswith("left")],
+            "partial_removed": [r["directory"] for r in rows if r.get("partial_removed")],
+        }
+        if apply:
+            after = _record_digests(folder)
+            differing = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
+            entry["run_records"] = {
+                "n_before": len(before),
+                "n_after": len(after),
+                "n_differing": len(differing),
+                "differing": differing[:20],
+            }
+            entry["crashed_tracebacks"] = _crashed_tracebacks(
+                [Path(r["directory"]) for r in rows if r["action"] in ("compacted", "finished", "already compacted")]
+            )
+            entry["applied_at"] = _dt.datetime.now().isoformat(timespec="seconds")
+            entry["applied_at_git_head"] = framework.git_head()
+            path = folder / COMPACTION_RECORD
+            history = json.loads(path.read_text()) if path.exists() else []
+            history.append(entry)
+            path.write_text(json.dumps(history, indent=2, default=str) + "\n")
+        block["run_ids"].append(entry)
+    block["bytes_before"] = sum(e["bytes_before"] for e in block["run_ids"])
+    block["bytes_after"] = sum(e["bytes_after"] for e in block["run_ids"])
+    block["n_folders"] = sum(e["n_folders"] for e in block["run_ids"])
+    return block
+
+
+def print_compaction(block: Mapping[str, Any]) -> None:
+    def mb(n: int) -> str:
+        return f"{n / 1e6:,.1f} MB"
+
+    for e in block["run_ids"]:
+        print(f"\n  {e['run_id']}: {e['n_folders']} folder(s) with a PROCESS log")
+        print(f"    by outcome: " + (", ".join(f"{k} {v}" for k, v in e["by_action"].items()) or "(none)"))
+        print(f"    PROCESS log bytes: {mb(e['bytes_before'])} now, {mb(e['bytes_after'])} after")
+        for row in e["left"]:
+            print(f"    LEFT {row['directory']}: {row['why']}")
+        if e["partial_removed"]:
+            print(f"    partial compressed file(s) of an interrupted compaction: {len(e['partial_removed'])}")
+        if "run_records" in e:
+            r = e["run_records"]
+            print(
+                f"    run records by SHA-256 before and after: {r['n_before']} before, {r['n_after']} after, "
+                f"{r['n_differing']} differing"
+            )
+            t = e["crashed_tracebacks"]
+            print(f"    crashed records in compacted folders: {t['n_crashed']}, traceback last line read: {t['n_traceback_read']}")
+            if t["example"]:
+                print(f"      e.g. {t['example']['traceback_last_line'][:100]}  (log form {t['example']['log_form']})")
+    print(
+        f"\n  total: {block['n_folders']} folder(s); PROCESS log bytes {mb(block['bytes_before'])} now, "
+        f"{mb(block['bytes_after'])} after"
+        + ("" if block["applied"] else "  (dry run: nothing changed; --apply does it)")
+    )
+
+
+# --------------------------------------------------------------------------
 # the listing
 # --------------------------------------------------------------------------
+
+
+def disk_bytes(folder: Path) -> int:
+    """The bytes *folder* occupies on disk (allocated blocks, as ``du``), each
+    hard-linked file counted once; 0 for a folder that does not exist."""
+    seen: set[tuple[int, int]] = set()
+    total = 0
+    for here, _dirs, files in os.walk(folder):
+        for name in files:
+            try:
+                st = os.lstat(os.path.join(here, name))
+            except OSError:
+                continue
+            key = (st.st_dev, st.st_ino)
+            if key in seen:
+                continue
+            seen.add(key)
+            total += st.st_blocks * 512
+    return total
 
 
 def _campaign_records(folder: Path) -> dict[str, Any]:
@@ -548,6 +710,8 @@ def listing(root: Path) -> dict[str, Any]:
                 "name_matches_settings": settings.get("run_id") == folder.name,
                 "campaign_records": _campaign_records(folder),
                 "n_run_records": sum(1 for _ in folder.rglob("metrics.json")),
+                "disk_bytes": disk_bytes(folder),
+                "campaign_disk_bytes": disk_bytes(folder / CAMPAIGN_ROOT),
                 "gate_table": _stage_record_summary(gates / "gate_table" / "measurements.json"),
                 "tallies": {
                     name: _stage_record_summary(gates / name / "measurements.json")
@@ -590,6 +754,10 @@ def print_listing(block: Mapping[str, Any]) -> None:
             if statuses:
                 print(f"      {phase:<18} " + ", ".join(f"{k} {v}" for k, v in statuses.items()))
         print(f"    run records in the folder: {row['n_run_records']}")
+        print(
+            f"    size on disk: {row['disk_bytes'] / 1e9:.2f} GB, of which the campaign "
+            f"(campaign/) {row['campaign_disk_bytes'] / 1e9:.2f} GB"
+        )
         table = row["gate_table"]
         if table is None:
             print("    gate table: none")

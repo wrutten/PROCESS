@@ -66,6 +66,20 @@ Six refusals live here, and none of them is a warning:
     change of accuracy; since driver change DR11 (A100 (v5-test-set)) there
     is one ruler and the check keeps its shape.
 
+What a run folder carries beside the record: PROCESS's own log, in one of
+the forms ``process_log.FORMS`` declares — ``compressed`` (one
+``process.log.gz``, every run made since task A108 (v5-one-compressed-log):
+the pool's close-out keeps one of the two identical plain files PROCESS
+writes, compressed), ``plain pair`` (``process.log`` and
+``<configuration>.process.log``, every run made before it until
+``--compact-run-logs`` compacts the folder), ``plain single`` or ``none``.
+**Every form is valid for a complete record**: no field of the record is read
+from the log (the failure taxonomy's detail is the record's own
+``traceback``), and neither the close-out nor the compaction reads or writes
+``metrics.json``, so a record's identity, digest, completeness and the
+``--resume`` decision do not depend on the form.  ``process_log.open_text``
+reads every form.
+
 Vocabulary, once: a **configuration** is one optimisation problem; an **arm** is
 one setting of the driver's switches; a **seed** selects which displaced
 starting point is used, and seed 0 is the undisplaced one; a **regime** says how

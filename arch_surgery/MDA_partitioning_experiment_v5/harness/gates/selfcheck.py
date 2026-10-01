@@ -23,6 +23,11 @@ the check must catch before its zeros are believed (orchestration protocol
    predicate module differs from its own source in nothing but the heritage
    paragraph the record names.
 
+Since task A108 (v5-one-compressed-log) also **process log** — the pool's
+close-out and the log compaction on synthetic run folders in a scratch
+directory: one compressed log only when the plain pair is identical and the
+round trip holds, every other case left as it is or finished, every form read.
+
 Run it directly, or through ``experiment_runner.py --selfcheck``.  Both check
 the experiment's own copy of PROCESS, which is the tree every run uses.  The
 refusals that keep it so are exercised on a campaign this module constructs at
@@ -58,6 +63,7 @@ from harness.core import framework  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.child import perturb as perturb_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
+from harness.core import process_log as process_log_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
 from harness.core import provenance as prov  # noqa: E402
 from harness.experiment import switches as sw  # noqa: E402
@@ -2362,6 +2368,130 @@ def check_run_path(campaign: Campaign) -> Check:
     return check
 
 
+def check_process_log() -> Check:
+    """The one compressed PROCESS log: the close-out and the compaction on
+    synthetic run folders in a scratch directory — never a copy of a record."""
+    check = Check(
+        name="process log",
+        binds="a run folder keeps one gzip-compressed PROCESS log only when the "
+        "plain pair is identical and the round trip holds; a folder whose logs "
+        "differ, or whose compressed file does not hold its plain log, is left "
+        "as it is; an interrupted compaction is finished; the reader reads every "
+        "form; the record is never touched",
+        population="7 synthetic run folders: 2 compacted (one of them compacted "
+        "again), 1 in the plain form read as it is, 4 teeth",
+    )
+    body = "".join(f"process.models.x - WARNING - evaluation {i}: limit reached\n" for i in range(4000))
+    record = {"status": "crashed", "traceback": "Traceback (most recent call last):\nValueError: synthetic"}
+
+    def folder(root: Path, name: str, *, second: str | None = None) -> Path:
+        d = root / name
+        d.mkdir()
+        (d / "metrics.json").write_text(json.dumps(record))
+        (d / process_log_mod.PLAIN_NAME).write_text(body)
+        (d / ("cfg" + process_log_mod.PREFIXED_SUFFIX)).write_text(body if second is None else second)
+        return d
+
+    def sha(path: Path) -> str:
+        return process_log_mod.sha256_of(path)[0]
+
+    with tempfile.TemporaryDirectory(prefix="process_log_check_") as td:
+        root = Path(td)
+
+        # the close-out on an identical pair
+        d = folder(root, "pair")
+        record_sha = sha(d / "metrics.json")
+        planned = process_log_mod.compact(d, apply=False)
+        done = process_log_mod.close_out(d)
+        check.n_compared += 1
+        left = sorted(p.name for p in d.iterdir())
+        if done["action"] != "compacted" or left != ["metrics.json", process_log_mod.COMPRESSED_NAME]:
+            check.fail(f"the close-out of an identical pair gave {done['action']!r} and left {left}")
+        with process_log_mod.open_text(d) as handle:
+            read_back = handle.read()
+        if read_back != body:
+            check.fail("the reader did not read the compressed log back to the plain text")
+        if sha(d / "metrics.json") != record_sha:
+            check.fail("the close-out changed the record")
+        if planned["bytes_after"] != (d / process_log_mod.COMPRESSED_NAME).stat().st_size:
+            check.fail(
+                f"the dry run's size after ({planned['bytes_after']} B) is not the compressed "
+                f"file's ({(d / process_log_mod.COMPRESSED_NAME).stat().st_size} B)"
+            )
+        if not records_mod.traceback_last_line(records_mod.read(d)):
+            check.fail("a crashed record's traceback line did not read from a compacted folder")
+        if process_log_mod.form_of(d) != "compressed":
+            check.fail(f"a compacted folder reads as {process_log_mod.form_of(d)!r}")
+        check.note(
+            f"identical pair: {done['bytes_before']} B of plain logs -> {done['bytes_after']} B compressed; "
+            f"the dry run predicted {planned['bytes_after']} B; the reader and the traceback line read it"
+        )
+
+        # an already compacted folder: skipped, and the compression is deterministic
+        check.n_compared += 1
+        again = process_log_mod.compact(d, apply=True)
+        e = folder(root, "same_text")
+        process_log_mod.close_out(e)
+        if again["action"] != "already compacted":
+            check.fail(f"a compacted folder compacted again gave {again['action']!r}")
+        if sha(d / process_log_mod.COMPRESSED_NAME) != sha(e / process_log_mod.COMPRESSED_NAME):
+            check.fail("the same log compressed twice gave two different files")
+
+        # a record made before this change: the plain pair, read as it is
+        check.n_compared += 1
+        old = folder(root, "plain_pair")
+        with process_log_mod.open_text(old) as handle:
+            if process_log_mod.form_of(old) != "plain pair" or handle.read() != body:
+                check.fail("a folder in the plain form was not read as it is")
+
+        # tooth: the pair differs
+        t = folder(root, "differs", second=body + "one more line\n")
+        before = sorted((p.name, sha(p)) for p in t.iterdir())
+        out = process_log_mod.compact(t, apply=True)
+        after = sorted((p.name, sha(p)) for p in t.iterdir())
+        check.tooth(
+            "the two plain logs differ",
+            out["action"].startswith("left") and before == after,
+            f"must be left untouched and listed, never reduced to one ({out['action'][:60]})",
+        )
+
+        # tooth: interrupted after the compressed file was renamed into place
+        t = folder(root, "interrupted")
+        process_log_mod._write_compressed(t / process_log_mod.PLAIN_NAME, t / process_log_mod.COMPRESSED_NAME)
+        (t / process_log_mod.PLAIN_NAME).unlink()
+        out = process_log_mod.compact(t, apply=True)
+        check.tooth(
+            "a compaction interrupted between the rename and the removals",
+            out["action"] == "finished" and process_log_mod.plain_logs(t) == [],
+            f"the next compaction must verify the kept file and finish ({out['action']})",
+        )
+
+        # tooth: a partial compressed file left by an interrupted write
+        t = folder(root, "partial")
+        (t / process_log_mod.PARTIAL_NAME).write_bytes(b"\x1f\x8b half a file")
+        out = process_log_mod.compact(t, apply=True)
+        check.tooth(
+            "a partial compressed file of an interrupted write",
+            out.get("partial_removed") and out["action"] == "compacted"
+            and not (t / process_log_mod.PARTIAL_NAME).exists(),
+            f"must be removed and the folder compacted from its plain logs ({out['action']})",
+        )
+
+        # tooth: a compressed file that does not hold the plain log beside it
+        t = folder(root, "foreign")
+        (t / "other.txt").write_text(body + "different\n")
+        process_log_mod._write_compressed(t / "other.txt", t / process_log_mod.COMPRESSED_NAME)
+        before = sorted((p.name, sha(p)) for p in t.iterdir())
+        out = process_log_mod.compact(t, apply=True)
+        after = sorted((p.name, sha(p)) for p in t.iterdir())
+        check.tooth(
+            "a compressed file that does not hold its plain log",
+            out["action"].startswith("left") and before == after,
+            f"the plain files must not be removed on its word ({out['action'][:60]})",
+        )
+    return check
+
+
 def _must_refuse_here(call) -> tuple[bool, str]:
     """Whether *call* refused, and what it said.  A success is a tooth failure."""
     try:
@@ -2383,6 +2513,7 @@ def run_all(
     checks.append(check_data(campaign))
     checks.append(check_run_path(campaign))
     checks.append(check_stage_provenance(campaign))
+    checks.append(check_process_log())
     return checks
 
 

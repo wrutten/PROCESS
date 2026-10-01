@@ -56,6 +56,7 @@ from harness.core import provenance as prov  # noqa: E402
 from harness.measurement import paper_tables as paper_tables_mod  # noqa: E402
 from harness.core import framework as framework_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
+from harness.core import process_log as process_log_mod  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
 from harness.core import run_layout  # noqa: E402
 from harness.gates import archived_records as archived_records_mod  # noqa: E402
@@ -607,6 +608,18 @@ def stage_single_run(args: argparse.Namespace, campaign: Campaign) -> int:
         + ("complete" if completeness.get("complete") else
            f"INCOMPLETE — {completeness.get('refusal')}")
     )
+    log = process_log_mod.open_text(outdir)
+    if log is None:
+        print("  PROCESS log: none")
+    else:
+        with log:
+            lines = log.read().splitlines()
+        files = sorted(p.name for p in outdir.iterdir() if "process.log" in p.name)
+        print(
+            f"  PROCESS log: form {process_log_mod.form_of(outdir)!r} ({', '.join(files)}); "
+            f"{len(lines)} line(s) read back"
+            + (f", the last: {lines[-1][:100]}" if lines else "")
+        )
     return 0 if result["status"] == "ok" else 1
 
 
@@ -1301,7 +1314,8 @@ def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
 
 def stage_runs(args: argparse.Namespace, campaign: Campaign) -> int:
     """The run IDs on disk, each with its settings, its campaign records by
-    phase and status, the commits they were made at, and whether its gate
+    phase and status, the commits they were made at, its size on disk and its
+    campaign's, and whether its gate
     table, tallies and tables document exist.  Nothing is compared between
     run IDs: the folders are the comparison's input, not this listing's."""
     _rule("the run IDs under runs/")
@@ -1361,6 +1375,35 @@ def stage_adopt_records_layout(args: argparse.Namespace, campaign: Campaign) -> 
         args.json.write_text(json.dumps(plan, indent=2, default=str) + "\n")
         print(f"  record: {args.json}")
     return 0
+
+
+def stage_compact_run_logs(args: argparse.Namespace, campaign: Campaign) -> int:
+    """Leave every run folder of a run ID (or of every run ID) with one
+    gzip-compressed PROCESS log: a listing unless ``--apply``
+    (``run_layout.compact_process_logs``, ``harness/core/process_log.py``).
+    Per folder the two plain logs are verified identical, one is compressed,
+    the round trip is verified by SHA-256, and only then are the plain files
+    removed; with ``--apply`` every run record's SHA-256 is compared before
+    and after."""
+    run_id = args.compact_run_logs or None
+    _rule(
+        f"compact the PROCESS logs of {('runs/' + run_id + '/') if run_id else 'every run ID'}"
+        + ("" if args.apply else " (dry run)")
+    )
+    root = campaign.runs_root or campaign.runs_dir
+    try:
+        block = run_layout.compact_process_logs(root, run_id=run_id, apply=args.apply)
+    except (OSError, run_layout.RunLayoutError) as exc:
+        print(f"  REFUSED — {type(exc).__name__}: {exc}")
+        return 3
+    run_layout.print_compaction(block)
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(block, indent=2, default=str) + "\n")
+        print(f"  record: {args.json}")
+    changed = any(e.get("run_records", {}).get("n_differing") for e in block["run_ids"])
+    left = any(e["left"] for e in block["run_ids"])
+    return 1 if changed or left else 0
 
 
 def stage_copy_archived_records(args: argparse.Namespace, campaign: Campaign) -> int:
@@ -1707,8 +1750,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="list the run IDs on disk (one folder per campaign settings under "
         "runs/): each one's settings, its campaign records by phase and status, "
-        "the commits they were made at, and whether its gate table, tallies and "
-        "tables document exist; and stop.  No comparison between run IDs",
+        "the commits they were made at, its size on disk and its campaign's, and "
+        "whether its gate table, tallies and tables document exist; and stop.  No comparison between run IDs",
     )
     parser.add_argument(
         "--adopt-records-layout",
@@ -1730,9 +1773,23 @@ def main(argv: list[str] | None = None) -> int:
         "the settings name, and stop.  A dry run unless --apply",
     )
     parser.add_argument(
+        "--compact-run-logs",
+        metavar="RUN_ID",
+        nargs="?",
+        const="",
+        default=None,
+        help="leave every run folder of that run ID (every run ID without one) "
+        "with one gzip-compressed PROCESS log, process.log.gz: the two plain "
+        "logs PROCESS writes verified identical, one compressed, the round trip "
+        "verified by SHA-256, then the plain files removed; a folder whose logs "
+        "differ is left and listed; nothing else touched; and stop.  A dry run "
+        "listing folders and log bytes now and after unless --apply",
+    )
+    parser.add_argument(
         "--apply",
         action="store_true",
-        help="for --adopt-records-layout and --copy-archived-records: do it",
+        help="for --adopt-records-layout, --copy-archived-records and "
+        "--compact-run-logs: do it",
     )
     parser.add_argument(
         "--run-isolation",
@@ -1762,12 +1819,14 @@ def main(argv: list[str] | None = None) -> int:
 
     # The run ID (task A107 (v5-campaign-settings-keys)): every record this
     # press makes or reads is under runs/<run ID>/.  The listing and the
-    # adoption look at the whole of runs/ and pass no guard; every other stage
+    # adoption (and the log compaction) look at the whole of runs/ and pass no guard; every other stage
     # refuses a runs/ in the old layout and a folder of other settings.
     if args.runs:
         return stage_runs(args, campaign)
     if args.adopt_records_layout:
         return stage_adopt_records_layout(args, campaign)
+    if args.compact_run_logs is not None:
+        return stage_compact_run_logs(args, campaign)
     print(f"{run_layout.header(campaign)}")
     try:
         run_layout.open_run(campaign, create=not _reads_only(args))
