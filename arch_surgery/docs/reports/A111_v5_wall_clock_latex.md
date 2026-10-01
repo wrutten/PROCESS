@@ -142,3 +142,18 @@ Total                     & 53.73 & 71.20 & -- & 47.83 & 0.67 & 0.72 [0.19, 0.98
 \hline
 \end{tabular}
 ```
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat decde489..9bebbd51`: five files — the generator (`paper_tables.py`, `timing.py`), the
+two tables documents and this report; 0 diff lines under the V5 driver copy, `process/` or V4; worktree clean. (2) The
+two documents gain 58 lines each and lose none: no existing line moved. (3) `--paper-tables check` reads IDENTICAL
+under both settings at the tip. (4) The LaTeX block of `paper_tables_write_set_tau1e-06.md`, parsed by the
+orchestrator with its own few lines and compared with the three Markdown phase B wall-clock grids of the same
+document: 12 rows per configuration, every cell equal on `tok`, `lad` and `st`.
+
+**One thing a reader of the block should know.** On `st` the Feedforward row prints 0.00 in three arms with no ratio,
+where the count tables print the group as absent (`--`). It is what the Markdown grid prints, so the block is faithful
+to it; whether the row is kept in the paper is the user's choice. Wall clock is context, never evidence (D33).
