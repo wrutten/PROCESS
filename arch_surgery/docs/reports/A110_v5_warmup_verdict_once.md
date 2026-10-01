@@ -331,3 +331,37 @@ mismatched of 178. Only the verification table and its stamp line moved in eithe
 
 **Hand-back state.** The records tree is the one V5 tree, left in this worktree at
 `arch_surgery/MDA_partitioning_experiment_v5/runs/`. The queue is not edited.
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat ff1abec4..6be87961`: ten files, all under the V5 harness, its runner, its README, the
+two tables documents and this report; **0 diff lines under the V5 driver copy, `process/` or V4**; worktree clean; the
+harness compiles. (2) The two tables documents moved in their verification table only (the stamp line and the gate
+rows' commits and counts); no result cell moved; `--paper-tables check` reads IDENTICAL under both settings at the tip.
+(3) `--runs` at the tip: `census_tau1e-08` 29 PASS of 29; `write_set_tau1e-06` 27 PASS, 1 FAIL, 1 not run. (4) The
+gate's record under each run ID says in its own words that it is read, not pressed (D44), with the verdict's commit
+and the re-derived comparison (1 426 count leaves, 0 differing). (5) Both campaigns: `--jobs campaign --resume` keeps
+553 of 553 under each setting, and no file under either `campaign/` folder has a modification time after the task
+began. (6) The G1 change is one entry in `ALWAYS_EXCLUDED`, with its content witness named.
+
+**D44 is carried out as ruled.** The gate reads one verdict under every run ID and composes no job; `--gate all` under
+the write set now stops only at GT's designed refusal. The decisions taken alone are accepted, among them reading
+without `--resume` (decision 2), which is what keeps a from-scratch chain from stopping at this gate.
+
+**The cause of the `tally_contracts` FAIL under the write set, corrected.** The report says the three re-made runs
+"cannot reproduce V4's census-set cells". V4 has no census set: V4's predicate *is* the whole write set at τ = 1e-6,
+and that is exactly why the failure occurs. Read by the orchestrator from the records: the three job digests
+(`e09d9d61…`, `e962abd5…`, `0a51a121…`) exist under both run IDs. Under `census_tau1e-08` they are the reproduction
+gate's records, made by the V4-identical driver copy at `66bfa240` (13 / 13 / 15 sweeps, no deferred set executed).
+Under `write_set_tau1e-06` gate G6's `A2` seed-1 jobs have the **same job identity**, because the run ID's settings are
+V4's; the copied reproduction records lacked four fields the record contract now owes, so A109's G6 press re-made them
+with today's driver (stamped `52ea57be`; 14 / 14 / 16 sweeps). The difference is the phase A once-execution of the
+deferred set (item 5): one dispatch sweep and the three post-processing nodes (four on `st`) per evaluation, which is
+the 60 → 63, 60 → 63, 62 → 66 in node calls. So the tally's contract gate compares today's driver with V4's reference
+cells on those three jobs and reports a real, intended driver difference as a mismatch. Not a property of the
+campaign's records, and not of this task. Filed as I-41. The originals are intact under `census_tau1e-08`.
+
+**What this leaves.** Under `write_set_tau1e-06`: `tally_contracts` FAIL (I-41) and GT not run by design. Neither is in
+the tables document's verification table, and no cell of a result table depends on either.
