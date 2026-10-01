@@ -188,3 +188,27 @@ approached the 10 GB floor.
 3. The census run ID's own G1 verdict (on disk, not re-pressed) says its straddle is *"one capture names no commit, so
    what this run straddles cannot be stated"* (`after_commit: null`), although its after records carry `24b78e2d`. This
    is noted only. It does not change that run ID's PASS, which was made in one tree.
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat 52ea57be..2aa32bb1`: two files, the tables document and this report; no code. The
+tables document's diff is five lines out and five in, all in the verification table (the stamp line and the G1, G6,
+G5, G9 rows); no cell of a result table moved. (2) Gate G1's record, read by the orchestrator
+(`runs/write_set_tau1e-06/gates/switch_neutrality/gate.json`): 3 651 values and 51 319 output-file lines compared, 3
+values differing, 0 lines; the three mismatches are one field, `audit_snapshot.coupling_state`, on runs 0, 2 and 4.
+(3) `--runs` reads 26 PASS, 2 FAIL, 1 not run for `write_set_tau1e-06`; `--paper-tables check` reads IDENTICAL under
+the write set and under the default settings. (4) No file under either run ID's `campaign/` has a modification time
+after the task began.
+
+**The G1 FAIL is a path, and the remedy is the gate's own table.** `ALWAYS_EXCLUDED` in `gate_neutrality.py` already
+names the sibling leaves `exit_audit.coupling_state`, `coupling_state_artifact` and `coupling_state_provenance.path` as
+absolute paths whose file is compared by content (`components_sha256`). `audit_snapshot.coupling_state` is the same
+path under a block added later, and it agreed until now only because both captures were made in one tree (trap T20).
+Naming it in that table is a correction of an omission, not a change to what the gate compares in behaviour. Decided
+by the orchestrator as an implementation matter, carried by A110 with the gate re-pressed; reversal: remove the entry.
+Until then the tables document's G1 row reads FAIL and the document is not to be cited as verified on G1.
+
+**The agent's inference, accepted as stated and untested:** a re-press of G1 outside A101's tree would fail the same
+way under the default run ID. A110 re-presses it under both.
