@@ -638,7 +638,7 @@ def collisions(campaign: Campaign) -> dict[str, Any]:
                 digests.setdefault(digest, set()).add(directory)
             kind = str(record.get("campaign_run_kind"))
             run_kinds[kind] = run_kinds.get(kind, 0) + 1
-        protected = all(pool_mod.read_only_archive_of(d, campaign) is not None for d in directories) if directories else False
+        n_protected = sum(1 for d in directories if pool_mod.read_only_archive_of(d, campaign) is not None)
         hits: list[dict[str, Any]] = []
         for name, rows in rows_by_gate.items():
             if name == archive.gate:
@@ -664,7 +664,7 @@ def collisions(campaign: Campaign) -> dict[str, Any]:
                 "n_digests": len(digests),
                 "run_kinds": run_kinds,
                 "refused": refused,
-                "protected_by_the_pool": protected,
+                "n_in_a_read_only_archive": n_protected,
                 "n_other_jobs_sharing_an_identity": len(hits),
                 "n_into_the_archive": sum(1 for h in hits if h["into_the_archive"]),
                 "n_into_the_archive_by_a_gate_that_makes_runs": sum(
@@ -681,7 +681,7 @@ def collisions_report(block: Mapping[str, Any]) -> list[str]:
     for row in block["archives"]:
         lines.append(
             f"  {row['archive']}: {row['n_records']} archived record(s), {row['n_digests']} identit(y/ies), "
-            f"run kinds {row['run_kinds']}; protected by pool.run: {'yes' if row['protected_by_the_pool'] else 'no'}"
+            f"run kinds {row['run_kinds']}; in a read-only archive pool.run refuses to write: {row['n_in_a_read_only_archive']}"
             + (f"; job set not composable: {row['refused']}" if row["refused"] else "")
         )
         lines.append(
