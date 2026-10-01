@@ -383,3 +383,28 @@ run_kind_separation, tally_contracts}/gate.json` and `gates/gate_table/measureme
   prints), smoke pairs; `--gate composition` FAIL on undeclared teeth, `2bd27bf5` declared them; presses at
   the tip; `fe5eb615` `paper_tables.md` stamp line; this report; `runs/` relocated by `mv` (same
   filesystem): 1 175 `metrics.json` and 17 905 files before, 1 175 and 17 905 after.
+
+---
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-01 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --name-only 59f36aed..4a023284`: 17 files, harness, runner, README,
+`paper_tables.md` and this report — **0 paths under the V5 driver copy `PROCESS/`, 0 under
+`process/models/`, 0 under `_v4/`**; worktree clean; `merge-tree`: no conflict. (2) `compileall` clean and
+`--gates` constructs the registry at the tip. (3) The diff of `paper_tables.md` is one line, the
+verification table's records-read stamp; no cell moved. (4) The gate-table record: 29 PASS. (5) **The
+campaign records are untouched**, recounted from every `metrics.json`: 553, still at `6221af70` (458) and
+`f4a75f8e` (75 `ok` + the 20 `crashed`) — no record was re-made by this task, which is what I-38's fix
+claims and what "no default moved" requires.
+
+**Read against the brief.** I-38 and I-36 are closed on the evidence given (0 of 553 re-made, was 20;
+`--jobs all` lists 688 jobs). The tolerance rule is a capability with the default untouched; the rule's
+name in the identity is right (a rule record and a `--tau` record at the same value are different
+declarations). Its limit is stated plainly: the tallies and some gates read the campaign's single τ, so a
+rule campaign cannot be tabulated yet — nothing uses a rule today, and after A104 a single τ may serve.
+The rule campaign's own root (`runs/campaign_tau_rule_<rule>/`) is the first instance of what A107
+(v5-campaign-settings-keys) generalises on the user's instruction; A107 absorbs it.
+
+**Queue consequences at merge.** A105 merged; I-36 and I-38 closed; A107 dispatched from the merged tip.
