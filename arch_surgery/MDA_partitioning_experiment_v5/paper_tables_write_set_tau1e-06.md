@@ -402,6 +402,64 @@ Post-processing & 6043 & 5050 & -- & 1 & 0.00 & 0.00 [0.00, 0.00] \\
 | fixed per run | 5.19 · 5.19 s per run · 16.0 % | 5.17 · 5.17 s per run · 10.3 % | — | 4.60 · 4.60 s per run · 13.4 % |
 | Total | 53.73 · 32.08 ms per evaluation · 100.0 % | 71.20 · 50.01 ms per evaluation · 100.0 % | — | 47.83 · 35.66 ms per evaluation · 100.0 % |
 
+**phase B in wall clock, s per optimisation — LaTeX** — The LaTeX form of the phase B wall-clock tables above, the 3 configurations in one `tabular` (n is each table's pair count): every cell the Markdown grid's own string, compared with it before writing — **0 mismatched of 258**; a doctored cell caught: **yes**. Wall clock is context, never evidence (D33).
+
+```latex
+\begin{tabular}{l|cccc|cc}
+\hline
+Row & BR & B0 & B1 & B2 & B2/B0 & B2/B0 med [min, max] \\
+\hline
+\multicolumn{7}{l}{\texttt{tok} ($n = 22$)} \\
+\hline
+M1                        & 6.69 & 7.54 & 7.41 & 5.06 & 0.67 & 0.69 [0.53, 0.84] \\
+M2                        & 6.52 & 7.25 & 7.14 & 6.09 & 0.84 & 0.87 [0.66, 1.08] \\
+M3                        & 1.37 & 1.52 & 1.49 & 1.11 & 0.73 & 0.73 [0.57, 0.95] \\
+Feedforward               & 0.02 & 0.02 & 0.02 & 0.01 & 0.34 & 0.35 [0.24, 0.46] \\
+Post-processing           & 0.39 & 0.42 & 0.42 & 0.00 & 0.00 & 0.00 [0.00, 0.00] \\
+MDA convergence test      & 0.08 & 10.63 & 10.48 & 8.22 & 0.77 & 0.79 [0.63, 1.01] \\
+dispatch                  & 0.23 & 0.30 & 0.31 & 0.55 & 1.80 & 1.89 [1.25, 2.38] \\
+objective and constraints & 0.33 & 0.14 & 0.14 & 0.14 & 1.02 & 1.01 [0.52, 2.01] \\
+optimiser own time        & 0.15 & 0.11 & 0.10 & 0.10 & 0.92 & 0.95 [0.45, 2.56] \\
+fixed per run             & 5.11 & 5.28 & 4.59 & 4.62 & 0.88 & 0.88 [0.73, 1.02] \\
+unattributed residual     & 0.03 & 0.11 & 0.11 & 0.15 & 1.35 & 1.42 [0.92, 1.96] \\
+\hline
+Total                     & 20.92 & 33.33 & 32.21 & 26.05 & 0.78 & 0.80 [0.62, 0.94] \\
+\hline
+\multicolumn{7}{l}{\texttt{lad} ($n = 11$)} \\
+\hline
+M1                        & 27.62 & 27.17 & 18.54 & 12.68 & 0.47 & 0.57 [0.08, 4.11] \\
+M2                        & 28.65 & 27.88 & 19.03 & 16.43 & 0.59 & 0.71 [0.10, 5.22] \\
+M3                        & 5.89 & 5.60 & 3.81 & 3.02 & 0.54 & 0.65 [0.09, 4.89] \\
+Feedforward               & 0.07 & 0.07 & 0.04 & 0.02 & 0.25 & 0.30 [0.04, 2.30] \\
+Post-processing           & 1.64 & 1.53 & 1.03 & 0.00 & 0.00 & 0.00 [0.00, 0.00] \\
+MDA convergence test      & 0.32 & 40.16 & 27.25 & 21.83 & 0.54 & 0.65 [0.09, 4.98] \\
+dispatch                  & 0.97 & 1.08 & 0.74 & 1.37 & 1.27 & 1.60 [0.22, 11.59] \\
+objective and constraints & 1.42 & 0.50 & 0.36 & 0.37 & 0.75 & 0.75 [0.17, 7.01] \\
+optimiser own time        & 0.38 & 0.31 & 0.23 & 0.24 & 0.77 & 0.78 [0.13, 6.36] \\
+fixed per run             & 5.46 & 5.19 & 4.44 & 4.48 & 0.86 & 0.86 [0.80, 0.99] \\
+unattributed residual     & 0.23 & 0.47 & 0.31 & 0.42 & 0.88 & 1.13 [0.14, 9.36] \\
+\hline
+Total                     & 72.64 & 109.97 & 75.78 & 60.86 & 0.55 & 0.67 [0.10, 4.34] \\
+\hline
+\multicolumn{7}{l}{\texttt{st} ($n = 22$)} \\
+\hline
+M1                        & 20.37 & 17.64 & -- & 11.09 & 0.63 & 0.69 [0.16, 0.91] \\
+M2                        & 19.93 & 16.89 & -- & 11.10 & 0.66 & 0.69 [0.17, 1.00] \\
+M3                        & 5.01 & 4.17 & -- & 2.68 & 0.64 & 0.70 [0.16, 0.96] \\
+Feedforward               & 0.00 & 0.00 & -- & 0.00 & -- & -- \\
+Post-processing           & 1.17 & 0.98 & -- & 0.00 & 0.00 & 0.00 [0.00, 0.00] \\
+MDA convergence test      & 0.22 & 24.92 & -- & 16.58 & 0.67 & 0.71 [0.17, 1.01] \\
+dispatch                  & 0.62 & 0.64 & -- & 1.00 & 1.57 & 1.61 [0.39, 2.49] \\
+objective and constraints & 0.81 & 0.25 & -- & 0.22 & 0.86 & 0.89 [0.22, 1.31] \\
+optimiser own time        & 0.29 & 0.24 & -- & 0.24 & 0.99 & 0.99 [0.21, 1.84] \\
+fixed per run             & 5.19 & 5.17 & -- & 4.60 & 0.89 & 0.89 [0.76, 1.03] \\
+unattributed residual     & 0.13 & 0.30 & -- & 0.34 & 1.12 & 1.11 [0.24, 1.84] \\
+\hline
+Total                     & 53.73 & 71.20 & -- & 47.83 & 0.67 & 0.72 [0.19, 0.98] \\
+\hline
+\end{tabular}
+```
+
 ### Table — per-arm success
 
 Per configuration and arm: the starts offered, the accepted optima (`status == ok`, `ifail == 1`), the other starts by outcome class, the one seed set every phase B table is over, and the starts lost to this arm alone. Reported, no expectation (plan §5 B5; item 3 as reduced). The tally's `per-arm success` table, republished.
