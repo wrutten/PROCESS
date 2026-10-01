@@ -1356,17 +1356,88 @@ READABLE_IDENTITY_FIELDS: tuple[str, ...] = (
 )
 
 
+#: The taxonomy rows a crashed run is **kept** in under ``--resume`` (issue
+#: I-38; task A105 (v5-resume-fixes-and-tau-rule)).  A run whose status is
+#: ``crashed`` raised; :func:`harness.core.failure.classify` puts it in one of
+#: these when the raise is a result about the models or the arrangement —
+#: a model's own exception (``crashed``: the 20 campaign starts whose TF-coil
+#: temperature-margin root-find raises), a block loop at its inner cap
+#: (``unconverged``), upstream's pass cap (``unconverged-at-cap``) — and a job
+#: is never retried (``pool``), so re-making such a record re-runs a result
+#: and re-stamps it at the press's commit and worker count.  Two rows are
+#: **not** kept: ``refused`` (the driver's typed refusal of a composition —
+#: the guards working, on inputs such as an artifact or a composed value that
+#: can change without changing the job identity) and ``machinery`` (a failure
+#: of the harness, never a result).
+CRASH_KEPT_FAILURE_CLASSES: tuple[str, ...] = ("crashed", "unconverged", "unconverged-at-cap")
+
+#: The pool's launcher stamps a crashed record must carry to be kept: the
+#: evidence that the pool, not an interrupted child, finished the record
+#: (``pool.stamp_identity`` writes them after the subprocess returned).
+CRASH_LAUNCHER_FIELDS: tuple[str, ...] = ("spawned_at", "returned_at", "wall_s")
+
+
+def traceback_last_line(record: Mapping[str, Any]) -> str:
+    """The last non-blank line of the record's traceback — the exception the
+    run raised, type and message — or ``""`` where there is none."""
+    text = record.get("traceback")
+    if not isinstance(text, str):
+        return ""
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    return lines[-1] if lines else ""
+
+
+def why_not_complete_as_a_crash(record: Mapping[str, Any]) -> str | None:
+    """Why a record whose status is not ``ok`` is not **complete as a crash**, or None.
+
+    The contract a crashed record meets to be kept by ``--resume`` (issue
+    I-38), beside the identity, the stamps and the always-owed fields that
+    :func:`why_not_complete_for` checks for every record:
+
+    * ``status == "crashed"`` — the child caught a raise and wrote the record;
+    * ``failure_class`` in :data:`CRASH_KEPT_FAILURE_CLASSES` — a result, not
+      a refusal of a composition and not a machinery failure;
+    * a ``traceback`` whose last line (:func:`traceback_last_line`, the
+      exception and its message) is not empty;
+    * the pool's ``launcher`` block with :data:`CRASH_LAUNCHER_FIELDS` — the
+      record was finished by the pool after the subprocess returned.
+
+    A crashed record missing any of these is re-made, as every non-``ok``
+    record was before.
+    """
+    status = record.get("status")
+    if status != "crashed":
+        return f"status is {status!r}, not 'ok' or 'crashed'"
+    failure = record.get("failure_class")
+    if failure not in CRASH_KEPT_FAILURE_CLASSES:
+        return (
+            f"status is 'crashed' with failure_class {failure!r}, which is not "
+            f"a row a crash is kept in ({list(CRASH_KEPT_FAILURE_CLASSES)})"
+        )
+    if not traceback_last_line(record):
+        return "status is 'crashed' and the record carries no traceback, or one with no last line"
+    launcher = record.get("launcher")
+    if not isinstance(launcher, Mapping):
+        return "status is 'crashed' and the record carries no launcher block (the pool did not finish it)"
+    absent = [name for name in CRASH_LAUNCHER_FIELDS if launcher.get(name) is None]
+    if absent:
+        return f"status is 'crashed' and the launcher block lacks {absent}"
+    return None
+
+
 def why_not_complete_for(
     record: Mapping[str, Any], *, identity: Mapping[str, Any], digest: str
 ) -> str | None:
-    """Why *record* is not a finished record of exactly this job, or None.
+    """Why *record* is not a complete record of exactly this job, or None.
 
     What ``resume`` consults, spelled out.  A directory is never evidence of a
     completed run: an interrupted one leaves a directory behind, and re-using
     it would put a half-written record into a population.  Four comparisons,
     in order:
 
-    1. the record finished (``status == "ok"``);
+    1. the record finished (``status == "ok"``), or it is **complete as a
+       crash** (:func:`why_not_complete_as_a_crash`: status ``crashed`` in a
+       result row, the traceback's last line, the launcher stamps; issue I-38);
     2. the **readable half** — arm, configuration, seed, phase, regime, run
        kind — against the child's own stamps;
     3. every identity field the child also stamps
@@ -1378,10 +1449,14 @@ def why_not_complete_for(
        is what makes every record made before this field existed re-run
        (harness plan amendment 17: ``--resume`` cannot cross a schema change);
 
-    and then the completeness contract itself (:func:`missing_fields`).
+    and then the completeness contract itself (:func:`missing_fields`) —
+    for a crashed record, the fields owed ``always``, since a crash has no
+    finished quantities to owe.
     """
     if record.get("status") != "ok":
-        return f"status is {record.get('status')!r}, not 'ok'"
+        crash = why_not_complete_as_a_crash(record)
+        if crash is not None:
+            return crash
     for name in READABLE_IDENTITY_FIELDS:
         stamped = record.get(IDENTITY_FIELDS_STAMPED_BY_THE_CHILD[name])
         if stamped != identity.get(name):

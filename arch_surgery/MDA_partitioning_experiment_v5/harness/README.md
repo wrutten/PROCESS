@@ -115,7 +115,11 @@ the `mixed` ruler (DR11).
    `campaign`, `supplementary`, `timing`), the campaign's test set and τ, the timers, and any entry
    state or pinned burn time. The job's rendered identity and its digest name the record
    (`pool.Job.identity`, `records.job_digest`); `--resume` keeps an existing record only when it is
-   the same job and complete under today's contract (trap T13).
+   the same job and complete under today's contract (trap T13) — finished (`status == "ok"`), or
+   **complete as a crash** (`records.why_not_complete_as_a_crash`: status `crashed` in a result row —
+   `crashed`, `unconverged`, `unconverged-at-cap` — the traceback's last line and the pool's launcher
+   stamps; issue I-38), so a model's own raise is a kept result and never re-run by a resumed press.
+   `pool.why_not_kept` is the one decision; `--jobs` prints it without running.
 2. A fresh subprocess runs `child/optimise.py` (one optimisation) or `child/evaluate.py` (one
    evaluation, warmed, §8) against `PROCESS/`, under the composed environment.
 3. **Inside the driver copy**, per run: the deferral sets and the block schedule are resolved **once**

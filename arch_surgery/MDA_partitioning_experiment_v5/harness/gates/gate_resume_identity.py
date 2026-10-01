@@ -37,7 +37,8 @@ a post-renaming record (stamped ``arm_naming``) is not translated, an arm
 nobody declared is refused by name, and a canonical directory occupied by
 another job's record is not removed.
 
-Teeth: a record whose digest matches but whose child-stamped δ differs is
+Teeth: a crash record is kept only when complete as a crash (issue I-38);
+a record whose digest matches but whose child-stamped δ differs is
 refused; a record with no digest is incomplete; a digest that does not
 re-derive from the stamped identity is refused; an unclassified job field
 refuses the module; a by-design pair doctored to collide is reported; and the
@@ -670,6 +671,42 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"(the named one must never be re-made into another caller's record)"
         )
 
+    def a_crash_is_kept_only_when_complete_as_a_crash() -> tuple[bool, str]:
+        """Issue I-38: a crashed record complete as a crash is kept by --resume.
+
+        Before task A105 (v5-resume-fixes-and-tau-rule) every record whose
+        status was not ``ok`` was re-made, so each resumed campaign press
+        re-ran the 20 crashing starts and re-stamped them.  A crash record
+        with its identity, status, traceback and the pool's launcher stamps
+        must now be kept; the same record without the traceback, without the
+        launcher, or in the ``machinery`` row must still be re-made, each by
+        name.
+        """
+        job = _job()
+        record = _complete_record_of(job, campaign)
+        record["status"] = "crashed"
+        record["failure_class"] = "crashed"
+        record["traceback"] = (
+            "Traceback (most recent call last):\n  File \"x.py\", line 1, in run\n"
+            "RuntimeError: Failed to converge after 50 iterations, value is nan.\n"
+        )
+        record["launcher"] = {"spawned_at": 1.0, "returned_at": 2.0, "wall_s": 1.0}
+        kept = _why(record, job)
+        doctored = {
+            "traceback": dict(record, traceback=""),
+            "launcher": {k: v for k, v in record.items() if k != "launcher"},
+            "failure_class": dict(record, failure_class="machinery"),
+        }
+        whys = {name: _why(rec, job) for name, rec in doctored.items()}
+        caught = kept is None and all(
+            why is not None and name in why for name, why in whys.items()
+        )
+        return caught, (
+            f"a crash record with its identity, traceback and launcher stamps: "
+            f"{'kept' if kept is None else 'RE-MADE (' + kept + ')'}; "
+            + "; ".join(f"without its {name} (or machinery): {why!r}" for name, why in whys.items())
+        )
+
     def a_by_design_pair_made_to_collide() -> tuple[bool, str]:
         from . import gate_composition
 
@@ -752,6 +789,20 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             what="'delta' dropped from JOB_IDENTITY_FIELDS",
             must="refuse the classification (TypeError)",
             check=an_unclassified_job_field,
+        ),
+        Tooth(
+            name="a crash is kept only when complete as a crash",
+            what=(
+                "a complete crash record (status crashed, a result row, the "
+                "traceback's last line, the launcher stamps), then the same "
+                "record with its traceback emptied, its launcher removed, or "
+                "its failure class machinery"
+            ),
+            must=(
+                "keep the first under --resume and re-make each doctored "
+                "copy, naming what it lacks (issue I-38)"
+            ),
+            check=a_crash_is_kept_only_when_complete_as_a_crash,
         ),
         Tooth(
             name="a by-design pair made to collide",
