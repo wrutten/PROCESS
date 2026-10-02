@@ -525,3 +525,51 @@ The tables document's wall-clock tables are therefore the campaign's W = 3 recor
   (decision 1). They are not published anywhere.
 - **The "existing folders untouched" claim** rests on modification times (`find -newermt`) and on the two committed
   checks per run ID. I did not hash every file before and after.
+
+## 12. Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-02 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --name-only a75d024b..04eb25a9`: four files — `compare_campaigns.py` (new, read-only),
+`campaign_comparison.md` (its output), `paper_tables_write_set_tau1e-08.md` and this report; 0 diff lines under the V5
+driver copy, `process/`, the harness or V4; worktree clean; the script compiles. (2) `--runs` at the tip:
+`write_set_tau1e-08` holds 553 campaign records, all at `b44c88c4`; gate table 26 PASS, 1 FAIL, 2 not run. (3)
+`--paper-tables check` reads IDENTICAL under the three settings (cross-check 0 of 178 each). (4) The two older run-ID
+folders: `find -newermt '2026-10-02T10:30:00+02:00'` lists 0 entries. (5) **The headline ratios recounted by the
+orchestrator from the 275 phase B `metrics.json`, not through the agent's script** (`node_calls_solve_phase` summed over
+the starts every arm accepted): `B2/B0` 0.5859 / 0.4091 / 0.5582 and `B2/BR` 0.7204 / 0.4713 / 0.5877, seed sets
+22 / 11 / 23, accepted counts as §2 — the agent's figures to the last digit; the same recount gives the two older
+campaigns' published ratios (0.6395 / 0.4504 / 0.5331 and 0.5020 / 0.7031 / 1.2419). (6) **A check the agent did not
+make**: the distance between the partitioned arm's final design and the flat arm's (`B2` against `B1`, on `st` against
+`B0`; the largest relative difference over the iteration variables, per start). `st`: census 1e-8 median 9.4e-01, 14 of
+20 starts above 10 %; write set 1e-6 median 3.8e-06, 4 of 22 above 10 %; **write set 1e-8 median 4.6e-08, 1 of 23
+above 10 %**. `tok` and `lad`: 0 starts above 10 % in every campaign (medians ≤ 1.2e-11). So the walk of `st`'s
+partitioned arm along the flat direction, present at census 1e-8, is absent under the whole write set at 1e-8, in
+agreement with the agent's two bound counts (0 of 24 each). This is the orchestrator's ad-hoc reading of the records,
+not a committed script's output, and is not to be published as such. (7) The two gate conditions the agent cites, read
+in the code: `gate_count_neutrality.py:823–832` and `gate_output_path.py:446–449` both compare the test set with V4's
+and do not look at τ.
+
+**The two gates (issue I-43, filed at merge).** Under a run ID whose test set is V4's and whose τ is not, GC composes
+its sides at the run ID's τ and finds no before side, and G9 gates `B0` against GR's archived τ = 1e-6 record. Both are
+the gates reading "V4's criterion" as "the whole write set" where V4's criterion is "the whole write set at 1e-6". The
+G9 differences (node calls about +20 % on `B0`, `norm_objf` in the last hex digits; iterations, `ifail` and attempts
+equal) are what a tighter loop gives; that this is all they are is the agent's inference and the orchestrator's too, not
+a measurement. **The gate table of `write_set_tau1e-08` therefore reads 26 PASS, 1 FAIL, 2 not run, and the tables
+document's verification table carries the G9 FAIL.** Nothing was changed to make either pass, and nothing is changed at
+merge. The campaign's cells do not depend on either gate: G9 compares against another setting's record, and GC's
+straddle is a claim about the τ = 1e-6 fallback.
+
+**I-42, now observed.** After the gate presses the collision survey lists nine jobs (G6, G2, GT) resolving into GC's
+three entry-reference records, which under this run ID are records this task made, not copied ones. Nothing was
+overwritten. The issue stays open; its row gains this observation.
+
+**The agent's decisions.** Discarding the first launch (records split across two commits by the agent's own commit) and
+relaunching is what "from scratch means the stamps say so" asks for. Running the archived-records copy mid-campaign was
+forced by the lifted input files not existing in a fresh run ID; the brief had the order wrong, and the next campaign's
+brief puts the copy first. The two timing stages without a single-worker pass follow A106.
+
+**Limits carried.** The wall-clock tables have no validity check (no single-worker pass). The untouched-folders claim
+rests on modification times and the committed checks, not on per-file hashes. Why `tok` and `lad` walk the τ = 1e-6
+paths at 1e-8 while `st` does not is not explained. Which setting the paper's tables carry remains the user's question
+(OQ-tolerance, open).
