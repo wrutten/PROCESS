@@ -102,7 +102,7 @@ LABEL_VARIABLE = "HARNESS_COUNT_NEUTRALITY_LABEL"
 #: Committed with the driver change it straddles.  ``("copy", "copy")`` is the
 #: first press, at the copy commit before any change: one side, compared with
 #: itself, a determinism result.
-STRADDLE: tuple[str, str] = ("item5", "DR12")
+STRADDLE: tuple[str, str] = ("DR12", "DR13")
 
 #: The test set a labelled side is made under, where a change declares one.
 #: DR11 (A100 (v5-test-set)) made the test set a switch and V4's whole write
@@ -113,7 +113,7 @@ STRADDLE: tuple[str, str] = ("item5", "DR12")
 #: campaign and is not GC's business; a press under it is refused.  Every
 #: later side straddles DR11's and is made under the same value, so that the
 #: two sides of each straddle are one campaign.
-STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set", "item5": "write_set", "DR12": "write_set"}
+STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set", "item5": "write_set", "DR12": "write_set", "DR13": "write_set"}
 
 #: The sides made **with the wall-clock timers on** (driver change DR12, A101
 #: (v5-timers-and-once)): the DR12 side of GC is made under
@@ -121,7 +121,23 @@ STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set", "item5": "write_set", 
 #: exit state must be identical to the digit to the item-5 side's, made
 #: without the instrument -- the proof that the timers are observation-only.
 #: The other sides are made with the timers unset, as the gates are.
-STRADDLE_TIMERS: dict[str, bool] = {"DR12": True}
+STRADDLE_TIMERS: dict[str, bool] = {"DR12": True, "DR13": True}
+
+#: The sides made **with the block trace on** (driver change DR13, A115
+#: (v5-sweep-residual-trace)): the DR13 side is made with
+#: ``PROCESS_ARCH_BLOCK_TRACE`` set on every arm that runs a block loop (the
+#: reference arms run upstream's loop, where the driver refuses the trace) and,
+#: the side being made under the whole write set, with
+#: ``PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS`` naming the configuration's census
+#: artifact, so that the trace's whole DR13 path -- the census and non-census
+#: parts scored every sweep -- runs.  Every count and every exit state must be
+#: identical to the digit to the DR12 side's, made without it: the proof that
+#: the extended trace is observation-only.  The timers stay on (as on the DR12
+#: side), so the trace is the one difference.
+STRADDLE_BLOCK_TRACE: dict[str, bool] = {"DR13": True}
+
+#: The trace file a traced side writes, relative to the run's own folder.
+BLOCK_TRACE_FILE = "block_trace.jsonl"
 
 #: Record blocks that are **not counts by kind** and are never under a
 #: declared count path: the timers' accumulators and the launcher's wall
@@ -164,6 +180,8 @@ COUNT_RULE_DECLARATION: dict[str, str] = {
     "item5": "deferred_set_executed_once_at_evaluation_exit",
     # DR12 (the observation-only timers) moves no count and no exit state.
     "DR12": "identical",
+    # DR13 (the block trace's census / non-census parts): observation only.
+    "DR13": "identical",
 }
 
 #: The driver read-back that says whether a run executes the per-run set at
@@ -201,6 +219,8 @@ PRIME_CALLS_DECLARATION: dict[str, str] = {
     "item5": "identical",
     # DR12 (the timers): no count moves.
     "DR12": "identical",
+    # DR13 (the block trace's parts, A115): no count moves.
+    "DR13": "identical",
 }
 
 #: The evaluation phase's seed: the first displaced one, as gate G6 pairs the
@@ -311,6 +331,16 @@ def count_neutrality_jobs(
     from . import reproduction as reproduction_mod
 
     timers = STRADDLE_TIMERS.get(label, False)
+    traced = STRADDLE_BLOCK_TRACE.get(label, False)
+
+    def env_for(config, arm: str) -> dict[str, str]:
+        env = labelled(label)
+        if traced and arms_mod.ARMS[arm].mda != "upstream":
+            env["PROCESS_ARCH_BLOCK_TRACE"] = BLOCK_TRACE_FILE
+            if campaign.test_set == "write_set":
+                env["PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS"] = str(config.test_sets_path)
+        return env
+
     plan: list[tuple[str, str, str, pool_mod.Job]] = []
     for config in campaign.configurations:
         reference = references[config.name]
@@ -340,7 +370,7 @@ def count_neutrality_jobs(
                         entry_state=snapshot,
                         run_kind="gate",
                         timers=timers,
-                        override_env=labelled(label),
+                        override_env=env_for(config, arm),
                     ),
                 )
             )
@@ -361,7 +391,7 @@ def count_neutrality_jobs(
                         delta=None,
                         run_kind="gate",
                         timers=timers,
-                        override_env=labelled(label),
+                        override_env=env_for(config, arm),
                     ),
                 )
             )
@@ -969,6 +999,8 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
         "straddle_test_set_declaration": dict(STRADDLE_TEST_SET),
         "straddle_timers_declaration": dict(STRADDLE_TIMERS),
         "after_side_timers": bool(STRADDLE_TIMERS.get(after_label, False)),
+        "straddle_block_trace_declaration": dict(STRADDLE_BLOCK_TRACE),
+        "after_side_block_trace": bool(STRADDLE_BLOCK_TRACE.get(after_label, False)),
         "not_counts_by_kind": dict(NOT_COUNTS_BY_KIND),
         "population": (
             f"{straddle['says']}  {len(rows)} run pair(s) = "

@@ -1291,6 +1291,80 @@ def stage_supplementary(args: argparse.Namespace, campaign: Campaign) -> int:
     return 0 if all(r["status"] == "ok" for r in results) else 1
 
 
+def stage_traced_runs(args: argparse.Namespace, campaign: Campaign) -> int:
+    """The traced-run stage (``harness/traced_runs.py``; A115 (v5-sweep-residual-trace)).
+
+    ``list``: the declared job set's traced jobs, where each goes and the
+    ``--resume`` decision, and the campaign record each is compared with.
+    ``press``: run them with the block trace on, under the run ID's settings
+    composed as the campaign press composes them (the timers on), into
+    ``runs/<run ID>/traced_runs/<job set>/``, one compressed trace per run;
+    refused unless every traced job is its own identity in its own folder.
+    ``check``: every traced run against its campaign record (the neutrality
+    check), written to ``traced_runs/<job set>/neutrality.json``.
+    ``--configuration`` and ``--arm`` narrow the job set.
+    """
+    from harness import traced_runs as traced_mod  # noqa: PLC0415
+
+    job_set = traced_mod.JOB_SETS.get(args.traced_job_set)
+    if job_set is None:
+        print(f"  REFUSED — {args.traced_job_set!r} is not a declared job set: {sorted(traced_mod.JOB_SETS)}")
+        return 3
+    composed = campaign_press_composition(campaign)
+    narrow = {
+        "configurations": [args.configuration] if args.configuration else None,
+        "arms": [args.arm] if args.arm else None,
+    }
+    _rule(f"traced runs — {job_set.name} ({args.traced_runs}) under run ID {campaign.run_id}")
+    print(f"  {job_set.what}")
+    if args.traced_runs == "list":
+        lines = traced_mod.listing(composed, job_set, **narrow)
+        for line in lines:
+            print(f"    {line}")
+        print(f"  {len(lines)} traced job(s)")
+        return 0
+    out_dir = traced_mod.root(composed, job_set)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.traced_runs == "press":
+        try:
+            record = traced_mod.press(composed, job_set, resume=args.resume, **narrow)
+        except framework_mod.GateError as exc:
+            print(f"  REFUSED — {exc}")
+            return 3
+        for row in record["results"]:
+            print(f"    {row['key']}: {row['status']}{' (kept)' if row.get('resumed') else ''}")
+        n_compressed = sum(1 for c in record["compression"] if c["outcome"] == "compressed")
+        print(f"  {record['n_jobs']} job(s); {n_compressed} trace(s) compressed")
+        path = out_dir / f"press_{framework_mod.git_head()[:8]}.json"
+        path.write_text(json.dumps(record, indent=2, default=str) + "\n")
+        print(f"  record: {path}")
+        return 0 if all(r["status"] == "ok" for r in record["results"]) else 1
+    record = traced_mod.check(composed, job_set, **narrow)
+    print(
+        f"  {record['n_traced_present']} of {record['n_pairs']} traced run(s) on disk; "
+        f"{record['n_equal']} equal to their campaign record, {record['n_differing']} differing; "
+        f"{record['n_leaves_compared']} count leaves compared, {record['n_leaves_differing']} differing; "
+        f"{record['n_state_components_compared']} coupling-state components compared, "
+        f"{record['n_state_components_differing']} differing; trace consistent with its record on "
+        f"{record['n_trace_consistent']}"
+    )
+    for key in record["differing_keys"]:
+        row = next(r for r in record["rows"] if r["key"] == key)
+        print(f"    DIFFERS {key}: {[d['leaf'] for d in row['differing']][:8]} "
+              f"states {[s['file'] for s in row['state_files'] if not s['equal']]} identity {row['identity']}")
+    for key in record["inconsistent_trace_keys"]:
+        row = next(r for r in record["rows"] if r["key"] == key)
+        tc = row["trace_consistency"]
+        print(f"    TRACE {key}: lines {tc.get('n_lines')} vs {tc.get('record_n_call_models')}; "
+              f"{tc.get('trace_sweeps_by_block')} vs {tc.get('record_sweeps_by_block')}")
+    print(f"  traced records at {record['traced_commits']}, dirty {record['traced_dirty']}")
+    name = "neutrality" if not (args.configuration or args.arm) else "neutrality_narrowed"
+    path = out_dir / f"{name}.json"
+    path.write_text(json.dumps(record, indent=2, default=str) + "\n")
+    print(f"  record: {path}")
+    return 0 if record["n_differing"] == 0 else 1
+
+
 def _run_reference_stage(args: argparse.Namespace, campaign: Campaign) -> int:
     """The committed reproduction reference, shown or tabled, from the button.
 
@@ -1496,6 +1570,7 @@ def _reads_only(args: argparse.Namespace) -> bool:
     pressing = (
         args.selfcheck or args.reference or args.artifacts or args.census or args.timing
         or args.smoke_test_set or args.supplementary or args.smoke or args.campaign
+        or args.traced_runs in ("press", "check")
         or args.reading_stages or args.gate or args.measure or args.run
         or (args.copy_archived_records and args.apply) or args.run_isolation
         or (args.freeze_reproduction_records and args.apply)
@@ -1758,6 +1833,21 @@ def main(argv: list[str] | None = None) -> int:
         "st_regression seed-0 run made elsewhere, to compare with",
     )
     parser.add_argument(
+        "--traced-runs",
+        choices=("list", "press", "check"),
+        default=None,
+        help="the traced-run stage (harness/traced_runs.py; A115): campaign jobs "
+        "re-made with the block trace on under this run ID's settings, into "
+        "runs/<run ID>/traced_runs/<job set>/ -- 'list' the jobs, 'press' them "
+        "(--resume keeps complete records), 'check' each against its campaign "
+        "record; --configuration and --arm narrow it",
+    )
+    parser.add_argument(
+        "--traced-job-set",
+        default="sweep_residual",
+        help="for --traced-runs: the declared job set (traced_runs.JOB_SETS)",
+    )
+    parser.add_argument(
         "--supplementary",
         default=None,
         help="run one declared supplementary stage by name and stop (its own "
@@ -1937,6 +2027,9 @@ def _dispatch(args: argparse.Namespace, campaign: Campaign) -> int:
 
     if args.supplementary:
         return stage_supplementary(args, campaign)
+
+    if args.traced_runs:
+        return stage_traced_runs(args, campaign)
 
     if args.smoke:
         return stage_smoke(args, campaign)

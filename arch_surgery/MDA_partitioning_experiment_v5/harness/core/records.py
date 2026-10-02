@@ -118,8 +118,12 @@ FORMAT = "run-record-1"
 #: the kind of a declared supplementary stage (``config.SupplementaryStage``;
 #: V5 plan §3, A96 (st-trajectory-ladder)): a measurement reported **beside**
 #: the campaign's cell under its own test set and tolerance, never pooled
-#: with it and never a campaign record.
-RUN_KINDS: tuple[str, ...] = ("campaign", "gate", "smoke", "reference", "supplementary", "timing")
+#: with it and never a campaign record.  ``trace`` is the kind of the
+#: traced-run stage (``harness/traced_runs.py``; A115
+#: (v5-sweep-residual-trace)): a campaign job re-made with the block trace on,
+#: under its own root ``runs/<run ID>/traced_runs/``, compared with its
+#: campaign record and never pooled with it.
+RUN_KINDS: tuple[str, ...] = ("campaign", "gate", "smoke", "reference", "supplementary", "timing", "trace")
 
 #: How a run ended.  ``unconverged-at-cap`` is separate from ``unconverged``
 #: on purpose: upstream's own analysis loop raises after ten passes, and a

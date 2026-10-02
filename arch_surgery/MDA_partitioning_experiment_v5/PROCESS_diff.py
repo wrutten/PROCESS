@@ -97,6 +97,7 @@ _SCHEDULE_ONCE = "DR9 (A99): the block schedule and the per-call deferral sets r
 _TEST_SET = "DR11 (A100): switches PROCESS_ARCH_TEST_SET / PROCESS_ARCH_TEST_SETS -- which components each block loop tests: the block's whole write set (V4's predicate, the fallback of D39) or the committed census test sets (D32), selected by loop; what the loops bound is stamped once (LOOP_TEST_SETS)"
 _PREDICATE_RETIRED = "DR11 (A100): the 'mixed' ruler removed and PROCESS_ARCH_PREDICATE retired -- the frozen ruler is the only ruler (D30; V5 plan section 12 Q5)"
 _TIMERS = "DR12 (A101): switch PROCESS_ARCH_TIMERS -- observation-only wall-clock timers per node, sweep, convergence test, objective layer, evaluation, once-per-run set-up, solve phase and output path (TIMERS); unset, every hook is one 'is None' test (D33: context, never evidence)"
+_BLOCK_TRACE = "the observation-only block trace: switch PROCESS_ARCH_BLOCK_TRACE (A90) -- per evaluation, the evaluator's call site, the design point and each block's sweeps with every sweep's residual by module -- and, driver change DR13 (A115), every sweep also scored on the block's census and non-census components with the worst of each named (PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS under the whole write set) and the objective and constraints on the line; unset, nothing runs"
 _ONCE_AT_EXIT = "V5 list item 5 (A101): switch PROCESS_ARCH_DEFER_PER_RUN_EXECUTION -- where the per-run deferred set is executed once: at the output path (unset) or at the exit of every call_models (evaluation_exit, the evaluation phase's), counted like any other node call and sweep (D35)"
 
 ANNOTATIONS: list[Annotation] = [
@@ -275,6 +276,17 @@ ANNOTATIONS: list[Annotation] = [
     Annotation("process/core/caller.py", "run()", _TIMERS),
     Annotation("process/core/solver/solver_handler.py", "timers_solve", _TIMERS),
     Annotation("process/core/solver/solver_handler.py", "DR12", _TIMERS),
+    # --- A90 and A115: the block trace (DR13 extends it) --------------------
+    Annotation("process/core/solver/evaluators.py", "module_solve", _BLOCK_TRACE),
+    Annotation("process/core/solver/evaluators.py", "BLOCK_TRACE", _BLOCK_TRACE),
+    Annotation("process/core/solver/module_solve.py", "BLOCK_TRACE", _BLOCK_TRACE),
+    Annotation("process/core/solver/module_solve.py", "block_trace", _BLOCK_TRACE),
+    Annotation("process/core/solver/module_solve.py", "DR13", _BLOCK_TRACE),
+    Annotation("process/core/caller.py", "block_trace", _BLOCK_TRACE),
+    Annotation("process/core/caller.py", "trace_census", _BLOCK_TRACE),
+    Annotation("process/core/caller.py", "trace_parts", _BLOCK_TRACE),
+    Annotation("process/core/caller.py", "DR13", _BLOCK_TRACE),
+    Annotation("process/core/caller.py", "objf_hex", _BLOCK_TRACE),
 ]
 
 #: What driver change DR11 (task A100 (v5-test-set)) adds to three of the
@@ -610,6 +622,38 @@ _DR12_ADDENDA: dict[str, str] = {
     ),
 }
 for _path, _addendum in _DR12_ADDENDA.items():
+    SUMMARIES[_path] = SUMMARIES[_path] + _addendum
+
+#: The block trace (A90) and driver change DR13 (task A115
+#: (v5-sweep-residual-trace)), which extends it.  ``evaluators.py`` had no
+#: paragraph: A90's hunks there were unclaimed until A115 added one.
+SUMMARIES.setdefault("process/core/solver/evaluators.py", (
+    "The optimiser's evaluator labels each of its calls to call_models for the "
+    "block trace (A90 (m2-phasea-vs-phaseb)) -- the function evaluation, the "
+    "gradient column and sign, the reconcile call -- when PROCESS_ARCH_BLOCK_TRACE "
+    "is set, so the kind of an evaluation is read from the optimiser's own call "
+    "site.  The calls themselves are unchanged; unset, each label is one boolean "
+    "read."
+))
+_DR13_ADDENDA: dict[str, str] = {
+    "process/core/caller.py": (
+        "  Driver change DR13 (A115 (v5-sweep-residual-trace)) extends the block "
+        "trace, observation only: each sweep's trace entry is handed the two "
+        "snapshots the loop already compared and the block's parts (its census "
+        "test set and the rest of its write set), and the evaluation's line "
+        "carries the objective and the constraints as hex floats.  Every "
+        "statement is guarded by PROCESS_ARCH_BLOCK_TRACE."
+    ),
+    "process/core/solver/module_solve.py": (
+        "  Driver change DR13 (A115 (v5-sweep-residual-trace)) scores every "
+        "traced sweep on the block's census and non-census components with the "
+        "predicate's untimed residual, names each part's worst component and "
+        "those at or above tau, and adds PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS, "
+        "the census artifact a whole-write-set loop's trace is split by "
+        "(refused without the trace and under the census set)."
+    ),
+}
+for _path, _addendum in _DR13_ADDENDA.items():
     SUMMARIES[_path] = SUMMARIES[_path] + _addendum
 
 

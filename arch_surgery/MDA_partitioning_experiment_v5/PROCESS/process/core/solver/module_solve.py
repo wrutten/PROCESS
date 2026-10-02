@@ -170,6 +170,30 @@ Selection
     the flat arrangement that says which module held the one loop open last;
     in the partitioned one, how much each block was disturbed.  Unset — the
     default — every hook is a no-op (gate G1).
+
+    **Driver change DR13 (A115 (v5-sweep-residual-trace)), trace path only.**
+    Every sweep is also scored on two **parts** of the block's write set,
+    each with its worst component named: ``census`` (the block's census test
+    set) and ``non_census`` (the rest of the block's write set; the flat
+    block's write set is the whole coupling state).  Under
+    ``PROCESS_ARCH_TEST_SET=census`` the first part is what the loop tested
+    and the second is everything it did not; under ``write_set`` the two
+    split what it tested.  The test's own worst component is named beside its
+    maximum, and the evaluation's line carries the objective and the
+    constraint vector as hex floats.  The parts are scored from the two
+    snapshots the loop already read for its own test, with the predicate's
+    untimed ``residual`` -- no state is read that the loop does not read, no
+    counter or timer is touched, no branch changes.
+``PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS``
+    **DR13, observation only.**  Under ``PROCESS_ARCH_TEST_SET=write_set``
+    the census sets are not loaded by the loop, so the trace's split needs
+    them named: the configuration's committed census test-set artifact,
+    loaded with :func:`load_test_sets`' own checks for the loop this driver
+    runs.  Refused without the block trace (a setting that changes nothing)
+    and refused under ``census`` (the loop's own sets are the split there,
+    and a second source could disagree with them).  Unset under
+    ``write_set``, the trace scores one part, ``write_set``, and its header
+    says the split was not asked for.
 """
 
 from __future__ import annotations
@@ -554,6 +578,31 @@ if BLOCK_TRACE_ENABLED and not ENABLED:
         "absence it never measured."
     )
 
+#: DR13 (A115 (v5-sweep-residual-trace)): the census test-set artifact the
+#: block trace splits a write-set loop's score by.  Trace path only.
+BLOCK_TRACE_CENSUS_PATH: str | None = (
+    os.environ.get("PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS") or None
+)
+
+if BLOCK_TRACE_CENSUS_PATH and not BLOCK_TRACE_ENABLED:
+    raise ArchitectureRefusal(
+        "PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS is set without "
+        "PROCESS_ARCH_BLOCK_TRACE: it is read by the block trace alone, so "
+        "without it the setting would change nothing under the right name."
+    )
+
+if BLOCK_TRACE_CENSUS_PATH and TEST_SET != "write_set":
+    raise ArchitectureRefusal(
+        f"PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS is set with "
+        f"PROCESS_ARCH_TEST_SET={TEST_SET!r}: under 'census' the trace splits "
+        f"by the loop's own census sets, and a second artifact could disagree "
+        f"with them.  It is for a 'write_set' loop only."
+    )
+
+#: How many component names a part lists per sweep at or above tau: a disk
+#: guard, not a filter.  When it binds, the part says how many it dropped.
+BLOCK_TRACE_MAX_NAMED = 40
+
 #: What the optimiser's evaluator asked for, set immediately before each
 #: ``call_models`` and consumed (reset to ``None``) by the trace line that
 #: evaluation writes: ``["function"]``, ``["gradient", column, sign]`` or
@@ -589,15 +638,138 @@ def block_trace_modules(spec, subsets) -> tuple:
     return names, lookup
 
 
-def block_trace_sweep(res, modules, tau) -> dict:
+#: DR13: the parts each block's sweep is scored on, by block label, built once
+#: per run (``block_trace_parts``) and written into the trace's header.
+_BLOCK_TRACE_PARTS: dict = {}
+_BLOCK_TRACE_PARTS_INFO: dict = {}
+_BLOCK_TRACE_CENSUS: dict = {}
+
+
+def block_trace_census_sets(spec, tests, *, loop_key: str):
+    """DR13: the census sets the trace splits a block's write set by, or None.
+
+    Under ``census`` they are the loop's own test sets (*tests*).  Under
+    ``write_set`` they are read from :data:`BLOCK_TRACE_CENSUS_PATH` with
+    :func:`load_test_sets` -- the same two checks, the same loop key -- or
+    are ``None`` when no artifact was named (one part only).  Trace path
+    only; nothing here is read by a loop.
+    """
+    if TEST_SET == "census":
+        return tests
+    if not BLOCK_TRACE_CENSUS_PATH:
+        return None
+    cached = _BLOCK_TRACE_CENSUS.get(loop_key)
+    if cached is None:
+        cached, _prov = load_test_sets(spec, BLOCK_TRACE_CENSUS_PATH, loop_key=loop_key)
+        _BLOCK_TRACE_CENSUS[loop_key] = cached
+    return cached
+
+
+def block_trace_parts(spec, label, write_subset, census_sets) -> dict:
+    """DR13: ``{part name: sorted component indices}`` for one block.
+
+    The block's write set is *write_subset* (``None``: the whole coupling
+    state, which is the flat block's).  With *census_sets* the parts are
+    ``census`` -- the block's census set as the census loop tests it -- and
+    ``non_census`` -- the write set less it; without, one part,
+    ``write_set``.  Built once per block label and cached; the header of the
+    trace records each part's size and the census components that lie
+    outside the block's write set.
+    """
+    cached = _BLOCK_TRACE_PARTS.get(label)
+    if cached is not None:
+        return cached
+    write = (
+        list(range(len(spec.keys))) if write_subset is None
+        else sorted(int(i) for i in write_subset)
+    )
+    if census_sets is None:
+        parts = {"write_set": write}
+        info = {"write_set": len(write), "census_split": False}
+    else:
+        census = sorted(int(i) for i in (census_sets.get(label) or ()))
+        cset = set(census)
+        parts = {
+            "census": census,
+            "non_census": [i for i in write if i not in cset],
+        }
+        wset = set(write)
+        info = {
+            "census": len(census),
+            "non_census": len(parts["non_census"]),
+            "write_set": len(write),
+            "census_split": True,
+            "census_outside_write_set": sorted(
+                spec.name(i) for i in census if i not in wset
+            ),
+        }
+    _BLOCK_TRACE_PARTS[label] = parts
+    _BLOCK_TRACE_PARTS_INFO[label] = info
+    return parts
+
+
+def _block_trace_part(spec, y_prev, y, sel, tau) -> dict:
+    """DR13: one part's score for one sweep, from the loop's own snapshots.
+
+    The predicate's own untimed ``residual`` over *sel*: its maximum, the
+    component it is on, how many components reach ``tau`` and, up to
+    :data:`BLOCK_TRACE_MAX_NAMED`, their names; the discrete mismatches,
+    moved constants and new NaNs by name.  An empty part reads 0.
+    """
+    if not sel:
+        return {"max": 0.0, "argmax": None, "n_above": 0}
+    res = spec.residual(y_prev, y, subset=sel, ruler=PREDICATE_MODE)
+    above = res.above(tau)
+    out: dict = {
+        "max": res.max,
+        "argmax": None if res.argmax is None else spec.name(res.argmax),
+        "n_above": len(above),
+    }
+    if above:
+        out["above"] = [spec.name(i) for i in above[:BLOCK_TRACE_MAX_NAMED]]
+        if len(above) > BLOCK_TRACE_MAX_NAMED:
+            out["above_truncated"] = len(above) - BLOCK_TRACE_MAX_NAMED
+    for key, idx in (
+        ("discrete_mismatch", res.mismatch_discrete),
+        ("moved_constant", res.moved_constant),
+        ("nan_new", res.nan_new),
+    ):
+        if idx:
+            out[key] = [spec.name(i) for i in idx[:BLOCK_TRACE_MAX_NAMED]]
+    return out
+
+
+def block_trace_sweep(
+    res, modules, tau, *, spec=None, y_prev=None, y=None, parts=None
+) -> dict:
     """One sweep's residual, split by module: its max and whether it is open.
 
     A module is *open* after a sweep when its own components would fail the
     convergence test at ``tau``: a scaled step at or above ``tau``, or a
     discrete mismatch, a moved constant or a new NaN among them.  Only the
     modules the residual scored appear.
+
+    DR13: with *parts* (and the two snapshots the loop compared), the sweep
+    is also scored on each part of the block's write set
+    (:func:`block_trace_parts`), and the test's own worst component is named.
     """
     import numpy as np  # noqa: PLC0415 - trace path only
+
+    if parts is not None:
+        out = _block_trace_sweep_modules(res, modules, tau, np)
+        out["test_argmax"] = (
+            None if res.argmax is None else spec.name(res.argmax)
+        )
+        out["parts"] = {
+            name: _block_trace_part(spec, y_prev, y, sel, tau)
+            for name, sel in parts.items()
+        }
+        return out
+    return _block_trace_sweep_modules(res, modules, tau, np)
+
+
+def _block_trace_sweep_modules(res, modules, tau, np) -> dict:
+    """The per-module split of one sweep's test residual (A90)."""
 
     names, lookup = modules
     idx_c = np.asarray(res.idx_c, dtype=int)
@@ -630,6 +802,13 @@ def block_trace_write(record: dict) -> None:
             "mda": MDA_MODE,
             "tau": TAU,
             "predicate_mode": PREDICATE_MODE,
+            # DR13 (A115): what each block's parts are, and from where.
+            "test_set": TEST_SET,
+            "census_sets_for_the_split": (
+                TEST_SETS_PATH if TEST_SET == "census"
+                else BLOCK_TRACE_CENSUS_PATH
+            ),
+            "parts_by_block": dict(_BLOCK_TRACE_PARTS_INFO),
         }) + "\n")
     _BLOCK_TRACE_FILE.write(json.dumps(record) + "\n")
     _BLOCK_TRACE_FILE.flush()

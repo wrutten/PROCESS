@@ -103,9 +103,13 @@ with the rungs beside.
 | campaign settings (one value for every arm and both phases) | `test_set` (`census` / `write_set`), `tolerance` (τ), `test_sets`, `coupling_state`, `write_sets` (the artifacts), `defer_per_run_execution` (phase A's deferring arm, §7) | `core/config.Campaign` and the phase |
 | instruments (observe a run, never change it; `switches.INSTRUMENT_SWITCHES`) | `timers` | `Campaign.timers`: off for the gates, on for the campaign press and the timing stages |
 
-The pass and block traces (`pass_trace`, `pass_trace_full_from`, `block_trace`) are debugging
-instruments cleared before every arm and never composed; the `predicate_mode` switch is retired with
-the `mixed` ruler (DR11).
+The pass and block traces (`pass_trace`, `pass_trace_full_from`, `block_trace`,
+`block_trace_census_sets`) are instruments cleared before every arm and never composed; the block trace
+is set by one stage, the traced runs (§10, `harness/traced_runs.py`), through a job's `override_env`.
+Driver change **DR13** (A115 (v5-sweep-residual-trace)) extends the block trace, observation only: every
+sweep is also scored on the block's census and non-census components, each part's worst component
+named, and the line carries the objective and constraints (`PROCESS/CHANGES.md` §§4.2.11, 4.5.19). The
+`predicate_mode` switch is retired with the `mixed` ruler (DR11).
 
 ---
 
@@ -208,7 +212,10 @@ per-sweep form (its part (ii) reads GC's DR9 → DR10 straddle, a one-time resul
 of both phases, every arm and one seed per configuration, node calls, sweeps, predicate evaluations,
 components compared and every exit state identical to the digit before and after the change, with any
 declared move (item 5's one sweep, DR10's prime count) predicted by a declared rule and every undeclared
-move a mismatch. Its last straddle is `item5 → DR12`.
+move a mismatch. Its last straddle is `DR12 → DR13`: the DR13 side made under the whole write set with
+the timers on (as DR12's) **and the block trace on** every block-loop arm, with the census split
+(`STRADDLE_BLOCK_TRACE`), so that every count and exit state identical to the DR12 side's is the proof
+the extended trace observes only.
 
 ---
 
@@ -299,6 +306,19 @@ on `st_regression` under the census set at **τ = 1e-12**, the rung where the ce
 the optimiser's path returns (A96). Its records are stamped `supplementary` under
 `runs/supplementary/<name>/`, carry their own τ in the job identity, and are **reported beside the
 campaign, never pooled** (`measurement/tally_supplementary.py`, `--measure tally_supplementary`).
+
+**The traced runs** (`--traced-runs list | press | check`; `harness/traced_runs.py`; A115): a declared
+job set (`traced_runs.JOB_SETS`) of the campaign's own jobs re-made with the block trace on, under the
+run ID's settings composed as the campaign press composes them, stamped run kind `trace`
+(`records.RUN_KINDS`), into `runs/<run ID>/traced_runs/<job set>/`, one compressed trace per run
+(`block_trace.jsonl.gz`, written and verified as the pool's close-out writes the PROCESS log). Each traced
+job differs from its campaign job in `run_kind` and `override_env` only, so its digest is its own; the
+press refuses unless every traced job resolves to its own named directory. `check` compares every traced
+run with its campaign record — the declared count leaves, the optimum's hex floats, every coupling-state
+file component by component, and the identities field by field — and records the trace's own
+consistency with the record; written to `traced_runs/<job set>/neutrality.json`. Never pooled, never in a
+published population. The reading of the traces is `stopping_sweep_residuals.py` at the experiment's top
+level.
 
 **The tally** (`--measure tally_evaluation`, `tally_optimisation`, `tally_supplementary`) summarises the
 records into captioned tables over one declared population per phase (`tally.published_sources`: the
@@ -412,6 +432,7 @@ runs/
 | `campaign/entry_references/`, `campaign/evaluation/<configuration>/<arm>/seedNNN/`, `campaign/optimisation/…` | the campaign's records (553 in `census_tau1e-08`: 3 entry references, 275 evaluations, 275 optimisations) and `campaign/press.json` |
 | `smoke/` | the smoke chain's records and `smoke/press.json` |
 | `supplementary/<stage>/<configuration>/<arm>/seedNNN/` | the supplementary stage's records, pressed beside this run ID's campaign |
+| `traced_runs/<job set>/{evaluation,optimisation}/<configuration>/<arm>/seedNNN/` | the traced runs (§10; run kind `trace`), each with `block_trace.jsonl.gz`; `neutrality.json` and `press_<commit>.json` beside |
 | `gates/_runs/` | the shared pool: every gate's runs, one directory per job digest. A job that names no directory resolves here, or by digest to a record elsewhere **in this run ID's folder** — never into another gate's root `gates/<gate>/` (issue I-36), never into another run ID's folder |
 | `gates/<gate>/gate.json`, `gates/<stage>/measurements.json` | the verdict records and the measurement stages' records (the tallies, `gate_table`), each stamped with the run ID (`run`) |
 | `timing/<stage>/` | the timing stages' records and their `measurements.json` |
@@ -533,6 +554,7 @@ python paper_cells_recount.py                        # the independent recount o
 python experiment_runner.py --census take --resume   # the census stage (write: also into harness/data/)
 python experiment_runner.py --timing validity        # repeatability | timers-off | validity | seed-set | cache-load | tables
 python experiment_runner.py --supplementary st_census_exact --resume
+python experiment_runner.py --traced-runs press --resume      # the traced runs (list | press | check; --traced-job-set, --configuration, --arm)
 python experiment_runner.py --smoke                  # the chain once, one seed, cheapest configuration, smoke records
 python experiment_runner.py --campaign --resume      # the campaign (refused unless EXECUTION_APPROVED)
 python experiment_runner.py --run --arm B2 --configuration st_regression --seed 0   # one run, never a campaign record
@@ -556,6 +578,11 @@ unless `--runs` names another run ID's folder (with `--document paper_tables_<ru
 ---
 
 ## Change log
+
+- **2026-10-02, A115 (v5-sweep-residual-trace):** driver change DR13 — the block trace scores every sweep
+  on the block's census and non-census components (`PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS` under the whole
+  write set) and carries the objective and constraints (§3); gate GC's straddle `DR12 → DR13`, the DR13
+  side with the trace on (§6); the traced-run stage `--traced-runs` and run kind `trace` (§§10, 12, 13).
 
 - **2026-10-01, A112 (v5-reproduction-records-read-only):** the reproduction gate's records read from a read-only archive,
   `gates/reproduction/pool_records/`, which `pool.run` refuses to write (I-41; §§11, 12); `--freeze-reproduction-records`,

@@ -1892,6 +1892,17 @@ class Caller:
             if block_trace is not None
             else None
         )
+        # DR13 (A115 (v5-sweep-residual-trace)): the census sets each block's
+        # write set is split by in the trace.  Trace path only.
+        trace_census = (
+            module_solve.block_trace_census_sets(
+                spec,
+                tests,
+                loop_key=f"{module_solve.MDA_MODE}/{subsolve.BURN_TIME_OWNER}",
+            )
+            if block_trace is not None
+            else None
+        )
 
         def charge() -> None:
             nonlocal block_sweeps
@@ -1953,6 +1964,14 @@ class Caller:
             # arrangement's single block.  One integer, resolved once per block
             # rather than per sweep.
             width = len(subset) if subset is not None else len(spec.keys)
+            # DR13: the parts of this block's write set the trace scores.
+            trace_parts = (
+                module_solve.block_trace_parts(
+                    spec, label, subsets.get(label), trace_census
+                )
+                if block_trace is not None
+                else None
+            )
             y_prev = read(bound)
             inner_ok = False
             s = 0
@@ -1996,7 +2015,10 @@ class Caller:
                     )
                 if block_trace is not None:
                     block_trace.setdefault(label, []).append(
-                        module_solve.block_trace_sweep(res, trace_modules, tau)
+                        module_solve.block_trace_sweep(
+                            res, trace_modules, tau,
+                            spec=spec, y_prev=y_prev, y=y, parts=trace_parts,
+                        )
                     )
                 y_prev = y
                 if res.converged(tau):
@@ -2040,15 +2062,21 @@ class Caller:
         )
         _roll_up(self.module_solve_stats)
         if block_trace is not None:
-            self._block_trace_line(xc, inner_counts, block_trace, True)
+            self._block_trace_line(
+                xc, inner_counts, block_trace, True, objf=objf, conf=conf
+            )
         return objf, conf
 
-    def _block_trace_line(self, xc, inner_counts, block_trace, converged) -> None:
+    def _block_trace_line(
+        self, xc, inner_counts, block_trace, converged, *, objf=None, conf=None
+    ) -> None:
         """A90 (m2-phasea-vs-phaseb): one evaluation's line of the block trace.
 
         Called only with PROCESS_ARCH_BLOCK_TRACE set.  Reads and consumes the
         evaluation kind the optimiser's evaluator set; writes nothing the run
-        computes with.
+        computes with.  DR13 (A115): the objective and the constraint vector
+        the evaluation returns, as hex floats (null on the block-cap refusal,
+        which computes neither).
         """
         module_solve.block_trace_write({
             "call": MDA_TOTALS["n_call_models"],
@@ -2057,6 +2085,8 @@ class Caller:
             "x": [float(v).hex() for v in xc],
             "converged": converged,
             "sweeps": {k: sum(v) for k, v in inner_counts.items()},
+            "objf_hex": None if objf is None else float(objf).hex(),
+            "conf_hex": None if conf is None else [float(v).hex() for v in conf],
             "per_sweep": block_trace,
         })
         module_solve.EVALUATION_KIND = None
