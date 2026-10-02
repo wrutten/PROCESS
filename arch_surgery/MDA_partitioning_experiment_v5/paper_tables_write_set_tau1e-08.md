@@ -494,17 +494,17 @@ Per configuration and arm: the starts offered, the accepted optima (`status == o
 
 One row per check of plan §8, in its order. A gate's verdict is read from its record through the `gate_table` stage record, which this generator refuses when the verdict records have been re-made, removed or added to since the stage ran; `not pressed` is a gate with no verdict record (a declared placeholder that refuses, or one never pressed) or a rule that is not yet a construction. A verdict is PASS only with every tooth tripped.
 
-*the gate_table stage record read 28 record(s) at ['b484d8073e6d0c2fb34a0c9be9b4530eef5332c9'], and every one of them is byte-identical to what is on disk now*
+*the gate_table stage record read 28 record(s) at ['5447cca3148a0cbf96084238bd3e2ca7a63bb705'], and every one of them is byte-identical to what is on disk now*
 
 | check | plan | verdict | detail |
 |---|---|---|---|
-| physics frozen | G0 | **PASS** | `g0prime` at `b484d807`: 1 of 77 mismatched; 4/4 teeth |
-| switch neutrality | G1 | **PASS** | `switch_neutrality` at `b484d807`: 0 of 54973 mismatched; 10/10 teeth |
+| physics frozen | G0 | **PASS** | `g0prime` at `5447cca3`: 1 of 77 mismatched; 4/4 teeth |
+| switch neutrality | G1 | **PASS** | `switch_neutrality` at `5447cca3`: 0 of 54973 mismatched; 10/10 teeth |
 | matched accuracy — whole-state audit at 0 components above τ | A1 | **PASS** | `tok` A2/A1: similarity PASS, runs with a component ≥ τ A1 0 / A2 0 → **PASS**; `lad` A2/A1: similarity PASS, runs with a component ≥ τ A1 0 / A2 0 → **PASS**; `st` A2/A0: similarity PASS, runs with a component ≥ τ A0 0 / A2 0 → **PASS** (whole-state statistic, D36; the second half of the rule is the count column) |
 | fixed-point distance between arms | A2 | **reported, no rule** | the tally's fixed-point distance table (plan §5 A2) |
 | same optimum, attributed where it fails | B1 | **PASS tok, st · FAIL lad** | `tok` B0 → B1 PASS, B0 → B2 PASS (objf p90 4.6e-11 ≤ 1.0e-06; 0 hops of 22); `lad` B0 → B1 FAIL, B0 → B2 FAIL at p90 (objf p90 2.1e-06 > 1.0e-06): 3 hops of 11 (1 across clusters; seeds 1*, 11, 13), entering at B0 → B1 (the lift) 3 of 3; B1 → B2 (the partition) adds none: objf median 8.1e-15, p90 3.7e-14, same path on 11 of 11; the yardstick BR → B0 also hops on 0 of 3 of these seeds; `st` B0 → B2 PASS (objf p90 3.4e-10 ≤ 1.0e-06; 2 hops of 23) (hop: objective difference above the floor; * = a retried arm; the tally's `same optimum by rung` table, plan §5 B1) |
-| entry pairing | G6 | **PASS** | `entry_and_warm` at `b484d807`: 0 of 6717 mismatched; 3/3 teeth |
-| arm composition | G5 | **FAIL** | `switch_composition` at `b484d807`: 3 of 159 mismatched; 4/4 teeth |
-| output-path equivalence | G9 | **PASS** | `output_path` at `b484d807`: 0 of 3879 mismatched; 5/5 teeth |
+| entry pairing | G6 | **PASS** | `entry_and_warm` at `5447cca3`: 0 of 6717 mismatched; 3/3 teeth |
+| arm composition | G5 | **PASS** | `switch_composition` at `5447cca3`: 0 of 159 mismatched; 4/4 teeth |
+| output-path equivalence | G9 | **PASS** | `output_path` at `5447cca3`: 0 of 3879 mismatched; 5/5 teeth |
 | the test set's teeth | GT | **not pressed** | `test_set` has no verdict record |
 
