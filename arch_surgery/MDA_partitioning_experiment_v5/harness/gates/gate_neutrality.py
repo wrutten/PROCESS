@@ -188,6 +188,21 @@ ALWAYS_EXCLUDED: dict[str, str] = {
     "evaluation_warmup.restore_wall_s": "the whole-structure restore's wall: context, never evidence",
     "evaluation_warmup.warmup_wall_s": "the warm-up's wall: context, never evidence",
     "wall_s": "wall clock is context, never evidence (I-10)",
+    # A116 (v5-gate-criterion-keys; issue I-45): the snapshot hook's own
+    # stopwatch (child.install_exit_snapshot: time.perf_counter() summed over
+    # the hook's calls).  Compared, and differing on every BR pair, from the
+    # first straddle whose two sides both carry the snapshot block
+    # (3211f50e -> d1e94dc8, A115: 3 of 4 614 values, 0 of 51 319 output-file
+    # lines).  The exclusion review measured it before it was listed: the
+    # only compared leaf named as a timing that differs, a non-negative float
+    # on every side, with the other compared leaves of its block equal (72
+    # over the three pairs, at 2c5e281a under census_tau1e-08) --
+    # the stopwatch moved and the snapshots it timed did not.
+    "audit_snapshot.wall_s": (
+        "the exit-snapshot hook's wall: context, never evidence.  The "
+        "positions it reached, their component counts and digests sit beside "
+        "it in the same block and are compared"
+    ),
     "cpu_user_s": "cpu time is a contention diagnostic",
     "cpu_sys_s": "cpu time is a contention diagnostic",
     "cpu_s": "cpu time is a contention diagnostic",
@@ -550,17 +565,6 @@ FIELDS_ADDED_BY_A_DRIVER_CHANGE: dict[str, str] = {
 #: default condition would compare 0 against 122 and fail -- reporting the
 #: absence of a computation as a difference in behaviour.
 CONDITIONAL_WITNESS: dict[str, str] = {
-    # The digest is a function of the identity's fields.  DR11 (A100
-    # (v5-test-set)) added two identity fields, the test set and the
-    # tolerance, rendered where they differ from V4's values -- so across the
-    # DR11 commit the same job's digest moves although every field both
-    # sides carry agrees (the identity's leaves are compared one by one under
-    # the conditional name above).  Witnessed by one of the added fields:
-    # where it is present on exactly one side the digest was computed over
-    # two field sets and is excluded; where it is present on both, or on
-    # neither (two fallback captures, or two captures before DR11), the
-    # digests were computed over the same fields and are compared.
-    "job_digest": "job_identity.test_set",
     "exit_audit.frozen.n_excluded_from_the_restricted_statistic": (
         "exit_audit.frozen.restricted"
     ),
@@ -568,6 +572,51 @@ CONDITIONAL_WITNESS: dict[str, str] = {
         "exit_audit.mixed.restricted"
     ),
 }
+
+#: A conditional name that is a **digest of a block**, and that block: the
+#: name is compared only where both sides computed it over the same field set
+#: -- the same top-level keys of the block -- and excluded where they did not
+#: (one side lacks the block, or the two blocks render different fields).
+#:
+#: The live case is the job digest, sha256 over the canonical JSON of the job
+#: identity (``records.job_digest``).  DR11 (A100 (v5-test-set)) added two
+#: identity fields, the test set and the tolerance, each rendered **only where
+#: it differs from V4's value** -- so the same job's digest moves across the
+#: DR11 commit although every field both sides carry agrees, and two captures
+#: under one test set at two tolerances render different field sets.  The
+#: identity's own leaves are compared one by one under the conditional name
+#: ``job_identity``; the digest adds a comparison only where its inputs are the
+#: same fields.  Until A116 (v5-gate-criterion-keys; issue I-43) the witness
+#: was one field, ``job_identity.test_set``, present on exactly one side; under
+#: ``census_tau1e-06`` the test set is on both sides while the tolerance is
+#: rendered on one, so two digests over two field sets were compared and
+#: differed on 6 of 6 pairs, 0 of 51 319 output-file lines differing (A114).
+#: A tooth shows the other half: a digest that differs over the same field set
+#: still FAILs.
+FIELD_SET_WITNESS: dict[str, str] = {
+    "job_digest": "job_identity",
+}
+
+
+def _field_set(document: Mapping[str, Any], path: str) -> frozenset[str] | None:
+    """The top-level keys of the block at *path*, or None where it is absent,
+    null or not a mapping."""
+    if not records_mod.has_path(document, path):
+        return None
+    block = records_mod.resolve_path(document, path)
+    return frozenset(block) if isinstance(block, Mapping) else None
+
+
+def _field_set_witness(path: str, conditional: Mapping[str, str]) -> str | None:
+    """The block whose field set decides whether *path* is compared, or None.
+    Only names the caller's own conditional table holds can have one."""
+    bare = path.split("[")[0]
+    for name, block in FIELD_SET_WITNESS.items():
+        if name not in conditional:
+            continue
+        if bare == name or bare.startswith(name + "."):
+            return block
+    return None
 
 #: The record path that says **which instrument** made a record's exit-audit
 #: residual.  A record written before the instrument existed carries nothing
@@ -1117,7 +1166,14 @@ def compare_records(
             instrument_compared.append(path)
         if conditional is not None and is_volatile(path, conditional) is not None:
             witness = _conditional_witness(path, conditional)
-            if witness is not None and (
+            field_block = _field_set_witness(path, conditional)
+            fields_a = _field_set(before, field_block) if field_block else None
+            fields_b = _field_set(after, field_block) if field_block else None
+            if field_block is not None and (fields_a is not None or fields_b is not None):
+                # A digest of a block: compared only over the same field set
+                # (FIELD_SET_WITNESS; A116, issue I-43).
+                one_sided = fields_a != fields_b
+            elif witness is not None and (
                 _block_present(before, witness) or _block_present(after, witness)
             ):
                 one_sided = _block_present(before, witness) != _block_present(
@@ -1927,7 +1983,77 @@ def _neutrality_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"rename — the map covers renames and nothing else"
         )
 
+    def a_digest_moved_over_the_same_field_set() -> tuple[bool, str]:
+        """The job digest is compared wherever both sides computed it over the
+        same field set, and only there (A116 (v5-gate-criterion-keys); issue
+        I-43).
+
+        Part 1: one hex digit of ``job_digest`` changed on a copy of a captured
+        record, compared with the record itself -- the same identity, the same
+        field set -- must be the one mismatch, named.  Part 2: the same moved
+        digest with the identity's ``tau`` field rendered on one side only (the
+        shape of a census capture at 1e-8 against one at 1e-6, where τ is
+        rendered only when it differs from V4's) must be excluded, with nothing
+        differing.  Witnessed by the test set alone, as before A116, part 2
+        compares the two digests and the tooth does not trip.
+        """
+        for side in ("after", "before"):
+            for config in campaign.configurations:
+                directory = neutrality_run_dir(campaign, side, config.name, "BR")
+                if not (Path(directory) / "metrics.json").exists():
+                    continue
+                record = _read_record(directory, side=side, key=f"BR/{config.name}")
+                if isinstance(record.get("job_digest"), str) and isinstance(
+                    record.get("job_identity"), Mapping
+                ):
+                    break
+            else:
+                continue
+            break
+        else:
+            return False, "no capture carries a job identity and its digest"
+        tables = dict(
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+        )
+        digest = record["job_digest"]
+        moved = copy.deepcopy(record)
+        moved["job_digest"] = digest[:-1] + ("0" if digest[-1] != "0" else "1")
+        same_fields = compare_records(record, moved, **tables)
+        caught = same_fields["n_mismatched"] == 1 and same_fields["mismatches"][0]["field"] == "job_digest"
+        other = copy.deepcopy(moved)
+        if "tau" in other["job_identity"]:
+            del other["job_identity"]["tau"]
+            shape = "tau removed from one side's identity"
+        else:
+            other["job_identity"]["tau"] = 1e-08
+            shape = "tau added to one side's identity"
+        other_fields = compare_records(record, other, **tables)
+        excluded = (
+            "job_digest" in other_fields["conditionally_excluded"]
+            and other_fields["n_mismatched"] == 0
+        )
+        return caught and excluded, (
+            f"on BR/{config.name} ({side} side), job_digest {digest[-6:]} -> "
+            f"{moved['job_digest'][-6:]}: over the same field set "
+            f"{same_fields['n_mismatched']} of {same_fields['n_compared']} values "
+            f"differ ({[m['field'] for m in same_fields['mismatches']]}); with "
+            f"{shape} the digest is "
+            f"{'excluded' if 'job_digest' in other_fields['conditionally_excluded'] else 'COMPARED'} "
+            f"and {other_fields['n_mismatched']} of {other_fields['n_compared']} differ"
+        )
+
     return (
+        Tooth(
+            "a_digest_moved_over_the_same_field_set",
+            "one hex digit of job_digest changed on a copy of a captured record, "
+            "compared over the same identity field set, and again with tau "
+            "rendered in one side's identity only",
+            "be caught and named over the same field set, and excluded only "
+            "where the field sets differ",
+            a_digest_moved_over_the_same_field_set,
+        ),
         Tooth(
             "a_renamed_field_moved_by_one",
             "one renamed integer moved by one on a record rewritten into the "

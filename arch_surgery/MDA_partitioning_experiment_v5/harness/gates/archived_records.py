@@ -58,7 +58,6 @@ selected.
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as _dt
 import hashlib
 import json
@@ -104,16 +103,13 @@ def _reproduction_jobs(campaign: Campaign) -> tuple[Campaign, list[pool_mod.Job]
 
 def _count_neutrality_jobs(campaign: Campaign) -> tuple[Campaign, list[pool_mod.Job]]:
     """GC's references and **both** labelled sides, composed as its body
-    composes them: under the declared straddle test set."""
+    composes them: under the declared straddle criterion, the test set at its
+    declared τ (``gate_count_neutrality.declared_campaign``; keyed on the test
+    set and τ together since A116, issue I-43)."""
     from . import gate_count_neutrality as gc_mod  # noqa: PLC0415
     from . import gates as gates_mod  # noqa: PLC0415
 
-    declared = gc_mod.STRADDLE_TEST_SET.get(gc_mod.STRADDLE[1])
-    composed = (
-        dataclasses.replace(campaign, test_set=declared, tau=None)
-        if declared is not None and campaign.test_set != declared
-        else campaign
-    )
+    composed = gc_mod.declared_campaign(campaign)
     references = gates_mod.entry_references_from_records(composed)
     jobs = list(gates_mod.entry_reference_jobs(composed))
     for label in dict.fromkeys(gc_mod.STRADDLE):
@@ -141,7 +137,7 @@ ARCHIVES: tuple[Archive, ...] = (
     Archive(
         gate="count_neutrality",
         what="GC's straddle records, one per driver change, and the pool records of its references and both labelled sides",
-        why_read_only="each side is made at the commit of its label and never re-made; its test set is GC's declared straddle set whatever the campaign, so the same jobs under every run ID; G2 part (ii) reads the DR9 -> DR10 straddle",
+        why_read_only="each side is made at the commit of its label and never re-made; its test set and τ are GC's declared straddle criterion whatever the campaign, so the same jobs under every run ID; G2 part (ii) reads the DR9 -> DR10 straddle",
         paths=("gates/count_neutrality/straddles",),
         jobs=_count_neutrality_jobs,
     ),
@@ -427,14 +423,11 @@ def report(block: Mapping[str, Any], resolved: Mapping[str, Any] | None = None) 
 
 def _settings_are_v4s(campaign: Campaign) -> bool:
     """Whether *campaign*'s settings are V4's own -- the reproduction gate's
-    criterion -- so that its campaign composition renders GR's identities."""
-    from ..core.config import TAU_BY_TEST_SET, V4_TEST_SET  # noqa: PLC0415
+    criterion -- so that its campaign composition renders GR's identities.
+    The one construction is ``config.is_v4_criterion`` (A116)."""
+    from ..core.config import is_v4_criterion  # noqa: PLC0415
 
-    return (
-        campaign.test_set == V4_TEST_SET
-        and campaign.tau_rule is None
-        and all(float(campaign.tau_for(c)) == float(TAU_BY_TEST_SET[V4_TEST_SET]) for c in campaign.configurations)
-    )
+    return is_v4_criterion(campaign)
 
 
 def freeze_reproduction_records(campaign: Campaign, *, apply: bool) -> dict[str, Any]:

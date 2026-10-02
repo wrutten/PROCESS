@@ -37,7 +37,7 @@ from harness.experiment import arms as arms_mod  # noqa: E402
 from harness.core import framework  # noqa: E402
 from harness.experiment import input_files as input_files_mod  # noqa: E402
 from harness.core import pool as pool_mod  # noqa: E402
-from harness.core.config import V4_TEST_SET  # noqa: E402
+from harness.core.config import V4_TEST_SET, at_declared_criterion, is_v4_criterion  # noqa: E402
 from harness.core import records as records_mod  # noqa: E402
 from harness.core.config import Campaign, Config  # noqa: E402
 from harness.gates.gate_neutrality import _read_record, _same  # noqa: E402
@@ -148,14 +148,13 @@ def _reproduction_planned(campaign: Campaign) -> list[Any]:
     the fallback's — and a census campaign's rendering of the same jobs
     would resolve to records that do not exist.  Found by the first
     census-default press of this gate (A100 (v5-test-set)): "G1 has no
-    reproduction gate record for BR/large_tokamak_nof".
+    reproduction gate record for BR/large_tokamak_nof".  Built by
+    ``config.at_declared_criterion`` (A116), which also drops a tolerance
+    rule: GR's identities carry none.
     """
-    import dataclasses  # noqa: PLC0415
-
-    from ..core.config import V4_TEST_SET  # noqa: PLC0415
     from . import reproduction as reproduction_mod  # noqa: PLC0415
 
-    fallback = dataclasses.replace(campaign, test_set=V4_TEST_SET, tau=None)
+    fallback = at_declared_criterion(campaign, V4_TEST_SET)
     root = Path(fallback.runs_dir) / reproduction_mod.RUNS_SUBPATH
     planned, _prerequisites = reproduction_mod.plan(fallback, root)
     reproduction_mod.attach_phase_a_entries(planned, root, fallback)
@@ -329,6 +328,48 @@ def per_run_owned_components(
     }
 
 
+def reference_arm_differences(
+    record: Mapping[str, Any], previous: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Every field of :data:`UNCHANGED_ON_REFERENCE_ARMS` that differs between
+    a reference arm's run here and the reproduction gate's record of it."""
+    diffs = []
+    for path in UNCHANGED_ON_REFERENCE_ARMS:
+        left = records_mod.resolve_path(previous, path)
+        right = records_mod.resolve_path(record, path)
+        if not _same(left, right):
+            diffs.append({"field": path, "gate_GR": left, "here": right})
+    return diffs
+
+
+def same_criterion_as_the_reproduction_gate(campaign: Campaign, arm: str) -> bool:
+    """Whether *arm*'s run under *campaign* stops on the reproduction gate's
+    criterion, so that a difference from GR's record is gated.
+
+    The reproduction gate's record is V4's criterion on the copy: the whole
+    write set **at 1e-6** (D39).  An arm whose loop stops on another test set
+    -- B0 under the census campaign -- or on V4's test set at another τ -- B0
+    under the whole write set at 1e-8 -- is another criterion's run of the same
+    arm, and a difference from GR's record there is the criterion's, not the
+    output path's (A93 measured the census case: +4.6 % node calls on nof's
+    B0; A113 the τ case: about +20 % on B0 at 1e-8).  So the sub-check is
+    **gated only where the two are the same criterion**: the reference arm BR,
+    which composes no test set and no tolerance, and every arm under V4's test
+    set at V4's τ (``config.is_v4_criterion``); elsewhere the differences are
+    reported, named, not gated.  Keyed on the test set and τ together since
+    A116 (v5-gate-criterion-keys; issue I-43): keyed on the test set alone it
+    gated B0 at 1e-8 against GR's record at 1e-6 and FAILed (A113, 12 of 3 879).
+    """
+    return arms_mod.ARMS[arm].is_reference or is_v4_criterion(campaign)
+
+
+def reference_arm_check_passes(campaign: Campaign, arm: str, diffs: list[dict[str, Any]]) -> bool:
+    """The sub-check "nothing about the solve changed on the reference arm":
+    no differing field where the criterion is the reproduction gate's, and not
+    gated (passing, the differences reported) where it is not."""
+    return (not diffs) if same_criterion_as_the_reproduction_gate(campaign, arm) else True
+
+
 def output_path_body(campaign: Campaign) -> dict[str, Any]:
     """Compare each run against its criteria, and each reference against GR."""
     rows: list[dict[str, Any]] = []
@@ -427,27 +468,9 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
                 previous = _read_record(
                     reference, side="reproduction gate", key=key
                 )
-                diffs = []
-                for path in UNCHANGED_ON_REFERENCE_ARMS:
-                    left = records_mod.resolve_path(previous, path)
-                    right = records_mod.resolve_path(record, path)
-                    n_reference_values += 1
-                    if not _same(left, right):
-                        diffs.append({"field": path, "gate_GR": left, "here": right})
-                # The reproduction gate's record is V4's criterion on the copy
-                # (the fallback test set at 1e-6, D39).  An arm whose loop
-                # stops on another test set -- B0 under the census campaign
-                # -- is another campaign's run of the same arm, and a
-                # difference from GR's record there is the test set's, not
-                # the output path's (A93 measured it: +4.6 % node calls on
-                # nof's B0).  So the sub-check is **gated only where the two
-                # are the same criterion**: the reference arm BR, which
-                # composes no test set, and every arm under the fallback;
-                # elsewhere the differences are reported, named, not gated.
-                same_criterion = (
-                    arms_mod.ARMS[arm].is_reference
-                    or campaign.test_set == V4_TEST_SET
-                )
+                diffs = reference_arm_differences(record, previous)
+                n_reference_values += len(UNCHANGED_ON_REFERENCE_ARMS)
+                same_criterion = same_criterion_as_the_reproduction_gate(campaign, arm)
                 if same_criterion:
                     n_reference_diffs += len(diffs)
                 row["unchanged_against_the_reproduction_gate"] = {
@@ -462,10 +485,11 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
                         if same_criterion
                         else (
                             f"this arm's loop stops on the {campaign.test_set!r} "
-                            f"test set at tau={campaign.tau!r} and the reproduction "
-                            f"gate's record on V4's write set at 1e-6 (D39): two "
-                            f"campaigns; the differences are the test set's and "
-                            f"are reported, not gated"
+                            f"test set at tau={campaign.tau!r}"
+                            + (f" (rule {campaign.tau_rule!r})" if campaign.tau_rule else "")
+                            + " and the reproduction gate's record on V4's write "
+                            "set at 1e-6 (D39): two criteria; the differences "
+                            "are the criterion's and are reported, not gated"
                         )
                     ),
                     "fields": list(UNCHANGED_ON_REFERENCE_ARMS),
@@ -483,7 +507,7 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
                 checks += [
                     {
                         "check": "nothing about the solve changed on the reference arm",
-                        "passed": (not diffs) if same_criterion else True,
+                        "passed": reference_arm_check_passes(campaign, arm, diffs),
                         "detail": (
                             f"{len(diffs)} of {len(UNCHANGED_ON_REFERENCE_ARMS)} "
                             f"fields differ from the reproduction gate's record"
@@ -491,7 +515,8 @@ def output_path_body(campaign: Campaign) -> dict[str, Any]:
                                 ""
                                 if same_criterion
                                 else f" — not gated: the arm's loop stops on the "
-                                f"{campaign.test_set!r} set, GR's on the write set (D39)"
+                                f"{campaign.test_set!r} set at tau={campaign.tau!r}, "
+                                f"GR's on the write set at 1e-6 (D39)"
                             )
                         ),
                     },
@@ -627,7 +652,87 @@ def _output_path_teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"accepted {accepted}",
         )
 
+    def a_solve_field_moved_at_the_same_criterion() -> tuple[bool, str]:
+        """A difference from GR's record on an arm at GR's criterion still
+        FAILs, and the criterion is keyed on the test set and τ together
+        (A116 (v5-gate-criterion-keys); issue I-43).
+
+        Part 1, on every keep-the-loop arm this press gates (BR always; B0
+        too where the run ID is at V4's criterion): GR's own record of the arm
+        stands in for this press's run, so the untouched comparison reads 0
+        differing fields and passes; one added to ``node_calls_solve_phase``
+        on a copy must make the sub-check fail and be the one field named.
+        Part 2, on B0 against the same record: the sub-check is gated under
+        the whole write set at 1e-6 and not under the whole write set at 1e-8
+        nor under the census set (campaigns built from this press's) -- keyed
+        on the test set alone, the 1e-8 campaign would be gated and the tooth
+        would not trip.
+        """
+        gated: list[str] = []
+        bitten: list[str] = []
+        for config in campaign.configurations:
+            for arm in arms_mod.active_arms(config, "B"):
+                if arms_mod.ARMS[arm].output_loop == "none":
+                    continue
+                if not same_criterion_as_the_reproduction_gate(campaign, arm):
+                    continue
+                key = f"{arm}/{config.name}"
+                previous = _read_record(
+                    reproduction_run_dir(campaign, config.name, arm, 0),
+                    side="reproduction gate",
+                    key=key,
+                )
+                gated.append(key)
+                here = copy.deepcopy(previous)
+                clean = reference_arm_differences(here, previous)
+                was = here.get("node_calls_solve_phase")
+                if not isinstance(was, int):
+                    continue
+                here["node_calls_solve_phase"] = was + 1
+                diffs = reference_arm_differences(here, previous)
+                if (
+                    not clean
+                    and reference_arm_check_passes(campaign, arm, clean)
+                    and [d["field"] for d in diffs] == ["node_calls_solve_phase"]
+                    and not reference_arm_check_passes(campaign, arm, diffs)
+                ):
+                    bitten.append(key)
+        import dataclasses  # noqa: PLC0415 - tooth path only
+
+        keyed = {
+            name: same_criterion_as_the_reproduction_gate(
+                dataclasses.replace(campaign, test_set=test_set, tau=tau, tau_rule=None), "B0"
+            )
+            for name, test_set, tau in (
+                ("write_set at 1e-6", V4_TEST_SET, 1e-6),
+                ("write_set at 1e-8", V4_TEST_SET, 1e-8),
+                ("census at 1e-8", "census", 1e-8),
+                ("census at 1e-6", "census", 1e-6),
+            )
+        }
+        key_holds = keyed == {
+            "write_set at 1e-6": True,
+            "write_set at 1e-8": False,
+            "census at 1e-8": False,
+            "census at 1e-6": False,
+        }
+        return bool(gated) and bitten == gated and key_holds, (
+            f"gated here: {gated}; one added to node_calls_solve_phase on a copy "
+            f"of GR's own record fails the sub-check and is the one field named "
+            f"on {len(bitten)} of {len(gated)}; B0 gated under "
+            + ", ".join(f"{k}: {'yes' if v else 'no'}" for k, v in keyed.items())
+        )
+
     return (
+        Tooth(
+            "a_solve_field_moved_on_a_reference_arm_at_the_same_criterion",
+            "one added to node_calls_solve_phase on a copy of GR's record of "
+            "each keep-the-loop arm this press gates; and B0's gating asked "
+            "under the whole write set at 1e-6 and 1e-8 and the census set",
+            "FAIL the sub-check, naming the field, wherever the criterion is "
+            "GR's; gated at the whole write set at 1e-6 only",
+            a_solve_field_moved_at_the_same_criterion,
+        ),
         Tooth(
             "one_component_moved_by_one_ulp_before_finalise",
             "one float of a throwaway copy of the entry snapshot moved by one "
