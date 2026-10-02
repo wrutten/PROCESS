@@ -364,3 +364,37 @@ Each resumed verdict's "runs read" line says so.
 - **GT under `census_tau1e-06` (I-44)** is reported, not investigated.
 
 **Branch tip:** this report's commit, on `6b0c7777`; the press commit is `5447cca3`.
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-02 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat 4ea0870c..71c8abcf`: six files — `read_back_survey.py` (new, read-only), the four
+tables documents and this report; **no harness, driver-copy, `process/` or V4 line**; worktree clean. (2) `--runs` at
+the tip: `census_tau1e-08` 29 PASS of 29; `census_tau1e-06` 28 PASS, 1 FAIL; `write_set_tau1e-06` and
+`write_set_tau1e-08` 28 PASS, 0 FAIL, 1 not run. (3) `--paper-tables check` IDENTICAL for the four documents. (4)
+**G5's verdict records and the run records behind them, read by the orchestrator**: under each run ID the verdict is
+PASS, 0 of 159, teeth tripped, and the six run records it names (`runs_provenance`) are all stamped `5447cca3`, not
+dirty, each with 33 read-back keys — both sides are one commit's. (5) No file under the four `campaign/` folders is
+newer than the dispatch; under `traced_runs/` only the two `neutrality.json` per run ID that the check stage rewrites.
+(6) Nothing was writing into the records tree when the hand-back was read (the last write 19:03:33).
+
+**The remedy is the right one, and is not a retry until it passes.** G5's claim is about two compositions of one arm
+at one commit; a press without `--resume` makes exactly that comparison, with the same settings, and the gate's
+condition and compared values are unchanged. The agent's entanglement table shows no other gate reads the six records'
+values, no archive holds them, and the stamp survey shows exactly seven records re-made per run ID (G5's six and the
+one G7's tooth re-makes on every press).
+
+**On resume.** The agent's survey settles the question the brief asked: a resume rule on the read-back key set would
+re-make all 553 campaign records under every run ID (their sets pre-date today's registry by design: gate and campaign
+records are reused across count-neutral driver changes) and break the archives. No such rule is made. **The agent's
+proposed guard inside G5's own press** (keep a configuration's pair under `--resume` only when both records would be
+kept; otherwise re-make both) is the narrow fix for a defect that has now occurred twice (DR12 in A101, DR13 here). It
+was not made and not run; it is put to the user (issue I-47).
+
+**State after this task.** The only rows not PASS in the four gate tables are gate `test_set`: its refusal by design
+under the two write-set run IDs, and its FAIL under `census_tau1e-06` (I-44, the user's). `paper_tables.md` and
+`paper_tables_write_set_tau1e-06.md` are back to a verification table with no FAIL.
+
+**Limits carried.** "Untouched" rests on modification times, resume decisions, the stamp survey and the traced-run
+check, not per-file hashes. The tallies were not re-pressed (their provenance names campaign records only).
