@@ -1333,6 +1333,10 @@ def gate(campaign: Campaign) -> Gate:
             "declares"
         ),
         body=lambda *, resume=False: count_neutrality_body(campaign, resume=resume),
-        jobs=lambda: gates_mod.job_rows(jobs_read, campaign),
+        # The rows are resolved by the pool against the campaign they are
+        # listed under, so the listing is handed the declared campaign too
+        # (A116): resolved against the press's own, the jobs read the press's
+        # test set and τ and named records the body never makes.
+        jobs=lambda: gates_mod.job_rows(jobs_read, declared_campaign(campaign)),
         teeth=_teeth(campaign),
     )
