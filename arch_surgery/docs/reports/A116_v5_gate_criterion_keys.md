@@ -482,3 +482,44 @@ The 20 GB floor was never approached.
   hashes of the campaign records.
 - **The G1 after-capture keep decision** was read by an inline, uncommitted composition (§4). The gate's own "runs read"
   line agrees: 6 records at each run ID's earlier commit.
+
+## Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-02 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat e977c57d..2b6d06b5`: twelve files — seven under the V5 harness (`core/config.py`, the
+three gates, `archived_records.py`, `exclusion_review.py`, the README), the four tables documents and this report;
+**0 diff lines under the driver copy or `process/`**; worktree clean. (2) The shared criterion function
+(`config.is_at_declared_criterion`) read in full: test set, no tolerance rule, and every configuration's τ equal to the
+set's declared value — the three gates now ask one question in one place. G9's `same_criterion` and G1's
+`FIELD_SET_WITNESS` read at their call sites. (3) `--runs` at the tip: `census_tau1e-08` 28 PASS, 1 FAIL;
+`census_tau1e-06` 27 PASS, 2 FAIL; `write_set_tau1e-06` and `write_set_tau1e-08` 27 PASS, 1 FAIL, 1 not run — the
+agent's table. (4) `--paper-tables check` IDENTICAL for the four documents. (5) No file under the four `campaign/`
+folders is newer than the dispatch; under the four `traced_runs/` folders only the two `neutrality.json` per run ID
+that A115's check stage rewrites (the agent's point; the check is not read-only, which the next task's brief accounts
+for). (6) **G5's verdict record read by the orchestrator** (`runs/census_tau1e-08/gates/switch_composition/gate.json`):
+159 compared, 3 mismatched, and the one key present on one side only is
+`resolved_switches.switch_by_switch…module_solve.BLOCK_TRACE_CENSUS_PATH = None`, on the three `B2` rows — the agent's
+account. (7) Nothing was writing into the records tree when the hand-back was read (the last write 18:38:25).
+
+**The three keys and the exclusion.** GC now passes under `write_set_tau1e-08` (it refused), G9 passes there (it
+FAILed, 12 of 3 879), G1 passes under `census_tau1e-06` (it FAILed on the digest) and under the default run ID (it
+FAILed on the stopwatch leaf). Each change carries a committed tooth. The stopwatch leaf was listed after the gate's
+own review printed it as the only differing compared leaf, a non-negative float of 0.03–0.04 s on three pairs, with 72
+other leaves of its block compared and equal; the review also kept `lift_residual.raw_s` compared, correctly. **A limit
+the agent states and the orchestrator carries**: no tooth was pressed against the old condition, so "the tooth would
+have caught the old defect" is read from the code, not shown.
+
+**G5 (`switch_composition`) now FAILs under all four run IDs (issue I-46, filed at merge).** The two sides of its
+comparison were made on either side of driver change DR13: A115's new trace-only switch changed the identity of the
+switch-by-switch job, which was therefore made fresh at this task's tip and carries the new read-back key, while the
+matrix-composed job's identity did not change and `--resume` kept its pre-DR13 record. The difference is one read-back
+key holding `None`; no count, objective or state differs. The gate is right to FAIL — its two sides are not one
+commit's — and the agent was right not to re-make a record to turn it. What it needs is both sides made at one commit,
+with the gates that share the matrix-composed records in the pool accounted for (the I-41 class). **Until then the
+verification table of all four tables documents carries a G5 FAIL**, which is a regression from this morning for
+`paper_tables.md` and `paper_tables_write_set_tau1e-06.md`. A117 is minted for it.
+
+**The remaining non-PASS rows are as intended**: GT refuses under the two write-set run IDs by design and FAILs under
+`census_tau1e-06` (I-44, the user's). I-42 was checked before every press: nine jobs resolve into GC's archive under
+`write_set_tau1e-06`, all kept; none under the other three now that GC composes at its declared criterion.
