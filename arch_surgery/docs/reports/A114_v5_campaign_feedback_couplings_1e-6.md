@@ -492,3 +492,53 @@ validity check behind them. **No number in this report is a timing.**
 - **The "existing folders untouched" claim** rests on modification times and the two committed checks per run ID, not on
   per-file hashes.
 - **The c8, w6, w8 bound counts** in §4.3 are quoted from A113's and A106's reports, not re-run.
+
+## 12. Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-02 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat 12ba98e7..968db55b`: four files — `compare_campaigns.py` (extended, read-only),
+`campaign_comparison.md`, `paper_tables_census_tau1e-06.md` and this report; 0 diff lines under the V5 driver copy,
+`process/`, the harness or V4; worktree clean. (2) `--runs` at the tip: `census_tau1e-06` holds 553 campaign records,
+all at `448d6bde`; gate table 27 PASS, 2 FAIL, 0 not run. (3) `--paper-tables check` reads IDENTICAL under the four
+settings. (4) The three older run-ID folders: `find -newermt '2026-10-02T12:41:00+02:00'` lists 0 entries. (5) **The
+headline ratios recounted by the orchestrator from the 275 phase B `metrics.json` of each of the four run IDs, not
+through the agent's script**: under `census_tau1e-06`, `B2/B0` 0.5399 / 0.7465 / 0.6744, `B2/BR` 0.5012 / 0.6413 /
+2.0174, `B0/BR` 0.9283 / 0.8591 / 2.9915, seed sets 22 / 12 / 18, accepted counts as §2 — the agent's figures to the
+last digit; the other three run IDs give their published ratios. (6) **The agent's "st retries everything", recounted**:
+of st's finished runs, those with more than one attempt (`exit_forensics.n_attempts`) are `B0` 25 of 25 and `B2` 25 of
+25 under `census_tau1e-06`, against 2 and 8 at census 1e-8, 3 and 2 under both write-set settings, and `BR` 5 in every
+campaign. (7) **The new end-state tables against the orchestrator's earlier ad-hoc counts** (made before this task, from
+the records, for three run IDs): phase A bit-identical exits `tok` A2/A1 12 and 11, A0/AR 11 and 11; `lad` 25
+throughout; `st` A2/A0 0 and 0, A0/AR 0 and 2; phase B `st` design distance 14 of 20, 4 of 22, 1 of 23 — all
+reproduced by the committed script. (8) The two failing gates' conditions, read in the code: `gate_test_set.py:442–443`
+(PASS needs at least one drop to bite) and `gate_neutrality.py:563` (the job digest is excluded only where the test-set
+field is on exactly one side).
+
+**The two gate failures are of different kinds.**
+- **G1 is the harness's (I-43's class).** One value differs per pair on 6 of 6 pairs, the job digest; 0 of 51 319
+  output-file lines differ. The digests are computed over different field sets because τ is rendered into the identity
+  only when it differs from 1e-6, and the witness that excludes the digest looks at the test set alone. No behaviour
+  differs between the switch-off and switch-on sides. Added to I-43.
+- **GT is a result about the setting (I-44).** At the census set and τ = 1e-6, dropping any one of the eight tested
+  components changes no count (105 → 105 on `tok`, where census 1e-8 read 147 → 126): no single feedback coupling is
+  individually binding on the loop's stop at 1e-6 on these entries. The gate's tooth requires one bite and so FAILs.
+  Whether the gate should require a bite at every tolerance is a question for the user; nothing was changed.
+
+**What the campaign shows, as measured, without choosing a setting.** (a) On `st` under the census set at 1e-6 both
+loop arms degrade, not only the partitioned one: every finished `B0` and `B2` run goes through the retry ladder, `B0`
+costs 2.99 times the reference per run, and the partitioned arm ends more than 10 % from the flat arm's design on 11 of
+18 starts with the nose case at its lower bound on 7 of 18. (b) On `tok` and `lad` the optimiser's path follows the
+test set and not the tolerance: iterations `B2/B0` are 0.9942 / 1.3658 under the census set at both tolerances and
+0.9942 / 0.7012 under the write set at both. (c) In phase A the flat arm lands on the reference's exit state far more
+often under the census set at 1e-6 (21 / 23 / 23 of 25) than under any other setting (at most 11 / 25 / 2). The causes
+of (a)–(c) are not established by this task; the agent says so and so does the orchestrator.
+
+**The agent's decisions.** The comparison extension was committed before the campaign, so the records carry one stamp.
+The gate press killed by a 600 s limit was relaunched with `--resume`; no campaign record was involved. GC rewriting
+its verdict file in the copied archive of the new run ID is the gate's own behaviour and touches no run record; it does
+mean the copy step's byte check refuses after a GC press, which the README should say (noted for I-43's task, if one is
+minted).
+
+**Limits carried.** No validity check on the wall-clock tables. The untouched-folders claim rests on modification
+times and the committed checks. Which setting the paper's tables carry remains the user's (OQ-tolerance, open).
