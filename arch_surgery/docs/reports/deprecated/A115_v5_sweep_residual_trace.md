@@ -1,6 +1,6 @@
 # A115 (v5-sweep-residual-trace) — what the block loops leave moving when they stop
 
-> **Document status** — **MERGED 2026-10-02 at `a27395be` (`--no-ff`; the orchestrator's assessment at the end, §10); archived.** The one V5 records tree (four campaign run IDs, each now with a `traced_runs/` folder) was moved on with A116 and then A117 and is relocated to `arch_surgery/idf_probe/runs/` at A117's merge; the paths below that begin `runs/` are read from there. Was: **OPEN** (task report, awaiting the orchestrator's assessment). Task A115
+> **Document status** — **MERGED 2026-10-02 at `a27395be` (`--no-ff`; the orchestrator's assessment at the end, §10); archived.** The one V5 records tree (four campaign run IDs, each now with a `traced_runs/` folder) was moved on with A116 and then A117 and is at `arch_surgery/idf_probe/runs/A117_runs/`; the paths below that begin `runs/` are read from there. Was: **OPEN** (task report, awaiting the orchestrator's assessment). Task A115
 > (v5-sweep-residual-trace), 2026-10-02, branch `A115-v5-sweep-residual-trace`, worktree
 > `.claude/worktrees/A115-v5-sweep-residual-trace`, base `3211f50e`. Start time recorded
 > `2026-10-02T16:11:03+02:00`. Records under `arch_surgery/MDA_partitioning_experiment_v5/runs/<run ID>/traced_runs/`

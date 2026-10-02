@@ -1,6 +1,6 @@
 # A117 (v5-switch-composition-one-commit): gate G5's two sides made at one commit (I-46)
 
-> **Document status** — **OPEN (task report, awaiting the orchestrator's assessment).** Task A117, branch
+> **Document status** — **MERGED 2026-10-02 at `fea43a6d` (`--no-ff`; the orchestrator's assessment at the end); archived.** Records relocated by move to `arch_surgery/idf_probe/runs/A117_runs/` (**the one V5 records tree**: four run IDs, each with `campaign/`, `traced_runs/`, `gates/`; the shared caches); the paths below that begin `runs/` are read from there. Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A117, branch
 > `A117-v5-switch-composition-one-commit`, worktree `.claude/worktrees/A117-v5-switch-composition-one-commit`, from trunk
 > `4ea0870c`, 2026-10-02. **No harness change, no driver change**: nothing changed under
 > `MDA_partitioning_experiment_v5/PROCESS/`, `harness/`, `process/` or V4.
