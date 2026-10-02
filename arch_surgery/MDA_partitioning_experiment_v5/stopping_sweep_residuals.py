@@ -98,6 +98,33 @@ four campaigns' records (refused if it disagrees), and st's condition (at least
 one traced start where ``B2`` at census 1e-8 ends more than 10 % from ``B0``'s
 design, ``compare_campaigns.rel`` over ``exact.xcs``, and one where it does not).
 
+ADDED AFTER THE FIRST TRACE WAS READ -- not part of the declaration
+=================================================================
+
+Reading the first traced evaluation to check the trace's format (st ``A2``,
+census 1e-8, seed 1, at ``8e94a3a7``) showed ``M1`` stopping with its census
+part changed by exactly 0 and its non-census part by 3.9e-4.  A component that
+is not read before it is written in a sweep is computed from the census values
+the **previous** sweep left, so its change at a sweep is the census change of
+the sweep **before** -- a one-sweep lag -- and when the census change at the
+stop is exactly 0 the next sweep reproduces every such component bit for bit.
+So the declared S1 (the change at the stop) can be large while the value held
+at the stop is already the fixed point's.  Three statistics are added, labelled
+**L** wherever printed, and none of them changes a declared statistic or the
+declared verdict:
+
+L1  (census run IDs) the open stops split by whether the census part's change
+    at the stop is exactly 0; and E_live, E restricted to open stops whose
+    census change at the stop is not 0;
+L2  (whole-write-set run IDs) at the stops where the census part closed before
+    the write set did: of those whose census change at ``k*`` was exactly 0,
+    how many have the whole write set unchanged (both parts 0, no flag) at the
+    next sweep -- the lag, confirmed or not;
+L3  (census run IDs, inferred) at open stops whose census change at the stop
+    is not 0, the lag model's estimate of the out-of-test change the next sweep
+    would make: the change at the stop times the ratio of the census change at
+    the stop to that at the sweep before; the share of estimates at or above τ.
+
 Run: ``python stopping_sweep_residuals.py [--runs runs] [--out file.md]``.
 """
 
@@ -247,6 +274,8 @@ def new_cell() -> dict[str, Any]:
         "open_any_down": 0, "open_any_obj": 0, "open_any_either": 0,
         "open_names": Counter(),
         "census_at_stop": [], "kstar_extra": [], "nc_at_kstar": [], "nc_at_kstar_open": 0, "n_mirror": 0,
+        "L1_open_census_zero": 0, "L1_open_census_nonzero": 0, "L3_estimates": [],
+        "L2_kstar_zero_with_next": 0, "L2_confirmed": 0, "L2_kstar_nonzero_with_next": 0, "L2_next_nc": [],
     }
 
 
@@ -284,7 +313,7 @@ def analyse(runs: Path, job_sets: tuple[str, ...]) -> dict[str, Any]:
                         warmup_mismatch.append(f"{run_id}/{cfg}/{arm}/seed{seed}")
                     lines = lines[-1:]
                 run_key = (cfg, arm, run_id, job_set, seed, phase)
-                run_row = {"n_eval": 0, "n_grad": 0, "E": 0, "E_obj": 0, "status": record.get("status"),
+                run_row = {"n_eval": 0, "n_grad": 0, "E": 0, "E_obj": 0, "E_live": 0, "status": record.get("status"),
                            "ifail": (record.get("mfile") or {}).get("ifail"), "iterations": record.get("n_solver_iterations")}
                 prev = None
                 for _header, line in lines:
@@ -293,7 +322,7 @@ def analyse(runs: Path, job_sets: tuple[str, ...]) -> dict[str, Any]:
                     grad = kind == "gradient"
                     if grad:
                         run_row["n_grad"] += 1
-                    e_hit = e_obj_hit = False
+                    e_hit = e_obj_hit = e_live_hit = False
                     for label, entries in (line.get("per_sweep") or {}).items():
                         if label not in ITERATED or not entries:
                             continue
@@ -339,6 +368,19 @@ def analyse(runs: Path, job_sets: tuple[str, ...]) -> dict[str, Any]:
                                     e_hit = True
                                 if a_obj:
                                     e_obj_hit = True
+                                # L1, L3 (added after the first trace was read)
+                                c_now = (parts.get("census") or {})
+                                c_now_max = float(c_now.get("max") or 0.0)
+                                if c_now_max == 0.0 and not any(c_now.get(k) for k in ("discrete_mismatch", "moved_constant", "nan_new")):
+                                    cell["L1_open_census_zero"] += 1
+                                else:
+                                    cell["L1_open_census_nonzero"] += 1
+                                    if a_down or a_obj:
+                                        e_live_hit = True
+                                    if s >= 2:
+                                        c_prev = float(((entries[-2].get("parts") or {}).get("census") or {}).get("max") or 0.0)
+                                        if c_prev > 0:
+                                            cell["L3_estimates"].append(m * c_now_max / c_prev)
                         elif "census" in parts:
                             cpart = parts["census"]
                             cell["census_at_stop"].append(float(cpart.get("max") or 0.0))
@@ -353,9 +395,25 @@ def analyse(runs: Path, job_sets: tuple[str, ...]) -> dict[str, Any]:
                                 nc = (entries[kstar - 1].get("parts") or {}).get("non_census")
                                 cell["nc_at_kstar"].append(float((nc or {}).get("max") or 0.0))
                                 cell["nc_at_kstar_open"] += part_open(nc, tau)
+                                # L2 (added after the first trace was read)
+                                if kstar < s:
+                                    c_k = (entries[kstar - 1].get("parts") or {}).get("census") or {}
+                                    nxt = entries[kstar].get("parts") or {}
+                                    if float(c_k.get("max") or 0.0) == 0.0:
+                                        cell["L2_kstar_zero_with_next"] += 1
+                                        still = any(
+                                            float((nxt.get(k) or {}).get("max") or 0.0) != 0.0
+                                            or any((nxt.get(k) or {}).get(f) for f in ("discrete_mismatch", "moved_constant", "nan_new"))
+                                            for k in ("census", "non_census")
+                                        )
+                                        cell["L2_confirmed"] += not still
+                                    else:
+                                        cell["L2_kstar_nonzero_with_next"] += 1
+                                        cell["L2_next_nc"].append(float((nxt.get("non_census") or {}).get("max") or 0.0))
                     if grad:
                         run_row["E"] += e_hit
                         run_row["E_obj"] += e_obj_hit
+                        run_row["E_live"] += e_live_hit
                         ev = line.get("evaluation")
                         if prev is not None and prev[0][0] == "gradient" and ev[1] == prev[0][1] and prev[0][2] == 1 and ev[2] == -1:
                             pc = pairs[(cfg, arm, run_id)]
@@ -449,25 +507,26 @@ def report(runs: Path, job_sets: tuple[str, ...]) -> None:
         print(f"| {SHORT[cfg]} | {arm} | {run_id} | {js} | {seed} | {phase} | {r['status']} | {r['ifail']} | {r['iterations']} | {r['n_eval']} | {r['n_grad']} | {r['E']} | {r['E_obj']} |")
 
     # E per (cfg, arm, run_id), main job set and with st_more
-    def E(cfg, arm, run_id, js=job_sets) -> tuple[int, int, int]:
-        e = eo = n = 0
+    def E(cfg, arm, run_id, js=job_sets) -> tuple[int, int, int, int]:
+        e = eo = n = el = 0
         for (c, a, r, j, _s, ph), row in res["per_run"].items():
             if c == cfg and a == arm and r == run_id and j in js and ph == "B":
-                e += row["E"]; eo += row["E_obj"]; n += row["n_grad"]
-        return e, eo, n
+                e += row["E"]; eo += row["E_obj"]; n += row["n_grad"]; el += row["E_live"]
+        return e, eo, n, el
 
     print("\n## 2. The primary rate E, gradient evaluations, phase B (census run IDs)\n")
-    print("| configuration | arm | run ID | gradient evaluations | E | E_obj |")
-    print("|---|---|---|---:|---|---|")
+    print("| configuration | arm | run ID | gradient evaluations | E | E_obj | E_live (L1) |")
+    print("|---|---|---|---:|---|---|---|")
     Erate: dict[tuple, float | None] = {}
     for cfg in CONFIGS:
         for arm in ("B0", "B1", "B2"):
             for run_id in RUN_IDS[:2]:
-                e, eo, n = E(cfg, arm, run_id)
+                e, eo, n, el = E(cfg, arm, run_id)
                 if n == 0:
                     continue
                 Erate[(cfg, arm, run_id)] = e / n
-                print(f"| {SHORT[cfg]} | {arm} | {run_id} | {n} | {share(e, n)} | {share(eo, n)} |")
+                Erate[("live", cfg, arm, run_id)] = el / n
+                print(f"| {SHORT[cfg]} | {arm} | {run_id} | {n} | {share(e, n)} | {share(eo, n)} | {share(el, n)} |")
 
     print("\n## 3. Stops, per block (S1–S4)\n")
     for phase, kinds in (("B", ("gradient", "function", "reconcile", "other")), ("A", ("evaluation",))):
@@ -478,11 +537,11 @@ def report(runs: Path, job_sets: tuple[str, ...]) -> None:
                 continue
             print(f"\n### phase {phase}, {run_id}\n")
             if ts == "census":
-                print("| cfg | arm | kind | block | stops | out-of-test max at stop (S1) | open (S1) | ≥10τ | one-sweep stops (S2) | open among one-sweep | worst open read: later / obj / either (S4) | any open read: later / obj / either (S4) |")
-                print("|---|---|---|---|---:|---|---|---|---|---|---|---|")
+                print("| cfg | arm | kind | block | stops | out-of-test max at stop (S1) | open (S1) | ≥10τ | one-sweep stops (S2) | open among one-sweep | worst open read: later / obj / either (S4) | any open read: later / obj / either (S4) | L1 open with census change 0 / not 0 | L3 next-sweep estimate ≥ τ |")
+                print("|---|---|---|---|---:|---|---|---|---|---|---|---|---|---|")
             else:
-                print("| cfg | arm | kind | block | stops | census part at stop (S6) | extra sweeps after census closed: med / max (S6) | non-census max at k* (S6) | open at k* |")
-                print("|---|---|---|---|---:|---|---|---|---|")
+                print("| cfg | arm | kind | block | stops | census part at stop (S6) | extra sweeps after census closed: med / max (S6) | non-census max at k* (S6) | open at k* | L2 census 0 at k*: next sweep all 0 | L2 census not 0 at k*: next-sweep non-census max |")
+                print("|---|---|---|---|---:|---|---|---|---|---|---|")
             for key in rows:
                 cfg, arm, _r, _p, kind, label = key
                 if kind not in kinds:
@@ -491,12 +550,13 @@ def report(runs: Path, job_sets: tuple[str, ...]) -> None:
                 n = c["n_stops"]
                 if ts == "census":
                     o = c["out_open"]
-                    print(f"| {SHORT[cfg]} | {arm} | {kind} | {label} | {n} | {stats_line(c['out_max'])} | {share(o, n)} | {share(c['out_10tau'], n)} | {share(c['n_one'], n)} | {share(c['one_open'], c['n_one'])} | {c['open_worst_down']} / {c['open_worst_obj']} / {c['open_worst_either']} of {o} | {c['open_any_down']} / {c['open_any_obj']} / {c['open_any_either']} of {o} |")
+                    l3 = c["L3_estimates"]
+                    print(f"| {SHORT[cfg]} | {arm} | {kind} | {label} | {n} | {stats_line(c['out_max'])} | {share(o, n)} | {share(c['out_10tau'], n)} | {share(c['n_one'], n)} | {share(c['one_open'], c['n_one'])} | {c['open_worst_down']} / {c['open_worst_obj']} / {c['open_worst_either']} of {o} | {c['open_any_down']} / {c['open_any_obj']} / {c['open_any_either']} of {o} | {c['L1_open_census_zero']} / {c['L1_open_census_nonzero']} | {share(sum(1 for x in l3 if x >= tau_of(run_id)), len(l3))} |")
                 else:
                     ex = c["kstar_extra"]
                     exs = "—" if not ex else f"{statistics.median(ex):g} / {max(ex)} (≥1 extra: {sum(1 for x in ex if x >= 1)}/{len(ex)})"
                     approx = " (approx.)" if label in ("M2", "M3") else ""
-                    print(f"| {SHORT[cfg]} | {arm} | {kind} | {label} | {n} | {stats_line(c['census_at_stop'])} | {exs}{approx} | {stats_line(c['nc_at_kstar'])} | {share(c['nc_at_kstar_open'], c['n_mirror'])} |")
+                    print(f"| {SHORT[cfg]} | {arm} | {kind} | {label} | {n} | {stats_line(c['census_at_stop'])} | {exs}{approx} | {stats_line(c['nc_at_kstar'])} | {share(c['nc_at_kstar_open'], c['n_mirror'])} | {share(c['L2_confirmed'], c['L2_kstar_zero_with_next'])} | {stats_line(c['L2_next_nc'])} |")
 
     print("\n## 4. Worst components (S3), phase B gradient evaluations\n")
     print("| cfg | arm | run ID | block | in the test, at the stop | out of the test, non-zero | out of the test, open | most frequent open out-of-test names |")
@@ -552,6 +612,22 @@ def report(runs: Path, job_sets: tuple[str, ...]) -> None:
         disc_all = disc_all and disc
         ratio = "inf" if uside == 0 and dside > 0 else ("—" if uside == 0 else f"{dside / uside:.2f}")
         print(f"- {name}: E {dside:.4f} against {uside:.4f}, ratio {ratio} → {'discriminates' if disc else 'does NOT discriminate'}")
+    print("\n*L (added after the first trace was read; not the declared test):* the same comparisons with E_live in place of E.")
+    live = {
+        "T1 st/tok B0 census_tau1e-08": (("live", "st_regression", "B0", "census_tau1e-08"), ("live", "large_tokamak_nof", "B0", "census_tau1e-08")),
+        "T1 st/tok B2 census_tau1e-08": (("live", "st_regression", "B2", "census_tau1e-08"), ("live", "large_tokamak_nof", "B2", "census_tau1e-08")),
+        "T1 st/tok B0 census_tau1e-06": (("live", "st_regression", "B0", "census_tau1e-06"), ("live", "large_tokamak_nof", "B0", "census_tau1e-06")),
+        "T1 st/tok B2 census_tau1e-06": (("live", "st_regression", "B2", "census_tau1e-06"), ("live", "large_tokamak_nof", "B2", "census_tau1e-06")),
+        "T2 st census 1e-8 B2/B0": (("live", "st_regression", "B2", "census_tau1e-08"), ("live", "st_regression", "B0", "census_tau1e-08")),
+        "T3 st B0 census 1e-6/1e-8": (("live", "st_regression", "B0", "census_tau1e-06"), ("live", "st_regression", "B0", "census_tau1e-08")),
+    }
+    for name, (dk, uk) in live.items():
+        dside, uside = Erate.get(dk), Erate.get(uk)
+        if dside is None or uside is None:
+            print(f"- L {name}: not computable")
+            continue
+        ratio = "inf" if uside == 0 and dside > 0 else ("—" if uside == 0 else f"{dside / uside:.2f}")
+        print(f"- L {name}: E_live {dside:.4f} against {uside:.4f}, ratio {ratio}")
     refuted = [i for i, (c1, c2) in enumerate(verdicts) if not (c1 and c2)]
     if refuted:
         print(f"\n**Verdict: refuted** in {len(refuted)} of {len(verdicts)} D case(s) (C1 or C2 fails there).")
