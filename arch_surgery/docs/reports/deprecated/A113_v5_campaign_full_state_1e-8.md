@@ -1,6 +1,6 @@
 # A113 (v5-campaign-full-state-1e-8): the V5 campaign under the whole write set at τ = 1e-8
 
-> **Document status**: **MERGED 2026-10-02 at `e47c6ca2` (`--no-ff`; the orchestrator's assessment at the end, §12); archived.** The one V5 records tree (`census_tau1e-08/`, `write_set_tau1e-06/`, `write_set_tau1e-08/`, the shared caches) was moved on into A114's worktree and is relocated to `arch_surgery/idf_probe/runs/` at A114's merge; the paths below that begin `runs/` are read from there. **The gate table under this run ID reads 26 PASS, 1 FAIL (G9), 2 not run (GC refused; GT by design) — issue I-43.** Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A113, branch
+> **Document status**: **MERGED 2026-10-02 at `e47c6ca2` (`--no-ff`; the orchestrator's assessment at the end, §12); archived.** The one V5 records tree (`census_tau1e-08/`, `write_set_tau1e-06/`, `write_set_tau1e-08/`, the shared caches) was moved on with A114 and is at `arch_surgery/idf_probe/runs/A114_runs/`; the paths below that begin `runs/` are read from there. **The gate table under this run ID reads 26 PASS, 1 FAIL (G9), 2 not run (GC refused; GT by design) — issue I-43.** Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A113, branch
 > `A113-v5-campaign-full-state-1e-8`, worktree `.claude/worktrees/A113-v5-campaign-full-state-1e-8`, from trunk
 > `a75d024b`, 2026-10-02. This is a run task. Nothing changed in the driver copy (`MDA_partitioning_experiment_v5/PROCESS/`),
 > in `process/`, in the harness or in V4.

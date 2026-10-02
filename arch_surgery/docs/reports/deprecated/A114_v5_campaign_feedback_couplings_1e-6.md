@@ -1,6 +1,6 @@
 # A114 (v5-campaign-feedback-couplings-1e-6): the V5 campaign under the census set at τ = 1e-6
 
-> **Document status**: **OPEN (task report, awaiting the orchestrator's assessment).** Task A114, branch
+> **Document status**: **MERGED 2026-10-02 at `448227cc` (`--no-ff`; the orchestrator's assessment at the end, §12); archived.** Records relocated by move to `arch_surgery/idf_probe/runs/A114_runs/` (**the one V5 records tree**: `census_tau1e-06/`, `census_tau1e-08/`, `write_set_tau1e-06/`, `write_set_tau1e-08/`, the shared caches); the paths below that begin `runs/` are read from there. **The gate table under this run ID reads 27 PASS, 2 FAIL (G1, GT) — issues I-43, I-44.** Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A114, branch
 > `A114-v5-campaign-feedback-couplings-1e-6`, worktree `.claude/worktrees/A114-v5-campaign-feedback-couplings-1e-6`, from
 > trunk `12ba98e7`, 2026-10-02. This is a run task. Nothing changed in the driver copy (`MDA_partitioning_experiment_v5/PROCESS/`),
 > in `process/`, in the harness or in V4.
