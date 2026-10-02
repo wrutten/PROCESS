@@ -188,6 +188,21 @@ ALWAYS_EXCLUDED: dict[str, str] = {
     "evaluation_warmup.restore_wall_s": "the whole-structure restore's wall: context, never evidence",
     "evaluation_warmup.warmup_wall_s": "the warm-up's wall: context, never evidence",
     "wall_s": "wall clock is context, never evidence (I-10)",
+    # A116 (v5-gate-criterion-keys; issue I-45): the snapshot hook's own
+    # stopwatch (child.install_exit_snapshot: time.perf_counter() summed over
+    # the hook's calls).  Compared, and differing on every BR pair, from the
+    # first straddle whose two sides both carry the snapshot block
+    # (3211f50e -> d1e94dc8, A115: 3 of 4 614 values, 0 of 51 319 output-file
+    # lines).  The exclusion review measured it before it was listed: the
+    # only compared leaf named as a timing that differs, a non-negative float
+    # on every side, with the other compared leaves of its block equal (72
+    # over the three pairs, at 2c5e281a under census_tau1e-08) --
+    # the stopwatch moved and the snapshots it timed did not.
+    "audit_snapshot.wall_s": (
+        "the exit-snapshot hook's wall: context, never evidence.  The "
+        "positions it reached, their component counts and digests sit beside "
+        "it in the same block and are compared"
+    ),
     "cpu_user_s": "cpu time is a contention diagnostic",
     "cpu_sys_s": "cpu time is a contention diagnostic",
     "cpu_s": "cpu time is a contention diagnostic",

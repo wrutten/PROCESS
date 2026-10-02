@@ -215,7 +215,15 @@ declared move (item 5's one sweep, DR10's prime count) predicted by a declared r
 move a mismatch. Its last straddle is `DR12 → DR13`: the DR13 side made under the whole write set with
 the timers on (as DR12's) **and the block trace on** every block-loop arm, with the census split
 (`STRADDLE_BLOCK_TRACE`), so that every count and exit state identical to the DR12 side's is the proof
-the extended trace observes only.
+the extended trace observes only. **Both sides are composed under the declared criterion — the whole write set
+at its declared τ, 1e-6, no rule — under every run ID** (`gate_count_neutrality.declared_campaign`, through
+`config.at_declared_criterion`; the body, `--jobs count_neutrality` and the archived-records copy all use it), so
+every run ID presses the same straddle over the same records; until A116 the replacement was keyed on the test
+set alone, and under `write_set_tau1e-08` GC composed its sides at 1e-8, found no before side and refused (I-43).
+GC writes its straddle record (`gates/count_neutrality/straddles/<before>__<after>.json`) on every press, so a
+press under a run ID whose straddle records were copied in by `--copy-archived-records` rewrites the copied file
+(its row paths and its commit), after which the copy step's byte check (`--copy-archived-records … --apply` run
+again) refuses on that file (A114).
 
 ---
 
@@ -383,6 +391,27 @@ so its zeros are shown capable of failing (protocol §12). A failed gate is a re
 | `written_file_gap` | — | the written-file gap on the one-call output path (issue I-21) | yes |
 | `tally_contracts` | — | every tally table carries a caption and a real denominator, no acceptance table a timing; the tally reproduces V4's published cells on GR's twenty runs (236 cells), read from GR's archive (I-41), and resolves those runs to the same directories under every instrument switch (I-37) | no |
 | `run_kind_separation` | — | every record's run kind, and every population the tally builds | no |
+
+**A criterion is a test set at a tolerance** (A116 (v5-gate-criterion-keys); issue I-43). Three gates once
+recognised "V4's criterion" by the test set alone, where V4's criterion is the whole write set **at 1e-6**;
+`config.is_at_declared_criterion` / `at_declared_criterion` / `is_v4_criterion` are now the one answer (test set,
+no rule, every configuration's τ the set's declared value). **GC** composes its straddle under the declared
+criterion under every run ID (§6). **G9** gates a keep-the-loop arm's "nothing about the solve changed" sub-check
+against GR's record only where the arm stops on GR's criterion — `BR` always, `B0` only under the whole write set at
+1e-6 (`gate_output_path.same_criterion_as_the_reproduction_gate`) — and elsewhere reports and names the differences
+without gating them, as it did under the census set; under `write_set_tau1e-08` it gated `B0` at 1e-8 against GR's
+1e-6 record and FAILed (A113). **G1** compares `job_digest` only where both sides computed it over the same identity
+field set (`gate_neutrality.FIELD_SET_WITNESS`: the top-level keys of `job_identity`), since the test set and τ are
+rendered into the identity only where they differ from V4's; witnessed by the test set alone, it compared two
+digests over two field sets under `census_tau1e-06` and FAILed on 6 of 6 pairs with 0 output-file lines differing
+(A114). Each gate gained one tooth that shows it still bites at the same criterion: GC's after-side job composed
+under the four settings {census, write set} × {1e-8, 1e-6} resolves to one record, and a count moved there is the one
+differing leaf; G9's `node_calls_solve_phase` moved on a copy of GR's record of each gated arm fails the sub-check,
+and `B0` is gated at the write set's 1e-6 only; G1's digest moved over the same field set is the one mismatch, and
+excluded only where τ is rendered on one side. **G1's exclusion table gains `audit_snapshot.wall_s`** (issue
+I-45), the exit-snapshot hook's stopwatch, after the `exclusion_review` stage's timing block
+(`G1_timing_named_leaves`; beside it `G1_compared_leaves_differing`) measured it the only compared timing-named leaf
+that differs, a non-negative float, with every other compared leaf of its block equal.
 
 Dropped in V5: G3/G3c (the prime's cold chain), G8 (the `mixed` ruler), G4 (retired, D36), the second
 implementation's `recomputation`. The measurement stages beside the gates: `gate_table`, `exclusion_review`
@@ -578,6 +607,14 @@ unless `--runs` names another run ID's folder (with `--document paper_tables_<ru
 ---
 
 ## Change log
+
+- **2026-10-02, A116 (v5-gate-criterion-keys):** gates GC, G9 and G1 key "V4's criterion" on the test set and τ
+  together (issue I-43; §§6, 11): `config.is_at_declared_criterion`, `at_declared_criterion`, `is_v4_criterion`;
+  GC's `declared_campaign` (also `--jobs count_neutrality`, which listed the press's own settings, and the
+  archived-records copy); G9's `same_criterion_as_the_reproduction_gate`; G1's `FIELD_SET_WITNESS` for
+  `job_digest`; one tooth each. G1's exclusion table gains `audit_snapshot.wall_s` (issue I-45) after the
+  `exclusion_review` stage's new timing block measured it. GC rewrites its straddle record inside a copied archive,
+  after which the copy step's byte check refuses (§6).
 
 - **2026-10-02, A115 (v5-sweep-residual-trace):** driver change DR13 — the block trace scores every sweep
   on the block's census and non-census components (`PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS` under the whole

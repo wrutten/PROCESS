@@ -103,6 +103,9 @@ ALWAYS_EXCLUDED_KIND: dict[str, str] = {
     "process_file": "a path",
     "launcher": "a timing or the machine's state",
     "wall_s": "a timing or the machine's state",
+    # A116 (v5-gate-criterion-keys; issue I-45), after this review's timing
+    # block measured it (timing_named_leaves).
+    "audit_snapshot.wall_s": "a timing or the machine's state",
     "cpu_user_s": "a timing or the machine's state",
     "cpu_sys_s": "a timing or the machine's state",
     "cpu_s": "a timing or the machine's state",
