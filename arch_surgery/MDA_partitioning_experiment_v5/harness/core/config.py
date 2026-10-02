@@ -186,6 +186,52 @@ V4_TEST_SET = "write_set"
 
 
 # --------------------------------------------------------------------------
+# a criterion: the test set and the tolerance together (issue I-43)
+# --------------------------------------------------------------------------
+#
+# A loop's stopping criterion is its test set **at** its tolerance.  Three
+# gates once recognised "V4's criterion" by the test set alone -- GC's declared
+# straddle, G9's reference-arm sub-check, G1's job-digest witness -- and so
+# read a campaign of the whole write set at 1e-8 as V4's (A113, A114; task
+# A116 (v5-gate-criterion-keys)).  These two functions are the one place the
+# question "is this campaign at a test set's declared criterion?" is answered,
+# so that no gate decides it from one field.
+
+
+def is_at_declared_criterion(campaign: "Campaign", test_set: str) -> bool:
+    """Whether every job *campaign* composes stops on *test_set* at that
+    set's declared tolerance (:data:`TAU_BY_TEST_SET`): the test set is
+    *test_set*, no tolerance rule is named, and the tolerance of every
+    configuration is the declared one.  An explicit ``--tau`` equal to the
+    declared value is the declared criterion; any other is not."""
+    return (
+        campaign.test_set == test_set
+        and campaign.tau_rule is None
+        and all(
+            float(campaign.tau_for(c)) == float(TAU_BY_TEST_SET[test_set])
+            for c in campaign.configurations
+        )
+    )
+
+
+def at_declared_criterion(campaign: "Campaign", test_set: str) -> "Campaign":
+    """*campaign* itself where it is already at *test_set*'s declared
+    criterion (:func:`is_at_declared_criterion`), otherwise the same campaign
+    with the test set replaced, the tolerance falling to the set's declared
+    value and no rule.  Everything else -- the run ID, its folder, the
+    configurations, the timers -- is kept: the jobs belong to the press that
+    composes them (:attr:`Campaign.run_id`)."""
+    if is_at_declared_criterion(campaign, test_set):
+        return campaign
+    return replace(campaign, test_set=test_set, tau=None, tau_rule=None)
+
+
+def is_v4_criterion(campaign: "Campaign") -> bool:
+    """Whether *campaign* is at V4's criterion: the whole write set at 1e-6."""
+    return is_at_declared_criterion(campaign, V4_TEST_SET)
+
+
+# --------------------------------------------------------------------------
 # a named tolerance rule: one τ per configuration, from its input file
 # --------------------------------------------------------------------------
 

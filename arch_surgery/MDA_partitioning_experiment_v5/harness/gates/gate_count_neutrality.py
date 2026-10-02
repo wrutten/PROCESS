@@ -82,6 +82,7 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
+from ..core import config as config_mod
 from ..core import framework
 from ..core import pool as pool_mod
 from ..core import records as records_mod
@@ -109,10 +110,19 @@ STRADDLE: tuple[str, str] = ("DR12", "DR13")
 #: set its fallback value (decision D39): the DR11 side of GC is made under
 #: ``write_set`` **by declaration**, so that every count and every exit state
 #: must be identical to the digit to the DR10 side's -- which is the proof
-#: that the fallback is V4's predicate exactly.  The census value is another
-#: campaign and is not GC's business; a press under it is refused.  Every
-#: later side straddles DR11's and is made under the same value, so that the
-#: two sides of each straddle are one campaign.
+#: that the fallback is V4's predicate exactly.  Every later side straddles
+#: DR11's and is made under the same value, so that the two sides of each
+#: straddle are one campaign.
+#:
+#: **The declared value is a criterion, not a test set alone**: the set at its
+#: declared tolerance (``config.TAU_BY_TEST_SET``), no tolerance rule.  A press
+#: under any other run ID -- the census set, or the whole write set at another
+#: τ -- composes both sides under the declared criterion all the same
+#: (:func:`declared_campaign`), so every run ID presses the same straddle over
+#: the same records.  Until A116 (v5-gate-criterion-keys) the replacement was
+#: taken only where the test set differed, so under ``write_set_tau1e-08`` the
+#: sides were composed at 1e-8, no before side existed and the gate refused
+#: (A113; issue I-43).
 STRADDLE_TEST_SET: dict[str, str] = {"DR11": "write_set", "item5": "write_set", "DR12": "write_set", "DR13": "write_set"}
 
 #: The sides made **with the wall-clock timers on** (driver change DR12, A101
@@ -398,6 +408,25 @@ def count_neutrality_jobs(
     return plan
 
 
+def declared_campaign(campaign: Campaign) -> Campaign:
+    """The campaign GC composes **both** sides under: the press's own, with the
+    test set and τ replaced by the after label's declared criterion
+    (:data:`STRADDLE_TEST_SET` at its declared τ, no rule) wherever the press's
+    differ in either (``config.at_declared_criterion``).  The run ID and its
+    folder are the press's.  Under a label that declares no test set, the
+    press's campaign itself.
+
+    The one construction of it: the body, :func:`jobs_read` (the framework's
+    survey and ``--jobs``) and the archived-records copy
+    (``archived_records._count_neutrality_jobs``) all call this, so the jobs
+    listed, the jobs pressed and the jobs copied are one set.
+    """
+    declared_set = STRADDLE_TEST_SET.get(STRADDLE[1])
+    if declared_set is None:
+        return campaign
+    return config_mod.at_declared_criterion(campaign, declared_set)
+
+
 def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
     """The jobs this gate **makes** at this commit: the references and the after side.
 
@@ -405,7 +434,12 @@ def jobs_read(campaign: Campaign) -> list[pool_mod.Job]:
     verdict's ``straddle`` block with each record's own commit, not here: the
     framework's survey of ``jobs`` is the check that a gate's own runs are
     this commit's, and the before side is meant not to be.
+
+    Composed under :func:`declared_campaign`, as the body composes them (until
+    A116 this listed the press's own settings, so under the census run IDs
+    ``--jobs count_neutrality`` named jobs the body never makes).
     """
+    campaign = declared_campaign(campaign)
     references = gates_mod.entry_references_from_records(campaign)
     return gates_mod.entry_reference_jobs(campaign) + [
         job for *_rest, job in count_neutrality_jobs(campaign, references, STRADDLE[1])
@@ -850,16 +884,17 @@ def count_neutrality_body(campaign: Campaign, *, resume: bool = False) -> dict[s
             f"{after_label!r}; a change that does not say what it does to the "
             f"counts is not declared, and an undeclared change cannot pass"
         )
-    declared_set = STRADDLE_TEST_SET.get(after_label)
-    if declared_set is not None and campaign.test_set != declared_set:
-        # The after side is made under the declared test set **whatever the
-        # button composed**: the count-neutrality claim of DR11 is that the
-        # fallback is V4's predicate exactly, and a side made under another
-        # test set would be another campaign, not a straddle.  The campaign
-        # the gate runs under is therefore the declared one, built here (as
-        # the census stage builds its fallback campaign), so that --gate all
-        # under the census default still presses this straddle.
-        campaign = dataclasses.replace(campaign, test_set=declared_set, tau=None)
+    # The after side is made under the declared criterion **whatever the
+    # button composed**: the count-neutrality claim of DR11 is that the
+    # fallback is V4's predicate exactly -- the whole write set at 1e-6 --
+    # and a side made under another test set *or another τ* would be another
+    # campaign, not a straddle.  The campaign the gate runs under is therefore
+    # the declared one (:func:`declared_campaign`), so that --gate all under
+    # every run ID presses this straddle.  Keyed on the test set and τ
+    # together since A116 (v5-gate-criterion-keys; issue I-43): keyed on the
+    # test set alone, a press under the whole write set at 1e-8 kept its own
+    # τ, found no before side and refused (A113).
+    campaign = declared_campaign(campaign)
     references = gates_mod.entry_references(campaign, resume=resume)
     before_plan = count_neutrality_jobs(campaign, references, before_label)
     after_plan = count_neutrality_jobs(campaign, references, after_label)
@@ -1183,7 +1218,78 @@ def _teeth(campaign: Campaign) -> tuple[Tooth, ...]:
             f"({named}); {result['n_declared_moves']} declared move(s) applied"
         )
 
+    def a_count_moved_under_every_run_ids_settings() -> tuple[bool, str]:
+        """The declared straddle is one set of records under every run ID's
+        settings, and a count moved there is caught whichever run ID reads it
+        (A116 (v5-gate-criterion-keys); issue I-43).
+
+        For each of the four settings a campaign of this harness is pressed
+        under -- {census, whole write set} x τ {1e-8, 1e-6}, built from this
+        press's campaign so the run ID's folder is this one -- GC's after-side
+        job for this press's last compared pair is composed through
+        :func:`declared_campaign` and resolved by the pool: all four must name
+        the very directory this press compared.  Keyed on the test set alone
+        (the condition before A116), the whole write set at 1e-8 composes its
+        own τ and names another directory, and the tooth does not trip.  Then
+        one added to ``node_calls_total`` on a copy of that after-side record
+        must be the one differing count leaf.
+        """
+        from ..core.config import TAU_BY_TEST_SET, TEST_SETS, run_id_for  # noqa: PLC0415
+
+        row = _last_live_row()
+        if row is None:
+            return False, "the gate compared nothing, so nothing can be doctored"
+        after_dir = Path(row["after"]["path"])
+        resolved: dict[str, str] = {}
+        for test_set in TEST_SETS:
+            for tau in sorted({float(t) for t in TAU_BY_TEST_SET.values()}):
+                settings = dataclasses.replace(campaign, test_set=test_set, tau=tau, tau_rule=None)
+                composed = declared_campaign(settings)
+                references = gates_mod.entry_references_from_records(composed)
+                match = [
+                    job
+                    for phase, config_name, arm, job in count_neutrality_jobs(composed, references, STRADDLE[1])
+                    if f"{phase}/{arm}/{config_name}" == row["key"]
+                ]
+                name = run_id_for(test_set, tau, None)
+                resolved[name] = (
+                    str(pool_mod.directory_for(match[0], composed)) if len(match) == 1 else f"<{len(match)} jobs>"
+                )
+        same = all(Path(d) == after_dir for d in resolved.values())
+        differing = sorted(k for k, d in resolved.items() if Path(d) != after_dir)
+        before = records_mod.read(Path(row["before"]["path"]))
+        after = json.loads(json.dumps(records_mod.read(after_dir)))
+        field = "node_calls_total"
+        was = after.get(field)
+        if not isinstance(was, int):
+            return False, f"{field} is {was!r} on the after side; nothing to add one to"
+        after[field] = was + 1
+        result = compare_counts_under_rule(before, after, rule=_HELD.get("count_rule") or "identical")
+        named = [m["field"] for m in result["mismatches"]]
+        caught = result["n_mismatched"] == 1 and named == [field]
+        return same and caught, (
+            f"{row['key']}'s after-side job composed under the settings of "
+            f"{len(resolved)} run IDs ({', '.join(sorted(resolved))}) resolves to "
+            f"this press's directory under {len(resolved) - len(differing)} of them"
+            + (f" (another directory under {differing})" if differing else "")
+            + f"; one added to {field} ({was} → {was + 1}) on a copy of that record: "
+            f"{result['n_mismatched']} differing leaf/leaves of {result['n_compared']} ({named})"
+        )
+
     return (
+        Tooth(
+            name="a count moved, read under every run ID's settings",
+            what=(
+                "GC's after-side job composed under each of the four settings "
+                "{census, write set} x {1e-8, 1e-6}, and one added to "
+                "node_calls_total on a copy of the record they resolve to"
+            ),
+            must=(
+                "resolve to this press's own record under all four, and be the "
+                "one and only differing count leaf"
+            ),
+            check=a_count_moved_under_every_run_ids_settings,
+        ),
         Tooth(
             name="a per-run node counted twice",
             what="one added to a per-run node's census on a copy of an after-side record",

@@ -329,6 +329,129 @@ def path_valued_leaves(
     }
 
 
+#: A leaf whose last name segment matches this is **named** as a timing: a
+#: duration in seconds (``wall_s``, ``restore_wall_s``, ``exit_audit_wall_s``,
+#: ``cpu_s`` ...).  The name is a declaration by whoever wrote the field; the
+#: review measures what the values are beside it (A116 (v5-gate-criterion-keys);
+#: issue I-45).
+TIMING_LEAF_NAME = re.compile(r"(?:^|_)s$")
+
+
+def _last_segment(path: str) -> str:
+    return re.sub(r"\[\d+\]", "", path).split(".")[-1]
+
+
+def timing_named_leaves(
+    pairs: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """Every leaf of G1's pairs whose last segment is named as a timing
+    (:data:`TIMING_LEAF_NAME`), by name with list indices collapsed: which G1
+    table excludes it (or none: compared), on how many pairs both sides carry
+    it, how many read equal, whether every value is a non-negative float (what
+    a stopwatch reading is), and -- for a name G1 compares -- what else of its
+    own block differs on the same pairs, so that "a wall clock and nothing
+    else" is read off the records: the stopwatch moved and the work it timed
+    did not (issue I-45)."""
+    by_name: dict[str, dict[str, Any]] = {}
+    for before, after in pairs:
+        a, b = leaves(dict(before)), leaves(dict(after))
+        compared = _compared_by_g1(before, after)
+        excluded_here = set(compared["excluded"])
+        mismatched = {m["field"] for m in compared["mismatches"]}
+        for path in sorted(set(a) | set(b)):
+            if not TIMING_LEAF_NAME.search(_last_segment(path)):
+                continue
+            name = re.sub(r"\[\d+\]", "[]", path)
+            row = by_name.setdefault(
+                name,
+                {
+                    "name": name,
+                    "excluded_by": (
+                        "ALWAYS_EXCLUDED"
+                        if is_volatile(path, ALWAYS_EXCLUDED) is not None
+                        else "FIELDS_ADDED_BY_A_DRIVER_CHANGE (one side lacks it)"
+                        if path in excluded_here
+                        and is_volatile(path, FIELDS_ADDED_BY_A_DRIVER_CHANGE) is not None
+                        else "FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE"
+                        if path in excluded_here
+                        else None
+                    ),
+                    "n_pairs_on_both_sides": 0,
+                    "n_pairs_equal": 0,
+                    "n_pairs_mismatched_in_G1": 0,
+                    "all_values_non_negative_floats": True,
+                    "values": [],
+                    "same_block_compared": 0,
+                    "same_block_differing": [],
+                },
+            )
+            for side in (a, b):
+                if path not in side:
+                    continue
+                value = side[path]
+                row["values"].append(value)
+                if not (isinstance(value, float) and value >= 0.0):
+                    row["all_values_non_negative_floats"] = False
+            if path in a and path in b:
+                row["n_pairs_on_both_sides"] += 1
+                row["n_pairs_equal"] += int(_same(a[path], b[path]))
+            row["n_pairs_mismatched_in_G1"] += int(path in mismatched)
+            block = path.rsplit(".", 1)[0] if "." in path else ""
+            if block:
+                siblings = [
+                    p for p in sorted(set(a) & set(b))
+                    if p != path and p.startswith(block + ".") and p not in excluded_here
+                ]
+                row["same_block_compared"] += len(siblings)
+                row["same_block_differing"] += [p for p in siblings if not _same(a[p], b[p])]
+    rows = sorted(by_name.values(), key=lambda r: (r["excluded_by"] is not None, r["name"]))
+    for row in rows:
+        floats = [v for v in row.pop("values") if isinstance(v, (int, float))]
+        row["min"] = min(floats) if floats else None
+        row["max"] = max(floats) if floats else None
+    compared = [r for r in rows if r["excluded_by"] is None]
+    return {
+        "what": (
+            "every record leaf of G1's pairs whose last name segment is named as "
+            "a timing (pattern " + TIMING_LEAF_NAME.pattern + "), by name: the "
+            "G1 table that excludes it, or none (compared); pairs carrying it on "
+            "both sides and how many read equal; whether every value is a "
+            "non-negative float; and, for a compared name, the other compared "
+            "leaves of its own block and how many of them differ"
+        ),
+        "n_names": len(rows),
+        "names_compared": [r["name"] for r in compared],
+        "rows": rows,
+    }
+
+
+def compared_leaves_differing(
+    pairs: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """Every leaf G1 compares and finds differing on its pairs, by name: the
+    whole of what a G1 FAIL on record values rests on."""
+    from harness.gates import reference as reference_mod  # noqa: PLC0415
+
+    by_name: dict[str, int] = {}
+    for before, after in pairs:
+        result = compare_records(
+            before,
+            after,
+            excluded=ALWAYS_EXCLUDED,
+            conditional=FIELDS_ADDED_BY_A_DRIVER_CHANGE,
+            instrument_changed=FIELDS_CHANGED_BY_AN_INSTRUMENT_CHANGE,
+            name_map=reference_mod.FIELD_NAME_MAP,
+        )
+        for mismatch in result["mismatches"]:
+            name = re.sub(r"\[\d+\]", "[]", mismatch["field"])
+            by_name[name] = by_name.get(name, 0) + 1
+    return {
+        "what": "every record leaf G1 compares and finds differing, by name, with the number of pairs",
+        "n_names": len(by_name),
+        "by_name": dict(sorted(by_name.items())),
+    }
+
+
 def _neutrality_pairs(campaign: Campaign) -> list[tuple[dict, dict]]:
     pairs: list[tuple[dict, dict]] = []
     for phase, arm in NEUTRAL_ARMS:
@@ -549,6 +672,8 @@ def exclusion_review(campaign: Campaign) -> dict[str, Any]:
         "G1_pairing": g1_straddle,
         "G1_path_content_witness": path_content_witness(g1_pairs),
         "G1_path_valued_leaves": path_valued_leaves(g1_pairs),
+        "G1_timing_named_leaves": timing_named_leaves(g1_pairs),
+        "G1_compared_leaves_differing": compared_leaves_differing(g1_pairs),
         "G1_instrument_leaves_by_prefix": {
             "what": (
                 "every record leaf the instrument-change group removed from "
@@ -678,6 +803,32 @@ def print_exclusion_review(block: Mapping[str, Any]) -> None:
                 f"    {row['name']:<52} {row['excluded_by'] or 'COMPARED':<16} "
                 f"leaves {row['n_leaves']:>3}, equal {row['n_equal']:>3}"
             )
+    timings = block.get("G1_timing_named_leaves")
+    if timings:
+        print(
+            f"\n  G1's leaves named as a timing: {timings['n_names']} name(s); "
+            f"compared: {timings['names_compared']}"
+        )
+        for row in timings["rows"]:
+            print(
+                f"    {row['name']:<52} {row['excluded_by'] or 'COMPARED':<16} "
+                f"both sides on {row['n_pairs_on_both_sides']:>2} pair(s), equal on "
+                f"{row['n_pairs_equal']:>2}, mismatched in G1 on {row['n_pairs_mismatched_in_G1']:>2}; "
+                f"non-negative floats {'yes' if row['all_values_non_negative_floats'] else 'NO'} "
+                f"[{row['min']}, {row['max']}]"
+                + (
+                    f"; same block: {row['same_block_compared']} compared, "
+                    f"{len(row['same_block_differing'])} differing {row['same_block_differing'][:5]}"
+                    if row["excluded_by"] is None
+                    else ""
+                )
+            )
+    differing = block.get("G1_compared_leaves_differing")
+    if differing:
+        print(
+            f"\n  G1's compared leaves that differ: {differing['n_names']} name(s): "
+            f"{differing['by_name']}"
+        )
     sizes = block["sizes"]
     print("\n  sizes:")
     for name, value in sizes.items():
