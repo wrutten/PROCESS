@@ -1,6 +1,6 @@
 # A116 (v5-gate-criterion-keys): three gates keyed on the criterion (test set and τ), G1's wall-clock leaf, and the four gate tables
 
-> **Document status** — **OPEN (task report, awaiting the orchestrator's assessment).** Task A116
+> **Document status** — **MERGED 2026-10-02 at `af86dbf2` (`--no-ff`; the orchestrator's assessment at the end); archived.** The one V5 records tree was moved on into A117's worktree and is relocated to `arch_surgery/idf_probe/runs/` at A117's merge; the paths below that begin `runs/` are read from there. **Gate G5 (`switch_composition`) FAILs under all four run IDs at this task's tip — issue I-46, task A117.** Was: **OPEN (task report, awaiting the orchestrator's assessment).** Task A116
 > (v5-gate-criterion-keys), 2026-10-02, branch `A116-v5-gate-criterion-keys`, worktree
 > `.claude/worktrees/A116-v5-gate-criterion-keys`, base `e977c57d`. Harness only: nothing changed under the driver copy
 > (`MDA_partitioning_experiment_v5/PROCESS/`), the repository's `process/` or V4. Start time recorded
