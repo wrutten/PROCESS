@@ -331,6 +331,29 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             was="PREDICATE_MODES = ('frozen', 'mixed'); PREDICATE_MODE read from PROCESS_ARCH_PREDICATE",
             now="PREDICATE_MODES = ('frozen',); PREDICATE_MODE = 'frozen'",
         ),
+        PermittedEdit(
+            kind="instrument",
+            name="PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS, block_trace_census_sets, block_trace_parts, the parts in block_trace_sweep and the trace header",
+            description=(
+                "driver change DR13, observation only, trace path only: with "
+                "PROCESS_ARCH_BLOCK_TRACE set, every block-loop sweep is also "
+                "scored on two parts of the block's write set -- its census "
+                "test set and the rest -- from the two snapshots the loop "
+                "already read, with the predicate's untimed residual; each "
+                "part's maximum, worst component and components at or above "
+                "tau are named, and the test's own worst component beside its "
+                "maximum.  Under the whole write set the census sets come from "
+                "PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS (refused without the "
+                "trace and under the census set), loaded by load_test_sets "
+                "with its own checks; unset, one part.  The header records "
+                "each block's parts.  Unset, nothing here runs (gate G1); set, "
+                "no count and no exit state moves (gate GC, the DR13 side "
+                "made with the trace on)"
+            ),
+            task="A115 (v5-sweep-residual-trace)",
+            was="each sweep's test residual split by module only",
+            now="the same, plus the census and non-census parts of the block's write set, each with its worst component",
+        ),
     ],
     "process/core/solver/subsolve.py": [
         PermittedEdit(
@@ -730,6 +753,26 @@ PERMITTED_EDIT_FILES: dict[str, list[PermittedEdit]] = {
             task="A101 (v5-timers-and-once)",
             was="no timing in the driver; the harness timed the child's whole wall",
             now="per-node, per-sweep, per-test, per-evaluation and per-run accumulators, harvested by the harness before its audit sweep",
+        ),
+        PermittedEdit(
+            kind="instrument hook",
+            name="the block trace's parts and the objective in _call_models_partitioned and _block_trace_line",
+            description=(
+                "driver change DR13, observation only: with "
+                "PROCESS_ARCH_BLOCK_TRACE set, the census sets the trace "
+                "splits by are resolved once per evaluation "
+                "(block_trace_census_sets), each block's parts once per run "
+                "(block_trace_parts), and each sweep's trace entry is handed "
+                "the two snapshots the loop already compared; the evaluation's "
+                "line carries the objective and the constraint vector it "
+                "returns as hex floats.  Every statement is guarded by the "
+                "switch; no state is read that the loop does not read, no "
+                "counter or timer is touched and no branch a result depends on "
+                "changes"
+            ),
+            task="A115 (v5-sweep-residual-trace)",
+            was="the trace's sweep entry split by module only; no objective on the line",
+            now="the sweep entry scored on the block's census and non-census parts; the objective and constraints on the line",
         ),
     ],
     "process/core/solver/solver_handler.py": [

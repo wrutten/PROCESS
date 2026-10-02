@@ -27,7 +27,8 @@ an install (trap T6), and every measurement subprocess asserts `process.__file__
    all of them under `process/core/`, plus `process/data_structure/numerics.py` (decision D14(a))
    and `process/models/pulse.py` (decision D14(b)). §3 documents that layer.
 2. **The copy's own edits**, made after extraction and recorded one by one in
-   `copy_gates.PERMITTED_EDIT_FILES`: seven files, thirty-one recorded edits. §4 documents that
+   `copy_gates.PERMITTED_EDIT_FILES`: seven files, thirty-one recorded edits (A115 (v5-sweep-residual-trace)
+   adds two, driver change DR13: §4.2.11 and §4.5.19; the list is the authority). §4 documents that
    layer, one subsection per recorded edit.
 
 Relative to the frozen base, then, the copy differs in **fourteen files**: six that do not exist
@@ -569,7 +570,7 @@ naming the switch would be asking for a denominator the coupling-state module no
 the name raises at import like every other retired name; the harness's registry lists it as
 retired too and the `capability` self-check compares the two lists.
 
-### 4.2 `process/core/solver/module_solve.py` — 10 recorded edits
+### 4.2 `process/core/solver/module_solve.py` — 11 recorded edits
 
 The file does not exist at `c0ae5b28` (§3.3); the diff here is against `f2dc9243`.
 
@@ -830,6 +831,38 @@ evaluation and stamped in the spec's provenance — it names the one ruler for t
 recorded in `harness/data/PROVENANCE.json`). **Driver, not model:** the frozen path's arithmetic is
 untouched (gates G1 and GC).
 
+#### 4.2.11 `PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS`, `block_trace_census_sets`, `block_trace_parts`, the parts in `block_trace_sweep` — the block trace's census split (DR13)
+
+*Recorded edit kind: instrument. Made by task A115 (v5-sweep-residual-trace), driver change DR13.*
+
+```python
++BLOCK_TRACE_CENSUS_PATH: str | None = os.environ.get("PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS") or None
++# refused without PROCESS_ARCH_BLOCK_TRACE, and refused unless PROCESS_ARCH_TEST_SET=write_set
++def block_trace_census_sets(spec, tests, *, loop_key): ...   # the loop's own census sets, or the artifact's
++def block_trace_parts(spec, label, write_subset, census_sets): ...   # {"census": [...], "non_census": [...]}
++def _block_trace_part(spec, y_prev, y, sel, tau): ...   # spec.residual over one part: max, argmax, names >= tau
+ def block_trace_sweep(res, modules, tau, *, spec=None, y_prev=None, y=None, parts=None) -> dict:
+```
+
+**What it adds to the trace.** A90's block trace scored each sweep on the loop's own test only, by
+module. With the trace on, each sweep is now also scored on two **parts** of the block's write set
+(the flat block's write set is the whole coupling state): `census`, the block's census test set, and
+`non_census`, the rest. Under the census test set the first part is what the loop tested and the
+second is everything it did not; under the whole write set the two split what it tested. Each part
+records its maximum scaled change, the component it is on, the number of components at or above τ
+and (up to 40) their names, and any discrete mismatch, moved constant or new NaN by name; the test's
+own worst component is named beside its maximum (`test_argmax`). Under the whole write set the census
+sets are not loaded by the loop, so the trace reads them from the artifact
+`PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS` names, through `load_test_sets` and its two checks; unset, the
+trace scores one part (`write_set`) and its header says the split was not asked for. The header
+records each block's part sizes and the census components outside the block's write set.
+
+**What it is not.** The parts are scored from the two snapshots the loop already read for its own test,
+with the predicate's own **untimed** `residual` — no state is read that the loop does not read, no
+counter, no timer and no branch is touched. Unset, none of it runs (gate G1); set, every count and every
+exit state is identical to the digit (gate GC, the DR13 side made with the trace on). No model file
+changes.
+
 ### 4.3 `process/core/solver/subsolve.py` — 1 recorded edit
 
 The file does not exist at `c0ae5b28` (§3.4).
@@ -909,7 +942,7 @@ Relative to `c0ae5b28` this file also carries constraint 93 (§3.5, inherited).
 The docstring named a retired switch; it names the one that replaced it. Nothing the constraint
 computes changes.
 
-### 4.5 `process/core/caller.py` — 19 recorded edits
+### 4.5 `process/core/caller.py` — 20 recorded edits
 
 Relative to `c0ae5b28` this file also carries everything in §3.2 (inherited).
 
@@ -1607,6 +1640,32 @@ and every exit state of a side made with the timers on against the side made wit
 reads the dictionary after the run and *before* its own audit sweep, and measures the audit's share
 apart as an excluded cost. Wall clock is context, never evidence (D33; CLAUDE.md; I-10; trap T5).
 No model file changes.
+
+#### 4.5.19 The block trace's parts and the objective in `_call_models_partitioned` / `_block_trace_line` — instrument hook (DR13)
+
+*Recorded edit kind: instrument hook. Made by task A115 (v5-sweep-residual-trace), driver change DR13.*
+
+```python
++        trace_census = (module_solve.block_trace_census_sets(spec, tests, loop_key=...)
++                        if block_trace is not None else None)
+ ...
++            trace_parts = (module_solve.block_trace_parts(spec, label, subsets.get(label), trace_census)
++                           if block_trace is not None else None)
+ ...
+-                        module_solve.block_trace_sweep(res, trace_modules, tau)
++                        module_solve.block_trace_sweep(res, trace_modules, tau,
++                            spec=spec, y_prev=y_prev, y=y, parts=trace_parts)
+ ...
++            "objf_hex": None if objf is None else float(objf).hex(),
++            "conf_hex": None if conf is None else [float(v).hex() for v in conf],
+```
+
+Every statement is guarded by `PROCESS_ARCH_BLOCK_TRACE` (the `block_trace is not None` test A90's hook
+already makes). The census sets are resolved once per evaluation and each block's parts once per run;
+each sweep's trace entry is handed the snapshots `y_prev` and `y` **before** the loop's own
+`y_prev = y`, so it scores exactly the pair the loop's test compared. The evaluation's line carries the
+objective and the constraint vector it returns, as hex floats (null on the block-cap refusal, which
+computes neither). Gates G1 (unset) and GC (set) as §4.2.11.
 
 ### 4.6 `process/core/solver/solver_handler.py` — 2 recorded edits
 

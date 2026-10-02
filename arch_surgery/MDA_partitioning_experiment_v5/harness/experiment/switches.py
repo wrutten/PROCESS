@@ -509,7 +509,28 @@ REGISTRY: dict[str, Switch] = {
             "residual split by module.  Observation only: cleared before "
             "every arm, never composed; a run that wants it passes it as a "
             "job's override_env, which makes it a different job identity "
-            "from any campaign run."
+            "from any campaign run.  Since driver change DR13 (A115 "
+            "(v5-sweep-residual-trace)) every sweep is also scored on the "
+            "block's census and non-census components, each part's worst "
+            "component named, and the line carries the objective and the "
+            "constraints as hex floats."
+        ),
+    ),
+    "block_trace_census_sets": Switch(
+        term="block_trace_census_sets",
+        driver_name="PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS",
+        intended_name="PROCESS_ARCH_BLOCK_TRACE_CENSUS_SETS",
+        value_kind="path",
+        values=(),
+        composed=False,
+        readbacks=((MODULE_SOLVE, "BLOCK_TRACE_CENSUS_PATH"),),
+        note=(
+            "Driver change DR13 (A115 (v5-sweep-residual-trace)): the census "
+            "test-set artifact the block trace splits a write-set loop's "
+            "score by.  Observation only, read by the trace alone; refused "
+            "without the block trace and under the census test set.  Cleared "
+            "before every arm, never composed; the traced-run stage "
+            "(harness/traced_runs.py) passes it in a job's override_env."
         ),
     ),
 }
