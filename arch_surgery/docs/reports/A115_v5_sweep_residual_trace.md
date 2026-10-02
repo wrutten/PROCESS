@@ -315,3 +315,62 @@ Disk `/mnt/c`: 129 GB free at start, 131 GB at end. Traced records 153 / 192 / 1
   starts, and evaluations within a run are not independent.
 - G1/GC and the other gates only under `census_tau1e-08`; I-43's gates not touched.
 - The reading script was not independently recounted.
+
+## 10. Orchestrator's critical assessment (protocol §5) — verdict: merge
+
+*Written 2026-10-02 by the orchestrating session. Checked differently from the agent.*
+
+**Checked.** (1) `git diff --stat 3211f50e..43d78ce6`: fifteen files — the driver copy's two loop files
+(`caller.py` 38 lines, `module_solve.py` 181), the copy's bookkeeping (`CHANGES.md`, `PROVENANCE.json`, `copy_gates.py`,
+`PROCESS_diff.py`), the harness (`traced_runs.py` new, `switches.py`, `records.py`, `gate_count_neutrality.py`, the
+runner, the README), `stopping_sweep_residuals.py`, `paper_tables.md` and this report; 0 files under any `models/`
+folder and 0 diff lines under the repository's own `process/`. (2) **The `caller.py` hunks read line by line**: every
+added statement sits behind `block_trace is not None` (the trace switch) or is an argument passed to a trace function;
+the stop decision (`res.converged(tau)`) and the residual it uses are not touched. (3) **The neutrality claim recounted
+with the orchestrator's own code and choice of fields** (node calls, iterations, model calls, predicate evaluations,
+the objective's hex, `ifail`, attempts, the exit-state digest, and `y_exit.json`'s state component by component): 54
+traced runs per run ID, all at `d1e94dc8`, run kind `trace`, **216 of 216 equal to their campaign record**. (4)
+**Statistic C1 recounted from the compressed traces**: of the block stops on gradient evaluations, the share with a
+change at or above τ outside the test set is 0.68 (st `B2`, census 1e-8), 0.82 (st `B0`, census 1e-6) and 0.55 (st
+`B2`, census 1e-6) — the agent's three figures; the split by "census change exactly 0 / not 0" for st `B2` at 1e-8
+(M1 4 380 / 4 290, M2 0 / 4 366, M3 11 384 / 328) is the agent's to the unit. (5) **The same rate on cases the agent
+names as undisturbed, recounted**: tok `B2` at census 1e-8 0.52, st `B0` at census 1e-8 0.88. So the rate is as high
+where the optimiser is not disturbed, which is the agent's reason for "present but not shown to be the cause", and the
+orchestrator reads the same. (6) **The confirming-sweep finding (L2) recounted over every evaluation of the `B2`
+traces under both write-set settings, all three configurations**: wherever the census part's change was exactly 0 at
+the last sweep but one, the last sweep changed nothing in the census part or outside it — st M1 2 262 of 2 262 and M3
+5 789 of 5 789 at 1e-8, 1 551 of 1 551 and 2 956 of 2 956 at 1e-6; lad and tok likewise, every block, no exception
+(the orchestrator's counts are over all evaluations, the agent's over a subset, so the totals differ and the rate does
+not). st's M2 never reaches a census change of exactly 0. (7) `--runs`: the four campaigns hold 553 records each at
+their own commits; `--paper-tables check` IDENTICAL for the four documents; no file under the four `campaign/` folders
+is newer than the dispatch. (8) The statistics added after the first trace was read are in a separate commit that says
+so; the declaration's own verdict was not altered by them.
+
+**What the result is, in the orchestrator's words.** The user's conjecture has two parts. *Other written variables are
+still moving when the census test passes, and later blocks or the objective read them*: measured, yes, at most stops.
+*That movement is the noise that disturbs the optimiser*: not shown — the same movement is as frequent on tok and on
+st's flat arm at 1e-8, which are not disturbed. The traces add a distinction the conjecture did not have: most of the
+movement is a one-sweep lag (a variable computed from the couplings the previous sweep left, final as soon as the
+couplings stop changing exactly), and a real residual at the stop exists only where the couplings themselves have not
+reached an exact fixed point — on st, the coils block always, the flat loop, and part of M1. That the whole-write-set
+test removes the disturbance because it forces one more sweep on exactly those loops is inferred, by the agent and by
+the orchestrator; no run removed the residual to test it.
+
+**G1 under the default run ID now reads FAIL** (3 of 4 614 values, all `audit_snapshot.wall_s`, a stopwatch reading on
+the three reference runs; 0 of 51 319 output-file lines). The gate's exclusion table already excludes wall-clock leaves
+by name under issue I-10's rule (`wall_s`, the warm-up block's four); this leaf of the snapshot block is not listed
+because no earlier straddle carried the block on both sides. The agent did not change the gate, correctly. It means the
+default run ID's gate table reads 28 PASS, 1 FAIL and `paper_tables.md`'s verification table carries the G1 FAIL until
+the exclusion is reviewed (issue I-45, into A116's scope).
+
+**The agent's decisions.** The trace-only variable naming the census artifact under the write set, the new run kind
+`trace`, and the objective and constraints on each trace line are all inside the trace path and are covered by GC's
+DR12 → DR13 straddle (0 of 3 989 count leaves, 0 of 46 125 components). Who-reads-what was taken from an untracked
+run-time record (its digest printed) because no committed artifact holds per-node reads: a limit on statistic C2,
+which the report states. Annotating A90's unclaimed hunks in `PROCESS_diff.py` repairs a check that already failed at
+the base.
+
+**Limits carried.** Three starts on tok and lad, six on st. No intervention: causation is open. The read census is
+from one reference optimisation per configuration. Gates pressed under the default run ID only; the four gate tables
+are A116's. The objective and constraint values now on each trace line were not analysed: they would give the size of
+the objective's jump per evaluation directly, which is the quantity A104 measured by other means.
